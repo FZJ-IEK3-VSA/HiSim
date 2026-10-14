@@ -90,7 +90,11 @@ The cost is a small, documented jump in results at the threshold itself, a step 
 - **Part-load ratio (PLR)**: the fraction of a step a device runs at full load, `0 ≤ PLR ≤ 1`, a dimensionless
   output with `Units.FRACTION` (averaged by the post-processing, never summed). `PLR = 1` is the whole step.
 - **Ratio run** (`r_run`): the PLR the device reports it ran with in a pass: the commanded ratio while it follows its
-  controller, 1 for a whole step it runs on its own (a minimum running time), 0 while it does not run.
+  controller, 1 for a whole step it runs on its own against its controller (a minimum running time kept inside the
+  device, as the parked heat pump's), 0 while it does not run. A minimum running time the controller keeps, as the
+  boiler's controller does, is not such a run: the step stays in the mode and gets the rule's ratio, 0 for a store
+  that starts at or above the target, so the boiler does not fire on it while a 60 s run keeps firing (the gas twin's
+  year at 900 s, §11, shows no effect worth a change).
 - **Full load**: what the device does when it runs: its flow `m_full` at its supply temperature `T_sup`, its heat and
   its fuel or electricity by its own law.
 - **Target**: the store temperature at which the controller ends the charge; the controller publishes it.
@@ -121,7 +125,8 @@ The cost is a small, documented jump in results at the threshold itself, a step 
   value of the last unforced pass, as every other output of the controller does.
 
 Neither part keeps state; nothing is reset in `i_save_state`. A run that the device enforces itself against its
-controller (a minimum running time) runs the whole step and reports 1.
+controller (a minimum running time kept inside the device) runs the whole step and reports 1; a minimum running time
+kept by the controller is cut to the rule's ratio (§3, "Ratio run").
 
 ### 4.2 The rule
 
@@ -151,8 +156,9 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 - **A draw.** With a draw the store's end temperature at ratio 0 lies below `T_start`, by `d`. Linearised, the
   iteration's error shrinks by the factor `d / (T_aim − T_start)` per pass and alternates in sign: it converges while
   the draw takes less than the rise the step still needs, and a large draw at the end of a charge oscillates. The real
-  tank's tap valve keeps the draw's effect smaller than this estimate (`test_a_tank_with_a_tap_draw_ends_in_the_band`:
-  a 30 l draw at 57 °C lands in nine passes).
+  tank's tap valve keeps the draw's effect smaller than this estimate
+  (`test_a_tank_with_a_tap_draw_ends_in_the_band_and_the_draw_raises_the_ratio`: a 30 l draw at 57 °C lands in nine
+  passes).
 - **The evaluation order.** The controller pairs the ratio run with the end temperature it reads in the same pass.
   The two belong to the same run only in the cyclic order controller → device → store. In the order device →
   controller → store, which the boiler and the collector have in their recorded twins, the device has already run
@@ -320,7 +326,7 @@ Epic hisim-fxix.
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
 | hisim-fxix.11 (P1) | the collector | #917, parked |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
-| hisim-bq3h (P2) | solar priority as a control strategy | – |
+| hisim-bq3h (P3) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |
 | hisim-3y10 (P2) | the open points of decision 5 | measured on the old stack (#915 to #918) |
 | hisim-w510 (P4) | room-temperature devices (parent hisim-4g9) | – |

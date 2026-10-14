@@ -21,8 +21,10 @@ Terms:
   of the step at full load publishes the averaged flow, the full-load flow times the ratio, at its full-load supply
   temperature, and books the ratio times its full-load heat.
 * **Ratio run**: the part-load ratio the device actually ran with in a pass, which it publishes as an output. It is
-  the commanded ratio while the device follows its controller, 1 when the device runs a whole step on its own (a
-  minimum running time), and 0 while it does not run.
+  the commanded ratio while the device follows its controller, 1 when the device itself enforces a whole-step run
+  against its controller (a minimum running time kept inside the device), and 0 while it does not run. A minimum
+  running time kept by the controller, as the boiler's is, is not such a run: the controller keeps its device in the
+  mode, and the rule's ratio decides how much of the step it fires, 0 for a store that starts at or above the target.
 * **Target band**: the end-of-step temperatures the rule accepts, from the target to the target plus
   :attr:`PartLoadRule.TARGET_BAND_IN_KELVIN`. Landing at or just above the target makes the controller end the charge
   on the next step, as a fine-step run does.
@@ -252,7 +254,8 @@ class PartLoadControl:
             lt.Units.CELSIUS,
             output_description=(
                 f"The store temperature at which the controller ends {device_description}. Above the part-load "
-                "threshold the part-load ratio is set so that the store ends the step at it."
+                "threshold the part-load ratio is set so that the store ends the step at it or just above it (within "
+                "the rule's target band), except on a step the simulator forces to converge."
             ),
         )
 
@@ -337,8 +340,9 @@ class PartLoadCommand:
     A device whose controller runs it reads the ratio and, below 1, runs only that fraction of the step at full load:
     it publishes the averaged flow and books the ratio times its full-load heat. It reports the ratio it actually ran
     with as an output, a port quantity its controller reads: the commanded ratio while it follows its controller, 1 for
-    a run it enforces itself against its controller (a minimum running time, which runs the whole step), and 0 while it
-    does not run.
+    a run it enforces itself against its controller (a minimum running time kept inside the device, which runs the
+    whole step), and 0 while it does not run. A minimum running time its controller keeps is not such a run: the
+    controller commands the rule's ratio for it like for any other step.
     """
 
     def __init__(self, device: Component, *, input_name: str, ratio_run_output_name: str, device_description: str) -> None:

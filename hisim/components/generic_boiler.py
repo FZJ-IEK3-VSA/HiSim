@@ -1488,7 +1488,12 @@ class GenericBoilerController(L1ControllerComponent):
     the ratio follows :class:`hisim.part_load.PartLoadRule` from the ratio the boiler reports it ran with
     (``PartLoadRatioRunDhw``) and the tank's start and end temperatures, so that the tank ends the step at the warm-water
     aim, the temperature at which the controller ends the charge (``TargetTemperatureDhwInCelsius``, 60 °C), or at most
-    a few hundredths of a kelvin above it.
+    a few hundredths of a kelvin above it, except on a step the simulator forces to converge, which ends wherever its
+    last pass left it.
+
+    The minimum running time is kept here, in the controller, not in the boiler: a step held in hot-water mode only by
+    it gets the rule's ratio like any other, which is 0 for a tank that starts at or above the aim, so the boiler does
+    not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST

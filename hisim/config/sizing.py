@@ -35,7 +35,7 @@ import dataclasses
 import enum
 from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterable, List, Mapping, Optional, Set, Tuple, TypeVar, Union,
+    TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type, TypeVar, Union,
 )
 
 from dataclasses_json import config as dataclasses_json_config
@@ -128,7 +128,7 @@ def _encode_sizable(value: Any) -> Any:
     return _AutoSize.WIRE_SPELLING if value is AUTO else value
 
 
-def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
+def _sizable_decoder(value_type: Optional[type], field_label: Optional[str] = None) -> Callable[[Any], Any]:
     """Builds the wire decoder of one sizable field.
 
     The field-level decoder *replaces* dataclasses_json's default handling, so for
@@ -145,9 +145,25 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
     thing on every path; it is also the rule the repository-wide contract test
     ``test_every_enum_typed_sizable_field_in_the_repository_decodes_to_its_member`` asserts.
 
-    ``value_type`` is only needed for fields that need coercion at all; plain-number fields
-    pass values through untouched.
+    A word that is neither a member name nor a member value is refused with a ``ValueError``
+    that names the field and lists the member names, so a misspelling read through the class's
+    own ``from_dict`` or ``from_json`` says what to write instead. Example: ``"FLOOR"`` on
+    ``HeatDistributionConfig.heating_system`` is refused with ``RADIATOR, FLOORHEATING,
+    LOW_TEMPERATURE_RADIATOR`` and ``AUTO`` listed.
+
+    Args:
+        value_type: The concrete type the wire value is coerced into, or ``None`` for a field
+            whose wire value already is the Python value (plain numbers pass through untouched).
+        field_label: How a refusal names the field, ``"<ConfigClass>.<field>"``. ``sized_field``
+            cannot know the name of the field it declares, so the class-creation step that
+            completes the enum codecs passes it; without it a refusal says "this field".
+
+    Returns:
+        The decoder: a callable from the wire value to the field value.
     """
+    enum_type: Optional[Type[enum.Enum]] = (
+        value_type if isinstance(value_type, type) and issubclass(value_type, enum.Enum) else None
+    )
 
     def decode(raw: Any) -> Any:
         # dataclasses_json also runs this decoder on the *default* of a missing key, so ``raw`` can be
@@ -156,15 +172,21 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
         # wire spelling), and the engine would then treat the field as already set.
         if raw is AUTO or (isinstance(raw, str) and raw == _AutoSize.WIRE_SPELLING):
             return AUTO
-        if value_type is not None and raw is not None and not isinstance(raw, value_type):
-            if isinstance(raw, str) and isinstance(value_type, type) and issubclass(value_type, enum.Enum):
-                member = value_type.__members__.get(raw)
-                if member is not None:
-                    return member
-            # Not a member name -- fall through to the by-value coercion, whose own error
-            # names the type and the value, which is what the reporting layers render.
+        if value_type is None or raw is None or isinstance(raw, value_type):
+            return raw
+        if enum_type is None:
             return value_type(raw)
-        return raw
+        member = enum_type.__members__.get(raw) if isinstance(raw, str) else None
+        if member is not None:
+            return member
+        try:
+            return enum_type(raw)
+        except ValueError as error:
+            raise ValueError(
+                f"{field_label or 'this field'} is set to {raw!r}, which names no member of "
+                f"{enum_type.__name__}; write one of {', '.join(enum_type.__members__)}, "
+                f"or {_AutoSize.WIRE_SPELLING}."
+            ) from error
 
     return decode
 

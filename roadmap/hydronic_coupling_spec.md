@@ -348,9 +348,12 @@ return. The pump decides on `T0` (owner, 2026-10-11; hisim-fxix.21): the collect
 runs, the flow its heat at the tank's start-of-step temperature needs, `Q_coll(T0)/(c · 2 ΔT_n)`
 (`RequiredWaterMassFlowAtStartOfStepInKgPerSecond`, from the tank's `WaterTemperatureAtStartOfStepInCelsius` wired to
 its `TemperatureCollectorInletAtStartOfStepInCelsius`), and the controller switches the pump on and off on that flow.
-No pass of a step moves it, so the pump's own heat cannot switch it off in the step it switches on. The collector
-still runs at `T̄` and still publishes `Q_coll(T̄)/(c · 2 ΔT_n)` (`RequiredWaterMassFlowOutput`). From 2026-10-09 to
-2026-10-11 the pump decided on that step-mean flow, an exception to D4 (owner, 2026-10-09), because deciding on `T0`
+No pass of a step moves it, so the pump's own heat cannot switch it off in the step it switches on (from the second
+pass on: the first pass reads the previous step's values, from which the simulator starts the step). The collector
+still runs at `T̄`, and its circuit carries `Q_coll(T̄)/(c · 2 ΔT_n)` while the pump runs (`WaterMassFlowOutput`).
+The step-mean flow it also published whether or not the pump ran (`RequiredWaterMassFlowOutput`) had no reader once
+the controller decided on `T0` and was removed on 2026-10-14. From 2026-10-09 to 2026-10-11 the pump decided on the
+step-mean flow, an exception to D4 (owner, 2026-10-09), because deciding on `T0`
 had made the collector's yield and the tank's hot-water fuel depend on the step length; with the step-mean decision
 about 50 steps a year at 900 s had no consistent on/off state (hisim-fxix.21). The controller's former switch-on comparison, the
 collector's outlet at `T̄` against `T̄` plus `set_temperature_difference_for_on`, is removed with that field and the

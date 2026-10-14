@@ -352,10 +352,11 @@ the controller moved first it settled on 718 of 759 and flagged 46 / 50 steps (-
 than the pass-counting search it replaced (3.42 against 4.20 at 900 s). That led to the kind order and the physics
 order (§4.3, #922, hisim-fxix.16, closed).
 
-**The solar pump's hysteresis (#941) on the physics order (K′), 2026-10-11.** The same year with the physics order
-of §4.3 (each L1 controller's device before the other physics the controller reads), measured on the old stack with
-#922 on top (after the removal of the
-simulator's fixed-point acceleration, #927, and with the solar pump's hysteresis of #941, hisim-fxix.19), against the
+**hisim-fxix.19's flow hysteresis alone, on the step mean, on the physics order (K′), 2026-10-11.** The same year
+with the physics order of §4.3 (each L1 controller's device before the other physics the controller reads), measured
+on the old stack with #922 on top (after the removal of the simulator's fixed-point acceleration, #927, and with the
+solar pump's first hysteresis, hisim-fxix.19: the flow band alone, decided on the step mean, before the start-of-step
+decision and the restart band of hisim-fxix.21 and before the differential controller of 2026-10-14), against the
 60 s run of the same head, with the collector's part load (#917) and the heat pump's and the electric heater's (#916)
 on the branch. K is the kind order alone on the same base. Deviations are from the 60 s run, "forced" counts the
 flagged steps, and "partial steps converged" the partial steps that were not flagged. The physics order is part of

@@ -13,6 +13,7 @@ from hisim.components.dual_circuit_system import HeatingMode
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import PartLoadRule
 from hisim.simulationparameters import SimulationParameters
+from tests import functions_for_testing
 
 
 class Parameters:
@@ -29,9 +30,10 @@ class Parameters:
         Returns:
             The simulation parameters.
         """
+        day = SimulationParameters.one_day_only(2021, seconds_per_timestep)
         return SimulationParameters(
-            start_date=SimulationParameters.one_day_only(2021, seconds_per_timestep).start_date,
-            end_date=SimulationParameters.one_day_only(2021, seconds_per_timestep).end_date,
+            start_date=day.start_date,
+            end_date=day.end_date,
             seconds_per_timestep=seconds_per_timestep,
             **extra,
         )
@@ -45,7 +47,8 @@ class Rig:
         """Point every listed input of ``component`` at a fake output; return the step values and the fakes.
 
         The fakes take the first indices of the step values and the component's outputs the following ones, in the
-        order the component declared them, as the simulator registers them.
+        order the component declared them, as the simulator registers them
+        (:func:`tests.functions_for_testing.add_global_index_of_components`).
 
         Args:
             component: The component under test.
@@ -61,8 +64,7 @@ class Rig:
             )
             channel.source_output = fake
             fakes.append(fake)
-        for index, output in enumerate([*fakes, *component.outputs]):
-            output.global_index = index
+        functions_for_testing.add_global_index_of_components([*fakes, component])
         stsv = cp.SingleTimeStepValues(len(fakes) + len(component.outputs))
         return stsv, fakes
 

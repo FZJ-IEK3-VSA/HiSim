@@ -130,6 +130,18 @@ def test_the_boiler_books_the_commanded_fraction_of_its_full_load_charge() -> No
 
 
 @pytest.mark.base
+def test_a_hot_water_charge_at_ratio_zero_books_nothing_and_reports_zero() -> None:
+    """In hot-water mode a commanded ratio of 0 gives no flow, no heat and no fuel, and the boiler reports ratio 0.
+
+    This is the step the controller's minimum running time holds in hot-water mode while the tank already starts at
+    the aim: the rule commands 0, and the burner must not fire.
+    """
+    idle = BoilerRig.charge(900, ratio=0.0)
+    assert (idle["flow_kg_per_s"], idle["heat_w"], idle["fuel_w"], idle["fuel_wh"]) == (0.0, 0.0, 0.0, 0.0)
+    assert idle["ratio_run"] == 0.0
+
+
+@pytest.mark.base
 def test_a_whole_step_and_space_heating_are_booked_as_without_part_load() -> None:
     """Ratio 1 leaves the charge untouched, and space heating ignores the hot-water ratio altogether."""
     full = BoilerRig.charge(900, ratio=1.0)

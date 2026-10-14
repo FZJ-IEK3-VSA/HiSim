@@ -1018,18 +1018,19 @@ class SolarThermalSystem(PhysicsComponent):
             )
             * self.area_m2
         )
+        pump_runs = control_signal != 0
         circuit = self.collector_circuit(
             collector_heat_in_watt=collector_heat_at_return_w,
             inlet_temperature_in_celsius=temperature_collector_inlet_deg_c,
             inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
-            pump_runs=control_signal != 0,
+            pump_runs=pump_runs,
         )
         required_mass_flow_output_kg_s = self.required_mass_flow_in_kg_per_second(
             collector_heat_in_watt=collector_heat_at_return_w,
             inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
         )
         pump_ratio_run = 0.0
-        if control_signal != 0:
+        if pump_runs:
             pump_ratio_run = self.part_load_command.ratio(stsv)
             circuit = circuit.at_part_load(part_load_ratio=pump_ratio_run, t_return_c=temperature_collector_inlet_deg_c)
         self.part_load_command.publish_ratio_run(stsv, pump_ratio_run)
@@ -1041,7 +1042,7 @@ class SolarThermalSystem(PhysicsComponent):
         )
         # the solar pump draws its electricity for the part of the step it runs
         electric_power_demand_solar_pump_w = pump_ratio_run * self.pump_power_in_watt(
-            pump_runs=control_signal != 0, is_old_pump=self.config.old_solar_pump
+            pump_runs=pump_runs, is_old_pump=self.config.old_solar_pump
         )
         water_temperature_output_deg_c = circuit.t_supply_c
         mass_flow_output_kg_s = circuit.mass_flow_kg_per_s

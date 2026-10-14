@@ -38,4 +38,4 @@ tests:
   monotone: []                                              # no numeric parameter: nothing to sweep
   expect:
     - {kpi: Total energy consumption, member: FuelMeter, min: 110, max: 150}
-      # 130.2 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure
+      # 128.1 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure

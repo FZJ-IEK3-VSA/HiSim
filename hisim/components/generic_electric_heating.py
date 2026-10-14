@@ -1088,12 +1088,15 @@ class ElectricHeatingController(L1ControllerComponent):
         )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
-    def determine_operating_mode(self, is_heating_season: bool, dhw_current_temperature_deg_c: Optional[float]) -> float:
+    def determine_operating_mode(
+        self, is_heating_season: bool, dhw_current_temperature_deg_c: Optional[float]
+    ) -> float:
         """Set the controller's mode from the heating season and the tank's temperature, and return the hot-water lift.
 
         Args:
             is_heating_season: Whether the heating curve publishes this day as one of the heating season.
-            dhw_current_temperature_deg_c: The hot-water tank's start-of-step temperature, in °C; None without hot water.
+            dhw_current_temperature_deg_c: The hot-water tank's start-of-step temperature, in °C; None without hot
+                water.
 
         Returns:
             The lift the hot-water charge asks for, in K; 0 when no charge runs.

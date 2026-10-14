@@ -16,7 +16,6 @@ from typing import Dict, List
 import pytest
 
 from hisim.components.solar_thermal_system import SolarThermalSystem, SolarThermalSystemController
-from hisim.part_load import PartLoadRule
 from tests.part_load_rigs import AllInputsRig, CollectorRig, SolarControllerRig
 
 
@@ -55,7 +54,7 @@ def test_above_the_threshold_the_controller_applies_the_rule_towards_its_maximum
     75 °C and stop the sun's charge there.
     """
     values = SolarControllerRig.values(start_c=75.0, end_c=82.0)
-    expected = (PartLoadRule.aim_temperature_in_celsius(80.0) - 75.0) / (82.0 - 75.0)
+    expected = (80.025 - 75.0) / (82.0 - 75.0)  # the aim is the middle of the 0.05 K band above 80 °C
     assert ControllerPasses.ratios(900, values, 3) == pytest.approx([expected] * 3, rel=1e-12)
     controller, stsv, fakes = SolarControllerRig.build(900)
     target = AllInputsRig.step(controller, stsv, fakes, values, timestep=ControllerPasses.TIMESTEP)[

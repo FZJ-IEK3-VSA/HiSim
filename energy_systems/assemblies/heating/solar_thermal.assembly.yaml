@@ -1,6 +1,7 @@
 # Flat-plate solar thermal collectors with their differential-thermostat pump controller, charging a DHW cylinder
 # through its solar coil, the `solar_dhw` circuit. Control is hardcoded here (D21): the Controller starts the solar pump
-# on the collector's heat at the cylinder's start-of-step temperature. The energy manager ranks the pump's electricity
+# when the collector's sensor reads 7 K above the cylinder's start-of-step temperature and stops it at 3 K. The
+# collector's speed-controlled pump runs 5 to 40 kg/(m² h). The energy manager ranks the pump's electricity
 # from its own declaration (SOLAR_THERMAL_SYSTEM, weight 4, dispatch {}) and has no modifier for it (rank-only, dry run
 # G18), so the assembly offers no `ems_modifier`.
 #
@@ -38,7 +39,7 @@ components:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # the flow its heat at the start-of-step inlet needs;
+      - Collector                                           # its sensor temperature at the start of the step;
                                                             # PartLoadRatioRun, the fraction of the step its pump ran
       - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-storage stop;
                                                             # the end-of-step temperature, for the part-load ratio
@@ -72,6 +73,8 @@ tests:
       # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
     - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: 0, max: 5000}         # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
+    - {output: Collector.CollectorSensorTemperatureAtStartOfStepInCelsius, unit: CELSIUS, min: -30, max: 250}
+      # the stagnation temperature of a standing pump: winter night air to about 205 °C at 1200 W/m² in 40 °C air
     - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
     - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
     - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
@@ -87,8 +90,8 @@ tests:
     - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
       # the investment is priced per m² of collector (3188 EUR for the default 4 m², 1594 to 15940 EUR over the
       # range); the heat delivered is no measure on the test day: unlike the 1200 W/m² ceiling the bounds are sized
-      # for, the test day measures at most 53 W/m² on the collector plane, at which the collector heat stays below the
-      # pump's switch-on flow, so the pump never starts and every area of the range delivers 0 kWh
+      # for, the test day measures at most 53 W/m² on the collector plane, at which the collector stagnates far below
+      # the cylinder, so the pump never starts and every area of the range delivers 0 kWh
   expect:
     - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 0.5}
       # 0.0 kWh measured at the defaults (4 m², one apartment) on the test day: the pump never starts

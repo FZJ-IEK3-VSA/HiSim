@@ -90,7 +90,9 @@ class Systems:
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
       source_weight: 1
-      delta_temperature_n_k: 10.0
+      pump_target_lift_in_kelvin: 20.0
+      pump_minimum_mass_flow_in_kg_per_hour_per_m2: 5.0
+      pump_maximum_mass_flow_in_kg_per_hour_per_m2: 40.0
 """
 
     #: The weather every building is computed against. A building records which weather that is as a

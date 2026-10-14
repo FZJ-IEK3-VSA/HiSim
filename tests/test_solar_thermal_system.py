@@ -14,7 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-from tests.part_load_rigs import Parameters, Rig
+from tests.part_load_rigs import AllInputsRig, CollectorRig, SolarControllerRig
 
 
 @pytest.mark.base
@@ -327,7 +327,7 @@ def _collector_heat_the_series_way(
     ambient_air_temperature_deg_c: float,
     temperature_collector_inlet_deg_c: float,
 ) -> Any:
-    """The collector heat in W/m² exactly as i_simulate computed it before hisim-e194.
+    """The collector heat in W/m² as i_simulate computed it before hisim-e194, at half the pump's target lift.
 
     One-element pandas Series through ``pvlib.irradiance.dni``, ``get_total_irradiance`` and oemof's
     ``calc_eta_c_flate_plate``: correct, and about 7 ms a call. Kept here as the reference the fast
@@ -352,7 +352,7 @@ def _collector_heat_the_series_way(
         config.a_1_w_m2_k,
         config.a_2_w_m2_k,
         temperature_collector_inlet_deg_c,
-        config.delta_temperature_n_k,
+        config.pump_target_lift_in_kelvin / 2,
         pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
         total_irradiation["poa_global"],
     )
@@ -397,7 +397,7 @@ def test_the_fast_collector_equals_the_series_path(
         config.a_1_w_m2_k,
         config.a_2_w_m2_k,
         inlet_deg_c,
-        config.delta_temperature_n_k,
+        config.pump_target_lift_in_kelvin / 2,
         ambient_deg_c,
         poa,
     )
@@ -446,7 +446,9 @@ def test_the_timestep_output_equals_the_series_path() -> None:
     stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, control, inlet]))
     stsv.values[control.global_index] = 1
 
+    least_flow_kg_s = config.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * config.area_m2 / 3600
     compared = 0
+    above_the_minimum = 0
     for day in (15, 183):
         for hour in range(24):
             timestep = day * 24 + hour
@@ -465,27 +467,33 @@ def test_the_timestep_output_equals_the_series_path() -> None:
                 )
                 fast = my_sts.area_m2 * my_sts.collector_curve.heat_in_watt_per_m2(
                     inlet_temperature_in_celsius=inlet_deg_c,
+                    inlet_to_mean_temperature_difference_in_kelvin=config.pump_target_lift_in_kelvin / 2,
                     ambient_temperature_in_celsius=stsv.values[my_weather.air_temperature_output.global_index],
                     irradiance_in_watt_per_m2=float(my_sts.plane_of_array_irradiance_w_m2),
                 )
                 assert _bits(fast) == _bits(reference), (
                     f"timestep {timestep}, inlet {inlet_deg_c} °C: {fast!r} against the Series path's {reference!r}"
                 )
-                # the booked heat is what the circuit's water carries: the collector heat to the last digits
+                # the booked heat is what the circuit's water carries: the collector heat at the target lift to the
+                # last digits while the pump runs above its minimum flow
                 booked_w = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
-                assert booked_w == pytest.approx(max(reference, 0.0), rel=1e-12, abs=1e-9)
+                flow_kg_s = stsv.values[my_sts.water_mass_flow_kg_s_output_channel.global_index]
+                if flow_kg_s > least_flow_kg_s:
+                    assert booked_w == pytest.approx(reference, rel=1e-12)
+                    above_the_minimum += 1
                 compared += 1
     assert compared == 2 * 24 * 3
+    assert above_the_minimum > 10
 
 
 @pytest.mark.base
-def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_and_its_controller_reads_it() -> None:
+def test_the_collector_pumps_its_heat_over_the_target_lift_and_its_sensor_reads_the_stagnation_temperature() -> None:
     """A collector circuit whose water carried another heat than the collector's would unbalance the tank.
 
-    At noon on 2 July in Aachen, with the tank's step mean at 40 °C: the pump runs ``Q(40) / (c * 20 K)`` and the
-    supply is 60 °C, so the water carries ``Q(40)``; the flow the controller reads, at the tank's start-of-step
-    temperature (here equal to its step mean), is the same whether or not the pump runs. With the pump off the circuit
-    moves no water and its supply is its return.
+    At noon on 2 July in Aachen, with the tank's step mean at 40 °C: the pump runs ``Q(40) / (c * 20 K)``, within
+    its flow bounds, and the supply is 60 °C, so the water carries ``Q(40)`` at the target lift. The sensor of a
+    collector whose pump stood in the previous step reads its stagnation temperature whether or not the pump runs now.
+    With the pump off the circuit moves no water and its supply is its return.
     """
 
     repo = sim_repository.SimRepository()
@@ -507,7 +515,6 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
     my_sts.part_load_command.ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
-    # the tank started the step at its step mean, so the controller's flow is the circuit's
     my_sts.inlet_temperature_at_start_of_step_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
@@ -524,54 +531,287 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
 
     stsv.values[control.global_index] = 1
     my_sts.i_simulate(timestep, stsv, False)
+    irradiance_w_m2 = float(my_sts.plane_of_array_irradiance_w_m2)
     heat_w = my_sts.area_m2 * my_sts.collector_curve.heat_in_watt_per_m2(
         inlet_temperature_in_celsius=40.0,
+        inlet_to_mean_temperature_difference_in_kelvin=10.0,
         ambient_temperature_in_celsius=air_temperature_deg_c,
-        irradiance_in_watt_per_m2=float(my_sts.plane_of_array_irradiance_w_m2),
+        irradiance_in_watt_per_m2=irradiance_w_m2,
     )
-    assert heat_w > 0.0
     flow_kg_s = output(my_sts.water_mass_flow_kg_s_output_channel)
     assert flow_kg_s == pytest.approx(heat_w / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 20.0), rel=1e-12)
+    assert 5.0 * 4 / 3600 < flow_kg_s < 40.0 * 4 / 3600
     assert output(my_sts.water_temperature_deg_c_output_channel) == 60.0
     assert output(my_sts.thermal_power_w_output_channel) == hydronics.circuit_power_w(
         mass_flow_kg_per_s=flow_kg_s, t_supply_c=60.0, t_return_c=40.0
     )
     assert output(my_sts.thermal_power_w_output_channel) == pytest.approx(heat_w, rel=1e-12)
-    assert output(my_sts.required_water_mass_flow_at_start_of_step_output_channel) == flow_kg_s
+    stagnation_c = my_sts.collector_curve.stagnation_temperature_in_celsius(
+        ambient_temperature_in_celsius=air_temperature_deg_c, irradiance_in_watt_per_m2=irradiance_w_m2
+    )
+    sensor = my_sts.sensor_temperature_at_start_of_step_output_channel
+    assert output(sensor) == stagnation_c > 60.0
 
     stsv.values[control.global_index] = 0
     my_sts.i_simulate(timestep, stsv, False)
     assert output(my_sts.water_mass_flow_kg_s_output_channel) == 0.0
     assert output(my_sts.water_temperature_deg_c_output_channel) == 40.0
     assert output(my_sts.thermal_power_w_output_channel) == 0.0
-    assert output(my_sts.required_water_mass_flow_at_start_of_step_output_channel) == flow_kg_s
+    assert output(sensor) == stagnation_c
+
+
+class CollectorPhysics:
+    """The flat-plate preset's curve and pump, and a grid of tanks, air and irradiance to check them on."""
+
+    #: The flat-plate preset's configuration.
+    CONFIG = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+
+    #: The preset's efficiency curve.
+    CURVE = solar_thermal_system.FlatPlateCollectorCurve(
+        eta_0=CONFIG.eta_0,
+        a_1_in_watt_per_m2_per_kelvin=CONFIG.a_1_w_m2_k,
+        a_2_in_watt_per_m2_per_kelvin_squared=CONFIG.a_2_w_m2_k,
+    )
+
+    #: The preset's pump: 20 K target lift, 5 to 40 kg/(m² h).
+    PUMP = solar_thermal_system.SpeedControlledSolarPump(
+        target_lift_in_kelvin=CONFIG.pump_target_lift_in_kelvin,
+        minimum_mass_flow_in_kg_per_hour_per_m2=CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
+        maximum_mass_flow_in_kg_per_hour_per_m2=CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
+    )
+
+    #: Tank (inlet) temperatures, °C.
+    TANKS_IN_CELSIUS = (20.0, 45.0, 60.0)
+
+    #: Air temperatures, °C.
+    AIRS_IN_CELSIUS = (-5.0, 10.0, 25.0)
+
+    #: Irradiances on the collector plane, W/m².
+    IRRADIANCES_IN_WATT_PER_M2 = (0.0, 80.0, 150.0, 250.0, 400.0, 800.0, 1050.0)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("air_c", CollectorPhysics.AIRS_IN_CELSIUS)
+@pytest.mark.parametrize("irradiance_w_m2", CollectorPhysics.IRRADIANCES_IN_WATT_PER_M2)
+def test_the_stagnation_temperature_is_where_the_collector_gives_no_heat(air_c: float, irradiance_w_m2: float) -> None:
+    """A collector sensor that read another temperature than the one at zero heat would switch the pump on too early.
+
+    At the stagnation temperature the curve gives no heat with the whole collector at that temperature, a kelvin
+    below it gives heat, and without irradiance the collector is at the air temperature.
+    """
+    curve = CollectorPhysics.CURVE
+    stagnation_c = curve.stagnation_temperature_in_celsius(
+        ambient_temperature_in_celsius=air_c, irradiance_in_watt_per_m2=irradiance_w_m2
+    )
+    if irradiance_w_m2 == 0.0:
+        assert stagnation_c == air_c
+        return
+    excess_k = stagnation_c - air_c
+    balance_w_m2 = (
+        curve.eta_0 * irradiance_w_m2
+        - curve.a_1_in_watt_per_m2_per_kelvin * excess_k
+        - curve.a_2_in_watt_per_m2_per_kelvin_squared * excess_k**2
+    )
+    assert balance_w_m2 == pytest.approx(0.0, abs=1e-9)
+    below = curve.heat_in_watt_per_m2(
+        inlet_temperature_in_celsius=stagnation_c - 1.0,
+        inlet_to_mean_temperature_difference_in_kelvin=0.0,
+        ambient_temperature_in_celsius=air_c,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+    )
+    assert below > 0.0
+
+
+@pytest.mark.base
+def test_the_stagnation_temperature_of_a_linear_curve_is_the_absorbed_irradiance_over_its_loss() -> None:
+    """A curve without the quadratic loss stagnates at ``eta_0 G / a_1`` above the air, not at a division by zero."""
+    curve = solar_thermal_system.FlatPlateCollectorCurve(
+        eta_0=0.8, a_1_in_watt_per_m2_per_kelvin=4.0, a_2_in_watt_per_m2_per_kelvin_squared=0.0
+    )
+    assert curve.stagnation_temperature_in_celsius(
+        ambient_temperature_in_celsius=10.0, irradiance_in_watt_per_m2=500.0
+    ) == pytest.approx(110.0, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tank_c", CollectorPhysics.TANKS_IN_CELSIUS)
+@pytest.mark.parametrize("air_c", CollectorPhysics.AIRS_IN_CELSIUS)
+@pytest.mark.parametrize("irradiance_w_m2", CollectorPhysics.IRRADIANCES_IN_WATT_PER_M2)
+def test_the_pump_runs_the_target_lift_within_its_bounds_and_its_water_carries_the_heat_at_the_mean_temperature(
+    tank_c: float, air_c: float, irradiance_w_m2: float
+) -> None:
+    """The pump's flow lies within its bounds, and the heat is the curve's at the mean of inlet and outlet.
+
+    Within the bounds the lift is the 20 K target and the heat the curve's 10 K above the inlet; at a bound the lift
+    follows from the heat, and the water carries the curve's heat at half that lift above the inlet. A pump that broke
+    its bounds, or a heat that did not match its lift, would book heat the collector cannot give.
+    """
+    pump = CollectorPhysics.PUMP
+    area_m2 = 4.0
+    point = pump.operating_point(
+        curve=CollectorPhysics.CURVE,
+        inlet_temperature_in_celsius=tank_c,
+        ambient_temperature_in_celsius=air_c,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+        area_m2=area_m2,
+    )
+    if point.heat_in_watt == 0.0:
+        assert point == solar_thermal_system.CollectorOperatingPoint.idle()
+        return
+    least_kg_s = pump.minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600
+    most_kg_s = pump.maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600
+    assert least_kg_s * (1 - 1e-12) <= point.mass_flow_in_kg_per_second <= most_kg_s * (1 + 1e-12)
+    assert point.heat_in_watt == pytest.approx(
+        hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * point.mass_flow_in_kg_per_second * point.lift_in_kelvin, rel=1e-12
+    )
+    heat_at_the_mean_w = area_m2 * CollectorPhysics.CURVE.heat_in_watt_per_m2(
+        inlet_temperature_in_celsius=tank_c,
+        inlet_to_mean_temperature_difference_in_kelvin=point.lift_in_kelvin / 2,
+        ambient_temperature_in_celsius=air_c,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+    )
+    assert point.heat_in_watt == pytest.approx(heat_at_the_mean_w, rel=1e-9)
+    if least_kg_s < point.mass_flow_in_kg_per_second < most_kg_s:
+        assert point.lift_in_kelvin == pump.target_lift_in_kelvin
+    elif point.mass_flow_in_kg_per_second == least_kg_s:
+        assert point.lift_in_kelvin < pump.target_lift_in_kelvin
+
+
+@pytest.mark.base
+def test_a_collector_without_heat_at_the_target_lift_still_gives_heat_at_the_minimum_flow() -> None:
+    """A slower flow keeps the collector cooler, so it gives heat where the target lift's mean temperature gives none.
+
+    With the sun just 9 K of stagnation above a 45 °C tank, the mean temperature 10 K above the inlet gives no heat,
+    but the minimum flow lifts the water by a few kelvin and carries heat. A model that idled here would switch the
+    pump on at 7 K and off again in the next step.
+    """
+    curve, pump = CollectorPhysics.CURVE, CollectorPhysics.PUMP
+    excess_k = 45.0 + 9.0 - 20.0
+    irradiance_w_m2 = (3.2 * excess_k + 0.015 * excess_k**2) / 0.78
+    at_target = curve.heat_in_watt_per_m2(
+        inlet_temperature_in_celsius=45.0,
+        inlet_to_mean_temperature_difference_in_kelvin=10.0,
+        ambient_temperature_in_celsius=20.0,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+    )
+    assert at_target == 0.0
+    point = pump.operating_point(
+        curve=curve,
+        inlet_temperature_in_celsius=45.0,
+        ambient_temperature_in_celsius=20.0,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+        area_m2=4.0,
+    )
+    assert point.mass_flow_in_kg_per_second == pytest.approx(5.0 * 4.0 / 3600, rel=1e-12)
+    assert 3.0 < point.lift_in_kelvin < 9.0
+    assert point.heat_in_watt > 0.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("irradiance_w_m2", [150.0, 400.0, 800.0, 1050.0])
+def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradiance_w_m2: float) -> None:
+    """A pump whose minimum equals its maximum runs that flow whatever the sun, and only its lift moves.
+
+    A constant-flow pump that still ran the target lift's flow would ignore its own speed.
+    """
+    pump = solar_thermal_system.SpeedControlledSolarPump(
+        target_lift_in_kelvin=20.0,
+        minimum_mass_flow_in_kg_per_hour_per_m2=30.0,
+        maximum_mass_flow_in_kg_per_hour_per_m2=30.0,
+    )
+    point = pump.operating_point(
+        curve=CollectorPhysics.CURVE,
+        inlet_temperature_in_celsius=40.0,
+        ambient_temperature_in_celsius=15.0,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+        area_m2=6.0,
+    )
+    assert point.mass_flow_in_kg_per_second == pytest.approx(30.0 * 6.0 / 3600, rel=1e-12)
+    assert point.heat_in_watt == pytest.approx(
+        hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * point.mass_flow_in_kg_per_second * point.lift_in_kelvin, rel=1e-12
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tank_c", CollectorPhysics.TANKS_IN_CELSIUS)
+@pytest.mark.parametrize("irradiance_w_m2", CollectorPhysics.IRRADIANCES_IN_WATT_PER_M2)
+def test_the_pump_runs_every_collector_area_alike_per_m2(tank_c: float, irradiance_w_m2: float) -> None:
+    """Four and twenty-four m² of the same collector run the same flow per m² and the same lift.
+
+    The lift is what the sensor reads above the tank, so a pump whose flow depended on the field's size would switch
+    a large field at other irradiances than a small one.
+    """
+    points = [
+        CollectorPhysics.PUMP.operating_point(
+            curve=CollectorPhysics.CURVE,
+            inlet_temperature_in_celsius=tank_c,
+            ambient_temperature_in_celsius=10.0,
+            irradiance_in_watt_per_m2=irradiance_w_m2,
+            area_m2=area_m2,
+        )
+        for area_m2 in (4.0, 24.0)
+    ]
+    small, large = points
+    assert large.lift_in_kelvin == pytest.approx(small.lift_in_kelvin, rel=1e-12, abs=1e-12)
+    assert large.mass_flow_in_kg_per_second == pytest.approx(6 * small.mass_flow_in_kg_per_second, rel=1e-12)
+    assert large.heat_in_watt == pytest.approx(6 * small.heat_in_watt, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tank_c", CollectorPhysics.TANKS_IN_CELSIUS)
+@pytest.mark.parametrize("air_c", CollectorPhysics.AIRS_IN_CELSIUS)
+def test_at_the_switch_on_difference_the_preset_pump_lifts_by_more_than_the_switch_off_difference(
+    tank_c: float, air_c: float
+) -> None:
+    """A pump switched on at 7 K of stagnation must read more than 3 K at its outlet, or it switches off at once.
+
+    With the sun just strong enough for the collector to stagnate 7 K above the tank, the preset pump's minimum flow
+    lifts the water by more than the switch-off difference. With a faster minimum flow the lift there falls below it,
+    and the pump switches on and off in alternate steps while the sun stands near the switch-on point.
+    """
+    controller = solar_thermal_system.SolarThermalSystemController
+    excess_k = tank_c + controller.SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN - air_c
+    curve = CollectorPhysics.CURVE
+    irradiance_w_m2 = (
+        curve.a_1_in_watt_per_m2_per_kelvin * excess_k + curve.a_2_in_watt_per_m2_per_kelvin_squared * excess_k**2
+    ) / curve.eta_0
+    point = CollectorPhysics.PUMP.operating_point(
+        curve=curve,
+        inlet_temperature_in_celsius=tank_c,
+        ambient_temperature_in_celsius=air_c,
+        irradiance_in_watt_per_m2=irradiance_w_m2,
+        area_m2=4.0,
+    )
+    assert point.lift_in_kelvin > controller.SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN
 
 
 class PumpTransitions:
-    """The solar pump's on/off transitions: the saved pump state, the collector's flow, the full-storage stop."""
+    """The solar pump's on/off transitions: the saved pump state, the collector's sensor, the full-storage stop."""
 
-    #: The switch-on flow, kg/s.
-    ON_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_ON_MASS_FLOW_IN_KG_PER_S
+    #: The switch-on difference, K.
+    ON_IN_KELVIN = solar_thermal_system.SolarThermalSystemController.SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN
 
-    #: The switch-off flow, kg/s.
-    OFF_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_OFF_MASS_FLOW_IN_KG_PER_S
+    #: The switch-off difference, K.
+    OFF_IN_KELVIN = solar_thermal_system.SolarThermalSystemController.SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN
 
-    #: Each row: whether the pump ran in the previous step, the flow the collector heat at the storage's start-of-step
-    #: temperature needs in kg/s, whether the full-storage stop holds, whether the pump runs, and what the row checks.
+    #: Each row: whether the pump ran in the previous step, how far the collector's sensor reads above the storage's
+    #: start-of-step temperature in K, whether the full-storage stop holds, whether the pump runs, and what the row
+    #: checks.
     TABLE = [
-        (False, 0.01, False, True, "a standing pump with heat enough and a storage to fill switches on"),
-        (False, ON_IN_KG_PER_S, False, True, "a standing pump switches on at exactly the switch-on flow"),
-        (False, 0.004, False, False, "a standing pump stays off between the two flows"),
-        (False, OFF_IN_KG_PER_S, False, False, "a standing pump stays off at the switch-off flow"),
-        (False, 0.0, False, False, "a standing pump stays off without collector heat"),
-        (False, 0.01, True, False, "a standing pump stays off while the full-storage stop holds"),
-        (True, 0.01, False, True, "a running pump with heat enough keeps running"),
-        (True, 0.004, False, True, "a running pump keeps running between the two flows"),
-        (True, OFF_IN_KG_PER_S, False, True, "a running pump keeps running at exactly the switch-off flow"),
-        (True, 0.002, False, False, "a running pump switches off below the switch-off flow"),
-        (True, 0.0, False, False, "a running pump switches off without collector heat"),
-        (True, 0.01, True, False, "the full-storage stop stops a running pump"),
-        (True, 0.004, True, False, "the full-storage stop stops a running pump inside the flow band too"),
+        (False, 20.0, False, True, "a standing pump with a hot collector and a storage to fill switches on"),
+        (False, ON_IN_KELVIN + 0.01, False, True, "a standing pump switches on just above the switch-on difference"),
+        (False, ON_IN_KELVIN, False, False, "a standing pump stays off at exactly the switch-on difference"),
+        (False, 5.0, False, False, "a standing pump stays off between the two differences"),
+        (False, OFF_IN_KELVIN + 0.01, False, False, "a standing pump stays off just above the switch-off difference"),
+        (False, -10.0, False, False, "a standing pump stays off with a collector colder than the storage"),
+        (False, 20.0, True, False, "a standing pump stays off while the full-storage stop holds"),
+        (True, 20.0, False, True, "a running pump with a hot collector keeps running"),
+        (True, 5.0, False, True, "a running pump keeps running between the two differences"),
+        (True, OFF_IN_KELVIN + 0.01, False, True, "a running pump keeps running just above the switch-off difference"),
+        (True, OFF_IN_KELVIN, False, False, "a running pump switches off at exactly the switch-off difference"),
+        (True, 0.0, False, False, "a running pump switches off when the collector gives nothing"),
+        (True, 20.0, True, False, "the full-storage stop stops a running pump"),
+        (True, 5.0, True, False, "the full-storage stop stops a running pump inside the band too"),
     ]
 
 
@@ -603,15 +843,15 @@ class FullStorageStopTransitions:
 
 
 @pytest.mark.base
-def test_the_switch_off_flow_lies_clearly_below_the_switch_on_flow() -> None:
-    """Catches a hysteresis band of the wrong width between the pump's switch-on and switch-off flows.
+def test_the_switch_off_difference_lies_below_the_switch_on_difference_as_differential_controllers_set_them() -> None:
+    """Catches a hysteresis band of the wrong width between the pump's switch-on and switch-off differences.
 
-    A band of zero lets a pump whose heat warms the storage from one step to the next switch off and on every few
-    steps. A switch-off flow outside 3/7 to 1/2 of the switch-on flow leaves the 7 K / 3 K band of a differential
-    solar controller.
+    A band of zero lets a pump whose start cools the collector's sensor switch off and on every step. Differential
+    solar controllers switch on at about 5 to 8 K and off at about 2 to 4 K.
     """
-    ratio = PumpTransitions.OFF_IN_KG_PER_S / PumpTransitions.ON_IN_KG_PER_S
-    assert 3 / 7 <= ratio <= 1 / 2
+    assert 5.0 <= PumpTransitions.ON_IN_KELVIN <= 8.0
+    assert 2.0 <= PumpTransitions.OFF_IN_KELVIN <= 4.0
+    assert PumpTransitions.OFF_IN_KELVIN < PumpTransitions.ON_IN_KELVIN
 
 
 @pytest.mark.base
@@ -628,29 +868,26 @@ def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_aim() -> 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    (
-        "pump_ran_in_previous_step",
-        "required_mass_flow_at_start_of_step_in_kg_per_second",
-        "full_storage_stop_holds",
-        "expected",
-    ),
+    ("pump_ran_in_previous_step", "collector_above_storage_in_kelvin", "full_storage_stop_holds", "expected"),
     [row[:4] for row in PumpTransitions.TABLE],
     ids=[row[4] for row in PumpTransitions.TABLE],
 )
-def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stands_while_the_storage_is_full(
+def test_the_pump_switches_on_above_seven_kelvin_off_at_three_and_stands_while_the_storage_is_full(
     pump_ran_in_previous_step: bool,
-    required_mass_flow_at_start_of_step_in_kg_per_second: float,
+    collector_above_storage_in_kelvin: float,
     full_storage_stop_holds: bool,
     expected: bool,
 ) -> None:
-    """Every transition of the pump's flow hysteresis, with the edges of both flows and the full-storage stop.
+    """Every transition of the pump's temperature-difference hysteresis, with the edges of both and the stop.
 
-    A pump without the band would switch on and off every few steps; a band with the wrong edges would run the pump on
-    too little heat or keep it standing on enough; a pump that ignored the stop would heat a full storage further.
+    A pump without the band would switch on and off every step; a band with the wrong edges would run the pump on too
+    little heat or keep it standing on enough; a pump that ignored the stop would heat a full storage further.
     """
+    storage_c = 45.0
     assert (
         solar_thermal_system.SolarThermalSystemController.pump_runs(
-            required_mass_flow_at_start_of_step_in_kg_per_second=required_mass_flow_at_start_of_step_in_kg_per_second,
+            collector_sensor_temperature_in_celsius=storage_c + collector_above_storage_in_kelvin,
+            storage_temperature_at_start_in_celsius=storage_c,
             full_storage_stop_holds=full_storage_stop_holds,
             pump_ran_in_previous_step=pump_ran_in_previous_step,
         )
@@ -683,25 +920,28 @@ def test_the_full_storage_stop_sets_above_the_aim_and_releases_three_kelvin_belo
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("collector_heat_in_watt", "pump_runs", "expected_mass_flow_in_kg_per_second", "expected_supply_temperature_in_celsius"),
-    [(836.0, True, 0.01, 60.0), (836.0, False, 0.0, 40.0), (0.0, True, 0.0, 40.0), (-50.0, True, 0.0, 40.0)],
+    ("heat_in_watt", "pump_runs", "expected_mass_flow_in_kg_per_second", "expected_supply_temperature_in_celsius"),
+    [(2090.0, True, 0.025, 60.0), (2090.0, False, 0.0, 40.0), (0.0, True, 0.0, 40.0)],
 )
 def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the_collector_has_heat(
-    collector_heat_in_watt: float,
+    heat_in_watt: float,
     pump_runs: bool,
     expected_mass_flow_in_kg_per_second: float,
     expected_supply_temperature_in_celsius: float,
 ) -> None:
     """A circuit that moved water without heat, or with the pump off, would cool the tank or book phantom heat."""
+    if heat_in_watt > 0:
+        point = solar_thermal_system.CollectorOperatingPoint(
+            heat_in_watt=heat_in_watt, mass_flow_in_kg_per_second=0.025, lift_in_kelvin=20.0
+        )
+    else:
+        point = solar_thermal_system.CollectorOperatingPoint.idle()
     circuit = solar_thermal_system.SolarThermalSystem.collector_circuit(
-        collector_heat_in_watt=collector_heat_in_watt,
-        inlet_temperature_in_celsius=40.0,
-        inlet_to_mean_temperature_difference_in_kelvin=10.0,
-        pump_runs=pump_runs,
+        operating_point=point, inlet_temperature_in_celsius=40.0, pump_runs=pump_runs
     )
     assert circuit.mass_flow_kg_per_s == pytest.approx(expected_mass_flow_in_kg_per_second, rel=1e-12)
     assert circuit.t_supply_c == expected_supply_temperature_in_celsius
-    assert circuit.power_w == pytest.approx(max(collector_heat_in_watt, 0.0) if pump_runs else 0.0, rel=1e-12)
+    assert circuit.power_w == pytest.approx(heat_in_watt if pump_runs else 0.0, rel=1e-12)
 
 
 @pytest.mark.base
@@ -720,66 +960,65 @@ def test_the_solar_pump_draws_its_kind_s_power_only_while_it_runs(
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("delta_temperature_n_k", [0.0, -5.0, float("nan"), float("inf")])
-def test_a_collector_without_a_finite_positive_inlet_to_mean_difference_is_refused(delta_temperature_n_k: float) -> None:
-    """A difference of 0 K would divide the collector's flow by zero, a negative one would give a negative flow."""
-    with pytest.raises(ValueError, match="delta_temperature_n_k"):
-        solar_thermal_system.SolarThermalSystemConfig(
-            component_id=ComponentID(name="SolarThermalSystem"), delta_temperature_n_k=delta_temperature_n_k
-        )
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("pump_target_lift_in_kelvin", 0.0),
+        ("pump_target_lift_in_kelvin", -5.0),
+        ("pump_target_lift_in_kelvin", float("nan")),
+        ("pump_minimum_mass_flow_in_kg_per_hour_per_m2", 0.0),
+        ("pump_minimum_mass_flow_in_kg_per_hour_per_m2", float("inf")),
+        ("pump_maximum_mass_flow_in_kg_per_hour_per_m2", 4.0),
+        ("pump_maximum_mass_flow_in_kg_per_hour_per_m2", float("nan")),
+    ],
+)
+def test_a_solar_pump_without_a_finite_positive_lift_and_flow_range_is_refused(field_name: str, value: float) -> None:
+    """A lift of 0 K divides the flow by zero, a minimum flow of 0 gives an infinite lift, a lower maximum no range."""
+    fields: Dict[str, Any] = {field_name: value}
+    with pytest.raises(ValueError, match=field_name):
+        solar_thermal_system.SolarThermalSystemConfig(component_id=ComponentID(name="SolarThermalSystem"), **fields)
 
 
 @pytest.mark.base
-def test_the_flat_plate_preset_has_a_valid_inlet_to_mean_difference() -> None:
-    """The refusal of a non-positive difference must not refuse the preset's own 10 K."""
+def test_the_flat_plate_preset_has_a_valid_pump_and_a_constant_flow_pump_is_accepted() -> None:
+    """The refusals must not refuse the preset's own pump, nor a constant-flow pump whose minimum equals its maximum."""
     config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
-    assert config.delta_temperature_n_k == 10
+    assert config.pump_target_lift_in_kelvin == 20.0
+    assert config.pump_minimum_mass_flow_in_kg_per_hour_per_m2 == 5.0
+    assert config.pump_maximum_mass_flow_in_kg_per_hour_per_m2 == 40.0
+    solar_thermal_system.SolarThermalSystemConfig(
+        component_id=ComponentID(name="SolarThermalSystem"),
+        pump_minimum_mass_flow_in_kg_per_hour_per_m2=30.0,
+        pump_maximum_mass_flow_in_kg_per_hour_per_m2=30.0,
+    )
 
 
 class SolarControllerSteps:
-    """Drive the solar controller on fake inputs through passes and steps as the simulator does, and read its signal."""
+    """Drive the solar controller through passes and steps as the simulator does, on the shared rig."""
 
     #: A step well into the run.
     TIMESTEP: int = 100
 
-    #: A flow between the switch-off and the switch-on flow, kg/s.
-    BETWEEN_THE_FLOWS_IN_KG_PER_S: float = 0.004
+    #: A collector sensor between the switch-off and the switch-on difference above the storage, K.
+    BETWEEN_THE_DIFFERENCES_IN_KELVIN: float = 5.0
 
-    #: A flow above the switch-on flow, kg/s.
-    ABOVE_THE_ON_FLOW_IN_KG_PER_S: float = 0.006
+    #: A collector sensor above the switch-on difference, K.
+    ABOVE_THE_ON_DIFFERENCE_IN_KELVIN: float = 9.0
 
-    #: A flow below the switch-off flow, kg/s.
-    BELOW_THE_OFF_FLOW_IN_KG_PER_S: float = 0.002
-
-    @staticmethod
-    def build(seconds_per_timestep: int) -> Any:
-        """Return the controller, its step values and its fakes by input field name, every input on a fake output.
-
-        Args:
-            seconds_per_timestep: The step length, s.
-
-        Returns:
-            The controller, its step values and its fakes.
-        """
-        config = solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
-        controller = solar_thermal_system.SolarThermalSystemController(
-            my_simulation_parameters=Parameters.one_day(seconds_per_timestep), config=config
-        )
-        stsv, fakes = Rig.wire(controller, [(entry, LoadTypes.ANY, Units.ANY) for entry in controller.inputs])
-        return controller, stsv, {entry.field_name: fake for entry, fake in zip(controller.inputs, fakes)}
+    #: A collector sensor below the switch-off difference, K.
+    BELOW_THE_OFF_DIFFERENCE_IN_KELVIN: float = 2.0
 
     @staticmethod
-    def values(mass_flow_in_kg_per_second: float, start_c: float = 45.0, ratio_run: float = 1.0) -> Dict[str, float]:
-        """Return the controller's inputs: the tank's start temperature, the collector's flow and its pump's ratio run.
+    def values(
+        collector_above_storage_in_kelvin: float, start_c: float = 45.0, ratio_run: float = 1.0
+    ) -> Dict[str, float]:
+        """Return the controller's inputs: the tank's start temperature, the collector's sensor, the pump's ratio run.
 
         The ratio run is the part-load ratio the collector reports its pump ran with; a forced pass reads it.
         """
-        controller_class = solar_thermal_system.SolarThermalSystemController
-        return {
-            controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
-            controller_class.RequiredWaterMassFlowAtStartOfStepInKgPerSecond: mass_flow_in_kg_per_second,
-            controller_class.PartLoadRatioRun: ratio_run,
-        }
+        return SolarControllerRig.values(
+            start_c=start_c, ratio_run=ratio_run, collector_above_storage_in_kelvin=collector_above_storage_in_kelvin
+        )
 
     @classmethod
     def signal(
@@ -792,15 +1031,15 @@ class SolarControllerSteps:
     ) -> float:
         """Run one pass from the saved state, as the simulator does, and return the on/off signal it publishes."""
         controller.i_restore_state()
-        for field_name, fake in fakes.items():
-            stsv.set_output_value(fake, values.get(field_name, 0.0))
-        controller.i_simulate(cls.TIMESTEP, stsv, force_convergence)
-        return Rig.output(stsv, controller.control_signal_to_solar_thermal_system_channel)
+        outputs = AllInputsRig.step(
+            controller, stsv, fakes, values, timestep=cls.TIMESTEP, force_convergence=force_convergence
+        )
+        return outputs[controller.ControlSignalToSolarThermalSystem]
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("seconds_per_timestep", [60, 900])
-def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_remembers_another(
+def test_the_pump_state_of_the_previous_step_chooses_the_difference_and_no_pass_remembers_another(
     seconds_per_timestep: int,
 ) -> None:
     """Within a step the decision reads only the pass's inputs and the saved state; the state moves only between steps.
@@ -810,21 +1049,21 @@ def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_rememb
     no hysteresis at all.
     """
     steps = SolarControllerSteps
-    controller, stsv, fakes = steps.build(seconds_per_timestep)
+    controller, stsv, fakes = SolarControllerRig.build(seconds_per_timestep)
     controller.i_save_state()  # the first step starts with the pump standing
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN)) == 1
 
     controller.i_save_state()  # the step ended with the pump running
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)) == 1
 
     controller.i_save_state()  # the step ended with the pump running again
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN)) == 0
     controller.i_save_state()  # the step ended with the pump standing
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)) == 0
 
 
 @pytest.mark.base
@@ -832,22 +1071,22 @@ def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_rememb
 def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in_previous_step: bool) -> None:
     """Passes with other inputs before a pass change nothing it publishes: the generic iteration-safety check.
 
-    A controller whose restore restored nothing, or that wrote its state in a pass, would publish a different signal
-    after the other passes than in a fresh step.
+    A controller that wrote its state in a pass would publish a different signal after the other passes than in a
+    fresh step.
     """
     steps = SolarControllerSteps
-    fresh, fresh_stsv, fresh_fakes = steps.build(900)
-    iterated, iterated_stsv, iterated_fakes = steps.build(900)
+    fresh, fresh_stsv, fresh_fakes = SolarControllerRig.build(900)
+    iterated, iterated_stsv, iterated_fakes = SolarControllerRig.build(900)
     for controller, stsv, fakes in ((fresh, fresh_stsv, fresh_fakes), (iterated, iterated_stsv, iterated_fakes)):
         controller.i_save_state()
-        flow = steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S if pump_ran_in_previous_step else 0.0
-        steps.signal(controller, stsv, fakes, steps.values(flow))
+        difference = steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN if pump_ran_in_previous_step else 0.0
+        steps.signal(controller, stsv, fakes, steps.values(difference))
         controller.i_save_state()
-    for flow in (steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
-        steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(flow))
-    full_storage = steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0)
+    for difference in (steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, 0.0, steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN):
+        steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(difference))
+    full_storage = steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, start_c=61.0)
     steps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
-    final = steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
+    final = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
     expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
     assert steps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
     assert expected == (1 if pump_ran_in_previous_step else 0)
@@ -858,20 +1097,24 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
 def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
     ratio_run: float, expected_signal: int
 ) -> None:
-    """A forced pass keeps the pump as the collector reports it ran, whatever the flow; the next step starts from it.
+    """A forced pass keeps the pump as the collector reports it ran, whatever the sensors; the next step starts from it.
 
     The pump's signal and the part-load ratio the controller holds under ``force_convergence`` (the ratio run) then
-    describe the same run. A forced pass that decided on the flow again could switch on a pump whose held ratio is 0;
-    one that kept an earlier pass's decision would remember a pass.
+    describe the same run. A forced pass that decided on the sensors again could switch on a pump whose held ratio is
+    0; one that kept an earlier pass's decision would remember a pass.
     """
     steps = SolarControllerSteps
-    controller, stsv, fakes = steps.build(900)
+    controller, stsv, fakes = SolarControllerRig.build(900)
     controller.i_save_state()
-    flow = steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S if expected_signal else steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S
-    forced_values = steps.values(flow, ratio_run=ratio_run)
+    if expected_signal:
+        difference = steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN
+    else:
+        difference = steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN
+    forced_values = steps.values(difference, ratio_run=ratio_run)
     assert steps.signal(controller, stsv, fakes, forced_values, force_convergence=True) == expected_signal
     controller.i_save_state()
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == expected_signal
+    between = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
+    assert steps.signal(controller, stsv, fakes, between) == expected_signal
 
 
 @pytest.mark.base
@@ -882,11 +1125,12 @@ def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts
     second step; one that kept the stop in a pass instead of the saved state would hold or release it within a step.
     """
     steps = SolarControllerSteps
-    controller, stsv, fakes = steps.build(900)
+    controller, stsv, fakes = SolarControllerRig.build(900)
 
     def signal(start_c: float) -> float:
         """Run one pass of a sunny step whose storage started at ``start_c`` and return the pump signal."""
-        return steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=start_c))
+        sunny = steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, start_c=start_c)
+        return steps.signal(controller, stsv, fakes, sunny)
 
     controller.i_save_state()  # the first step starts with the pump standing and the stop released
     assert signal(59.5) == 1  # a storage below the aim with no stop: the pump switches on
@@ -902,63 +1146,26 @@ def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts
     assert signal(58.5) == 1  # inside the band, the released stop stays released
 
 
-class CollectorStep:
-    """A flat-plate collector on a hot-water tank at noon, one step with every input on a fake output."""
-
-    @staticmethod
-    def outputs(control_signal: float, inlet_at_start_of_step_c: float) -> Dict[str, float]:
-        """Return every output of one 900 s step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse.
-
-        The sun stands 30° from the zenith due south (no weather file, no cache). The tank started the step at
-        ``inlet_at_start_of_step_c``.
-
-        Args:
-            control_signal: The controller's pump signal, 1 for running.
-            inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C.
-
-        Returns:
-            The collector's outputs by field name.
-        """
-        config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
-            SizingContext(number_of_apartments=1)
-        )
-        collector = solar_thermal_system.SolarThermalSystem(
-            config=config, my_simulation_parameters=Parameters.one_day(900)
-        )
-        collector.apparent_zenith = np.array([30.0])
-        collector.solar_azimuth = np.array([180.0])
-        stsv, fakes = Rig.wire(collector, [(entry, LoadTypes.ANY, Units.ANY) for entry in collector.inputs])
-        system = solar_thermal_system.SolarThermalSystem
-        values = {
-            system.ControlSignal: control_signal,
-            system.PartLoadRatio: control_signal,
-            system.GlobalHorizontalIrradianceWM2: 800.0,
-            system.DiffuseHorizontalIrradianceWM2: 100.0,
-            system.TemperatureOutsideDegC: 20.0,
-            system.TemperatureCollectorInletDegC: 45.0,
-            system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
-        }
-        for entry, fake in zip(collector.inputs, fakes):
-            stsv.set_output_value(fake, values.get(entry.field_name, 0.0))
-        collector.i_simulate(0, stsv, False)
-        return {output.field_name: Rig.output(stsv, output) for output in collector.outputs}
-
-
 @pytest.mark.base
-def test_the_collector_publishes_the_flow_its_heat_at_the_start_of_step_inlet_needs_whatever_the_pump_does() -> None:
-    """The flow the controller switches on comes from the start-of-step inlet, not from the step mean or the pump.
+def test_the_collector_sensor_reads_the_stagnation_after_a_standing_step_and_the_outlet_after_a_run() -> None:
+    """The sensor the controller switches on comes from the start of the step and the pump's previous step.
 
-    A collector that published its step-mean flow here would let the pump's own heat switch the pump off in the step
-    it switches on; one whose answer depended on the pump signal would switch on its own output.
+    After a step the pump stood the sensor reads the stagnation temperature, which neither the tank nor the pump
+    signal moves. After a step it ran the sensor reads the outlet at the tank's start-of-step temperature: the start
+    plus the lift there, not the step mean's supply. A sensor that read the step mean would let the pump's own heat
+    switch the pump off in the step it switches on; one that read the pump signal would switch on its own output.
     """
-    system = solar_thermal_system.SolarThermalSystem
-    flow_name = system.RequiredWaterMassFlowAtStartOfStepInKgPerSecond
-    # the running pump's circuit flow at ratio 1: the flow the collector heat at the step mean needs
-    mean_flow_name = system.WaterMassFlowOutput
-    at_the_mean = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=45.0)
-    assert at_the_mean[flow_name] == at_the_mean[mean_flow_name] > 0.0
-    cooler_start = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=40.0)
-    assert cooler_start[flow_name] > at_the_mean[flow_name]
-    assert cooler_start[mean_flow_name] == at_the_mean[mean_flow_name]
-    standing = CollectorStep.outputs(control_signal=0.0, inlet_at_start_of_step_c=40.0)
-    assert standing[flow_name] == cooler_start[flow_name]
+    sensor_name = solar_thermal_system.SolarThermalSystem.CollectorSensorTemperatureAtStartOfStepInCelsius
+    supply_name = solar_thermal_system.SolarThermalSystem.WaterTemperatureOutput
+    stood = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=40.0)
+    stood_off = CollectorRig.charge(900, ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=55.0)
+    assert stood[sensor_name] == stood_off[sensor_name] > 80.0
+
+    ran = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True)
+    ran_off = CollectorRig.charge(
+        900, ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True
+    )
+    assert ran[sensor_name] == ran_off[sensor_name] == 60.0  # the 20 K target lift on the 40 °C start
+    assert ran[supply_name] == 65.0  # the circuit itself runs at the 45 °C step mean
+    cooler = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=35.0, pump_ran_in_previous_step=True)
+    assert cooler[sensor_name] == 55.0

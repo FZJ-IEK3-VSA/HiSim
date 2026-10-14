@@ -5516,7 +5516,13 @@
                       }
                     ]
                   },
-                  "delta_temperature_n_k": {
+                  "pump_target_lift_in_kelvin": {
+                    "type": "number"
+                  },
+                  "pump_minimum_mass_flow_in_kg_per_hour_per_m2": {
+                    "type": "number"
+                  },
+                  "pump_maximum_mass_flow_in_kg_per_hour_per_m2": {
                     "type": "number"
                   }
                 }

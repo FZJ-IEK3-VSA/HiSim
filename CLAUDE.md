@@ -93,7 +93,9 @@ them, so the layering is visible at every call site.
 ### Component model (`hisim/component.py`)
 The rules every component follows -- the component kinds (data source, physics, L1 and L2 controller, meter),
 black boxes that talk only through port quantities, who decides what -- are in
-`system_docs/component_design_principles.md`.
+`system_docs/component_design_principles.md`. How a component models physics -- the same energy at both ends of
+a port, stated signs, 60 s as the reference, clamp or fail at a limit, a source for every parameter -- is
+`system_docs/modelling_guide.md`.
 
 Every device is a `Component` subclass, through the one kind base class it inherits (`PhysicsComponent`, `L1ControllerComponent`, ...; see "Adding a new component"). Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`

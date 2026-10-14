@@ -26,6 +26,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   (`DataSourceComponent`, `PhysicsComponent`, `L1ControllerComponent`, `L2ControllerComponent`, `MeterComponent`)
   and keeps to that kind's role, and other components see it only as a black box through its port quantities.
   Check a new component and every review against it.
+- Every component models physics as `system_docs/modelling_guide.md` says: sender and receiver book the same energy at a port and every energy-moving component closes its balance, signs are stated, 60 s is the reference for every coarse-step model, physics clamps only at a real device limit and fails otherwise, every default parameter cites its source.
 - Code is designed and written as `system_docs/coding_style.md` says: business logic in pure, unit-tested functions;
   Clean Code, SOLID, YAGNI and DRY; the code rules (small units, typed data, explicit state, fail fast, ratchets
   in CI) and design patterns; controllers as testable state machines; class-scoped constants; a purpose sentence

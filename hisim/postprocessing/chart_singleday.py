@@ -1,5 +1,6 @@
 """Charts for a single day."""
 
+import datetime
 from typing import Callable, List, Tuple
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -23,8 +24,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         time_correction_factor_in_hours: float,
         output_description: str,
         data_with_units: pd.Series,
-        day: int = 0,
-        month: int = 0,
+        window_start: datetime.datetime,
+        day_in_window: int = 0,
         output2_with_units: pd.Series | None = None,
         figure_format: str | None = None,
         path_checker: Callable[[str], None] | None = None,
@@ -40,8 +41,10 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             output_description: Description of the output.
             data_with_units: Time-series data to visualize; its physical unit
                 is carried separately by the ``units`` argument.
-            day: Day of the month to display (default 0).
-            month: Month of the year to display (default 0).
+            window_start: The first moment of the run, at midnight; the row ``0`` of
+                ``data_with_units`` belongs to it.
+            day_in_window: Which day of the run to display, counted from 0 for the
+                run's first day (default 0).
             output2_with_units: Optional secondary output data for comparison;
                 its physical unit is carried separately by ``units``.
             figure_format: Format for the output figure (e.g., '.png').
@@ -74,8 +77,12 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 path_checker=path_checker,
             )
 
-        self.month: int = month
-        self.day: int = day
+        self.window_start: datetime.datetime = window_start
+        self.day_in_window: int = day_in_window
+        displayed_date = self.date_of_day(window_start, day_in_window)
+        # Zero-based month and day of month of the displayed date: the first of January is m0_d0.
+        self.month: int = displayed_date.month - 1
+        self.day: int = displayed_date.day - 1
         self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
         self.filename: str = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
@@ -84,15 +91,30 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.filepath2: str = str(Path(self.component_output_folder_path) / self.filename)
 
     @staticmethod
+    def date_of_day(window_start: datetime.datetime, day_in_window: int) -> datetime.date:
+        """Return the calendar date of one day of the run.
+
+        Example: day 0 of a run from 1 July 2021 is 1 July 2021, day 3 is 4 July 2021.
+
+        Args:
+            window_start: The first moment of the run.
+            day_in_window: The day of the run, counted from 0.
+
+        Returns:
+            The date of that day.
+        """
+        return (window_start + datetime.timedelta(days=day_in_window)).date()
+
+    @staticmethod
     def build_day_slice(
         data_with_units: "pd.Series",
-        month: int,
-        day: int,
+        window_start: datetime.datetime,
+        day_in_window: int,
         time_correction_factor_in_hours: float,
         label_months_lowercase: List[str],
         title: str,
     ) -> Tuple["pd.Series", str]:
-        """Compute the slice of ``data_with_units`` for a single day and the matching plot title.
+        """Compute the slice of ``data_with_units`` for a single day of the run and the matching plot title.
 
         This is the pure, side-effect-free core of :meth:`get_day_data`. It does
         neither touch ``self`` nor the filesystem, so it can be unit-tested with a
@@ -100,50 +122,53 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         ``Chart.__init__`` would otherwise wire up directory paths and the
         ``result_path_provider`` singleton).
 
+        The rows of ``data_with_units`` are the timesteps of the run, the first one at
+        ``window_start``, which is midnight; day ``d`` of the run is therefore the rows from
+        ``d`` times the timesteps per day on. The title names the day by its calendar date.
+        Example: hourly data of a run from 1 July 2021, day 2, gives rows 48 to 71 and the title
+        ``"{title} July 3rd"``.
+
         Args:
             data_with_units: The full time-series to slice; its physical unit
                 is carried separately by the caller (here via ``units``).
-            month: Zero-based month index (0 = January, ... 11 = December).
-            day: Zero-based day-of-month index within that month (0 = 1st).
-            time_correction_factor_in_hours: ``seconds_per_timestep / 3600``; its reciprocal
-                gives the number of timesteps per hour.
-            label_months_lowercase: The month labels indexed by ``month``.
+            window_start: The first moment of the run, at midnight.
+            day_in_window: The day of the run to slice, counted from 0.
+            time_correction_factor_in_hours: ``seconds_per_timestep / 3600``; 24 divided by it
+                gives the number of timesteps per day.
+            label_months_lowercase: The month labels, January first.
             title: The base plot title the date string is appended to.
 
         Returns:
             A ``(data_slice, plot_title)`` tuple, where ``data_slice`` is the
-            sub-series covering the requested day (or the original ``data_with_units`` when
-            the computed slice would exceed the available data) and ``plot_title``
+            sub-series covering the requested day with its own index (or the original
+            ``data_with_units`` when the data ends before that day does) and ``plot_title``
             is the assembled title string ``"{title} {month} {day}{ordinal}"``.
         """
-        timesteps_per_hour = int(1 / time_correction_factor_in_hours)
-        firstindex = (month * 30 + day) * 24 * timesteps_per_hour
-        lastindex = firstindex + 24 * timesteps_per_hour
-        day_number = day + 1
-        if day_number == 1:
+        timesteps_per_day = int(round(24 / time_correction_factor_in_hours))
+        firstindex = day_in_window * timesteps_per_day
+        lastindex = firstindex + timesteps_per_day
+        date = ChartSingleDay.date_of_day(window_start, day_in_window)
+        day_number = date.day
+        if day_number in (1, 21, 31):
             ordinal = "st"
-        elif day_number == 2:
+        elif day_number in (2, 22):
             ordinal = "nd"
-        elif day_number == 3:
+        elif day_number in (3, 23):
             ordinal = "rd"
         else:
             ordinal = "th"
-        date = f"{label_months_lowercase[month]} {day_number}{ordinal}"
-        plot_title = f"{title} {date}"
+        plot_title = f"{title} {label_months_lowercase[date.month - 1]} {day_number}{ordinal}"
 
-        if abs(lastindex - firstindex) < len(data_with_units):
-            data_slice = data_with_units[firstindex:lastindex]
-            data_index = data_slice.index[firstindex:lastindex]
-            data_slice.index = data_index
-            return data_slice, plot_title
+        if 0 < timesteps_per_day and lastindex <= len(data_with_units):
+            return data_with_units.iloc[firstindex:lastindex], plot_title
         return data_with_units, plot_title
 
     def get_day_data(self) -> pd.Series:
-        """Extract the sub-series for the configured month and day.
+        """Extract the sub-series for the configured day of the run.
 
-        Delegates to :meth:`build_day_slice` using the instance's ``month``,
-        ``day``, ``data_with_units``, ``time_correction_factor_in_hours``, ``label_months_lowercase``,
-        and ``title``. As a side effect, sets ``self.plot_title`` to the
+        Delegates to :meth:`build_day_slice` using the instance's ``window_start``,
+        ``day_in_window``, ``data_with_units``, ``time_correction_factor_in_hours``,
+        ``label_months_lowercase``, and ``title``. As a side effect, sets ``self.plot_title`` to the
         assembled title string returned by ``build_day_slice``.
 
         Returns:
@@ -152,8 +177,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """
         data_with_units, self.plot_title = self.build_day_slice(
             data_with_units=self.data_with_units,
-            month=self.month,
-            day=self.day,
+            window_start=self.window_start,
+            day_in_window=self.day_in_window,
             time_correction_factor_in_hours=self.time_correction_factor_in_hours,
             label_months_lowercase=self.label_months_lowercase,
             title=self.title,
@@ -174,7 +199,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """Plot the single-day time series and optionally save the figure.
 
         Rescales the y-axis units, draws the day's data as a green line with a
-        time-of-day formatted x-axis, and — when ``close`` is truthy — saves the
+        time-of-day formatted x-axis under a title that names the day's date, and — when ``close`` is truthy — saves the
         figure to ``self.filepath2`` and closes it.
 
         Args:
@@ -194,7 +219,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         plt.yticks(fontsize=self.fontsize_ticks)
 
         single_day_data_with_units, self.units = self.rescale_y_axis(y_values=single_day_data_with_units, units=self.units)
-        plt.title(self.title, fontsize=self.fontsize_title)
+        plt.title(self.plot_title, fontsize=self.fontsize_title)
         plt.plot(
             single_day_data_with_units.index,
             single_day_data_with_units,

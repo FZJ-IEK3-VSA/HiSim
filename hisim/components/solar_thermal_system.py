@@ -1524,7 +1524,8 @@ class SolarThermalSystemController(L1ControllerComponent):
 
     #: The maximum storage temperature: the storage temperature above which the pump stops, in °C. It is the solar
     #: controller's own limit, above the 60 °C warm-water aim the backup generators (boiler, heat pump, district
-    #: heating, electric heater) charge to. Solar controllers let the sun heat the tank past the backup's set point
+    #: heating, electric heater) charge to, and above the 69.5 °C the heat pump charges to while the energy manager
+    #: raises its set temperature on PV surplus. Solar controllers let the sun heat the tank past the backup's set point
     #: up to a maximum storage temperature that installers set between about 60 and 80 °C; a thermostatic mixing
     #: valve at the tap keeps the water drawn at the tap temperature, so a hotter tank does not scald and delivers
     #: the same heat to the tap. With a maximum equal to the backup's aim the tank waits just below 60 °C on sunny

@@ -24,6 +24,7 @@ from hisim.config import DisplayConfig
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.components.generic_electric_heating import ElectricHeating, ElectricHeatingConfig
 from hisim.simulationparameters import SimulationParameters
+from tests.part_load_rigs import AllInputsRig
 
 # Mark every test in this module as a fast ``base`` test (see pytest.ini).
 pytestmark: pytest.MarkDecorator = pytest.mark.base
@@ -294,10 +295,9 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
 @pytest.mark.base
 def test_the_idle_hot_water_circuit_supplies_its_return_while_the_rooms_are_heated() -> None:
     """An idle circuit whose supply was not its return would carry heat nobody booked into the tank."""
-    from tests.test_generic_district_heating import step_with_fake_inputs  # pylint: disable=import-outside-toplevel  # shared helper
 
     heater = _make_electric_heating()
-    outputs = step_with_fake_inputs(
+    outputs = AllInputsRig.step_once(
         heater,
         {
             ElectricHeating.HeatingMode: HeatingMode.SPACE_HEATING.value,
@@ -320,7 +320,6 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
         ElectricHeatingController,
         ElectricHeatingControllerConfig,
     )
-    from tests.test_generic_district_heating import step_with_fake_inputs  # pylint: disable=import-outside-toplevel  # shared helper
 
     config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
     # pinned rather than resolved, as above: no building to size them from
@@ -329,7 +328,7 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
     controller = ElectricHeatingController(
         SimulationParameters.one_day_only(year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP), config
     )
-    outputs = step_with_fake_inputs(controller, {ElectricHeatingController.DailyAverageOutsideTemperature: 20.0})
+    outputs = AllInputsRig.step_once(controller, {ElectricHeatingController.DailyAverageOutsideTemperature: 20.0})
     assert outputs[ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius] == (
         60.0 + config.hysteresis_water_temperature_offset
     )

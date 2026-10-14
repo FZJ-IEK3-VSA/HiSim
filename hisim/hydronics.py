@@ -410,6 +410,38 @@ class CircuitStep:
         """
         return CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=t_return_c, power_w=0.0)
 
+    def at_part_load(self, *, part_load_ratio: float, t_return_c: float) -> "CircuitStep":
+        """Return this full-load step of a circuit when its generator runs only a fraction of the step.
+
+        A generator that runs a fraction of a step at full load publishes the averaged flow, its full-load flow times
+        the ratio, at its full-load supply temperature. The heat that flow carries is the ratio times the full-load
+        heat, because the heat ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`) is linear in the flow. A ratio of 1
+        returns this step unchanged, and a ratio of 0 returns the idle step (:meth:`idle`): no flow, the supply at the
+        return. For example, a step of 0.0144 kg/s at 75 °C carrying 1504.8 W gives 0.0036 kg/s and 376.2 W at a
+        ratio of 0.25.
+
+        Args:
+            part_load_ratio: The fraction of the step the generator runs, from 0 to 1.
+            t_return_c: The circuit's return temperature, in °C; the supply of the idle step at a ratio of 0.
+
+        Returns:
+            The step at that ratio.
+
+        Raises:
+            ValueError: If the ratio lies outside [0, 1].
+        """
+        if not 0.0 <= part_load_ratio <= 1.0:
+            raise ValueError(f"A part-load ratio is a fraction from 0 to 1, not {part_load_ratio}.")
+        if part_load_ratio == 1.0:
+            return self
+        if part_load_ratio == 0.0:
+            return CircuitStep.idle(t_return_c=t_return_c)
+        return CircuitStep(
+            mass_flow_kg_per_s=part_load_ratio * self.mass_flow_kg_per_s,
+            t_supply_c=self.t_supply_c,
+            power_w=part_load_ratio * self.power_w,
+        )
+
 
 def throttled_supply_temperature_c(*, unthrottled_supply_c: float, return_c: float, supply_limit_c: float) -> float:
     """Return the supply temperature of a generator that holds its lift, throttled at a supply limit, in °C.

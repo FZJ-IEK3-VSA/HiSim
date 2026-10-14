@@ -243,36 +243,6 @@ def load_smart_appliance(name: str) -> Any:  # noqa
     return copy.deepcopy(_load_smart_appliances_file()[name])
 
 
-def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
-    """Transform LPG timesteps (list of integers) from local time to UTC.
-
-    Args:
-        data: list of integer timestep indices in Europe/Berlin local time.
-        year: simulation year for DST lookup.
-        seconds_per_timestep: seconds per index.
-
-    Returns:
-        List[int]: indices shifted to UTC.
-    """
-    timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
-    timeshifts = [elem for elem in timeshifts if elem.year == year]
-    steps_per_hour = int(3600 / seconds_per_timestep)
-    timeshift1_as_step = (
-        int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
-    )
-    timeshift2_as_step = (
-        int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
-    )
-
-    data_utc = []
-    for elem in data:
-        if elem < timeshift1_as_step or elem > timeshift2_as_step:
-            data_utc.append(elem - steps_per_hour)
-        else:
-            data_utc.append(elem - 2 * steps_per_hour)
-    return data_utc
-
-
 def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     """Transform LPG data from local time (not having explicit time shifts) to UTC.
 

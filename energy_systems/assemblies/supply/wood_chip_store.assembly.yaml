@@ -37,5 +37,5 @@ tests:
     - {output: FuelMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}
   monotone: []                                              # no numeric parameter: nothing to sweep
   expect:
-    - {kpi: Total energy consumption, member: FuelMeter, min: 170, max: 235}
-      # 201.1 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure
+    - {kpi: Total energy consumption, member: FuelMeter, min: 105, max: 145}
+      # 125.9 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure

@@ -703,6 +703,107 @@ class MixedNode:
 
 
 @dataclass(frozen=True)
+class StartOfStepNodeStep:
+
+    """The result of one step of a node whose circuits are booked on its start temperature.
+
+    ``heat_in_j_per_inflow[i]`` is ``m_i c (T_i - T0) dt``, in the order of the inflows; ``loss_j`` is
+    ``UA (T0 - T_amb) dt``; ``heat_drawn_j`` is the heat taken out directly; and
+    ``sum(heat_in_j_per_inflow) - loss_j - heat_drawn_j`` equals ``C (t_end_c - T0)`` to float precision.
+    """
+
+    #: The node's temperature at the end of the step, its start temperature for the next step, in °C.
+    t_end_c: float
+    #: The heat each inflow brought over the step, in J, in the order of the inflows.
+    heat_in_j_per_inflow: Tuple[float, ...]
+    #: The heat the node lost to its surroundings over the step, in J.
+    loss_j: float
+    #: The heat taken out of the node directly over the step, in J.
+    heat_drawn_j: float
+
+
+class StartOfStepNode:
+
+    """A water node whose every circuit is booked on the node's temperature at the start of the step.
+
+    The node publishes its start temperature ``T0`` as the return of the circuits that charge it and as the supply of
+    the circuits it feeds. Every circuit end then derives its heat from ``T0``: a stream entering at ``T_i`` with flow
+    ``m_i`` brings ``m_i c (T_i - T0) dt``, and the node loses ``UA (T0 - T_amb) dt``. The node adds up these heats and
+    ends the step at ``T_end = T0 + (sum of heats - loss - heat drawn) / C``. Nothing the node publishes changes while
+    a step iterates, so the circuits do not iterate against the node; the balance closes on every step whatever the
+    step length.
+
+    The price is that the node does not see its own temperature change inside the step: a circuit holding a lift
+    keeps bringing the same heat however far the node has risen, so a long step can carry the node past a target
+    (or, with a large draw, below the temperature of the water that returns to it). Whoever runs a circuit limits it
+    to the fraction of the step that keeps the node within its own aim.
+
+    Example: 170 kg of water at 40 °C, charged for 900 s with 0.3 kg/s at 45 °C and losing 3.6 W/K to a 20 °C room,
+    gains 5.643 MJ and loses 64.8 kJ, and ends at 47.85 °C.
+    """
+
+    @staticmethod
+    def step(
+        *,
+        t0_c: float,
+        inflows: Iterable[Inflow],
+        ua_w_per_k: float,
+        t_amb_c: float,
+        dt_s: float,
+        heat_capacity_j_per_k: float,
+        heat_drawn_w: float = 0.0,
+    ) -> StartOfStepNodeStep:
+        """Return the end temperature, the inflow heats, the loss and the heat drawn of one start-of-step node step.
+
+        Args:
+            t0_c: The node's temperature at the start of the step, in °C.
+            inflows: Every stream entering the node; read once, so any iterable will do.
+            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K.
+            t_amb_c: The temperature the node loses heat to, in °C.
+            dt_s: The step duration, in s.
+            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K.
+            heat_drawn_w: Heat taken out of the node directly, not by a stream, in W; for example what the emitters
+                of a distribution system without a buffer hand to the rooms from the pipe water.
+
+        Returns:
+            The end temperature, the heat of each inflow, the loss and the heat drawn.
+
+        Raises:
+            NonFiniteValueError: If any value is NaN or infinite, or a result overflows the float range.
+            NegativeHeatLossCoefficientError: If ``ua_w_per_k`` is negative.
+            NonPositiveTimestepError: If ``dt_s`` is not positive.
+            NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive.
+            HydronicsError: If an inflow is not an :class:`Inflow`.
+        """
+        t0 = _finite("t0_c", t0_c)
+        ua = _finite("ua_w_per_k", ua_w_per_k)
+        if ua < 0.0:
+            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua!r}.")
+        t_amb = _finite("t_amb_c", t_amb_c)
+        dt = _timestep("dt_s", dt_s)
+        capacity = _finite("heat_capacity_j_per_k", heat_capacity_j_per_k)
+        if capacity <= 0.0:
+            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {capacity!r}.")
+        drawn_w = _finite("heat_drawn_w", heat_drawn_w)
+        inflows = tuple(inflows)
+        for inflow in inflows:
+            if not isinstance(inflow, Inflow):
+                raise HydronicsError(f"A node's inflows must be Inflow instances, got {inflow!r}.")
+        heat_in = tuple(
+            _finite_result(
+                f"The heat of inflow {i}",
+                inflow.mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K * (inflow.temperature_c - t0) * dt,
+            )
+            for i, inflow in enumerate(inflows)
+        )
+        loss = _finite_result("The node's loss UA (T0 - T_amb) dt", ua * (t0 - t_amb) * dt)
+        drawn = _finite_result("The heat drawn from the node", drawn_w * dt)
+        net = _finite_sum("The node's net heat", list(heat_in) + [-loss, -drawn])
+        t_end = _finite_result("The node's end temperature T_end", t0 + net / capacity)
+        return StartOfStepNodeStep(t_end_c=t_end, heat_in_j_per_inflow=heat_in, loss_j=loss, heat_drawn_j=drawn)
+
+
+@dataclass(frozen=True)
 class ValveDraw:
 
     """What a thermostatic tap valve lets out of a tank for one hot-water demand.

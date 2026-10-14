@@ -78,14 +78,17 @@ def _make_parameters(timesteps: int) -> SimulationParameters:
     """Build simulation parameters that run for exactly ``timesteps`` steps.
 
     The component draws one value per timestep of the run, so a test that wants a short series says
-    so here rather than in the configuration. One minute per step keeps the arithmetic obvious.
+    so here rather than in the configuration. A run covers whole days (the window contract of
+    ``SimulationParameters``), so the series is one day cut into ``timesteps`` equal steps; the
+    number must therefore divide the 86 400 seconds of a day.
     """
-    seconds_per_timestep = 60
+    seconds_per_day = SimulationParameters.SECONDS_PER_DAY
+    assert seconds_per_day % timesteps == 0, f"{timesteps} steps do not divide one day evenly"
     start = datetime.datetime(2021, 1, 1)
     return SimulationParameters(
         start,
-        start + datetime.timedelta(seconds=timesteps * seconds_per_timestep),
-        seconds_per_timestep,
+        start + datetime.timedelta(days=1),
+        seconds_per_day // timesteps,
     )
 
 

@@ -29,6 +29,16 @@ class WeatherYearError(ValueError):
     """
 
 
+class SimulationWindowError(ValueError):
+    """A simulated period that breaks the window contract of :class:`SimulationParameters`.
+
+    The window is the span from ``start_date`` to ``end_date`` that a run simulates. It must start at
+    midnight, cover whole days, lie within one calendar year and divide into whole timesteps; see
+    :meth:`SimulationParameters.validated_window`. Raised at construction, so a simulation-parameters
+    file with such a window is refused before anything runs.
+    """
+
+
 @dataclass()
 class SimulationParameters:
 
@@ -69,10 +79,15 @@ class SimulationParameters:
         Defines how the simulation will proceed, including time resolution, time span,
         logging configuration, and various simulation options.
 
+        The window from ``start_date`` to ``end_date`` must obey the window contract of
+        :meth:`validated_window`: start at midnight, whole days, one calendar year, whole timesteps.
+
         Args:
-            start_date: The start date and time of the simulation period.
-            end_date: The end date and time of the simulation period.
-            seconds_per_timestep: The duration of each simulation timestep in seconds.
+            start_date: The start of the simulation period, at midnight.
+            end_date: The end of the simulation period, excluded, a whole number of days after
+                ``start_date`` and in the same year as the start of the last timestep.
+            seconds_per_timestep: The duration of each simulation timestep in seconds; it divides the
+                period into whole timesteps.
             country: Country code for location-specific data (e.g., weather, tariffs).
                 Defaults to 'DE' (Germany).
             result_directory: Directory path where simulation results will be stored.
@@ -112,13 +127,19 @@ class SimulationParameters:
                 step length. ``None`` (the default) means
                 :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
                 :class:`PartLoadThresholdError`.
+
+        Raises:
+            SimulationWindowError: If the window breaks the window contract.
+            WeatherYearError: If ``weather_year`` is not a year in range.
+            PartLoadThresholdError: If ``part_load_above_seconds`` is not a step length.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
         self.seconds_per_timestep = seconds_per_timestep
         self.duration = end_date - start_date
-        total_seconds = self.duration.total_seconds()
-        self.timesteps: int = int(total_seconds / seconds_per_timestep)
+        # The one place that decides the run's window: everything a component, the simulator or the
+        # postprocessing derives from these dates relies on the contract checked here.
+        self.timesteps: int = self.validated_window(start_date, end_date, seconds_per_timestep)
         self.year: int = int(start_date.year)
         self.country: str = country
         if post_processing_options is None:
@@ -153,6 +174,79 @@ class SimulationParameters:
         # reason as the four above: at its default, every key, record and file this object produces stays
         # byte-identical.
         self.part_load_above_seconds: float = self.validated_part_load_above_seconds(part_load_above_seconds)
+
+    #: The length of the days a window is made of. A window is a whole number of these.
+    SECONDS_PER_DAY: ClassVar[int] = 86400
+
+    @classmethod
+    def validated_window(
+        cls, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int
+    ) -> int:
+        """Checks the run's window against the window contract and returns its number of timesteps.
+
+        The window is the span from ``start_date`` (included) to ``end_date`` (excluded). It must:
+
+        1. start at midnight, so that every day of the run begins at the start of a row of a carpet
+           plot and at the start of a day of every profile;
+        2. cover a whole number of days, at least one;
+        3. lie within one calendar year: ``start_date`` and the start of the last timestep,
+           ``end_date - seconds_per_timestep``, fall in the same year. The profiles a run reads are
+           one year long, so a window across 31 December has no single source to read from;
+        4. divide into whole timesteps: the duration is a multiple of ``seconds_per_timestep``.
+
+        Example: 1 July 2021 to 8 July 2021 at 900 s passes and gives 672 timesteps; 1 July 2021
+        06:00 to 8 July 2021 is refused (not midnight), as is 30 December 2021 to 2 January 2022
+        (two years) and one day at 7000 s (86 400 s is not a multiple of 7000 s). A full year,
+        1 January 2021 to 1 January 2022, passes: its last timestep starts on 31 December 2021.
+
+        Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
+        say -- is not decided here, but by the component that owns the source.
+
+        Args:
+            start_date: The first moment of the run.
+            end_date: The moment the run ends; the last timestep ends here.
+            seconds_per_timestep: The length of one timestep, in seconds.
+
+        Returns:
+            The number of timesteps in the window.
+
+        Raises:
+            SimulationWindowError: If the window breaks any of the four rules, or if
+                ``seconds_per_timestep`` is not a positive number.
+        """
+        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, (int, float)):
+            raise SimulationWindowError(
+                f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep!r}."
+            )
+        if not seconds_per_timestep > 0:
+            raise SimulationWindowError(
+                f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep}."
+            )
+        if start_date.time() != datetime.time(0, 0):
+            raise SimulationWindowError(
+                f"The simulation must start at midnight, but start_date is {start_date.isoformat()}."
+            )
+        duration = end_date - start_date
+        one_day = datetime.timedelta(seconds=cls.SECONDS_PER_DAY)
+        if duration < one_day or duration % one_day:
+            raise SimulationWindowError(
+                f"The simulation must cover a whole number of days, at least one, but {start_date.isoformat()} "
+                f"to {end_date.isoformat()} is {duration}."
+            )
+        timestep = datetime.timedelta(seconds=seconds_per_timestep)
+        if duration % timestep:
+            raise SimulationWindowError(
+                f"The simulated duration of {duration} is not a whole number of {seconds_per_timestep} s "
+                f"timesteps."
+            )
+        last_timestep_start = end_date - timestep
+        if last_timestep_start.year != start_date.year:
+            raise SimulationWindowError(
+                f"The simulation must lie within one calendar year, but it starts in {start_date.year} and "
+                f"its last timestep starts in {last_timestep_start.year} ({last_timestep_start.isoformat()}). "
+                f"The profiles a run reads are one year long; split the run at 1 January."
+            )
+        return duration // timestep
 
     #: The step length above which devices run part load, s, when the parameters name none. 600 s keeps every 60 s
     #: run, the reference, on whole steps, and lets a 900 s run, RenoVisor's resolution, run part load.
@@ -405,7 +499,7 @@ class SimulationParameters:
 
         **It does not do that today, and a caller must not assume it does.** HiSim has never
         supported a mid-year start date. Every profile-driven component — the weather sources, the
-        PV model, the building, the LoadProfileGenerator occupancy, the cars, the smart devices,
+        PV model, the building, the LoadProfileGenerator occupancy, the cars,
         the CSV loader, the seasonal gates of the heat pump and the CHP — indexes its year-long
         profile by the timestep number, so timestep 0 is read as the 1st of January whatever this
         start date says. A run over these dates therefore reproduces January for every component

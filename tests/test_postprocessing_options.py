@@ -270,9 +270,10 @@ def _run_converging_feedback_simulation(
     result_directory = str(result_directory_path)
 
     simulation_parameters = SimulationParameters(
+        # Three timesteps: a run covers whole days (the window contract), so one day in steps of 8 h.
         start_date=datetime.datetime(2021, 1, 1),
-        end_date=datetime.datetime(2021, 1, 1, 0, 0, 3),
-        seconds_per_timestep=1,
+        end_date=datetime.datetime(2021, 1, 2),
+        seconds_per_timestep=8 * 3600,
         result_directory=result_directory,
         post_processing_options=post_processing_options,
     )

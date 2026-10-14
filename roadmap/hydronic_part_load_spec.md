@@ -5,9 +5,11 @@ controller iterates against the store's end temperature, then to a memoryless ru
 solves. Built as four draft PRs (#915 to #918, §10); after the year was measured on the kind order, the owner decided
 on 2026-10-12 (§2, decisions 17 to 19) to keep #915, the threshold, the rule and the boiler, to park #916 (the heat
 pump and the electric heater) and #917 (the collector), and to drop #918 (the buffer-less loop). On 2026-10-14 the
-owner brought #917 back on its own, directly on #915 (decision 20); #916 stays parked. Builds on the
-hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start (hisim-4g9.23, #914)
-and the simulator's kind order (#922, §4.3). This document describes the design of all four parts and marks what is
+owner brought #917 back on its own, directly on #915 (decision 20); #916 stays parked. On 2026-10-15 the owner
+extended the mechanism to the space-heating buffer, a start-of-step store since stage D, for the boiler and
+district-heating chain (decision 21, amending decision 7), and then to the heat pump's space heating (decision 22).
+Builds on the hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start
+(hisim-4g9.23, #914) and the simulator's kind order (#922, §4.3). This document describes the design of all four parts and marks what is
 built; the measured results are in §11.
 
 ## 1. Problem
@@ -51,7 +53,8 @@ Owner, 2026-10-10, replacing the prototype's design of 2026-10-09 (heat-to-targe
 7. **The store is a black box.** It publishes only port and sensor quantities. The part-load mechanism reads its
    controlled temperature at the end of the step, `WaterTemperatureAtEndOfStepInCelsius`, which any tank model (a
    stratified one included) can publish. The store does not know which inflow is a backup or a collector and decides
-   nothing.
+   nothing. *Amended by decision 21 (owner, 2026-10-15):* a start-of-step store also publishes, per circuit, its end
+   temperature without that circuit; these are port quantities too, not a line or a model.
 8. **The L1 controller owns the fraction and its target.** It already owns the device's on/off, mode and set point;
    it now also sets the fraction (§4). The target is published by the controller and by nobody else.
 9. **Collector and backup both set their ratio** against their own targets on the same tank. No priority rule is
@@ -91,6 +94,25 @@ Owner, 2026-10-14, after the review of the 80 °C solar maximum (#942):
     declared range, stopped at 3600 s with the tank's "way too high" check (above 90 °C). The collector's part load
     ends such a step at the controller's target instead. The heat pump's and the electric heater's part load (#916)
     stay parked under decision 18.
+
+Owner, 2026-10-15, after stage D made the space-heating buffer a start-of-step store
+(`roadmap/hydronic_coupling_spec.md` §12):
+
+21. **The part-load mode for start-of-step stores, above 600 s, for the boiler and district-heating chain.** The
+    space-heating buffer publishes its end temperature and, per circuit, its end temperature without that circuit
+    (`WaterTemperatureAtEndOfStepWithout{HeatGenerator,SecondaryHeatGenerator,HeatDistribution}InCelsius`). The end
+    temperature of a start-of-step store is exactly linear in each circuit's ratio, so the rules of
+    `part_load.StartOfStepPartLoadRule` are exact given the other circuits' ratios and land in one pass where the
+    rule of decision 11 alternates under a draw (hisim-fxix.17). The boiler's controller raises the buffer to the
+    heating curve's supply temperature, also from a buffer at that temperature that its draw would empty (a steady
+    charge at full power and a 0.1 K lift); the distribution controller lowers its ratio so that the buffer ends no
+    lower than the room's start-of-step temperature, in forced passes too; in the heating season the rest of a
+    hot-water part-load step charges the buffer. The hot-water cylinder keeps decision 11's rule.
+22. **The heat pump's space heating runs the mode too** (owner, 2026-10-15, after the heat-pump assemblies failed
+    with whole steps into the start-of-step buffer). Its space-heating controller sets the exact fraction of
+    decision 21 against the heating curve's supply temperature plus the energy manager's raise, charges a buffer at
+    its target that its draw would empty, and the distribution's floor applies. Its hot-water part load stays parked
+    under decision 18 (#916).
 
 This is a hybrid by design: one model whose controllers set a run fraction above the threshold, not two models.
 The cost is a small, documented jump in results at the threshold itself, a step length nobody runs.
@@ -497,6 +519,6 @@ Epic hisim-fxix.
 | hisim-fxix.22 (P3, closed) | the solar controller's own 80 °C maximum storage temperature instead of the backups' 60 °C aim | #942 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P3) | solar priority as a control strategy | – |
-| hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |
+| hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5): the boiler and district heating with decision 21, the heat pump's space heating with decision 22 | stage D |
 | hisim-3y10 (P2) | the open points of decision 5 | measured on the old stack (#915 to #918) |
 | hisim-w510 (P4) | room-temperature devices (parent hisim-4g9) | – |

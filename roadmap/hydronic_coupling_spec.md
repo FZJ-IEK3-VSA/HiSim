@@ -2,7 +2,9 @@
 
 **Date:** 2026-10-01 · **Owner:** Noah Pflugradt · **Status:** decided (owner, 2026-10-01: the frame in §2,
 D1–D8 in §10); ready for staged implementation (§9.5). Replaces PR #864. Beads: hisim-4g9.16, hisim-4g9.21,
-hisim-4g9.22, hisim-9uoo.12, hisim-9uoo.15, hisim-9uoo.17, hisim-6ehm; renovisorissues #76.
+hisim-4g9.22, hisim-9uoo.12, hisim-9uoo.15, hisim-9uoo.17, hisim-6ehm; renovisorissues #76. **Stage D couples the
+space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler, heat-pump
+and district-heating chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12).**
 
 All `file:line` citations are against `origin/main` at fca81ba0. Code on the #864 branch (`fix/storage-energy`)
 is cited by name only.
@@ -690,7 +692,8 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   the energy manager's raise switching inside a step; it moves to hisim-fxix.12 (owner, 2026-10-09). The
   heat-pump-and-solar twin's year at 3600 s aborts on a 2-cycle the pinned 0.5 under-relaxation cannot damp
   (hisim-fxix.13; the owner kept 0.5, 2026-10-09).
-- **D. SH chain.** Scope: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
+- **D. SH chain.** *Replaced by §12 (owner, 2026-10-15): start-of-step coupling instead of the step-mean node.*
+  Scope as first written: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
   buffer, the SH circuits, the iteration histogram test. Done when: buffer and HDS close per step, district
   heating's bill equals pipe-water `ΔU` plus delivered heat (hisim-9uoo.12 closed), no step at
   `force_convergence` at 900 s in the boiler, heat-pump and district-heating twins, goldens re-blessed.
@@ -783,3 +786,156 @@ hisim-4g9.16 (vessels conserve energy; re-solved by §4), hisim-4g9.21 (heat-pum
 buffer; §4.6, D3), hisim-9uoo.15 (cooling and brine-pump electricity metering; §5.2), hisim-9uoo.17 (cooling
 through a buffer; §4.2), hisim-6ehm (buffer control at coarse steps; open as a validation item, D4, §9.4);
 renovisorissues #76 (stated vs simulated boiler efficiency; §9.4); the D5 stratification bead hisim-fxix.1; the epic hisim-fxix with one bead per stage (A hisim-fxix.2 … G hisim-fxix.8).
+
+## 12. Stage D as decided: start-of-step coupling (owner, 2026-10-15)
+
+**Why not the step-mean node.** The design of §4.4 and §4.6 makes the buffer a node that publishes its step mean `T̄`
+to both its generators and the heat distribution system. Probes on the stack top (design summary of 2026-10-14)
+showed that this does not converge with plain iteration: the buffer sits between a generator that holds a lift and a
+distribution system that holds a drop (it takes the building's demand whatever its supply), so the step mean
+contracts per pass only by `θ = 1 − (1 − e^(−a))/a` (§6), and the twins have `a` of 2 to 3.4 at 900 s. The gas twin
+needed 34 passes per step at 900 s (96 % of the steps at `force_convergence`) and aborted at 3600 s; the heat-pump
+twin aborted at 900 s. The acceleration the design counted on was removed on 2026-10-11. The circuit laws of
+hisim-4g9.22 converged in a prototype (7 passes at 900 s) but the owner found them too complex to maintain.
+
+**The decision.** Every node of the space-heating chain publishes the temperature it starts the step at, `T0`, a
+value no pass of the step moves:
+
+- the buffer (`SimpleHotWaterStorage` with its heat exchanger) publishes `T0` as the return to its generators, as
+  the supply to the heat distribution system and as the value its generators' controllers decide on;
+- a generator (boiler, heat pump, district-heating substation) supplies `T0 + lift` and books `m c lift`;
+- the heat distribution system returns `T0 − drop`, never below the room temperature the building reports at the
+  start of the step, and books `m c (T0 − T_ret)`;
+- the node integrates the step's energy exactly: `T_end = T0 + (Σ m_i c (T_i − T0) dt − UA (T0 − T_amb) dt) / C`
+  (`hydronics.StartOfStepNode`).
+
+All ports stay `(m, T)`, energy is derived as `m c ΔT`, components stay black boxes. Both ends of every circuit book
+from the same triple and the node closes on every step at any step length. Nothing in the chain reads a value that
+changes within the step, so the chain adds no iteration. The price: a node does not see its own temperature change
+inside the step, so a generator that holds its lift keeps bringing its heat however far the node has risen, and the
+distribution system keeps drawing however far the node has fallen. Above 600 s both ends of the buffer therefore run
+a fraction of the step (the part-load mode below, decided in a second and a third round on 2026-10-15).
+
+The hot-water cylinder keeps stage C's step-mean node: its generators' supplies are capped at set temperatures, so it
+converges.
+
+**The design summary's decisions S2–S10, under start-of-step coupling.** S2 (scope of circuit laws) falls away. S3
+(the boiler's space-heating limit) becomes the boiler's space-heating part load with the heating curve's supply
+temperature as its target. S4 (the distribution system's room clamp on the building's start-of-step indoor
+temperature) and S5 (zero flow with the valve shut) stand. S6 (comfort: give the rest of a hot-water part-load step to
+space heating), S8 (0.5 % forced steps at 900 s for the boiler twins), S9 (heat within 1 % at 900 s and 3600 s
+against 60 s, fuel and electricity reported) and S10 (D25 without a buffer) stand as recommended; S6 is the comfort
+remainder of the part-load mode. S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part
+load; the owner accepted that for stage D (hisim-fxix.26).
+
+**As built and measured** (pull requests stacked on #1000; full year 2021, predefined occupancy; 60 s is the
+reference every coarse step is compared with):
+
+1. The distribution system's own pump stands while its valve is shut (S5).
+2. The building publishes its start-of-step indoor temperature (S4).
+3. `hydronics.StartOfStepNode`.
+4. The occupants open the windows only more than 0.01 K above the cooling set temperature: a room the distribution
+   system cools in the same step ends exactly at that temperature, and float noise flipped the windows until the step
+   aborted (gas twin, June at 900 s and 3600 s, August at 60 s).
+5. The buffer as a start-of-step node, the distribution system in the same step behind it. The buffer closes on every
+   step; the space heat booked at 900 s against 60 s is −0.36 % (gas), −0.53 % (heat pump), −0.44 % (pellets); forced
+   steps at 900 s are those of the stack top (gas 94, pellets 94, heat pump 1601 against 1620). The overbooking of the
+   mixing law is gone (at 900 s, booked: gas 11909.1 → 11124.5 kWh, pellets 15146.0 → 11440.8 kWh, heat pump
+   15700.5 → 12402.2 kWh, with the heat delivered to the building unchanged within 0.3 %). Alone it does not carry
+   coarse steps: the gas twin's year at 3600 s aborts (below), and comfort falls (gas twin 92.9 degree-hours at 900 s
+   against 9.5 at 60 s).
+6. The ports of the part-load mode, with no result change: the buffer publishes its end temperature and, per circuit,
+   its end temperature without that circuit (`WaterTemperatureAtEndOfStepWithout{HeatGenerator,
+   SecondaryHeatGenerator, HeatDistribution}InCelsius`), and `part_load.StartOfStepPartLoadRule` gains the exact
+   raising and lowering ratios.
+7. The part-load mode for the boiler and district-heating chain (second decision below).
+8. The heat pump's space-heating part load (third decision below).
+
+A first space-heating part load with the existing rule of `hisim/part_load.py` stopped the stack (owner's stop rule:
+more forced steps than today): the pellet twin at 900 s forced 5714 steps instead of 94. The rule takes the buffer's
+start temperature as its end temperature at ratio 0, but the distribution system draws from the buffer all step, so
+the end temperature at ratio 0 lies far below the start and the rule alternates (the case of hisim-fxix.17). It was
+dropped for the part-load mode.
+
+**Second decision (owner, 2026-10-15): the part-load mode above 600 s for the boiler and district-heating chain.**
+At and below 600 s every circuit runs whole steps. Above it the buffer's circuits run a fraction of the step, set by
+four pieces:
+
+- *The store's end temperature without a circuit.* For a start-of-step node the end temperature is exactly linear in
+  a circuit's ratio, so the buffer publishes, beside its end temperature, its end temperature without each circuit as
+  port quantities. A rule that reads them lands in one pass; it needs no model of the store. This amends decision 7
+  of `roadmap/hydronic_part_load_spec.md` (decision 21 there) and answers hisim-fxix.17's option (c) for
+  start-of-step stores.
+- *The generator's exact fraction, with a steady charge.* The boiler's controller sets the fraction that ends the
+  buffer at the heating curve's supply temperature (`StartOfStepPartLoadRule.raising_ratio`). A buffer that starts at
+  or above that temperature but would end below it under the draw is charged as well, at full power with a lift of
+  0.1 K, for the fraction that ends it at the target.
+- *The distribution's floor fraction.* The distribution controller sets the fraction that keeps the buffer's end
+  temperature at or above the room's start-of-step temperature (`StartOfStepPartLoadRule.lowering_ratio`); it applies
+  the rule in forced passes too, so a forced step cannot drain the buffer below the room.
+- *The comfort remainder (S6).* In the heating season the rest of a hot-water part-load step charges the buffer, at
+  most that rest, with the lift to the supply temperature.
+
+**Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat
+pump overshot a start-of-step buffer (the heat-pump assemblies failed: sample s007 at 93.3 °C, a 50 l buffer in the
+volume sweep at −0.27 °C). Its space-heating controller now sets the same exact fraction, with the heating curve's
+supply temperature plus the energy manager's raise as the target; while it heats, a buffer at its target that its
+draw would empty is charged too, and the distribution's floor applies as for the boilers. The heat pump's hot-water
+part load stays parked with #916 (decision 18 of the part-load spec). Decision 22 of the part-load spec records it.
+
+Measured, full year 2021, predefined occupancy, against 60 s. The boilers with the mode (pull request 7), the heat
+pumps with their part load (pull request 8). The 60 s references:
+
+| Twin | Booked, kWh | Fuel or electricity, kWh | Delivered, kWh | Degree-hours |
+|---|---|---|---|---|
+| gas | 11164.2 | 15367.1 | 11012.8 | 9.5 |
+| pellets | 11491.4 | 12769.4 | 11020.2 | 0.0 |
+| heat pump | 12472.2 | 2704.3 | 11846.0 | 16.3 |
+| heat pump + solar thermal | 12112.2 | 2574.7 | 11768.1 | 11.1 |
+
+At 60 s the gas twin is bit-identical to pull request 5. The heat-pump twin moves by +0.04 % of booked heat in pull
+request 7 (12467.8 kWh before), with 5174 instead of 5028 forced steps: it already forces about 5000 steps a year at
+60 s through the energy manager's raise cycle (hisim-4g9.28), and the distribution controller's new inputs change the
+order the simulator evaluates the components in. Pull request 8 leaves 60 s unchanged.
+
+Forced steps in brackets are the stack top's; degree-hours are below the set temperature less 1 K:
+
+| Twin, step | Forced steps | Space heat booked | Delivered | Fuel or electricity | Degree-hours |
+|---|---|---|---|---|---|
+| gas 900 s | 98 (94) | +0.02 % | −0.13 % | −9.31 % | 36.8 |
+| gas 3600 s | 504 (47) | −0.66 % | −1.01 % | −19.36 % | 192.8 |
+| pellets 900 s | 94 (94) | −1.31 % | −0.09 % | −1.32 % | 0.4 |
+| pellets 3600 s | 55 (47) | −1.72 % | −0.24 % | −1.73 % | 11.3 |
+| heat pump 900 s | 1668 (1620) | −1.08 % | −0.70 % | −3.54 % | 23.0 |
+| heat pump 3600 s | 805 (618) | −2.34 % | −1.99 % | −5.91 % | 109.3 |
+| heat pump + solar thermal 900 s | 1326 (946) | −0.70 % | −0.66 % | −2.79 % | 15.5 |
+| heat pump + solar thermal 3600 s | 543 (313) | −1.09 % | −1.15 % | −3.78 % | 93.7 |
+
+With whole steps (pull request 7) the heat-pump twin delivered −0.70 % and −3.75 % and used −2.88 % and −9.85 %
+electricity, with 1587 and 957 forced steps and 44.5 and 617.0 degree-hours. The gas twin's year at 3600 s runs
+again; its buffer stays at or above 19.6 °C. Every assembly contract passes, the heat pump's included. Three
+RenoVisor flats at 900 s (2019, Ireland; pellets, biomass, gas) book 5775.3, 7029.6 and 6725.3 kWh instead of the
+stack top's 8785.4, 10677.4 and 8147.8 kWh, deliver the same heat within 0.03 %, keep their forced steps (22, 42, 42)
+and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
+
+**Decided with it (owner, 2026-10-15):**
+
+- *The gas fuel at coarse steps.* The heat is asserted (booked and delivered) and the balance closes; the fuel is
+  recorded against 60 s. The gas twin's fuel gap (−9.31 % at 900 s, −19.36 % at 3600 s with the heat within 1 %)
+  comes from the boiler's efficiency law, which rises with burner power, so a fraction of the step at full power
+  burns less fuel than modulating low all step. It is not a coupling error. The law is parked as the P1 bead
+  hisim-4g9.66 until the open pull requests are merged; stage D is not stacked on it.
+- *The gas twin's extra forced steps* (98 against 94 at 900 s, 504 against 47 at 3600 s) are accepted for now
+  (hisim-fxix.25).
+- *The heat-pump twins' extra forced steps* (S7 not met): 1668 against 1620 and 805 against 618, with solar thermal
+  1326 against 946 and 543 against 313. Accepted for stage D and recorded, not asserted; the P1 bead hisim-fxix.26
+  addresses them once the current pull requests are merged.
+- *The heat pump's electricity at coarse steps*: −3.54 % at 900 s and −5.91 % at 3600 s against 60 s (with solar
+  thermal −2.79 % and −3.78 %), while its delivered heat is within 1 % at 900 s. Accepted for stage D and recorded,
+  not asserted, like the gas fuel; the P1 bead hisim-fxix.27 addresses it once the current pull requests are merged.
+  RenoVisor runs at 900 s, so a RenoVisor heat pump's electricity is about 3.5 % low against 60 s.
+
+**Open:**
+
+- *Comfort at coarse steps* (hisim-6ehm): degree-hours at 3600 s are 192.8 (gas), 109.3 (heat pump) and 93.7 (heat
+  pump + solar thermal), against the stack top's 2.7, 4.2 and 3.6.

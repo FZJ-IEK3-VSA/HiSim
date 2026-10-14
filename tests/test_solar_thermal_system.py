@@ -9,13 +9,23 @@ import pytest
 from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_plate_precalc
 from hisim import hydronics
 from hisim import sim_repository, component, log, simulator as sim
-from hisim.components import weather, solar_thermal_system
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
+from hisim.components import (
+    generic_boiler,
+    generic_district_heating,
+    generic_electric_heating,
+    solar_thermal_system,
+    weather,
+)
+from hisim.components.controller_l2_energy_management_system import EMSConfig
+from hisim.components.more_advanced_heat_pump_hplib import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-from tests.part_load_rigs import AllInputsRig, CollectorRig, SolarControllerRig
+from tests.part_load_rigs import AllInputsRig, CollectorRig, Parameters, SolarControllerRig
 
 
 @pytest.mark.base
@@ -869,19 +879,80 @@ def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_maximum()
     assert 3.0 <= band_in_kelvin <= 5.0
 
 
-@pytest.mark.base
-def test_the_solar_maximum_lies_above_the_warm_water_aim_of_the_backups() -> None:
-    """Catches a solar maximum storage temperature at or below the 60 °C the backup generators charge the tank to.
+class BackupAims:
+    """The highest tank temperature each backup generator's controller charges the hot-water tank to, in °C."""
 
-    With the solar maximum at the backups' warm-water aim, the full-storage stop holds the pump on sunny days while
-    the tank waits between 57 and 60 °C, and the boiler or heat pump supplies heat the sun could have delivered. The
-    maximum stays within the 60 to 80 °C real solar controllers are set to.
+    @staticmethod
+    def built_controllers() -> Dict[str, Any]:
+        """Return the boiler's, the district-heating substation's and the electric heater's controllers, built.
+
+        Each is built from its first preset with its sizable fields set by hand (a boiler of 1 to 10 kW, a heating
+        threshold of 16 °C, a specific heating load of 50 W/m²); its warm-water aim depends on none of them.
+
+        Returns:
+            The controllers by name.
+        """
+        parameters = Parameters.one_day(900)
+        boiler = generic_boiler.GenericBoilerControllerConfig.preset_modulating("BoilerController")
+        boiler.minimal_thermal_power_in_watt = 1000.0
+        boiler.maximal_thermal_power_in_watt = 10000.0
+        district = generic_district_heating.DistrictHeatingControllerConfig.preset_standard("DistrictController")
+        district.set_heating_threshold_outside_temperature_in_celsius = 16.0
+        electric = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricController")
+        electric.set_heating_threshold_outside_temperature_in_celsius = 16.0
+        electric.specific_heating_load_of_building_in_watt_per_m2 = 50.0
+        return {
+            "boiler": generic_boiler.GenericBoilerController(my_simulation_parameters=parameters, config=boiler),
+            "district heating": generic_district_heating.DistrictHeatingController(
+                my_simulation_parameters=parameters, config=district
+            ),
+            "electric heater": generic_electric_heating.ElectricHeatingController(
+                my_simulation_parameters=parameters, config=electric
+            ),
+        }
+
+    @staticmethod
+    def heat_pump_raised_aim_in_celsius() -> float:
+        """Return the tank temperature at which the heat pump ends a charge under the energy manager's full raise, °C.
+
+        The heat pump's controller ends a hot-water charge 0.5 K below its set temperature, and the energy manager
+        raises that set temperature by its hot-water offset (10 K) while PV surplus is available: 69.5 °C.
+
+        Returns:
+            The raised aim, in °C.
+        """
+        config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+        energy_manager = EMSConfig.preset_optimize_own_consumption("EMS")
+        raise_in_kelvin = energy_manager.domestic_hot_water_storage_temperature_offset_value
+        return (
+            config.t_max_dhw_storage_in_celsius
+            + raise_in_kelvin
+            - MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
+        )
+
+
+@pytest.mark.base
+def test_the_solar_maximum_lies_above_the_warm_water_aim_of_every_backup() -> None:
+    """Catches a solar maximum storage temperature at or below a temperature a backup generator charges the tank to.
+
+    The boiler, the district-heating substation and the electric heater charge to their 60 °C warm-water aim, the
+    heat pump to 59.5 °C and, under the energy manager's raise, to 69.5 °C. With the solar maximum at or below such an
+    aim, the full-storage stop would hold the pump on sunny days while that backup supplies heat the sun could have
+    delivered. The maximum stays within the 60 to 80 °C real solar controllers are set to.
     """
     maximum_in_celsius = solar_thermal_system.SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
-    backup_config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
-    backup_aim_in_celsius = backup_config.t_max_dhw_storage_in_celsius
-    assert backup_aim_in_celsius == 60.0
-    assert backup_aim_in_celsius < maximum_in_celsius <= 80.0
+    aims_in_celsius = {
+        name: controller.warm_water_temperature_aim_in_celsius
+        for name, controller in BackupAims.built_controllers().items()
+    }
+    aims_in_celsius["heat pump, raised"] = BackupAims.heat_pump_raised_aim_in_celsius()
+    assert aims_in_celsius == {
+        "boiler": 60.0,
+        "district heating": 60.0,
+        "electric heater": 60.0,
+        "heat pump, raised": 69.5,
+    }
+    assert max(aims_in_celsius.values()) < maximum_in_celsius <= 80.0
 
 
 @pytest.mark.base

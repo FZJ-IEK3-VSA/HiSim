@@ -324,7 +324,6 @@ class SolarThermalSystem(PhysicsComponent):
     PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
     ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
     ThermalEnergyOutput: ClassVar[str] = "ThermalEnergyOutput"
-    RequiredWaterMassFlowOutput: ClassVar[str] = "RequiredWaterMassFlowOutput"
     #: The flow the collector heat at the inlet's start-of-step temperature needs (kg/s), on which the controller
     #: switches the pump.
     RequiredWaterMassFlowAtStartOfStepInKgPerSecond: ClassVar[str] = "RequiredWaterMassFlowAtStartOfStepInKgPerSecond"
@@ -485,16 +484,6 @@ class SolarThermalSystem(PhysicsComponent):
             load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
-        )
-        self.required_water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.RequiredWaterMassFlowOutput,
-            load_type=loadtypes.LoadTypes.WARM_WATER,
-            unit=loadtypes.Units.KG_PER_SEC,
-            output_description=(
-                "The mass flow [kg/s] the collector heat at the storage's step mean needs: that heat over c times twice "
-                "the inlet-to-mean difference, whether or not the pump runs."
-            ),
         )
         self.required_water_mass_flow_at_start_of_step_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -1093,10 +1082,6 @@ class SolarThermalSystem(PhysicsComponent):
             inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
             pump_runs=control_signal != 0,
         )
-        required_mass_flow_output_kg_s = self.required_mass_flow_in_kg_per_second(
-            collector_heat_in_watt=collector_heat_at_return_w,
-            inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
-        )
         required_mass_flow_at_start_of_step_in_kg_per_second = self.required_mass_flow_in_kg_per_second(
             collector_heat_in_watt=collector_heat_at_start_of_step_in_watt,
             inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
@@ -1126,10 +1111,6 @@ class SolarThermalSystem(PhysicsComponent):
             water_temperature_output_deg_c,
         )
         stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
-        stsv.set_output_value(
-            self.required_water_mass_flow_kg_s_output_channel,
-            required_mass_flow_output_kg_s,
-        )
         stsv.set_output_value(
             self.required_water_mass_flow_at_start_of_step_output_channel,
             required_mass_flow_at_start_of_step_in_kg_per_second,

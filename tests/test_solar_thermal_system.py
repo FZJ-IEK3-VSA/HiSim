@@ -483,8 +483,9 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     """A collector circuit whose water carried another heat than the collector's would unbalance the tank.
 
     At noon on 2 July in Aachen, with the tank's step mean at 40 °C: the pump runs ``Q(40) / (c * 20 K)`` and the
-    supply is 60 °C, so the water carries ``Q(40)``; the flow the controller reads is the same whether or not the
-    pump runs. With the pump off the circuit moves no water and its supply is its return.
+    supply is 60 °C, so the water carries ``Q(40)``; the flow the controller reads, at the tank's start-of-step
+    temperature (here equal to its step mean), is the same whether or not the pump runs. With the pump off the circuit
+    moves no water and its supply is its return.
     """
 
     repo = sim_repository.SimRepository()
@@ -506,6 +507,8 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
     my_sts.part_load_command.ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
+    # the tank started the step at its step mean, so the controller's flow is the circuit's
+    my_sts.inlet_temperature_at_start_of_step_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
     my_sts.ghi_channel.source_output = my_weather.ghi_output
@@ -534,14 +537,14 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
         mass_flow_kg_per_s=flow_kg_s, t_supply_c=60.0, t_return_c=40.0
     )
     assert output(my_sts.thermal_power_w_output_channel) == pytest.approx(heat_w, rel=1e-12)
-    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
+    assert output(my_sts.required_water_mass_flow_at_start_of_step_output_channel) == flow_kg_s
 
     stsv.values[control.global_index] = 0
     my_sts.i_simulate(timestep, stsv, False)
     assert output(my_sts.water_mass_flow_kg_s_output_channel) == 0.0
     assert output(my_sts.water_temperature_deg_c_output_channel) == 40.0
     assert output(my_sts.thermal_power_w_output_channel) == 0.0
-    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
+    assert output(my_sts.required_water_mass_flow_at_start_of_step_output_channel) == flow_kg_s
 
 
 class PumpTransitions:
@@ -950,7 +953,8 @@ def test_the_collector_publishes_the_flow_its_heat_at_the_start_of_step_inlet_ne
     """
     system = solar_thermal_system.SolarThermalSystem
     flow_name = system.RequiredWaterMassFlowAtStartOfStepInKgPerSecond
-    mean_flow_name = system.RequiredWaterMassFlowOutput
+    # the running pump's circuit flow at ratio 1: the flow the collector heat at the step mean needs
+    mean_flow_name = system.WaterMassFlowOutput
     at_the_mean = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=45.0)
     assert at_the_mean[flow_name] == at_the_mean[mean_flow_name] > 0.0
     cooler_start = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=40.0)

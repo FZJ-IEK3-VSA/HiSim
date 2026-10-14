@@ -838,7 +838,7 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
     # an archived result carries such support), and this note says which of the two it is.
     caption = "" if cards else (
         '<p class="sub">No subsidy catalog decision backs the support shown here. It comes from '
-        "the retired flat legacy shim (cost_spec.md §10.1, retired 2026-09-24), which a run "
+        "the retired flat legacy shim (roadmap/cost_spec.md §10.1, retired 2026-09-24), which a run "
         "without a catalog no longer applies; an audit trail requires a catalog, see "
         "subsidy_catalog/.</p>"
     )

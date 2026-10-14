@@ -845,7 +845,7 @@ def build_evaluation_inputs(
     if duration_seconds > SECONDS_PER_YEAR * 1.001:
         log.warning(
             "Simulation spans more than one year; the lifecycle cost engine uses the first "
-            "simulated year (cost_module_issues.md #15)."
+            "simulated year (roadmap/cost_module_issues.md #15)."
         )
         fraction = 1.0
     elif fraction < 1.0:

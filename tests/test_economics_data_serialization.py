@@ -1,4 +1,4 @@
-"""Spot-series parsing, validation gaps, and result serialization round-trips (cost_spec.md §7.2, §9.6).
+"""Spot-series parsing, validation gaps, and result serialization round-trips (roadmap/cost_spec.md §7.2, §9.6).
 
 Second of the three data/integration test files (split per the PR-3 review's 500-line rule):
 strict spot-series CSV parsing (review finding 25), the validation harness's gap findings,

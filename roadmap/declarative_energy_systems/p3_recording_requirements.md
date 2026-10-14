@@ -182,7 +182,7 @@ extension of the golden gate and it blesses nothing.
   reference is produced, so a setup needs no entry in `golden_config.json` to be covered, and nothing has to be
   re-blessed when a P4 batch changes a number.
 - R11.2 **Exact equality, not a tolerance.** Both runs happen on one machine, where determinism is byte-exact
-  (`golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
+  (`roadmap/golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
   rig does not have. So the comparison demands equality. A triple that only passes with a tolerance is a finding to
   investigate, not a threshold to widen.
 - R11.3 **Three comparisons, in this order:** the component set and the wire set (R3.3); then **every** column of

@@ -264,7 +264,7 @@ Nothing here is released; the branch is unmerged. Landing order, each independen
 
 1. **PR-A kernel** — `engine.py`, `contributions.py`, `report.py`, `laws.py` (`Self`, `Many`), `sizing.py` ordering; pilots adjusted minimally (`scope=` dropped, pellet law → `Self`); `tests/test_sizing_engine.py` rewritten (T-1–T-7, T-14). Golden: pilot numbers unchanged.
 2. **PR-B typed presets + introspection** — `presets.py` rewrite, pilots to `Presets`/`(name)` builders, `german_single_family_home → standard`, `introspection.py`; T-8–T-13. Requires a mypy prototype green *before* the pilots are converted (R-1).
-3. **PR-C plan bookkeeping** — `roadmap/declarative_energy_systems/plan.md` §P1 checked off; branch plan/agenda marked superseded; `system_docs/config_defaults_spec.md` §on scopes replaced by a pointer to the requirements.
+3. **PR-C plan bookkeeping** — `roadmap/declarative_energy_systems/plan.md` §P1 checked off; branch plan/agenda marked superseded; `roadmap/declarative_energy_systems/config_defaults_spec.md` §on scopes replaced by a pointer to the requirements.
 
 Deleted: `FactScope`, `Catalog`, `OverrideRecord`, `adjacency`/`preseeded_facts` parameters, `LookupMode` old members, the `sizing_facts` wording in docstrings. Regenerated: pilot scenario JSON fixtures if literal spellings change (expected int→float drift only, `random_findings`).
 

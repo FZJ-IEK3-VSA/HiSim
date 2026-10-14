@@ -3,7 +3,7 @@
 A TABULA row whose reference window areas are both zero used to crash ``BuildingInformation``
 twice over: the per-direction window scaling divided by the reference window area (findings log
 entry 1), and the window U-value's area-weighted average divided by the same zero sum
-(``simulation_issues.md`` item 2). Neither division runs for such a row any more, and what
+(``roadmap/simulation_issues.md`` item 2). Neither division runs for such a row any more, and what
 happens instead depends on whether the row has window data anywhere else.
 
 A row with no window data anywhere -- every window column zero -- keeps the window's own

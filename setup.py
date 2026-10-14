@@ -52,7 +52,7 @@ setup(
             # The commit the image was built from, baked in by the Dockerfile (todo H6) so a
             # container that is not a git checkout can still say which code produced a result.
             "COMMIT",
-            # Data files of the lifecycle cost engine (cost_spec.md §3.5, §5.2):
+            # Data files of the lifecycle cost engine (roadmap/cost_spec.md §3.5, §5.2):
             "cost_database/*.json",
             "cost_database/tariffs/*.json",
             "cost_database/spot_series/*.csv",

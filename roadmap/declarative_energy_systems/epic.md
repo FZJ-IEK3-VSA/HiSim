@@ -5,7 +5,7 @@
 **Author(s):** Noah Pflugradt (owner; all `[given]` items) · assistant (all `[proposed]` items, evidence survey)
 **Reviewers:** HiSim core team
 **Supersedes / related:** `roadmap/declarative_energy_systems/config_requirements_spec.md` (first draft, superseded); the design documents
-`system_docs/config_defaults_spec.md` (branch `config_presets`) and `system_docs/json_scenario_v2_spec.md`
+`roadmap/declarative_energy_systems/config_defaults_spec.md` (branch `config_presets`) and `system_docs/json_scenario_v2_spec.md`
 (branch `json_v2`) become *solution-design input* for the phases, not requirements.
 **Children:** `roadmap/declarative_energy_systems/plan.md` (phased plan) · `roadmap/declarative_energy_systems/p1_sizing_kernel_requirements.md` ·
 `roadmap/declarative_energy_systems/p2_file_format_requirements.md` · `p3_recording_requirements.md` (draft) · the P5 document is written when P3 is accepted.
@@ -44,7 +44,7 @@ Detailed evidence lives in the phase documents and `roadmap/declarative_energy_s
 | v1 executor default lookup | method-name matching, `hisim/json_executor.py:_get_default_config` |
 | Existing design work | `config_presets` (18 commits: `hisim/config/`, 3 pilots), `json_v2` (`hisim/scenario_v2/`, grouped connections, realized record, A3/A4 decisions) |
 
-**Stakeholders and consumers.** Existing: RenoVisor (`hisim/renovisor/mapping.py:_select_setup`), building sizer (`hisim/building_sizer_utils/interface_configs/`), HPC harness (`hpc_harnes_spec.md` on `json_v2`). Hypothetical, not constraints: webtool, template creator.
+**Stakeholders and consumers.** Existing: RenoVisor (`hisim/renovisor/mapping.py:_select_setup`), building sizer (`hisim/building_sizer_utils/interface_configs/`), HPC harness (`roadmap/hpc_harness_spec.md` on `json_v2`). Hypothetical, not constraints: webtool, template creator.
 
 **Kind of change:** behavior change + migration. Format, executor and sizing mechanism are replaced; identical concrete inputs must yield identical results (C1).
 

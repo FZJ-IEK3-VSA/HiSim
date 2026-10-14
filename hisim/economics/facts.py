@@ -54,7 +54,7 @@ class UndeclaredCostRelevanceError(ValueError):
         super().__init__(
             f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
             "component class(es) in this simulation declare no cost_relevance, so the cost model "
-            "cannot describe them (cost_spec.md §9.2). The run is refused before the first "
+            "cannot describe them (roadmap/cost_spec.md §9.2). The run is refused before the first "
             "timestep rather than after the last one.\n" + bullets
         )
 
@@ -75,7 +75,7 @@ class UnpriceableComponentError(ValueError):
             f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
             "component class(es) in this simulation declare cost_relevance PRICED while nothing "
             "can produce cost facts for them, so the evaluation would abort after the run "
-            "(cost_spec.md §9.1/§9.2, decision D7). The run is refused before the first timestep "
+            "(roadmap/cost_spec.md §9.1/§9.2, decision D7). The run is refused before the first timestep "
             "rather than after the last one.\n" + bullets
         )
 
@@ -95,7 +95,7 @@ def describe_undeclared_class(component_class: type) -> str:
         f"{component_class.__name__} (module {component_class.__module__}) declares no "
         "cost_relevance, so nothing can say whether it costs money: declare "
         "cost_relevance = CostRelevance.PRICED, CostRelevance.METER or "
-        "CostRelevance.FREE_OF_COST in the class body (cost_spec.md §9.2)"
+        "CostRelevance.FREE_OF_COST in the class body (roadmap/cost_spec.md §9.2)"
     )
 
 
@@ -115,7 +115,7 @@ def describe_unpriceable_class(component_class: type) -> str:
         "cost_relevance PRICED, but it implements no get_cost_facts() of its own and has no entry "
         "in hisim.economics.adapter.FactsExtractors.BY_CLASS_NAME, so nothing can tell the cost "
         "model what it is: implement get_cost_facts() on the class or register an extractor for it "
-        "(cost_spec.md §9.1)"
+        "(roadmap/cost_spec.md §9.1)"
     )
 
 

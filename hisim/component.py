@@ -242,7 +242,7 @@ class Component:
     whose class has no kind when it is added.
     """
 
-    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    # Cost role declaration for the lifecycle cost engine (roadmap/cost_spec.md §9.2). PRICED
     # components must return facts from `get_cost_facts()` or have an adapter table entry,
     # FREE_OF_COST components must return None, METER components provide
     # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
@@ -586,7 +586,7 @@ class Component:
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
 
     def get_cost_facts(self) -> Optional[ComponentCostFacts]:
-        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+        """Return cost-relevant facts for the lifecycle cost engine, or None (roadmap/cost_spec.md §3.3).
 
         Components declare, the engine computes: no prices, no discounting, no dataframe
         access here. The default (None) means "this component contributes no cost facts" —
@@ -612,7 +612,7 @@ class Component:
         all_outputs: List,  # pylint: disable=unused-argument
         postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
     ) -> Optional[EnergyFlowFacts]:
-        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4).
+        """Return the carrier flows a meter measured, or None for non-meters (roadmap/cost_spec.md §3.4).
 
         The billing counterpart of `get_cost_facts`: only components sitting at a carrier boundary
         (the electricity/gas/fuel/heating meters) override it, and they report the energy that

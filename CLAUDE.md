@@ -14,6 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —
   proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
 
+- **Documents go where `system_docs/documentation_map.md` says**: the root holds README, AGENTS, CLAUDE,
+  CONTRIBUTING and HISTORY only; binding guidelines are in `system_docs/`, specs and plans in `roadmap/`.
+
 ## Project Overview
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems. It models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, and more. Each simulation consists of components wired together, iterated over all time steps until convergence per step.

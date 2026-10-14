@@ -138,7 +138,7 @@ A full-fleet `golden_check.py` run fails one pair of sixteen:
 **1.95e-7**, which exceeds `rel_tol = 1e-9` by a factor of ~195. The gate's report prints `rel diff=0.000%`,
 which rounds the number that decides the verdict out of view.
 
-The cause is the tolerance regime, not the code: `golden_ref_spec.md` §7 fixes `rel_tol = 1e-9, abs_tol = 0`
+The cause is the tolerance regime, not the code: `roadmap/golden_ref_spec.md` §7 fixes `rel_tol = 1e-9, abs_tol = 0`
 on the reasoning that it "absorbs sub-ULP platform noise". That holds for KPIs of ordinary magnitude and
 fails exactly for KPIs that are **physically zero** — here a temperature deviation of 1.2e-9 °C·h — where a
 relative comparison has nothing to be relative to and one last-bit difference is an infinite relative error.

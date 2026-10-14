@@ -417,7 +417,7 @@ class KpiEntry:
     name_of_source_component: Optional[str] = None
     # Snake_case field names inside the camelCase entry: KpiSource pins its own spelling.
     source: Optional[KpiSource] = None
-    # Optional uncertainty band (cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
+    # Optional uncertainty band (roadmap/cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
     # legacy KPIs leave these unset during the parallel phase of the lifecycle cost engine.
     value_min: Optional[float] = None
     value_max: Optional[float] = None

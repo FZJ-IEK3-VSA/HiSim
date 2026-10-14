@@ -4,6 +4,8 @@
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems — it models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, hydrogen systems, and more. A simulation is a set of components wired together, iterated over every time step until each step's outputs converge, followed by post-processing (KPIs, plots, CSV/JSON/PDF reports). The top-level layout is: `hisim/` (the package — simulator core, the `Component` model, `components/`, `postprocessing/`, input data under `hisim/inputs/`); `system_setups/` (one `setup_function(sim, sim_params)` per `.py` file — the imperative input — plus the shared `.simulation.json` parameter files); `energy_systems/` (the declarative input: `*.energy_system.yaml`, one recorded twin per setup, plus `*.simulation.yaml`); `tests/` (pytest suite, organized by marker); and `hisim/hisim_main.py` (the CLI entrypoint that runs either).
 
+Where each document belongs -- the root, the binding guidelines in `system_docs/`, the specs and plans in `roadmap/` -- is `system_docs/documentation_map.md`.
+
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
 - No test should leave any calculation artefact in any other directory
@@ -35,7 +37,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   in every docstring; no `print` outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and
   PR descriptions in its form.
 - A change that moves simulation results, or renames an output, KPI, config field or the energy-system format, is made as `system_docs/results_and_interfaces.md` says: KPI deltas in the PR description, goldens blessed only through `golden-update.yml`, refactoring commits free of result changes, a heads-up to the RenoVisor side for a renamed public name.
-- Tests are written as `TESTING.md` says: one job marker per test, the runtime budget of `base`, a regression test that fails without its fix, explicit configuration over monkeypatching.
+- Tests are written as `system_docs/testing.md` says: one job marker per test, the runtime budget of `base`, a regression test that fails without its fix, explicit configuration over monkeypatching.
 
 ## Pull requests and merging
 
@@ -72,7 +74,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Test markers
 
-Markers are defined in `pytest.ini`. `TESTING.md` says which marker a test carries, the runtime budget of `base`
+Markers are defined in `pytest.ini`. `system_docs/testing.md` says which marker a test carries, the runtime budget of `base`
 and what a test must prove.
 
 - `base` — unit-scale tests that must pass in any case: no full simulation of a system setup, a few seconds at most. **Run these.**

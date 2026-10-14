@@ -544,6 +544,93 @@ def test_the_space_heating_circuit_is_throttled_at_the_maximal_flow_temperature_
     assert output(boiler.water_output_temperature_dhw_channel) == 50.0
 
 
+class PumpCase:
+
+    """The pump of :class:`BoilerStep`'s boiler, a namespace for the pump tests' expected values."""
+
+    #: The largest flow of a 20 kW boiler at 0.9 over the default 5 K: 18000 / (4180 * 5) = 0.861 kg/s.
+    MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND = 20000.0 * 0.9 / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 5.0)
+
+    #: Per circuit, the operating mode and the return inputs of a step: space heating on a 35 °C buffer return, hot
+    #: water on a 50 °C tank return.
+    CIRCUITS: Dict[str, Tuple[HeatingMode, float, float]] = {
+        "space heating": (HeatingMode.SPACE_HEATING, 35.0, 50.0),
+        "hot water": (HeatingMode.DOMESTIC_HOT_WATER, 35.0, 50.0),
+    }
+
+    @staticmethod
+    def outputs_of(boiler: Any, circuit: str) -> Tuple[Any, Any, Any]:
+        """Return the circuit's mass-flow, supply-temperature and thermal-power outputs."""
+        if circuit == "space heating":
+            return (
+                boiler.water_output_mass_flow_sh_channel,
+                boiler.water_output_temperature_sh_channel,
+                boiler.thermal_output_power_sh_channel,
+            )
+        return (
+            boiler.water_output_mass_flow_dhw_channel,
+            boiler.water_output_temperature_dhw_channel,
+            boiler.thermal_output_power_dhw_channel,
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("circuit", sorted(PumpCase.CIRCUITS))
+@pytest.mark.parametrize(("control_signal", "burner_power_in_watt"), [(1.0, 20000.0), (0.05, 2000.0)])
+def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_heat(
+    circuit: str, control_signal: float, burner_power_in_watt: float
+) -> None:
+    """A boiler that sized its flow to a lift close to 0 K pumped hundreds of kg/s and booked heat no store got.
+
+    The pellet and wood-chip twins' on/off controller asks for full power on a lift that shrinks to a few mK while
+    the buffer reaches its set temperature: the boiler pumped up to 958 kg/s on the year's mean and booked 51.7 MWh of
+    space heating for 11.0 MWh delivered (hisim-4g9.63). The pump moves at most
+    :attr:`PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND`, so a 0.01 K lift is raised to the rise the heat gives at that
+    flow: 5 K at full power (18000 W), 1/3 K at the 2 kW minimum (1200 W at 0.6). The heat the boiler books is the
+    heat that flow carries, which is the burner's heat, and the fuel the commanded power.
+    """
+    mode, space_heating_return_in_celsius, hot_water_return_in_celsius = PumpCase.CIRCUITS[circuit]
+    boiler, output = BoilerStep.run(
+        control_signal=control_signal, operating_mode=mode.value, lift=0.01,
+        space_heating_return=space_heating_return_in_celsius, hot_water_return=hot_water_return_in_celsius,
+    )
+    mass_flow_channel, supply_channel, power_channel = PumpCase.outputs_of(boiler, circuit)
+    is_space_heating = mode == HeatingMode.SPACE_HEATING
+    return_in_celsius = space_heating_return_in_celsius if is_space_heating else hot_water_return_in_celsius
+    heat_in_watt = burner_power_in_watt * boiler.burner.efficiency_at(burner_power_in_watt)
+    assert output(mass_flow_channel) == pytest.approx(PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND, rel=1e-12)
+    assert output(supply_channel) == pytest.approx(
+        return_in_celsius
+        + heat_in_watt / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND),
+        rel=1e-12,
+    )
+    assert output(power_channel) == hydronics.circuit_power_w(
+        mass_flow_kg_per_s=output(mass_flow_channel), t_supply_c=output(supply_channel), t_return_c=return_in_celsius
+    )
+    assert output(power_channel) == pytest.approx(heat_in_watt, rel=1e-12)
+    assert output(boiler.total_fuel_input_power_channel) == burner_power_in_watt
+
+
+@pytest.mark.base
+def test_a_lift_the_pump_carries_is_kept() -> None:
+    """A boiler that raised every lift would overshoot the supply a modulating controller asks for.
+
+    At half signal the burner turns 10 kW into 10000 * 0.7333 = 7333 W, which the pump's largest flow carries over
+    2.04 K. A 3 K lift is above that, so the boiler runs it: the supply is the return plus 3 K, and the flow carries
+    the heat over that lift.
+    """
+    boiler, output = BoilerStep.run(
+        control_signal=0.5, operating_mode=HeatingMode.SPACE_HEATING.value, lift=3.0, space_heating_return=35.0,
+        hot_water_return=50.0,
+    )
+    heat_in_watt = 10000.0 * boiler.burner.efficiency_at(10000.0)
+    assert output(boiler.water_output_temperature_sh_channel) == 38.0
+    assert output(boiler.water_output_mass_flow_sh_channel) == pytest.approx(
+        heat_in_watt / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 3.0), rel=1e-12
+    )
+    assert output(boiler.water_output_mass_flow_sh_channel) < PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND
+
+
 @pytest.mark.base
 @pytest.mark.parametrize(
     ("control_signal", "expected_power_in_watt"), [(0.0, 2000.0), (0.05, 2000.0), (0.1, 2000.0), (0.5, 10000.0), (1.0, 20000.0)]
@@ -655,6 +742,19 @@ def test_a_boiler_without_a_finite_positive_maximal_flow_temperature_is_refused(
             energy_carrier=lt.LoadTypes.GAS,
             boiler_type=generic_boiler.BoilerType.CONDENSING,
             maximal_flow_temperature_in_celsius=maximal_flow_temperature_in_celsius,
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("minimal_lift_in_kelvin", [0.0, -5.0, float("nan"), float("inf")])
+def test_a_boiler_without_a_finite_positive_minimal_lift_is_refused(minimal_lift_in_kelvin: float) -> None:
+    """A minimal lift of 0 K would leave the pump's largest flow unbounded, and an infinite one would stop the flow."""
+    with pytest.raises(ValueError, match="minimal_lift_at_maximal_power_in_kelvin"):
+        generic_boiler.GenericBoilerConfig(
+            component_id=ComponentID(name="Boiler"),
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=generic_boiler.BoilerType.CONDENSING,
+            minimal_lift_at_maximal_power_in_kelvin=minimal_lift_in_kelvin,
         )
 
 

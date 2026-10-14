@@ -152,19 +152,21 @@ class SimulationParameters:
 
     #: The step length above which devices run part load, s, when the parameters name none. 600 s keeps every 60 s
     #: run, the reference, on whole steps, and lets a 900 s run, RenoVisor's resolution, run part load.
-    PART_LOAD_ABOVE_SECONDS_DEFAULT: ClassVar[int] = 600
+    PART_LOAD_ABOVE_SECONDS_DEFAULT: ClassVar[float] = 600.0
 
     @classmethod
     def validated_part_load_above_seconds(cls, part_load_above_seconds: Any) -> float:
-        """Returns the part-load threshold: :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT` for ``None``, else the value given.
+        """Returns the part-load threshold in seconds as a float: the value given, or the default for ``None``.
 
-        Example: ``None`` gives 600; ``900`` gives 900, which keeps a 900 s run on whole steps.
+        The default is :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`. Example: ``None`` gives 600.0; ``900`` and ``900.0``
+        both give 900.0, which keeps a 900 s run on whole steps. Returning a float for every number keeps one spelling
+        of one threshold in keys and records.
 
         Args:
             part_load_above_seconds: The threshold handed to the constructor, s, or ``None``.
 
         Returns:
-            The threshold in seconds.
+            The threshold in seconds, as a float.
 
         Raises:
             PartLoadThresholdError: If ``part_load_above_seconds`` is a ``bool``, not a number, not finite, or
@@ -181,7 +183,7 @@ class SimulationParameters:
             raise PartLoadThresholdError(
                 f"part_load_above_seconds must be a finite number >= 0, not {part_load_above_seconds}."
             )
-        return part_load_above_seconds
+        return float(part_load_above_seconds)
 
     def runs_part_load(self) -> bool:
         """Whether this run's steps are longer than the part-load threshold, so generators may run part load.
@@ -464,7 +466,13 @@ class SimulationParameters:
         return simulation_parameters
 
     def get_unique_key(self) -> str:
-        """Gets a unique key from a simulation parameter class."""
+        """Gets a unique key from a simulation parameter class.
+
+        A part-load threshold other than the default is part of the key, spelled with ``:g`` (``900`` for 900 and
+        900.0 alike). Note: the legacy input caches (``utils.get_cache_file``: the load-profile connector, the car,
+        the collector's sun positions) append this key as well, so a run with a non-default threshold misses those
+        caches and recomputes them, although none of them depends on the threshold. That costs time, not accuracy.
+        """
         return "###".join(
             str(value) for value in (
                 self.start_date,
@@ -475,7 +483,7 @@ class SimulationParameters:
                 self.country,
             )
         ) + ("" if self.weather_year is None else f"###weather={self.weather_year}") + (
-            "" if self.part_load_threshold_is_default() else f"###part_load_above={self.part_load_above_seconds}"
+            "" if self.part_load_threshold_is_default() else f"###part_load_above={self.part_load_above_seconds:g}"
         )
 
     def get_unique_key_as_list(self) -> List[str]:
@@ -490,7 +498,7 @@ class SimulationParameters:
         ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"]) + (
             []
             if self.part_load_threshold_is_default()
-            else [f"Part load above: {self.part_load_above_seconds} s per timestep"]
+            else [f"Part load above: {self.part_load_above_seconds:g} s per timestep"]
         )
 
     def cache_locations(self) -> "CacheLocations":

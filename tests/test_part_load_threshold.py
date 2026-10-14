@@ -52,6 +52,7 @@ def test_keys_and_files_are_unchanged_at_the_default_and_carry_another_threshold
     assert default.get_unique_key() == explicit_default.get_unique_key()
     assert "part_load" not in default.get_unique_key()
     assert other.get_unique_key() == default.get_unique_key() + "###part_load_above=900"
+    assert Parameters.one_day(part_load_above_seconds=900.0).get_unique_key() == other.get_unique_key()
     normalised = ParameterNormalisation.normalise(default)
     assert ParameterNormalisation.PART_LOAD_KEY not in normalised
     assert ParameterFileName.stem(normalised) == "one_day_hourly_plain"

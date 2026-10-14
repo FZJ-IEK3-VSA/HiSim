@@ -96,7 +96,9 @@ class ParameterNormalisation:
         if parameters.weather_year is not None:
             reduced[cls.WEATHER_YEAR_KEY] = int(parameters.weather_year)
         if not parameters.part_load_threshold_is_default():
-            reduced[cls.PART_LOAD_KEY] = parameters.part_load_above_seconds
+            # A whole number of seconds is written as an integer, so a file that says 900 records 900, not 900.0.
+            threshold_seconds = parameters.part_load_above_seconds
+            reduced[cls.PART_LOAD_KEY] = int(threshold_seconds) if threshold_seconds.is_integer() else threshold_seconds
         return reduced
 
     @classmethod

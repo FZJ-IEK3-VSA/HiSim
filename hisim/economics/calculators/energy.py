@@ -6,7 +6,7 @@ tariff contract, and each bill component is escalated with its own rate:
 - ENERGY_WORKING: the carrier rate; a controllable tariff's flexibility value escalates with the spread rate instead.
 - ENERGY_STANDING: the general price escalation rate.
 - ENERGY_CAPACITY_CHARGE: the grid-fee rate (the general rate when unset).
-- FEED_IN_REVENUE: nominal for an EEG-style guaranteed duration, then the feed-in rate.
+- FEED_IN_REVENUE: nominal for an EEG-style guaranteed duration, then the feed-in rate, counted from the duration's end.
 - ENERGY_CO2_PRICE: not escalated; read off the CO2 price path per year.
 
 It also returns the operational CO2 mass per carrier, which `calculators/co2.py` folds into the CO2 result, and
@@ -22,7 +22,7 @@ from hisim.economics.calculators.annualization import (
     annualize_billing_determinants,
     check_simulated_period_fraction,
 )
-from hisim.economics.calculators.escalation import carrier_escalation_rate, escalate, escalation_factor
+from hisim.economics.calculators.escalation import carrier_escalation_rate, escalate, feed_in_escalation_factor
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase, EnergyPriceEntry
 from hisim.economics.facts import BillingDeterminants
@@ -538,12 +538,9 @@ def build_energy_flows(
                 )
             feed_in = bill.by_category.get(CostCategory.FEED_IN_REVENUE)
             if feed_in is not None and not macro and feed_in.minimum != 0:
-                # EEG-style fixed tariffs stay nominal for their duration (§8.5).
-                within_duration = projection_year <= contract.feed_in.duration_in_years
-                feed_escalation = (
-                    1.0
-                    if within_duration
-                    else escalation_factor(params.feed_in_escalation_rate, projection_year - 1)
+                # EEG-style fixed tariffs stay nominal for their duration and escalate from its end on (§8.5).
+                feed_escalation = feed_in_escalation_factor(
+                    params.feed_in_escalation_rate, contract.feed_in.duration_in_years, projection_year
                 )
                 result.entries.append(
                     CashFlowEntry(

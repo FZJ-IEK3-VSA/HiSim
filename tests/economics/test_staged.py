@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 import pytest
 
 from hisim.economics.calculators.energy import StatedPriceError, StatedPrices
+from hisim.economics.calculators.escalation import feed_in_escalation_factor
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase
 from hisim import log
@@ -1031,6 +1032,48 @@ class TestStatedEnergyPrices:
         assert record.parameter == "parameters.energy_prices.ELECTRICITY_FEED_IN.working_price_in_euro_per_kwh"
         assert result.energy_echo is not None
         assert result.energy_echo.prices[EnergyCarrier.ELECTRICITY_FEED_IN].working_price_origin is EchoOrigin.STATED
+
+    @pytest.mark.parametrize("plan_start_year", [None, SyntheticPlan.YEAR + 3])
+    def test_the_feed_in_rate_escalates_from_the_end_of_its_fixed_period(
+        self, database, parameters, plan_start_year
+    ):
+        """Years 1-20 pay the fixed rate, year 21 one year of escalation on it, year 22 two.
+
+        The revenue must not jump in year 21 by twenty years of escalation at once, and a plan
+        that starts three years after its price basis year pays the same rates: the fixed rate
+        is the contract's, and the later years continue from it.
+        """
+        rate_in_euro_per_kwh, escalation = 0.12, 0.02
+        stated = replace(
+            parameters,
+            observation_period_in_years=25,
+            feed_in_escalation_rate=escalation,
+            energy_prices={
+                EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(rate_in_euro_per_kwh))
+            },
+        )
+        sold_in_kwh = SyntheticPlan.SOLD_ELECTRICITY_IN_KWH
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(0, electricity_sold_in_kwh=sold_in_kwh)],
+            stated,
+            brownfield_perspective(),
+            plan_start_year=plan_start_year,
+        )
+        revenue = _by_year(result.plan, revenue_subject(EnergyCarrier.ELECTRICITY), CostCategory.FEED_IN_REVENUE)
+        fixed_in_euro = -sold_in_kwh * rate_in_euro_per_kwh
+        assert revenue[1].best_estimate == pytest.approx(fixed_in_euro)
+        assert revenue[20].best_estimate == pytest.approx(fixed_in_euro)
+        assert revenue[21].best_estimate == pytest.approx(fixed_in_euro * (1 + escalation))
+        assert revenue[22].best_estimate == pytest.approx(fixed_in_euro * (1 + escalation) ** 2)
+        assert revenue[25].best_estimate == pytest.approx(fixed_in_euro * (1 + escalation) ** 5)
+
+    @pytest.mark.parametrize(
+        "fixed_period_in_years, year, expected",
+        [(20, 1, 1.0), (20, 20, 1.0), (20, 21, 1.02), (20, 22, 1.02**2), (0, 1, 1.0), (0, 2, 1.02), (1, 2, 1.02)],
+    )
+    def test_the_feed_in_factor_counts_from_the_last_fixed_year(self, fixed_period_in_years, year, expected):
+        """Year 1 is the base whatever the period; each year after the period adds one year of escalation."""
+        assert feed_in_escalation_factor(0.02, fixed_period_in_years, year) == pytest.approx(expected)
 
     def test_nothing_stated_bills_exactly_as_before(self, database, parameters):
         """An empty block is the database's contract, entry for entry, with its default id."""

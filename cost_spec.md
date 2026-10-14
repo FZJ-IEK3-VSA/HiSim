@@ -460,8 +460,9 @@ triplets; every step below is evaluated in the three slots of §3.9):
 4. **Maintenance & fixed operation**: `(maintenance_rate · I_gross + fixed_operation_cost) · (1+r_gen)^t`.
 5. **Energy costs** per carrier: year-1 cost from `EnergyFlowFacts` (or the meter's simulated dynamic-
    tariff cost), split into working price (escalated), standing charge (escalated with the general
-   rate), and CO2-price component (from the trajectory). Feed-in revenue as negative cost with its own
-   escalation. If the simulated period is shorter than one year, flows are annualized by linear
+   rate), and CO2-price component (from the trajectory). Feed-in revenue as negative cost, nominal for
+   its contract duration `D` and then escalated with its own rate counted from the duration's end:
+   year `t > D` pays the fixed rate times `(1+r_feed)^(t-D)`. If the simulated period is shorter than one year, flows are annualized by linear
    extrapolation, explicitly and with a warning.
 6. **Financing** (only if the perspective's financing plan says so, §4.4): loan disbursement, interest
    and principal flows replace the year-0 outflow.

@@ -2,9 +2,9 @@
 
 Rates are nominal annual price-change rates as fractions (0.02 = 2 %/a); a negative rate expresses a learning curve.
 Callers choose the exponent: year-anchored flows (a replacement in year t, the residual value, the anyway credit) use
-the year itself, while recurring payments quoted at year-1 prices (maintenance, energy, feed-in) use `year - 1`, so
-year 1 is unescalated. Discounting is not done here. Rate values live in `EconomicParameters` and
-`escalation_defaults_<COUNTRY>.json`.
+the year itself, while recurring payments quoted at year-1 prices (maintenance, energy) use `year - 1`, so year 1
+is unescalated; feed-in revenue escalates only after its fixed period (`feed_in_escalation_factor`). Discounting is
+not done here. Rate values live in `EconomicParameters` and `escalation_defaults_<COUNTRY>.json`.
 """
 
 from __future__ import annotations
@@ -31,6 +31,27 @@ def escalation_factor(rate: float, years: int) -> float:
         The dimensionless multiplier.
     """
     return (1.0 + rate) ** years
+
+
+def feed_in_escalation_factor(rate: float, fixed_period_in_years: int, year: int) -> float:
+    """Return the factor that scales the year-1 feed-in revenue to its value in a projected year.
+
+    The feed-in rate stays nominal (factor 1.0) through its fixed period, the guaranteed years of an EEG-style tariff,
+    and then rises at the feed-in escalation rate counted from the last fixed year: with a 20-year period and 2 %/a,
+    years 1 to 20 get 1.0, year 21 gets 1.02 and year 22 gets 1.0404. Counting from the end of the period rather than
+    from year 1 keeps the rate continuous; counting from year 1 would raise it by twenty years of escalation at once
+    in year 21. A period of 0 years is treated like 1 year, because the year-1 bill is the unescalated base.
+
+    Args:
+        rate: The feed-in escalation rate as a fraction; may be negative.
+        fixed_period_in_years: How many years, counted from year 1, the rate stays nominal.
+        year: The projected year, 1 for the first year.
+
+    Returns:
+        The dimensionless multiplier.
+    """
+    last_fixed_year = max(fixed_period_in_years, 1)
+    return escalation_factor(rate, max(year - last_fixed_year, 0))
 
 
 def escalate(amount: UncertainValue, rate: float, years: int) -> UncertainValue:

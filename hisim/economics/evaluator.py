@@ -58,7 +58,7 @@ from hisim.economics.calculators.subsidy_application import (
     build_subsidy_flows,
     nominal_support_from_entries,
 )
-from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind, revenue_subject
+from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.facts import (
     BillingDeterminants,
@@ -450,18 +450,19 @@ class YearZeroPriceLevel:
       rate;
     - a like-for-like anyway credit: the replaced asset's investment rate;
     - maintenance, fixed operation and the standing charge: the general rate; the capacity charge: the grid-fee rate;
-      the working price: the carrier rate on the volume and the spread rate on the flexibility correction; feed-in
-      revenue: the feed-in rate once its fixed-price period is over;
+      the working price: the carrier rate on the volume and the spread rate on the flexibility correction;
     - the CO2 price: the price path is read `years` later; the CO2 damage cost: unchanged.
 
-    Not shifted: a stated purchase price (a reader's quote) and the residual value and credit computed from it.
+    Not shifted: a stated purchase price (a reader's quote) and the residual value and credit computed from it, and
+    feed-in revenue: its rate is fixed by the contract for the fixed-price period, and the later years escalate from
+    that fixed rate, not from a market price of the price basis year.
     Subsidies are not shifted here; the solver already gets the cost in year-0 money (`purchase`), so a share-of-cost
     grant follows it and a fixed amount is clamped to the year-0 cost. `years` may be negative (de-escalation); `years
     == 0` changes nothing. The loan is computed afterwards on the shifted net investment.
 
     Attributes:
         years: The shift, `year 0 - price basis year`; 0 leaves every amount as it is.
-        parameters: The general, grid-fee, spread and feed-in rates.
+        parameters: The general, grid-fee and spread rates.
         database: For the carrier rates, resolved by the energy calculator's own chain.
         price_basis_year: Where the CO2 price path is read for year 1.
         subject_rates: Subject -> its investment escalation rate.
@@ -469,7 +470,6 @@ class YearZeroPriceLevel:
         stated: Subjects whose year-0 purchase is a stated price, never shifted.
         stated_residuals: Subjects whose residual value is written down from that stated price.
         carriers: Carrier subject -> (carrier rate, spread rate, flexibility value in euro).
-        feed_in: Revenue subject -> (feed-in rate, fixed-price duration in years).
     """
 
     #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh): a
@@ -489,7 +489,6 @@ class YearZeroPriceLevel:
     stated: Set[str] = field(default_factory=set)
     stated_residuals: Set[str] = field(default_factory=set)
     carriers: Dict[str, Tuple[float, float, float]] = field(default_factory=dict)
-    feed_in: Dict[str, Tuple[float, int]] = field(default_factory=dict)
 
     @property
     def shifts(self) -> bool:
@@ -553,8 +552,6 @@ class YearZeroPriceLevel:
             spread = params.spread_escalation_rate if params.spread_escalation_rate is not None else rate
             flexibility = max(0.0, flexibility_by_carrier.get(carrier.value, 0.0))
             self.carriers[carrier.value] = (rate, spread, flexibility)
-            duration = contract.feed_in.duration_in_years
-            self.feed_in[revenue_subject(carrier)] = (params.feed_in_escalation_rate, duration)
 
     def timeline(self, timeline: CashFlowTimeline) -> CashFlowTimeline:
         """The timeline with every entry in year-0 money; the same object when nothing shifts."""
@@ -591,8 +588,8 @@ class YearZeroPriceLevel:
         elif category is CostCategory.ENERGY_WORKING:
             return self._working(entry)
         elif category is CostCategory.FEED_IN_REVENUE:
-            rate, duration = self.feed_in[subject]
-            factor = 1.0 if entry.year <= duration else self.factor(rate)
+            # The fixed rate is the contract's, and the later years continue from it: nothing moves.
+            factor = 1.0
         elif category is CostCategory.ENERGY_CO2_PRICE:
             factor = self._co2_price_factor(entry.year)
         elif category is CostCategory.CO2_DAMAGE:

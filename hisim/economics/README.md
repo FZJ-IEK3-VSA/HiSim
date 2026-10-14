@@ -166,7 +166,7 @@ share of the energy sold (5/8 and 3/8), each at its own scheme's terms; an incre
 removes again earns no residual value. The document gives the increment a `by_subject` row of its
 own under the enlarged subject's measure. `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
-then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
+then rises from that fixed rate at `escalation.feed_in`, one year of escalation per year after the 20th). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —
 `{"ELECTRICITY": {"working_price_in_euro_per_kwh": 0.31, "standing_charge_in_euro_per_year": 180},
 "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.08}}`, each value a number or a band
@@ -662,7 +662,9 @@ sweepable, and neither is the retired `legacy_flat_subsidy_share` shim field (§
 - **Energy projection** (§8.5): year-1 bills are decomposed into volume effect (escalated with
   the carrier rate), flexibility value (spread escalation rate, default = carrier rate),
   standing charges (general rate), capacity charges (grid-fee rate) and the CO2-price component
-  (from the trajectory). EEG-style feed-in stays nominally fixed for its contract duration.
+  (from the trajectory). EEG-style feed-in stays nominally fixed for its contract duration and then
+  escalates with the feed-in rate counted from the duration's end: with 20 years and 2 %/a, year 21
+  pays 1.02 times the fixed rate, year 22 1.02².
   Simulations shorter than a year are annualized linearly with a warning.
 - **Uncertainty = envelope, not confidence interval** (§3.9): LOW/HIGH are fully correlated
   cheap/expensive worlds. Physical quantities, economic *rates*, service lives and emission

@@ -1118,6 +1118,33 @@ def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
 
 
 @pytest.mark.base
+def test_an_unforced_pass_that_signals_the_pump_on_at_ratio_zero_saves_it_as_standing() -> None:
+    """The saved pump state is what the collector will report: a pump signalled on at ratio 0 did not run.
+
+    Above the part-load threshold a step that ends the storage at the aim gets ratio 0 with the signal on; the
+    collector idles and reports a ratio run of 0. A controller that saved the signal instead would choose the
+    switch-off difference in the next step as if the pump had run, unlike a forced pass on the same step.
+    """
+    steps = SolarControllerSteps
+    controller, stsv, fakes = SolarControllerRig.build(900)
+    controller.i_save_state()
+    at_the_aim = SolarControllerRig.values(
+        start_c=58.0,
+        end_c=60.03,
+        ratio_run=0.0,
+        collector_above_storage_in_kelvin=steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN,
+    )
+    controller.i_restore_state()
+    outputs = AllInputsRig.step(controller, stsv, fakes, at_the_aim, timestep=steps.TIMESTEP)
+    assert outputs[controller.ControlSignalToSolarThermalSystem] == 1
+    assert outputs[controller.PartLoadRatio] == 0.0
+    controller.i_save_state()
+    assert controller.previous_state.pump_runs is False
+    between = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
+    assert steps.signal(controller, stsv, fakes, between) == 0
+
+
+@pytest.mark.base
 def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts_three_kelvin_below_the_aim() -> None:
     """The full-storage stop holds across steps until the storage starts a step 3 K below the aim, then it releases.
 

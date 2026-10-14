@@ -1646,7 +1646,8 @@ class SolarThermalSystemController(L1ControllerComponent):
 
         The simulator calls this at the start of every step, so the saved state is whether the pump ran and whether
         the full-storage stop held in the previous step: the two hysteresis bands of :meth:`pump_runs` and
-        :meth:`full_storage_stop_holds` read it.
+        :meth:`full_storage_stop_holds` read it. The pump counts as having run only if the collector ran a part-load
+        ratio above 0, which is what the collector reports and what a forced pass keeps.
         """
         self.previous_state = dataclasses.replace(self.state)
 
@@ -1669,9 +1670,10 @@ class SolarThermalSystemController(L1ControllerComponent):
         The full-storage stop follows :meth:`full_storage_stop_holds` from the storage's start-of-step temperature and
         whether the stop held in the previous step. In an unforced pass the pump's on/off decision follows
         :meth:`pump_runs` from the collector's sensor and the storage's start-of-step temperature, the full-storage
-        stop and whether the pump ran in the previous step. Under ``force_convergence`` the controller keeps the pump as
-        the collector reports it ran (:meth:`pump_ran_as_reported`) and its part-load ratio becomes the ratio run, so
-        the device keeps running what it ran and the iteration stops moving. All of it reads only inputs and the saved
+        stop and whether the pump ran in the previous step; the state saves the pump as running only with a ratio
+        above 0, as the collector will report it. Under ``force_convergence`` the controller keeps the pump as the
+        collector reports it ran (:meth:`pump_ran_as_reported`) and its part-load ratio becomes the ratio run, so the
+        device keeps running what it ran and the iteration stops moving. All of it reads only inputs and the saved
         state. The inputs are start-of-step quantities, so from the second pass on an unforced pass decides as the
         pass before it; the first pass, which reads the previous step's sensors, may decide differently.
         """
@@ -1697,13 +1699,13 @@ class SolarThermalSystemController(L1ControllerComponent):
                 pump_ran_in_previous_step=self.previous_state.pump_runs,
             )
             stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
-            self.part_load.publish(
+            ratio = self.part_load.publish(
                 stsv,
                 device_runs=pump_runs,
                 start_temperature_in_celsius=storage_temperature_at_start_in_celsius,
                 target_temperature_in_celsius=self.WARM_WATER_AIM_IN_CELSIUS,
             )
-            pump_ran = pump_runs
+            pump_ran = pump_runs and ratio > 0.0
         self.state = SolarThermalSystemControllerState(
             pump_runs=pump_ran, full_storage_stop_holds=full_storage_stop_holds
         )
@@ -1825,7 +1827,7 @@ class SolarThermalSystemControllerState:
     pump runs again.
     """
 
-    #: Whether the pump runs.
+    #: Whether the pump runs: signalled on with a part-load ratio above 0.
     pump_runs: bool
 
     #: Whether the full-storage stop holds the pump: set once the storage started a step above the warm-water aim,

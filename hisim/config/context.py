@@ -39,7 +39,7 @@ FactValue = Optional[Union[float, Tuple[float, ...]]]
 
 if TYPE_CHECKING:
     from hisim.components.building.config import BuildingConfig
-    from hisim.components.heat_distribution_system import HeatDistributionSystemType
+    from hisim.components.heating_curve import HeatDistributionSystemType
     from hisim.loadtypes import LoadTypes
 
 

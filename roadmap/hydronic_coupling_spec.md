@@ -344,10 +344,18 @@ Corrected (owner, 2026-10-09): the outlet stays `T_in + 2 ΔT_n`, because `ΔT_n
 efficiency curve is evaluated at, and the flow is sized for `2 ΔT_n`: the collector is pump owner at
 `m = Q_coll(T̄)/(c · 2 ΔT_n)`, reads the node's `T̄` and publishes `T_sup = T̄ + 2 ΔT_n`, so its water carries exactly
 `Q_coll(T̄)`. While the pump stands or the collector has no heat, the circuit moves no water and its supply is its
-return. The pump decides on the step mean, an exception to D4 for the solar controller only (owner, 2026-10-09):
-the collector publishes the flow `Q_coll(T̄)/(c · 2 ΔT_n)` (`RequiredWaterMassFlowOutput`) whether or not the pump
-runs, and the pump runs while that flow reaches the controller's minimum. Deciding on `T0` made the collector's
-yield and the tank's hot-water fuel depend on the step length. The controller's former switch-on comparison, the
+return. The pump decides on `T0` (owner, 2026-10-11; hisim-fxix.21): the collector publishes, whether or not the pump
+runs, the flow its heat at the tank's start-of-step temperature needs, `Q_coll(T0)/(c · 2 ΔT_n)`
+(`RequiredWaterMassFlowAtStartOfStepInKgPerSecond`, from the tank's `WaterTemperatureAtStartOfStepInCelsius` wired to
+its `TemperatureCollectorInletAtStartOfStepInCelsius`), and the controller switches the pump on and off on that flow.
+No pass of a step moves it, so the pump's own heat cannot switch it off in the step it switches on (from the second
+pass on: the first pass reads the previous step's values, from which the simulator starts the step). The collector
+still runs at `T̄`, and its circuit carries `Q_coll(T̄)/(c · 2 ΔT_n)` while the pump runs (`WaterMassFlowOutput`).
+The step-mean flow it also published whether or not the pump ran (`RequiredWaterMassFlowOutput`) had no reader once
+the controller decided on `T0` and was removed on 2026-10-14. From 2026-10-09 to 2026-10-11 the pump decided on the
+step-mean flow, an exception to D4 (owner, 2026-10-09), because deciding on `T0`
+had made the collector's yield and the tank's hot-water fuel depend on the step length; with the step-mean decision
+about 50 steps a year at 900 s had no consistent on/off state (hisim-fxix.21). The controller's former switch-on comparison, the
 collector's outlet at `T̄` against `T̄` plus `set_temperature_difference_for_on`, is removed with that field and the
 collector's `CollectorTemperatureAtStepMeanInCelsius` output (owner, 2026-10-10): the difference was `2 ΔT_n`
 whenever the collector had heat and 0 otherwise, so the comparison only repeated the minimum flow below 20 K and
@@ -358,7 +366,46 @@ step mean across 60 °C, and
 such a step ended at `force_convergence` (owner decision, 2026-10-09: the stop stays on `T0` because on `T̄` it has
 no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s with the stop on `T̄`, 13 with it on
 `T0`, and 1110 against 11 at 900 s). The controller's minimum pump flow is halved to
-0.005 kg/s, the same collector heat as before (owner, 2026-10-09).
+0.005 kg/s, the same collector heat as before (owner, 2026-10-09). Since 2026-10-11 the pump switches with a
+hysteresis, as a differential solar controller does (on at about 7 K, off at about 3 K): a pump that stood in the
+previous step switches on at 0.005 kg/s, a pump that ran switches off below 0.0025 kg/s, and whether it ran is the
+controller's saved state (owner, 2026-10-11; hisim-fxix.19). The full-tank stop has a restart hysteresis too (owner,
+2026-10-11): once the tank starts a step above 60 °C the stop holds until it starts a step at least 3 K below the aim
+(`SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN`), as solar controllers restart a few kelvin
+below their maximum storage temperature; the stop is saved state as well. Without it a charge that ends just above
+60 °C (the boiler's part-load rule ends one at 60.025 °C) and the next step's standby loss switched the pump every
+second step.
+
+**Since 2026-10-14 the pump is speed-controlled and its controller is a differential controller** (owner, 2026-10-14:
+"build it and fold it into 941"). The flow thresholds above were totals for the whole collector field, so the
+hysteresis band was about 12 K of tank temperature at 4 m² and 2 K at 24 m², and it depended on `ΔT_n`
+(review941b, R6/R13). They, and the collector's `RequiredWaterMassFlowAtStartOfStepInKgPerSecond`, are removed.
+
+- **The pump** (`SpeedControlledSolarPump`, three fields of `SolarThermalSystemConfig`) runs `m = Q/(c · lift)` for
+  its target lift (20 K, the lift of before), clamped to a minimum and a maximum specific flow, 5 and 40 kg/(m² h);
+  at a bound the lift follows from the heat. A constant-flow pump has both bounds equal. Every bound is per m², so
+  fields of any size run alike per m².
+- **The curve's mean temperature** is the inlet plus half the lift (`FlatPlateCollectorCurve`), which replaces the
+  fixed `ΔT_n` (`delta_temperature_n_k` is removed). At the target lift it is the 10 K of before, so a pump within its
+  bounds gives the heat, flow and supply of before to the last bit. At the minimum flow the lift and the heat solve
+  `c m L = Q(T_in + L/2)`, a quadratic in `L`. With the fixed `ΔT_n` a collector whose stagnation temperature lies
+  less than 10 K above the tank gives no heat at all, so a pump switched on at 7 K read its outlet at the tank
+  temperature in the next step and switched off again: about 26 switch-ons a day at 60 s against 2 at 900 s on a
+  45 °C tank (probe on the 2021 Aachen weather).
+- **The sensors.** The collector publishes `CollectorSensorTemperatureAtStartOfStepInCelsius`, a start-of-step
+  quantity: after a step its pump stood (it ran a part-load ratio of 0), its stagnation temperature in the step's sun,
+  from `eta_0 G = a_1 (T − T_a) + a_2 (T − T_a)²`; after a step it ran, its outlet with the tank's start-of-step
+  temperature `T0` at the inlet. Whether the pump ran is the collector's saved state.
+- **The switching.** A pump that stood switches on when the sensor reads more than 7 K above `T0`, a pump that ran
+  keeps running while it reads more than 3 K above `T0` (owner, 2026-10-14). The full-tank stop with its restart
+  band, the start-of-step decision and the forced-pass rule (`pump_ran_as_reported`) are unchanged. In an unforced
+  pass the controller saves the pump as running only with a part-load ratio above 0, the state the collector
+  reports and a forced pass keeps.
+- **The minimum flow sets the switching.** At 5 kg/(m² h) a collector that stagnated 7 K above the tank lifts the
+  water by 3.3 to 4.3 K once the pump runs (tanks of 20 to 60 °C, air of −5 to 25 °C), above the 3 K switch-off
+  difference. At 10 kg/(m² h) the lift there is about 2 K: the pump switches on and off in alternate steps while the
+  sun stands near the switch-on point, about 7 switch-ons a day at 60 s against 1 at 900 s on a 45 °C tank. The real
+  collector's heat capacity, which keeps its outlet warm for minutes after the pump starts, is not modelled.
 
 ### 5.4 District heating substation
 
@@ -645,9 +692,9 @@ first candidate for hisim-4g9.22 if the histogram fails.
 **D4 — Feed-forward and DHW priority: drop both.** No temperature forecast for on/off controllers, no
 `DhwChargeYield`; controllers stay as on main, deciding on start-of-step values. Consequence: hisim-6ehm stays
 open as a validation item; heat-pump comfort at 900 s is compared in the validation runs (§9.4) and, if the
-underheating returns, it is solved then. *Amendment (owner, 2026-10-09):* the solar controller decides on the node's
-step mean `T̄` and the collector's answer there to switch the pump on (§5.3), the one exception; its full-tank
-stop stays on `T0`. The in-step supply cap at the
+underheating returns, it is solved then. *Amendment (owner, 2026-10-09, withdrawn 2026-10-11):* the solar controller decided on the
+node's step mean `T̄` and the collector's answer there to switch the pump on (§5.3); since 2026-10-11 it decides on
+`T0` like every other controller, on the collector's answer at `T0`. The in-step supply cap at the
 controller's set temperature (§5) relates to D4 as a limit, not a forecast: the generator stops its supply at the
 controller's target inside the step, while the controller still decides on `T0`; the heat pump's hot-water
 controller ends a charge within 0.5 K of its set temperature, since a capped supply never passes it (§5.5).

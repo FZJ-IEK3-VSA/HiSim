@@ -6,7 +6,7 @@ A rig points every input a test drives at a fake output and steps the component 
 district-heating and electric-heating tests.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -378,15 +378,25 @@ class CollectorRig:
     """A flat-plate collector on a hot-water tank at noon, one step on fake inputs."""
 
     @staticmethod
-    def charge(seconds_per_timestep: int, ratio: float, control_signal: float = 1.0) -> Dict[str, float]:
+    def charge(
+        seconds_per_timestep: int,
+        ratio: float,
+        control_signal: float = 1.0,
+        *,
+        inlet_at_start_of_step_c: float = 45.0,
+        pump_ran_in_previous_step: bool = False,
+    ) -> Dict[str, float]:
         """Return every output of one step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse irradiance.
 
-        The sun stands 30° from the zenith due south (no weather file, no cache).
+        The sun stands 30° from the zenith due south (no weather file, no cache); the air is at 20 °C.
 
         Args:
             seconds_per_timestep: The step length, s.
             ratio: The part-load ratio the controller commands.
             control_signal: The controller's pump signal, 1 for running.
+            inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C; by default the
+                step mean.
+            pump_ran_in_previous_step: Whether the collector's pump ran in the previous step, its saved state.
 
         Returns:
             The collector's outputs by field name.
@@ -399,6 +409,7 @@ class CollectorRig:
         )
         collector.apparent_zenith = np.array([30.0])
         collector.solar_azimuth = np.array([180.0])
+        collector.previous_state = solar_thermal_system.SolarThermalSystemState(pump_ran=pump_ran_in_previous_step)
         system = solar_thermal_system.SolarThermalSystem
         return AllInputsRig.step_once(
             collector,
@@ -408,6 +419,7 @@ class CollectorRig:
                 system.DiffuseHorizontalIrradianceWM2: 100.0,
                 system.TemperatureOutsideDegC: 20.0,
                 system.TemperatureCollectorInletDegC: 45.0,
+                system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
                 system.PartLoadRatio: ratio,
             },
         )
@@ -435,13 +447,23 @@ class SolarControllerRig:
         return controller, stsv, fakes
 
     @staticmethod
-    def values(*, start_c: float, end_c: float, ratio_run: float = 1.0) -> Dict[str, float]:
-        """Return the controller's inputs for a sunny collector, the storage's temperatures and the pump's ratio run.
+    def values(
+        *,
+        start_c: float,
+        end_c: Optional[float] = None,
+        ratio_run: float = 1.0,
+        collector_above_storage_in_kelvin: float = 20.0,
+    ) -> Dict[str, float]:
+        """Return the controller's inputs: the storage's temperatures, the collector's sensor and the pump's ratio run.
+
+        By default the collector is sunny, its sensor 20 K above the storage's start-of-step temperature, and the
+        storage ends the step where it started.
 
         Args:
             start_c: The storage's start-of-step temperature, °C.
-            end_c: The storage's end-of-step temperature, °C.
+            end_c: The storage's end-of-step temperature, °C; ``start_c`` when omitted.
             ratio_run: The part-load ratio the collector reports its pump ran with.
+            collector_above_storage_in_kelvin: How far the collector's sensor reads above ``start_c``, K.
 
         Returns:
             The input values by field name.
@@ -449,7 +471,8 @@ class SolarControllerRig:
         controller_class = solar_thermal_system.SolarThermalSystemController
         return {
             controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
-            controller_class.StorageTemperatureAtEndOfStepInCelsius: end_c,
-            controller_class.MassFlow: 0.03,
+            controller_class.StorageTemperatureAtEndOfStepInCelsius: start_c if end_c is None else end_c,
+            controller_class.CollectorSensorTemperatureAtStartOfStepInCelsius: start_c
+            + collector_above_storage_in_kelvin,
             controller_class.PartLoadRatioRun: ratio_run,
         }

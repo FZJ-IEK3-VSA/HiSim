@@ -352,6 +352,83 @@ the controller moved first it settled on 718 of 759 and flagged 46 / 50 steps (-
 than the pass-counting search it replaced (3.42 against 4.20 at 900 s). That led to the kind order and the physics
 order (§4.3, #922, hisim-fxix.16, closed).
 
+**hisim-fxix.19's flow hysteresis alone, on the step mean, on the physics order (K′), 2026-10-11.** The same year
+with the physics order of §4.3 (each L1 controller's device before the other physics the controller reads), measured
+on the old stack with #922 on top (after the removal of the simulator's fixed-point acceleration, #927, and with the
+solar pump's first hysteresis, hisim-fxix.19: the flow band alone, decided on the step mean, before the start-of-step
+decision and the restart band of hisim-fxix.21 and before the differential controller of 2026-10-14), against the
+60 s run of the same head, with the collector's part load (#917) and the heat pump's and the electric heater's (#916)
+on the branch. K is the kind order alone on the same base. Deviations are from the 60 s run, "forced" counts the
+flagged steps, and "partial steps converged" the partial steps that were not flagged. The physics order is part of
+#922 since, so every measurement above is on K′:
+
+| twin | step | hot-water fuel or electricity K / K′ | collector K / K′ | passes K / K′ | forced K / K′ | partial steps converged K / K′ |
+|---|---|---|---|---|---|---|
+| gas | 900 s | -0.00 % / the same | – | 3.29 / the same | 94 / the same | 718 of 759 / the same |
+| gas | 3600 s | -0.01 % / the same | – | 3.67 / the same | 47 / the same | 614 of 643 / the same |
+| heat pump | 900 s | +0.96 % / the same | – | 4.63 / the same | 1784 / the same | 586 of 872 / the same |
+| heat pump | 3600 s | +8.89 % / the same | – | 5.84 / the same | 887 / the same | 83 of 581 / the same |
+| electric | 900 s | -0.07 % / the same | – | 5.29 / the same | 73 / the same | 409 of 482 / the same |
+| electric | 3600 s | -0.26 % / the same | – | 6.95 / the same | 72 / the same | 403 of 474 / the same |
+| gas + solar | 900 s | +2.58 % / -0.10 % | -14.45 % / +0.58 % | 4.35 / 3.50 | 1298 / 172 | boiler 6 of 637, collector 0 of 214 / boiler 621 of 665, collector 1453 of 1486 |
+| gas + solar | 3600 s | +0.57 % / +0.00 % | -2.35 % / -0.14 % | 5.24 / 4.03 | 880 / 228 | boiler 3 of 521, collector 1 of 185 / boiler 549 of 582, collector 175 of 299 |
+| heat pump + solar | 900 s | +1.39 % / the same | +0.66 % / the same | 4.58 / the same | 1294 / the same | collector 1205 of 1237, heat pump 300 of 306 / the same |
+| heat pump + solar | 3600 s | +13.48 % / the same | +0.23 % / the same | 6.20 / the same | 735 / the same | collector 190 of 332, heat pump 51 of 305 / the same |
+
+The 60 s references: gas 3463.3 kWh of hot-water gas; heat pump 1067.8 kWh of hot-water electricity; electric
+3090.8 kWh; gas + solar 2997.0 kWh of hot-water gas and 423.9 kWh of collector heat; heat pump + solar 690.1 kWh and
+614.3 kWh. Only `household_gas_solar_thermal` changes: the other twins already evaluated each device before the
+stores its controller reads, and their results are bit for bit those of K. In K′ `household_gas_solar_thermal` and
+`household_gas_solar_thermal_building_sizer`, which differ only in the order their components are added, give
+identical results. Without the pump's hysteresis K′ forces 165 steps of the gas + solar year at 900 s (1292 in K);
+the 172 that remain are slow boiler heat-ups, alternations where the draw takes more than the rise the step still
+needs (hisim-fxix.17), and about 55 steps in which the collector pump switched on with no fixed point (hisim-fxix.21).
+
+**The solar pump's hysteresis on #917 (#941), measured 2026-10-14**, full year 2021 with the predefined occupancy,
+#917 → #941, each against the 60 s run of its own head. #941 decides on the start-of-step sensors with the two
+hysteresis bands of §5.3 of the hydronic coupling spec, and its full-tank stop still sits at the 60 °C aim, 3 K
+restart band included:
+
+| twin, step | flagged steps | pump switch-ons | collector heat, kWh (against 60 s) | backup's hot-water heat, kWh |
+|---|---|---|---|---|
+| gas + solar, 60 s | 14 → 0 | 1855 → 253 | 418.8 → 358.7 | 2702.0 → 2761.5 |
+| gas + solar, 900 s | 165 → 95 | 1638 → 220 | 411.5 → 341.3 (-1.75 % → -4.85 %) | 2709.5 → 2778.3 |
+| gas + solar, 3600 s | 223 → 61 | 428 → 180 | 414.6 → 302.6 (-1.00 % → -15.64 %) | 2705.8 → 2816.0 |
+| heat pump + solar, 60 s | 216 → 194 | 1677 → 353 | 595.8 → 584.6 | 2473.3 → 2486.5 |
+| heat pump + solar, 900 s | 1260 → 1243 | 1466 → 336 | 591.6 → 584.7 (-0.71 % → +0.02 %) | 2476.3 → 2483.6 |
+| heat pump + solar, 3600 s | 534 → 410 | 449 → 286 | 585.4 → 539.0 (-1.75 % → -7.81 %) | 2482.4 → 2525.3 |
+
+The hysteresis removes most pump switch-ons and, in the gas + solar twin, most flagged steps. The 60 s years equal
+those of #941 measured on #915 (the collector's ratio is exactly 1 at 60 s). The restart band 3 K below a 60 °C stop
+costs collector heat at every step length (hisim-fxix.22), and the coarser the step the more (gas + solar at 3600 s:
+-15.6 % against 60 s). #942 moves the stop to the solar controller's own 80 °C maximum.
+
+**The differential controller with a speed-controlled pump (#941), measured 2026-10-14**, full year 2021 with the
+predefined occupancy, the flow hysteresis above → the differential controller (§5.3 of the hydronic coupling spec:
+on at 7 K and off at 3 K of the collector's sensor above the tank, a pump of 5 to 40 kg/(m² h) with a 20 K target
+lift, the curve at half the lift above the inlet). "Flips" counts the steps whose pump signal changes between passes
+(the first pass reads the previous step's sensors), "flagged" the steps at `force_convergence` and, in brackets,
+those of them with a flip; the backup is the tank's heat from the boiler or the heat pump:
+
+| twin, step | collector heat, kWh | backup, kWh | pump switch-ons | pump hours | flips | flagged | mean passes | max tank, °C |
+|---|---|---|---|---|---|---|---|---|
+| gas + solar, 60 s | 358.7 → 400.6 | 2761.5 → 2719.9 | 253 → 348 | 426 → 673 | 506 → 713 | 0 → 0 | 3.09 → 3.09 | 60.47 → 60.47 |
+| gas + solar, 900 s | 341.3 → 393.7 | 2778.3 → 2726.1 | 220 → 321 | 407 → 657 | 450 → 647 | 95 (1) → 92 (2) | 3.27 → 3.30 | 61.51 → 61.00 |
+| gas + solar 20 m², 60 s | 633.1 → 680.7 | 2489.8 → 2442.2 | 337 → 367 | 280 → 330 | 696 → 755 | 0 → 0 | 3.09 → 3.09 | 60.58 → 60.58 |
+| gas + solar 20 m², 900 s | 624.2 → 666.9 | 2497.5 → 2455.2 | 320 → 355 | 279 → 321 | 652 → 720 | 98 (15) → 87 (14) | 3.27 → 3.29 | 60.75 → 60.40 |
+| heat pump + solar, 60 s | 537.5 → 607.2 | 2723.9 → 2652.6 | 342 → 458 | 626 → 1022 | 690 → 933 | 211 (0) → 371 (0) | 3.75 → 3.74 | 60.12 → 60.12 |
+| heat pump + solar, 900 s | 514.0 → 571.7 | 2746.2 → 2689.4 | 321 → 433 | 596 → 970 | 656 → 876 | 1328 (13) → 1295 (22) | 4.46 → 4.47 | 60.05 → 60.05 |
+
+The pump starts at a lower sun than at the old switch-on flow and runs at its minimum flow on weak sun, so the
+collector gives 7 to 15 % more heat, the backup correspondingly less, and the pump runs about 60 % longer. The
+switch-ons a day hardly depend on the area any more: 0.95 at 4 m² against 1.01 at 20 m² at 60 s (before 0.69
+against 0.92); at 20 m² the 60 °C stop holds the pump most of the summer. The collector heat at 900 s lies 1.7 %
+(gas + solar) and 5.8 % (heat pump + solar) below 60 s, against 4.9 % and 4.4 % before. The heat pump + solar twin
+flags 160 more steps at 60 s, none of them with a flipping pump signal. The gas + solar "before" column reproduces
+the table above to the digit; the heat pump + solar one does not (537.5 against 584.6 kWh of collector heat at
+60 s). Both columns here come from one script on the same day, so the comparison holds; the cause of the difference
+to the earlier table was not traced.
+
 
 ## 12. Beads
 
@@ -363,6 +440,8 @@ Epic hisim-fxix.
 | hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below #915 |
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
 | hisim-fxix.11 (P1) | the collector | #917 |
+| hisim-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
+| hisim-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P3) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |

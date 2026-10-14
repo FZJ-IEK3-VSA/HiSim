@@ -86,8 +86,8 @@ Rules:
   assertion, no tolerance so wide that any plausible value passes. Where a loop is unavoidable, assert first that
   it ran (`assert len(rows) == 8760`).
 - **Tolerances are stated and justified.** `pytest.approx` gets an explicit `rel` or `abs`, and a comment says why
-  that tolerance: an exact integration gets `1e-9`; a coarse-step model compared with the 60 s reference gets the
-  tolerance its spec documents.
+  that tolerance: an exact integration gets `1e-9`; a coarse-step model compared with the 60 s reference gets 1 %
+  unless its spec states and justifies another (`system_docs/modelling_guide.md` §3).
 - **A test's docstring names the failure it catches** (`coding_style.md` §6): what would be wrong in the code if
   this test failed.
 - **Pure functions are tested directly**, edge cases and invalid input included, without building a simulation;

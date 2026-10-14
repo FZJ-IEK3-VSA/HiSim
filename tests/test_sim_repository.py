@@ -202,8 +202,9 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
 
     The CRUD tests above drive :class:`SimRepository` directly; this one drives it the way a
     simulation does. A Weather/occupancy/Building household publishes the Weather's series over the
-    run's window -- one value per timestep of the run, not the year the weather file covers -- into the repository the ``Simulator`` owns, under the key names the ``Weather`` class
-    exposes, and that is where the PV system reads them. Nothing here is process-global: the
+    run's window -- one value per timestep of the run, not the year the weather file covers -- into
+    the repository the ``Simulator`` owns, under the key names the ``Weather`` class exposes, and
+    that is where the PV system and the Building read them. Nothing here is process-global: the
     repository belongs to this ``Simulator`` and is cleared when its run ends.
     """
 

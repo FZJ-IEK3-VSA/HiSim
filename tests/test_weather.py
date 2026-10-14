@@ -201,7 +201,8 @@ def test_the_published_series_cover_the_run_window_and_not_the_source_year() -> 
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     owner = types.SimpleNamespace(my_simulation_parameters=parameters)
     year_long = [float(hour) for hour in range(8760)]
-    assert weather.Weather.run_window_of(owner, year_long) == [float(hour) for hour in range(24)]  # type: ignore[arg-type]
+    first_day = [float(hour) for hour in range(24)]
+    assert weather.Weather.run_window_of(owner, year_long) == first_day  # type: ignore[arg-type]
     day_long = year_long[:24]
     assert weather.Weather.run_window_of(owner, day_long) is day_long  # type: ignore[arg-type]
 

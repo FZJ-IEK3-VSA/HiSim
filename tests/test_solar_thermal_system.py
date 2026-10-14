@@ -897,7 +897,6 @@ class BackupAims:
         boiler.minimal_thermal_power_in_watt = 1000.0
         boiler.maximal_thermal_power_in_watt = 10000.0
         district = generic_district_heating.DistrictHeatingControllerConfig.preset_standard("DistrictController")
-        district.set_heating_threshold_outside_temperature_in_celsius = 16.0
         electric = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricController")
         electric.set_heating_threshold_outside_temperature_in_celsius = 16.0
         electric.specific_heating_load_of_building_in_watt_per_m2 = 50.0

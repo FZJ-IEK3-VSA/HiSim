@@ -61,7 +61,10 @@ hash, list of golden files). The checker does **not** read it.
 [`../scripts/golden_config.json`](../scripts/golden_config.json) is the single,
 hand-maintained source of truth for **which** setups and parameter sets are in the
 gate. Edit it to add or remove a setup; everything downstream (runner, check,
-update, CI matrix) follows. Every parameter set must enable the cost stages plus the
+update, CI matrix) follows. An entry's `path` names a Python setup (`system_setups/<file>.py`)
+or an energy system written in YAML alone (`energy_systems/<file>.energy_system.yaml`, such as
+`gas_boiler_household`), which runs the way `hisim energy-system run` runs it. Every parameter
+set must enable the cost stages plus the
 KPIs — `["COMPUTE_OPEX", "COMPUTE_CAPEX", "COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`, so
 the building-level cost KPIs are pinned — and every setup must be **offline-runnable**
 and **KPI-complete** — validate with:
@@ -101,6 +104,7 @@ compares with an earlier run of its own.
   the declarative executor: *the recorded twin reproduces the reference*. The energy manager's
   `Priority for <port>` KPIs quote an aggregator port, which the two paths name differently
   (C-P3.2), so this mode excludes that family from both sides (`PORT_NAMED_KPIS`, printed per pair).
+  An entry that is an energy-system file has no twin; this mode runs that file itself.
 - **`composed`** runs the setup's composed file, `energy_systems/<stem>.composed.energy_system.yaml`
   (the site plus imports of `energy_systems/assemblies/`): *the assemblies reproduce the reference*.
   Its KPIs carry the members' addresses (`heating-HeatPump`, with an import, a path and an assembly),

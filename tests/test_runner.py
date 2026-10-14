@@ -151,11 +151,12 @@ def test_load_config_real_file_setups_and_params() -> None:
 
 
 def test_load_config_real_file_setups_exist_on_disk() -> None:
-    """Every setup path in the shipped config resolves to an existing ``.py`` file."""
+    """Every entry of the shipped config resolves to an existing ``.py`` setup or energy-system file."""
     cfg = load_config(REAL_CONFIG)
     for setup in cfg.setups:
         resolved = resolve_setup_path(setup, REPO_ROOT)
-        assert resolved.exists() and resolved.suffix == ".py"
+        assert resolved.exists()
+        assert resolved.suffix == ".py" or resolved.name.endswith(".energy_system.yaml")
 
 
 # --------------------------------------------------------------------------- #
@@ -237,6 +238,84 @@ def test_resolve_setup_path_missing_raises() -> None:
     """``resolve_setup_path`` raises ``FileNotFoundError`` for a missing setup file."""
     with pytest.raises(FileNotFoundError):
         resolve_setup_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
+
+
+# --------------------------------------------------------------------------- #
+# Entries that name an energy-system file instead of a Python setup
+# --------------------------------------------------------------------------- #
+GAS_BOILER_HOUSEHOLD = SetupConfig("gas_boiler_household", "energy_systems/gas_boiler_household.energy_system.yaml")
+
+
+def test_an_energy_system_file_is_told_apart_from_a_python_setup() -> None:
+    """The entry kind follows the suffixes the command line dispatches on, and nothing else.
+
+    A ``.py`` setup, a plain ``.yaml`` file (a simulation-parameters file carries that suffix too)
+    and a ``.json`` file are not energy-system files; both spellings of the compound suffix are.
+    """
+    assert GAS_BOILER_HOUSEHOLD.is_energy_system_file()
+    assert SetupConfig("b", "energy_systems/other.energy_system.yml").is_energy_system_file()
+    assert not SetupConfig("c", "system_setups/simple_system_setup_one.py").is_energy_system_file()
+    assert not SetupConfig("d", "simulation_parameters/one_day.simulation.yaml").is_energy_system_file()
+    assert not SetupConfig("e", "system_setups/basic_household.simulation.json").is_energy_system_file()
+
+
+def test_the_shipped_config_lists_the_gas_boiler_household_file_for_both_horizons() -> None:
+    """The YAML-only reference system is a golden entry, as itself, with a week and a full-year pair."""
+    cfg = load_config(REAL_CONFIG)
+    entry = next(setup for setup in cfg.setups if setup.id == GAS_BOILER_HOUSEHOLD.id)
+    assert entry.path == GAS_BOILER_HOUSEHOLD.path
+    pairs = [param.id for setup, param in select_pairs(cfg) if setup.id == entry.id]
+    assert pairs == ["one_week_60s", "full_year_60s"]
+
+
+def test_resolve_setup_path_accepts_an_energy_system_file_and_refuses_other_files() -> None:
+    """An energy-system file resolves like a ``.py`` setup; a file of another kind is refused by name."""
+    resolved = resolve_setup_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT)
+    assert resolved == (REPO_ROOT / GAS_BOILER_HOUSEHOLD.path).resolve()
+    parameters_file = SetupConfig("params", "simulation_parameters/one_day_15min_export.simulation.yaml")
+    assert (REPO_ROOT / parameters_file.path).exists()
+    with pytest.raises(FileNotFoundError, match="energy_system.yaml"):
+        resolve_setup_path(parameters_file, REPO_ROOT)
+
+
+def test_an_energy_system_file_is_its_own_yaml_twin() -> None:
+    """YAML mode runs the entry's own file: it has no recorded twin, and none is looked for."""
+    assert resolve_twin_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT) == resolve_setup_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT)
+
+
+def test_python_mode_runs_an_energy_system_file_through_the_declarative_executor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In python mode an energy-system entry goes to ``run_energy_system_file``, a ``.py`` setup to ``hisim_main``.
+
+    No simulation runs: both entry points are replaced by recorders that raise, and ``run_one``
+    files the raise as the pair's ``run_error``. Catches an energy-system file handed to
+    ``hisim_main.main`` (which imports it as a Python module), and a Python setup that would no
+    longer reach ``hisim_main.main``.
+    """
+    called: list[tuple[str, str]] = []
+
+    def fake_run_energy_system_file(path: Path, _params: Any) -> None:
+        called.append(("run_energy_system_file", Path(path).name))
+        raise RuntimeError("recorded")
+
+    def fake_hisim_main(path_to_module: str, _params: Any = None) -> str:
+        called.append(("hisim_main.main", Path(path_to_module).name))
+        raise RuntimeError("recorded")
+
+    monkeypatch.setattr("scripts.runner.run_energy_system_file", fake_run_energy_system_file)
+    monkeypatch.setattr("hisim.hisim_main.main", fake_hisim_main)
+    week = ParameterSetConfig("p", "one_week_only", 2021, 60, ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"])
+    python_setup = SetupConfig("simple", "system_setups/simple_system_setup_one.py")
+
+    for setup in (GAS_BOILER_HOUSEHOLD, python_setup):
+        result = run_one(setup, week, str(tmp_path / setup.id), REPO_ROOT)
+        assert result.error is not None and "recorded" in result.error
+
+    assert called == [
+        ("run_energy_system_file", "gas_boiler_household.energy_system.yaml"),
+        ("hisim_main.main", "simple_system_setup_one.py"),
+    ]
 
 
 def test_all_golden_setups_have_recorded_twins() -> None:

@@ -23,7 +23,7 @@
 #
 # ONE RUN PER JOB. Every run is a matrix job of its own (golden_matrix.py --runs, golden_check.py
 # --jobs 1 --pairs <pair> --mode <mode>): each Python full-year pair, and separately each composed
-# file's full-year run, 30 jobs in all. The tier's wall time is then its slowest single run (the
+# file's full-year run, 31 jobs in all. The tier's wall time is then its slowest single run (the
 # heat pump with the car or with solar thermal, about 10 minutes) plus a job's fixed minute or so,
 # instead of the busiest of five shards that each ran two runs at once (12 to 16 minutes measured
 # on #1002); owner decision 2026-10-15. The matrix comes heaviest first, so when the 32 runners

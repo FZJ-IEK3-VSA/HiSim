@@ -40,6 +40,7 @@ from hisim.components.pylpg_workspace import PylpgWorkspace
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
+from hisim.components import lpg_local_time
 from hisim.caching import atomic_cache_write
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
@@ -2066,7 +2067,9 @@ class UtspLpgConnector(cp.DataSourceComponent):
         initial_data["water_consumption"] = water_consumption_list
         initial_data["inner_device_heat_gains"] = inner_device_heat_gains_list
 
-        initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
+        initial_data = lpg_local_time.convert_lpg_data_to_utc(
+            data=initial_data, year=self.my_simulation_parameters.year
+        )
 
         # extract everything from data frame
         electricity_consumption = initial_data["electricity_consumption"].tolist()

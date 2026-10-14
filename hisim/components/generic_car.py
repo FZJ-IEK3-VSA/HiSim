@@ -3,19 +3,19 @@
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
 """
 
-import datetime as dt
 from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
 from typing import Any, ClassVar, Dict, List, Tuple
-import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import utils, log
-from hisim.caching import atomic_cache_write
+from hisim import log
+from hisim.caching import CacheClient, CacheEntry, CacheKey
+from hisim.components import generic_car_profile
+from hisim.components.generic_car_profile import CarProfileInputs, produce_car_profile
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, constructor, sized_field
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -87,8 +87,9 @@ class CarConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: float
     #: The occupancy whose driving profile this car uses, as ``UtspLpgConnectorConfig.identity()``
-    #: spells it. Sized from the occupancy by the sizing engine, so the cache key includes it; the
-    #: household name alone does not determine the profile. See ``roadmap/pylpg_flakiness.md`` F7.
+    #: spells it. Sized from the occupancy by the sizing engine; the household name alone does not
+    #: determine the profile. See ``roadmap/pylpg_flakiness.md`` F7. The cached profile no longer
+    #: depends on it: its key hashes the published profile itself.
     occupancy_identity: Sizable[str] = sized_field(rule=Size.OCCUPANCY_IDENTITY, value_type=str)
 
     @constructor(note="the two vehicles the HiSim cost database carries, an EV and a diesel car")
@@ -152,19 +153,6 @@ class CarConfig(ConfigBase):
             maintenance_costs_in_euro_per_year=cls.MAINTENANCE_SHARE_OF_INVESTMENT * investment_costs_in_euro,
             subsidy_as_percentage_of_investment_costs=0,
         )
-
-
-def most_frequent(input_list: List) -> Any:
-    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower."""
-    max_count = 0
-    most_frequent_value = input_list[0]
-
-    for value in input_list:
-        curr_frequency = input_list.count(value)
-        if curr_frequency > max_count:
-            max_count = curr_frequency
-            most_frequent_value = value
-    return most_frequent_value
 
 
 class Car(cp.PhysicsComponent):
@@ -473,125 +461,81 @@ class Car(cp.PhysicsComponent):
 
         The LoadProfileGenerator always reports per minute and in local time, so the profile has to
         be converted to UTC and then aggregated — summed for distances, most-frequent for the
-        location — down to the run's own resolution. The result is cached under the car's
-        configuration, because the conversion is the expensive part of preparing a car and nothing
-        about it changes between two runs of the same car under the same parameters.
+        location — down to the run's own resolution. That calculation is the producer
+        :func:`hisim.components.generic_car_profile.produce_car_profile`, and its result is cached
+        under the producer's key: a hash of the published profile, the run's span and timestep, and a
+        fingerprint of the producer's code, so an edit to the calculation is a cache miss.
 
         Args:
             car_information_dict: The payload the occupancy published for this car.
         """
         self.car_information_dict = car_information_dict
-        self.car_location = car_information_dict["car_location"]
-        self.meters_driven = car_information_dict["driven_meters"]
-        self.time_resolution = car_information_dict["time_resolution"]
-
-        location_translator = {
-            "School": 0,
-            "Event Location": 0,
-            "Shopping": 0,
-            None: 0,
-            "Home": 1,
-            "Workplace": 2,
-        }
-
-        # check if caching is possible
-        file_exists, cache_filepath = utils.get_cache_file(
-            component_key=self.config.component_id.name,
-            parameter_class=self.config,
-            my_simulation_parameters=self.my_simulation_parameters,
-        )
-        if file_exists:
-            # load from cache
-            log.information("Generic car data is taken from cache.")
+        self.time_resolution = str(car_information_dict["time_resolution"])
+        calculation_inputs = self.build_calculation_inputs(car_information_dict)
+        entry = self.cache_entry(calculation_inputs)
+        if entry.exists:
+            log.information(f"Generic car data is taken from cache: {entry.path}")
             # float_precision="round_trip" is what makes a cached run and an uncached one the same
             # run. pandas' default CSV reader uses a fast, inexact float parser and loses the last
             # bit of a fifth of the distances in this file -- measured on a committed year-long
             # entry: 334 of the 1789 non-zero values of meters_driven come back different from
             # what was written, and none do with this argument.
             dataframe = pd.read_csv(
-                cache_filepath, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
+                entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
             )
-            self.car_location = dataframe["car_location"].tolist()
-            self.meters_driven = dataframe["meters_driven"].tolist()
-
         else:
-            # compare time resolution of LPG to time resolution of hisim
-            time_resolution_original = dt.datetime.strptime(self.time_resolution, "%H:%M:%S")
-            seconds_per_timestep_original = (
-                time_resolution_original.hour * 3600
-                + time_resolution_original.minute * 60
-                + time_resolution_original.second
-            )
-            minutes_per_timestep = int(
-                self.my_simulation_parameters.seconds_per_timestep / seconds_per_timestep_original
-            )
+            log.information(f"Generic car data cache miss: computing it and filing it at {entry.path}")
+            dataframe = produce_car_profile(calculation_inputs)
+            with entry.writing() as temporary_cache_filepath:
+                dataframe.to_csv(temporary_cache_filepath, index=False)
+        self.car_location = dataframe[CarProfileInputs.LOCATION_COLUMN].tolist()
+        self.meters_driven = dataframe[CarProfileInputs.DISTANCE_COLUMN].tolist()
 
-            simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
-            # minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
-            steps_desired = self.my_simulation_parameters.timesteps
-            steps_desired_in_minutes = steps_desired * minutes_per_timestep
+    def build_calculation_inputs(self, car_information_dict: Dict) -> CarProfileInputs:
+        """Build the DTO the car-profile producer is a pure function of.
 
-            # extract values for location and distance of car,
-            # include time information and
-            # translate car location to integers (according to location_translator)
-            initial_data = pd.DataFrame(
-                {
-                    "Time": pd.date_range(
-                        start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                        end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
-                        + dt.timedelta(days=simulation_time_span.days)
-                        - dt.timedelta(seconds=60),
-                        freq="min",
-                    ),
-                    "meters_driven": self.meters_driven[:steps_desired_in_minutes],
-                    "car_location": [location_translator[elem] for elem in self.car_location][
-                        :steps_desired_in_minutes
-                    ],
-                }
-            )
-            initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
-            self.meters_driven = pd.to_numeric(initial_data["meters_driven"]).tolist()
-            self.car_location = pd.to_numeric(initial_data["car_location"]).tolist()
+        The published minute profile enters as payload, identified in the key by its hash; the run
+        enters as its year, timestep, number of timesteps and span in days. Nothing the car keeps to
+        itself -- its name, fuel, consumption or costs -- is part of the calculation, so none of it is
+        part of the key.
 
-            # sum / extract most common value from data to match hisim time resolution
-            if minutes_per_timestep > 1:
-                self.meters_driven = self.resample_meters_driven(
-                    meters_driven=self.meters_driven,
-                    seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
-                )
-                self.car_location = [
-                    most_frequent(
-                        input_list=self.car_location[i * minutes_per_timestep : (i + 1) * minutes_per_timestep]
-                    )
-                    for i in range(steps_desired)
-                ]
+        Args:
+            car_information_dict: The payload the occupancy published for this car.
 
-            # save data in cache
-            car_cache_dataframe = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
-            with atomic_cache_write(
-                cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
-                car_cache_dataframe.to_csv(temporary_cache_filepath)
-            del car_cache_dataframe
+        Returns:
+            CarProfileInputs: the producer's single argument.
+        """
+        car_location = tuple(car_information_dict["car_location"])
+        driven_distance_per_minute_in_meters = tuple(car_information_dict["driven_meters"])
+        lpg_time_resolution = str(car_information_dict["time_resolution"])
+        parameters = self.my_simulation_parameters
+        return CarProfileInputs(
+            profile_content_hash=CarProfileInputs.content_hash(
+                lpg_time_resolution, car_location, driven_distance_per_minute_in_meters
+            ),
+            lpg_time_resolution=lpg_time_resolution,
+            year=parameters.year,
+            seconds_per_timestep=parameters.seconds_per_timestep,
+            timesteps=parameters.timesteps,
+            duration_in_days=(parameters.end_date - parameters.start_date).days,
+            car_location=car_location,
+            driven_distance_per_minute_in_meters=driven_distance_per_minute_in_meters,
+        )
 
-    def resample_meters_driven(self, meters_driven: List, seconds_per_timestep: int) -> Any:
-        """Resample meters driven according to simulation time resolution."""
-        # Convert seconds per timestep to minutes per timestep
-        minutes_per_timestep = seconds_per_timestep // 60
+    def cache_entry(self, calculation_inputs: CarProfileInputs) -> CacheEntry:
+        """Look the produced profile up in the cache under the key of the producer that makes it.
 
-        # Check the length of the input list
-        total_minutes = len(meters_driven)
+        The key fingerprints :mod:`hisim.components.generic_car_profile` and the LPG time conversion it
+        imports, so an edit to either is a cache miss.
 
-        # Calculate the number of complete timesteps
-        num_timesteps = total_minutes // minutes_per_timestep
+        Args:
+            calculation_inputs: the DTO from :meth:`build_calculation_inputs`.
 
-        # Trim the list to be a multiple of minutes_per_timestep
-        trimmed_meters_driven = meters_driven[: num_timesteps * minutes_per_timestep]
-
-        # Reshape and sum the data
-        reshaped_meters: np.ndarray = np.reshape(trimmed_meters_driven, (num_timesteps, minutes_per_timestep))
-        resampled_meters = np.sum(reshaped_meters, axis=1)
-        return resampled_meters
+        Returns:
+            CacheEntry: where the entry is or will be, and whether it is there.
+        """
+        key = CacheKey.for_producer(CarProfileInputs.ARTIFACT_KIND, generic_car_profile, calculation_inputs)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_locations())
 
     def write_to_report(self) -> List[str]:
         """Writes Car values to report."""

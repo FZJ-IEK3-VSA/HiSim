@@ -362,8 +362,8 @@ class ComponentType(str, enum.Enum):
     NO_HDS = "No HDS"
 
     # Building envelope measures (lifecycle cost engine, cost_spec.md Q7). These are cost
-    # subjects sized in m2 of the respective envelope element (EXTERIOR_DOOR and
-    # VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
+    # subjects sized in m2 of the respective envelope element, the door in m2 of door
+    # (VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
     # The taxonomy follows the renovation measure database, element by element: external wall,
     # roof, top floor ceiling, basement ceiling, basement walls, ground-contacting components,
     # windows (review round 3, PR 556).

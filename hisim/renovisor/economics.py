@@ -1838,8 +1838,9 @@ class EconomicContextBuilder:
         database has no entry for the class the engine's fallback, marked as such
         (``lifetime_is_engine_fallback``), so the row's due years are stated either way.
 
-        The size is the element's area (:meth:`_element_area`) in square metres, except for the
-        door, which the cost database lists per door (``per_unit: null``), so it is one door.
+        The size is the element's area (:meth:`_element_area`) in square metres, for the door as for
+        every other element: the cost database prices each envelope class per square metre, which
+        is the unit the register row and the measure's own subject declare too.
 
         Each subject enters the report's ``subjects`` map with no measure (``None``), as every
         subject of the house as it was, so every unpriced subject is a named one and the result
@@ -1863,7 +1864,6 @@ class EconomicContextBuilder:
                 continue
             asset_class = EnvelopeAssets.of_element(element)
             subject = EnvelopeAssets.subject_of(element)
-            size, size_unit = (1.0, Units.ANY) if element is ThermalElement.DOOR else (float(area), Units.SQUARE_METER)
             has_life = database.has_device_entry(asset_class, country)
             note = self.KEPT_ELEMENT_UNPRICED_NOTE + (
                 "" if has_life else self.KEPT_ELEMENT_FALLBACK_LIFE_NOTE.format(
@@ -1881,8 +1881,8 @@ class EconomicContextBuilder:
                     subject=subject,
                     facts=ComponentCostFacts(
                         asset_class=asset_class,
-                        size=size,
-                        size_unit=size_unit,
+                        size=float(area),
+                        size_unit=Units.SQUARE_METER,
                         investment_cost_override_in_euro=zero,
                         installation_cost_override_in_euro=zero,
                         maintenance_rate_override=zero,

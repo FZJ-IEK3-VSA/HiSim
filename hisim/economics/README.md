@@ -493,8 +493,9 @@ Insulation measures (external/internal wall, between/over the roof joists, warm 
 ceiling, basement ceiling, basement walls, ground-contacting perimeter), triple-glazed windows,
 exterior doors, air sealing and ventilation systems are ordinary cost subjects with their own
 `ComponentType`s — one per measure of the renovation measure database — sized in **m² of the
-respective envelope element** (`EXTERIOR_DOOR` and `VENTILATION_SYSTEM` per unit). They are
-*not* simulation components — the building physics only sees changed U-values — so their
+respective envelope element**, the door in m² of door (renovisorissues #74), and
+`VENTILATION_SYSTEM` per unit. They are *not* simulation components — the building physics
+only sees changed U-values — so their
 `SubjectCostFacts` are injected into `EvaluationInputs` by whoever defines the variant
 (RenoVisor mapping or a system setup), with areas taken from the building's TABULA data and
 the achieved `u_value` in `technical_attributes` (the BEG subsidy conditions test it).

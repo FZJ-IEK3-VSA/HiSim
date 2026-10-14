@@ -419,6 +419,107 @@ def test_hds_preset_is_sizing_mandatory_and_enum_typed():
 
 
 @pytest.mark.base
+def test_an_enum_typed_sizable_field_read_from_json_holds_the_member():
+    """Catches the member name in a JSON configuration staying a string after decoding.
+
+    HiSim's configuration enums derive from ``str``, so a decoder that left ``"FLOORHEATING"`` a
+    string would pass every equality check; only the identity check below sees the difference,
+    and identity is what a component comparing ``is HeatDistributionSystemType.FLOORHEATING``
+    relies on.
+    """
+    from hisim.components.heat_distribution_system import (
+        HeatDistributionConfig,
+        HeatDistributionSystemType,
+    )
+
+    wire = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").to_dict()
+    wire["heating_system"] = "FLOORHEATING"
+
+    decoded = HeatDistributionConfig.from_json(json.dumps(wire))
+
+    assert decoded.heating_system is HeatDistributionSystemType.FLOORHEATING
+
+
+@pytest.mark.base
+def test_an_enum_typed_sizable_field_reads_the_member_name_where_name_and_value_differ():
+    """Catches a decoder that coerces only by value, refusing the name every file writes.
+
+    ``LoadTypes.GAS`` holds ``"Gas"``, while files write the member name ``GAS``; both spellings
+    have to arrive at the one member.
+    """
+    from hisim import loadtypes as lt
+    from hisim.components.gas_meter import GasMeterConfig
+
+    wire = GasMeterConfig.preset_standard("GasMeter").to_dict()
+    for written in ("GAS", "Gas"):
+        wire["gas_loadtype"] = written
+        assert GasMeterConfig.from_json(json.dumps(wire)).gas_loadtype is lt.LoadTypes.GAS
+
+
+@pytest.mark.base
+def test_an_unknown_member_name_on_a_sizable_enum_field_is_refused_naming_field_and_members():
+    """Catches a misspelled member surfacing as a bare enum error that names neither field nor fix.
+
+    The class's own ``from_dict`` is a path no energy-system codec wraps, so the decoder's message
+    is the whole report: it has to say which field was wrong and which words it accepts.
+    """
+    from hisim.components.heat_distribution_system import HeatDistributionConfig
+
+    wire = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").to_dict()
+    wire["heating_system"] = "FLOOR"
+
+    with pytest.raises(ValueError) as raised:
+        HeatDistributionConfig.from_dict(wire)
+
+    message = str(raised.value)
+    assert "HeatDistributionConfig.heating_system" in message and "'FLOOR'" in message
+    for allowed in ("RADIATOR", "FLOORHEATING", "LOW_TEMPERATURE_RADIATOR", "AUTO"):
+        assert allowed in message
+
+
+@pytest.mark.base
+def test_auto_on_a_sizable_enum_field_still_decodes_to_the_sentinel():
+    """Catches the name-based coercion swallowing ``AUTO``, written or left out.
+
+    Turned into a member or into the string ``"AUTO"``, the field would count as set and the
+    law that sizes it from the building would never run.
+    """
+    from hisim.components.heat_distribution_system import HeatDistributionConfig
+
+    wire = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").to_dict()
+    assert wire["heating_system"] == "AUTO"
+    assert HeatDistributionConfig.from_json(json.dumps(wire)).heating_system is AUTO
+    del wire["heating_system"]
+    assert HeatDistributionConfig.from_dict(wire).heating_system is AUTO
+
+
+@pytest.mark.base
+def test_every_member_of_a_sizable_enum_field_survives_an_encode_decode_round_trip():
+    """Catches a member that the class writes in a spelling its own decoder does not read back.
+
+    ``to_json`` writes the member's value, a file writes its name; the decoder has to accept the
+    first as surely as the second, for every member, or a configuration the class serialized
+    itself could not be loaded again.
+    """
+    from hisim import loadtypes as lt
+    from hisim.components.gas_meter import GasMeterConfig
+    from hisim.components.heat_distribution_system import (
+        HeatDistributionConfig,
+        HeatDistributionSystemType,
+    )
+
+    heat_distribution = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
+    for member in HeatDistributionSystemType:
+        pinned = dataclasses.replace(heat_distribution, heating_system=member)
+        assert HeatDistributionConfig.from_json(pinned.to_json()).heating_system is member
+        assert HeatDistributionConfig.from_dict(pinned.to_dict()).heating_system is member
+    gas_meter = GasMeterConfig.preset_standard("GasMeter")
+    for carrier in lt.LoadTypes:
+        pinned_meter = dataclasses.replace(gas_meter, gas_loadtype=carrier)
+        assert GasMeterConfig.from_json(pinned_meter.to_json()).gas_loadtype is carrier
+
+
+@pytest.mark.base
 def test_ems_preset_has_nothing_to_size():
     """The EMS is the IGNORED case: resolve raises instead of silently no-opping."""
     from hisim.components.controller_l2_energy_management_system import EMSConfig

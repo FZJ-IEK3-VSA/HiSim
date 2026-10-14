@@ -527,6 +527,152 @@ class BoilerFiring:
 
 
 @dataclass(frozen=True)
+class BurnerState:
+
+    """Whether a boiler's burner is lit, and for how long it has been lit or out, at the end of a step.
+
+    The boiler commits one of these at the end of every step and decides the next step's firing on it
+    (:meth:`BurnerTimes.burner_is_lit`). For example, a burner lit for the last two 900 s steps is
+    ``BurnerState(is_lit=True, seconds_in_state=1800.0)``.
+    """
+
+    #: Whether the burner burnt fuel in the step.
+    is_lit: bool
+    #: How long the burner has been in that state, lit or out, at the end of the step, in s.
+    seconds_in_state: float
+
+    @classmethod
+    def at_start(cls) -> "BurnerState":
+        """Return the state a simulation starts in: the burner out for longer than any pause, so it may light at once.
+
+        Returns:
+            The burner out since an infinitely long time.
+        """
+        return cls(is_lit=False, seconds_in_state=math.inf)
+
+    def after_step(self, *, is_lit: bool, seconds_per_timestep: float) -> "BurnerState":
+        """Return the state at the end of a step in which the burner was lit or out.
+
+        A burner that stays in its state adds the step to its time; one that changes starts counting again from the
+        step. For example, a burner out for 900 s that lights in a 900 s step has been lit for 900 s.
+
+        Args:
+            is_lit: Whether the burner burnt fuel in the step.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The state after the step.
+        """
+        if is_lit == self.is_lit:
+            return BurnerState(is_lit=is_lit, seconds_in_state=self.seconds_in_state + seconds_per_timestep)
+        return BurnerState(is_lit=is_lit, seconds_in_state=seconds_per_timestep)
+
+
+@dataclass(frozen=True)
+class BurnerTimes:
+
+    """A burner's minimum firing time and minimum pause: the device's protection against short cycling.
+
+    A wood pellet or wood chip burner cannot simply switch off: once lit it runs through ignition, a stabilisation of
+    the fire and, when it stops, a burn-out of the fuel left on the grate, each lasting minutes. Lit, it therefore
+    keeps burning for at least its minimum firing time even when its controller asks it to stop; out, it does not
+    light again before its minimum pause has passed. Both are counted in whole timesteps, rounded down, the way the
+    boiler's controller counts its own minimum times: 1800 s are 2 steps of 900 s and 30 steps of 60 s, and 600 s at
+    900 s per step are 0 steps, no minimum. A modulating gas, oil or hydrogen burner follows its heat demand within its
+    power band and has neither (0 s).
+
+    The times per fuel are class constants. Pellets: a measured pellet boiler cycle has about 10.5 minutes of
+    start-up (purge, fuel fill, ignition, stabilisation) and 10 minutes of burn-out plus 3 minutes of post-combustion
+    ventilation (McDowell, Yousef, Siegenthaler and Butcher, "A new detailed model of wood pellet boilers", SimBuild
+    2020, Table 1), so a start that is stopped at once still occupies the burner for about 24 minutes; the minimum
+    firing time is 30 minutes and the minimum pause 15 minutes. Wood chips burn on a larger fuel bed that ignites and
+    burns out more slowly: 60 and 30 minutes. Both pairs are the times the repository's pellet and wood-chip setups
+    already gave their controllers.
+    """
+
+    #: A pellet burner's minimum firing time, in s.
+    PELLET_MINIMUM_FIRING_TIME_IN_SECONDS: ClassVar[float] = 30 * 60.0
+    #: A pellet burner's minimum pause, in s.
+    PELLET_MINIMUM_PAUSE_IN_SECONDS: ClassVar[float] = 15 * 60.0
+    #: A wood chip burner's minimum firing time, in s.
+    WOOD_CHIP_MINIMUM_FIRING_TIME_IN_SECONDS: ClassVar[float] = 60 * 60.0
+    #: A wood chip burner's minimum pause, in s.
+    WOOD_CHIP_MINIMUM_PAUSE_IN_SECONDS: ClassVar[float] = 30 * 60.0
+
+    #: The shortest time the burner burns once lit, in s, at least 0.
+    minimum_firing_time_in_seconds: float
+    #: The shortest time the burner stays out once it went out, in s, at least 0.
+    minimum_pause_in_seconds: float
+
+    @classmethod
+    def of_fuel(cls, energy_carrier: lt.LoadTypes) -> "BurnerTimes":
+        """Return the minimum times of a burner of this fuel: pellets and wood chips have them, every other fuel none.
+
+        For example, ``BurnerTimes.of_fuel(lt.LoadTypes.PELLETS)`` gives 1800 s and 900 s, ``lt.LoadTypes.GAS``
+        0 s and 0 s.
+
+        Args:
+            energy_carrier: The fuel the boiler burns.
+
+        Returns:
+            The burner's minimum firing time and minimum pause.
+        """
+        if energy_carrier == lt.LoadTypes.PELLETS:
+            return cls(
+                minimum_firing_time_in_seconds=cls.PELLET_MINIMUM_FIRING_TIME_IN_SECONDS,
+                minimum_pause_in_seconds=cls.PELLET_MINIMUM_PAUSE_IN_SECONDS,
+            )
+        if energy_carrier == lt.LoadTypes.WOOD_CHIPS:
+            return cls(
+                minimum_firing_time_in_seconds=cls.WOOD_CHIP_MINIMUM_FIRING_TIME_IN_SECONDS,
+                minimum_pause_in_seconds=cls.WOOD_CHIP_MINIMUM_PAUSE_IN_SECONDS,
+            )
+        return cls(minimum_firing_time_in_seconds=0.0, minimum_pause_in_seconds=0.0)
+
+    @staticmethod
+    def whole_steps_in_seconds(seconds: float, seconds_per_timestep: float) -> float:
+        """Return a minimum time rounded down to whole timesteps, in s.
+
+        For example, 1500 s at 900 s per step is 900 s, 600 s at 900 s per step is 0 s, and 1800 s at 60 s per step
+        stays 1800 s.
+
+        Args:
+            seconds: The minimum time, in s.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The whole timesteps the time holds, in s.
+        """
+        return math.floor(seconds / seconds_per_timestep) * seconds_per_timestep
+
+    def burner_is_lit(self, *, asked_to_burn: bool, committed: BurnerState, seconds_per_timestep: float) -> bool:
+        """Return whether the burner burns in this step: as asked, unless a minimum time holds it lit or out.
+
+        A burner lit for less than its minimum firing time burns on although it is not asked to; a burner out for less
+        than its minimum pause stays out although it is asked to burn. For example, with 1800 s and 900 s at 900 s per
+        step, a burner lit for 900 s burns on, one lit for 1800 s stops when asked, and one out for 900 s lights when
+        asked; with 1800 s of pause it would stay out.
+
+        Args:
+            asked_to_burn: Whether the controller's command would burn fuel in this step.
+            committed: The burner's state at the end of the previous step.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            Whether the burner burns in this step.
+        """
+        if committed.is_lit and committed.seconds_in_state < self.whole_steps_in_seconds(
+            self.minimum_firing_time_in_seconds, seconds_per_timestep
+        ):
+            return True
+        if not committed.is_lit and committed.seconds_in_state < self.whole_steps_in_seconds(
+            self.minimum_pause_in_seconds, seconds_per_timestep
+        ):
+            return False
+        return asked_to_burn
+
+
+@dataclass(frozen=True)
 class BoilerCircuitChannels:
 
     """The return input and the outputs of one of the boiler's two water circuits.
@@ -560,6 +706,11 @@ class GenericBoiler(PhysicsComponent):
     temperature, and books the heat that flow carries and the ratio times the full-load fuel. It reports the ratio it
     ran with (``PartLoadRatioRunDhw``): the commanded ratio while it charges the tank, 0 otherwise. Cycling losses of
     the burner are not modelled.
+
+    A pellet or wood-chip burner keeps its minimum firing time and minimum pause (:class:`BurnerTimes`), the device's
+    protection against short cycling: lit, it burns on although its controller asks it to stop, sending the heat to the
+    space-heating buffer; out, it stays out although asked to burn. The burner's state, lit or out and since when, is
+    committed at the end of every step. A gas, oil or hydrogen burner has no minimum times.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -788,6 +939,9 @@ class GenericBoiler(PhysicsComponent):
         )
         # Set important parameters
         self.build()
+        # the burner's state committed at the end of the previous step, and the one this step's pass leaves
+        self.committed_burner_state: BurnerState = BurnerState.at_start()
+        self.burner_state: BurnerState = self.committed_burner_state
         self.fuel_consumption_in_liter: float = 0
         self.fuel_consumption_in_kg: float = 0
 
@@ -895,6 +1049,7 @@ class GenericBoiler(PhysicsComponent):
             maximal_heat_power_in_watt=self.maximal_thermal_power_in_watt * self.max_combustion_efficiency,
             minimal_lift_at_maximal_power_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,
         )
+        self.burner_times = BurnerTimes.of_fuel(self.energy_carrier)
 
         # The fuel constants are derived by the config, which is also what contributes them
         # as sizing facts, so the meter accounting this boiler's consumption reads exactly
@@ -921,12 +1076,12 @@ class GenericBoiler(PhysicsComponent):
         return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """Save the current state."""
-        pass
+        """Commit the burner's state of the step that just converged: whether it was lit, and for how long."""
+        self.committed_burner_state = self.burner_state
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        pass
+        """Start the pass from the burner's committed state, discarding what an earlier pass of this step left."""
+        self.burner_state = self.committed_burner_state
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -938,13 +1093,16 @@ class GenericBoiler(PhysicsComponent):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Fire the circuit the controller asks for and publish both circuits, the fuel and the combustion loss.
+        """Fire the circuit the controller asks for, within the burner's minimum times, and publish both circuits.
 
         The controller sends a control signal, an operating mode and a lift. In space-heating or hot-water mode with
-        a positive lift the boiler fires that mode's circuit (:meth:`fired_circuit`); the other circuit idles. Off,
-        or without a lift, the boiler does not fire: no circuit moves water, and no fuel is burnt. A lift smaller than
-        the rise the commanded heat gives at the pump's largest flow is raised to that rise (:class:`BoilerPump`), so
-        the flow stays one a household circuit carries and the supply ends above the one asked for.
+        a positive lift the boiler fires that mode's circuit (:meth:`commanded_firing`); the other circuit idles. Off,
+        or without a lift, the controller asks for no fire. The burner then burns as asked, unless its minimum times
+        (:class:`BurnerTimes`) hold it: a burner lit for less than its minimum firing time burns on, at the commanded
+        power and at least its minimal power, and sends that heat to the space-heating circuit, the buffer an on/off
+        burner charges (:meth:`held_firing`); a burner out for less than its minimum pause stays out. Out, no circuit
+        moves water and no fuel is burnt. The decision reads only this step's inputs and the burner's state committed
+        at the end of the previous step, so every pass of a step decides the same way on the same inputs.
 
         Raises:
             ValueError: If the control signal is outside [0, 1] or the operating mode is unknown.
@@ -960,17 +1118,68 @@ class GenericBoiler(PhysicsComponent):
         elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
             fired, idle = self.hot_water_circuit, self.space_heating_circuit
         elif operating_mode == HeatingMode.OFF.value:
-            self.publish_idle_boiler(stsv)
-            self.dhw_part_load_command.publish_ratio_run(stsv, 0.0)
-            return
+            fired, idle = None, None
         else:
             raise ValueError(f"Unknown operating mode {operating_mode}")
-        if lift_in_kelvin <= 0:
-            # a circuit without a lift moves no water, so it carries no heat and the burner stays off
-            self.publish_idle_boiler(stsv)
-            self.dhw_part_load_command.publish_ratio_run(stsv, 0.0)
-            return
 
+        firing: Optional[BoilerFiring] = None
+        hot_water_ratio_run = 0.0
+        # a circuit without a lift moves no water, so it carries no heat and the controller asks for no fire
+        if fired is not None and lift_in_kelvin > 0:
+            firing, hot_water_ratio_run = self.commanded_firing(
+                stsv, fired=fired, control_signal=control_signal, lift_in_kelvin=lift_in_kelvin
+            )
+        asked_to_burn = firing is not None and firing.fuel_power_in_watt > 0
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        burner_is_lit = self.burner_times.burner_is_lit(
+            asked_to_burn=asked_to_burn,
+            committed=self.committed_burner_state,
+            seconds_per_timestep=seconds_per_timestep,
+        )
+        if burner_is_lit and not asked_to_burn:
+            # held lit by the minimum firing time
+            firing = self.held_firing(stsv, control_signal=control_signal)
+            fired, idle = self.space_heating_circuit, self.hot_water_circuit
+            hot_water_ratio_run = 0.0
+        elif asked_to_burn and not burner_is_lit:
+            # held out by the minimum pause
+            firing = None
+            hot_water_ratio_run = 0.0
+        self.burner_state = self.committed_burner_state.after_step(
+            is_lit=firing is not None and firing.fuel_power_in_watt > 0, seconds_per_timestep=seconds_per_timestep
+        )
+        self.dhw_part_load_command.publish_ratio_run(stsv, hot_water_ratio_run)
+        if firing is None or fired is None or idle is None:
+            self.publish_idle_boiler(stsv)
+            return
+        self.publish_firing(stsv, fired, firing)
+        self.publish_idle_circuit(stsv, idle)
+
+    def commanded_firing(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        fired: "BoilerCircuitChannels",
+        control_signal: float,
+        lift_in_kelvin: float,
+    ) -> Tuple["BoilerFiring", float]:
+        """Return the firing of the circuit the controller commands, and the hot-water part-load ratio it runs.
+
+        A lift smaller than the rise the commanded heat gives at the pump's largest flow is raised to that rise
+        (:class:`BoilerPump`), so the flow stays one a household circuit carries and the supply ends above the one
+        asked for. The hot-water supply stops at the controller's set temperature and both supplies at the maximal
+        flow temperature. A hot-water charge runs the part-load ratio the controller commands; a space-heating
+        firing reports a ratio of 0.
+
+        Args:
+            stsv: The step's values, read for the circuit's return, the hot-water set temperature and the ratio.
+            fired: The circuit the controller's mode names.
+            control_signal: The share of the maximal burner power the controller commands, 0 to 1.
+            lift_in_kelvin: The lift the controller asks for, in K, above 0.
+
+        Returns:
+            The circuit's firing, and the hot-water part-load ratio it ran with.
+        """
         commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
         lift_in_kelvin = self.pump.lift_in_kelvin(
             asked_lift_in_kelvin=lift_in_kelvin,
@@ -1004,9 +1213,42 @@ class GenericBoiler(PhysicsComponent):
             firing = self.part_loaded_firing(
                 firing, part_load_ratio=hot_water_ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
             )
-        self.dhw_part_load_command.publish_ratio_run(stsv, hot_water_ratio_run)
-        self.publish_firing(stsv, fired, firing)
-        self.publish_idle_circuit(stsv, idle)
+        return firing, hot_water_ratio_run
+
+    def held_firing(self, stsv: SingleTimeStepValues, *, control_signal: float) -> "BoilerFiring":
+        """Return the space-heating firing of a burner its minimum firing time holds lit although no fire is asked for.
+
+        The burner burns at the power the control signal commands, at least its minimal power, and its heat goes to
+        the space-heating circuit, the buffer an on/off burner charges, at the pump's largest flow: the lift is the
+        rise that heat gives at that flow (:class:`BoilerPump`), and the supply stops at the maximal flow
+        temperature. For example, a pellet burner whose controller switched to off burns at its minimal power, a
+        twelfth of its maximal one, and one whose controller still names space heating with the buffer above its set
+        temperature burns at full power.
+
+        Args:
+            stsv: The step's values, read for the space-heating return.
+            control_signal: The share of the maximal burner power the controller commands, 0 to 1.
+
+        Returns:
+            The space-heating circuit's firing.
+        """
+        commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
+        lift_in_kelvin = self.pump.lift_in_kelvin(
+            asked_lift_in_kelvin=0.0,
+            heat_power_in_watt=commanded_power_in_watt * self.burner.efficiency_at(commanded_power_in_watt),
+        )
+        return_temperature_in_celsius = stsv.get_input_value(self.space_heating_circuit.return_temperature)
+        return self.fired_circuit(
+            burner=self.burner,
+            control_signal=control_signal,
+            lift_in_kelvin=lift_in_kelvin,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            supply_temperature_in_celsius=hydronics.throttled_supply_temperature_c(
+                unthrottled_supply_c=return_temperature_in_celsius + lift_in_kelvin,
+                return_c=return_temperature_in_celsius,
+                supply_limit_c=self.maximal_flow_temperature_in_celsius,
+            ),
+        )
 
     @staticmethod
     def fired_circuit(
@@ -1595,7 +1837,9 @@ class GenericBoilerController(L1ControllerComponent):
 
     The minimum running time is kept here, in the controller, not in the boiler: a step held in hot-water mode only by
     it gets the rule's ratio like any other, which is 0 for a tank that starts at or above the aim, so the boiler does
-    not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time.
+    not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time. These
+    times act on the controller's mode; the burner's own minimum firing time and minimum pause, which act on whether
+    it burns, are the boiler's (:class:`BurnerTimes`).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST

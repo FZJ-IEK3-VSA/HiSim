@@ -129,5 +129,6 @@ tests:
       # more surface
   expect:
     - {kpi: Total Pellets consumption (energy), member: Boiler, min: 110, max: 150}
-      # 130.2 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 203.3 kWh
-      # before the boiler's pump had a largest flow (hisim-4g9.63)
+      # 128.1 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 130.2 kWh
+      # before the burner kept its minimum firing time and pause (hisim-75mt), 203.3 kWh before the boiler's pump had
+      # a largest flow (hisim-4g9.63)

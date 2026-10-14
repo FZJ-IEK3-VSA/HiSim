@@ -12,8 +12,10 @@ flow, and a lift below the rise the heat gives at that flow is raised to it.
 The tolerance covers the buffer's mixing law: it mixes a step's inflowing water into its own, so its content grows by
 only ``M / (M + m dt)`` of the heat its inflows bring, and it closes per step only once the buffer is a node (hydronic
 stage D, hisim-fxix.5). An on/off burner that charges at full power leaves more of that residual than a modulating
-one. Measured on the window: gas +1.05 %, pellets +4.60 %, wood chips +3.81 %; over the year 2021 +0.87 %, +4.62 % and
-+3.81 %. Before the pump limit the pellet and wood-chip twins booked 144.7 and 142.4 kWh on this day for 50.1 and
+one, and one that keeps its minimum firing time charges the buffer further above its set temperature, which leaves
+more again. Measured on the window: gas +2.21 %, pellets +7.51 %, wood chips +6.40 % (+6.99 % and +6.08 % before the
+pellet and wood-chip burners kept their minimum firing time and pause); over the year 2021 +0.87 %, +5.07 % and
++5.41 %. Before the pump limit the pellet and wood-chip twins booked 144.7 and 142.4 kWh on this day for 50.1 and
 50.0 kWh, +189 % and +185 %.
 
 Every test here simulates a whole energy system, so it runs in the ``extendedbase2`` shard.
@@ -51,9 +53,9 @@ class BoilerTwinDay:
     }
 
     #: How far the booked heat may lie from the delivered heat plus the buffer's loss and content change, relative:
-    #: the buffer's mixing law leaves up to 4.6 % at 60 s (module docstring); a booking that ignores the pump's
+    #: the buffer's mixing law leaves up to 7.5 % at 60 s (module docstring); a booking that ignores the pump's
     #: largest flow lies near +190 %.
-    RELATIVE_TOLERANCE: ClassVar[float] = 0.08
+    RELATIVE_TOLERANCE: ClassVar[float] = 0.10
 
     #: Seconds per hour, to turn the step's watts into kilowatt hours.
     SECONDS_PER_HOUR: ClassVar[float] = 3600.0

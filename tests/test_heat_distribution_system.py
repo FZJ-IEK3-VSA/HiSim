@@ -407,3 +407,21 @@ class TestValveState:
         assert self.published_state(controller, demand, stsv, 300.0) == 1
         controller.i_save_state()
         assert self.published_state(controller, demand, stsv, -300.0) == 1  # an open heating valve stays open
+
+    @pytest.mark.base
+    def test_a_forced_pass_keeps_the_mode_of_the_last_free_pass(self) -> None:
+        """Catches a valve mode that moves while the simulator forces a step to converge.
+
+        A free pass opens the closed valve for heating. A forced pass with a cooling demand leaves both the published
+        state and the mode the step ends with untouched, so the next step starts from the open heating valve.
+        """
+        controller, demand, stsv = self.controller_with_inputs()
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, 300.0) == 1
+        stsv.set_output_value(demand, -300.0)
+        controller.i_restore_state()
+        controller.i_simulate(0, stsv, True)
+        assert stsv.values[controller.state_channel.global_index] == 1
+        assert controller.end_of_step_state.valve_mode == heat_distribution_system.HeatDistributionValveMode.HEATING
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, -300.0) == 1  # the open heating valve stays open

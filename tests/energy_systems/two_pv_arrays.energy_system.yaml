@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=../../hisim/energy_system_v3.schema.json
+# Hand-written test fixture of tests/test_multiple_pv_arrays.py: a household with two PV arrays, a south one of 4 kWp
+# and a west one of 2 kWp, beside a battery sized to both and the energy manager maximising self-consumption. The
+# meter observes the manager's grid balance. Both arrays are ordinary PVSystem entries with names of their own;
+# the manager takes one production input per array.
+schema_version: 3
+name: two_pv_arrays
+description: A household with a south and a west array, a battery and the self-consumption manager.
+components:
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+  Weather:
+    class: hisim.components.weather.Weather
+    preset: aachen
+  PVSouth:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    config:
+      power_in_watt: 4000.0
+      azimuth: 180
+    inputs:
+      - Weather
+  PVWest:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    config:
+      power_in_watt: 2000.0
+      azimuth: 270
+    inputs:
+      - Weather
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv
+  L2EMSElectricityController:
+    class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+    preset: optimize_own_consumption
+    inputs:
+      - from: Battery.AcBatteryPowerUsed
+        component_type: BATTERY
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 6
+        dispatch:
+          target_input: LoadingPowerInput
+      - from: Battery.MaximumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MAXIMUM_CHARGING_POWER
+        weight: 999
+      - from: Battery.MinimumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MINIMUM_CHARGING_POWER
+        weight: 999
+      - from: PVSouth.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: PVWest.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        component_type: RESIDENTS
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 1
+        dispatch: {}

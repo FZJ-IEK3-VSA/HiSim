@@ -32,10 +32,12 @@ from hisim.config import (
     ComponentID,
     ConfigBase,
     FactContribution,
+    Many,
     Self,
     Sizable,
     Size,
     SizingContext,
+    Sum,
     preset,
     preset_provenance,
     sized_field,
@@ -882,6 +884,38 @@ class _BoilerConfig(ConfigBase):
         )
 
 
+@dataclass_json
+@dataclass
+class _BankConfig(ConfigBase):
+    """A fixture consumer whose one sized field sums a fact over every provider, as the battery does.
+
+    The battery's capacity is ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`` over every array beside it; this is that
+    law in miniature, summing the roof area of every roof, so the recorder's judgement about a many read can be
+    tested against the fixture's two roofs.
+    """
+
+    component_id: ComponentID
+    capacity: Sizable[float] = sized_field(rule=Sum(Many(Size.ROOF_AREA_IN_M2)))
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_recording._BankConfig"
+
+    @preset
+    @classmethod
+    def preset_summed(cls, name: str) -> "_BankConfig":
+        """The bank as the fixture's preset builds it, with its capacity left to the summing law.
+
+        Args:
+            name: The instance name, which becomes the configuration's identity.
+
+        Returns:
+            The unresolved configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
+
+
 class Sized:
     """The smallest recorded system in which one field is computed from another component's fact.
 
@@ -1158,6 +1192,47 @@ def test_a_fact_two_recorded_components_declare_keeps_the_number_and_names_both(
     assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == Sized.POWER
     assert written.decisions[0].comment() == (
         f"pinned: roof_area_in_m2 is declared by {Sized.ROOF}, OtherRoof, "
+        "and a twin writes no sizing_sources"
+    )
+
+
+@pytest.mark.base
+def test_a_field_summed_over_every_provider_is_left_to_the_preset_beside_two_providers() -> None:
+    """Catches a battery beside two arrays pinned to its number, so editing an array no longer resizes it.
+
+    One provider of a fact read once makes a file that names nobody ambiguous; a law that sums every provider
+    (``Sum(Many(...))``) is not, because the file sums every provider it holds. A setup that summed both roofs is
+    therefore recorded as its preset alone, and the decision names both roofs as its sources.
+    """
+    names = (Sized.ROOF, "OtherRoof")
+    roofs = [Sized.observed(name, _RoofConfig(ComponentID(name=name))) for name in names]
+    bank = _BankConfig.preset_summed("Bank").resolve(SizingContext(roof_area_in_m2=(100.0, 50.0)))
+
+    written = Sized.writer(Sized.observed("Bank", bank), *roofs).fields("Bank", bank, "tests/synthetic.py")
+
+    assert written.members == {EntryConfigWriter.PRESET_KEY: "summed"}
+    (decision,) = written.decisions
+    assert decision.auto
+    assert decision.value == 150.0
+    assert decision.sources == tuple(f"{name}.roof_area_in_m2" for name in names)
+
+
+@pytest.mark.base
+def test_a_field_summed_over_some_of_the_providers_keeps_the_number_and_says_how_many() -> None:
+    """Catches a battery sized to one of two arrays recorded as sized to both.
+
+    A file without ``sizing_sources`` sums every provider, so a setup that summed fewer than the system holds
+    cannot be left to the preset: the re-run would size a different battery. The number stays, and the comment
+    says how many values were summed and who declares the fact.
+    """
+    roofs = [Sized.observed(name, _RoofConfig(ComponentID(name=name))) for name in (Sized.ROOF, "OtherRoof")]
+    bank = _BankConfig.preset_summed("Bank").resolve(SizingContext(roof_area_in_m2=(100.0,)))
+
+    written = Sized.writer(Sized.observed("Bank", bank), *roofs).fields("Bank", bank, "tests/synthetic.py")
+
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["capacity"] == 100.0
+    assert written.decisions[0].comment() == (
+        f"pinned: roof_area_in_m2 is summed over 1 of the 2 values {Sized.ROOF}, OtherRoof declare, "
         "and a twin writes no sizing_sources"
     )
 

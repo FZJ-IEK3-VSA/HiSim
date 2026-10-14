@@ -87,7 +87,7 @@ def test_under_force_convergence_the_solar_controller_publishes_the_ratio_run() 
 
 @pytest.mark.base
 def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fraction() -> None:
-    """At a quarter of the step the flow, heat and pump electricity are a quarter; the outlet stays the full-load outlet.
+    """At a quarter of the step the flow, heat and pump electricity are a quarter; the outlet is the full-load outlet.
 
     The ratio 0.25 keeps the ratio and its complement apart, which 0.5 would not. At full load the new pump draws its
     10 W.

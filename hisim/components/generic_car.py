@@ -540,6 +540,7 @@ class Car(cp.PhysicsComponent):
             seconds_per_timestep=parameters.seconds_per_timestep,
             timesteps=parameters.timesteps,
             duration_in_days=(parameters.end_date - parameters.start_date).days,
+            window_start=parameters.start_date.isoformat(),
             car_location=car_location,
             driven_distance_per_minute_in_meters=driven_distance_per_minute_in_meters,
         )

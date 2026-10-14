@@ -547,6 +547,7 @@ class PVSystem(cp.PhysicsComponent):
             tilt_in_degrees=float(self.pvconfig.tilt),
             azimuth_in_degrees=float(self.pvconfig.azimuth),
             number_of_timesteps=self.my_simulation_parameters.timesteps,
+            window_start=self.my_simulation_parameters.start_date.isoformat(),
             module_database_path=module_database_path,
             inverter_database_path=inverter_database_path,
             weather_series=self.read_weather_series(),

@@ -896,6 +896,7 @@ class Building(cp.PhysicsComponent):
             year=self.my_simulation_parameters.year,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
             timesteps=self.my_simulation_parameters.timesteps,
+            window_start=self.my_simulation_parameters.start_date.isoformat(),
             windows=self.window_geometries,
             azimuth_in_degrees=self.published_weather_series(Weather.RUN_WINDOW_AZIMUTH),
             direct_normal_irradiance_in_watt_per_square_meter=self.published_weather_series(

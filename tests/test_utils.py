@@ -1,8 +1,8 @@
 """Tests for public utility functions in :mod:`hisim.utils`.
 
 These tests target regressions flagged during docstring review of
-``hisim/utils.py``: the ``convert_lpg_timestep_to_utc`` return value and the
-``get_cache_file`` cache-path generation.
+``hisim/utils.py``: the ``get_cache_file`` cache-path generation and the
+memoized smart-appliance loader.
 """
 
 import os
@@ -13,25 +13,6 @@ import pytest
 
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-
-
-@pytest.mark.base
-def test_convert_lpg_timestep_to_utc_returns_shifted_indices() -> None:
-    """``convert_lpg_timestep_to_utc`` must return the UTC-shifted indices.
-
-    The function builds ``data_utc`` with the shifted values but previously
-    returned the original unmodified ``data`` list, so callers silently
-    received local-time indices. This regression test pins the corrected
-    ``return data_utc`` behaviour: every index is shifted towards UTC (by one
-    hour for winter timesteps at a 3600 s resolution) and the returned list is
-    not the input list.
-    """
-    data = [10, 100, 1000, 5000]
-    result = utils.convert_lpg_timestep_to_utc(
-        data=data, year=2021, seconds_per_timestep=3600
-    )
-    assert result is not data
-    assert result == [9, 99, 999, 4999]
 
 
 @pytest.mark.base

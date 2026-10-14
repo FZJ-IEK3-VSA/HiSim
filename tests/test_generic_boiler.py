@@ -793,3 +793,208 @@ def test_every_boiler_preset_passes_the_config_checks(preset: Callable[[str], ge
     config = preset("Boiler")
     assert 0.0 < config.eff_th_min <= config.eff_th_max <= 1.0  # the presets also keep the stricter physical bounds
     assert config.maximal_flow_temperature_in_celsius > 0.0
+
+
+class BurnerSequence:
+
+    """A boiler of one fuel on fake inputs, stepped through a sequence of commands the way the simulator steps it.
+
+    Every step commits the previous step's state (``i_save_state``), then runs two passes that each start from it
+    (``i_restore_state`` and ``i_simulate``), so a decision that depended on an earlier pass of the same step shows
+    as a difference between the passes.
+    """
+
+    #: The boiler's maximal burner power, in W; a pellet or wood-chip burner modulates down to a twelfth of it.
+    MAXIMAL_POWER_IN_WATT = 12000.0
+
+    #: The space-heating buffer's return, in °C, and the hot-water tank's.
+    SPACE_HEATING_RETURN_IN_CELSIUS = 35.0
+    HOT_WATER_RETURN_IN_CELSIUS = 50.0
+
+    #: The command that asks an on/off burner to heat the buffer: full signal, space heating, a 5 K lift.
+    ASK_TO_BURN: Tuple[float, float, float] = (1.0, float(HeatingMode.SPACE_HEATING.value), 5.0)
+    #: The command that asks it to stop while its controller stays in space heating: the buffer is above its set
+    #: temperature, so the lift is negative.
+    ASK_TO_STOP_IN_SPACE_HEATING: Tuple[float, float, float] = (1.0, float(HeatingMode.SPACE_HEATING.value), -2.0)
+    #: The command of a controller that switched off.
+    ASK_TO_STOP: Tuple[float, float, float] = (0.0, float(HeatingMode.OFF.value), 0.0)
+
+    @classmethod
+    def fuel_burnt_per_step(
+        cls,
+        preset: Callable[[str], generic_boiler.GenericBoilerConfig],
+        seconds_per_timestep: int,
+        commands: List[Tuple[float, float, float]],
+    ) -> Tuple[Any, List[float], List[float]]:
+        """Step a fresh boiler of ``preset`` through ``commands`` and return it, its fuel power and its buffer heat.
+
+        Args:
+            preset: The boiler's preset, resolved to :attr:`MAXIMAL_POWER_IN_WATT`.
+            seconds_per_timestep: The step length, in s.
+            commands: Per step, the control signal, the operating mode's value and the lift in K.
+
+        Returns:
+            The boiler, its fuel power per step in W and its space-heating heat per step in W.
+        """
+        from hisim import component as cp  # pylint: disable=import-outside-toplevel  # keeps the test module light
+        from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel  # as above
+
+        config = preset("Boiler").resolve(
+            SizingContext(heating_load_in_watt=cls.MAXIMAL_POWER_IN_WATT / 1.1, number_of_apartments=1)
+        )
+        parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
+        boiler = generic_boiler.GenericBoiler(parameters, config)
+        channels = [
+            (boiler.control_signal_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
+            (boiler.operating_mode_channel, lt.LoadTypes.ANY, lt.Units.ANY),
+            (boiler.temperature_delta_channel, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
+            (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            (boiler.supply_temperature_set_for_dhw_in_celsius_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            (boiler.dhw_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+        ]
+        fakes = []
+        for number, (channel, load_type, unit) in enumerate(channels):
+            fake = cp.ComponentOutput(
+                f"Fake{number}", f"Fake{number}", load_type, unit, component_id=ComponentID(f"Fake{number}")
+            )
+            channel.source_output = fake
+            fakes.append(fake)
+        fft.add_global_index_of_components([*fakes, boiler])
+        fuel_power_in_watt: List[float] = []
+        space_heating_heat_in_watt: List[float] = []
+        for timestep, (control_signal, operating_mode, lift_in_kelvin) in enumerate(commands):
+            boiler.i_save_state()
+            passes = []
+            for _ in range(2):
+                stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, boiler]))
+                for fake, value in zip(
+                    fakes,
+                    (
+                        control_signal,
+                        operating_mode,
+                        lift_in_kelvin,
+                        cls.SPACE_HEATING_RETURN_IN_CELSIUS,
+                        cls.HOT_WATER_RETURN_IN_CELSIUS,
+                        70.0,
+                        1.0,
+                    ),
+                ):
+                    stsv.set_output_value(fake, value)
+                boiler.i_restore_state()
+                boiler.i_simulate(timestep, stsv, False)
+                passes.append(list(stsv.values))
+            assert passes[0] == passes[1], f"the second pass of step {timestep} decided differently"
+            fuel_power_in_watt.append(float(stsv.values[boiler.total_fuel_input_power_channel.global_index]))
+            space_heating_heat_in_watt.append(float(stsv.values[boiler.thermal_output_power_sh_channel.global_index]))
+        return boiler, fuel_power_in_watt, space_heating_heat_in_watt
+
+    @staticmethod
+    def lit_steps(fuel_power_in_watt: List[float]) -> List[bool]:
+        """Return per step whether the burner burnt fuel."""
+        return [power > 0.0 for power in fuel_power_in_watt]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("preset", "minimum_firing_time_in_seconds", "minimum_pause_in_seconds"),
+    [
+        (generic_boiler.GenericBoilerConfig.preset_pellets, 1800, 900),
+        (generic_boiler.GenericBoilerConfig.preset_wood_chips, 3600, 1800),
+    ],
+)
+@pytest.mark.parametrize("seconds_per_timestep", [60, 900])
+def test_a_wood_burner_burns_its_minimum_firing_time_and_rests_its_minimum_pause(
+    preset: Callable[[str], generic_boiler.GenericBoilerConfig],
+    minimum_firing_time_in_seconds: int,
+    minimum_pause_in_seconds: int,
+    seconds_per_timestep: int,
+) -> None:
+    """A pellet or wood-chip burner that stopped whenever its controller asked lit and went out about once a minute.
+
+    The on/off controller keeps its space-heating mode while the buffer sits near its set temperature and asks for
+    fire whenever the buffer is below it: the pellet twin's burner started 425 times a day in a January week at 60 s,
+    for 1.25 minutes each. The burner now burns for its minimum firing time once lit (30 minutes for pellets, 60 for
+    wood chips) although asked to stop after one step, sends that heat to the buffer, and then stays out for its
+    minimum pause (15 and 30 minutes) although asked to burn at once. The sequence is: one step asked to burn, then
+    asked to stop until the minimum firing time is over, then asked to burn again.
+    """
+    firing_steps = minimum_firing_time_in_seconds // seconds_per_timestep
+    pause_steps = minimum_pause_in_seconds // seconds_per_timestep
+    commands = (
+        [BurnerSequence.ASK_TO_BURN]
+        + [BurnerSequence.ASK_TO_STOP_IN_SPACE_HEATING] * (firing_steps - 1)
+        + [BurnerSequence.ASK_TO_STOP]
+        + [BurnerSequence.ASK_TO_BURN] * pause_steps
+    )
+    boiler, fuel_power_in_watt, space_heating_heat_in_watt = BurnerSequence.fuel_burnt_per_step(
+        preset, seconds_per_timestep, commands
+    )
+    assert BurnerSequence.lit_steps(fuel_power_in_watt) == [True] * firing_steps + [False] * pause_steps + [True]
+    # held lit in space heating at the commanded full power, the buffer taking the heat at the pump's largest flow
+    assert fuel_power_in_watt[1] == BurnerSequence.MAXIMAL_POWER_IN_WATT
+    assert space_heating_heat_in_watt[1] == pytest.approx(
+        BurnerSequence.MAXIMAL_POWER_IN_WATT * boiler.burner.efficiency_at(BurnerSequence.MAXIMAL_POWER_IN_WATT)
+    )
+    assert boiler.burner_times == generic_boiler.BurnerTimes(
+        minimum_firing_time_in_seconds=minimum_firing_time_in_seconds,
+        minimum_pause_in_seconds=minimum_pause_in_seconds,
+    )
+
+
+@pytest.mark.base
+def test_a_burner_held_lit_after_its_controller_switched_off_burns_at_its_minimal_power_into_the_buffer() -> None:
+    """A held burner whose controller sends no fire burns at its minimal power, a twelfth of the maximal one.
+
+    The controller's off command carries a control signal of 0, which commands the burner's minimal power; the heat
+    goes to the space-heating circuit and no hot water is charged.
+    """
+    commands = [BurnerSequence.ASK_TO_BURN, BurnerSequence.ASK_TO_STOP]
+    boiler, fuel_power_in_watt, space_heating_heat_in_watt = BurnerSequence.fuel_burnt_per_step(
+        generic_boiler.GenericBoilerConfig.preset_pellets, 900, commands
+    )
+    minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
+    assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
+    assert space_heating_heat_in_watt[1] == pytest.approx(
+        minimal_power_in_watt * boiler.burner.efficiency_at(minimal_power_in_watt)
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "preset",
+    [
+        generic_boiler.GenericBoilerConfig.preset_condensing_gas,
+        generic_boiler.GenericBoilerConfig.preset_oil,
+        generic_boiler.GenericBoilerConfig.preset_hydrogen,
+    ],
+)
+def test_a_modulating_burner_stops_and_lights_when_asked(
+    preset: Callable[[str], generic_boiler.GenericBoilerConfig],
+) -> None:
+    """A gas, oil or hydrogen burner has no minimum times: holding it would move every modulating twin's results."""
+    commands = [
+        BurnerSequence.ASK_TO_BURN,
+        BurnerSequence.ASK_TO_STOP_IN_SPACE_HEATING,
+        BurnerSequence.ASK_TO_BURN,
+        BurnerSequence.ASK_TO_STOP,
+        BurnerSequence.ASK_TO_BURN,
+    ]
+    _, fuel_power_in_watt, _ = BurnerSequence.fuel_burnt_per_step(preset, 60, commands)
+    assert BurnerSequence.lit_steps(fuel_power_in_watt) == [True, False, True, False, True]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("seconds", "seconds_per_timestep", "expected_seconds"),
+    [(1800, 60, 1800), (1800, 900, 1800), (1500, 900, 900), (600, 900, 0), (1800, 3600, 0)],
+)
+def test_a_minimum_burner_time_rounds_down_to_whole_steps(
+    seconds: float, seconds_per_timestep: float, expected_seconds: float
+) -> None:
+    """A minimum time rounded up would stretch a burn or a pause beyond its configured length at a coarse step.
+
+    The controller rounds its own minimum times down to whole steps; the burner counts its times the same way, so
+    30 minutes have no effect at hourly steps.
+    """
+    assert generic_boiler.BurnerTimes.whole_steps_in_seconds(seconds, seconds_per_timestep) == expected_seconds

@@ -107,9 +107,10 @@ def _build_weather_with_cache(
         my_weather.series_cache_key(my_weather.build_calculation_inputs(location_dict))
     )
     columns = [column for column in calculation.PRODUCED_COLUMNS if column != omitted_column]
-    data = {col: [float(i) * 10 for i in range(5)] for col in columns}
+    data = {col: [float(i) * 10 for i in range(24)] for col in columns}
+    labels = pd.date_range("2021-01-01 00:00", periods=24, freq="h", name=calculation.ProducedFrame.INDEX_NAME)
     with entry.writing() as temporary_cache_filepath:
-        pd.DataFrame(data).to_csv(temporary_cache_filepath, index=False)
+        pd.DataFrame(data, index=labels).to_csv(temporary_cache_filepath)
     return my_weather
 
 
@@ -187,24 +188,29 @@ def test_weather_cache_pressure_present_read_from_cache(
     """A cached weather file with a 'Pressure' column reads the cached values."""
     my_weather = _build_weather_with_cache(tmp_path)
     my_weather.i_prepare_simulation()
-    assert my_weather.pressure_list == pytest.approx([0.0, 10.0, 20.0, 30.0, 40.0])
+    assert my_weather.pressure_list == pytest.approx([float(i) * 10 for i in range(24)])
+    assert my_weather.window_offset_in_timesteps == 0
 
 
 @pytest.mark.base
 def test_the_published_series_cover_the_run_window_and_not_the_source_year() -> None:
-    """The Weather publishes one value per timestep of the run, read from the start of its series.
+    """The Weather publishes one value per timestep of the run, read from the row its window starts at.
 
-    A one-day run at one-hour resolution publishes the first 24 values of a series that covers a
-    year; a series exactly as long as the run is published as it is, without a copy, which is what
-    keeps a full-year run of minutes from duplicating eight series of 525 600 values.
+    A one-day run at one-hour resolution starting on 1 January publishes the first 24 values of a
+    series that covers a year, and one whose window starts at row 4344 (1 July) the 24 from there; a
+    series exactly as long as the run is published as it is, without a copy, which is what keeps a
+    full-year run of minutes from duplicating eight series of 525 600 values.
     """
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
-    owner = types.SimpleNamespace(my_simulation_parameters=parameters)
+    owner = types.SimpleNamespace(my_simulation_parameters=parameters, window_offset_in_timesteps=0)
     year_long = [float(hour) for hour in range(8760)]
     first_day = [float(hour) for hour in range(24)]
     assert weather.Weather.run_window_of(owner, year_long) == first_day  # type: ignore[arg-type]
     day_long = year_long[:24]
     assert weather.Weather.run_window_of(owner, day_long) is day_long  # type: ignore[arg-type]
+    owner.window_offset_in_timesteps = 4344
+    july_day = [float(hour) for hour in range(4344, 4368)]
+    assert weather.Weather.run_window_of(owner, year_long) == july_day  # type: ignore[arg-type]
 
 
 @pytest.mark.base

@@ -303,9 +303,17 @@ def prepared_weather(
     component.set_sim_repo(repository)
     location_dict = weather.get_coordinates(filepath=config.source_path, source_enum=config.data_source)
     entry = component.cache_entry(component.series_cache_key(component.build_calculation_inputs(location_dict)))
-    frame = pd.DataFrame({column: [0.0] * 24 for column in calculation.PRODUCED_COLUMNS})
+    labels = pd.date_range(
+        parameters.start_date,
+        periods=parameters.timesteps,
+        freq=f"{parameters.seconds_per_timestep}s",
+        name=calculation.ProducedFrame.INDEX_NAME,
+    )
+    frame = pd.DataFrame(
+        {column: [0.0] * parameters.timesteps for column in calculation.PRODUCED_COLUMNS}, index=labels
+    )
     with entry.writing() as temporary_cache_filepath:
-        frame.to_csv(temporary_cache_filepath, index=False)
+        frame.to_csv(temporary_cache_filepath)
 
     messages: List[str] = []
     monkeypatch.setattr(log, "information", lambda message, *args, **kwargs: messages.append(message))

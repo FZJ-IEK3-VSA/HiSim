@@ -96,11 +96,17 @@ class EmitterDesign:
         """
         match heat_distribution_system_type:
             case HeatDistributionSystemType.FLOORHEATING:
-                return EmitterDesign(maximal_supply_temperature_in_celsius=35.0, maximal_return_temperature_in_celsius=28.0, exponent=1.1)
+                return EmitterDesign(
+                    maximal_supply_temperature_in_celsius=35.0, maximal_return_temperature_in_celsius=28.0, exponent=1.1
+                )
             case HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
-                return EmitterDesign(maximal_supply_temperature_in_celsius=55.0, maximal_return_temperature_in_celsius=45.0, exponent=1.2)
+                return EmitterDesign(
+                    maximal_supply_temperature_in_celsius=55.0, maximal_return_temperature_in_celsius=45.0, exponent=1.2
+                )
             case HeatDistributionSystemType.RADIATOR:
-                return EmitterDesign(maximal_supply_temperature_in_celsius=70.0, maximal_return_temperature_in_celsius=55.0, exponent=1.3)
+                return EmitterDesign(
+                    maximal_supply_temperature_in_celsius=70.0, maximal_return_temperature_in_celsius=55.0, exponent=1.3
+                )
             case _:
                 assert_never(heat_distribution_system_type)
 
@@ -131,7 +137,7 @@ class HeatingCurveControllerConfig(ConfigBase):
 
     @staticmethod
     def heating_threshold_for(specific_heating_load_of_building_in_watt_per_m2: float) -> float:
-        """Return the daily mean outside temperature above which space heating stops, from the building's efficiency, in °C.
+        """Return the day mean outside temperature above which space heating stops, by the building's efficiency, in °C.
 
         An inefficient building cools out quickly in the mornings and evenings of the shoulder season, so the worse
         the specific heating load, the earlier the heating has to come on: 16 °C up to 50 W/m², 18 °C up to 80 W/m²
@@ -153,7 +159,9 @@ class HeatingCurveControllerConfig(ConfigBase):
     #: Sizing law of the heating threshold: :meth:`heating_threshold_for` over the building's specific heating load.
     #: An author who knows the threshold writes it down and the law steps aside.
     HEATING_THRESHOLD_LAW: ClassVar[SizingLaw] = law(
-        lambda ctx: HeatingCurveControllerConfig.heating_threshold_for(ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2),
+        lambda ctx: HeatingCurveControllerConfig.heating_threshold_for(
+            ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2
+        ),
         reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
         description="heating_threshold_for(Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2)",
     )
@@ -170,9 +178,13 @@ class HeatingCurveControllerConfig(ConfigBase):
         rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
     )
     #: The outside temperature of the design day, on which the emitter runs at its design point, in °C.
-    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS)
+    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
+    )
     #: The room temperature the building is heated to, in °C; the lowest supply temperature of the curve.
-    set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS)
+    set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(
+        rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS
+    )
 
     @preset
     @classmethod
@@ -253,8 +265,8 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         self.heating_threshold_in_celsius = float(concrete(config.set_heating_threshold_outside_temperature_in_celsius))
         if self.heating_reference_temperature_in_celsius >= self.room_set_temperature_in_celsius:
             raise ValueError(
-                f"The heating curve's design day must be colder than the room it heats: the heating reference temperature "
-                f"is {self.heating_reference_temperature_in_celsius} °C and the room set temperature "
+                "The heating curve's design day must be colder than the room it heats: the heating reference "
+                f"temperature is {self.heating_reference_temperature_in_celsius} °C and the room set temperature "
                 f"{self.room_set_temperature_in_celsius} °C."
             )
 
@@ -262,7 +274,11 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             self.component_name, self.DailyAverageOutsideTemperature, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
         )
         self.building_temperature_modifier_channel: ComponentInput = self.add_input(
-            self.component_name, self.BuildingTemperatureModifierInKelvin, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, mandatory=False
+            self.component_name,
+            self.BuildingTemperatureModifierInKelvin,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.KELVIN,
+            mandatory=False,
         )
         self.supply_temperature_set_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -276,7 +292,9 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             self.HeatingSeason,
             lt.LoadTypes.ANY,
             lt.Units.BINARY,
-            output_description="1 while the day's mean outside temperature is at or below the heating threshold, else 0.",
+            output_description=(
+                "1 while the day's mean outside temperature is at or below the heating threshold, else 0."
+            ),
         )
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
@@ -312,7 +330,9 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         ]
 
     @staticmethod
-    def is_heating_season(*, daily_average_outside_temperature_in_celsius: float, heating_threshold_in_celsius: float) -> bool:
+    def is_heating_season(
+        *, daily_average_outside_temperature_in_celsius: float, heating_threshold_in_celsius: float
+    ) -> bool:
         """Return whether space heating runs on a day, from its mean outside temperature and the heating threshold.
 
         Space heating runs on a day whose mean outside temperature is at or below the threshold. For example, with
@@ -330,7 +350,8 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         """
         if not math.isfinite(daily_average_outside_temperature_in_celsius):
             raise ValueError(
-                f"The day's mean outside temperature must be a finite temperature in °C, got {daily_average_outside_temperature_in_celsius!r}."
+                "The day's mean outside temperature must be a finite temperature in °C, got "
+                f"{daily_average_outside_temperature_in_celsius!r}."
             )
         return daily_average_outside_temperature_in_celsius <= heating_threshold_in_celsius
 
@@ -370,12 +391,14 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
                 would make it.
         """
         if room_set_temperature_in_celsius < daily_average_outside_temperature_in_celsius:
-            return max(room_set_temperature_in_celsius, HeatingCurveController.MINIMAL_COOLING_SUPPLY_TEMPERATURE_IN_CELSIUS)
+            return max(
+                room_set_temperature_in_celsius, HeatingCurveController.MINIMAL_COOLING_SUPPLY_TEMPERATURE_IN_CELSIUS
+            )
         raised_room_set_temperature_in_celsius = room_set_temperature_in_celsius + room_set_temperature_raise_in_kelvin
         if not raised_room_set_temperature_in_celsius > heating_reference_temperature_in_celsius:
             raise ValueError(
-                f"The heating curve's raised room set temperature, {raised_room_set_temperature_in_celsius} °C, must be "
-                f"warmer than its design day, {heating_reference_temperature_in_celsius} °C."
+                f"The heating curve's raised room set temperature, {raised_room_set_temperature_in_celsius} °C, must "
+                f"be warmer than its design day, {heating_reference_temperature_in_celsius} °C."
             )
         load_fraction = (raised_room_set_temperature_in_celsius - daily_average_outside_temperature_in_celsius) / (
             raised_room_set_temperature_in_celsius - heating_reference_temperature_in_celsius
@@ -400,7 +423,9 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         """
         if force_convergence:
             return
-        daily_average_outside_temperature_in_celsius = stsv.get_input_value(self.daily_average_outside_temperature_channel)
+        daily_average_outside_temperature_in_celsius = stsv.get_input_value(
+            self.daily_average_outside_temperature_channel
+        )
         stsv.set_output_value(
             self.supply_temperature_set_channel,
             self.supply_temperature_set_in_celsius(
@@ -438,7 +463,9 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
-    def get_cost_capex(config: HeatingCurveControllerConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: HeatingCurveControllerConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Return no investment: the heating curve is control logic, not a device.
 
         Returns:

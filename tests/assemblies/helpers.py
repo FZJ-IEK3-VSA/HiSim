@@ -85,7 +85,8 @@ class Real:
     )
     #: The heating curve, the partner of every heating assembly's ``heating_curve`` need.
     HEATING_CURVE: ClassVar[str] = (
-        "HeatingCurveController: {class: hisim.components.heating_curve.HeatingCurveController, preset: building_derived}"
+        "HeatingCurveController: "
+        "{class: hisim.components.heating_curve.HeatingCurveController, preset: building_derived}"
     )
     HEAT_DISTRIBUTION: ClassVar[str] = (
         "HeatDistributionSystem: {class: hisim.components.heat_distribution_system.HeatDistribution, "
@@ -112,7 +113,7 @@ class Real:
 
     @classmethod
     def heating_site(cls, *extra: str) -> str:
-        """The site a heating assembly binds to in an expansion: weather, residents, heat distribution, its controller, the curve.
+        """The site a heating assembly binds to: weather, residents, heat distribution, its controller, the curve.
 
         Example: ``Real.heating_site() + imports("gas: {assembly: supply/gas_connection}", ...)``. The
         distribution is the other end of every heating assembly's ``space_heating`` circuit. The site has
@@ -124,7 +125,14 @@ class Real:
         Returns:
             The text of a version-4 file without imports.
         """
-        return site(cls.WEATHER, cls.OCCUPANCY, cls.HEAT_DISTRIBUTION_CONTROLLER, cls.HEATING_CURVE, cls.HEAT_DISTRIBUTION, *extra)
+        return site(
+            cls.WEATHER,
+            cls.OCCUPANCY,
+            cls.HEAT_DISTRIBUTION_CONTROLLER,
+            cls.HEATING_CURVE,
+            cls.HEAT_DISTRIBUTION,
+            *extra,
+        )
 
 
 #: The test contract of an inline assembly without a numeric parameter.

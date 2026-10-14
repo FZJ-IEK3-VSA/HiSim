@@ -23,7 +23,11 @@ def controller_between(
         config=idealized_electric_heater.IdealizedHeaterControllerConfig.preset_standard("IdealizedHeaterController"),
     )
     controller.connect_input(
-        controller.TheoreticalThermalBuildingDemand, my_building.component_name, my_building.TheoreticalThermalBuildingDemand
+        controller.TheoreticalThermalBuildingDemand,
+        my_building.component_name,
+        my_building.TheoreticalThermalBuildingDemand,
     )
-    my_heater.connect_input(my_heater.ThermalPowerSetInWatt, controller.component_name, controller.ThermalPowerSetInWatt)
+    my_heater.connect_input(
+        my_heater.ThermalPowerSetInWatt, controller.component_name, controller.ThermalPowerSetInWatt
+    )
     return controller

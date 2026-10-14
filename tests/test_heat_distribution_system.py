@@ -318,7 +318,10 @@ class TestHeatDistributionValve:
     @pytest.mark.base
     @pytest.mark.parametrize(("mode", "demand_in_watt", "expected"), TRANSITIONS)
     def test_every_transition_of_the_valve(
-        self, mode: heat_distribution_system.HeatDistributionValveMode, demand_in_watt: float, expected: heat_distribution_system.HeatDistributionValveMode
+        self,
+        mode: heat_distribution_system.HeatDistributionValveMode,
+        demand_in_watt: float,
+        expected: heat_distribution_system.HeatDistributionValveMode,
     ) -> None:
         """Catches a valve that opens without a demand, or one that closes while the building still needs heat."""
         assert heat_distribution_system.HeatDistributionController.next_valve_mode(mode, demand_in_watt) is expected
@@ -339,7 +342,10 @@ class TestHeatDistributionValve:
         self, mode: heat_distribution_system.HeatDistributionValveMode, is_heating_season: bool, expected_state: int
     ) -> None:
         """Catches a valve that passes heat outside the heating season the heating curve publishes."""
-        assert heat_distribution_system.HeatDistributionController.valve_state(mode, is_heating_season=is_heating_season) == expected_state
+        assert (
+            heat_distribution_system.HeatDistributionController.valve_state(mode, is_heating_season=is_heating_season)
+            == expected_state
+        )
 
 
 class TestValveState:
@@ -359,8 +365,12 @@ class TestValveState:
         controller = heat_distribution_system.HeatDistributionController(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config
         )
-        demand = cp.ComponentOutput("Building", "Demand", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=ComponentID("Building"))
-        season = cp.ComponentOutput("Curve", "Season", lt.LoadTypes.ANY, lt.Units.BINARY, component_id=ComponentID("Curve"))
+        demand = cp.ComponentOutput(
+            "Building", "Demand", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=ComponentID("Building")
+        )
+        season = cp.ComponentOutput(
+            "Curve", "Season", lt.LoadTypes.ANY, lt.Units.BINARY, component_id=ComponentID("Curve")
+        )
         controller.theoretical_thermal_building_demand_channel.source_output = demand
         controller.heating_season_channel.source_output = season
         outputs = [demand, season, *controller.outputs]

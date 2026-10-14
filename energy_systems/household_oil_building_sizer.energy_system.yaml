@@ -59,6 +59,7 @@ components:
     inputs:
       - Weather
       - HeatDistributionController
+      - ConventionalOilBoiler
       - DHWStorage
       - SimpleHotWaterStorage
   DHWStorage:

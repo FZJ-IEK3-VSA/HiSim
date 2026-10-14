@@ -1641,11 +1641,11 @@
       "valid_from_year": 2026,
       "specific_investment": {
         "value": {
-          "min": 2300,
-          "best_estimate": 3400,
-          "max": 5200
+          "min": 500,
+          "best_estimate": 1000,
+          "max": 1500
         },
-        "per_unit": null
+        "per_unit": "m2"
       },
       "scaling_exponent": null,
       "fixed_installation_cost_in_euro": 0,
@@ -1659,8 +1659,8 @@
       "fixed_operation_cost_in_euro_per_year": 0,
       "service_life_in_years": 35,
       "embodied_co2": {
-        "value": 120.0,
-        "per_unit": null
+        "value": 43.0,
+        "per_unit": "m2"
       },
       "vat_rate": 0.135,
       "price_basis": "AS_LEGACY",
@@ -1668,9 +1668,20 @@
       "anyway_threshold_years_override": 5.0,
       "legacy_flat_subsidy_share": 0.1,
       "source_ids": [
-        "src_ai_estimates"
+        "src_renovisor_contract_measure_costs_36af54a",
+        "src_ai_estimates",
+        "src_iwu_2015_hinz_component_costs"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+      "notes": "Priced per m2 of door (renovisorissues #74). Price: the RenoVisor contract's Irish band for energy-efficient doors, 500-1500 EUR/m2, best estimate the midpoint. Embodied CO2: the earlier AI estimate of 120 kg per door over IWU's mean front-door area of 2.79 m2 (single-family houses, n = 170). Service life, maintenance and the remaining fields: AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a.",
+      "field_sources": {
+        "specific_investment": [
+          "src_renovisor_contract_measure_costs_36af54a"
+        ],
+        "embodied_co2": [
+          "src_ai_estimates",
+          "src_iwu_2015_hinz_component_costs"
+        ]
+      }
     },
     {
       "component_type": "AIR_SEALING",
@@ -2113,11 +2124,11 @@
       "valid_from_year": 2035,
       "specific_investment": {
         "value": {
-          "min": 2650,
-          "best_estimate": 3900,
-          "max": 5900
+          "min": 576,
+          "best_estimate": 1147,
+          "max": 1702
         },
-        "per_unit": null
+        "per_unit": "m2"
       },
       "scaling_exponent": null,
       "fixed_installation_cost_in_euro": 0,
@@ -2131,8 +2142,8 @@
       "fixed_operation_cost_in_euro_per_year": 0,
       "service_life_in_years": 35,
       "embodied_co2": {
-        "value": 120.0,
-        "per_unit": null
+        "value": 43.0,
+        "per_unit": "m2"
       },
       "vat_rate": 0.135,
       "price_basis": "AS_LEGACY",
@@ -2140,9 +2151,21 @@
       "anyway_threshold_years_override": 5.0,
       "legacy_flat_subsidy_share": 0.1,
       "source_ids": [
-        "src_ai_estimates"
+        "src_renovisor_contract_measure_costs_36af54a",
+        "src_ai_estimates",
+        "src_iwu_2015_hinz_component_costs"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+      "notes": "Priced per m2 of door (renovisorissues #74). Price: the 2026 contract band carried forward by the AI estimate's own 2026-2035 escalation of the per-door price (min x 2650/2300, best x 3900/3400, max x 5900/5200). Embodied CO2: the earlier AI estimate of 120 kg per door over IWU's mean front-door area of 2.79 m2 (single-family houses, n = 170). Service life, maintenance and the remaining fields: AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a.",
+      "field_sources": {
+        "specific_investment": [
+          "src_renovisor_contract_measure_costs_36af54a",
+          "src_ai_estimates"
+        ],
+        "embodied_co2": [
+          "src_ai_estimates",
+          "src_iwu_2015_hinz_component_costs"
+        ]
+      }
     },
     {
       "component_type": "AIR_SEALING",

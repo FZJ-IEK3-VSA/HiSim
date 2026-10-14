@@ -1892,7 +1892,7 @@ class TestTheReferenceRenewsTheFabric:
         return {"stages": stages, "insulated": insulated, "document": document, "database": database}
 
     def test_every_kept_element_is_a_subject_of_its_register_class(self) -> None:
-        """Five subjects, each of its element's register class, sized in m² -- the door per door."""
+        """Five subjects, each of its element's register class, sized in m² of the element, the door too."""
         built = _built(self._document(with_insulation=False), _building(**self.AREAS))
         facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
 
@@ -1908,7 +1908,7 @@ class TestTheReferenceRenewsTheFabric:
         assert built.subject_notes["envelope_roof"] == EconomicContextBuilder.KEPT_ELEMENT_UNPRICED_NOTE
         assert facts["envelope_facade"].size == 140.0
         assert facts["envelope_facade"].size_unit is Units.SQUARE_METER
-        assert (facts["envelope_door"].size, facts["envelope_door"].size_unit) == (1.0, Units.ANY)
+        assert (facts["envelope_door"].size, facts["envelope_door"].size_unit) == (2.7, Units.SQUARE_METER)
 
     def test_an_element_a_measure_replaces_has_no_subject_of_its_own(self, plan) -> None:
         """The insulated facade is the measure's subject now, not a renewal of the old one."""

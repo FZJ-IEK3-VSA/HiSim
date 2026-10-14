@@ -886,8 +886,8 @@ class BackupAims:
     def built_controllers() -> Dict[str, Any]:
         """Return the boiler's, the district-heating substation's and the electric heater's controllers, built.
 
-        Each is built from its first preset with its sizable fields set by hand (a boiler of 1 to 10 kW, a heating
-        threshold of 16 °C, a specific heating load of 50 W/m²); its warm-water aim depends on none of them.
+        Each is built from its first preset; the boiler's sizable power band is set by hand to 1 to 10 kW, on which
+        its warm-water aim does not depend. The other two controllers have no sizable field.
 
         Returns:
             The controllers by name.
@@ -898,8 +898,6 @@ class BackupAims:
         boiler.maximal_thermal_power_in_watt = 10000.0
         district = generic_district_heating.DistrictHeatingControllerConfig.preset_standard("DistrictController")
         electric = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricController")
-        electric.set_heating_threshold_outside_temperature_in_celsius = 16.0
-        electric.specific_heating_load_of_building_in_watt_per_m2 = 50.0
         return {
             "boiler": generic_boiler.GenericBoilerController(my_simulation_parameters=parameters, config=boiler),
             "district heating": generic_district_heating.DistrictHeatingController(

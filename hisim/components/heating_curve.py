@@ -234,6 +234,10 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             my_simulation_parameters: The simulation parameters.
             config: The resolved configuration.
             my_display_config: How the component appears in reports.
+
+        Raises:
+            ValueError: If the design day is not colder than the room set temperature, which would make the curve
+                divide by zero or rise without bound.
         """
         self.config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -247,6 +251,12 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         self.heating_reference_temperature_in_celsius = float(concrete(config.heating_reference_temperature_in_celsius))
         self.room_set_temperature_in_celsius = float(concrete(config.set_heating_temperature_for_building_in_celsius))
         self.heating_threshold_in_celsius = float(concrete(config.set_heating_threshold_outside_temperature_in_celsius))
+        if self.heating_reference_temperature_in_celsius >= self.room_set_temperature_in_celsius:
+            raise ValueError(
+                f"The heating curve's design day must be colder than the room it heats: the heating reference temperature "
+                f"is {self.heating_reference_temperature_in_celsius} °C and the room set temperature "
+                f"{self.room_set_temperature_in_celsius} °C."
+            )
 
         self.daily_average_outside_temperature_channel: ComponentInput = self.add_input(
             self.component_name, self.DailyAverageOutsideTemperature, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
@@ -338,10 +348,11 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         On a heating day the supply runs from the room set temperature at no load up to the emitter's design supply
         temperature on the design day (DIN/TS 18599-12:2021-04, p. 170, eq. 127): with the load fraction
         ``x = (T_room - T_out) / (T_room - T_ref)``, the supply is ``T_room + x ** (1 / n) * (T_max - T_room)``, ``n``
-        being the emitter exponent. The energy manager's raise lifts the room set temperature, and with it the whole
-        curve. On a day warmer than the room set temperature (cooling) the supply is the room set temperature, but not
-        below :attr:`MINIMAL_COOLING_SUPPLY_TEMPERATURE_IN_CELSIUS`. For example, a floor heating (35 °C, n = 1.1) for
-        a 20 °C room and a -7 °C design day asks for 28.8 °C on a 5 °C day.
+        being the emitter exponent. The energy manager's raise lifts the room set temperature of this heating branch.
+        On a day warmer than the unraised room set temperature (cooling) the supply is the unraised room set
+        temperature, but not below :attr:`MINIMAL_COOLING_SUPPLY_TEMPERATURE_IN_CELSIUS`; the raise does not apply
+        there. For example, a floor heating (35 °C, n = 1.1) for a 20 °C room and a -7 °C design day asks for 28.8 °C
+        on a 5 °C day.
 
         Args:
             daily_average_outside_temperature_in_celsius: The day's mean outside temperature, in °C.
@@ -352,13 +363,30 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
 
         Returns:
             The supply temperature, in °C.
+
+        Raises:
+            ValueError: If the raised room set temperature is not warmer than the design day, or if the load fraction
+                is negative or NaN, as a negative raise that puts the raised room below the day mean or a NaN raise
+                would make it.
         """
         if room_set_temperature_in_celsius < daily_average_outside_temperature_in_celsius:
             return max(room_set_temperature_in_celsius, HeatingCurveController.MINIMAL_COOLING_SUPPLY_TEMPERATURE_IN_CELSIUS)
         raised_room_set_temperature_in_celsius = room_set_temperature_in_celsius + room_set_temperature_raise_in_kelvin
+        if not raised_room_set_temperature_in_celsius > heating_reference_temperature_in_celsius:
+            raise ValueError(
+                f"The heating curve's raised room set temperature, {raised_room_set_temperature_in_celsius} °C, must be "
+                f"warmer than its design day, {heating_reference_temperature_in_celsius} °C."
+            )
         load_fraction = (raised_room_set_temperature_in_celsius - daily_average_outside_temperature_in_celsius) / (
             raised_room_set_temperature_in_celsius - heating_reference_temperature_in_celsius
         )
+        if not load_fraction >= 0.0:
+            raise ValueError(
+                f"The heating curve's load fraction must be at least 0, got {load_fraction} from a day mean of "
+                f"{daily_average_outside_temperature_in_celsius} °C, a room set temperature of "
+                f"{room_set_temperature_in_celsius} °C raised by {room_set_temperature_raise_in_kelvin} K and a design "
+                f"day of {heating_reference_temperature_in_celsius} °C."
+            )
         return float(
             raised_room_set_temperature_in_celsius
             + load_fraction ** (1 / emitter_design.exponent)

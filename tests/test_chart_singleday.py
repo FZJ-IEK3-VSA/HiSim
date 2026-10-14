@@ -1,7 +1,12 @@
-"""Unit tests for the single-day chart postprocessing module."""
+"""Unit tests for the single-day chart postprocessing module.
+
+The chart shows one day of a run, picked by its position in the run and named by its calendar date,
+so a run that starts in July shows and names a July day.
+"""
 
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +34,10 @@ LABEL_MONTHS: list[str] = [
 ]
 
 
+JANUARY_FIRST: datetime.datetime = datetime.datetime(2021, 1, 1)
+JULY_FIRST: datetime.datetime = datetime.datetime(2021, 7, 1)
+
+
 def _make_series(n_steps: int) -> pd.Series[float]:
     """A plain pandas Series of ``n_steps`` rows with an integer RangeIndex."""
     return pd.Series(np.arange(n_steps, dtype=float))
@@ -43,120 +52,107 @@ def test_build_day_slice_is_static_and_needs_no_chart_construction() -> None:
 
 
 def test_build_day_slice_first_day_of_january_with_hourly_resolution() -> None:
-    """Day 0 / month 0 -> January 1st, the first 24 timesteps of the series (slice path)."""
-    # 1 / time_correction_factor_in_hours == 1 -> one timestep per hour.
+    """Day 0 of a run from 1 January -> January 1st, the first 24 timesteps of the series."""
     data = _make_series(24 * 31)  # 31 days of hourly data
     data_slice, plot_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=0,
-        day=0,
+        window_start=JANUARY_FIRST,
+        day_in_window=0,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Temperature",
     )
     assert plot_title == "Temperature January 1st"
-    assert len(data_slice) == 24
     assert list(data_slice.values) == [float(v) for v in range(24)]
 
 
-def test_build_day_slice_slice_path_requires_more_than_one_day_of_data() -> None:
-    """Boundary: a slice of width 24 is only taken when ``len(data) > 24``.
-
-    With exactly 24 points ``abs(lastindex - firstindex) == 24`` is not ``< 24``,
-    so the full series is returned unchanged (this mirrors the original guard).
-    """
-    data = _make_series(24)
-    data_slice, _ = ChartSingleDay.build_day_slice(
+def test_build_day_slice_names_the_day_of_a_july_run_by_its_july_date() -> None:
+    """Day 0 of a run from 1 July is July 1st, not January 1st: the title follows the run's dates."""
+    data = _make_series(24 * 7)
+    _, plot_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=0,
-        day=0,
+        window_start=JULY_FIRST,
+        day_in_window=0,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
-        title="T",
+        title="PV",
     )
-    assert data_slice is data
-    assert len(data_slice) == 24
+    assert plot_title == "PV July 1st"
+
+
+def test_build_day_slice_takes_a_later_day_with_its_rows_and_its_index() -> None:
+    """Day 2 of an hourly run is rows 48 to 71, keeping their own index labels."""
+    index = pd.date_range(JULY_FIRST, periods=24 * 7, freq="h")
+    data = pd.Series(np.arange(24 * 7, dtype=float), index=index)
+    data_slice, plot_title = ChartSingleDay.build_day_slice(
+        data_with_units=data,
+        window_start=JULY_FIRST,
+        day_in_window=2,
+        time_correction_factor_in_hours=1.0,
+        label_months_lowercase=LABEL_MONTHS,
+        title="PV",
+    )
+    assert plot_title == "PV July 3rd"
+    assert list(data_slice.values) == [float(v) for v in range(48, 72)]
+    assert data_slice.index[0] == pd.Timestamp(2021, 7, 3)
 
 
 def test_build_day_slice_ordinal_suffixes() -> None:
-    """The ordinal suffix follows day_number = day + 1: 1st, 2nd, 3rd, then th.
-
-    Uses short data so the bounds check falls through to the full series (the
-    slice path only works for ``firstindex == 0``); this isolates the title logic.
-    """
-    data = _make_series(5)  # len <= 24 -> fall-through, no slicing
-    _, t1 = ChartSingleDay.build_day_slice(
-        data_with_units=data, month=0, day=0, time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS, title="X")
-    _, t2 = ChartSingleDay.build_day_slice(
-        data_with_units=data, month=0, day=1, time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS, title="X")
-    _, t3 = ChartSingleDay.build_day_slice(
-        data_with_units=data, month=0, day=2, time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS, title="X")
-    _, t4 = ChartSingleDay.build_day_slice(
-        data_with_units=data, month=0, day=3, time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS, title="X")
-    _, t11 = ChartSingleDay.build_day_slice(
-        data_with_units=data, month=0, day=10, time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS, title="X")
-
-    assert t1 == "X January 1st"
-    assert t2 == "X January 2nd"
-    assert t3 == "X January 3rd"
-    assert t4 == "X January 4th"
-    assert t11 == "X January 11th"
+    """The ordinal suffix follows the day of the month: 1st, 2nd, 3rd, 4th, 11th, 21st, 22nd, 23rd, 31st."""
+    data = _make_series(24 * 31)
+    expected = {0: "1st", 1: "2nd", 2: "3rd", 3: "4th", 10: "11th", 11: "12th", 12: "13th",
+                20: "21st", 21: "22nd", 22: "23rd", 30: "31st"}
+    for day_in_window, ordinal in expected.items():
+        _, title = ChartSingleDay.build_day_slice(
+            data_with_units=data, window_start=JANUARY_FIRST, day_in_window=day_in_window,
+            time_correction_factor_in_hours=1.0, label_months_lowercase=LABEL_MONTHS, title="X")
+        assert title == f"X January {ordinal}"
 
 
-def test_build_day_slice_month_label_and_offset_in_title() -> None:
-    """Month index selects the label and the day offset is encoded in the title."""
-    data = _make_series(5)  # fall-through path
+def test_build_day_slice_crosses_into_the_next_month() -> None:
+    """Day 31 of a run from 1 January is February 1st."""
+    data = _make_series(24 * 40)
     _, plot_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=1,
-        day=2,
+        window_start=JANUARY_FIRST,
+        day_in_window=31,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Demand",
     )
-    # month=1 -> February, day=2 -> day_number 3 -> "3rd"
-    assert plot_title == "Demand February 3rd"
+    assert plot_title == "Demand February 1st"
 
 
-def test_build_day_slice_firstindex_offset_for_subhourly_resolution() -> None:
-    """15-minute resolution -> 4 timesteps per hour, 96 per day, sliced from offset 0."""
+def test_build_day_slice_subhourly_resolution() -> None:
+    """15-minute resolution -> 96 timesteps per day."""
     seconds_per_timestep = 900
     time_correction_factor_in_hours = seconds_per_timestep / 3600.0  # 0.25
     data = _make_series(96 * 31)
     data_slice, plot_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=0,
-        day=0,
+        window_start=JANUARY_FIRST,
+        day_in_window=1,
         time_correction_factor_in_hours=time_correction_factor_in_hours,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
-    assert plot_title == "PV January 1st"
-    assert len(data_slice) == 96
-    assert list(data_slice.values) == [float(v) for v in range(96)]
+    assert plot_title == "PV January 2nd"
+    assert list(data_slice.values) == [float(v) for v in range(96, 192)]
 
 
-def test_build_day_slice_returns_full_data_when_slice_exceeds_length() -> None:
-    """When the requested day slice would exceed ``len(data)``, the whole series is returned unchanged."""
-    # Only 5 timesteps available, but the requested slice needs 24 -> out of bounds.
+def test_build_day_slice_returns_full_data_when_the_data_ends_before_the_day() -> None:
+    """When the requested day runs past the end of the data, the whole series is returned unchanged."""
     short_data = _make_series(5)
     data_slice, plot_title = ChartSingleDay.build_day_slice(
         data_with_units=short_data,
-        month=0,
-        day=0,
+        window_start=JANUARY_FIRST,
+        day_in_window=0,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Short",
     )
     assert plot_title == "Short January 1st"
-    # Boundary: abs(lastindex - firstindex) == 24 is NOT < 5, so fall-through to full data.
     assert data_slice is short_data
-    assert len(data_slice) == 5
 
 
 def test_build_day_slice_does_not_mutate_input_series() -> None:
@@ -166,8 +162,8 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
     original_values = list(data.values)
     ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=0,
-        day=0,
+        window_start=JANUARY_FIRST,
+        day_in_window=3,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="T",
@@ -176,37 +172,47 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
     assert list(data.values) == original_values
 
 
-def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
-    """``get_day_data`` sets ``self.plot_title`` and returns the slice from ``build_day_slice``."""
+def _chart(tmp_path: Path, data: pd.Series, window_start: datetime.datetime, day_in_window: int) -> ChartSingleDay:
+    """A single-day chart over hourly data, writing nowhere until it plots."""
     from hisim.simulationparameters import FigureFormat
 
-    timesteps_per_hour = 1
-    data = _make_series(24 * 31)
-    chart = ChartSingleDay(
+    return ChartSingleDay(
         output="Residence # Temperature",
         component_name="House",
         units="C",
         directory_path=str(tmp_path),
-        time_correction_factor_in_hours=1.0 / timesteps_per_hour,
+        time_correction_factor_in_hours=1.0,
         output_description="temperature",
         data_with_units=data,
-        day=0,
-        month=0,
+        window_start=window_start,
+        day_in_window=day_in_window,
         figure_format=FigureFormat.PNG,
         path_checker=lambda **_: None,
     )
+
+
+def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
+    """``get_day_data`` sets ``self.plot_title`` and returns the slice from ``build_day_slice``."""
+    data = _make_series(24 * 31)
+    chart = _chart(tmp_path, data, JANUARY_FIRST, 0)
     result = chart.get_day_data()
     assert chart.plot_title.endswith("January 1st")
     assert len(result) == 24
 
-    # Consistency with the pure helper.
     expected_slice, expected_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
-        month=0,
-        day=0,
-        time_correction_factor_in_hours=1.0 / timesteps_per_hour,
+        window_start=JANUARY_FIRST,
+        day_in_window=0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=chart.label_months_lowercase,
         title=chart.title,
     )
     assert chart.plot_title == expected_title
     assert list(result.values) == list(expected_slice.values)
+
+
+def test_the_file_name_carries_the_displayed_date(tmp_path: Path) -> None:
+    """The file is named by the zero-based month and day of the date shown: m0_d0 for 1 January."""
+    data = _make_series(24 * 7)
+    assert _chart(tmp_path, data, JANUARY_FIRST, 0).filename.startswith("days_m0_d0")
+    assert _chart(tmp_path, data, JULY_FIRST, 2).filename.startswith("days_m6_d2")

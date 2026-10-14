@@ -1257,18 +1257,18 @@ class SolarThermalSystemController(L1ControllerComponent):
         """
 
         connections: List[ComponentConnection] = []
-        storage_classname = SolarThermalSystem.get_classname()
+        collector_classname = SolarThermalSystem.get_classname()
         connections.append(
             ComponentConnection(
                 SolarThermalSystemController.MassFlow,
-                storage_classname,
+                collector_classname,
                 SolarThermalSystem.RequiredWaterMassFlowOutput,
             )
         )
         connections.append(
             ComponentConnection(
                 SolarThermalSystemController.PartLoadRatioRun,
-                storage_classname,
+                collector_classname,
                 SolarThermalSystem.PartLoadRatioRun,
             )
         )

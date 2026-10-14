@@ -314,11 +314,13 @@ class HeatDistribution(cp.PhysicsComponent):
             )
         )
 
+        # the room temperature at the start of the step: a clamp on the same pass's room temperature and the heat
+        # delivered into the room can alternate from pass to pass
         connections.append(
             cp.ComponentConnection(
                 HeatDistribution.ResidenceTemperatureIndoorAir,
                 building_classname,
-                Building.TemperatureIndoorAir,
+                Building.TemperatureIndoorAirAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -409,6 +411,11 @@ class HeatDistribution(cp.PhysicsComponent):
         and returns its inlet temperature unchanged (:meth:`pump_stopped_by_the_valve`). Before, it went on pumping the
         design flow with the valve shut and returned the inlet cooled by a hundredth of its difference to the room,
         so the buffer booked heat into a circuit that delivered none to the building.
+
+        Behind a buffer (``PARALLEL``) the circuit publishes this step's heat and temperatures: the buffer sends its
+        start-of-step temperature as the supply, the circuit returns it less what the building takes, and both ends
+        book ``m c (T_sup - T_ret)`` from the same values. Without a buffer the outputs still lag one step. The
+        return never falls below the room temperature the building reports at the start of the step.
         """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
@@ -476,27 +483,23 @@ class HeatDistribution(cp.PhysicsComponent):
                 raise ValueError("unknown hds controller mode")
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
-        stsv.set_output_value(
-            self.water_temperature_inlet_channel,
-            self.state.water_input_temperature_in_celsius,
-            # water_temperature_input_in_celsius
-        )
-        stsv.set_output_value(
-            self.water_temperature_outlet_channel,
-            self.state.water_output_temperature_in_celsius,
-            # water_temperature_output_in_celsius,
-        )
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            # behind a buffer the circuit's heat is this step's, booked on the buffer's start temperature
+            published = HeatDistributionSystemState(
+                water_output_temperature_in_celsius=water_temperature_output_in_celsius,
+                water_input_temperature_in_celsius=water_temperature_input_in_celsius,
+                thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
+            )
+        else:
+            # without a buffer the outputs still lag one step
+            published = self.state
+        stsv.set_output_value(self.water_temperature_inlet_channel, published.water_input_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_outlet_channel, published.water_output_temperature_in_celsius)
         stsv.set_output_value(
             self.water_temperature_difference_channel,
-            #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
-            self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
+            published.water_input_temperature_in_celsius - published.water_output_temperature_in_celsius,
         )
-
-        stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt,
-            # thermal_power_delivered_in_watt,
-        )
+        stsv.set_output_value(self.thermal_power_delivered_channel, published.thermal_power_delivered_in_watt)
         stsv.set_output_value(
             self.water_mass_flow_channel,
             water_mass_flow_rate_in_kg_per_second,

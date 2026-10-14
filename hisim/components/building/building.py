@@ -82,10 +82,19 @@ class BuildingState:
         self,
         thermal_mass_temperature_in_celsius: float,
         thermal_capacitance_in_joule_per_kelvin: float,
+        indoor_air_temperature_in_celsius: float,
     ) -> None:
-        """Construct all the neccessary attributes for the BuildingState object."""
+        """Construct all the neccessary attributes for the BuildingState object.
+
+        Args:
+            thermal_mass_temperature_in_celsius: The thermal mass temperature at the start of the step, in °C.
+            thermal_capacitance_in_joule_per_kelvin: The thermal mass's heat capacity, in J/K.
+            indoor_air_temperature_in_celsius: The indoor air temperature at the end of the previous step, which is
+                the start of this one, in °C.
+        """
         # this is labeled as t_m in the paper [1] (** Check header)
         self.thermal_mass_temperature_in_celsius: float = thermal_mass_temperature_in_celsius
+        self.indoor_air_temperature_in_celsius: float = indoor_air_temperature_in_celsius
 
         # this is labeled as c_m in the paper [1] (** Check header)
         self.thermal_capacitance_in_joule_per_kelvin: float = thermal_capacitance_in_joule_per_kelvin
@@ -103,6 +112,7 @@ class BuildingState:
         return BuildingState(
             self.thermal_mass_temperature_in_celsius,
             self.thermal_capacitance_in_joule_per_kelvin,
+            self.indoor_air_temperature_in_celsius,
         )
 
 
@@ -159,6 +169,9 @@ class Building(cp.PhysicsComponent):
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
     TemperatureInternalSurface = "TemperatureInternalSurface"
     TemperatureIndoorAir = "TemperatureIndoorAir"
+    #: The indoor air temperature at the start of the step, the value the previous step converged to: a sensor
+    #: value no pass of the step moves, for components that decide on the room temperature within the step.
+    TemperatureIndoorAirAtStartOfStepInCelsius = "TemperatureIndoorAirAtStartOfStepInCelsius"
     TotalThermalPowerToResidence = "TotalThermalPowerToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     InternalHeatGainsFromOccupancy = "InternalHeatGainsFromOccupancy"
@@ -235,6 +248,7 @@ class Building(cp.PhysicsComponent):
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
+            indoor_air_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
         self.previous_state = self.state.self_copy()
 
@@ -358,6 +372,16 @@ class Building(cp.PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.TemperatureIndoorAir} will follow.",
+        )
+        self.indoor_air_temperature_at_start_of_step_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TemperatureIndoorAirAtStartOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The indoor air temperature at the start of the step: the value the previous step converged to, "
+                "constant while the step iterates."
+            ),
         )
         self.total_thermal_power_to_residence_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -739,6 +763,11 @@ class Building(cp.PhysicsComponent):
             self.indoor_air_temperature_channel,
             indoor_air_temperature_in_celsius,
         )
+        stsv.set_output_value(
+            self.indoor_air_temperature_at_start_of_step_channel,
+            self.state.indoor_air_temperature_in_celsius,
+        )
+        self.state.indoor_air_temperature_in_celsius = indoor_air_temperature_in_celsius
 
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
 

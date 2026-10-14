@@ -11,6 +11,8 @@ import numpy as np
 
 import hisim.component as cp
 from hisim.components.building import Building
+# HeatDistributionSystemType and EmitterDesign live in heating_curve, which this module imports; their old import
+# path through this module stays valid for the setups and tests that use it, but new code imports them from there.
 from hisim.components.heating_curve import EmitterDesign, HeatDistributionSystemType, HeatingCurveController
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
@@ -906,7 +908,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
     on a positive demand and for cooling on a negative one, and an open valve closes when the demand is zero. A
     valve open for heating passes heat only in the heating season, which the heating curve
     (:class:`hisim.components.heating_curve.HeatingCurveController`) decides. The controller publishes ``State``:
-    1 for heating, -1 for cooling and 0 for a closed valve.
+    1 for heating, -1 for cooling, and 0 for a closed valve or for a valve open for heating outside the heating season.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -957,7 +959,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
             self.State,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description="The valve: 1 open for heating, -1 open for cooling, 0 closed.",
+            output_description="The valve: 1 heating, -1 cooling, 0 closed or open for heating outside the heating season.",
         )
 
         #: The valve's mode at the start of the step, and the mode the latest free pass of the step decided.
@@ -1065,9 +1067,10 @@ class HeatDistributionController(cp.L1ControllerComponent):
 
     @staticmethod
     def valve_state(mode: HeatDistributionValveMode, *, is_heating_season: bool) -> int:
-        """Return the valve's published state: 1 for heating, -1 for cooling and 0 for a closed valve.
+        """Return the valve's published state: 1 for heating, -1 for cooling and 0 for no flow.
 
-        A valve open for heating outside the heating season passes nothing and publishes 0.
+        A closed valve publishes 0, and so does a valve open for heating outside the heating season, which passes
+        nothing.
 
         Args:
             mode: The valve's mode.

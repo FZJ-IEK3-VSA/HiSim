@@ -50,7 +50,7 @@ from hisim.config import (
 from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
-from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.loadtypes import (
     ComponentType,
     EnergyBalanceCarrier,
@@ -2588,15 +2588,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
 
         The field defaults are that controller: the plain on/off law, a five-kelvin
         hysteresis band either side of the requested flow temperature, and no cooling below
-        20 °C outside. What the preset does not fix is the emitter type, the heating
-        threshold and the room setpoint, which stay ``AUTO`` so that they are copied from the
-        heat distribution controller and the building instead of repeating their choices here.
+        20 °C outside. What the preset does not fix is the emitter type and the room setpoint,
+        which stay ``AUTO`` so that they are copied from the heat distribution controller and the
+        building instead of repeating their choices here. The heating season comes from the
+        heating curve.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its three sizable fields still ``AUTO``.
+            The configuration, with its two sizable fields still ``AUTO``.
         """
         return cls(component_id=ComponentID(name=name))
 

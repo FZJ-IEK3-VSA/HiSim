@@ -154,7 +154,7 @@ class IdealizedElectricHeaterController(StatelessComponent, cp.L1ControllerCompo
         """Return the report lines of the controller.
 
         Returns:
-            Its name.
+            Its report title.
         """
         return ["Idealized Electric Heater Controller"]
 

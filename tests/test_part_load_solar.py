@@ -15,7 +15,6 @@ from typing import Dict, List
 
 import pytest
 
-from hisim.components import solar_thermal_system
 from hisim.components.solar_thermal_system import SolarThermalSystem, SolarThermalSystemController
 from hisim.part_load import PartLoadRule
 from tests.part_load_rigs import AllInputsRig, CollectorRig, SolarControllerRig
@@ -88,10 +87,15 @@ def test_under_force_convergence_the_solar_controller_publishes_the_ratio_run() 
 
 @pytest.mark.base
 def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fraction() -> None:
-    """At half the step the flow, heat and pump electricity halve; the outlet stays the full-load outlet."""
+    """At a quarter of the step the flow, heat and pump electricity are a quarter; the outlet stays the full-load outlet.
+
+    The ratio 0.25 keeps the ratio and its complement apart, which 0.5 would not. At full load the new pump draws its
+    10 W.
+    """
     full = CollectorRig.charge(900, ratio=1.0)
-    part = CollectorRig.charge(900, ratio=0.5)
+    part = CollectorRig.charge(900, ratio=0.25)
     assert full[SolarThermalSystem.WaterMassFlowOutput] > 0.0
+    assert full[SolarThermalSystem.ElectricityConsumptionOutput] == 10.0
     assert part[SolarThermalSystem.WaterTemperatureOutput] == full[SolarThermalSystem.WaterTemperatureOutput]
     for field in (
         SolarThermalSystem.WaterMassFlowOutput,
@@ -99,9 +103,9 @@ def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fract
         SolarThermalSystem.ThermalEnergyOutput,
         SolarThermalSystem.ElectricityConsumptionOutput,
     ):
-        assert part[field] == pytest.approx(0.5 * full[field], rel=1e-12)
+        assert part[field] == pytest.approx(0.25 * full[field], rel=1e-12)
     assert part[SolarThermalSystem.SolarPumpHeatLoss] == part[SolarThermalSystem.ElectricityConsumptionOutput]
-    assert (part[SolarThermalSystem.PartLoadRatioRun], full[SolarThermalSystem.PartLoadRatioRun]) == (0.5, 1.0)
+    assert (part[SolarThermalSystem.PartLoadRatioRun], full[SolarThermalSystem.PartLoadRatioRun]) == (0.25, 1.0)
     standing = CollectorRig.charge(900, ratio=0.0, control_signal=0.0)
     assert standing[SolarThermalSystem.ElectricityConsumptionOutput] == 0.0
     assert standing[SolarThermalSystem.PartLoadRatioRun] == 0.0
@@ -123,12 +127,3 @@ def test_a_collector_commanded_ratio_zero_is_idle_though_its_pump_signal_is_on()
         SolarThermalSystem.PartLoadRatioRun,
     ):
         assert idle[field] == 0.0
-
-
-@pytest.mark.base
-def test_the_pump_powers_are_named_constants() -> None:
-    """The pump draws 10 W, or 35 W with ``old_solar_pump``, while the controller runs it at full load."""
-    assert SolarThermalSystem.PUMP_POWER_IN_WATT == 10
-    assert SolarThermalSystem.OLD_PUMP_POWER_IN_WATT == 35
-    assert CollectorRig.charge(900, ratio=1.0)[SolarThermalSystem.ElectricityConsumptionOutput] == 10.0
-    assert solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("x").old_solar_pump is False

@@ -360,7 +360,7 @@ class TestValveState:
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config
         )
         demand = cp.ComponentOutput("Building", "Demand", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=ComponentID("Building"))
-        season = cp.ComponentOutput("Curve", "Season", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Curve"))
+        season = cp.ComponentOutput("Curve", "Season", lt.LoadTypes.ANY, lt.Units.BINARY, component_id=ComponentID("Curve"))
         controller.theoretical_thermal_building_demand_channel.source_output = demand
         controller.heating_season_channel.source_output = season
         outputs = [demand, season, *controller.outputs]

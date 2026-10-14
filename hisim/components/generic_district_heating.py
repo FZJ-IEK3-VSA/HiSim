@@ -1053,7 +1053,7 @@ class DistrictHeatingController(L1ControllerComponent):
             self.component_name,
             self.HeatingSeason,
             LoadTypes.ANY,
-            Units.ANY,
+            Units.BINARY,
             True,
         )
 

@@ -948,7 +948,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
             self.component_name,
             self.HeatingSeason,
             lt.LoadTypes.ANY,
-            lt.Units.ANY,
+            lt.Units.BINARY,
             True,
         )
         # Outputs

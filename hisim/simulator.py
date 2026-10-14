@@ -6,7 +6,7 @@ import os
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 import time
 import pandas as pd
 
@@ -526,6 +526,36 @@ class Simulator:
             remaining.remove(chosen)
         return placed
 
+    @staticmethod
+    def l2_positions_reading_a_later_l2(
+        kinds: Sequence[Type[cp.Component]], sources: Sequence[AbstractSet[int]], positions: Sequence[int]
+    ) -> List[int]:
+        """Return the L2 controllers that read an L2 controller evaluated after them in a pass.
+
+        :meth:`l2_positions_after_their_sources` places every L2 controller after the L2 controllers it reads, so
+        only controllers that read each other in a cycle are left reading a later one. Such a controller reads the
+        other's output of the pass before. For example, the kinds (L2, L2), where each reads the other, evaluated in
+        the order (0, 1), give [0]: controller 0 reads controller 1, which comes after it.
+
+        Args:
+            kinds: The kind base class of every component, in the order the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+            positions: The positions in evaluation order.
+
+        Returns:
+            The positions of the L2 controllers that read a later L2 controller, in evaluation order.
+        """
+        evaluated: Set[int] = set()
+        late_readers: List[int] = []
+        for position in positions:
+            if kinds[position] is cp.L2ControllerComponent and any(
+                kinds[source] is cp.L2ControllerComponent and source != position and source not in evaluated
+                for source in sources[position]
+            ):
+                late_readers.append(position)
+            evaluated.add(position)
+        return late_readers
+
     def evaluation_plan(self) -> List[ComponentWrapper]:
         """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.
 
@@ -533,7 +563,8 @@ class Simulator:
         For example, a setup that adds a hot-water tank, its boiler and the boiler's controller gets the plan
         controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
         columns keep the order they were added in. A group of physics components whose constraints form a cycle keeps
-        the order it was added in, and a warning names its components.
+        the order it was added in, and a warning names its components. A warning also names every L2 controller that
+        reads another L2 controller evaluated after it, which only a read cycle between them causes.
 
         Returns:
             The wrapped components in evaluation order; the same list on every later call.
@@ -558,6 +589,12 @@ class Simulator:
                     "of an L1 controller that reads another of them. They keep the order they were added in, so a "
                     "controller among them may pair its device's report with a store's answer of the pass before, "
                     "and its iteration may circle instead of settling."
+                )
+            for position in self.l2_positions_reading_a_later_l2(kinds, sources, order.positions):
+                log.warning(
+                    f"The L2 controller {components[position].component_name} reads an L2 controller that is "
+                    "evaluated after it, because the L2 controllers read one another in a cycle; it reads that "
+                    "controller's output of the pass before."
                 )
             self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
         return self._evaluation_plan

@@ -261,6 +261,25 @@ def test_an_l2_controller_is_evaluated_after_the_l2_controllers_it_reads(
     assert Simulator.evaluation_positions(kinds, sources).positions == tuple(expected_positions)
 
 
+@pytest.mark.parametrize(
+    ("kinds", "sources", "expected_late_readers"),
+    [
+        # a cycle: the first controller reads the second, which comes after it
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, {0}], [0]),
+        # a read without a cycle is placed after its source, so nobody reads late
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, set()], []),
+        # an L1 controller that reads a later L2 controller is not an L2 read
+        ((L1ControllerComponent, L2ControllerComponent), [{1}, set()], []),
+    ],
+)
+def test_an_l2_controller_that_reads_a_later_one_is_found(
+    kinds: Tuple[Type[Component], ...], sources: List[set], expected_late_readers: List[int]
+) -> None:
+    """Catches an L2 read cycle that the plan keeps silently, so that one controller reads the other a pass late."""
+    order = Simulator.evaluation_positions(kinds, sources)
+    assert Simulator.l2_positions_reading_a_later_l2(kinds, sources, order.positions) == expected_late_readers
+
+
 @dataclass_json
 @dataclasses.dataclass
 class KindProbeConfig(ConfigBase):

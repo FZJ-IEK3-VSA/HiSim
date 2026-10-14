@@ -940,7 +940,8 @@ class SolarThermalSystem(PhysicsComponent):
         evaluated at, so the flow is ``Q / (c 2 dT_n)``. For example, 836 W over 20 K need 0.01 kg/s.
 
         Args:
-            collector_heat_in_watt: The collector heat at the storage's step mean, in W.
+            collector_heat_in_watt: The collector heat, in W: at the storage's step mean for the circuit, at its
+                start-of-step temperature for the flow the controller switches on.
             inlet_to_mean_temperature_difference_in_kelvin: The collector's inlet-to-mean difference, in K.
 
         Returns:
@@ -985,7 +986,7 @@ class SolarThermalSystem(PhysicsComponent):
         inlet with a 10 K inlet-to-mean difference supply 60 °C at 0.01 kg/s.
 
         Args:
-            collector_heat_in_watt: The collector heat at the storage's step mean, in W.
+            collector_heat_in_watt: The collector heat at the inlet temperature, in W.
             inlet_temperature_in_celsius: The collector's inlet temperature, the storage's step mean, in °C.
             inlet_to_mean_temperature_difference_in_kelvin: The collector's inlet-to-mean difference, in K.
             pump_runs: Whether the controller runs the solar pump.
@@ -1016,8 +1017,9 @@ class SolarThermalSystem(PhysicsComponent):
         """Return the heat the whole collector field gives at an inlet temperature in this step's irradiance, in W.
 
         The heat per m² follows the collector's efficiency curve at the irradiance on the collector plane of the step
-        last calculated (:attr:`plane_of_array_irradiance_w_m2`), times the collector area. It is negative when the
-        collector loses more than it gains; the circuit then moves no water.
+        last calculated (:attr:`plane_of_array_irradiance_w_m2`), times the collector area. It is zero when the
+        collector loses as much as it gains or more, since the efficiency is clipped at zero; the circuit then moves no
+        water.
 
         Args:
             inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
@@ -1217,7 +1219,10 @@ class SolarThermalSystemController(L1ControllerComponent):
     decides on the temperatures it measures at that moment: the flow the collector heat at the storage's start-of-step
     temperature needs (the collector's ``RequiredWaterMassFlowAtStartOfStepInKgPerSecond``) and the storage's
     start-of-step temperature. No pass of the step moves either, so the pump's own heat cannot switch it off again in
-    the step it switches on. Two hysteresis bands keep the pump from switching every few steps:
+    the step it switches on. One exception: the simulator starts each step from the values the previous step
+    converged to and evaluates the controller before the collector and the storage, so the first pass of a step reads
+    the previous step's sensors and may decide differently; from the second pass on the decision cannot change, and
+    the step keeps the decision of its last pass. Two hysteresis bands keep the pump from switching every few steps:
 
     * the flow: a pump that stood in the previous step switches on at :attr:`SWITCH_ON_MASS_FLOW_IN_KG_PER_S`, a pump
       that ran keeps running down to the lower :attr:`SWITCH_OFF_MASS_FLOW_IN_KG_PER_S`, as a differential solar
@@ -1259,11 +1264,11 @@ class SolarThermalSystemController(L1ControllerComponent):
 
     #: The pump flow at the storage's start-of-step temperature below which a pump that ran in the previous step
     #: switches off, in kg/s: half the switch-on flow, about 210 W of collector heat. Differential solar controllers
-    #: switch the pump on at a collector-to-tank difference of about 7 K and off at about 3 K, a ratio of 3/7. Near
-    #: the switching point the collector heat, and with it this flow, grows about in proportion to that difference,
-    #: so the switch-off flow lies between 3/7 and 1/2 of the switch-on flow; half keeps the pump from running on heat
-    #: its 10 W hardly pays for. Without the band a pump whose heat warms the storage from one step to the next would
-    #: switch off and on again every few steps.
+    #: switch the pump on at a collector-to-tank difference of about 7 K and off at about 3 K, where the heat gained,
+    #: the pipe losses and the pump's electricity are about even, a ratio of 3/7. Near the switching point the collector
+    #: heat, and with it this flow, grows about in proportion to that difference, so the switch-off flow lies between
+    #: 3/7 and 1/2 of the switch-on flow; half lies inside that band. Without the band a pump whose heat warms the
+    #: storage from one step to the next would switch off and on again every few steps.
     SWITCH_OFF_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.0025
 
     #: The storage temperature above which the pump stops, in °C: warm water should leave the tank at 60 °C
@@ -1417,6 +1422,8 @@ class SolarThermalSystemController(L1ControllerComponent):
         the pump ran in the previous step. Under ``force_convergence`` the controller keeps the pump as the collector
         reports it ran (:meth:`pump_ran_as_reported`) and its part-load ratio becomes the ratio run, so the device
         keeps running what it ran and the iteration stops moving. All of it reads only inputs and the saved state.
+        The inputs are start-of-step quantities, so from the second pass on an unforced pass decides as the pass
+        before it; the first pass, which reads the previous step's sensors, may decide differently.
         """
         storage_temperature_at_start_in_celsius = stsv.get_input_value(
             self.storage_temperature_at_start_deg_c_input_channel

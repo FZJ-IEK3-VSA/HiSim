@@ -2668,6 +2668,9 @@
                   "maximal_flow_temperature_in_celsius": {
                     "type": "number"
                   },
+                  "minimal_lift_at_maximal_power_in_kelvin": {
+                    "type": "number"
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {

@@ -212,6 +212,21 @@ class GenericBoilerConfig(ConfigBase):
     #: gas, oil and solid-fuel boilers, whose safety high-limit cut-outs act above it (around 90-110 °C, EN 15502-1,
     #: EN 303-5); it lies above the controller's 70 °C hot-water flow aim, so every charge reaches its set point.
     maximal_flow_temperature_in_celsius: float = field(default=80.0, metadata={"unit": lt.Units.CELSIUS})
+    #: The smallest rise from return to supply the boiler's pump allows at maximal burner power, K. The pump's
+    #: largest flow carries the maximal heat, the maximal power times ``eff_th_max``, over this rise:
+    #: ``m_max = P_max eff_th_max / (c rise)``. A lift the controller asks for that is smaller than the rise the
+    #: commanded heat gives at that flow is raised to it, so the supply ends above the one asked for. For example, a
+    #: 12 kW boiler at 0.9 pumps at most 12000 * 0.9 / (4180 * 5) = 0.52 kg/s (1.9 m3/h) and lifts its water by at
+    #: least 5 K at full power and by about 2 K at half power (6 kW at an efficiency of about 0.75 is about 4.5 kW of
+    #: heat). Why 5 K: it bounds the flow of an on/off burner, or of one held at its minimal power, on a lift close
+    #: to 0 K. A modulating controller (the ``modulating`` preset) commands full power only on lifts of 5 K and more
+    #: and a power proportional to the lift below, so it reaches the bound only where it holds the burner at its
+    #: minimal power: a 12 kW boiler with a 1 kW minimum (the ``*_12kw`` presets) turns that into 600 W, which the
+    #: largest flow carries over 0.28 K, so a lift below 0.28 K is raised. A boiler without a minimal power never
+    #: reaches it. A minimal lift above the controller's ``set_temperature_difference_for_full_power`` would raise
+    #: lifts on which that controller commands full power, so the supply would end above the one it asked for: keep
+    #: it at or below that threshold.
+    minimal_lift_at_maximal_power_in_kelvin: float = field(default=5.0, metadata={"unit": lt.Units.KELVIN})
     device_co2_footprint_in_kg: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
     lifetime_in_years: Optional[float] = None
@@ -220,17 +235,20 @@ class GenericBoilerConfig(ConfigBase):
     consumption_in_kilowatt_hour: float = 0.0
 
     def __post_init__(self) -> None:
-        """Refuse combustion efficiencies that are not finite and positive, and an unusable maximum flow temperature.
+        """Refuse combustion efficiencies that are not finite and positive, and an unusable maximum flow or lift.
 
         The burner's efficiency runs linearly from ``eff_th_min`` at its minimal to ``eff_th_max`` at its maximal
         power, and its fuel is the heat over that efficiency. An efficiency of 0 divides by zero on a throttled step
         and books fuel without heat on others. A maximum flow temperature that is not a finite positive number of
-        degrees lies below every return, so the boiler would silently never fire. For example, the defaults
-        0.6 / 0.9 / 80 °C are accepted, ``eff_th_min=0`` and ``maximal_flow_temperature_in_celsius=0`` are refused.
+        degrees lies below every return, so the boiler would silently never fire. A minimal lift of 0 K or less gives
+        the pump no largest flow, so a burner at full power on a lift close to 0 K would pump without bound. For
+        example, the defaults 0.6 / 0.9 / 80 °C / 5 K are accepted, ``eff_th_min=0``,
+        ``maximal_flow_temperature_in_celsius=0`` and ``minimal_lift_at_maximal_power_in_kelvin=0`` are refused.
 
         Raises:
-            ValueError: If ``eff_th_min`` or ``eff_th_max`` is not finite or not above 0, or if
-                ``maximal_flow_temperature_in_celsius`` is not finite or not above 0 °C.
+            ValueError: If ``eff_th_min`` or ``eff_th_max`` is not finite or not above 0, if
+                ``maximal_flow_temperature_in_celsius`` is not finite or not above 0 °C, or if
+                ``minimal_lift_at_maximal_power_in_kelvin`` is not finite or not above 0 K.
         """
         for name, efficiency in (("eff_th_min", self.eff_th_min), ("eff_th_max", self.eff_th_max)):
             if not math.isfinite(efficiency) or efficiency <= 0.0:
@@ -242,6 +260,12 @@ class GenericBoilerConfig(ConfigBase):
             raise ValueError(
                 f"The boiler's maximal_flow_temperature_in_celsius must be a finite temperature above 0 °C, got "
                 f"{self.maximal_flow_temperature_in_celsius!r}: below the return the boiler would never fire."
+            )
+        minimal_lift_in_kelvin = self.minimal_lift_at_maximal_power_in_kelvin
+        if not math.isfinite(minimal_lift_in_kelvin) or minimal_lift_in_kelvin <= 0.0:
+            raise ValueError(
+                f"The boiler's minimal_lift_at_maximal_power_in_kelvin must be a finite rise above 0 K, got "
+                f"{minimal_lift_in_kelvin!r}: it sets the pump's largest flow, which 0 K would leave unbounded."
             )
 
     @staticmethod
@@ -430,6 +454,89 @@ class BurnerModulation:
         return float(
             self.minimal_efficiency + (burner_power_in_watt - self.minimal_power_in_watt) * efficiency_slope_per_watt
         )
+
+    def heat_power_in_watt(self, burner_power_in_watt: float) -> float:
+        """Return the heat the burner turns a burner power into, in W: the power times :meth:`efficiency_at`.
+
+        The one home of the burner's heat, which both sizes the boiler's flow (:meth:`GenericBoiler.fired_circuit`)
+        and sets the rise the pump raises a lift to (:meth:`BoilerPump.lift_in_kelvin`), so the two cannot drift
+        apart. For example, a 2-20 kW burner from 0.6 to 0.9 turns 11 kW into 11000 * 0.75 = 8250 W.
+
+        Args:
+            burner_power_in_watt: The burner power, in W.
+
+        Returns:
+            The heat, in W.
+        """
+        return burner_power_in_watt * self.efficiency_at(burner_power_in_watt)
+
+
+@dataclass(frozen=True)
+class BoilerPump:
+
+    """The boiler's circulation pump: the largest water flow it moves through either of the boiler's circuits.
+
+    The boiler sizes its flow so that the commanded heat leaves at the lift its controller asks for,
+    ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound: an on/off burner at full power would pump
+    hundreds of kilograms a second through a household circuit, and one held at its minimal power tens (12 kW of
+    burner power at 0.9 over 0.01 K is 258 kg/s, a 1 kW minimum at 0.6 is 14 kg/s). The pump cannot, so
+    the boiler raises such a lift to the rise its heat gives at the pump's largest flow (:meth:`lift_in_kelvin`) and
+    the supply ends above the one asked for. For example, a pump of at most 0.5 kg/s carrying 10450 W lifts its water
+    by at least 10450 / (4180 * 0.5) = 5 K, and a lift of 0.01 K asked for is raised to 5 K.
+    """
+
+    #: The largest flow the pump moves, in kg/s, above 0.
+    maximal_mass_flow_in_kg_per_second: float
+
+    @classmethod
+    def sized_for(
+        cls, *, maximal_heat_power_in_watt: float, minimal_lift_at_maximal_power_in_kelvin: float
+    ) -> "BoilerPump":
+        """Return the pump that carries the boiler's maximal heat over its minimal lift at maximal power.
+
+        ``m_max = P_th,max / (c rise)``. For example, 10800 W of maximal heat over 5 K gives 0.517 kg/s. A maximal
+        heat of 0 W or less gives a pump with no largest flow, and :meth:`lift_in_kelvin` would divide by it at the
+        first step the boiler fires, so it is refused here, when the boiler is built.
+
+        Args:
+            maximal_heat_power_in_watt: The heat at maximal burner power, the maximal power times its efficiency,
+                in W, above 0.
+            minimal_lift_at_maximal_power_in_kelvin: The smallest rise the pump allows at that heat, in K, above 0.
+
+        Returns:
+            The pump.
+
+        Raises:
+            ValueError: If ``maximal_heat_power_in_watt`` is not finite or not above 0 W.
+        """
+        if not math.isfinite(maximal_heat_power_in_watt) or maximal_heat_power_in_watt <= 0.0:
+            raise ValueError(
+                f"The boiler's pump needs a finite maximal heat above 0 W, maximal_thermal_power_in_watt times "
+                f"eff_th_max, got {maximal_heat_power_in_watt!r}: a boiler without power has no largest flow."
+            )
+        return cls(
+            maximal_mass_flow_in_kg_per_second=maximal_heat_power_in_watt
+            / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * minimal_lift_at_maximal_power_in_kelvin)
+        )
+
+    def lift_in_kelvin(self, *, asked_lift_in_kelvin: float, heat_power_in_watt: float) -> float:
+        """Return the lift a circuit runs at: the one asked for, or the rise the heat gives at the largest flow.
+
+        ``max(lift asked, P_th / (c m_max))``. A lift at or above that rise is returned unchanged, so a boiler whose
+        flow stays within the pump's is not affected. For example, a pump of at most 0.5 kg/s carrying 10450 W keeps
+        a lift of 8 K and raises one of 0.01 K to 5 K.
+
+        Args:
+            asked_lift_in_kelvin: The lift the controller asks for, in K.
+            heat_power_in_watt: The heat the burner turns its commanded power into, in W.
+
+        Returns:
+            The lift the circuit runs at, in K.
+        """
+        lift_at_maximal_flow_in_kelvin = heat_power_in_watt / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * self.maximal_mass_flow_in_kg_per_second
+        )
+        return max(asked_lift_in_kelvin, lift_at_maximal_flow_in_kelvin)
 
 
 @dataclass(frozen=True)
@@ -816,6 +923,10 @@ class GenericBoiler(PhysicsComponent):
             minimal_efficiency=self.min_combustion_efficiency,
             maximal_efficiency=self.max_combustion_efficiency,
         )
+        self.pump = BoilerPump.sized_for(
+            maximal_heat_power_in_watt=self.maximal_thermal_power_in_watt * self.max_combustion_efficiency,
+            minimal_lift_at_maximal_power_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,
+        )
 
         # The fuel constants are derived by the config, which is also what contributes them
         # as sizing facts, so the meter accounting this boiler's consumption reads exactly
@@ -863,7 +974,9 @@ class GenericBoiler(PhysicsComponent):
 
         The controller sends a control signal, an operating mode and a lift. In space-heating or hot-water mode with
         a positive lift the boiler fires that mode's circuit (:meth:`fired_circuit`); the other circuit idles. Off,
-        or without a lift, the boiler does not fire: no circuit moves water, and no fuel is burnt.
+        or without a lift, the boiler does not fire: no circuit moves water, and no fuel is burnt. A lift smaller than
+        the rise the commanded heat gives at the pump's largest flow is raised to that rise (:class:`BoilerPump`), so
+        the flow stays one a household circuit carries and the supply ends above the one asked for.
 
         Raises:
             ValueError: If the control signal is outside [0, 1] or the operating mode is unknown.
@@ -890,6 +1003,11 @@ class GenericBoiler(PhysicsComponent):
             self.dhw_part_load_command.publish_ratio_run(stsv, 0.0)
             return
 
+        commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
+        lift_in_kelvin = self.pump.lift_in_kelvin(
+            asked_lift_in_kelvin=lift_in_kelvin,
+            heat_power_in_watt=self.burner.heat_power_in_watt(commanded_power_in_watt),
+        )
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
         unthrottled_supply_in_celsius = return_temperature_in_celsius + lift_in_kelvin
         if fired is self.hot_water_circuit:
@@ -945,7 +1063,9 @@ class GenericBoiler(PhysicsComponent):
         Args:
             burner: The burner's power band and efficiency law.
             control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
-            lift_in_kelvin: The lift the controller asks for, in K, above 0.
+            lift_in_kelvin: The lift the circuit runs at, in K, above 0: the one the controller asks for, raised by
+                :meth:`BoilerPump.lift_in_kelvin` to the rise the heat gives at the pump's largest flow, so the flow
+                computed here never exceeds that largest flow.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
             supply_temperature_in_celsius: The circuit's supply temperature after any throttling, in °C, at most
                 the return plus the lift.
@@ -955,8 +1075,8 @@ class GenericBoiler(PhysicsComponent):
         """
         commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
         efficiency = burner.efficiency_at(commanded_power_in_watt)
-        mass_flow_in_kg_per_second = (
-            commanded_power_in_watt * efficiency / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
+        mass_flow_in_kg_per_second = burner.heat_power_in_watt(commanded_power_in_watt) / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
         )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,

@@ -15,10 +15,10 @@ from tests import functions_for_testing as fft
 def test_example_storage() -> None:
     """Verify SimpleStorage accumulates net charge into its fill state.
 
-    Constructs a default thermal SimpleStorage, feeds it fake charging (30 kWh)
-    and discharging (-10 kWh) outputs, then asserts that after `i_simulate` the
-    reported `current_fill` reflects the net energy added (20 kWh at timestep
-    300, 40 kWh at timestep 301).
+    Constructs a default thermal SimpleStorage, which starts half full at 25 kWh, feeds it fake
+    charging (10 kWh) and discharging (-5 kWh) outputs, then asserts that after `i_simulate` the
+    reported `current_fill` reflects the net energy added (30 kWh at timestep 300, 35 kWh at
+    timestep 301).
     """
 
     simulation_parameters: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
@@ -54,8 +54,8 @@ def test_example_storage() -> None:
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_example_storage, charging_output, discharging_output])
-    stsv.values[charging_output.global_index] = 30  # fake charg input
-    stsv.values[discharging_output.global_index] = -10  # fake discharg input
+    stsv.values[charging_output.global_index] = 10  # fake charg input
+    stsv.values[discharging_output.global_index] = -5  # fake discharg input
 
     timestep: int = 300
 
@@ -66,22 +66,23 @@ def test_example_storage() -> None:
     log.information(f"charging output = {stsv.values[charging_output.global_index]}")
     log.information(f"discharging output  = {stsv.values[discharging_output.global_index]}\n")
 
-    # Test current storage fill state before running the simulation
+    # The storage starts half full, and no output is written before the first simulation
+    assert my_example_storage.state.fill_in_kwh == 25
     assert 0 == stsv.values[my_example_storage.current_fill.global_index]
     my_example_storage.i_restore_state()
     my_example_storage.i_simulate(timestep, stsv, False)
 
     log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill_in_kwh}\n")
     # Test charging of the storage
-    assert 30 == stsv.values[charging_output.global_index]
+    assert 10 == stsv.values[charging_output.global_index]
     # Test discharging of the storage
-    assert -10 == stsv.values[discharging_output.global_index]
+    assert -5 == stsv.values[discharging_output.global_index]
     # Test current storage fill state
-    assert 20 == stsv.values[my_example_storage.current_fill.global_index]
+    assert 30 == stsv.values[my_example_storage.current_fill.global_index]
 
     timestep = 301
     log.information(f"timestep = {timestep}")
     my_example_storage.i_simulate(timestep, stsv, False)
     log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill_in_kwh}\n")
     # Test current storage fill state
-    assert 40 == stsv.values[my_example_storage.current_fill.global_index]
+    assert 35 == stsv.values[my_example_storage.current_fill.global_index]

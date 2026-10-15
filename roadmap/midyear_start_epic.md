@@ -176,6 +176,18 @@ untangle before any building-side seasonal default: `initial_internal_temperatur
 doubles as the *permanent* window-opening comfort floor in the building's free-cooling rule — a
 field named "initial" that is silently a model parameter.
 
+**Superseded for the storages (hisim-4g9.64, owner request 2026-10-14, decisions 2026-10-15):**
+every storage now states one start value as a class constant, and the state classes lost their
+contradicting defaults. Half charged: the house battery and the car battery at a state of charge of
+0.5 (the "Battery losses" KPI now subtracts the change of the stored energy, so the charge held at
+the start is no loss), the hydrogen tank half way between its floor and its capacity (250 kg of the
+500 kg preset), the hot-water tank at 50 °C (half its usable charge: half way from the 40 °C tap
+temperature, below which its water is no longer usable, to the 60 °C warm-water aim), the example
+storage at half its capacity. The space-heating buffer keeps 35 °C by the owner's decision: its
+half-charged value depends on the emitter it feeds (floor heating 28–35 °C, radiator 55–70 °C),
+which the buffer does not know. The thermal mass and the controllers are not storages and are
+unchanged.
+
 ## Validation: the split oracle
 
 The strongest available truth: a full-year run is correct today, so a mid-year window must
@@ -262,7 +274,7 @@ Out of scope, each with its trigger: `generic_price_signal` emits a constant (el
 forever) — not profile-driven, cannot be made wrong by this epic; fix when a setup needs a
 time-varying tariff. The `i_save_state` reference/self-assignment bugs — live convergence-loop
 defects, prerequisite for checkpointing; on the cleanup list. The initial-state default
-contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settle when the
-season-aware storage seed lands. The MPC's uninterpretable `10/15` Wh literal — flag for whoever
+contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settled by hisim-4g9.64,
+every storage states one start value. The MPC's uninterpretable `10/15` Wh literal — flag for whoever
 touches the MPC. The building's dual-purpose `initial_internal_temperature_in_celsius` — split
 before any building-side seasonal default.

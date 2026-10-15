@@ -3566,9 +3566,6 @@
                   "max_capacity": {
                     "type": "number"
                   },
-                  "starting_fill": {
-                    "type": "number"
-                  },
                   "max_charging_rate_hour": {
                     "type": "number"
                   },

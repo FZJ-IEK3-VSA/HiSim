@@ -3,6 +3,7 @@
 # Generic/Built-in
 import copy
 from dataclasses import dataclass
+from typing import ClassVar
 from dataclasses_json import dataclass_json
 
 # Owned
@@ -16,10 +17,16 @@ from hisim.economics.facts import CostRelevance
 class ExampleStorageState:
     """A class to simulate the Example Storage State."""
 
-    def __init__(self, min_val_in_kwh: float, max_val_in_kwh: float) -> None:
-        """Constructs all the neccessary attributes for the ExampleStorage object."""
+    def __init__(self, min_val_in_kwh: float, max_val_in_kwh: float, fill_in_kwh: float) -> None:
+        """Hold the storage's fill level between its floor and its capacity.
 
-        self.fill_in_kwh: float = 0
+        Args:
+            min_val_in_kwh: The fill level below which nothing can be withdrawn, in kWh.
+            max_val_in_kwh: The capacity, the fill level above which nothing can be stored, in kWh.
+            fill_in_kwh: The fill level the storage starts with, in kWh.
+        """
+
+        self.fill_in_kwh: float = fill_in_kwh
         self.max_val_in_kwh: float = max_val_in_kwh
         self.min_val_in_kwh: float = min_val_in_kwh
 
@@ -103,6 +110,11 @@ class SimpleStorage(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: The share of the capacity the storage holds before the first step, dimensionless between 0 and 1: a half-full
+    #: storage, which can take a charge and give one from the first step, rather than an empty or a full one. For
+    #: example, the 50 kWh preset storage starts with 25 kWh.
+    INITIAL_FILL_FRACTION: ClassVar[float] = 0.5
+
     ChargingAmount: str = "ChargingAmount"
     DischargingAmount: str = "DischargingAmount"
     ActualStorageDelta: str = "ActualStorageDelta"
@@ -129,7 +141,11 @@ class SimpleStorage(PhysicsComponent):
             my_display_config=my_display_config,
         )
         # Initialized variables
-        self.state: ExampleStorageState = ExampleStorageState(0, self.simplestorageconfig.capacity_in_kwh)
+        self.state: ExampleStorageState = ExampleStorageState(
+            min_val_in_kwh=0,
+            max_val_in_kwh=self.simplestorageconfig.capacity_in_kwh,
+            fill_in_kwh=self.INITIAL_FILL_FRACTION * self.simplestorageconfig.capacity_in_kwh,
+        )
         self.capacity_in_kwh: float = self.simplestorageconfig.capacity_in_kwh
         self.previous_state: ExampleStorageState = copy.copy(self.state)
 

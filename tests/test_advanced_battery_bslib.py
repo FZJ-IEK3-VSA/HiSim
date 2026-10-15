@@ -10,6 +10,7 @@ from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.config import ComponentID, ConfigSizingError, SizingContext, auto_fields, concrete
 from tests import functions_for_testing as fft
 
@@ -507,3 +508,69 @@ class TestStoredEnergyAndLosses:
         expected_losses_in_kilowatt_hour = charged_in_kilowatt_hour - stored_in_kilowatt_hour
         assert opex.total_consumption_in_kwh == pytest.approx(expected_losses_in_kilowatt_hour, abs=0.11)
         assert 0.0 < opex.total_consumption_in_kwh < 0.2 * charged_in_kilowatt_hour
+
+    @staticmethod
+    def bare_kpi_preparation(battery: advanced_battery_bslib.Battery) -> KpiPreparation:
+        """Build a KPI preparation that knows only the battery's simulation parameters.
+
+        ``KpiPreparation.__init__`` needs a finished simulation; the filter and the battery KPIs read only the time
+        step, so the object is created without the constructor.
+
+        Args:
+            battery: The battery whose simulation parameters the preparation reads.
+
+        Returns:
+            The preparation, ready for direct calls of its filter and its battery KPIs.
+        """
+        preparation = KpiPreparation.__new__(KpiPreparation)
+        preparation.simulation_parameters = battery.my_simulation_parameters
+        return preparation
+
+    @pytest.mark.base
+    def test_the_battery_kpis_subtract_the_stored_energy_the_filter_collects(self) -> None:
+        """Catches the KPI filter not collecting the battery's stored-energy output into the losses.
+
+        The battery's real outputs go through ``filter_results_according_to_postprocessing_flags`` and then
+        ``compute_battery_kpis``: one hour of charging at 4 kW from empty, then half an hour of discharging at 3 kW.
+        The losses must be charged minus discharged minus the state-of-charge change times the capacity, a few percent
+        of the charge, not the energy the battery still holds.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 60 + [-3000.0] * 30, state_of_charge_at_start=0.0)
+        preparation = self.bare_kpi_preparation(battery)
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=battery.component_id.building_label
+        )
+        charged, discharged, losses = preparation.compute_battery_kpis(result_dataframe=filtered)
+        stored_increase_in_kilowatt_hour = (
+            frame.iloc[-1, outputs.index(battery.state_of_charge_channel)] * self.CAPACITY_IN_WATT_HOUR / 1e3
+        )
+        assert stored_increase_in_kilowatt_hour > 1.0  # the run must leave the battery clearly fuller
+        assert losses == pytest.approx(charged - discharged - stored_increase_in_kilowatt_hour, rel=1e-9)
+        assert 0.0 < losses < 0.2 * charged
+
+    @pytest.mark.base
+    def test_the_kpi_filter_refuses_a_battery_without_its_stored_energy_output(self) -> None:
+        """Catches a battery whose stored energy is missing from the KPIs silently booking what it holds as lost."""
+        battery, outputs, frame = self.run_steps([4000.0] * 10, state_of_charge_at_start=0.0)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        increase = battery.stored_energy_increase_channel
+        outputs_without_increase = [output for output in outputs if output is not increase]
+        frame_without_increase = frame.drop(columns=frame.columns[increase_column])
+        preparation = self.bare_kpi_preparation(battery)
+        with pytest.raises(ValueError, match="STORED_ENERGY_INCREASE"):
+            preparation.filter_results_according_to_postprocessing_flags(
+                all_outputs=outputs_without_increase,
+                results=frame_without_increase,
+                building_objects_in_district=battery.component_id.building_label,
+            )
+
+    @pytest.mark.base
+    def test_the_opex_refuses_outputs_without_the_stored_energy_output(self) -> None:
+        """Catches the OPEX falling back to charged minus discharged when its stored-energy output is not passed."""
+        battery, outputs, frame = self.run_steps([4000.0] * 10, state_of_charge_at_start=0.0)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        increase = battery.stored_energy_increase_channel
+        outputs_without_increase = [output for output in outputs if output is not increase]
+        frame_without_increase = frame.drop(columns=frame.columns[increase_column])
+        with pytest.raises(ValueError, match="STORED_ENERGY_INCREASE"):
+            battery.get_cost_opex(all_outputs=outputs_without_increase, postprocessing_results=frame_without_increase)

@@ -17,7 +17,9 @@ A sample's run is made once by the module's run cache, which keeps the run of on
 time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each other, and the
 run of a sample (its frames and its directory) is released when the next sample's run is made.
 Under ``xdist`` every sample is one ``xdist_group``, so ``--dist loadgroup`` keeps its tests on one
-worker.
+worker; every monotone sweep and every library check is a group of its own too, so the PR tier (``pytest
+(assemblies)``, ``--dist loadgroup``) spreads the module's tests over all four workers, each worker making
+only the runs of the samples it was given.
 
 A sample a member's component refuses at construction (``ConfigurationRefusedError``, such as a heat
 pump's W55 SCOP above its W35 SCOP) is handled, not failed: its tests are skipped, naming the
@@ -131,7 +133,10 @@ class ContractLibrary:
                         pytest.param(
                             Sweep(self.directory, path, declaration, base),
                             id=f"{path}:{base.sample_id}:monotone[{index}]",
-                            marks=pytest.mark.nightly if base.nightly else pytest.mark.assemblies,
+                            marks=[
+                                pytest.mark.nightly if base.nightly else pytest.mark.assemblies,
+                                pytest.mark.xdist_group(f"{path}:{base.sample_id}:monotone{index}"),
+                            ],
                         )
                     )
 
@@ -183,7 +188,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize(
             "library, assembly_path",
             [
-                pytest.param(library.directory, path, id=path, marks=pytest.mark.assemblies)
+                pytest.param(
+                    library.directory,
+                    path,
+                    id=path,
+                    marks=[pytest.mark.assemblies, pytest.mark.xdist_group(f"{path}:library_check")],
+                )
                 for library in libraries
                 for path in library.paths
             ],

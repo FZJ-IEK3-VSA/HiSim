@@ -68,14 +68,21 @@ the wait held a runner: 28 idle minutes in a good run, an hour when it timed out
 request. Since CI moved to the self-hosted runners it waits for nothing: it starts on the same
 push or pull request as every other workflow. A wait that costs a runner is a bug, not a cost.
 
-The golden gates run as shards (`scripts/golden_matrix.py --shards 4`): four week jobs, each
-running four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has
-one, its composed file side by side in one pool (`golden_check.py --mode all`), and five
-full-year jobs (`--shards 5`) running two simulations at once, the composed files among them
-(`--mode python composed`). A shard is
-expected to use all four cores, so "holding a runner idle" on one of them means a pair ran far
-past its weight (`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit
-means a pair outgrew its horizon's `PAIRS_AT_ONCE`.
+The week gate runs as shards (`scripts/golden_matrix.py --shards 4`): four jobs, each running
+four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has one, its
+composed file side by side in one pool (`golden_check.py --mode all`). A shard is expected to use
+all four cores, so "holding a runner idle" on one of them means a pair ran far past its weight
+(`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit means a pair
+outgrew its horizon's `PAIRS_AT_ONCE`. The full-year gate runs one job per run instead
+(`golden_matrix.py --runs`, about 30 jobs: every Python full-year pair, and each composed file's
+run separately), so its wall time is its slowest run; such a job uses one core of four by design,
+and a long one is flagged as holding a runner idle without anything being wrong.
+
+The slow pytest shards are split over several jobs (`tests/ci_split.py`, `--ci-group k/n`):
+`extendedbase` as three jobs of two workers, `extendedbase2` as two serial jobs. A split job
+that runs far longer than its siblings means the weights in `tests/ci_durations.json` are stale;
+each split job uploads its measured seconds per unit (`ci-durations-<job>`), and the docstring of
+`tests/ci_split.py` says how to merge them into the table.
 
 Both a proportional and an absolute threshold have to be crossed, and only successful runs
 form a baseline. Shared runners vary by tens of percent for reasons nobody controls, a
@@ -105,7 +112,7 @@ was pushed costs a handful of requests, and the request cap is 500.
 
 Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
 one download each, and the golden workflows uploaded 66 per push to `main` before they were
-sharded (about ten since) — so a
+sharded, and golden-year's one job per run uploads about 30 again — so a
 single sweep a day could never keep up with them, and they are collected for `main` and for
 flagged jobs rather than for everything. Pull-request jobs still produce and print their own
 numbers; they just don't feed the trend.

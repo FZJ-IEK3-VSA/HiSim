@@ -18,6 +18,7 @@ from scripts.golden_matrix import (
     HORIZON_FACTORIES,
     PAIRS_AT_ONCE,
     build_matrix,
+    build_runs,
     build_shards,
     composed_setups,
     main,
@@ -320,6 +321,45 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
     assert len(year) == 5 and sum(cell["count"] for cell in year) == 22
     assert len(bless_year) == 4 and sum(cell["count"] for cell in bless_year) == 22
     assert all(cell["count"] > 0 for cell in [*week, *year, *bless_year])
+
+
+def test_runs_give_every_run_a_cell_of_its_own_heaviest_first() -> None:
+    """golden-year's matrix: one cell per (pair, mode), each pair's Python run and its composed run where it has one.
+
+    Catches a run dropped or doubled (a gate covering less, or paying a runner twice) and an order that would queue
+    the longest run last.
+    """
+    config = _weighted_config()
+    cells = build_runs(config, horizon="year", composed=frozenset({"heavy"}))["include"]
+    assert [(cell["setup"], cell["mode"], cell["seconds"]) for cell in cells] == [
+        ("heavy", "python", 470),
+        ("heavy", "composed", 470),
+        ("big", "python", DEFAULT_PAIR_SECONDS),
+    ]
+    assert all(cell["pair"] == f"{cell['setup']}:{cell['param']}" for cell in cells)
+    assert len({cell["name"] for cell in cells}) == len(cells)
+    week = build_runs(config, horizon="week", with_yaml=True)["include"]
+    week_pairs = build_matrix(config, horizon="week")["include"]
+    expected = sorted((pair["setup"], mode) for pair in week_pairs for mode in ("python", "yaml"))
+    assert sorted((cell["setup"], cell["mode"]) for cell in week) == expected
+    assert [cell["seconds"] for cell in week] == sorted((cell["seconds"] for cell in week), reverse=True)
+
+
+def test_the_shipped_config_gives_golden_year_one_job_per_run() -> None:
+    """The year tier's call: the 22 Python full-year runs and one composed run per setup with a composed file."""
+    config = json.loads(REAL_CONFIG.read_text())
+    composed = composed_setups(config, REPO_ROOT)
+    cells = build_runs(config, horizon="year", composed=composed)["include"]
+    python_setups = sorted(cell["setup"] for cell in cells if cell["mode"] == "python")
+    assert python_setups == sorted(setup["id"] for setup in config["setups"])
+    assert {cell["setup"] for cell in cells if cell["mode"] == "composed"} == set(composed)
+    assert len(cells) == 22 + len(composed)
+
+
+def test_runs_and_shards_exclude_each_other() -> None:
+    """A cell is either one run or one shard; asking for both is refused rather than one silently winning."""
+    with pytest.raises(SystemExit):
+        main(["--horizon", "year", "--runs", "--shards", "4"])
 
 
 def test_the_cli_prints_shards_as_one_json_line(capsys: pytest.CaptureFixture[str]) -> None:

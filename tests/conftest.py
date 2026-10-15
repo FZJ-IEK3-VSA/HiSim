@@ -28,6 +28,7 @@ import pytest
 
 from hisim.caching import CacheSettings
 from hisim.result_path_provider import ResultPathProviderSingleton
+from tests import ci_split
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 
@@ -323,8 +324,27 @@ def _record_result_dir(request: pytest.FixtureRequest) -> Iterator[None]:
     window.last_test = request.node.nodeid
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Registers the hooks of the CI split (``tests/ci_split.py``): module groups under loadgroup, durations, plan."""
+    config.pluginmanager.register(ci_split.CiSplitPlugin(config), "hisim_ci_split")
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Keeps the ``--ci-group k/n`` of the tests ``-m`` selected (``tests/ci_split.py``); a no-op without the option.
+
+    ``trylast`` puts it behind pytest's own ``-m`` selection, so every job of a split cuts its groups from
+    the same selected tests.
+    """
+    ci_split.select_group(config, items)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """The options of the assembly test contracts, ``tests/assemblies/test_library_contracts.py`` (spec §9.4)."""
+    """The options of the assembly test contracts (``tests/assemblies/test_library_contracts.py``, spec §9.4).
+
+    And those of the CI split, ``--ci-group``, ``--ci-durations-out`` and ``--ci-split-plan`` (``tests/ci_split.py``).
+    """
+    ci_split.add_options(parser)
     group = parser.getgroup("assemblies", "assembly test contracts (assemblies_spec.md §9.4)")
     group.addoption(
         "--assembly-library",

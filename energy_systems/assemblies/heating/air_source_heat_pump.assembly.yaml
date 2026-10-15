@@ -143,6 +143,12 @@ tests:
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius, unit: CELSIUS, min: -300, max: 300}
+      # hypothetical end temperatures without one circuit, from which the controllers set their fractions: a step's
+      # whole draw or charge without its counterpart can carry them far outside the range of liquid water
     - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}           # 1000 l at 100 °C: 116 kWh
     - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}
     - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}  # zero here

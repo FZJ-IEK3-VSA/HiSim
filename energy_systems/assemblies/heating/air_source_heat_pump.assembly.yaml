@@ -45,6 +45,7 @@ components:
     inputs:
       - {$port: weather}                                    # DailyAverageOutsideTemperature
       - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
+      - HeatPump                                            # PartLoadRatioRunSh
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   ControllerDHW:
@@ -127,6 +128,12 @@ tests:
     - {output: HeatPump.CumulativeThermalEnergyTotal, unit: WATT_HOUR, min: 0, max: 1000000}
     - {output: HeatPump.CumulativeElectricalEnergyTotal, unit: WATT_HOUR, min: 0, max: 600000}
     - {output: HeatPump.DeltaTHeatpumpSecondarySide, unit: KELVIN, min: -10, max: 40}         # hydronic spreads, 3-15 K
+    - {output: HeatPump.PartLoadRatioRunSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge ran, reported back to the controller
+    - {output: ControllerSH.PartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge runs: 1 at and below the part-load threshold
+    - {output: ControllerSH.TargetTemperatureShInCelsius, unit: CELSIUS, min: 0, max: 100}
+      # the heating curve's supply temperature plus the energy manager's raise, at which the charge ends the buffer
     - {output: HeatPump.ThermalOutputPowerDHW, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ElectricalInputPowerDHW, unit: WATT, min: 0, max: 25000}
       # a cylinder above about 63 °C runs hplib at COP 1, its heating-rod mode, where the electricity is the heat:

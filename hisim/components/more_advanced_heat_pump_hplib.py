@@ -15,7 +15,7 @@ import hashlib
 import importlib
 import math
 from enum import Enum, unique
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
@@ -50,6 +50,7 @@ from hisim.config import (
 from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
+from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.loadtypes import (
     ComponentType,
@@ -261,6 +262,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     Model will switch between both states, but priority is on dhw.
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
+
+    A space-heating charge its space-heating controller commands runs the part-load ratio the controller sends
+    (``PartLoadRatioSh``): 1, the whole step, at and below the part-load threshold, and above it the fraction of the
+    step that ends the space-heating buffer at the controller's target. Below 1 the heat pump publishes the averaged
+    flow at its full-load outlet, books ``P_th = m c (T_out - T_ret)`` and ``P_el = P_th / COP`` from that flow, and
+    the ratio of the brine pump's electricity (:meth:`part_loaded_space_heating`). A space-heating step the heat pump
+    keeps running against its controller (its minimum running time) runs the whole step. It reports the ratio it ran
+    with (``PartLoadRatioRunSh``): the commanded ratio, 1 for a step it keeps running on its own, 0 in any other mode.
+    The hot-water side runs whole steps.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -275,8 +285,12 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
+    #: The fraction of the step a space-heating charge runs, commanded by the space-heating controller.
+    PartLoadRatioSh = "PartLoadRatioSh"
 
     # Outputs
+    #: The fraction of the step the space-heating charge ran, reported back to the space-heating controller.
+    PartLoadRatioRunSh = "PartLoadRatioRunSh"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -486,6 +500,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             field_name=self.OnOffSwitchSH,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
+            mandatory=False,
+        )
+
+        self.space_heating_part_load_command = PartLoadCommand(
+            self,
+            input_name=self.PartLoadRatioSh,
+            ratio_run_output_name=self.PartLoadRatioRunSh,
+            device_description="the heat pump's space-heating charge",
             mandatory=False,
         )
 
@@ -951,6 +973,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioSh,
+                hpc_classname,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh,
+            )
+        )
         return connections
 
     def get_default_connections_from_heat_pump_controller_dhw(
@@ -1348,11 +1377,91 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         elif self.cycling_mode is not False:
             raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
-        operation = self.operation_in_mode(on_off, conditions, timers)
+        operation = self.space_heating_at_part_load(
+            stsv,
+            self.operation_in_mode(on_off, conditions, timers),
+            on_off=on_off,
+            on_off_space_heating=on_off_space_heating,
+            return_temperature_in_celsius=conditions.space_heating_return_temperature_in_celsius,
+        )
         timers_after = self.advanced_run_timers(
             on_off=on_off, timers=timers, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
         )
         self.publish_operation(stsv, on_off, conditions, operation, timers_after)
+
+    def space_heating_at_part_load(
+        self,
+        stsv: SingleTimeStepValues,
+        operation: "HeatPumpOperation",
+        *,
+        on_off: float,
+        on_off_space_heating: float,
+        return_temperature_in_celsius: float,
+    ) -> "HeatPumpOperation":
+        """Run a space-heating step at the part-load ratio the space-heating controller commands; report the ratio run.
+
+        A space-heating step the controller commands runs the commanded ratio (:meth:`part_loaded_space_heating`); a
+        space-heating step the heat pump keeps running against its controller (its minimum running time) runs the
+        whole step and reports 1; a step in any other mode reports 0 and is returned unchanged.
+
+        Args:
+            stsv: The step's values, to read the commanded ratio from and to publish the ratio run to.
+            operation: The step at full load in the mode the heat pump runs.
+            on_off: The mode the heat pump runs, 1 for space heating.
+            on_off_space_heating: The space-heating controller's signal, 1 for heating.
+            return_temperature_in_celsius: The space-heating circuit's return temperature, in °C.
+
+        Returns:
+            The step at the ratio run.
+        """
+        ratio_run = 0.0
+        if on_off == 1 and on_off_space_heating == 1:
+            ratio_run = self.space_heating_part_load_command.ratio(stsv)
+            operation = self.part_loaded_space_heating(
+                operation, part_load_ratio=ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
+            )
+        elif on_off == 1:
+            ratio_run = 1.0
+        self.space_heating_part_load_command.publish_ratio_run(stsv, ratio_run)
+        return operation
+
+    @classmethod
+    def part_loaded_space_heating(
+        cls, full_load: "HeatPumpOperation", *, part_load_ratio: float, return_temperature_in_celsius: float
+    ) -> "HeatPumpOperation":
+        """Return a space-heating step's flow and powers when the heat pump runs a fraction of the step at full load.
+
+        The circuit carries the averaged flow, the full-load flow times the ratio, at the full-load outlet
+        temperature; the thermal and electrical power follow from that flow at the step's COP
+        (:meth:`booked_heating_powers_in_watt`), and the brine pump, which runs only while the compressor does, draws
+        the ratio of its power. A ratio of 1 returns the full-load step unchanged. Example: 0.4 kg/s from 30 to 35 °C at
+        a COP of 4 and a 100 W brine pump, at a ratio of 0.25, give 0.1 kg/s, 2090 W of heat, 522.5 W of electricity
+        and 25 W for the brine pump. At a ratio of 0 nothing flows and nothing is booked.
+
+        Args:
+            full_load: The space-heating step at full load over the whole step.
+            part_load_ratio: The fraction of the step the heat pump runs, from 0 to 1.
+            return_temperature_in_celsius: The circuit's return temperature, the buffer's start temperature, in °C.
+
+        Returns:
+            The space-heating step at that ratio.
+        """
+        if part_load_ratio >= 1.0:
+            return full_load
+        mass_flow_in_kg_per_second = part_load_ratio * full_load.mass_flow_space_heating_in_kg_per_second
+        powers = cls.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=full_load.outlet_temperature_space_heating_in_celsius,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            cop=full_load.cop,
+        )
+        return replace(
+            full_load,
+            mass_flow_space_heating_in_kg_per_second=mass_flow_in_kg_per_second,
+            thermal_power_space_heating_in_watt=powers.thermal_power_in_watt,
+            electrical_power_space_heating_in_watt=powers.electrical_power_in_watt,
+            electrical_power_brine_pump_in_watt=part_load_ratio * full_load.electrical_power_brine_pump_in_watt,
+        )
 
     def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
         """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
@@ -2629,12 +2738,30 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     mode : int
         Mode index for operation type for this heat pump
 
+    The controller also owns how much of a step a space-heating charge runs
+    (:class:`hisim.part_load.StartOfStepPartLoadControl`): it switches heating on and off on the buffer's
+    start-of-step temperature as before, and commands the part-load ratio ``PartLoadRatioSh`` with it. At and below the
+    part-load threshold the ratio is 1 whenever the heat pump heats. Above it, with the buffer wired, the ratio is
+    :meth:`hisim.part_load.StartOfStepPartLoadRule.raising_ratio`: the fraction that ends the buffer at its target
+    (``TargetTemperatureShInCelsius``), the heating curve's supply temperature raised by the energy manager's
+    modifier, read from the buffer's end temperature and its end temperature without the heat pump. While the
+    controller heats, a buffer at or above its target that its draw would take below it is charged as well, for the
+    fraction that ends it at the target. Under ``force_convergence`` the ratio becomes the ratio the heat pump reports
+    it ran with (``PartLoadRatioRunSh``).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInput = "WaterTemperatureInput"
+    #: The buffer's temperature at the end of the step, which the part-load ratio is set against.
+    WaterTemperatureAtEndOfStepFromWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWaterStorageInCelsius"
+    #: The buffer's temperature at the end of the step without the heat pump's circuit.
+    WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius = (
+        "WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius"
+    )
+    #: The fraction of the step the heat pump's space-heating charge ran, as the heat pump reports it.
+    PartLoadRatioRunSh = "PartLoadRatioRunSh"
     SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
     HeatingSeason = "HeatingSeason"
 
@@ -2644,6 +2771,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
     # Outputs
     State_SH = "State_SH"
+    #: The fraction of the step the space-heating charge runs.
+    PartLoadRatioSh = "PartLoadRatioSh"
+    #: The buffer temperature the space-heating charge aims at.
+    TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
 
     def __init__(
         self,
@@ -2719,6 +2850,18 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             output_description=f"here a description for {self.State_SH} will follow.",
         )
 
+        self.space_heating_part_load = StartOfStepPartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+            end_temperature_without_circuit_input_name=(
+                self.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius
+            ),
+            ratio_run_input_name=self.PartLoadRatioRunSh,
+            ratio_output_name=self.PartLoadRatioSh,
+            device_description="the heat pump's space-heating charge",
+            target_output_name=self.TargetTemperatureShInCelsius,
+        )
+
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
@@ -2726,6 +2869,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
 
     @staticmethod
     def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
@@ -2776,7 +2920,38 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        controller = MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+        buffer = simple_water_storage.SimpleHotWaterStorage
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius,
+            )
+        )
         return connections
+
+    @staticmethod
+    def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
+        """Return the connection of the ratio the heat pump's space-heating charge ran, from the heat pump.
+
+        Returns:
+            The one connection of ``PartLoadRatioRunSh``.
+        """
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioRunSh,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh,
+            )
+        ]
 
     def get_default_connections_from_energy_management_system(
         self,
@@ -2841,10 +3016,14 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         return self.heatpump_controller_config.get_string_dict()
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat pump comtroller."""
+        """Decide heating, cooling or off on the buffer's start temperature, and the space-heating part-load ratio.
+
+        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio: it
+        becomes the ratio the heat pump reports it ran with, so the charge stops changing.
+        """
 
         if force_convergence:
-            pass
+            self.space_heating_part_load.publish_held(stsv)
         else:
             # Retrieves inputs
 
@@ -2909,6 +3088,33 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 raise ValueError("Advanced HP Lib Controller State unknown.")
 
             stsv.set_output_value(self.state_channel, state)
+            self.space_heating_part_load.publish_raising(
+                stsv,
+                device_runs=state == 1,
+                target_temperature_in_celsius=self.space_heating_target_temperature_in_celsius(
+                    supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+                ),
+            )
+
+    @staticmethod
+    def space_heating_target_temperature_in_celsius(
+        *, supply_temperature_set_in_celsius: float, storage_temperature_modifier_in_kelvin: float
+    ) -> float:
+        """Return the buffer temperature a space-heating charge ends the step at above the part-load threshold, in °C.
+
+        It is the heating curve's supply temperature, raised by the energy manager's modifier, so a buffer the energy
+        manager raises to store surplus electricity as heat is charged to the raised temperature. Example: a 35 °C
+        supply temperature and a 5 K raise give a 40 °C target.
+
+        Args:
+            supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
+            storage_temperature_modifier_in_kelvin: The energy manager's raise of the buffer, in K; 0 without one.
+
+        Returns:
+            The target, in °C.
+        """
+        return supply_temperature_set_in_celsius + storage_temperature_modifier_in_kelvin
 
     def conditions_on_off(
         self,

@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import platform
+import signal
 import subprocess
 import sys
 import time
@@ -560,9 +561,10 @@ class ChildRuns:
     reads back. Everything the child prints goes to ``<pair>.log`` in :data:`WORK_SUBDIR`, and a
     child that ends without writing its result — a crash of the interpreter, or the kernel's
     out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines. A child
-    that runs longer than its timeout (:meth:`timeout_in_seconds`) is killed and becomes a
-    ``run_error`` of its pair the same way, so a hung simulation fails its pair by name instead of
-    holding a CI runner until the job's own limit.
+    that runs longer than its timeout (:meth:`timeout_in_seconds`) is killed together with the
+    processes it started (:meth:`kill_with_its_children`) and becomes a ``run_error`` of its pair
+    the same way, so a hung simulation fails its pair by name instead of holding a CI runner until
+    the job's own limit.
 
     The children keep the process-id default of the LoadProfileGenerator base index
     (``PylpgWorkspace.default_base_index``) rather than borrowing from an ``LpgBaseIndexPool``:
@@ -583,6 +585,33 @@ class ChildRuns:
     #: The shortest timeout a child gets, in seconds, so a pair recorded at a few seconds still
     #: has time to import HiSim and read its inputs on a busy machine.
     MINIMAL_TIMEOUT_IN_SECONDS = 600.0
+
+    #: Whether a timed-out child is killed together with every process it started (POSIX), or alone
+    #: (Windows, which has no process groups to kill).
+    KILLS_PROCESS_GROUP = hasattr(os, "killpg")
+
+    @classmethod
+    def kill_with_its_children(cls, child: subprocess.Popen) -> None:
+        """Kill a timed-out child and every process it started, then wait for the child.
+
+        The child runs in a session of its own (``start_new_session``), so its process id is also
+        the id of its process group, and ``os.killpg`` reaches the processes it started too: a
+        LoadProfileGenerator calculation the child is waiting for, which killing the child alone
+        would leave running on the machine. Example: a full-year pair hangs inside the LPG; the
+        Python child and the LPG binary both receive SIGKILL. Where there are no process groups
+        (Windows), only the child is killed.
+
+        Args:
+            child: The child process, started with ``start_new_session=KILLS_PROCESS_GROUP``.
+        """
+        if cls.KILLS_PROCESS_GROUP:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # the whole group ended between the timeout and the kill
+        else:
+            child.kill()
+        child.wait()
 
     @classmethod
     def timeout_in_seconds(cls, setup: SetupConfig, parameter_set: ParameterSetConfig) -> float:
@@ -646,31 +675,35 @@ class ChildRuns:
         timeout_in_seconds = cls.timeout_in_seconds(setup, parameter_set)
         started = time.monotonic()
         with log_path.open("w", encoding="utf-8") as log:
-            try:
-                completed: Optional[subprocess.CompletedProcess] = subprocess.run(
-                    cls.command(payload),
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    cwd=repo_root,
-                    env=env,
-                    check=False,
-                    timeout=timeout_in_seconds,
-                )
-            except subprocess.TimeoutExpired:
-                completed = None  # subprocess.run has killed the child and waited for it
+            # A session of its own makes the child the leader of a process group that also holds the
+            # processes it starts, so a timeout can end the LoadProfileGenerator binary along with it.
+            with subprocess.Popen(
+                cls.command(payload),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=repo_root,
+                env=env,
+                start_new_session=cls.KILLS_PROCESS_GROUP,
+            ) as child:
+                returncode: Optional[int]
+                try:
+                    returncode = child.wait(timeout=timeout_in_seconds)
+                except subprocess.TimeoutExpired:
+                    cls.kill_with_its_children(child)
+                    returncode = None
         duration = round(time.monotonic() - started, 1)
-        if completed is not None and completed.returncode == 0 and out_path.exists():
+        if returncode == 0 and out_path.exists():
             result = RunResult(**json.loads(out_path.read_text(encoding="utf-8")))
             result.duration_s = duration
             return result
-        if completed is None:
+        if returncode is None:
             how = (
                 f"ran longer than its timeout of {timeout_in_seconds:g} s "
                 f"({cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO:g} times the {setup.recorded_seconds(parameter_set.id):g} s "
                 f"recorded for {setup.id} / {parameter_set.id} in golden_config.json) and was killed"
             )
         else:
-            code = completed.returncode
+            code = returncode
             how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
             if code in (-9, 137):
                 how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"

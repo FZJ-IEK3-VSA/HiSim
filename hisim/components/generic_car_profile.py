@@ -3,7 +3,8 @@
 What this module produces is one artifact: two series, one value per simulated timestep -- the car's
 location as a number (0 away, 1 at home, 2 at the workplace) and the metres it drove in the timestep --
 computed from the minute profile the occupancy publishes for the car. The LoadProfileGenerator reports
-that profile per minute in local time, so the calculation converts it to UTC and then aggregates it to
+that profile per minute on the wall clock, so the calculation puts it onto the run's standard-time clock
+(:class:`hisim.components.lpg_local_time.LpgLocalTime`), cuts out the run's window and aggregates it to
 the run's timestep: distances are summed, and the location is the most frequent one of the minutes in
 the timestep.
 
@@ -52,7 +53,7 @@ __status__ = "development"
 class CarProfileInputs:
     """Everything :func:`produce_car_profile` depends on, plus the hash that names the profile in the key.
 
-    Key material: the hash of the minute profile, its resolution, and the run's year, window, span and
+    Key material: the hash of the minute profile, its resolution, and the run's year, window and
     timestep.
     Payload, excluded from the key by :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`: the two minute
     series themselves, which the hash identifies.
@@ -88,7 +89,7 @@ class CarProfileInputs:
     #: The resolution of the minute profile as the LoadProfileGenerator states it, ``"HH:MM:SS"``.
     lpg_time_resolution: str
 
-    #: The simulated year. The conversion to UTC looks up that year's daylight-saving switches.
+    #: The simulated year. The profile's minutes are labelled in it, with its daylight-saving switches.
     year: int
 
     #: The simulation's timestep in seconds; the minute profile is aggregated to it.
@@ -96,9 +97,6 @@ class CarProfileInputs:
 
     #: How many values each produced series has.
     timesteps: int
-
-    #: The simulated span in whole days. The profile is cut to this many days before the conversion.
-    duration_in_days: int
 
     #: The run's first instant, ISO 8601 without a time zone, for example ``"2021-07-01T00:00:00"``.
     #: Key material only: :func:`produce_car_profile` does not read it yet and cuts every profile from
@@ -146,19 +144,17 @@ class CarProfileInputs:
     def __post_init__(self) -> None:
         """Refuse a run the producer cannot cut a profile for, before the cache is looked up.
 
-        Three things have to hold. The profile must have one value per minute
-        (:attr:`PROFILE_RESOLUTION_IN_SECONDS`), because the producer stamps it minute by minute: a
-        profile of one value per 5 minutes would get a time column five times its length. The run's
+        Two things have to hold. The profile must have one value per minute
+        (:attr:`PROFILE_RESOLUTION_IN_SECONDS`), because the producer labels it minute by minute: a
+        profile of one value per 5 minutes would be read as five times as long as it is. And the run's
         timestep must be a whole multiple of the profile's resolution, because a timestep aggregates
-        whole minutes: at 30 s per timestep there is no minute to aggregate. And the run's timesteps
-        must cover exactly its span in days, because the producer cuts the minute profile by the one
-        and returns one row per the other. Example: 48 timesteps of 3600 s span 2 days; 48 timesteps
-        over 3 days are refused. Without this check each mistake surfaces as a pandas length error
-        inside the producer.
+        whole minutes: at 30 s per timestep there is no minute to aggregate. Example: a run at 900 s
+        reads 15 minutes per timestep; a run at 30 s is refused. Without this check each mistake
+        surfaces as a pandas length error inside the producer.
 
         Raises:
-            ValueError: if the profile is not one value per minute, the timestep is not a whole
-                multiple of the profile's resolution, or the timesteps do not cover the span in days.
+            ValueError: if the profile is not one value per minute, or the timestep is not a whole
+                multiple of the profile's resolution.
         """
         profile_seconds = self.profile_resolution_in_seconds()
         if profile_seconds != self.PROFILE_RESOLUTION_IN_SECONDS:
@@ -170,11 +166,6 @@ class CarProfileInputs:
             raise ValueError(
                 f"The car's driving profile has one value per {profile_seconds} s, so the run's timestep "
                 f"must be a whole multiple of it; {self.seconds_per_timestep} s is not."
-            )
-        if self.timesteps * self.seconds_per_timestep != self.duration_in_days * 86400:
-            raise ValueError(
-                f"The car's driving profile is cut for {self.duration_in_days} days, but {self.timesteps} "
-                f"timesteps of {self.seconds_per_timestep} s do not span them."
             )
 
     def profile_resolution_in_seconds(self) -> int:
@@ -192,9 +183,9 @@ class CarProfileInputs:
 def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
     """Produce the car's location and driven distance per timestep of the run.
 
-    The minute profile is cut to the run's span, stamped with the minutes of that span from 1 January
-    of the simulated year, converted to UTC and aggregated to the run's timestep: the distances of a
-    timestep are summed and its location is the most frequent of its minutes.
+    The minute profile is labelled with the wall-clock minutes from 1 January of the simulated year, put
+    onto the run's standard-time clock, cut to the run's window and aggregated to the run's timestep: the
+    distances of a timestep are summed and its location is the most frequent of its minutes.
 
     Args:
         inputs: the calculation's inputs.
@@ -206,26 +197,27 @@ def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
     minutes_per_timestep = inputs.seconds_per_timestep // inputs.profile_resolution_in_seconds()
     steps_desired_in_minutes = inputs.timesteps * minutes_per_timestep
 
-    # extract values for location and distance of car, include time information and translate the car
-    # location to integers
-    initial_data = pd.DataFrame(
+    # The minutes of the profile, the car location translated to integers. A window that ends in summer ends an
+    # hour later on the wall clock the profile is labelled in, so that hour is read too where the profile has it.
+    minutes_to_read = lpg_local_time.LpgLocalTime.minutes_to_read(steps_desired_in_minutes)
+    minute_profile = pd.DataFrame(
         {
-            "Time": pd.date_range(
-                start=dt.datetime(year=inputs.year, month=1, day=1),
-                end=dt.datetime(year=inputs.year, month=1, day=1)
-                + dt.timedelta(days=inputs.duration_in_days)
-                - dt.timedelta(seconds=60),
-                freq="min",
-            ),
-            CarProfileInputs.DISTANCE_COLUMN: list(
-                inputs.driven_distance_per_minute_in_meters[:steps_desired_in_minutes]
-            ),
+            CarProfileInputs.DISTANCE_COLUMN: list(inputs.driven_distance_per_minute_in_meters[:minutes_to_read]),
             CarProfileInputs.LOCATION_COLUMN: [
-                CarProfileInputs.LOCATION_NUMBERS[location] for location in inputs.car_location
-            ][:steps_desired_in_minutes],
+                CarProfileInputs.LOCATION_NUMBERS[location] for location in inputs.car_location[:minutes_to_read]
+            ],
         }
     )
-    initial_data = lpg_local_time.convert_lpg_data_to_utc(data=initial_data, year=inputs.year)
+    # Put the profile onto the run's standard-time clock and cut out the window. The profile is still read as if
+    # it started on 1 January and the run did too; hisim-9g2.6 reads the run's own start.
+    new_year = dt.datetime(year=inputs.year, month=1, day=1)
+    initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
+        minute_values=minute_profile,
+        first_label=new_year,
+        window_start=new_year,
+        window_minutes=steps_desired_in_minutes,
+        source="the car profile of the LoadProfileGenerator",
+    )
     meters_driven: Any = pd.to_numeric(initial_data[CarProfileInputs.DISTANCE_COLUMN]).tolist()
     car_location: List[Any] = pd.to_numeric(initial_data[CarProfileInputs.LOCATION_COLUMN]).tolist()
 

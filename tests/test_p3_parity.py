@@ -31,6 +31,9 @@ import yaml
 
 from hisim.config.channels import ResolvedDynamicConnection
 from hisim.energy_system.parity import WiringParityHarness, WiringSnapshot
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector, UtspLpgConnectorConfig
+from hisim.components.weather import Weather, WeatherConfig
+from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 
@@ -357,13 +360,7 @@ class Rig:
 
 @pytest.mark.base
 def test_one_week_july_is_the_first_week_of_july() -> None:
-    """Catches a summer window whose dates are not seven days, or not in July.
-
-    The definition is kept while the rig's July window is fenced (R11.5 as amended), because the
-    mid-year-start epic unfences it rather than writing it again, and a definition nobody runs is
-    exactly the kind that drifts. What this pins is the dates alone: what a run over those dates
-    currently simulates is January, which the fence tests below are about.
-    """
+    """Catches a summer window whose dates are not seven days, or not in July."""
     parameters = SimulationParameters.one_week_july(2021, 60)
     assert (parameters.start_date.month, parameters.start_date.day) == (7, 1)
     assert (parameters.end_date.month, parameters.end_date.day) == (7, 8)
@@ -373,68 +370,51 @@ def test_one_week_july_is_the_first_week_of_july() -> None:
 
 
 @pytest.mark.base
-def test_the_matrix_covers_every_recorded_setup_in_every_runnable_window() -> None:
+def test_the_matrix_covers_every_recorded_setup_in_every_window() -> None:
     """Catches a dispatch that quietly covers less than the fleet.
 
-    R11.7 asks for one table covering every triple, so a matrix that lost a setup or a runnable
-    window would make the rig's table an incomplete claim. The window vocabulary is asserted
-    against the runner's own list because the matrix script may not import HiSim and therefore
-    carries a second copy of it, and the runnable subset is asserted too so the fence cannot be
-    lifted on one side only.
+    R11.7 asks for one table covering every triple, so a matrix that lost a setup or a window would
+    make the rig's table an incomplete claim. The window vocabulary is asserted against the runner's
+    own list because the matrix script may not import HiSim and therefore carries a second copy of it.
     """
-    assert tuple(MatrixPaths.WINDOWS) == ParityWindows.names()
-    assert MatrixPaths.runnable_windows() == ParityWindows.runnable()
+    assert tuple(MatrixPaths.WINDOWS) == ParityWindows.names() == ("january", "july")
     covered = discover(None)
     assert covered, "no setup has a recorded twin, so the rig would cover nothing"
     include = build_matrix()["include"]
-    assert len(include) == len(covered) * len(ParityWindows.runnable())
+    assert len(include) == len(covered) * len(ParityWindows.names())
     for stem in covered:
         windows = {entry["window"] for entry in include if entry["setup"] == stem}
-        assert windows == set(ParityWindows.runnable())
+        assert windows == set(ParityWindows.names())
 
 
 @pytest.mark.base
-def test_the_july_window_is_fenced_out_of_every_default_dispatch() -> None:
-    """Catches the fenced window creeping back into what a dispatch runs by default.
+def test_the_july_window_reads_july_not_january(tmp_path: Path) -> None:
+    """Catches a July triple that simulates January, which is why the window was fenced until hisim-9g2.8.
 
-    A July triple compares two runs that both simulate January, because every profile-driven
-    component indexes its profile from timestep 0 (R11.5 as amended). Until the mid-year-start epic
-    fixes that, no default path may reach the window: not the matrix the discover job emits, not
-    the checker's default window list, and not the runner's.
+    The two windows' weather and occupancy are read the way a run reads them: the July window's outside air
+    is the warmer, and its household is another week of the profile than January's.
     """
-    assert "july" in MatrixPaths.WINDOWS, "the definition is kept; only the running of it is fenced"
-    assert "july" in MatrixPaths.FENCED_WINDOWS
-    assert set(MatrixPaths.FENCED_WINDOWS) <= set(MatrixPaths.WINDOWS), (
-        "a fenced window that is not a defined window is a typo the fence would silently ignore"
-    )
-    assert "july" not in MatrixPaths.runnable_windows()
-    assert "july" not in ParityWindows.runnable()
-    assert {entry["window"] for entry in build_matrix()["include"]} == {"january"}
+    published = {}
+    for window in ParityWindows.names():
+        parameters = ParityWindows.build(window, tmp_path / window / "results", tmp_path / window / "cache")
+        repository = SimRepository()
+        weather = Weather(config=WeatherConfig.preset_aachen("Weather"), my_simulation_parameters=parameters)
+        weather.set_sim_repo(repository)
+        weather.i_prepare_simulation()
+        occupancy = UtspLpgConnector(
+            my_simulation_parameters=parameters, config=UtspLpgConnectorConfig.preset_couple_both_at_work("Occupancy")
+        )
+        published[window] = (
+            repository.get_entry(Weather.RUN_WINDOW_TEMPERATURE_OUTSIDE),
+            occupancy.electricity_consumption,
+        )
 
-
-@pytest.mark.base
-def test_asking_for_the_fenced_window_is_refused_with_the_reason_and_the_pointer(tmp_path: Path) -> None:
-    """Catches a fenced window being silently dropped, or refused without saying why.
-
-    Silently running fewer triples than were asked for would report a green table over coverage
-    nobody checked, and a bare "unknown window" would send whoever asked for July looking for a
-    typo instead of at the defect. Every entry point is checked, because each of them is somebody's
-    first contact with the fence, and the last of them refuses before a simulation is started. The
-    build call gets throwaway directories: the refusal fires before they are used today, but the
-    day the epic unfences July this test is edited, not allowed to write into the checkout.
-    """
-    for refused in (
-        lambda: build_matrix(windows=["july"]),
-        lambda: ParityWindows.build("july", tmp_path / "results", tmp_path / "cache"),
-    ):
-        with pytest.raises(ValueError, match="midyear_start_epic"):
-            refused()
-
-    with pytest.raises(ValueError, match="January's profiles"):
-        build_matrix(windows=["january", "july"])
-
-    with pytest.raises(SystemExit, match="midyear_start_epic"):
-        parity_main(["--setup", Rig.FIXTURE, "--window", "july"])
+    january_air_in_celsius, january_electricity_in_watt = published["january"]
+    july_air_in_celsius, july_electricity_in_watt = published["july"]
+    assert sum(july_air_in_celsius) / len(july_air_in_celsius) > sum(january_air_in_celsius) / len(
+        january_air_in_celsius
+    ) + 10.0
+    assert july_electricity_in_watt != january_electricity_in_watt
 
 
 @pytest.mark.base

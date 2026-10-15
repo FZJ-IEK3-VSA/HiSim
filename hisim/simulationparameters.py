@@ -484,27 +484,21 @@ class SimulationParameters:
 
     @classmethod
     def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set for the first week of July; most profiles, not yet all, deliver July.
+        """Generates a parameter set for the first week of July, the summer counterpart of ``one_week_only``.
 
-        The intent was a summer counterpart to ``one_week_only``: every week- and day-sized
-        parameter set of this class starts on the first of January, which measures a cooling
-        device, a solar-thermal collector or an air conditioner at its annual minimum, and a
-        component that does nothing for the whole run proves nothing about itself. Shifting the
-        same seven days into July was meant to exercise the cooling side.
+        Every other week- and day-sized parameter set of this class starts on the first of January,
+        which measures a cooling device, a solar-thermal collector or an air conditioner at its annual
+        minimum, and a component that does nothing for the whole run proves nothing about itself. This
+        week exercises the summer side; the golden gate's ``july_week`` pairs and the parity rig's July
+        window run it.
 
-        **It does that only in part today, and a caller must not assume more.** The weather looks
-        the run's start up in its series and delivers July (``hisim/window_offset.py``), and with it
-        the PV system and the building's solar gains, which compute from the weather's published
-        window. The LoadProfileGenerator occupancy and its cars read July from their profiles
-        (``hisim/components/lpg_local_time.py``), and the CHP controller's heating season counts the
-        days of the year, and the solar-thermal collector reads the weather's sun. The CSV loader
-        still indexes its profile by the timestep number, so timestep 0 is read as the 1st of
-        January whatever this start date says. The mid-year-start epic
-        (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
-
-        The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
-        use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is
-        done. Until then it belongs in nothing that reports physics.
+        Every profile reads July (``roadmap/midyear_start_epic.md``): the weather looks the run's start
+        up in its series (``hisim/window_offset.py``), and with it the PV system, the building's solar
+        gains and the solar-thermal collector read July; the LoadProfileGenerator occupancy and its cars
+        read July from their profiles (``hisim/components/lpg_local_time.py``); the CHP controller's
+        heating season counts the days of the year. One exception remains: the CSV loader indexes its
+        profile by the timestep number, so its timestep 0 is read as the 1st of January whatever this
+        start date says (hisim-9g2.14).
 
         Args:
             year: Calendar year the week is taken from.

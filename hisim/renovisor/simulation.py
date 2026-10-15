@@ -40,10 +40,10 @@ class Period(str, Enum):
 
     ``FULL_YEAR`` is what the backend calls; the two short periods exist for the verification
     harness and for the end-to-end tests, which need a run that finishes in seconds. All three
-    start on the 1st of January, and the two short ones deliberately do *not* start mid-January
-    as the frontend side's spec proposed: every profile-driven component of HiSim indexes its
-    year-long profile by the timestep number, so a mid-January start reproduces the 1st of
-    January anyway while labelling the result with the wrong dates.
+    start on the 1st of January. The two short ones did not start mid-January as the frontend
+    side's spec proposed because HiSim then read every profile from the 1st of January whatever
+    the start date said; since the mid-year-start epic (``roadmap/midyear_start_epic.md``) a
+    window reads its own dates, so that reason is gone, and the periods are kept as they are.
     """
 
     FULL_YEAR = "full_year"

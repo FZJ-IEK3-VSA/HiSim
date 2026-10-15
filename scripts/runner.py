@@ -58,10 +58,11 @@ class SetupConfig:
 
     id: str
     path: str
-    #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
+    #: The horizons this setup participates in (``"day"``/``"week"``/``"july_week"``/``"year"``), or
     #: ``None`` for all of them. Every shipped setup runs both the week and the full year
-    #: (owner decision 2026-10-11: every system setup has a full-year golden), so the
-    #: shipped config sets this nowhere; it stays for a setup that may join one horizon only.
+    #: (owner decision 2026-10-11: every system setup has a full-year golden); the shipped
+    #: config sets it only to keep a setup out of the July week while its July still reads
+    #: January in part (``tests/test_golden_matrix.py``, ``CANNOT_RUN_JULY``).
     horizons: Optional[list[str]] = None
     #: The recorded wall time of each of its pairs on a GitHub runner, in seconds, by parameter-set
     #: id: the config's ``seconds`` entry. The CI shards are balanced by it, and a pair run in a

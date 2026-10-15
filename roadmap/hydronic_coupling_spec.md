@@ -899,6 +899,11 @@ The mode acts where a buffer sits. District heating feeds its distribution syste
 `gas_boiler_household` does; in such a chain every ratio is 1 and the distribution system still publishes the
 previous step's heat and temperatures (see Open).
 
+The threshold is `SimulationParameters.part_load_above_seconds`, 600 s by default. Whole steps into a start-of-step
+buffer are measured at 60 s, not at 600 s. A run whose step length is at or below its threshold runs whole steps, so a
+threshold raised above the default gives a coarse step item 5's behaviour, and the heat pump's before the third
+decision: the gas twin's year at 3600 s aborts and the heat pump overshoots its buffer.
+
 **Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat pump
 overshot a start-of-step buffer, and the heat-pump assemblies failed: sample s007 reached 93.3 °C. (A 50 l buffer in the
 volume sweep also drained to −0.27 °C, but because the distribution controller's test partner could not read the buffer,

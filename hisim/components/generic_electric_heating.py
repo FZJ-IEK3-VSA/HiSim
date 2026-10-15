@@ -12,7 +12,15 @@ from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
-from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
+from hisim.loadtypes import (
+    EnergyBalanceCarrier,
+    EnergyRole,
+    LoadTypes,
+    Units,
+    InandOutputType,
+    ComponentType,
+    OutputAggregation,
+)
 from hisim.component import (
     L1ControllerComponent,
     PhysicsComponent,
@@ -973,6 +981,7 @@ class ElectricHeatingController(L1ControllerComponent):
             LoadTypes.ANY,
             Units.ANY,
             output_description="Operating mode of electric heating.",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.add_default_connections(self.get_default_connections_from_heating_curve())

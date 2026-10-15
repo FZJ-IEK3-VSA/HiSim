@@ -237,6 +237,7 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.cumulative_gas_production_channel: cp.ComponentOutput = self.add_output(
@@ -245,6 +246,7 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())

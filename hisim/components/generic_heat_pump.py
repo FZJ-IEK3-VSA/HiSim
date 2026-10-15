@@ -369,6 +369,7 @@ class GenericHeatPump(cp.PhysicsComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for {self.NumberOfCycles} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -772,6 +773,7 @@ class GenericHeatPumpController(cp.L1ControllerComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for {self.State} will follow.",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.add_default_connections(self.get_default_connections_from_building())

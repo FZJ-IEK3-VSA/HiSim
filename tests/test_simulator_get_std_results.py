@@ -2,7 +2,7 @@
 
 ``get_std_results`` resamples the per-timestep results DataFrame into monthly,
 daily, hourly, and cumulative aggregations, using mean aggregation for units in
-``UNITS_USING_MEAN_AGGREGATION`` and sum aggregation for everything else.
+``OutputAggregation.units_averaged_by_default()`` and sum aggregation for everything else.
 
 These tests drive the method directly with a lightweight stub (no full
 simulation) and assert that the bulk-resample-by-group implementation produces
@@ -53,7 +53,7 @@ def _reference_std_results(
     seconds_per_timestep: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Per-column reference implementation (the pre-refactor behaviour)."""
-    units_mean = lt.UNITS_USING_MEAN_AGGREGATION
+    units_mean = lt.OutputAggregation.units_averaged_by_default()
     use_hourly_resample = seconds_per_timestep != 3600
     monthly_frames: list[pd.Series] = []
     daily_frames: list[pd.Series] = []
@@ -193,3 +193,60 @@ def test_get_std_results_empty_aggregation_group(units: list[lt.Units]) -> None:
     pd.testing.assert_frame_equal(monthly, ref_mon)
     pd.testing.assert_frame_equal(daily, ref_day)
     pd.testing.assert_frame_equal(hourly, ref_hr)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep", [900, 3600])
+def test_get_std_results_follows_the_declared_aggregation(seconds_per_timestep: int) -> None:
+    """A declared aggregation overrides the unit's rule: a running total is not summed, a state has no aggregate.
+
+    The three outputs are a running total in Wh (``LAST``), a stored energy in Wh (``MEAN``) and a
+    controller mode (``NONE``). By their units the first two would be summed and the third averaged.
+    """
+    step_count = 24 * 90
+    index = pd.date_range(start="2021-01-01", periods=step_count, freq=f"{seconds_per_timestep}s")
+    steps = np.arange(step_count, dtype=float)
+    running_total = steps * 10.0
+    stored_energy = 500.0 + (steps % 7)
+    mode = (steps % 3) - 1.0
+    df = pd.DataFrame(
+        {"Total [Wh]": running_total, "Stored [Wh]": stored_energy, "Mode [-]": mode}, index=index
+    )
+    declared = [lt.OutputAggregation.LAST, lt.OutputAggregation.MEAN, lt.OutputAggregation.NONE]
+    units = [lt.Units.WATT_HOUR, lt.Units.WATT_HOUR, lt.Units.ANY]
+    outputs = [
+        cp.ComponentOutput(
+            object_name="Comp",
+            field_name=f"Output{i}",
+            load_type=lt.LoadTypes.ANY,
+            unit=unit,
+            component_id=ComponentID("Comp"),
+            aggregation=aggregation,
+        )
+        for i, (unit, aggregation) in enumerate(zip(units, declared))
+    ]
+    stub = SimpleNamespace(
+        all_outputs=outputs, _simulation_parameters=SimpleNamespace(seconds_per_timestep=seconds_per_timestep)
+    )
+
+    cumulative, monthly, daily, hourly = Simulator.get_std_results(stub, df)
+
+    # The running total's month is its value at the end of the month, its run value the final one.
+    assert monthly["Total [Wh]"].equals(df["Total [Wh]"].resample("ME").last())
+    assert daily["Total [Wh]"].equals(df["Total [Wh]"].resample("D").last())
+    assert cumulative["Total [Wh]"].iloc[0] == running_total[-1]
+    assert monthly["Total [Wh]"].iloc[0] != pytest.approx(df["Total [Wh]"].resample("ME").sum().iloc[0])
+    # The stored energy is averaged, not summed.
+    assert monthly["Stored [Wh]"].equals(df["Stored [Wh]"].resample("ME").mean())
+    assert cumulative["Stored [Wh]"].iloc[0] == pytest.approx(stored_energy.mean())
+    # The mode has no aggregate: every aggregated cell is empty, but the column is there.
+    assert monthly["Mode [-]"].isna().all() and len(monthly["Mode [-]"]) == len(df.resample("ME").size())
+    assert daily["Mode [-]"].isna().all()
+    assert np.isnan(cumulative["Mode [-]"].iloc[0])
+    assert list(monthly.columns) == list(df.columns)
+    if seconds_per_timestep == 3600:
+        # On an hourly grid nothing is aggregated, so the hourly frame is the time series itself.
+        pd.testing.assert_frame_equal(hourly, df)
+    else:
+        assert hourly["Mode [-]"].isna().all()
+        assert hourly["Total [Wh]"].equals(df["Total [Wh]"].resample("60min").last())

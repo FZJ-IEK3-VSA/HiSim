@@ -8,6 +8,7 @@ import enum
 from dataclasses import dataclass
 from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
 import time
+import numpy as np
 import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -25,7 +26,7 @@ from hisim.economics.facts import (
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
-from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
+from hisim.loadtypes import OutputAggregation
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.write_guard import CalculationDirectories
 
@@ -950,8 +951,15 @@ class Simulator:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into aggregated DataFrames for post-processing.
 
-        Computes monthly, daily, hourly, and cumulative aggregations, using mean
-        aggregation for units in UNITS_USING_MEAN_AGGREGATION and sum otherwise.
+        Computes the monthly, daily, hourly and cumulative (whole-run) values of every output by the
+        output's declared aggregation (:class:`~hisim.loadtypes.OutputAggregation`): ``SUM`` sums
+        the time steps of a period, ``MEAN`` averages them, ``LAST`` takes the period's last time
+        step (a running total at the end of the month), and ``NONE`` gives NaN, since no aggregate
+        of such an output means anything. An output that declares no aggregation follows its unit
+        (mean for W, °C, ..., sum for Wh, ...), as all outputs did before outputs declared one.
+
+        When the simulation already runs on hourly time steps, the hourly frame is the time series
+        itself, for every output: nothing is aggregated, so nothing is left out either.
 
         Args:
             results_data_frame: DataFrame with raw per-timestep simulation results.
@@ -959,78 +967,63 @@ class Simulator:
         Returns:
             A tuple of (cumulative, monthly, daily, hourly) DataFrames.
         """
-
-        units_mean = UNITS_USING_MEAN_AGGREGATION
         use_hourly_resample = self._simulation_parameters.seconds_per_timestep != 3600
 
-        # Split columns once by aggregation rule and resample each sub-DataFrame
-        # in a single call. ``mean``/``sum`` are column-wise reductions, so this
-        # is numerically identical to the previous per-column resampling but
-        # issues ~6 resample calls instead of ~3 * n_columns (GitLab #1687).
-        # Selection and recombination are positional (``iloc``) so the result is
-        # independent of column-label uniqueness.
+        # Split the columns once by aggregation and resample each group in a single call
+        # instead of once per column (GitLab #1687). Selection and recombination are
+        # positional (``iloc``) so the result is independent of column-label uniqueness.
         column_count = len(results_data_frame.columns)
-        mean_indices = [
-            i for i in range(column_count) if self.all_outputs[i].unit in units_mean
-        ]
-        sum_indices = [
-            i for i in range(column_count) if self.all_outputs[i].unit not in units_mean
-        ]
-        mean_df = results_data_frame.iloc[:, mean_indices]
-        sum_df = results_data_frame.iloc[:, sum_indices]
-        log.debug(
-            f"get_std_results: {len(mean_indices)} mean-aggregated and "
-            f"{len(sum_indices)} sum-aggregated of {column_count} columns"
+        indices_by_aggregation: Dict[OutputAggregation, List[int]] = {
+            aggregation: [i for i in range(column_count) if self.all_outputs[i].aggregation == aggregation]
+            for aggregation in OutputAggregation
+        }
+        frames_by_aggregation: Dict[OutputAggregation, pd.DataFrame] = {
+            aggregation: results_data_frame.iloc[:, indices]
+            for aggregation, indices in indices_by_aggregation.items()
+        }
+        group_sizes = ", ".join(
+            f"{len(indices)} {aggregation.value}" for aggregation, indices in indices_by_aggregation.items()
         )
+        log.debug(f"get_std_results: {group_sizes} of {column_count} columns")
 
-        def _resample_group(frame: pd.DataFrame, freq: str, how: str) -> pd.DataFrame:
+        def _resample_group(frame: pd.DataFrame, freq: str, aggregation: OutputAggregation) -> pd.DataFrame:
             # resample on a column-less frame is valid but pointless; skip it to
             # avoid creating a spurious (empty) index that misaligns on concat.
             if frame.shape[1] == 0:
                 return pd.DataFrame(columns=frame.columns)
-            return frame.resample(freq).agg(how)
+            if aggregation == OutputAggregation.NONE:
+                period_index = frame.iloc[:, :1].resample(freq).last().index
+                return pd.DataFrame(np.nan, index=period_index, columns=frame.columns)
+            return frame.resample(freq).agg(aggregation.value)
 
-        monthly_mean = _resample_group(mean_df, "ME", "mean")
-        monthly_sum = _resample_group(sum_df, "ME", "sum")
-        daily_mean = _resample_group(mean_df, "D", "mean")
-        daily_sum = _resample_group(sum_df, "D", "sum")
+        def _aggregate(freq: str) -> List[pd.DataFrame]:
+            return [_resample_group(frame, freq, aggregation) for aggregation, frame in frames_by_aggregation.items()]
+
+        # Recombine the groups in the original column order. After the concat the columns
+        # sit group by group, so map every original index back to its concatenated position
+        # and select positionally.
+        concatenated_order = [index for indices in indices_by_aggregation.values() for index in indices]
+        position_in_combined = {original_index: position for position, original_index in enumerate(concatenated_order)}
+        reorder = [position_in_combined[original_index] for original_index in range(column_count)]
+
+        def _combine_in_order(group_frames: List[pd.DataFrame]) -> pd.DataFrame:
+            return pd.concat(group_frames, axis=1).iloc[:, reorder]
+
+        results_merged_monthly = _combine_in_order(_aggregate("ME"))
+        results_merged_daily = _combine_in_order(_aggregate("D"))
         if use_hourly_resample:
-            hourly_mean = _resample_group(mean_df, "60min", "mean")
-            hourly_sum = _resample_group(sum_df, "60min", "sum")
+            results_merged_hourly = _combine_in_order(_aggregate("60min"))
         else:
-            # No resampling needed when the simulation already runs on an hourly
-            # grid; pass the raw slices through unchanged.
-            hourly_mean = mean_df
-            hourly_sum = sum_df
+            # No resampling needed when the simulation already runs on an hourly grid.
+            results_merged_hourly = results_data_frame
 
-        # Cumulative scalars (``.mean()``/``.sum()``) are cheap column-wise
-        # reductions; keep them per-column to preserve the previous scalar
-        # aggregation (and dict-keyed column order) exactly.
+        # The whole-run values are cheap column-wise reductions; keep them per column so
+        # the dict-keyed column order is the original one.
         cumulative_data: Dict[Any, Any] = {}
         for i, column_name in enumerate(results_data_frame.columns):
-            col_data = results_data_frame.iloc[:, i]
-            if self.all_outputs[i].unit in units_mean:
-                cumulative_data[column_name] = col_data.mean()
-            else:
-                cumulative_data[column_name] = col_data.sum()
-
-        # Recombine the mean/sum groups in the original column order. After the
-        # concat the columns sit in [mean_indices..., sum_indices...] order, so
-        # map every original index back to its concatenated position and select
-        # positionally.
-        def _combine_in_order(mean_frame: pd.DataFrame, sum_frame: pd.DataFrame) -> pd.DataFrame:
-            combined = pd.concat([mean_frame, sum_frame], axis=1)
-            position_in_combined: Dict[int, int] = {}
-            for position, original_index in enumerate(mean_indices):
-                position_in_combined[original_index] = position
-            for position, original_index in enumerate(sum_indices):
-                position_in_combined[original_index] = len(mean_indices) + position
-            reorder = [position_in_combined[original_index] for original_index in range(column_count)]
-            return combined.iloc[:, reorder]
-
-        results_merged_monthly = _combine_in_order(monthly_mean, monthly_sum)
-        results_merged_daily = _combine_in_order(daily_mean, daily_sum)
-        results_merged_hourly = _combine_in_order(hourly_mean, hourly_sum)
+            cumulative_data[column_name] = Simulator.aggregate_whole_run(
+                results_data_frame.iloc[:, i], self.all_outputs[i].aggregation
+            )
         results_merged_cumulative = pd.DataFrame([cumulative_data])
 
         return (
@@ -1039,6 +1032,28 @@ class Simulator:
             results_merged_daily,
             results_merged_hourly,
         )
+
+    @staticmethod
+    def aggregate_whole_run(column: pd.Series, aggregation: OutputAggregation) -> float:
+        """Return the value of one output over the whole run, by its aggregation.
+
+        Example: a power in W (``MEAN``) gives its mean, an energy in Wh (``SUM``) its total, a
+        running total (``LAST``) its final value, and a controller state (``NONE``) NaN.
+
+        Args:
+            column: The output's time series.
+            aggregation: How the output's time steps are combined.
+
+        Returns:
+            The run value.
+        """
+        if aggregation == OutputAggregation.SUM:
+            return float(column.sum())
+        if aggregation == OutputAggregation.MEAN:
+            return float(column.mean())
+        if aggregation == OutputAggregation.LAST:
+            return float(column.iloc[-1])
+        return float("nan")
 
     def connect_everything_automatically(
         self,

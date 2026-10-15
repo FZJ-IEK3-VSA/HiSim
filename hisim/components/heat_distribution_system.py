@@ -1070,6 +1070,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
                 "The valve: 1 open for heating, -1 open for cooling, 0 closed or open for heating outside the heating "
                 "season."
             ),
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         #: The valve's mode at the start of the step, and the mode the latest free pass of the step decided.

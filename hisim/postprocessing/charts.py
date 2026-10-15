@@ -1,9 +1,8 @@
 """Contains all the chart classes."""
 
 import datetime
-import enum
 import gc
-from typing import Any, Callable, ClassVar, List, Tuple
+from typing import Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import dates as mdates
@@ -264,42 +263,23 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         )
 
 
-class MonthlyAggregation(str, enum.Enum):
-    """How the twelve values of a monthly bar chart were formed from the run's time steps.
-
-    The simulator aggregates every output into months by its unit (``Simulator.get_std_results``):
-    a rate or a state such as W, °C or a fraction is averaged over the month, everything else, such
-    as Wh, is summed. The bar chart names which of the two its bars are, since a monthly mean power
-    in kW and a monthly energy in kWh look alike on an axis that names only the unit. Example: PV
-    electricity in W is drawn as "Power, monthly mean [kW]", PV energy in Wh as "Energy, monthly
-    sum [MWh]".
-    """
-
-    MEAN = "mean"
-    SUM = "sum"
-
-    @classmethod
-    def of_unit(cls, unit: Any) -> "MonthlyAggregation":
-        """Return how the simulator aggregates an output of this unit into months.
-
-        Args:
-            unit: The output's unit, a ``loadtypes.Units`` member or its string value.
-
-        Returns:
-            ``MEAN`` for the units in ``loadtypes.UNITS_USING_MEAN_AGGREGATION``, ``SUM`` for all others.
-        """
-        unit_value = unit.value if hasattr(unit, "value") else unit
-        mean_unit_values = {mean_unit.value for mean_unit in lt.UNITS_USING_MEAN_AGGREGATION}
-        return cls.MEAN if unit_value in mean_unit_values else cls.SUM
-
-
 class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     """Makes the monthly bar chart of one output: twelve bars, January to December.
 
-    The y axis names the quantity and whether a bar is the month's mean or its sum
-    (:class:`MonthlyAggregation`), and an output that is zero in every month is drawn with a note
-    saying so instead of an empty axis.
+    The y axis names the quantity and how a bar was formed from the month's time steps, by the
+    output's declared aggregation (:class:`~hisim.loadtypes.OutputAggregation`): its mean, its sum
+    or its value at the end of the month. Example: PV electricity in W is drawn as "Power, monthly
+    mean [kW]", PV energy in Wh as "Energy, monthly sum [MWh]", a running total in Wh as "Energy,
+    end of month [MWh]". An output that is zero in every month is drawn with a note saying so
+    instead of an empty axis. Outputs declared ``NONE`` get no bar chart at all.
     """
+
+    #: The words of the y axis label for each aggregation a bar chart is drawn for.
+    AGGREGATION_LABELS: ClassVar[dict[lt.OutputAggregation, str]] = {
+        lt.OutputAggregation.SUM: "monthly sum",
+        lt.OutputAggregation.MEAN: "monthly mean",
+        lt.OutputAggregation.LAST: "end of month",
+    }
 
     original_pv_sol_in_kwh: ClassVar[list[float]] = [
         385.66,
@@ -327,7 +307,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
         path_checker: Callable[[str], None] | None = None,
-        aggregation: MonthlyAggregation | None = None,
+        aggregation: lt.OutputAggregation | None = None,
     ) -> None:
         """Initialize the bar chart of one output.
 
@@ -340,8 +320,11 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             output_description: The output's description, for the report.
             figure_format: The image format.
             path_checker: Validates path lengths; the result path provider's check by default.
-            aggregation: Whether the monthly values are means or sums; derived from ``units`` as the
-                simulator does when not given.
+            aggregation: How the monthly values were formed (the output's declared aggregation);
+                derived from ``units`` as for an output that declares none when not given.
+
+        Raises:
+            ValueError: If ``aggregation`` is ``NONE``: such an output has no monthly values.
         """
         super().__init__(
             output=output,
@@ -354,12 +337,16 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             figure_format=figure_format,
             path_checker=path_checker,
         )
-        self.aggregation: MonthlyAggregation = (
-            aggregation if aggregation is not None else MonthlyAggregation.of_unit(self.declared_units)
+        self.aggregation: lt.OutputAggregation = (
+            aggregation if aggregation is not None else lt.OutputAggregation.of_unit(self.declared_units)
         )
+        if self.aggregation not in self.AGGREGATION_LABELS:
+            raise ValueError(f"{output} declares the aggregation {self.aggregation.value}: it has no monthly values.")
 
     def y_axis_label(self, shown_units: str) -> str:
         """Return the y axis title: quantity, aggregation and unit, e.g. ``Energy, monthly sum [MWh]``.
+
+        A running total reads e.g. ``Energy, end of month [MWh]``.
 
         Args:
             shown_units: The unit the bars are drawn in, as :meth:`rescale_y_axis` returned it.
@@ -368,7 +355,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             The label.
         """
         quantity = AxisUnit.QUANTITIES.get(self.declared_units, "Value")
-        return f"{quantity}, monthly {self.aggregation.value} [{shown_units}]"
+        return f"{quantity}, {self.AGGREGATION_LABELS[self.aggregation]} [{shown_units}]"
 
     def plot(self, data_in_self_units: pd.Series) -> ReportImageEntry:
         """Plot the bar chart.

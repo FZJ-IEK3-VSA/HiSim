@@ -294,7 +294,9 @@ tax credit, a soft loan's repayment grant) cannot be stated on an unpriced measu
 measure without a `cost` block and without a quote): its maximum is null with a note saying why, and
 a grant the answers would award stays `undetermined`, books nothing, and asks for the measure's
 price in `open_questions` (renovisorissues #77); a soft loan without a repayment grant and a per-kWh
-payment keep their rules. The energy-management
+payment keep their rules. An unpriced envelope measure books no embodied CO2 either: its carbon is
+unknown like its price, booked as zero and said so in the row's `note`, as for a kept element's
+renewal (hisim-hq4z); a quote prices its money, not its carbon. The energy-management
 controller that comes with a battery is part of the battery system: a subject of its own, costless
 (no investment, maintenance or renewal cost), dated and renewed with the battery (no due years of
 its own), carrying `battery_system` where the package installs the battery (renovisorissues #77).

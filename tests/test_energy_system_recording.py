@@ -37,6 +37,7 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
+    SizingRecordEntry,
     Sum,
     preset,
     preset_provenance,
@@ -1232,9 +1233,36 @@ def test_a_field_summed_over_some_of_the_providers_keeps_the_number_and_says_how
 
     assert written.members[EntryConfigWriter.CONFIG_KEY]["capacity"] == 100.0
     assert written.decisions[0].comment() == (
-        f"pinned: roof_area_in_m2 is summed over 1 of the 2 values {Sized.ROOF}, OtherRoof declare, "
+        f"pinned: roof_area_in_m2: the law summed 1 value(s), 2 components declare it ({Sized.ROOF}, OtherRoof), "
         "and a twin writes no sizing_sources"
     )
+
+
+@pytest.mark.base
+def test_the_values_a_many_read_summed_are_counted_in_both_forms_of_the_sizing_record() -> None:
+    """Catches a count that misses the fact engine's per-provider inputs, so a battery beside two arrays is pinned.
+
+    A configuration the fact engine resolved records one ``("<provider>.<fact>", value)`` input per provider; one a
+    setup resolved against a hand-built context records one ``(fact, (value, ...))`` input. Both count the values
+    summed; a sibling field (``self.<field>``) and another fact count nothing.
+    """
+    fact = "pv_peak_power_in_watt"
+    bound = SizingRecordEntry(
+        field="capacity",
+        law="Sum(Many(Size.PV_PEAK_POWER_IN_WATT))",
+        facts_read=(fact,),
+        value=6.0,
+        inputs=(
+            (f"PVSouth.{fact}", 4000.0),
+            (f"PVWest.{fact}", 2000.0),
+            (f"self.{fact}", 1.0),
+            ("Building.roof_area_in_m2", 100.0),
+        ),
+    )
+    hand_built = dataclasses.replace(bound, inputs=((fact, (4000.0, 2000.0)),))
+
+    assert EntryConfigWriter.values_read(bound, fact) == 2
+    assert EntryConfigWriter.values_read(hand_built, fact) == 2
 
 
 @pytest.mark.base

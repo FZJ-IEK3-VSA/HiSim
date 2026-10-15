@@ -149,12 +149,13 @@ class TwinComments:
     #: stays until a twin may carry a ``sizing_sources`` block.
     SEVERAL_PROVIDERS: ClassVar[str] = "{fact} is declared by {providers}, and a twin writes no sizing_sources"
 
-    #: Reason for a value a law computed by summing a fact over fewer providers than the recorded
-    #: system holds: the setup chose which arrays a battery is sized to, and a file without a
-    #: ``sizing_sources`` block would sum all of them.
+    #: Reason for a value a law computed by summing a fact over another number of values than the
+    #: recorded system has providers: the setup chose which arrays a battery is sized to (fewer), or
+    #: resolved it against a hand-built context holding more values, and a file without a
+    #: ``sizing_sources`` block would sum exactly the providers it holds.
     SUBSET_OF_PROVIDERS: ClassVar[str] = (
-        "{fact} is summed over {count} of the {total} values {providers} declare, and a twin writes no "
-        "sizing_sources"
+        "{fact}: the law summed {count} value(s), {total} components declare it ({providers}), and a twin "
+        "writes no sizing_sources"
     )
 
     #: Separator between the several providers of one fact.
@@ -354,7 +355,7 @@ class EntryConfigWriter:
         name: str,
         config: Any,
         block: Mapping[str, Any],
-        many_facts: Optional[Mapping[str, FrozenSet[str]]] = None,
+        many_facts: Mapping[str, FrozenSet[str]],
     ) -> Tuple[SizedFieldDecision, ...]:
         """Decides, field by field, which computed values the file may compute again (A-P3.1).
 
@@ -378,12 +379,11 @@ class EntryConfigWriter:
                 assigned the field again after resolving it.
             block: The sparse block as the diff produced it, before any field is dropped.
             many_facts: Per field, the facts its effective law reads from every provider, as
-                :meth:`many_read_facts` derives them; no field reads a fact many-fold when omitted.
+                :meth:`many_read_facts` derives them; a field it does not name reads no fact many-fold.
 
         Returns:
             One decision per computed field the block states, in resolution order.
         """
-        many_facts = many_facts if many_facts is not None else {}
         decisions: List[SizedFieldDecision] = []
         for entry in getattr(config, "sizing_record", ()) or ():
             if entry.field not in block:
@@ -395,7 +395,7 @@ class EntryConfigWriter:
         return tuple(decisions)
 
     def field_decision(
-        self, name: str, entry: Any, value: Any, many_facts: FrozenSet[str] = frozenset()
+        self, name: str, entry: Any, value: Any, many_facts: FrozenSet[str]
     ) -> SizedFieldDecision:
         """Decides about one computed field: left to the preset, or concrete with why it stayed.
 

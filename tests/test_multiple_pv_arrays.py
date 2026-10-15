@@ -31,10 +31,11 @@ import pandas as pd
 import pytest
 import yaml
 
+from hisim.energy_system.assemblies.twins import rename_column
 from hisim.energy_system.configure import ConfiguredSystem
 from hisim.energy_system.executor import run_energy_system
 
-pytestmark = pytest.mark.base
+pytestmark = pytest.mark.extendedbase
 
 
 @dataclass
@@ -262,6 +263,10 @@ class TwoArrays:
     def renamed_column(cls, column: str) -> str:
         """Renames one result column of the composed run to the flat fixture's name of the same output.
 
+        It renames as the twin gates do (``rename_column``): the component, and every port name derived from a
+        member's name, so the manager's ``DispatchTobattery_Battery_LoadingPowerInput`` becomes
+        ``DispatchToBattery_LoadingPowerInput``.
+
         Example: ``"pv-south-PVSystem - ElectricityOutput [Electricity - W]"`` becomes
         ``"PVSouth - ElectricityOutput [Electricity - W]"``.
 
@@ -271,8 +276,7 @@ class TwoArrays:
         Returns:
             The flat run's name of that column; a site component's column unchanged.
         """
-        component, separator, rest = column.partition(" - ")
-        return f"{cls.COMPOSED_NAMES.get(component, component)}{separator}{rest}"
+        return rename_column(column, cls.COMPOSED_NAMES)
 
 
 @pytest.fixture(name="runs", scope="module")
@@ -419,12 +423,8 @@ def test_the_composed_file_with_two_array_instances_reproduces_the_flat_file(run
     """Catches the assembly path losing an instance, mis-binding the battery's fact port or reordering the arrays."""
     flat = runs["both"].results
     composed = runs["composed"].results.rename(columns=TwoArrays.renamed_column)
-    compared = [column for column in flat.columns if column in composed.columns]
-    for array in TwoArrays.ARRAYS:
-        assert f"{array} - ElectricityOutput [Electricity - W]" in compared
-    assert f"{TwoArrays.METER} - ElectricityAvailable [Electricity - W]" in compared
-    assert f"{TwoArrays.BATTERY} - AcBatteryPowerUsed [Electricity - W]" in compared
-    pd.testing.assert_frame_equal(composed[compared], flat[compared], check_exact=False, rtol=1e-12, atol=1e-9)
+    assert set(composed.columns) == set(flat.columns), sorted(set(composed.columns) ^ set(flat.columns))
+    pd.testing.assert_frame_equal(composed[list(flat.columns)], flat, check_exact=False, rtol=1e-12, atol=1e-9)
     battery = runs["composed"].configured.config_of("battery-Battery")
     assert battery.custom_battery_capacity_generic_in_kilowatt_hour == pytest.approx(
         sum(TwoArrays.PEAK_POWER_IN_WATT.values()) * 1e-3

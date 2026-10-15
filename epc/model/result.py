@@ -236,6 +236,8 @@ def building_to_dict(building: BuildingDescription) -> Dict[str, Any]:
                 "adjustment_factor": element.adjustment_factor_used_by_hisim,
                 "situation": element.situation.value,
                 "u_value_origin": element.u_value_origin,
+                **({} if element.stated_correction_factor is None
+                   else {"stated_correction_factor": element.stated_correction_factor}),
             }
             for element in building.elements
         ],

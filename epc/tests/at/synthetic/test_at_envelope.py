@@ -94,6 +94,18 @@ def test_a_conditioned_neighbour_is_in_neither_the_conductance_nor_the_area(tabl
     assert result.envelope_area_in_m2 == 242.0
 
 
+def test_a_stated_factor_replaces_the_row_without_assumption(tables: AustrianTables) -> None:
+    """D43: a factor the description states, as a certificate prints it, is taken as stated: no row, no assumption."""
+    building = _building()
+    floor = dataclasses.replace(building.elements[0], stated_correction_factor=0.6)
+    stated = dataclasses.replace(building, elements=(floor,) + building.elements[1:])
+    result = envelope.envelope(tables, stated, usage.usage(tables, stated), 125.0, 375.0)
+    taken = result.elements[0]
+    assert (taken.row, taken.factor, taken.conductance_in_w_per_k) == (None, 0.6, 0.6 * 50.0 * 0.4)
+    assert result.envelope_area_in_m2 == 242.0
+    assert [assumption.key for assumption in result.assumptions] == ["correction_factor_roof"]
+
+
 def test_the_rows_taken_by_default_are_assumptions(tables: AustrianTables) -> None:
     """D29: the cellar and the attic rows are recorded; outside air and the neighbour are not defaults."""
     result = envelope.envelope(tables, _building(), usage.usage(tables, _building()), 125.0, 375.0)

@@ -3,8 +3,10 @@
 Transmission follows the simplified approach of B 8110-6-1:2024-03 5.3: every element of the description
 contributes f_i,h · A_i · U_i with the heating-case factor of the Tab. 3–5 row its situation takes
 (:func:`~epc.engines.at.defaults.correction_factor_row`), and the thermal bridges add the default of
-Eq. (11a) with its lower bound. An element against a conditioned neighbour lies outside the thermal
-envelope (Section 4, p. 8): it is in neither the conductance nor the envelope area (I-10).
+Eq. (11a) with its lower bound. An element whose description states its factor, as a certificate prints
+it, takes that factor instead of a row, with no assumption (D43). An element against a conditioned
+neighbour lies outside the thermal envelope (Section 4, p. 8): it is in neither the conductance nor the
+envelope area (I-10).
 
 Ventilation is natural ventilation for a residential building (6.2.2): the air volume of Eq. (13), the
 hygienic air change of the usage profile as the rate of Eq. (15a, b), and the conductance of Eq. (14).
@@ -44,8 +46,8 @@ class ElementConductance:
 
     Attributes:
         name: The element class.
-        row: The key of its Tab. 3–5 row, ``None`` for a conditioned neighbour.
-        factor: f_i,h of the row, ``None`` for a conditioned neighbour.
+        row: The key of its Tab. 3–5 row, ``None`` for a conditioned neighbour or a stated factor.
+        factor: f_i,h of the row or as stated, ``None`` for a conditioned neighbour.
         conductance_in_w_per_k: f_i,h · A_i · U_i, 0 for a conditioned neighbour.
     """
 
@@ -112,13 +114,16 @@ def envelope(
     assumptions: List[Assumption] = []
     envelope_area = 0.0
     for element in building.elements:
-        row, assumption = defaults.correction_factor_row(element)
-        if assumption is not None:
-            assumptions.append(assumption)
-        if row is None:
-            contributions.append(ElementConductance(element.name, None, None, 0.0))
-            continue
-        factor = tables.temperature_correction_factors[row].f_h
+        if element.stated_correction_factor is not None:
+            row, factor = None, element.stated_correction_factor
+        else:
+            row, assumption = defaults.correction_factor_row(element)
+            if assumption is not None:
+                assumptions.append(assumption)
+            if row is None:
+                contributions.append(ElementConductance(element.name, None, None, 0.0))
+                continue
+            factor = tables.temperature_correction_factors[row].f_h
         conductance = factor * element.area_in_m2 * element.u_value_in_watt_per_m2_per_kelvin
         contributions.append(ElementConductance(element.name, row, factor, conductance))
         envelope_area += element.area_in_m2

@@ -63,6 +63,9 @@ class Element:
             situation follows.
         situation: What the element borders on.
         u_value_origin: HiSim's origin string of the U-value, verbatim.
+        stated_correction_factor: The heating-case temperature-correction factor, if stated (a
+            certificate prints one per element); the engine then takes it instead of the row of the
+            situation (D43). HiSim's record never states it.
     """
 
     name: ElementName
@@ -71,6 +74,7 @@ class Element:
     adjustment_factor_used_by_hisim: float
     situation: Situation
     u_value_origin: str
+    stated_correction_factor: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -219,6 +223,15 @@ class BuildingDescription:
                     self.windows,
                     element.name != "window" or not element.area_in_m2 > 0 or bool(self.windows),
                     f"a window element of {element.area_in_m2} m² needs at least one window surface",
+                ),
+                (
+                    f"elements.{element.name}.stated_correction_factor",
+                    element.stated_correction_factor,
+                    element.stated_correction_factor is None
+                    or (element.situation is not Situation.CONDITIONED_NEIGHBOUR
+                        and _at_least(element.stated_correction_factor, 0, inclusive=False)
+                        and element.stated_correction_factor <= 1),
+                    "null, or > 0 and <= 1 for an element of the envelope (not a conditioned neighbour)",
                 ),
             ]
         for window in self.windows:

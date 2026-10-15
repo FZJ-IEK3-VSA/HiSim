@@ -125,4 +125,6 @@ solar gains and the heating demand. Monthly series per climate: heating demand, 
 share and outdoor temperature. Assumptions: gross floor area, gross volume (when the record states
 none), construction from HiSim's heat capacity class, glass share (for windows without a stated glass
 area), shading factor, thermal bridges,
-ventilation, and the Tab. 4 row of every element against an unconditioned space.
+ventilation, and the Tab. 4 row of every element against an unconditioned space. An element whose
+description states its temperature-correction factor (a hand-written description of a certificate)
+takes that factor, with no row and no assumption.

@@ -18,11 +18,13 @@ from hisim.energy_system.assemblies.model import (
     NO_DEFAULT,
     AssemblyFile,
     BoundsDeclaration,
+    ConstraintKind,
     ExpectDeclaration,
     InternalVariant,
     MemberTemplate,
     MonotoneDeclaration,
     MonotoneDirection,
+    ParameterConstraint,
     ParameterDeclaration,
     ParameterType,
     TestContract,
@@ -81,7 +83,7 @@ class AssemblyReader:
             name=RawDocument.string(document.get("name"), f"{origin}.name", required=True) or "",
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
             parameters=cls.parameters(document.get("parameters"), f"{origin}.parameters"),
-            exactly_one_of=cls.constraints(document.get("constraints"), f"{origin}.constraints"),
+            constraints=cls.constraints(document.get("constraints"), f"{origin}.constraints"),
             components=cls.members(document.get("components"), f"{origin}.components", ("components",)),
             variants=cls.variants(document.get("variants"), f"{origin}.variants"),
             ports=cls.interface(document.get("interface"), f"{origin}.interface"),
@@ -136,23 +138,34 @@ class AssemblyReader:
         return low, high
 
     @classmethod
-    def constraints(cls, raw: Any, location: str) -> Tuple[Tuple[str, ...], ...]:
-        """Reads the constraint list: ``exactly_one_of`` only (``at_most_one_of``/``requires`` are cut)."""
+    def constraints(cls, raw: Any, location: str) -> Tuple[ParameterConstraint, ...]:
+        """Reads the constraint list: each item one ``exactly_one_of`` or ``all_or_none_of`` (D31).
+
+        ``at_most_one_of`` and ``requires`` are cut (D26); an item naming one is refused as a cut construct.
+        """
         if raw is None:
             return ()
         if not isinstance(raw, list):
             raise RawDocument.malformed(location, raw, "a list of constraints")
-        constraints: List[Tuple[str, ...]] = []
+        kinds = tuple(kind.value for kind in ConstraintKind)
+        constraints: List[ParameterConstraint] = []
         for index, item in enumerate(raw):
             item_location = f"{location}[{index}]"
             block = RawDocument.mapping(item, item_location)
-            ImportsReader.check_keys(block, item_location, ("exactly_one_of",), "a constraint")
-            names = block.get("exactly_one_of")
-            if not isinstance(names, list) or len(names) < 2:
+            ImportsReader.check_keys(block, item_location, kinds, "a constraint")
+            if len(block) != 1:
                 raise RawDocument.malformed(
-                    f"{item_location}.exactly_one_of", names, "a list of two or more parameters"
+                    item_location, block, f"one constraint, a mapping with exactly one of the keys {', '.join(kinds)}"
                 )
-            constraints.append(ImportsReader.names(names, f"{item_location}.exactly_one_of", "parameter"))
+            key, names = next(iter(block.items()))
+            if not isinstance(names, list) or len(names) < 2:
+                raise RawDocument.malformed(f"{item_location}.{key}", names, "a list of two or more parameters")
+            constraints.append(
+                ParameterConstraint(
+                    kind=ConstraintKind(key),
+                    names=ImportsReader.names(names, f"{item_location}.{key}", "parameter"),
+                )
+            )
         return tuple(constraints)
 
     @classmethod

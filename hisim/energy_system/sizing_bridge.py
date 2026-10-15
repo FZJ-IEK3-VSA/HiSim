@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
 from hisim.config.engine import SizingFactEngine
 from hisim.config.laws import SizingError
 from hisim.config.report import ResolutionReport
+from hisim.config.sizing import SizedTogether
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemSizingError
 from hisim.energy_system.model import EnergySystemFile, SourceReference
 
@@ -62,6 +63,7 @@ class KernelFailure(enum.Enum):
     FIELD_CYCLE = (EnergySystemErrorId.SIZING_FIELD_CYCLE, ("via Self",))
     AMBIGUOUS = (EnergySystemErrorId.SIZING_AMBIGUOUS, ("is provided by", "sources="))
     MANY_READ = (EnergySystemErrorId.SIZING_MANY_READ, ("is read many-fold by",))
+    STATED_IN_PART = (EnergySystemErrorId.SIZING_STATED_IN_PART, (SizedTogether.MARKER,))
 
     def __init__(self, error_id: EnergySystemErrorId, markers: Tuple[str, ...]) -> None:
         """Stores the identifier and the message fragments of one failure mode.
@@ -106,6 +108,7 @@ class _ConsumerPhrasing(enum.Enum):
     SOURCES_KEY = re.compile(r"sources\['([^']+)'\]")
     CANNOT_SIZE = re.compile(r"'([^']+)' cannot size from it")
     DUPLICATE = re.compile(r"two configs named '([^']+)'")
+    STATED_IN_PART = re.compile(r"^\w+ '([^']+)': .* " + SizedTogether.MARKER)
 
     @property
     def expression(self) -> "re.Pattern[str]":
@@ -194,7 +197,7 @@ def resolve_sizing(
 
     Raises:
         EnergySystemSizingError: For every kernel failure, classified into ``EF-4A`` …
-            ``EF-4H`` and carrying the kernel's own message.
+            ``EF-4J`` and carrying the kernel's own message.
     """
     engine = SizingFactEngine(seed=None, sources=sources)
     try:

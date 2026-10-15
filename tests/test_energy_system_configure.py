@@ -36,7 +36,8 @@ from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, Sum
 from hisim.config.contributions import FactContribution
 from hisim.config.engine import resolve_all
 from hisim.config.laws import SizingError
-from hisim.config.sizing import AUTO, SizedFieldMetadata
+from hisim.config.sizing import AUTO, SizedFieldMetadata, SizedTogether
+from hisim.components.advanced_battery_bslib import BatteryConfig
 from hisim.energy_system import (
     EnergySystemBindingError,
     EnergySystemErrorId,
@@ -778,6 +779,35 @@ def test_the_kernels_duplicate_name_message_is_recognized() -> None:
     )
 
     assert KernelFailure.classify(message) is EnergySystemErrorId.SIZING_DUPLICATE_NAME
+
+
+@pytest.mark.base
+def test_the_kernels_stated_in_part_message_is_recognized() -> None:
+    """Catches a battery stated in part degrading to the catch-all identifier (``EF-4J``).
+
+    A class lists fields it sizes together (``SIZED_TOGETHER``); the kernel refuses a
+    configuration stating only some of them before it looks for any fact, so the message names
+    no fact and only its own phrasing tells the wrapper which condition it is.
+    """
+    battery = BatteryConfig.preset_sized_to_pv("battery")
+    battery.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
+    message = kernel_message([battery])
+
+    assert KernelFailure.classify(message) is EnergySystemErrorId.SIZING_STATED_IN_PART
+    assert message.endswith("state both or neither.")
+
+
+@pytest.mark.base
+def test_a_group_sized_together_naming_a_field_without_a_law_is_a_class_error() -> None:
+    """Catches a ``SIZED_TOGETHER`` declaration naming a field the class does not size, which would never fire."""
+
+    class _Misdeclared(_CyclicConfig):
+        """The cyclic configuration with a group naming its identity, which is no sized field."""
+
+        SIZED_TOGETHER: ClassVar[Tuple[Tuple[str, ...], ...]] = (("first", "component_id"),)
+
+    with pytest.raises(TypeError, match="component_id is not"):
+        SizedTogether.groups_of(_Misdeclared)
 
 
 @pytest.mark.base

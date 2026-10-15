@@ -54,7 +54,11 @@ components:
     preset: building_derived
     inputs:
       - HeatingCurveController
+      - HeatDistributionSystem
       - Building
+      - {$port: buffer}
+    ports:
+      buffer: {partner: SimpleHotWaterStorage}               # the buffer's end temperatures, for the circuit's fraction
   HeatingCurveController:
     order: 6
     class: hisim.components.heating_curve.HeatingCurveController
@@ -70,8 +74,8 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - {$port: space_heating}
     ports:
       space_heating: {circuit: space_heating}               # pump and return leg are the distribution's

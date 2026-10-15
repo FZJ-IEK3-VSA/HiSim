@@ -42,7 +42,9 @@ components:
     preset: building_derived
     inputs:
       - HeatingCurveController
+      - HeatDistributionSystem
       - Building
+      - SimpleHotWaterStorage
   HeatingCurveController:
     class: hisim.components.heating_curve.HeatingCurveController
     preset: building_derived
@@ -95,8 +97,8 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - SimpleHotWaterStorage
   Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0:
     class: hisim.components.generic_car.Car

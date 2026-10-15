@@ -30,7 +30,8 @@ Terms:
   on the next step, as a fine-step run does.
 """
 
-from typing import ClassVar
+import math
+from typing import ClassVar, Optional
 
 from hisim import loadtypes as lt
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
@@ -324,7 +325,9 @@ class PartLoadCommand:
     controller commands the rule's ratio for it like for any other step.
     """
 
-    def __init__(self, device: Component, *, input_name: str, ratio_run_output_name: str, device_description: str) -> None:
+    def __init__(
+        self, device: Component, *, input_name: str, ratio_run_output_name: str, device_description: str
+    ) -> None:
         """Add the part-load ratio input and the ratio-run output to ``device``.
 
         Args:
@@ -512,4 +515,189 @@ class StartOfStepPartLoadRule:
         PartLoadRule.check_finite("end_temperature_in_celsius", end_temperature_in_celsius)
         PartLoadRule.check_finite(
             "end_temperature_without_circuit_in_celsius", end_temperature_without_circuit_in_celsius
+        )
+
+
+class StartOfStepPartLoadControl:
+    """The part of an L1 controller that sets the fraction of a coarse step its device runs on a start-of-step store.
+
+    The controller decides as before whether its device runs; this part decides how much of the step, by
+    :class:`StartOfStepPartLoadRule`. It adds three inputs to the controller (the store's end temperature, its end
+    temperature without the device's circuit, and the ratio the device reports it ran) and a ratio output, plus, for a
+    device that raises the store, a target output. In every pass it publishes:
+
+    * 0 while the device does not run;
+    * exactly 1 at and below the part-load threshold while it runs, and 1 when no store is wired to the inputs (a
+      device feeding a consumer without a store in between runs whole steps);
+    * above the threshold, the ratio of :meth:`StartOfStepPartLoadRule.raising_ratio` or
+      :meth:`StartOfStepPartLoadRule.lowering_ratio`, at most the budget the controller allows;
+    * under ``force_convergence``, above the threshold, the ratio the device reports it ran (:meth:`publish_held`).
+
+    The inputs are optional, since a controller may run its device without a store. The part keeps no state.
+    """
+
+    def __init__(
+        self,
+        controller: Component,
+        *,
+        end_temperature_input_name: str,
+        end_temperature_without_circuit_input_name: str,
+        ratio_run_input_name: str,
+        ratio_output_name: str,
+        device_description: str,
+        target_output_name: Optional[str] = None,
+    ) -> None:
+        """Add the three inputs, the ratio output and, if named, the target output to ``controller``.
+
+        Args:
+            controller: The L1 controller this part belongs to; its simulation parameters decide the threshold.
+            end_temperature_input_name: The input that reads the store's end temperature.
+            end_temperature_without_circuit_input_name: The input that reads the store's end temperature without
+                the device's circuit.
+            ratio_run_input_name: The input that reads the ratio the device ran with.
+            ratio_output_name: The ratio output.
+            device_description: How the output descriptions name the device's run, for example "the boiler's
+                space-heating charge".
+            target_output_name: The target output of a device that raises the store; None for one that lowers it.
+        """
+        self.runs_part_load: bool = controller.my_simulation_parameters.runs_part_load()
+        self.end_temperature_channel: ComponentInput = controller.add_input(
+            controller.component_name, end_temperature_input_name, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, False
+        )
+        self.end_temperature_without_circuit_channel: ComponentInput = controller.add_input(
+            controller.component_name,
+            end_temperature_without_circuit_input_name,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            False,
+        )
+        self.ratio_run_channel: ComponentInput = controller.add_input(
+            controller.component_name, ratio_run_input_name, lt.LoadTypes.ANY, lt.Units.FRACTION, False
+        )
+        self.ratio_channel: ComponentOutput = controller.add_output(
+            controller.component_name,
+            ratio_output_name,
+            lt.LoadTypes.ANY,
+            lt.Units.FRACTION,
+            output_description=(
+                f"The part-load ratio of {device_description}: the fraction of the step it runs. 0 while it does not "
+                "run, 1 for the whole step (always at and below the part-load threshold); above the threshold the "
+                "ratio that keeps the store within its range by the end of the step."
+            ),
+        )
+        self.target_channel: Optional[ComponentOutput] = None
+        if target_output_name is not None:
+            self.target_channel = controller.add_output(
+                controller.component_name,
+                target_output_name,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+                output_description=(
+                    f"The store temperature {device_description} aims at: above the part-load threshold its ratio "
+                    "ends the store at it or just above it, except on a step the simulator forces to converge."
+                ),
+            )
+
+    def store_is_wired(self) -> bool:
+        """Return whether a store feeds the end-temperature inputs, so the device can run part of a step."""
+        return (
+            self.end_temperature_channel.source_output is not None
+            and self.end_temperature_without_circuit_channel.source_output is not None
+        )
+
+    def runs_fractions(self) -> bool:
+        """Return whether this part sets fractions below 1: above the threshold, with a store wired."""
+        return self.runs_part_load and self.store_is_wired()
+
+    def publish_raising(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        device_runs: bool,
+        target_temperature_in_celsius: float,
+        budget: float = 1.0,
+    ) -> float:
+        """Publish the ratio of a device that raises the store, and its target; return the ratio.
+
+        Args:
+            stsv: The step's values.
+            device_runs: Whether the controller has its device running in this pass.
+            target_temperature_in_celsius: The store temperature at which the controller ends the charge, in °C.
+            budget: The largest fraction of the step left to this device, from 0 to 1.
+
+        Returns:
+            The published ratio, from 0 to 1.
+        """
+        if self.target_channel is not None:
+            stsv.set_output_value(self.target_channel, target_temperature_in_celsius)
+        ratio = 0.0
+        if device_runs:
+            ratio = 1.0
+            if self.runs_fractions():
+                ratio = StartOfStepPartLoadRule.raising_ratio(
+                    ratio_run=self.ratio_run(stsv),
+                    end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
+                    end_temperature_without_circuit_in_celsius=stsv.get_input_value(
+                        self.end_temperature_without_circuit_channel
+                    ),
+                    target_temperature_in_celsius=target_temperature_in_celsius,
+                )
+            ratio = min(ratio, PartLoadRule.validated_ratio(budget, "The part-load budget"))
+        stsv.set_output_value(self.ratio_channel, ratio)
+        return ratio
+
+    def publish_lowering(
+        self, stsv: SingleTimeStepValues, *, device_runs: bool, floor_temperature_in_celsius: float
+    ) -> float:
+        """Publish the ratio of a device that lowers the store; return the ratio.
+
+        Args:
+            stsv: The step's values.
+            device_runs: Whether the controller has its device running in this pass.
+            floor_temperature_in_celsius: The lowest end temperature the device may leave the store at, in °C.
+
+        Returns:
+            The published ratio, from 0 to 1.
+        """
+        ratio = 0.0
+        if device_runs:
+            ratio = 1.0
+            if self.runs_fractions():
+                ratio = StartOfStepPartLoadRule.lowering_ratio(
+                    ratio_run=self.ratio_run(stsv),
+                    end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
+                    end_temperature_without_circuit_in_celsius=stsv.get_input_value(
+                        self.end_temperature_without_circuit_channel
+                    ),
+                    floor_temperature_in_celsius=floor_temperature_in_celsius,
+                )
+        stsv.set_output_value(self.ratio_channel, ratio)
+        return ratio
+
+    def publish_held(self, stsv: SingleTimeStepValues) -> None:
+        """Publish the ratio of a pass under ``force_convergence``: above the threshold, the ratio the device ran.
+
+        At and below the threshold, or without a store, the ratio keeps the value of the last unforced pass, as the
+        controller's other outputs do.
+
+        Args:
+            stsv: The step's values.
+        """
+        if self.runs_fractions():
+            stsv.set_output_value(self.ratio_channel, self.ratio_run(stsv))
+
+    def ratio_run(self, stsv: SingleTimeStepValues) -> float:
+        """Return the ratio the device reports it ran with, as read in this pass.
+
+        Args:
+            stsv: The step's values.
+
+        Returns:
+            The ratio run, from 0 to 1.
+
+        Raises:
+            ValueError: If the device reported a ratio outside [0, 1].
+        """
+        return PartLoadRule.validated_ratio(
+            stsv.get_input_value(self.ratio_run_channel), f"{self.ratio_run_channel.fullname} (ratio run)"
         )

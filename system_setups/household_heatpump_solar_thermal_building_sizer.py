@@ -543,7 +543,7 @@ def setup_function(
     my_heatpump_controller_sh.connect_only_predefined_connections(
         my_heat_distribution_controller, my_weather, my_simple_water_storage
     )
-    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage)
+    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage, my_heatpump)
     my_sim.add_component(my_heatpump_controller_sh)
     my_sim.add_component(my_heatpump_controller_dhw)
 

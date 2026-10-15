@@ -52,6 +52,7 @@ components:
     preset: standard
     inputs:
       - {$port: ems_modifier_dhw}                           # DHWStorageTemperatureModifier
+      - HeatPump                                            # PartLoadRatioRunDHW, the ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
   HeatPump:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
@@ -139,6 +140,12 @@ tests:
     - {output: HeatPump.CumulativeElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 500000}
     - {output: ControllerDHW.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 40, max: 80}
       # the hot-water target: t_max (60 °C) plus the energy manager's raise (10 K), which caps the heat pump's supply
+    - {output: ControllerDHW.TargetTemperatureDHWInCelsius, unit: CELSIUS, min: 39.5, max: 79.5}
+      # where the controller ends a hot-water charge: its set temperature, raised or not, less 0.5 K
+    - {output: ControllerDHW.PartLoadRatioDHW, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
+    - {output: HeatPump.PartLoadRatioRunDHW, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge ran, reported back to the hot-water controller
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}

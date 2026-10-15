@@ -661,7 +661,16 @@ class PostProcessor:
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Exports the results to a CSV file."""
+        """Exports the results to CSV: one file per output, or all outputs in one file.
+
+        With ``EXPORT_RESULTS_IN_ONE_FILE`` every output goes into ``all_results.csv`` and, with
+        ``EXPORT_MONTHLY_RESULTS``, their monthly values into ``all_results_monthly.csv``; without it
+        each output gets its own file, and with ``EXPORT_MONTHLY_RESULTS`` its own ``*_monthly.csv``.
+        A monthly value is the month's mean or sum, by the output's unit (``Simulator.get_std_results``).
+
+        Args:
+            ppdt: The finished run.
+        """
 
         if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
             csvfilename = os.path.join(
@@ -670,6 +679,14 @@ class PostProcessor:
             )
             csvfilename = self.shorten_path(csvfilename)
             ppdt.results.to_csv(csvfilename, sep=",", decimal=".")
+            if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                # The monthly values in one file too: this branch used to write none, so the option did
+                # nothing beside EXPORT_RESULTS_IN_ONE_FILE.
+                assert ppdt.results_monthly is not None
+                monthly_csvfilename = self.shorten_path(
+                    os.path.join(ppdt.simulation_parameters.result_directory, "all_results_monthly.csv")
+                )
+                ppdt.results_monthly.to_csv(monthly_csvfilename, sep=",", decimal=".")
         else:
             for column in ppdt.results:
                 csvfilename = os.path.join(

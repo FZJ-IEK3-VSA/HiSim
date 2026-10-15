@@ -1,5 +1,6 @@
 """Test for the advanced battery lib."""
 
+import dataclasses
 from typing import List, Tuple
 
 import pytest
@@ -308,6 +309,42 @@ class TestTheChargingLimits:
         assert battery.charging_parameters.rated_charging_power_in_watt == 5000.0
         assert battery.charging_parameters.minimum_charging_power_in_watt == pytest.approx(18.23 * 5)
         assert battery.charging_parameters.recharge_threshold_state_of_charge == 0.98
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("field_name", "value"),
+        [
+            ("capacity_in_watt_hour", float("nan")),
+            ("rated_charging_power_in_watt", float("inf")),
+            ("minimum_charging_power_in_watt", float("nan")),
+            ("minimum_charging_power_in_watt", -1.0),
+            ("recharge_threshold_state_of_charge", -0.5),
+        ],
+    )
+    def test_a_parameter_that_is_not_finite_or_is_negative_is_refused(self, field_name: str, value: float) -> None:
+        """Catches a NaN bound that would reach the energy manager in the first step instead of failing construction."""
+        with pytest.raises(ValueError, match=rf"{field_name} must be a finite number of at least 0, got {value!r}"):
+            dataclasses.replace(self.PARAMETERS, **{field_name: value})
+
+    @pytest.mark.base
+    def test_a_recharge_threshold_above_1_is_refused(self) -> None:
+        """Catches a recharge threshold above a full battery, which would let a blocked battery charge past full."""
+        with pytest.raises(ValueError, match=r"recharge_threshold_state_of_charge must be a state of charge of at"):
+            dataclasses.replace(self.PARAMETERS, recharge_threshold_state_of_charge=1.5)
+
+    @pytest.mark.base
+    def test_a_dc_coupled_bslib_system_is_refused_when_the_battery_is_built(self) -> None:
+        """S3 gives NaN charging powers; the battery refuses it at construction, naming the system and the field."""
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            system_id="S3",
+            custom_pv_inverter_power_generic_in_watt=5000.0,
+            custom_battery_capacity_generic_in_kilowatt_hour=10.0,
+        )
+        with pytest.raises(ValueError, match=r"bslib system 'S3' .*rated_charging_power_in_watt .* got nan"):
+            advanced_battery_bslib.Battery(
+                config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            )
 
     @pytest.mark.base
     def test_a_battery_offered_its_maximum_takes_it(self) -> None:

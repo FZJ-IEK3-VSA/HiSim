@@ -149,3 +149,40 @@ def test_the_preset_cannot_resolve_without_the_room_setpoint() -> None:
                 heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
             )
         )
+
+
+@pytest.mark.parametrize(
+    ("mode", "emitter", "message"),
+    [
+        (3, HeatDistributionSystemType.FLOORHEATING, "must be 1 .* or 2 .*, got 3"),
+        (0, HeatDistributionSystemType.FLOORHEATING, "must be 1 .* or 2 .*, got 0"),
+        (2, HeatDistributionSystemType.RADIATOR, "only floor heating can do"),
+    ],
+)
+def test_a_mode_the_controller_cannot_run_is_refused_when_it_is_built(
+    mode: int, emitter: HeatDistributionSystemType, message: str
+) -> None:
+    """Catches a wrong control law that fails only at the first simulated step instead of at construction."""
+    config = MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard("SH").resolve(
+        SizingContext(set_heating_temperature_in_celsius=ROOM_SETPOINT, heat_distribution_system_type=emitter)
+    )
+    config.mode = mode
+    with pytest.raises(ValueError, match=message):
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
+        )
+
+
+def test_mode_2_with_floor_heating_and_mode_1_with_radiators_are_built() -> None:
+    """Catches a guard that refuses a control law the controller can run."""
+    assert controller(mode=2).mode == 2
+    config = MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard("SH").resolve(
+        SizingContext(
+            set_heating_temperature_in_celsius=ROOM_SETPOINT,
+            heat_distribution_system_type=HeatDistributionSystemType.RADIATOR,
+        )
+    )
+    component = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
+    )
+    assert component.mode == 1

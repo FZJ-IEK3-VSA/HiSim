@@ -1,5 +1,6 @@
 """Test for generic pv system."""
 
+import dataclasses
 import pathlib
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import pytest
@@ -56,7 +57,6 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     )
     testee.controller_mode = operating_mode
     testee.warm_water_temperature_aim_in_celsius = 60
-    testee.config.hysteresis_water_temperature_offset = 5
 
     is_heating_season = True
     heating_flow_temperature = 55
@@ -97,7 +97,7 @@ def given_default_testee(
         "with_domestic_hot_water_preparation",
         config.with_domestic_hot_water_preparation,
     )
-    config.hysteresis_water_temperature_offset = 0
+    config.hysteresis_water_temperature_offset = 5
     testee = GenericBoilerController(
         simulationparameters,
         config,
@@ -340,6 +340,17 @@ def test_a_minimum_time_shorter_than_one_timestep_warns_once_and_a_whole_one_doe
     assert len(warnings) == len(warned_fields)
     assert controller.minimum_runtime_in_timesteps == int(runtime_in_seconds // 900)
     assert controller.minimum_resting_time_in_timesteps == int(resting_time_in_seconds // 900)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_runtime_in_seconds", "minimum_resting_time_in_seconds"])
+@pytest.mark.parametrize("seconds", [-900.0, float("nan")])
+def test_a_negative_or_non_finite_minimum_time_is_refused(field_name: str, seconds: float) -> None:
+    """Catches a negative minimum time that rounds to no minimum without a word; the message names field and value."""
+    config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController")
+    with pytest.raises(ValueError, match=rf"needs {field_name} to be a finite time of at least 0 s, got {seconds!r} s"):
+        overrides: Dict[str, Any] = {field_name: seconds}
+        dataclasses.replace(config, **overrides)
 
 
 class BoilerStep:

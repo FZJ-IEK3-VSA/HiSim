@@ -16,12 +16,10 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
 * the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps reach
   the simulator's ``force_convergence`` (more than eleven passes). These are boiler charges that start kilowatts away
   from their final value and need a pass or two more than the simulator allows to reach its absolute tolerance; they
-  are forced within about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). The bound is asserted
-  first. Only a file that exceeds it, and whose forced steps all have a controller running its device at a part-load
-  ratio strictly between 0 and 1, is an expected failure: the plain iteration of the part-load rule can need more
-  passes than the simulator allows on a slow boiler heat-up, and does not settle where the draw takes more than the
-  rise the step still needs (hisim-fxix.17). A whole-step charge (ratio 1) is not iterated by the rule and counts
-  against the bound like any other step. The simulator's
+  are forced within about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). Every partial step of
+  the part-load rule converges, so a forced step with a part-load ratio strictly between 0 and 1 counts against the
+  bound like any other, and a file over the bound fails with those steps named: they point at a regression of the
+  rule rather than of the boiler's own iteration. The simulator's
   kind order already evaluates every controller before its device and the device before the tank. The heat-pump
   files are recorded, not asserted: their forced steps come from the energy manager, which switches its
   set-temperature raise on the sign of a surplus that includes the heat pump's own draw, so a float's flip turns it
@@ -364,13 +362,12 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
         forced_steps = np.array(forced, dtype=bool)
-        within_bound = int(forced_steps.sum()) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes)
-        if not within_bound and np.all(partial_part_load_steps(results)[forced_steps]):
-            pytest.xfail(
-                f"{int(forced_steps.sum())} forced steps, more than the bound allows, each with a part-load ratio "
-                "strictly between 0 and 1: the part-load rule's plain iteration does not settle there"
-            )
-        assert within_bound, summary
+        forced_part_load_steps = np.flatnonzero(forced_steps & partial_part_load_steps(results)).tolist()
+        assert int(forced_steps.sum()) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), (
+            f"{int(forced_steps.sum())} forced steps, more than the bound allows; the forced steps with a part-load "
+            f"ratio strictly between 0 and 1 are {forced_part_load_steps}, which the part-load rule should settle.",
+            summary,
+        )
 
 
 @pytest.mark.extendedbase2

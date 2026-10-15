@@ -105,7 +105,11 @@ class SimulationParameters:
                 :class:`WeatherYearError`.
             part_load_above_seconds: The step length above which a device its controller has switched on runs
                 only the fraction of the step that brings its store to the controller's target (:mod:`hisim.part_load`).
-                At and below it every device runs whole steps, as before. ``None`` (the default) means
+                At and below it every device runs whole steps, as before. Two devices read it today: the boiler's
+                hot-water charge (:class:`~hisim.components.generic_boiler.GenericBoilerController`) and the solar
+                collector's pump (:class:`~hisim.components.solar_thermal_system.SolarThermalSystemController`);
+                every other device, the heat pumps and the electric heaters among them, runs whole steps at any
+                step length. ``None`` (the default) means
                 :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
                 :class:`PartLoadThresholdError`.
         """

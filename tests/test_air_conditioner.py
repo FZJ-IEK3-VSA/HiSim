@@ -254,10 +254,65 @@ def test_the_ramp_per_step_is_capped_at_450_seconds(
 
 
 @pytest.mark.base
-def test_a_hysteresis_of_zero_is_refused() -> None:
-    """Without a positive hysteresis the soft stop has no bound, so the controller refuses to be built."""
-    with pytest.raises(ValueError, match="positive hysteresis"):
-        given_default_testee({"hysteresis_in_kelvin": 0.0})
+@pytest.mark.parametrize("hysteresis_in_kelvin", [0.0, float("nan")])
+def test_a_hysteresis_of_zero_or_nan_is_refused(hysteresis_in_kelvin: float) -> None:
+    """Without a finite positive hysteresis the soft stop has no bound, so the controller refuses to be built."""
+    with pytest.raises(ValueError, match="finite positive hysteresis"):
+        given_default_testee({"hysteresis_in_kelvin": hysteresis_in_kelvin})
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["heating_set_temperature_deg_c", "cooling_set_temperature_deg_c"])
+def test_a_set_point_that_is_not_finite_is_refused(field_name: str) -> None:
+    """Catches a NaN set point, which passes the order check because every comparison with NaN is false."""
+    with pytest.raises(ValueError, match=rf"finite {field_name}, got nan"):
+        given_default_testee({field_name: float("nan")})
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_runtime_s", "minimum_idle_time_s"])
+@pytest.mark.parametrize("seconds", [-900.0, float("nan"), float("inf")])
+def test_a_minimum_time_that_is_negative_or_not_finite_is_refused(field_name: str, seconds: float) -> None:
+    """Catches a negative minimum time that would round to no minimum without a word."""
+    with pytest.raises(ValueError, match=rf"{field_name} to be a finite time of at least 0 s, got"):
+        given_default_testee({field_name: seconds})
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("ramp_time_s", [0.0, -1800.0, float("nan"), float("inf")])
+def test_a_ramp_time_that_is_not_a_finite_positive_time_is_refused(ramp_time_s: float) -> None:
+    """A ramp time of 0 divides by zero and a negative one inverts the ramp, so the controller refuses to be built.
+
+    The message names the field and the value, so the author sees which number to change.
+    """
+    with pytest.raises(ValueError, match=r"ramp_time_to_full_power_at_one_kelvin_s above 0 s, got"):
+        given_default_testee({"ramp_time_to_full_power_at_one_kelvin_s": ramp_time_s})
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "heating_set_temperature_deg_c, cooling_set_temperature_deg_c", [(26.0, 20.0), (22.0, 22.0)]
+)
+def test_a_heating_set_point_at_or_above_the_cooling_set_point_is_refused(
+    heating_set_temperature_deg_c: float, cooling_set_temperature_deg_c: float
+) -> None:
+    """With heating 26 °C and cooling 20 °C an idle unit would heat a 21-25 °C room, so the controller refuses it.
+
+    Equal set points leave no comfort band at all and are refused the same way.
+    """
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"heating_set_temperature_deg_c below cooling_set_temperature_deg_c, "
+            rf"got {heating_set_temperature_deg_c} °C and {cooling_set_temperature_deg_c} °C"
+        ),
+    ):
+        given_default_testee(
+            {
+                "heating_set_temperature_deg_c": heating_set_temperature_deg_c,
+                "cooling_set_temperature_deg_c": cooling_set_temperature_deg_c,
+            }
+        )
 
 
 @pytest.mark.base

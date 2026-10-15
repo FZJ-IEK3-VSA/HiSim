@@ -424,6 +424,43 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    "position", [PositionHotWaterStorageInSystemSetup.SERIES, PositionHotWaterStorageInSystemSetup.PARALLEL]
+)
+@pytest.mark.parametrize("mass_flow_in_kg_per_s", [-0.333, float("nan")])
+def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
+    position: PositionHotWaterStorageInSystemSetup, mass_flow_in_kg_per_s: float
+) -> None:
+    """Catches a negative nominal flow that would only fail at the first fixed-flow step, without naming the field."""
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = mass_flow_in_kg_per_s
+    config.position_hot_water_storage_in_system = position
+    with pytest.raises(
+        ValueError,
+        match=rf"massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least 0 kg/s, "
+        rf"got {mass_flow_in_kg_per_s!r} kg/s",
+    ):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_running_time_in_seconds", "minimum_idle_time_in_seconds"])
+@pytest.mark.parametrize("seconds", [-900, float("nan"), float("inf")])
+def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_pump_is_built(
+    field_name: str, seconds: float
+) -> None:
+    """Catches a negative minimum time that would mean no minimum in cycling mode without a word."""
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    setattr(config, field_name, seconds)
+    with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
 def test_active_cooling_books_the_heat_its_flow_draws_and_that_heat_over_the_eer() -> None:
     """Cooling at 30 °C outside from a 22.04 °C return: a negative flow heat, electricity at hplib's EER."""
     outputs = SingleStep.step(

@@ -1,7 +1,7 @@
 """The hot-water rules the dual-circuit generators share: the diverter valve, the lift a charge asks for, and the return.
 
-The electric heater and the district-heating substation, and their controllers, call these functions instead of
-keeping a copy each; the tests pin the rules once for both.
+The boiler, the electric heater and the district-heating substation, and their controllers, call these functions
+instead of keeping a copy each; the tests pin the rules once for all of them.
 """
 
 from typing import Optional
@@ -11,7 +11,11 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
-from hisim.config import ComponentID
+from hisim.components.generic_boiler import GenericBoilerController, GenericBoilerControllerConfig
+from hisim.components.generic_district_heating import DistrictHeatingController, DistrictHeatingControllerConfig
+from hisim.components.generic_electric_heating import ElectricHeatingController, ElectricHeatingControllerConfig
+from hisim.config import ComponentID, SizingContext
+from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
@@ -159,3 +163,55 @@ class TestDiverterValve:
             parallel_space_heating_and_dhw_option=False,
         )
         assert mode is HeatingMode.DOMESTIC_HOT_WATER
+
+
+class TestHysteresisGuard:
+    """Every dual-circuit controller refuses a hysteresis outside ``0 < hysteresis < set temperature`` when it is built.
+
+    The switch-on point of a hot-water charge is the 60 °C set temperature less the hysteresis. A negative value
+    charges above the set temperature, 0 starts and ends a charge at one point, and 60 K or more never starts one.
+    """
+
+    #: The three dual-circuit controllers, by the names :meth:`build_controller` knows them.
+    CONTROLLERS = ("boiler", "electric_heating", "district_heating")
+
+    @staticmethod
+    def build_controller(controller: str, hysteresis_in_kelvin: float) -> None:
+        """Build the named controller from its preset with the given hysteresis, at 60 s steps.
+
+        Args:
+            controller: One of :attr:`CONTROLLERS`.
+            hysteresis_in_kelvin: The hysteresis to set on the preset.
+        """
+        simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+        if controller == "boiler":
+            boiler_config = GenericBoilerControllerConfig.preset_modulating("BoilerController").resolve(
+                SizingContext(maximal_thermal_power_in_watt=10000.0, minimal_thermal_power_in_watt=2000.0)
+            )
+            boiler_config.hysteresis_water_temperature_offset = hysteresis_in_kelvin
+            GenericBoilerController(simulation_parameters, boiler_config)
+        elif controller == "electric_heating":
+            electric_config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+            electric_config.hysteresis_water_temperature_offset = hysteresis_in_kelvin
+            ElectricHeatingController(simulation_parameters, electric_config)
+        else:
+            district_config = DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController")
+            district_config.hysteresis_water_temperature_offset_in_celsius = hysteresis_in_kelvin
+            DistrictHeatingController(simulation_parameters, district_config)
+
+    @pytest.mark.base
+    @pytest.mark.parametrize("controller", CONTROLLERS)
+    @pytest.mark.parametrize("hysteresis_in_kelvin", [-5.0, 0.0, 60.0, 75.0, float("nan")])
+    def test_a_hysteresis_outside_the_range_is_refused(self, controller: str, hysteresis_in_kelvin: float) -> None:
+        """The message names the field, the value and the range, so the author sees which number to change."""
+        with pytest.raises(
+            ValueError, match=r"needs hysteresis_water_temperature_offset\S* above 0 K and below its 60.0 °C"
+        ):
+            self.build_controller(controller, hysteresis_in_kelvin)
+
+    @pytest.mark.base
+    @pytest.mark.parametrize("controller", CONTROLLERS)
+    @pytest.mark.parametrize("hysteresis_in_kelvin", [10.0, 15.0, 59.9])
+    def test_a_hysteresis_inside_the_range_is_accepted(self, controller: str, hysteresis_in_kelvin: float) -> None:
+        """The shipped 10 K and 15 K build, and so does a value just below the set temperature."""
+        self.build_controller(controller, hysteresis_in_kelvin)

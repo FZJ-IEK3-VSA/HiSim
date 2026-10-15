@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import enum
+import math
 from typing import ClassVar, Optional, Tuple
 
 from hisim.component import ComponentInput, SingleTimeStepValues
@@ -46,7 +47,10 @@ class DiverterValve:
         set_temperatures: SetTemperatureConfig,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> HeatingMode:
-        """Return the mode a dual-circuit generator's diverter valve sets for this step, from the tank and buffer temperatures.
+        """Return the mode a dual-circuit generator's diverter valve sets for this step, from two water temperatures.
+
+        The two temperatures are the space-heating water temperature (a buffer's, the distribution water's, or 0 for
+        the electric heater, which has neither) and the hot-water tank's.
 
         A dual-circuit generator (a boiler, an electric heater, a district-heating substation) heats either its
         space-heating circuit or the hot-water tank, or both at once if ``parallel_space_heating_and_dhw_option`` is
@@ -60,7 +64,8 @@ class DiverterValve:
             with_domestic_hot_water_preparation: Whether the generator has a hot-water tank at all.
             current_controller_mode: The controller's mode at the start of the step.
             is_heating_season: Whether the day is in the heating season, in which space heating runs at all.
-            water_temperature_input_sh_in_celsius: The space-heating water temperature, in °C.
+            water_temperature_input_sh_in_celsius: The space-heating water temperature, in °C: a buffer's, the
+                distribution water's, or 0 for the electric heater.
             water_temperature_input_dhw_in_celsius: The hot-water tank's temperature, in °C, or None without a tank.
             set_temperatures: The set temperatures and the hysteresis.
             parallel_space_heating_and_dhw_option: Whether both circuits may be heated at once.
@@ -116,7 +121,8 @@ class DiverterValve:
 
         return mode
 
-    #: The controller modes in which a hot-water charge is running, so the latch keeps it going up to the set temperature.
+    #: The controller modes in which a hot-water charge is running: the latch keeps it going up to the set temperature,
+    #: and a generator runs its hot-water circuit in exactly these modes.
     CHARGING_MODES: ClassVar[Tuple[HeatingMode, ...]] = (
         HeatingMode.DOMESTIC_HOT_WATER,
         HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
@@ -153,6 +159,40 @@ class DiverterValve:
         if storage_temperature_in_celsius < set_temperature_in_celsius - hysteresis_in_kelvin:
             return True
         return controller_mode in DiverterValve.CHARGING_MODES and storage_temperature_in_celsius < set_temperature_in_celsius
+
+    @staticmethod
+    def require_valid_hysteresis(
+        *,
+        hysteresis_in_kelvin: float,
+        set_temperature_in_celsius: float,
+        field_name: str,
+        controller_description: str,
+    ) -> None:
+        """Refuse a hysteresis outside ``0 < hysteresis < set temperature``, naming the field and the value.
+
+        The switch-on point of a hot-water charge is the set temperature less the hysteresis
+        (:meth:`hot_water_charge_needed`). A negative hysteresis moves it above the set temperature, so a 60 °C tank
+        with -5 K charges to 65 °C; zero makes the latch a one-point control that starts and ends a charge at the same
+        temperature; a hysteresis at or above the set temperature puts the switch-on point at or below 0 °C, so no
+        charge ever starts. For example, the shipped 10 K and 15 K at a 60 °C set temperature are accepted, 0 K and
+        60 K are refused. A dual-circuit controller calls this when it is built, where it knows its set temperature.
+
+        Args:
+            hysteresis_in_kelvin: The configured hysteresis, in K.
+            set_temperature_in_celsius: The warm-water temperature a charge ends at, in °C.
+            field_name: The configuration field the hysteresis comes from, for the message.
+            controller_description: Which controller is built, for the message, e.g. "The boiler's controller".
+
+        Raises:
+            ValueError: If the hysteresis is not a finite number above 0 K and below the set temperature.
+        """
+        if not math.isfinite(hysteresis_in_kelvin) or not 0.0 < hysteresis_in_kelvin < set_temperature_in_celsius:
+            raise ValueError(
+                f"{controller_description} needs {field_name} above 0 K and below its {set_temperature_in_celsius} °C "
+                f"warm-water set temperature, got {hysteresis_in_kelvin!r} K: a hot-water charge starts at the set "
+                "temperature less this hysteresis, so a negative value charges above the set temperature, 0 starts "
+                "and ends a charge at one point, and a value at or above the set temperature never starts one."
+            )
 
 
 class DualCircuitHotWater:

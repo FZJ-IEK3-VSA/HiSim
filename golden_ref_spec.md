@@ -395,11 +395,13 @@ bless. Adding a setup later is the same loop: append to the list, validate, bles
 
 ## 14. Decisions (resolved) & remaining questions
 
-1. **Setup list** — ✅ RESOLVED: the 11 `building_sizer` setups, now in
-   `golden_config.json`. Still need `golden_validate.py` to confirm they run
+1. **Setup list** — ✅ RESOLVED: at first the 11 `building_sizer` setups; since #642
+   `golden_config.json` holds all 22 system setups, and since #943 each has a week and a
+   full-year pair, 44 pairs. `golden_validate.py` is the probe that a listed setup runs
    offline (several reference UTSP and may need `USE_PREDEFINED_PROFILE`).
 2. **Tolerance** — ✅ RESOLVED: `rel_tol = 1e-9`, `abs_tol = 1e-12` (the floor added 2026-10-12, hisim-b3b.6; §7).
-3. **Parallel unit & triggers** — ✅ RESOLVED: per-pair (22 jobs);
+3. **Parallel unit & triggers** — ✅ RESOLVED: per-pair (22 jobs at first; since #848 the pairs
+   run in a few shards, `golden_matrix.py --shards`);
    `golden_check`/`golden_update`/`golden_matrix` take `--setup` + `--param`.
    **Two tiers** (§8): week pairs on every PR + push; full-year pairs on **PRs to
    main only, gated so they run only after quality + tests + golden-check are all

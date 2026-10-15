@@ -874,9 +874,12 @@ four pieces:
 
 - *The store's end temperature without a circuit.* For a start-of-step node the end temperature is exactly linear in
   a circuit's ratio, so the buffer publishes, beside its end temperature, its end temperature without each circuit as
-  port quantities. A rule that reads them lands in one pass; it needs no model of the store. This amends decision 7
-  of `roadmap/hydronic_part_load_spec.md` (decision 21 there) and answers hisim-fxix.17's option (c) for
-  start-of-step stores.
+  port quantities. A rule that reads them lands in one pass once the other circuits' ratios stand; it needs no model
+  of the store. The circuit ends of one buffer read each other's ratios of the pass before, so together they settle
+  within a few passes (`tests/test_start_of_step_part_load.py` iterates both rules against a real node; this
+  coupling is one of the candidate causes of hisim-fxix.25). This amends decision 7 of
+  `roadmap/hydronic_part_load_spec.md` (decision 21 there) and answers hisim-fxix.17's option (c) for start-of-step
+  stores.
 - *The generator's exact fraction, with a steady charge.* The boiler's controller sets the fraction that ends the
   buffer at the heating curve's supply temperature (`StartOfStepPartLoadRule.raising_ratio`). A buffer that starts at
   or above that temperature but would end below it under the draw is charged as well, at full power with a lift of

@@ -352,6 +352,38 @@ class TestTheChargingLimits:
             )
 
     @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("capacity_in_kilowatt_hour", "inverter_power_in_watt", "field_name", "unit", "value"),
+        [
+            (0.0, 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", 0.0),
+            (-10.0, 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", -10.0),
+            (float("nan"), 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", float("nan")),
+            (10.0, 0.0, "custom_pv_inverter_power_generic_in_watt", "W", 0.0),
+            (10.0, -5000.0, "custom_pv_inverter_power_generic_in_watt", "W", -5000.0),
+            (10.0, float("inf"), "custom_pv_inverter_power_generic_in_watt", "W", float("inf")),
+        ],
+    )
+    def test_a_size_that_is_not_finite_or_not_above_0_is_refused_when_the_battery_is_built(
+        self, capacity_in_kilowatt_hour: float, inverter_power_in_watt: float, field_name: str, unit: str, value: float
+    ) -> None:
+        """Catches a stated size that builds: 0 kWh divides by zero in the first step, 0 W never charges.
+
+        A size stated in the configuration replaces the sizing law, so the battery checks it when it is built.
+        """
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
+            custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
+        )
+        with pytest.raises(
+            ValueError, match=rf"Battery: the bslib battery's {field_name} must be a finite number above 0 {unit}, "
+            rf"got {value!r} {unit}"
+        ):
+            advanced_battery_bslib.Battery(
+                config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            )
+
+    @pytest.mark.base
     def test_a_battery_offered_its_maximum_takes_it(self) -> None:
         """Catches a published maximum the battery does not take: the energy manager's share would then be wrong."""
         battery, set_point, stsv = battery_with_set_point_input()

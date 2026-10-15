@@ -479,16 +479,26 @@ class BoilerPump:
     ) -> "BoilerPump":
         """Return the pump that carries the boiler's maximal heat over its minimal lift at maximal power.
 
-        ``m_max = P_th,max / (c rise)``. For example, 10800 W of maximal heat over 5 K gives 0.517 kg/s.
+        ``m_max = P_th,max / (c rise)``. For example, 10800 W of maximal heat over 5 K gives 0.517 kg/s. A maximal
+        heat of 0 W or less gives a pump with no largest flow, and :meth:`lift_in_kelvin` would divide by it at the
+        first step the boiler fires, so it is refused here, when the boiler is built.
 
         Args:
             maximal_heat_power_in_watt: The heat at maximal burner power, the maximal power times its efficiency,
-                in W.
+                in W, above 0.
             minimal_lift_at_maximal_power_in_kelvin: The smallest rise the pump allows at that heat, in K, above 0.
 
         Returns:
             The pump.
+
+        Raises:
+            ValueError: If ``maximal_heat_power_in_watt`` is not finite or not above 0 W.
         """
+        if not math.isfinite(maximal_heat_power_in_watt) or maximal_heat_power_in_watt <= 0.0:
+            raise ValueError(
+                f"The boiler's pump needs a finite maximal heat above 0 W, maximal_thermal_power_in_watt times "
+                f"eff_th_max, got {maximal_heat_power_in_watt!r}: a boiler without power has no largest flow."
+            )
         return cls(
             maximal_mass_flow_in_kg_per_second=maximal_heat_power_in_watt
             / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * minimal_lift_at_maximal_power_in_kelvin)

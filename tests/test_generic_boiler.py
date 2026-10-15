@@ -759,6 +759,21 @@ def test_a_boiler_without_a_finite_positive_minimal_lift_is_refused(minimal_lift
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("maximal_power_in_watt", [0.0, -1000.0, float("nan")])
+def test_a_boiler_without_a_finite_positive_maximal_power_is_refused_when_built(maximal_power_in_watt: float) -> None:
+    """A boiler of 0 W has a pump of no largest flow, which divided by zero at the first step the boiler fired.
+
+    The power is sizable, so the config may hold ``AUTO`` until it is resolved; the pump refuses the resolved value
+    when the boiler is built.
+    """
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    config.maximal_thermal_power_in_watt = maximal_power_in_watt
+    config.minimal_thermal_power_in_watt = 0.0
+    with pytest.raises(ValueError, match="maximal_thermal_power_in_watt"):
+        generic_boiler.GenericBoiler(SimulationParameters.one_day_only(2021, 900), config)
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     "preset",
     [

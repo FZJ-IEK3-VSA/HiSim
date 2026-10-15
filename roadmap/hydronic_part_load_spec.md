@@ -103,12 +103,13 @@ Owner, 2026-10-15, after stage D made the space-heating buffer a start-of-step s
     (`WaterTemperatureAtEndOfStepWithout{HeatGenerator,SecondaryHeatGenerator,HeatDistribution}InCelsius`). The end
     temperature of a start-of-step store is exactly linear in each circuit's ratio, so the rules of
     `part_load.StartOfStepPartLoadRule` are exact given the other circuits' ratios: each lands in one pass once the
-    others stand, and together they settle within a few passes, where the rule of decision 11 alternates under a
-    draw (hisim-fxix.17). The boiler's controller raises the buffer to the
-    heating curve's supply temperature, also from a buffer at that temperature that its draw would empty (a steady
-    charge at full power and a 0.1 K lift); the distribution controller lowers its ratio so that the buffer ends no
-    lower than the room's start-of-step temperature, in forced passes too; in the heating season the rest of a
-    hot-water part-load step charges the buffer. The hot-water cylinder keeps decision 11's rule.
+    others stand, and together they settle within a few passes, where the rule of decision 11 alternates under a draw
+    (hisim-fxix.17). The boiler's controller raises the buffer to the heating curve's supply temperature, also from a
+    buffer at that temperature that its draw would empty (a steady charge at full power: the controller asks for a 0.1 K
+    lift only so that the boiler fires, and the boiler's pump sets the rise at its largest flow); the distribution
+    controller lowers its ratio so that the buffer ends no lower than the room's start-of-step temperature, in forced
+    passes too; in the heating season the rest of a hot-water part-load step charges the buffer. The hot-water cylinder
+    keeps decision 11's rule.
 22. **The heat pump's space heating runs the mode too** (owner, 2026-10-15, after the heat-pump assemblies failed
     with whole steps into the start-of-step buffer). Its space-heating controller sets the exact fraction of
     decision 21 against the heating curve's supply temperature plus the energy manager's raise, charges a buffer at

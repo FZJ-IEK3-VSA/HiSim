@@ -882,8 +882,10 @@ four pieces:
   stores.
 - *The generator's exact fraction, with a steady charge.* The boiler's controller sets the fraction that ends the
   buffer at the heating curve's supply temperature (`StartOfStepPartLoadRule.raising_ratio`). A buffer that starts at
-  or above that temperature but would end below it under the draw is charged as well, at full power with a lift of
-  0.1 K, for the fraction that ends it at the target.
+  or above that temperature but would end below it under the draw is charged as well, at full power, for the
+  fraction that ends it at the target. Its controller asks for a lift of 0.1 K only so that the boiler fires; the
+  boiler's pump raises that to the rise its full heat gives at the pump's largest flow (`BoilerPump`), the smallest
+  lift the pump allows at full power.
 - *The distribution's floor fraction.* The distribution controller sets the fraction that keeps the buffer's end
   temperature at or above the room's start-of-step temperature (`StartOfStepPartLoadRule.lowering_ratio`); it applies
   the rule in forced passes too, so a forced step cannot drain the buffer below the room.

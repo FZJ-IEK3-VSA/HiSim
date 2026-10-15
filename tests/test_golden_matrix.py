@@ -317,22 +317,64 @@ def test_zero_shards_is_refused() -> None:
 
 
 def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
-    """The workflows' own calls: 22 week pairs in four shards, 22 full-year pairs in five or four.
+    """The workflows' own calls: 22 week pairs in four shards, 22 full-year pairs in five.
 
     golden-check cuts the week into four shards with the YAML twins and the composed files
-    counted (``--with-yaml --with-composed``), golden-year the year into five shards with the
-    composed files counted, the bless (golden-update.yml) into four without them. Catches a shard
-    holding no pair, which would start a runner for nothing.
+    counted (``--with-yaml --with-composed``), the year into five shards with the composed files
+    counted. Catches a shard holding no pair, which would start a runner for nothing.
     """
     config = json.loads(REAL_CONFIG.read_text())
     composed = composed_setups(config, REPO_ROOT)
     week = build_shards(config, 4, horizon="week", with_yaml=True, composed=composed)["include"]
     year = build_shards(config, 5, horizon="year", composed=composed)["include"]
-    bless_year = build_shards(config, 4, horizon="year")["include"]
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
     assert len(year) == 5 and sum(cell["count"] for cell in year) == 22
-    assert len(bless_year) == 4 and sum(cell["count"] for cell in bless_year) == 22
-    assert all(cell["count"] > 0 for cell in [*week, *year, *bless_year])
+    assert all(cell["count"] > 0 for cell in [*week, *year])
+
+
+def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_shards() -> None:
+    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 22 + 4 jobs.
+
+    Every Python pair of both horizons is blessed exactly once, each full-year pair in a job of its
+    own running only it (``jobs`` 1), the week pairs in four shards. Catches a pair the bless would
+    no longer regenerate, which would leave its golden stale without anyone noticing.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+    cells = build_shards(config, 4, one_pair_per_job=frozenset({"year"}))["include"]
+    year = [cell for cell in cells if cell["horizon"] == "year"]
+    week = [cell for cell in cells if cell["horizon"] == "week"]
+    assert len(year) == 22 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
+    emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
+    assert emitted == sorted((p["setup"], p["param"]) for p in build_matrix(config)["include"])
+    assert len(emitted) == 44
+
+
+def test_one_pair_per_job_gives_each_pair_of_the_horizon_a_cell_first_and_shards_the_rest() -> None:
+    """A horizon named in ``one_pair_per_job`` gets a cell per pair, heaviest first, ahead of the shards.
+
+    Catches a pair of that horizon dropped or doubled, a cell running more pairs at once than it has
+    runs (``jobs``), names that collide (the bless names its artifacts after them, and a collision
+    would make one upload overwrite another's file), and the other horizons' shards changing.
+    """
+    config = _weighted_config()
+    cells = build_shards(config, 2, one_pair_per_job=frozenset({"year"}), composed=frozenset({"heavy"}))["include"]
+    assert [(cell["horizon"], cell["pairs"], cell["jobs"], cell["seconds"]) for cell in cells[:2]] == [
+        ("year", "heavy:full_year_60s", 2, 470),
+        ("year", "big:full_year_60s", 1, DEFAULT_PAIR_SECONDS),
+    ]
+    assert all(cell["count"] == 1 for cell in cells[:2])
+    week = build_shards(config, 2, horizon="week", composed=frozenset({"heavy"}))["include"]
+    assert cells[2:] == week
+    assert len({cell["name"] for cell in cells}) == len(cells)
+
+
+def test_one_pair_per_job_refuses_an_unknown_horizon_and_a_call_without_shards() -> None:
+    """A typo'd horizon would silently shard what was meant to run alone; without --shards it would do nothing."""
+    with pytest.raises(ValueError, match="Unknown horizons"):
+        build_shards(_weighted_config(), 2, one_pair_per_job=frozenset({"years"}))
+    with pytest.raises(SystemExit):
+        main(["--runs", "--one-pair-per-job", "year"])
 
 
 def test_runs_give_every_run_a_cell_of_its_own_heaviest_first() -> None:

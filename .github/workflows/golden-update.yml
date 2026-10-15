@@ -11,8 +11,37 @@
 # The force_rewrite input dumps the fresh values verbatim instead — the way to clear
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
 #
-# The pairs run in shards, like the gates' (golden_matrix.py --shards 4 cuts each horizon
-# into four): four week pairs or two full-year pairs at once per job, as memory allows.
+# A bless regenerates the Python setups' goldens only, every pair of golden_config.json in both
+# horizons: 22 week and 22 full-year pairs. The YAML twins and the composed files have no goldens
+# of their own; the gates hold them to the Python setup's.
+#
+# ONE JOB PER FULL-YEAR PAIR, THE WEEK PAIRS IN FOUR SHARDS (golden_matrix.py --shards 4
+# --one-pair-per-job year; owner decision 2026-10-15, as golden-year.yml has had since #1005). The
+# bless used to cut each horizon into four shards, two full-year pairs at once per job, and then
+# took as long as its busiest full-year shard: on the self-hosted runners on 2026-10-15 the
+# full-year shards of four to eight pairs took 12 to 17 minutes and the bless 26 minutes from
+# dispatch to PR. Now every full-year pair is a job of its own, run in-process (golden_update.py
+# --jobs 1), so the regenerate phase takes about its slowest single pair: the heaviest recorded in
+# golden_config.json "seconds" are 690 s (heat pump with car) and 623 s (heat pump with solar
+# thermal), and the first bless in this layout (2026-10-15) took 0.7 to 11.1 minutes per full-year
+# job, the heat pump with solar thermal the longest. That bless took 22 minutes from dispatch to
+# PR only because two other branches' full CI had taken most runners a minute earlier, so its jobs
+# started up to 10 minutes late; on free runners it would take about 13. The week pairs stay in four
+# shards of four pairs at once: they weigh 5 to 254 s each, the shards 140 to 254 s of busiest
+# lane, and a week shard took 4 to 5 minutes, well inside the slowest full-year job. A job per
+# week pair would not shorten the bless and would pay 18 more container starts, checkouts and
+# installs of about a minute each. That makes 26 regenerate jobs on the 56 runners, the full-year
+# jobs listed first and heaviest first. The price is runner time: a job per full-year pair pays
+# its own start and no longer shares a runner with a second pair, about 140 runner-minutes per
+# bless against about 80 in shards. Each job uploads exactly its own goldens under a name of its
+# own (golden-<cell name>); collect merges them all and checks that every pair's file arrived.
+#
+# TIMEOUTS. A hung simulation must not hold a runner until GitHub's six-hour default. A full-year
+# job runs its one pair in-process, so the job's own limit is the guard: 30 minutes, as in
+# golden-year.yml, almost three times the slowest full-year job measured (11 minutes). The same
+# limit fits the week shards (4 to 5 minutes), whose pairs also run in child processes that are
+# each killed after three times their recorded seconds (scripts/runner.py,
+# ChildRuns.timeout_in_seconds).
 
 name: golden-update
 
@@ -36,7 +65,7 @@ permissions:
 
 jobs:
   discover:
-    name: discover all shards
+    name: discover all pairs
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     outputs:
@@ -48,8 +77,13 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-      - id: gen
-        run: echo "matrix=$(python3 scripts/golden_matrix.py --shards 4)" >> "$GITHUB_OUTPUT"
+      # golden_matrix.py is stdlib-only, so no dependency install is needed here.
+      - name: Build the bless matrix
+        id: gen
+        run: |
+          matrix="$(python3 scripts/golden_matrix.py --shards 4 --one-pair-per-job year)"
+          echo "$matrix" | python3 -m json.tool
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -63,6 +97,8 @@ jobs:
     needs: discover
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
+    # See TIMEOUTS above: almost three times the slowest full-year job measured (11 minutes).
+    timeout-minutes: 30
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -72,7 +108,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     env:
-      # Space-separated setup:param tokens, split on purpose where they are used.
+      # Space-separated setup:param tokens (one for a full-year job), split on purpose where they
+      # are used.
       PAIRS: ${{ matrix.pairs }}
       JOBS: ${{ matrix.jobs }}
     steps:
@@ -87,16 +124,16 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      - name: Regenerate the goldens of this shard
+      - name: Regenerate the goldens of this job
         env:
           FORCE: ${{ inputs.force_rewrite && '--force-rewrite' || '' }}
         run: |
           # shellcheck disable=SC2086  # PAIRS and FORCE are split into arguments on purpose
           python scripts/golden_update.py --jobs "$JOBS" --pairs $PAIRS $FORCE
-      # Exactly this shard's files: the checkout holds every other golden too, unchanged, and
+      # Exactly this job's files: the checkout holds every other golden too, unchanged, and
       # collect merges all artifacts into one directory, so an unchanged copy uploaded here
-      # could overwrite the fresh one another shard produced.
-      - name: List this shard's goldens
+      # could overwrite the fresh one another job produced.
+      - name: List this job's goldens
         id: files
         run: |
           {
@@ -121,7 +158,10 @@ jobs:
 
   collect:
     name: assemble goldens and open PR
-    needs: update
+    needs: [discover, update]
+    # Runs after a failed regenerate job too, but only to fail itself in its first step: a bless
+    # PR must carry every pair's fresh golden or none.
+    if: ${{ !cancelled() && needs.discover.result == 'success' }}
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
@@ -132,6 +172,15 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # needs.update.result is 'success' only when every one of its matrix jobs succeeded.
+      - name: Fail if a regenerate job failed or did not run
+        env:
+          UPDATE_RESULT: ${{ needs.update.result }}
+        run: |
+          if [ "$UPDATE_RESULT" != "success" ]; then
+            echo "::error::A regenerate job ended '$UPDATE_RESULT' — refusing to open a bless PR without every pair's golden."
+            exit 1
+          fi
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
@@ -145,17 +194,30 @@ jobs:
         with:
           pattern: golden-*
           # upload-artifact strips the common leading dir, so each artifact holds a bare
-          # "<pair>.json" — download straight into golden_references/ to restore the layout.
-          path: golden_references
+          # "<pair>.json". They land beside the checkout's goldens first, so the next step can
+          # tell what arrived from what was committed.
+          path: regenerated
           merge-multiple: true
-      - name: Verify goldens landed
+      # Every pair the matrix listed must have come back, and nothing else: a missing file would
+      # leave its committed golden in the PR as if it had been blessed.
+      - name: Verify every pair's golden landed
+        env:
+          MATRIX: ${{ needs.discover.outputs.matrix }}
         run: |
-          count=$(find golden_references -maxdepth 1 -name '*.json' ! -name manifest.json | wc -l)
-          echo "Downloaded $count golden reference file(s) into golden_references/."
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No golden reference files were downloaded — refusing to open an empty bless PR."
-            exit 1
-          fi
+          python - <<'PY'
+          import json, os, pathlib, sys
+          cells = json.loads(os.environ["MATRIX"])["include"]
+          expected = {token.replace(":", "__") + ".json" for cell in cells for token in cell["pairs"].split()}
+          landed = {path.name for path in pathlib.Path("regenerated").glob("*.json")}
+          print(f"Downloaded {len(landed)} golden reference file(s) of the {len(expected)} pairs blessed.")
+          if landed != expected:
+              print(
+                  f"::error::Missing: {sorted(expected - landed)}; unexpected: {sorted(landed - expected)}"
+                  " — refusing to open an incomplete bless PR."
+              )
+              sys.exit(1)
+          PY
+          cp regenerated/*.json golden_references/
       - name: Install HiSim package
         run: uv pip install --system -e .
       - name: (Re)write manifest

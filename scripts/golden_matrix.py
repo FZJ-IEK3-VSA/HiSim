@@ -35,6 +35,18 @@ single run rather than its busiest shard, and a cell reads::
 The cells come heaviest first, so the runs that would otherwise finish last are queued first when
 the runners are busy. ``--runs`` takes ``--with-yaml`` and ``--with-composed`` like ``--shards``.
 
+``--one-pair-per-job HORIZON`` is for the bless (golden-update.yml), which mixes the two: with
+``--shards`` it gives every pair of the named horizon a shard of its own, while the other horizons
+are still cut into shards. The bless gives the long full-year pairs a job each and keeps the short
+week pairs in a few shards. Such a cell has the shard form, so one workflow job serves both kinds,
+and reads::
+
+    {"name": "year-setup_a-full_year_60s", "horizon": "year", "jobs": 1, "count": 1, "seconds": 623,
+     "pairs": "setup_a:full_year_60s"}
+
+``jobs`` is the number of runs of the pair (one, or more with ``--with-yaml`` and
+``--with-composed``), all at once. These cells come first, heaviest first, ahead of the shards.
+
 ``--with-composed`` adds the ``composed`` mode's run (``golden_check.py --mode all``, or ``--mode
 python composed`` in the year tier) for every pair whose setup has a composed file,
 ``energy_systems/<stem>.composed.energy_system.yaml`` beside the config's repository
@@ -186,6 +198,7 @@ def build_shards(
     horizon: Optional[str] = None,
     with_yaml: bool = False,
     composed: frozenset[str] = frozenset(),
+    one_pair_per_job: frozenset[str] = frozenset(),
 ) -> dict:
     """Return a GitHub matrix whose cells are shards: balanced lists of pairs, per horizon.
 
@@ -197,12 +210,20 @@ def build_shards(
     :func:`composed_setups`) counts once more, for its composed file. Ties keep config order, so
     the output is deterministic.
 
+    A horizon named in ``one_pair_per_job`` is not cut into shards: every pair of it gets a cell
+    of its own, its ``jobs`` the pair's number of runs, and those cells come first, heaviest first
+    (for example the bless's full-year pairs, ``{"year"}``).
+
     Raises:
-        ValueError: if ``shards`` is less than one, a ``seconds`` weight is malformed or names a
-            parameter set the config does not have, or :func:`build_matrix` refuses the config.
+        ValueError: if ``shards`` is less than one, ``one_pair_per_job`` names an unknown horizon,
+            a ``seconds`` weight is malformed or names a parameter set the config does not have,
+            or :func:`build_matrix` refuses the config.
     """
     if shards < 1:
         raise ValueError(f"--shards must be at least 1, not {shards}.")
+    unknown_horizons = sorted(set(one_pair_per_job) - set(HORIZON_FACTORIES))
+    if unknown_horizons:
+        raise ValueError(f"Unknown horizons {unknown_horizons}; choose from {sorted(HORIZON_FACTORIES)}.")
     pairs = build_matrix(config, horizon=horizon)["include"]
     setups = {setup["id"]: setup for setup in config["setups"]}
     params = {param["id"]: param for param in config["parameter_sets"]}
@@ -212,6 +233,7 @@ def build_shards(
         if unknown:
             raise ValueError(f"setup {setup['id']!r}: 'seconds' names unknown parameter sets {unknown}.")
 
+    solos: list[dict] = []
     include = []
     for name in HORIZON_FACTORIES:  # day, week, year: a stable cell order
         members = [p for p in pairs if FACTORY_HORIZONS[params[p["param"]]["factory"]] == name]
@@ -221,6 +243,19 @@ def build_shards(
             ((pair_seconds(setups[p["setup"]], p["param"]), position, p) for position, p in enumerate(members)),
             key=lambda item: (-item[0], item[1]),
         )
+        if name in one_pair_per_job:
+            for seconds, _, pair in weighted:
+                solos.append(
+                    {
+                        "name": f"{name}-{pair['setup']}-{pair['param']}",
+                        "horizon": name,
+                        "jobs": 1 + with_yaml + (pair["setup"] in composed),
+                        "count": 1,
+                        "seconds": round(seconds),
+                        "pairs": f"{pair['setup']}:{pair['param']}",
+                    }
+                )
+            continue
         jobs = PAIRS_AT_ONCE[name]
         count = min(shards, len(members))
         lanes = [[0.0] * jobs for _ in range(count)]
@@ -243,7 +278,8 @@ def build_shards(
                     "pairs": " ".join(f"{pair['setup']}:{pair['param']}" for pair in chosen[index]),
                 }
             )
-    return {"include": include}
+    # sorted() is stable: equal weights keep the horizon order and, within one, config order.
+    return {"include": sorted(solos, key=lambda cell: -cell["seconds"]) + include}
 
 
 def build_runs(
@@ -314,6 +350,15 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "instead of one cell per pair or shard.",
     )
     parser.add_argument(
+        "--one-pair-per-job",
+        action="append",
+        choices=sorted(HORIZON_FACTORIES),
+        default=[],
+        metavar="HORIZON",
+        help="With --shards: give every pair of this horizon a cell of its own instead of a place in a shard "
+        "(repeatable).",
+    )
+    parser.add_argument(
         "--with-yaml",
         action="store_true",
         help="Balance the shards for running each pair's YAML twin beside it (golden_check.py --mode both).",
@@ -332,6 +377,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
     if args.runs and args.shards is not None:
         raise SystemExit("--runs and --shards exclude each other: a cell is either one run or one shard.")
+    if args.one_pair_per_job and args.shards is None:
+        raise SystemExit("--one-pair-per-job needs --shards: it names the horizons the shards leave out.")
     config = json.loads(args.config.read_text())
     composed = composed_setups(config, args.config.resolve().parent.parent) if args.with_composed else frozenset()
     if args.runs:
@@ -339,7 +386,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.shards is None:
         matrix = build_matrix(config, horizon=args.horizon)
     else:
-        matrix = build_shards(config, args.shards, horizon=args.horizon, with_yaml=args.with_yaml, composed=composed)
+        matrix = build_shards(
+            config,
+            args.shards,
+            horizon=args.horizon,
+            with_yaml=args.with_yaml,
+            composed=composed,
+            one_pair_per_job=frozenset(args.one_pair_per_job),
+        )
     # Compact single line: consumed by ``echo "matrix=$(...)" >> $GITHUB_OUTPUT``.
     print(json.dumps(matrix, separators=(",", ":")))
     return 0

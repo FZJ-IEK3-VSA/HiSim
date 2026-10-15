@@ -31,7 +31,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   in CI) and design patterns; controllers as testable state machines; class-scoped constants; a purpose sentence
   in every docstring; no `print` outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and
   PR descriptions in its form.
-- Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
+- Tests are written as `TESTING.md` says: one job marker per test, the runtime budget of `base`, a regression test that fails without its fix, explicit configuration over monkeypatching.
 
 ## Pull requests and merging
 
@@ -62,7 +62,8 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Test markers
 
-Markers are defined in `pytest.ini`:
+Markers are defined in `pytest.ini`. `TESTING.md` says which marker a test carries, the runtime budget of `base`
+and what a test must prove.
 
 - `base` — unit-scale tests that must pass in any case: no full simulation of a system setup, a few seconds at most. **Run these.**
 - `extendedbase`, `extendedbase2` — the full-simulation tests; CI splits each over several jobs (`tests/ci_split.py`), `extendedbase2` serially for memory. Slow. Avoid.

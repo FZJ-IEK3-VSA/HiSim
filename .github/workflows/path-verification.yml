@@ -4,10 +4,9 @@
 # uploaded as the artifact path-verification-report whatever the verdict, because a failing run
 # is the one somebody opens it for. See hisim/renovisor/how_to_use.md.
 #
-# A workflow of its own rather than a job of tests.yml: golden-year.yml's gate
-# (scripts/ci_prereqs_done.sh) waits for tests.yml to be green, and a verification failure --
-# a probe missing for a settable leaf, a status below the announced one -- says nothing about
-# whether the full-year golden references may run.
+# A workflow of its own rather than a job of tests.yml, so that a verification failure -- a
+# probe missing for a settable leaf, a status below the announced one -- shows as its own check
+# of the pull request rather than as a failed test shard.
 
 name: path-verification
 
@@ -32,7 +31,8 @@ concurrency:
 jobs:
   verify:
     name: path verification (tier 1)
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:

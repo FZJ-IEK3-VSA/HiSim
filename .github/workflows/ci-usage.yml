@@ -48,6 +48,9 @@ concurrency:
 jobs:
   report:
     name: report CI resource usage
+    # Stays on a GitHub-hosted runner, unlike the rest of CI (see tests.yml): this job runs on the
+    # runner itself, without a container, and needs the gh CLI and unzip, which the self-hosted
+    # boxes are not known to provide. It runs no pull request code.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

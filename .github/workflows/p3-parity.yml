@@ -57,7 +57,8 @@ concurrency:
 jobs:
   discover:
     name: discover triples
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -85,7 +86,8 @@ jobs:
   parity:
     name: parity ${{ matrix.setup }} / ${{ matrix.window }}
     needs: discover
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -143,7 +145,8 @@ jobs:
     name: p3-parity summary
     needs: parity
     if: always()
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     # The same container as the matrix jobs, because the table is rendered by the checker itself
     # rather than by a second copy of the row format, and the checker imports HiSim.
     container:

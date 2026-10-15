@@ -35,15 +35,10 @@
 # not excluded: the golden's legacy port names are read through the parity rig's declared table.
 #
 # Gate: BLOCKING. Any KPI divergence or run error, in any mode, fails its shard and the
-# summary job. Because golden-year waits for this workflow to succeed, a YAML twin that
-# diverges from its golden also keeps the full-year tier from running: the twins gate
-# golden-year too, deliberately (decided 2026-09-27).
+# summary job.
 #
-# The heavier full-year pairs run separately, in golden-year.yml, once all the other
-# CI for the commit is green. This workflow completing is one of the three events
-# that fire that one (`workflow_run`), so renaming this workflow, or its `name:`
-# above, breaks that trigger. Nothing here has to wait for anything: the gate on the
-# other side reads where the three prerequisites stand and decides in seconds.
+# The heavier full-year pairs run separately, in golden-year.yml, which starts at the same
+# time as this workflow and does not wait for it.
 
 name: golden-check
 
@@ -76,7 +71,8 @@ concurrency:
 jobs:
   discover:
     name: discover golden shards
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -107,7 +103,8 @@ jobs:
   golden:
     name: golden ${{ matrix.name }} (${{ matrix.count }} pairs)
     needs: discover
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -180,7 +177,8 @@ jobs:
     name: golden-check summary
     needs: golden
     if: always()
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
       - name: Fail if any pair diverged or failed to run, in any mode
         run: '[ "${{ needs.golden.result }}" = "success" ] || exit 1'

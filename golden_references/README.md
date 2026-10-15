@@ -117,15 +117,12 @@ In CI this runs as two tiers (see `.github/workflows/`):
   setup, its recorded YAML twin and, where it has one, its composed file side by side
   (`golden_check.py --mode all`, one report per mode), in four shards
   (`scripts/golden_matrix.py --shards 4 --with-yaml --with-composed`) that run four simulations at
-  once each. A diverging YAML twin or composed file fails it, and so also holds back `golden-year`. The shards are
+  once each. A diverging YAML twin or composed file fails it. The shards are
   balanced by each pair's measured duration, `"seconds"` in `scripts/golden_config.json`;
   `report.json` records a fresh `duration_s` per pair when they need refreshing.
-- **`golden-year.yml`** — full-year pairs, for PRs to `main` **only after** `quality`,
-  `tests`, and `golden-check` have all gone green for the commit (no wasted
-  full-year compute when a cheaper check already failed). It is triggered by those
-  workflows completing (`workflow_run`), not by the pull request itself, so that
-  waiting for them costs no runner; its result reaches the pull request as a
-  `golden-year` commit status rather than as an entry in the checks list. Five shards running
+- **`golden-year.yml`** — full-year pairs, on every PR and push to `main`, starting at the
+  same time as `golden-check` and the rest of CI on the self-hosted runners and reporting as
+  ordinary checks of the pull request; a pull request from a fork skips it. Five shards running
   two simulations at once, since a full-year pair needs about 6 GiB: the Python setups and, where
   the setup has one, its composed file (`golden_check.py --mode python composed`,
   `golden_matrix.py --with-composed`). Every setup of the config runs the full year (owner

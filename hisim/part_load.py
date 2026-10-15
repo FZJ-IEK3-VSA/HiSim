@@ -343,9 +343,20 @@ class PartLoadCommand:
     a run it enforces itself against its controller (a minimum running time kept inside the device, which runs the
     whole step), and 0 while it does not run. A minimum running time its controller keeps is not such a run: the
     controller commands the rule's ratio for it like for any other step.
+
+    A device may declare the ratio input optional, for a device that also runs without the controller that sends it;
+    an unwired input commands the whole step (:meth:`ratio`).
     """
 
-    def __init__(self, device: Component, *, input_name: str, ratio_run_output_name: str, device_description: str) -> None:
+    def __init__(
+        self,
+        device: Component,
+        *,
+        input_name: str,
+        ratio_run_output_name: str,
+        device_description: str,
+        mandatory: bool = True,
+    ) -> None:
         """Add the part-load ratio input and the ratio-run output to ``device``.
 
         Args:
@@ -354,9 +365,10 @@ class PartLoadCommand:
             ratio_run_output_name: The field name of its ratio-run output.
             device_description: How the output description names the device's run, for example "the boiler's
                 hot-water charge".
+            mandatory: Whether the ratio input must be wired; an optional input that is not wired commands 1.
         """
         self.ratio_channel: ComponentInput = device.add_input(
-            device.component_name, input_name, lt.LoadTypes.ANY, lt.Units.FRACTION, True
+            device.component_name, input_name, lt.LoadTypes.ANY, lt.Units.FRACTION, mandatory
         )
         self.ratio_run_channel: ComponentOutput = device.add_output(
             device.component_name,
@@ -370,7 +382,7 @@ class PartLoadCommand:
         )
 
     def ratio(self, stsv: SingleTimeStepValues) -> float:
-        """Return the commanded part-load ratio of this pass.
+        """Return the commanded part-load ratio of this pass; 1, the whole step, while an optional input is unwired.
 
         Args:
             stsv: The step's values.
@@ -381,6 +393,8 @@ class PartLoadCommand:
         Raises:
             ValueError: If the controller sent a ratio outside [0, 1].
         """
+        if self.ratio_channel.source_output is None:
+            return 1.0
         return PartLoadRule.validated_ratio(stsv.get_input_value(self.ratio_channel), self.ratio_channel.fullname)
 
     def publish_ratio_run(self, stsv: SingleTimeStepValues, ratio_run: float) -> None:

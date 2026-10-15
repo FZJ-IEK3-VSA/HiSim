@@ -68,6 +68,10 @@ Markers are defined in `pytest.ini`:
 - `system_setups` — runs full system setups end to end. Slow. Avoid.
 - `mpc` — model-predictive-control system tests. Slow. Avoid.
 - `utsp` — exercises the LPG/UTSP connector. **Networked + requires credentials.** Avoid.
+- `renovisor_probes` — the RenoVisor tests that read the capability document or the translation map
+  (session fixtures in `tests/renovisor/conftest.py`). The first test builds the whole probe set, about
+  100 s; run it when you change the translator, the catalogue or the capability document. Run without
+  xdist (`-p no:xdist` or `-n 0`), or every worker builds the document again.
 
 Deselect the slow/networked ones explicitly when running a broader-than-base subset, e.g.:
 ```bash

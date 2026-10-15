@@ -83,6 +83,13 @@ jobs:
             durations: "40"
             # One module (test_postprocessing_options.py), about a minute: nothing to spread.
             workers: 0
+          - name: renovisor-probes
+            marker: "renovisor_probes"
+            # The tests that read RenoVisor's capability document or the translation map rendered from it
+            # (tests/renovisor/conftest.py). The session fixture builds the whole probe set, about 90 s; in
+            # base each of the four workers that picked up one of the three modules built it again (five
+            # 85-92 s setups in base's --durations). One process builds it once, plus the determinism build.
+            workers: 0
           - name: system-setups
             marker: "system_setups"
             # 3.5 GB peak (~2.1 GB above idle): four processes stay near 10 GB; 16 modules.
@@ -92,7 +99,7 @@ jobs:
             # One test (test_occupancy_scaling_with_local_lpg, 328 s) at 11.5 GB peak: nothing to spread.
             workers: 0
           - name: others
-            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions and not nightly and not assemblies"
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions and not nightly and not assemblies and not renovisor_probes"
             allow_empty: "true"
             # 1.9 GB peak, 35 s: two workers are the most the short shard gains from, and they leave the
             # HPC-harness worker-pool tests, which time child processes, cores to spare.

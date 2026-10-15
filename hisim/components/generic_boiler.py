@@ -455,6 +455,21 @@ class BurnerModulation:
             self.minimal_efficiency + (burner_power_in_watt - self.minimal_power_in_watt) * efficiency_slope_per_watt
         )
 
+    def heat_power_in_watt(self, burner_power_in_watt: float) -> float:
+        """Return the heat the burner turns a burner power into, in W: the power times :meth:`efficiency_at`.
+
+        The one home of the burner's heat, which both sizes the boiler's flow (:meth:`GenericBoiler.fired_circuit`)
+        and sets the rise the pump raises a lift to (:meth:`BoilerPump.lift_in_kelvin`), so the two cannot drift
+        apart. For example, a 2-20 kW burner from 0.6 to 0.9 turns 11 kW into 11000 * 0.75 = 8250 W.
+
+        Args:
+            burner_power_in_watt: The burner power, in W.
+
+        Returns:
+            The heat, in W.
+        """
+        return burner_power_in_watt * self.efficiency_at(burner_power_in_watt)
+
 
 @dataclass(frozen=True)
 class BoilerPump:
@@ -991,7 +1006,7 @@ class GenericBoiler(PhysicsComponent):
         commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
         lift_in_kelvin = self.pump.lift_in_kelvin(
             asked_lift_in_kelvin=lift_in_kelvin,
-            heat_power_in_watt=commanded_power_in_watt * self.burner.efficiency_at(commanded_power_in_watt),
+            heat_power_in_watt=self.burner.heat_power_in_watt(commanded_power_in_watt),
         )
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
         unthrottled_supply_in_celsius = return_temperature_in_celsius + lift_in_kelvin
@@ -1060,8 +1075,8 @@ class GenericBoiler(PhysicsComponent):
         """
         commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
         efficiency = burner.efficiency_at(commanded_power_in_watt)
-        mass_flow_in_kg_per_second = (
-            commanded_power_in_watt * efficiency / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
+        mass_flow_in_kg_per_second = burner.heat_power_in_watt(commanded_power_in_watt) / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
         )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,

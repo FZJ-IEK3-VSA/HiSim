@@ -3,8 +3,9 @@
 **Date:** 2026-10-01 · **Owner:** Noah Pflugradt · **Status:** decided (owner, 2026-10-01: the frame in §2,
 D1–D8 in §10); ready for staged implementation (§9.5). Replaces PR #864. Beads: hisim-4g9.16, hisim-4g9.21,
 hisim-4g9.22, hisim-9uoo.12, hisim-9uoo.15, hisim-9uoo.17, hisim-6ehm; renovisorissues #76. **Stage D couples the
-space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler, heat-pump
-and district-heating chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12).**
+space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler and heat-pump
+chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12). A chain without a buffer
+(district heating) keeps whole steps.**
 
 All `file:line` citations are against `origin/main` at fca81ba0. Code on the #864 branch (`fix/storage-energy`)
 is cited by name only.
@@ -859,7 +860,8 @@ on those branches only:
    its end temperature without that circuit (`WaterTemperatureAtEndOfStepWithout{HeatGenerator,
    SecondaryHeatGenerator, HeatDistribution}InCelsius`), and `part_load.StartOfStepPartLoadRule` gains the exact
    raising and lowering ratios.
-7. The part-load mode for the boiler and district-heating chain (second decision below).
+7. The part-load mode for the boiler and district-heating chain (second decision below). The district-heating
+   twin has no buffer, so it runs whole steps and its results are those of item 5.
 8. The heat pump's space-heating part load (third decision below).
 
 A first space-heating part load with the existing rule of `hisim/part_load.py` stopped the stack (owner's stop rule:
@@ -891,6 +893,10 @@ four pieces:
   the rule in forced passes too, so a forced step cannot drain the buffer below the room.
 - *The comfort remainder (S6).* In the heating season the rest of a hot-water part-load step charges the buffer, at
   most that rest, with the lift to the supply temperature.
+
+The mode acts where a buffer sits. District heating feeds its distribution system without one (S10), as the boiler of
+`gas_boiler_household` does; in such a chain every ratio is 1 and the distribution system still publishes the
+previous step's heat and temperatures (see Open).
 
 **Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat pump
 overshot a start-of-step buffer, and the heat-pump assemblies failed: sample s007 reached 93.3 °C. (A 50 l buffer in the
@@ -958,5 +964,9 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 
 **Open:**
 
+- *The chain without a buffer* (district heating, `gas_boiler_household`): the pipe-water node of §4.6, S10's flow
+  ownership (D25: the distribution system learns from the circuit who pumps, and its position enum goes) and district
+  heating's bill (hisim-9uoo.12) are in the first scope of §9.5 D, and this stack does not build them. No owner
+  decision yet says whether they stay in stage D.
 - *Comfort at coarse steps* (hisim-6ehm): degree-hours at 3600 s are 192.8 (gas), 109.3 (heat pump) and 93.7 (heat
   pump + solar thermal), against the stack top's 2.7, 4.2 and 3.6.

@@ -95,8 +95,9 @@ def uncosted_config() -> CostedDummyConfig:
 def make_simulation_parameters(days: int) -> SimulationParameters:
     """Build simulation parameters spanning ``days`` days from the start of 2021.
 
-    The helper divides the simulated duration by a fixed 365-day year, so a span of 73 days
-    is exactly a fifth of a year and a span of 365 days is exactly one year. A run covers whole
+    The proration (``prorate_to_simulated_period``) divides the simulated duration by a fixed
+    365-day year, so a span of 73 days is exactly a fifth of a year and a span of 365 days is
+    exactly one year. A run covers whole
     days (the window contract of ``SimulationParameters``), which is why the partial period is a
     fifth of a year rather than half of one.
 

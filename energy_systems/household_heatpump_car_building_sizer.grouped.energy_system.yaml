@@ -57,6 +57,7 @@ components:
     inputs:
       - Weather
       - HeatingCurveController
+      - MoreAdvancedHeatPumpHPLib
       - L2EMSElectricityController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:

@@ -30,10 +30,10 @@ controller (#941).
   end temperature without that circuit, and `hisim.part_load.StartOfStepPartLoadRule` sets each fraction exactly from
   them: a generator's so that the store ends at its controller's target (also when the store starts at the target but
   its draw would take it below), the distribution system's so that the store does not end below the room's
-  start-of-step temperature. The space-heating buffer and its boilers do this since hydronic stage D; the heat pump
-  runs whole steps until its part load (#916). Why: a committed start value does not move while the step
-  iterates, so the coupling needs no iteration between store and generator. Today the hot-water cylinder of stage
-  C (#909) still returns the step mean of its temperature to its generators
+  start-of-step temperature. The space-heating buffer, its boilers and its heat pump do this since hydronic stage D;
+  the heat pump's hot-water charge runs whole steps until its part load (#916). Why: a committed start value does not
+  move while the step iterates, so the coupling needs no iteration between store and generator. Today the hot-water
+  cylinder of stage C (#909) still returns the step mean of its temperature to its generators
   (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the controllers decide on its start-of-step
   temperature (part-load spec, decision 3; the solar controller reads `WaterTemperatureAtStartOfStepInCelsius`
   since #941). A new store follows the rule above.

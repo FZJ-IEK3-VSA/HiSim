@@ -49,6 +49,7 @@ components:
     inputs:
       - Weather
       - HeatingCurveController
+      - MoreAdvancedHeatPumpHPLib
       - SimpleHotWaterStorage
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution

@@ -253,13 +253,15 @@ class SingleStep:
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
-        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one.
+        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one, and
+        the space-heating part-load ratio is 1, the whole step, unless ``values`` names one.
 
         Returns:
             Every output of the heat pump by field name.
         """
         values = {
             MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
+            MoreAdvancedHeatPumpHPLib.PartLoadRatioSh: 1.0,
             **values,
         }
         fakes: List[cp.ComponentOutput] = []

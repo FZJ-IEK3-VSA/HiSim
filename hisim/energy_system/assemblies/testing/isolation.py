@@ -310,13 +310,57 @@ def isolation_document(
     add_fact_providers(partners, port_facts, selection.members, registry, assembly.path)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
+    components = registry.document(partners, f"the test partners of '{assembly.path}'")
+    bind_optional_partner_ports(components, classes)
     return {
         "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
         "name": f"isolation_{assembly.path.replace('/', '_')}",
         "description": f"The isolation system of {assembly.path} (assemblies_spec.md §9.4).",
-        "components": registry.document(partners, f"the test partners of '{assembly.path}'"),
+        "components": components,
         "imports": {SUBJECT: entry},
     }
+
+
+def bind_optional_partner_ports(components: Dict[str, Dict[str, Any]], member_classes: Mapping[str, str]) -> None:
+    """Write ``optional-bind:`` for every optional partner port of a test partner that has exactly one candidate.
+
+    A test partner stands beside every assembly whose ports it serves, so the component its optional port reads may
+    sit in the subject in one isolation system, among the other partners in another, and nowhere in a third. One
+    verb in the registry cannot name all three, and the engine refuses an optional port with a candidate and no verb.
+    The harness therefore writes the verb per system, as it does for the subject's own optional ports: the subject
+    when exactly one member of the subject has the port's partner class and no other partner has it, the partner when
+    exactly one other partner has it and no member does, and no verb when none has it (the port stays unbound).
+    Several candidates write no verb either, and the engine refuses the binding as ambiguous. A port the entry already
+    gives a verb keeps it. Example: the heat distribution controller's ``buffer`` port (partner
+    ``SimpleHotWaterStorage``) binds the subject beside a heating assembly with a buffer, the partner ``Buffer``
+    beside a hot-water cylinder whose heat pump charges one, and nothing beside district heating.
+
+    Args:
+        components: The partners' site entries by name, changed in place.
+        member_classes: The class name of every member of the subject, by member name.
+    """
+    for name, component in components.items():
+        written = {
+            port
+            for verb in ("bind", "optional-bind")
+            for port in (component.get(verb) or {})
+        } | set(component.get("none") or ())
+        for port_name, port in (component.get("ports") or {}).items():
+            if not isinstance(port, Mapping) or not port.get("optional") or "partner" not in port:
+                continue
+            if port_name in written:
+                continue
+            wanted = port["partner"]
+            in_subject = sum(1 for class_name in member_classes.values() if class_name == wanted)
+            in_partners = [
+                other
+                for other, entry in components.items()
+                if other != name and str(entry.get("class", "")).rsplit(".", 1)[-1] == wanted
+            ]
+            if in_subject == 1 and not in_partners:
+                component.setdefault("optional-bind", {})[port_name] = SUBJECT
+            elif in_subject == 0 and len(in_partners) == 1:
+                component.setdefault("optional-bind", {})[port_name] = in_partners[0]
 
 
 def refusal_in(error: Optional[BaseException]) -> Optional[ConfigurationRefusedError]:

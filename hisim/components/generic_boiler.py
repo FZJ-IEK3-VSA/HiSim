@@ -217,9 +217,15 @@ class GenericBoilerConfig(ConfigBase):
     #: ``m_max = P_max eff_th_max / (c rise)``. A lift the controller asks for that is smaller than the rise the
     #: commanded heat gives at that flow is raised to it, so the supply ends above the one asked for. For example, a
     #: 12 kW boiler at 0.9 pumps at most 12000 * 0.9 / (4180 * 5) = 0.52 kg/s (1.9 m3/h) and lifts its water by at
-    #: least 5 K at full power and by about 2.5 K at half power. Why 5 K: it bounds the flow of an on/off burner, or
-    #: of one held at its minimal power, on a lift close to 0 K, while a modulating controller that commands full
-    #: power only on lifts of 5 K and more (the ``modulating`` preset) never reaches it.
+    #: least 5 K at full power and by about 2 K at half power (6 kW at an efficiency of about 0.75 is about 4.5 kW of
+    #: heat). Why 5 K: it bounds the flow of an on/off burner, or of one held at its minimal power, on a lift close
+    #: to 0 K. A modulating controller (the ``modulating`` preset) commands full power only on lifts of 5 K and more
+    #: and a power proportional to the lift below, so it reaches the bound only where it holds the burner at its
+    #: minimal power: a 12 kW boiler with a 1 kW minimum (the ``*_12kw`` presets) turns that into 600 W, which the
+    #: largest flow carries over 0.28 K, so a lift below 0.28 K is raised. A boiler without a minimal power never
+    #: reaches it. A minimal lift above the controller's ``set_temperature_difference_for_full_power`` would raise
+    #: lifts on which that controller commands full power, so the supply would end above the one it asked for: keep
+    #: it at or below that threshold.
     minimal_lift_at_maximal_power_in_kelvin: float = field(default=5.0, metadata={"unit": lt.Units.KELVIN})
     device_co2_footprint_in_kg: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
@@ -456,8 +462,9 @@ class BoilerPump:
     """The boiler's circulation pump: the largest water flow it moves through either of the boiler's circuits.
 
     The boiler sizes its flow so that the commanded heat leaves at the lift its controller asks for,
-    ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound: an on/off burner at full power, or one held
-    at its minimal power, would pump hundreds of kilograms a second through a household circuit. The pump cannot, so
+    ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound: an on/off burner at full power would pump
+    hundreds of kilograms a second through a household circuit, and one held at its minimal power tens (12 kW of
+    burner power at 0.9 over 0.01 K is 258 kg/s, a 1 kW minimum at 0.6 is 14 kg/s). The pump cannot, so
     the boiler raises such a lift to the rise its heat gives at the pump's largest flow (:meth:`lift_in_kelvin`) and
     the supply ends above the one asked for. For example, a pump of at most 0.5 kg/s carrying 10450 W lifts its water
     by at least 10450 / (4180 * 0.5) = 5 K, and a lift of 0.01 K asked for is raised to 5 K.
@@ -1031,7 +1038,9 @@ class GenericBoiler(PhysicsComponent):
         Args:
             burner: The burner's power band and efficiency law.
             control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
-            lift_in_kelvin: The lift the controller asks for, in K, above 0.
+            lift_in_kelvin: The lift the circuit runs at, in K, above 0: the one the controller asks for, raised by
+                :meth:`BoilerPump.lift_in_kelvin` to the rise the heat gives at the pump's largest flow, so the flow
+                computed here never exceeds that largest flow.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
             supply_temperature_in_celsius: The circuit's supply temperature after any throttling, in °C, at most
                 the return plus the lift.

@@ -832,7 +832,10 @@ temperature) and S5 (zero flow with the valve shut) stand. S6 (comfort: give the
 space heating), S8 (0.5 % forced steps at 900 s for the boiler twins), S9 (heat within 1 % at 900 s and 3600 s
 against 60 s, fuel and electricity reported) and S10 (D25 without a buffer) stand as recommended; S6 is the comfort
 remainder of the part-load mode. S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part
-load; the owner accepted that for stage D (hisim-fxix.26, filed with pull request 8).
+load; the owner accepted that for stage D (hisim-fxix.26, filed with pull request 8). S9 is not met everywhere either
+(the second table below): the delivered heat is within 1 % at 900 s in all four twins, but not at 3600 s (gas
+−1.01 %, heat pump −1.99 %, heat pump + solar thermal −1.15 %), and the booked heat misses 1 % in the pellet twin
+(−1.31 %, −1.72 %), in the heat-pump twin (−1.08 %, −2.34 %) and with solar thermal at 3600 s (−1.09 %).
 
 **As built and measured** (full year 2021, predefined occupancy; 60 s is the reference every coarse step is compared
 with). Item n is pull request n of stage D, stacked on #1000 and on this spec: 1 #1007, 2 #1008, 3 #1009, 4 #1010,
@@ -929,10 +932,12 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 **Decided with it (owner, 2026-10-15):**
 
 - *The gas fuel at coarse steps.* The heat is asserted (booked and delivered) and the balance closes; the fuel is
-  recorded against 60 s. The gas twin's fuel gap (−9.31 % at 900 s, −19.36 % at 3600 s with the heat within 1 %)
-  comes from the boiler's efficiency law, which rises with burner power, so a fraction of the step at full power
-  burns less fuel than modulating low all step. It is not a coupling error. The law is parked as the P1 bead
-  hisim-4g9.66 until the open pull requests are merged; stage D is not stacked on it.
+  recorded against 60 s. Built so far is the per-step half: `tests/test_space_heating_buffer_twins.py` asserts that the
+  buffer closes and that both ends of each circuit book the same heat; no test yet asserts the heat against 60 s. The
+  gas twin's fuel gap (−9.31 % at 900 s, −19.36 % at 3600 s, while its booked heat is +0.02 % and −0.66 % and its
+  delivered heat −0.13 % and −1.01 %) comes from the boiler's efficiency law, which rises with burner power, so a
+  fraction of the step at full power burns less fuel than modulating low all step. It is not a coupling error. The law
+  is parked as the P1 bead hisim-4g9.66 until the open pull requests are merged; stage D is not stacked on it.
 - *The gas twin's extra forced steps* (98 against 94 at 900 s, 504 against 47 at 3600 s) are accepted for now
   (the P3 bead hisim-fxix.25, filed with pull request 7).
 - *The heat-pump twins' extra forced steps* (S7 not met): 1668 against 1620 and 805 against 618, with solar thermal

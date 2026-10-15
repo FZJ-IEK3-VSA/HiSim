@@ -295,8 +295,8 @@ class PostProcessor:
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
         # Collected first, from the result table as the simulator left it; concluded last (below)
         energy_balance = self.check_energy_balance(ppdt)
-        # Which outputs get charts: not the constant ones (listed in the report instead) and not
-        # those declaring the aggregation NONE. The exports below still write every output.
+        # Which outputs get charts: not the constant ones and not those declaring the aggregation
+        # NONE; the report lists both with the reason. The exports below still write every output.
         chart_selection = ChartSelection.of_results(ppdt.all_outputs, ppdt.results)
 
         # Make plots
@@ -379,7 +379,7 @@ class PostProcessor:
             start = timer()
             if report is not None:
                 self.write_components_to_report(ppdt, report, report_image_entries)
-                self.write_constant_outputs_to_report(report, chart_selection)
+                self.write_outputs_without_charts_to_report(report, chart_selection)
             else:
                 raise ValueError(
                     "report is None but should be a ReportGenerator object. "
@@ -926,28 +926,33 @@ class PostProcessor:
         kind = cls.CHART_KINDS_BY_FILE_PREFIX.get(prefix)
         return caption if kind is None else f"{caption}, {kind}"
 
-    def write_constant_outputs_to_report(
+    def write_outputs_without_charts_to_report(
         self, report: reportgenerator.ReportGenerator, chart_selection: ChartSelection
     ) -> None:
-        """Write the chapter listing the outputs that kept one value over the whole run.
+        """Write the chapter listing the outputs that got no charts, each with the reason.
 
-        These outputs get no charts (:class:`ChartSelection`), so the report names each of them
-        once, with its value and unit, after the chapters of the charted outputs. Nothing is
-        written when no output is constant.
+        An output gets no charts when it kept one value over the whole run ("constant at 0") or
+        declares no aggregate ("no aggregate declared", e.g. a controller mode or a sun angle; see
+        :class:`ChartSelection`). The chapter follows the chapters of the charted outputs, so no
+        output disappears from the report silently. Nothing is written when every output was charted.
 
         Args:
             report: The report.
             chart_selection: The run's chart selection.
         """
-        if not chart_selection.constant_outputs:
+        outputs_without_charts = chart_selection.outputs_without_charts
+        if not outputs_without_charts:
             return
+        constant_count = len(chart_selection.constant_outputs)
         self.write_new_chapter_with_table_to_report(
             report=report,
-            table_as_list_of_list=chart_selection.constant_outputs_table(),
-            headline=". Constant Outputs",
+            table_as_list_of_list=chart_selection.outputs_without_charts_table(),
+            headline=". Outputs Without Charts",
             comment=[
-                f"These {len(chart_selection.constant_outputs)} outputs have the same value in every time step "
-                "of the run, so they get no charts."
+                f"These outputs get no charts. Constant over the run: {constant_count}. No aggregate declared: "
+                f"{len(outputs_without_charts) - constant_count} (a controller mode, a timer that restarts at every "
+                "switch or an angle of the sun, of which no monthly value means anything). The time series of every "
+                "output are in the result files."
             ],
         )
 

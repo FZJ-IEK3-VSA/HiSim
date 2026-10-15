@@ -139,6 +139,69 @@ def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> N
     assert sum(1 for sample in samples if sample.values["power_in_watt"] is None) == 6
 
 
+#: The box's share and switch stated together or not at all; both default to unstated.
+ALL_OR_NONE = "constraints:\n  - {all_or_none_of: [share, boost]}"
+
+
+@pytest.mark.assemblies
+def test_a_deterministic_sample_stating_one_member_of_an_all_or_none_of_states_the_others(tmp_path: Path) -> None:
+    """Catches a boundary sample stating one member alone, which the import would refuse (D31).
+
+    A value that states a member brings the others at their companion values (the share at the middle
+    of its range, the switch at its first stated value); a value that unstates one unstates the others.
+    """
+    space = box(tmp_path, ALL_OR_NONE)
+    by_origin = {origin: sample.values for sample in deterministic_samples(space) for origin in sample.origins}
+    assert (by_origin["defaults"]["share"], by_origin["defaults"]["boost"]) == (None, False)
+    assert (by_origin["min of share"]["share"], by_origin["min of share"]["boost"]) == (0.0, True)
+    assert (by_origin["boost = True"]["share"], by_origin["boost = True"]["boost"]) == (0.5, True)
+    assert (by_origin["boost = False"]["share"], by_origin["boost = False"]["boost"]) == (None, False)
+    assert space.problems({**by_origin["defaults"], "share": 0.3}) == [
+        "all_or_none_of [share, boost]: share = 0.3 is stated but boost is not; state both or neither"
+    ]
+
+
+@pytest.mark.assemblies
+def test_the_hypercube_states_every_member_of_an_all_or_none_of(tmp_path: Path) -> None:
+    """Catches the switch's stratified dimension drawing false beside a stated share, which breaks the constraint."""
+    space = box(tmp_path, ALL_OR_NONE)
+    samples = hypercube_samples(space, 8, 2)
+    assert len(samples) == 8 and not any(space.problems(sample.values) for sample in samples)
+    assert all(sample.values["boost"] is True and sample.values["share"] is not None for sample in samples)
+
+
+@pytest.mark.assemblies
+def test_a_sweep_of_an_all_or_none_of_member_from_an_unstated_base_states_the_others(tmp_path: Path) -> None:
+    """Catches a sweep moving one member beside unstated others, the one-sided case the import refuses."""
+    space = box(tmp_path, ALL_OR_NONE)
+    defaults = deterministic_samples(space)[0]
+    points = sweep(space, defaults, "share")
+    assert points is not None
+    assert [point["share"] for point in points] == pytest.approx([0.0, 1 / 3, 2 / 3, 1.0])
+    assert all(point["boost"] is True and not space.problems(point) for point in points)
+
+
+@pytest.mark.assemblies
+def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
+    """Catches the real battery losing coverage to the constraint: every sample but the defaults states both sizes.
+
+    The PR tier keeps five samples (the defaults and each size's min and max, the other at the middle of its
+    range) and the capacity sweep runs at a stated power from every base, never beside an AUTO power.
+    """
+    _, space = mock("storage/battery", Real.LIBRARY)
+    samples = deterministic_samples(space)
+    assert [(sample.values["capacity_in_kwh"], sample.values["power_in_watt"]) for sample in samples] == [
+        ("AUTO", "AUTO"),
+        (1.0, 7750.0),
+        (30.0, 7750.0),
+        (15.5, 500.0),
+        (15.5, 15000.0),
+    ]
+    swept = sweeps(space, samples, space.model.tests.monotone[0])  # type: ignore[union-attr]
+    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 15000.0]
+    assert all(ParameterChecks.is_stated(point["power_in_watt"]) for _, points in swept for point in points)
+
+
 @pytest.mark.assemblies
 def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_the_constraints() -> None:
     """The heater's boundaries, values and options; the array's share at its minimum states it, the power stays AUTO."""

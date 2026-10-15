@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict
 
 from hisim import loadtypes as lt
-from hisim.energy_system.assemblies.model import AssemblyFile, MonotoneDirection, ParameterType
+from hisim.energy_system.assemblies.model import AssemblyFile, ConstraintKind, MonotoneDirection, ParameterType
 from hisim.energy_system.model import ComponentEntry
 from hisim.energy_system.schema_export import SchemaBuilder, default_schema_path, render_schema
 
@@ -57,7 +57,8 @@ class AssemblySchemaBuilder:
             "title": f"HiSim assembly, schema version {AssemblyFile.SCHEMA_VERSION} (lean v1)",
             "description": (
                 "A fragment of an energy system in a file of its own (assemblies_spec.md §13.1): members, "
-                "parameters, exactly_one_of constraints, internal variants, an interface of ports and its "
+                "parameters, exactly_one_of and all_or_none_of constraints, internal variants, an interface of ports "
+                "and its "
                 "test contract."
             ),
             "type": "object",
@@ -133,8 +134,12 @@ class AssemblySchemaBuilder:
             "constraint": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["exactly_one_of"],
-                "properties": {"exactly_one_of": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/name"}}},
+                "minProperties": 1,
+                "maxProperties": 1,
+                "properties": {
+                    kind.value: {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/name"}}
+                    for kind in ConstraintKind
+                },
             },
             "member": {
                 "type": "object",

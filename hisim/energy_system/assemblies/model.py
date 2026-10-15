@@ -1,8 +1,8 @@
 """The in-memory form of an assembly file (``*.assembly.yaml``), lean v1.
 
 An assembly (``assemblies_spec.md`` §2.1, §13.1) holds ordinary component entries whose names are
-local to it, parameters with units, descriptions, defaults and ranges, ``exactly_one_of``
-constraints, parameter-selected internal variants, an interface of ports and its test contract
+local to it, parameters with units, descriptions, defaults and ranges, ``exactly_one_of`` and
+``all_or_none_of`` constraints, parameter-selected internal variants, an interface of ports and its test contract
 (§9.4). The models hold exactly what the file says and know nothing about component classes; a value
 a parameter supplies is kept as the raw ``{$param: <name>}`` mapping the file wrote.
 """
@@ -95,6 +95,37 @@ class ParameterDeclaration(BaseModel):
         if allowed is None or value not in allowed:
             return False
         return self.type != ParameterType.BOOL or isinstance(value, bool)
+
+
+class ConstraintKind(enum.Enum):
+    """The kinds of constraint across parameters an assembly may declare (§2.6).
+
+    ``exactly_one_of`` states one member and leaves the others unstated, as the PV array's peak power
+    or its share of the roof. ``all_or_none_of`` states every member or none of them, as the battery's
+    capacity and inverter power, which its component sizes together (D31).
+    """
+
+    EXACTLY_ONE_OF = "exactly_one_of"
+    ALL_OR_NONE_OF = "all_or_none_of"
+
+
+class ParameterConstraint(BaseModel):
+    """One entry of an assembly's ``constraints:`` list: its kind and the parameters it names.
+
+    Attributes:
+        kind: Which rule the constraint imposes.
+        names: The parameters it names, two or more, as written.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: ConstraintKind
+    names: Tuple[str, ...]
+
+    @property
+    def text(self) -> str:
+        """How messages and ``describe`` write the constraint: ``all_or_none_of [a, b]``."""
+        return f"{self.kind.value} [{', '.join(self.names)}]"
 
 
 class MemberTemplate(BaseModel):
@@ -212,7 +243,7 @@ class AssemblyFile(BaseModel):
         name: The assembly's library path as the file states it (``pv/array``).
         description: What it is.
         parameters: Its parameters, in written order.
-        exactly_one_of: Its constraints, each a tuple of parameter names.
+        constraints: Its constraints, in written order.
         components: Its members outside every internal variant.
         variants: Its internal variants.
         ports: Its interface, every section's ports in one namespace.
@@ -250,11 +281,21 @@ class AssemblyFile(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: Mapping[str, ParameterDeclaration] = Field(default_factory=dict)
-    exactly_one_of: Tuple[Tuple[str, ...], ...] = ()
+    constraints: Tuple[ParameterConstraint, ...] = ()
     components: Mapping[str, MemberTemplate] = Field(default_factory=dict)
     variants: Mapping[str, InternalVariant] = Field(default_factory=dict)
     ports: Mapping[str, Port] = Field(default_factory=dict)
     tests: Optional[TestContract] = None
+
+    @property
+    def exactly_one_of(self) -> Tuple[Tuple[str, ...], ...]:
+        """The parameters of every ``exactly_one_of`` constraint, in written order."""
+        return tuple(item.names for item in self.constraints if item.kind == ConstraintKind.EXACTLY_ONE_OF)
+
+    @property
+    def all_or_none_of(self) -> Tuple[Tuple[str, ...], ...]:
+        """The parameters of every ``all_or_none_of`` constraint, in written order."""
+        return tuple(item.names for item in self.constraints if item.kind == ConstraintKind.ALL_OR_NONE_OF)
 
     def all_members(self) -> Tuple[MemberTemplate, ...]:
         """Every member template the file writes, each option's included, in written order."""

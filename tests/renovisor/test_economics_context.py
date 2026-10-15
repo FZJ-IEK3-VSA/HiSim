@@ -2149,3 +2149,156 @@ class TestTheDoorIsPricedPerSquareMetre:
         assert row["unpriced"] is not with_cost_block
         assert (row["service_life_years"], row["service_life_origin"]) == (35.0, "cost_database")
         assert replaced.replaces_subjects["door_replacement"] == ["envelope_door"]
+
+
+@pytest.mark.base
+class TestAnUnpricedMeasuresCarbonIsUnknown:
+    """hisim-hq4z: an envelope measure without a price books no embodied CO2, as a kept element does.
+
+    Owner decision of 2026-10-15. An envelope measure without a ``cost`` block is in the plan with
+    an investment of zero, flagged unpriced; its embodied CO2 is treated the same way: unknown,
+    booked as zero, and named in the row's note. Before the decision the engine booked the cost
+    database's figure over the area: 43.0 kg/m² x 2.7 m² = 116.1 kg for the door below. The plan
+    is the one of :class:`TestTheDoorIsPricedPerSquareMetre`: the mockup with an area for each of
+    its five elements, the house as it is in stage 0, then the door replaced in stage 1, priced
+    against the shipped Irish cost database.
+    """
+
+    #: The door's area in the plan, in square metres.
+    DOOR_AREA_IN_M2: float = TestTheReferenceRenewsTheFabric.AREAS["door_area_in_m2"]
+
+    #: The database's embodied CO2 of an exterior door, in kilograms per square metre of door.
+    DOOR_EMBODIED_CO2_IN_KG_PER_M2: float = 43.0
+
+    #: A reader's quote for the unpriced door, in euro.
+    DOOR_QUOTE_IN_EURO: float = 2500.0
+
+    @classmethod
+    def _plan(cls, with_cost_block: bool, quoted: bool = False) -> Dict[str, Any]:
+        """Price the two-stage door plan and write its document.
+
+        Args:
+            with_cost_block: Whether the door measure carries a price band.
+            quoted: Whether a reader's quote prices the door's purchase in stage 1.
+
+        Returns:
+            The door stage's built context (``replaced``), the evaluated stages (``stages``) and
+            the validated document (``document``).
+        """
+        # pylint: disable=import-outside-toplevel,protected-access
+        from hisim.economics.database import CostDatabase
+        from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.staged import InvestmentOverride, StagedEvaluator
+        from hisim.economics.staged_document import StagedDocument
+        from tests.economics.synthetic_stages import brownfield_perspective
+
+        fabric = TestTheReferenceRenewsTheFabric
+        config = _building(**fabric.AREAS)
+        reference = _built(fabric._document(with_insulation=False), config)
+        replaced = _built(TestTheDoorIsPricedPerSquareMetre._door_document(with_cost_block), config)
+        stages = [fabric._stage(reference, 0, ()), fabric._stage(replaced, 1, ("door_replacement",))]
+        parameters = EconomicParameters(
+            country="IE", price_basis_year=fabric.BASIS_YEAR, co2_price_scenario="none", apply_subsidies=False
+        )
+        perspective = brownfield_perspective()
+        overrides = (
+            [
+                InvestmentOverride(
+                    stage=1,
+                    measure_id="door_replacement",
+                    amount_in_euro=cls.DOOR_QUOTE_IN_EURO,
+                    source="a test quote",
+                    main_subject="door_replacement",
+                )
+            ]
+            if quoted
+            else []
+        )
+        result = StagedEvaluator(CostDatabase(None)).evaluate(
+            stages, parameters, perspective, investment_overrides=overrides
+        )
+        document = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids=replaced.subjects,
+            # Merged over both stages' reports, as ``StagedCli.read_mapping`` merges them.
+            unpriced_subjects=[*reference.unpriced_subjects, *replaced.unpriced_subjects],
+            subject_notes={**reference.subject_notes, **replaced.subject_notes},
+            replaces_subjects=replaced.replaces_subjects,
+        ).to_json()
+        StagedDocument.validate(document)
+        return {"replaced": replaced, "stages": stages, "document": document}
+
+    @staticmethod
+    def _door_row(plan: Dict[str, Any]) -> Any:
+        """The door measure's ``by_subject`` row on the plan."""
+        return {row["subject"]: row for row in plan["document"]["plan"]["by_subject"]}["door_replacement"]
+
+    @staticmethod
+    def _band(value: float) -> Any:
+        """An exact band of one value, approximately, as the document states it."""
+        return pytest.approx({"min": value, "best": value, "max": value})
+
+    def test_an_unpriced_door_books_no_embodied_co2_and_says_so(self) -> None:
+        """No cost block: 0 EUR and 0 kg, flagged unpriced, and the note names the carbon.
+
+        Under the old rule the plan's embodied CO2 was the database's 116.1 kg; this test fails
+        on it.
+        """
+        plan = self._plan(with_cost_block=False)
+        facts = {entry.subject: entry.facts for entry in plan["replaced"].context.extra_cost_facts}
+        door = facts["door_replacement"]
+        assert door.embodied_co2_override_in_kg == 0.0
+        assert door.price_is_unknown
+        assert "door_replacement" in plan["replaced"].unpriced_subjects
+        assert plan["replaced"].subject_notes["door_replacement"] == EconomicContextBuilder.UNPRICED_NOTE
+        assert "embodied CO2 are unknown, not zero" in EconomicContextBuilder.UNPRICED_NOTE
+
+        row = self._door_row(plan)
+        assert (row["unpriced"], row["note"]) == (True, EconomicContextBuilder.UNPRICED_NOTE)
+        assert row["investment_in_euro"] == self._band(0.0)
+        assert plan["document"]["plan"]["co2"]["embodied_in_kg"] == self._band(0.0)
+
+    def test_a_priced_door_still_books_the_databases_co2(self) -> None:
+        """With a cost block the carbon is the database's 43.0 kg/m² over the door's 2.7 m²."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.database import CostDatabase
+
+        plan = self._plan(with_cost_block=True)
+        door = {entry.subject: entry.facts for entry in plan["replaced"].context.extra_cost_facts}["door_replacement"]
+        assert door.embodied_co2_override_in_kg is None
+        assert not door.price_is_unknown
+        entry = CostDatabase(None).get_device_entry(
+            ComponentType.EXTERIOR_DOOR, TestTheReferenceRenewsTheFabric.BASIS_YEAR, "IE"
+        )
+        assert entry.embodied_co2_value == self.DOOR_EMBODIED_CO2_IN_KG_PER_M2
+
+        row = self._door_row(plan)
+        assert row["unpriced"] is False
+        # The kept elements book none, so the plan's embodied CO2 is the door's alone: 116.1 kg.
+        door_co2_in_kg = self.DOOR_EMBODIED_CO2_IN_KG_PER_M2 * self.DOOR_AREA_IN_M2
+        assert plan["document"]["plan"]["co2"]["embodied_in_kg"] == self._band(door_co2_in_kg)
+
+    @pytest.mark.parametrize("with_cost_block", [False, True], ids=["no_cost_block", "cost_block"])
+    def test_the_kept_elements_book_no_co2_either_way(self, with_cost_block: bool) -> None:
+        """The four kept elements of the door stage and the reference's five carry a zero carbon override."""
+        plan = self._plan(with_cost_block)
+        kept = [element for element in ThermalElement if element is not ThermalElement.DOOR]
+        door_stage = {entry.subject: entry.facts for entry in plan["stages"][1].inputs.cost_facts}
+        assert "envelope_door" not in door_stage
+        for element in kept:
+            assert door_stage[EnvelopeAssets.subject_of(element)].embodied_co2_override_in_kg == 0.0
+        assert plan["document"]["reference"]["co2"]["embodied_in_kg"] == self._band(0.0)
+
+    def test_a_quote_prices_the_money_but_not_the_carbon(self) -> None:
+        """A reader's quote for the unpriced door prices its purchase; its carbon stays unknown, as the note says."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.staged_document import StagedDocument
+
+        plan = self._plan(with_cost_block=False, quoted=True)
+        row = self._door_row(plan)
+        assert row["unpriced"] is False
+        assert row["investment_in_euro"]["best"] == pytest.approx(self.DOOR_QUOTE_IN_EURO)
+        assert row["note"] == StagedDocument.QUOTED_UNPRICED_NOTE + StagedDocument.QUOTED_UNKNOWN_CARBON_NOTE
+        assert plan["document"]["plan"]["co2"]["embodied_in_kg"] == self._band(0.0)

@@ -497,10 +497,10 @@ class SimulationParameters:
         the PV system and the building's solar gains, which compute from the weather's published
         window. The LoadProfileGenerator occupancy and its cars read July from their profiles
         (``hisim/components/lpg_local_time.py``), and the CHP controller's heating season counts the
-        days of the year. The CSV loader still indexes its profile by the timestep number, so
-        timestep 0 is read as the 1st of January whatever this start date says, and a solar-thermal
-        collector pairs its own sun position with the weather's irradiance on a clock of its own. The
-        mid-year-start epic (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
+        days of the year, and the solar-thermal collector reads the weather's sun. The CSV loader
+        still indexes its profile by the timestep number, so timestep 0 is read as the 1st of
+        January whatever this start date says. The mid-year-start epic
+        (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
 
         The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
         use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is

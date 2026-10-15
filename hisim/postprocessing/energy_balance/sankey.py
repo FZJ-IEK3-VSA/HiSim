@@ -167,6 +167,34 @@ class SankeyDiagram:
         return diagrams
 
     @classmethod
+    def title(cls, diagram_name: str) -> str:
+        """The title of one diagram, with the carrier in words.
+
+        Example: ``domestic_hot_water_heat`` is titled "Energy flows over the run: domestic hot water
+        heat (kWh)", ``overall`` "Energy flows over the run: all carriers (kWh)".
+        """
+        words = "all carriers" if diagram_name == "overall" else diagram_name.replace("_", " ")
+        return f"Energy flows over the run: {words} (kWh)"
+
+    @classmethod
+    def node_labels(cls, diagram: Dict[str, Any]) -> List[str]:
+        """Each node's name with the energy through it over the run, in whole kWh.
+
+        A node's energy is the larger of what flows in and what flows out, as plotly sizes the
+        node; it is written into the label so that a printed diagram, which shows no hover text,
+        still carries the numbers. Example: ``MoreAdvancedHeatPumpHPLib<br>15,252 kWh``.
+        """
+        inflow = [0.0] * len(diagram["nodes"])
+        outflow = [0.0] * len(diagram["nodes"])
+        for link in diagram["links"]:
+            outflow[link["source"]] += link["value_kwh"]
+            inflow[link["target"]] += link["value_kwh"]
+        return [
+            f"{node['name']}<br>{max(inflow[index], outflow[index]):,.0f} kWh"
+            for index, node in enumerate(diagram["nodes"])
+        ]
+
+    @classmethod
     def figure(cls, diagram: Dict[str, Any], title: str) -> Any:
         """The plotly figure of one diagram."""
         import plotly.graph_objects as go  # pylint: disable=import-outside-toplevel
@@ -175,10 +203,10 @@ class SankeyDiagram:
         links = diagram["links"]
         figure = go.Figure(
             go.Sankey(
-                valueformat=".1f",
+                valueformat=",.1f",
                 valuesuffix=" kWh",
                 node={
-                    "label": [node["name"] for node in nodes],
+                    "label": cls.node_labels(diagram),
                     "color": [cls.COLOURS[node["kind"]] for node in nodes],
                     "pad": 18,
                 },

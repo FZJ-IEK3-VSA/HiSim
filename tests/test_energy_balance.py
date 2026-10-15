@@ -24,6 +24,7 @@ from hisim.postprocessing.energy_balance import (
     EnergyBalanceReport,
 )
 from hisim.postprocessing.energy_balance.check import RoleTotals
+from hisim.postprocessing.energy_balance.sankey import SankeyDiagram
 from hisim.postprocessing.postprocessing_main import PostProcessor
 from hisim.postprocessingoptions import PostProcessingOptions
 
@@ -585,3 +586,30 @@ def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> Non
     (entry,) = json.loads(report_path.read_text())["links"]
     assert entry["verdict"] == "closes" and entry["reason"] is None
     assert entry["sent_kwh"] == pytest.approx(0.7) and entry["received_kwh"] == pytest.approx(0.7)
+
+
+@pytest.mark.base
+def test_a_sankey_is_titled_with_its_carrier_in_words() -> None:
+    """The carrier's identifier is written as words in the title; ``overall`` reads "all carriers"."""
+    assert SankeyDiagram.title("domestic_hot_water_heat") == "Energy flows over the run: domestic hot water heat (kWh)"
+    assert SankeyDiagram.title("overall") == "Energy flows over the run: all carriers (kWh)"
+
+
+@pytest.mark.base
+def test_a_sankey_node_label_carries_the_energy_through_the_node() -> None:
+    """A printed Sankey shows no hover text, so each node label names its energy: the larger of in and out."""
+    diagram = {
+        "nodes": [{"name": "grid", "kind": "undeclared"}, {"name": "pump", "kind": "component"},
+                  {"name": "store", "kind": "undeclared"}, {"name": "ambient heat", "kind": "environment"}],
+        "links": [
+            {"source": 0, "target": 1, "value_kwh": 3621.6, "carrier": "electricity", "label": "a"},
+            {"source": 3, "target": 1, "value_kwh": 11630.7, "carrier": "ambient_heat", "label": "b"},
+            {"source": 1, "target": 2, "value_kwh": 15252.3, "carrier": "space_heating_heat", "label": "c"},
+        ],
+    }
+    assert SankeyDiagram.node_labels(diagram) == [
+        "grid<br>3,622 kWh",
+        "pump<br>15,252 kWh",
+        "store<br>15,252 kWh",
+        "ambient heat<br>11,631 kWh",
+    ]

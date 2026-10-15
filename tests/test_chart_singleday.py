@@ -203,17 +203,21 @@ def _chart(tmp_path: Path, data: pd.Series, window_start: datetime.datetime, day
 
 
 def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
-    """``get_day_data`` sets ``self.plot_title`` and returns the slice from ``build_day_slice``."""
-    data = _make_series(24 * 31)
-    chart = _chart(tmp_path, data, JANUARY_FIRST, 0)
+    """``get_day_data`` sets ``self.plot_title`` and returns the slice from ``build_day_slice``.
+
+    Day 31 of a run from 1 January is 1 February, the first day of its month: a ``get_day_data``
+    that sliced by the day of the month, or by day 0, would return other rows than these.
+    """
+    data = _make_series(24 * 40)
+    chart = _chart(tmp_path, data, JANUARY_FIRST, 31)
     result = chart.get_day_data()
-    assert chart.plot_title.endswith("January 1st")
-    assert len(result) == 24
+    assert chart.plot_title.endswith("February 1st")
+    assert list(result.values) == [float(v) for v in range(24 * 31, 24 * 32)]
 
     expected_slice, expected_title = ChartSingleDay.build_day_slice(
         data_with_units=data,
         window_start=JANUARY_FIRST,
-        day_in_window=0,
+        day_in_window=31,
         time_correction_factor_in_hours=1.0,
         label_months_lowercase=chart.label_months_lowercase,
         title=chart.title,

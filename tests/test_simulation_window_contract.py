@@ -109,9 +109,10 @@ class TestRefusedWindows:
         with pytest.raises(SimulationWindowError, match="positive"):
             SimulationParameters.validated_window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), True)
 
-    def test_the_error_is_a_value_error(self) -> None:
-        """Callers that catch ``ValueError`` for bad parameters keep catching this one."""
-        assert issubclass(SimulationWindowError, ValueError)
+    def test_a_caller_catching_value_error_catches_a_refused_window(self) -> None:
+        """Callers that catch ``ValueError`` for bad parameters keep catching a refused window."""
+        with pytest.raises(ValueError, match="midnight"):
+            _window(datetime.datetime(2021, 7, 1, 6), datetime.datetime(2021, 7, 8, 6))
 
 
 class TestFactories:

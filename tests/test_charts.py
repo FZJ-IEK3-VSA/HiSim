@@ -390,7 +390,8 @@ def test_the_bar_chart_axis_names_mean_or_sum(
 
 def test_a_running_total_is_drawn_as_its_end_of_month_value(tmp_path: Path) -> None:
     """A running total in Wh declared LAST is labelled as the value at the end of the month, not a sum."""
-    label, _texts = _plot_and_read(_bar_chart(tmp_path, "Wh", lt.OutputAggregation.LAST), [1000.0 * m for m in range(12)])
+    end_of_month_totals = [1000.0 * month for month in range(12)]
+    label, _texts = _plot_and_read(_bar_chart(tmp_path, "Wh", lt.OutputAggregation.LAST), end_of_month_totals)
     assert label == "Energy, end of month [kWh]"
 
 

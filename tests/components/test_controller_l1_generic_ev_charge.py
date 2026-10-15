@@ -218,3 +218,59 @@ def test_above_the_set_point_and_without_surplus_the_car_does_not_charge(control
     assert commands_in_watt[-1] == 0.0
     assert step.end_state_of_charge() == pytest.approx(0.4)
     assert passes <= 4
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("surplus_offered_in_watt", "expected_command_in_watt"),
+    [
+        # at the 1,100 W threshold the station's efficiency collapses, so the car does not charge
+        (1100.0, 0.0),
+        # just above it the car charges with the offer
+        (1101.0, 1101.0),
+        # an offer above the station power is capped at the 11 kW the station delivers
+        (15000.0, 11000.0),
+    ],
+)
+def test_above_the_set_point_the_offer_is_bounded_by_the_threshold_and_the_station(
+    surplus_offered_in_watt: float, expected_command_in_watt: float
+) -> None:
+    """Catches a car above its set point that charges at the threshold, or above what its station delivers.
+
+    A car at 0.6, above its 0.4 set point, at an 11 kW station charges only with an offer strictly above the 1,100 W
+    threshold, and with at most the station power.
+    """
+    step = ParkedCarStep(
+        state_of_charge_at_start=0.6,
+        surplus_offered_in_watt=surplus_offered_in_watt,
+        previous_state_of_charge_at_start=0.6,
+    )
+
+    command_in_watt = step.controller.control_power_in_watt(
+        car_consumption_in_watt=0.0,
+        car_location=int(ParkedCarStep.AT_HOME),
+        soc=0.6,
+        electricity_target_in_watt=surplus_offered_in_watt,
+    )
+
+    assert command_in_watt == expected_command_in_watt
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("set_state_of_charge", [-0.1, 1.5, 80.0, float("nan")])
+def test_a_set_point_outside_0_to_1_is_refused(set_state_of_charge: float) -> None:
+    """Catches a set point outside 0 to 1, such as 80 meant as a percentage, that the controller accepts.
+
+    The battery's state of charge is always below such a set point, so the car would charge at full station power
+    whatever surplus it is offered. 1.0, the always-charge variant of the car house, stays accepted.
+    """
+    parameters = SimulationParameters.one_day_only(2021, 60)
+    config = controller_l1_generic_ev_charge.ChargingStationConfig.for_charging_station_set(
+        "L1EVChargeControl_1", ChargingStationSets.Charging_At_Home_with_11_kW
+    )
+    config.battery_set_soc = 1.0
+    controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=parameters, config=config)
+    config.battery_set_soc = set_state_of_charge
+
+    with pytest.raises(ValueError, match="battery_set_soc"):
+        controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=parameters, config=config)

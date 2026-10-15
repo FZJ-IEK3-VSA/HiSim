@@ -227,3 +227,32 @@ def test_a_curve_whose_design_day_is_not_colder_than_the_room_is_refused_when_bu
     )
     with pytest.raises(ValueError, match="design day must be colder"):
         HeatingCurveController(my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "set_heating_threshold_outside_temperature_in_celsius",
+        "heating_reference_temperature_in_celsius",
+        "set_heating_temperature_for_building_in_celsius",
+    ],
+)
+@pytest.mark.parametrize("temperature_in_celsius", [float("nan"), float("inf")])
+def test_a_curve_temperature_that_is_not_finite_is_refused_when_built(
+    field_name: str, temperature_in_celsius: float
+) -> None:
+    """Catches a NaN threshold that would silently keep every day out of the heating season."""
+    fields = {
+        "set_heating_threshold_outside_temperature_in_celsius": 18.0,
+        "heating_reference_temperature_in_celsius": -7.0,
+        "set_heating_temperature_for_building_in_celsius": 20.0,
+    }
+    fields[field_name] = temperature_in_celsius
+    config = HeatingCurveControllerConfig(
+        component_id=ComponentID(name="HeatingCurveController"),
+        heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
+        **fields,
+    )
+    with pytest.raises(ValueError, match=rf"{field_name} must be a finite temperature"):
+        HeatingCurveController(my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config)

@@ -274,8 +274,10 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             my_display_config: How the component appears in reports.
 
         Raises:
-            ValueError: If the design day is not colder than the room set temperature, which would make the curve
-                divide by zero or rise without bound.
+            ValueError: If the heating threshold, the design day or the room set temperature is not finite: a NaN
+                threshold would make every day silently fall outside the heating season, an infinite one inside it.
+                If the design day is not colder than the room set temperature, which would make the curve divide by
+                zero or rise without bound.
         """
         self.config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -289,6 +291,16 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
         self.heating_reference_temperature_in_celsius = float(concrete(config.heating_reference_temperature_in_celsius))
         self.room_set_temperature_in_celsius = float(concrete(config.set_heating_temperature_for_building_in_celsius))
         self.heating_threshold_in_celsius = float(concrete(config.set_heating_threshold_outside_temperature_in_celsius))
+        for field_name, temperature_in_celsius in (
+            ("set_heating_threshold_outside_temperature_in_celsius", self.heating_threshold_in_celsius),
+            ("heating_reference_temperature_in_celsius", self.heating_reference_temperature_in_celsius),
+            ("set_heating_temperature_for_building_in_celsius", self.room_set_temperature_in_celsius),
+        ):
+            if not math.isfinite(temperature_in_celsius):
+                raise ValueError(
+                    f"The heating curve's {field_name} must be a finite temperature in °C, got "
+                    f"{temperature_in_celsius!r}."
+                )
         if self.heating_reference_temperature_in_celsius >= self.room_set_temperature_in_celsius:
             raise ValueError(
                 "The heating curve's design day must be colder than the room it heats: the heating reference "

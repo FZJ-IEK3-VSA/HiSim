@@ -83,7 +83,8 @@ class Profile:
             window_minutes=minutes,
             source="the test profile",
         )
-        return window["row"].to_numpy()
+        rows: np.ndarray = np.asarray(window["row"], dtype=np.int64)
+        return rows
 
 
 @pytest.mark.base
@@ -222,7 +223,8 @@ class PredefinedOccupancy:
             cache_dir_path=str(directory / "cache"),
         )
         config = UtspLpgConnectorConfig.preset_couple_both_at_work("Occupancy")
-        return UtspLpgConnector(my_simulation_parameters=parameters, config=config)
+        occupancy: UtspLpgConnector = UtspLpgConnector(my_simulation_parameters=parameters, config=config)
+        return occupancy
 
     @classmethod
     def raw_electricity_in_watt(cls) -> np.ndarray:
@@ -232,7 +234,8 @@ class PredefinedOccupancy:
             np.ndarray: 525 600 values.
         """
         frame = pd.read_csv(cls.FILES["electricity_consumption"], sep=";")
-        return frame["Sum [kWh]"].to_numpy() * 1000 * 60
+        electricity_in_watt: np.ndarray = np.asarray(frame["Sum [kWh]"], dtype=np.float64) * 1000 * 60
+        return electricity_in_watt
 
 
 @pytest.mark.base

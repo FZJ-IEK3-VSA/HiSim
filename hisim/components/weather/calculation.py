@@ -51,6 +51,7 @@ import pandas as pd
 import pvlib
 
 from hisim.caching.keys import KeyMaterial
+from hisim.simulation_day import SimulationDay
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -564,18 +565,18 @@ def calculate_daily_average_outside_temperature(
     Returns:
         List[float]: one average per timestep, held constant within a day.
 
+    The block is one day of the run, :meth:`SimulationDay.timesteps_per_day` timesteps long -- the
+    same exact number the window contract makes whole and the single-day chart slices by. For every
+    step the contract accepts it equals the ``int(24 * 3600 / seconds_per_timestep)`` used before, so
+    no average changes.
+
     Raises:
-        ValueError: if a timestep is longer than the day the average is taken over, which leaves no
-            block to average. The loop this replaces returned a series of NaN for it, which the
-            building would have simulated with.
+        ValueError: if the timestep does not divide a day of 86400 s -- among them every timestep
+            longer than a day, which leaves no block to average. The loop this replaces returned a
+            series of NaN for a step longer than a day, which the building would have simulated with,
+            and averaged blocks that were not days for a step that does not divide one.
     """
-    timestep_24h = int(24 * 3600 / seconds_per_timestep)
-    if timestep_24h < 1:
-        raise ValueError(
-            f"A timestep of {seconds_per_timestep} s is longer than the 24 h this average is taken over, "
-            "so there is no block of timesteps to average; the daily average outside temperature needs a "
-            "timestep of at most 86400 s."
-        )
+    timestep_24h = SimulationDay.timesteps_per_day(seconds_per_timestep)
     if not temperature_list:
         return []
     temperatures = np.asarray(temperature_list, dtype=float)

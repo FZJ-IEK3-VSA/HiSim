@@ -174,6 +174,9 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     assert set(closure.package_modules) == {
         "hisim.components.weather.calculation",
         "hisim.caching.keys",
+        # The daily average's block length: the one exact number of timesteps per day the window
+        # contract also uses. Standard library only and a few lines long, so it is rarely edited.
+        "hisim.simulation_day",
     }, (
         "every HiSim module in the closure is hashed into the weather's cache key, so adding one means "
         "its edits invalidate every cached weather series; pass plain values through the DTO instead"
@@ -477,15 +480,17 @@ def test_the_daily_average_is_one_block_mean_per_day_with_the_boundaries_it_has_
 
 
 @pytest.mark.base
-def test_a_timestep_longer_than_a_day_is_refused() -> None:
-    """A timestep of two days leaves no block to average, and says so instead of returning NaN.
+@pytest.mark.parametrize("seconds_per_timestep", [2 * 86400, 7 * 3600])
+def test_a_timestep_that_does_not_divide_a_day_is_refused(seconds_per_timestep: int) -> None:
+    """A timestep of two days or of seven hours makes no block of one day, and says so.
 
-    ``int(24 * 3600 / seconds_per_timestep)`` is zero for any timestep longer than a day, and the loop
-    this replaces then averaged empty slices: a series of NaN, which the building would have simulated
-    with and reported.
+    The block is ``SimulationDay.timesteps_per_day``, which exists only for a step that divides a day.
+    For a step of two days the loop this replaced averaged empty slices -- a series of NaN, which the
+    building would have simulated with and reported; for seven hours it averaged blocks of 21 hours
+    and called them days. The window contract refuses both steps before a run starts.
     """
     with pytest.raises(ValueError, match="86400"):
-        calculation.calculate_daily_average_outside_temperature([1.0, 2.0], 2 * 86400)
+        calculation.calculate_daily_average_outside_temperature([1.0, 2.0], seconds_per_timestep)
 
 
 def _prepared_weather(

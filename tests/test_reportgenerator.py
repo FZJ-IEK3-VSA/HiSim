@@ -68,17 +68,49 @@ def test_a_report_with_figures_builds(tmp_path: Path, figure_path: str) -> None:
     """
     figure_free_directory = tmp_path / "without_figures"
     figure_free_directory.mkdir()
-    ReportGenerator(dirpath=str(figure_free_directory))
+    ReportGenerator(dirpath=str(figure_free_directory)).build()
     figure_free_images = (figure_free_directory / "report.pdf").read_bytes().count(b"/Subtype /Image")
     report = ReportGenerator(dirpath=str(tmp_path))
-    report.open()
     report.write_figures_to_report(figure_path)
-    report.close()
-    report.open()
+    report.build()
     report.write_figure_fitted_to_page(figure_path)
-    report.close()
+    report.build()
     content = (tmp_path / "report.pdf").read_bytes()
     assert content.count(b"/Subtype /Image") > figure_free_images
+
+
+@pytest.mark.base
+def test_the_report_is_written_by_build_alone(tmp_path: Path) -> None:
+    """Opening the report and writing chapters into it writes no file; ``build`` writes ``report.pdf``.
+
+    The constructor used to build the preamble at once, and every chapter writer built the whole
+    report again; now the caller builds it once, after the last chapter.
+    """
+    report = ReportGenerator(dirpath=str(tmp_path))
+    report.write_heading_with_style_heading_one(["1. Chapter"])
+    report.write_with_normal_alignment(["Text"])
+    assert not (tmp_path / "report.pdf").exists()
+    report.build()
+    assert (tmp_path / "report.pdf").is_file()
+
+
+@pytest.mark.base
+def test_the_table_of_contents_gives_the_pages_of_the_chapters(tmp_path: Path) -> None:
+    """One build settles the table of contents: each entry names the page its chapter starts on.
+
+    The title page is page 1 and the contents page 2, so three chapters with a page break after
+    each start on pages 3, 4 and 5.
+    """
+    report = ReportGenerator(dirpath=str(tmp_path))
+    for chapter in range(1, 4):
+        report.write_heading_with_style_heading_one([f"{chapter}. Chapter"])
+        report.page_break()
+    report.build()
+    # The build lays out a copy of the story; its table of contents is the doc's one indexing flowable
+    (table_of_contents,) = report.doc._indexingFlowables  # pylint: disable=protected-access
+    toc_entries = table_of_contents._entries  # pylint: disable=protected-access
+    entries = [tuple(entry[:3]) for entry in toc_entries]
+    assert entries == [(0, "1. Chapter", 3), (0, "2. Chapter", 4), (0, "3. Chapter", 5)]
 
 
 @pytest.mark.base
@@ -88,6 +120,7 @@ def test_the_title_page_holds_the_developers_the_address_and_the_date(tmp_path: 
     At 16 pt with 10 pt spacers the address and the date ran onto page 2, ahead of the contents.
     """
     report = ReportGenerator(dirpath=str(tmp_path))
+    report.build()
     assert report.doc.page == 2
 
 

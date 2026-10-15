@@ -16,8 +16,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hisim.postprocessing.charts import Carpet
-from hisim.postprocessing.chartbase import Chart
+from hisim.postprocessing.charts import Carpet, Line
+from hisim.postprocessing.chartbase import AxisUnit, Chart
 from hisim.simulationparameters import FigureFormat
 
 
@@ -181,3 +181,153 @@ def test_chart_constructor_defaults_to_global_path_checker(tmp_path: Path) -> No
     assert not target_subdir.exists()
     chart.ensure_output_dir()
     assert target_subdir.exists()
+
+
+@pytest.mark.parametrize(
+    ("values", "declared_unit", "expected_values", "expected_unit"),
+    [
+        # A power in W takes the prefix its values reach.
+        ([0.0, 20914.0], "W", [0.0, 20.914], "kW"),
+        ([0.0, 500.0], "W", [0.0, 500.0], "W"),
+        # A unit that already carries k is not prefixed twice: 2 000 kWh are 2 MWh, never "kkWh".
+        ([2000.0], "kWh", [2.0], "MWh"),
+        # ... and never shown below its declared prefix: 0.5 kWh stay kWh, 0.1 kg/s stay kg/s.
+        ([0.5], "kWh", [0.5], "kWh"),
+        ([0.1], "kg/s", [0.1], "kg/s"),
+        # Units without an SI prefix keep their unit whatever their size.
+        ([2000.0], "°C", [2000.0], "°C"),
+        ([5000.0], "timesteps", [5000.0], "timesteps"),
+        ([2.0], "-", [2.0], "-"),
+        # Seconds of three hours or more are shown in hours rather than as ks or Ms.
+        ([7200.0], "s", [7200.0], "s"),
+        ([2.3e6], "s", [2.3e6 / 3600.0], "h"),
+        # Long unit names are shown by their symbols.
+        ([900.0], "W per square meter", [900.0], "W/m²"),
+        ([1400.0], "W per square meter", [1.4], "kW/m²"),
+        ([350.0], "Degrees", [350.0], "°"),
+        # A driven distance is shown in km once it reaches 1 000 m.
+        ([12000.0], "m", [12.0], "km"),
+        # NaN values do not decide the prefix.
+        ([np.nan, 1500.0], "W", [np.nan, 1.5], "kW"),
+    ],
+)
+def test_axis_unit_shows_values_in_a_readable_unit(
+    values: list, declared_unit: str, expected_values: list, expected_unit: str
+) -> None:
+    """Each declared unit is shown with the largest prefix its values reach, never a smaller one."""
+    shown_values, shown_unit = AxisUnit.scale(np.array(values), declared_unit)
+    assert shown_unit == expected_unit
+    np.testing.assert_allclose(shown_values, expected_values)
+
+
+@pytest.mark.parametrize(
+    ("declared_unit", "shown_unit", "expected"),
+    [
+        ("W", "kW", "Power [kW]"),
+        ("Wh", "MWh", "Energy [MWh]"),
+        ("°C", "°C", "Temperature [°C]"),
+        ("K", "K", "Temperature difference [K]"),
+        ("kg/s", "kg/s", "Mass flow [kg/s]"),
+        ("s", "h", "Duration [h]"),
+        ("-", "-", "Value [-]"),
+    ],
+)
+def test_axis_label_names_the_quantity_and_the_shown_unit(declared_unit: str, shown_unit: str, expected: str) -> None:
+    """An axis reads "Power [kW]" rather than a bare "[kW]"."""
+    assert AxisUnit.label(declared_unit, shown_unit) == expected
+
+
+def test_wrap_title_breaks_a_long_camel_case_name_and_keeps_its_words() -> None:
+    """A long output name is broken at a camel-case boundary instead of running off the figure."""
+    name = "WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius"
+    wrapped = Chart.wrap_title(f"SimpleHotWaterStorage\n{name}")
+    lines = wrapped.split("\n")
+    assert all(len(line) <= Chart.MAXIMUM_TITLE_CHARACTERS for line in lines)
+    assert lines[0] == "SimpleHotWaterStorage"
+    assert "".join(lines[1:]) == name
+
+
+def test_wrap_title_keeps_a_short_title_and_the_suffix_whole() -> None:
+    """A title that fits is unchanged; a suffix such as a date is never split between lines."""
+    assert Chart.wrap_title("PVSystem\nElectricityOutput") == "PVSystem\nElectricityOutput"
+    assert Chart.wrap_title("PVSystem\nElectricityOutput", suffix="January 1st") == (
+        "PVSystem\nElectricityOutput January 1st"
+    )
+    long_line = "DispatchToBattery_LoadingPowerInputForTheDay"
+    assert Chart.wrap_title(long_line, suffix="January 1st").rsplit("\n", maxsplit=1)[-1] == "January 1st"
+
+
+class _SavedFigure(NamedTuple):
+    """What a chart had drawn when it saved its figure: the axis labels, the x range and the title."""
+
+    xlabel: str
+    ylabel: str
+    xlim: tuple
+    title: str
+    colorbar_label: str
+
+
+@pytest.fixture
+def saved_figures(monkeypatch: pytest.MonkeyPatch) -> list[_SavedFigure]:
+    """Record the figure of every ``plt.savefig`` call instead of writing an image file."""
+    import matplotlib.pyplot as plt
+
+    figures: list[_SavedFigure] = []
+
+    def record(*_args: object, **_kwargs: object) -> None:
+        figure = plt.gcf()
+        axis = figure.axes[0]
+        colorbar_label = figure.axes[1].get_ylabel() if len(figure.axes) > 1 else ""
+        figures.append(
+            _SavedFigure(axis.get_xlabel(), axis.get_ylabel(), axis.get_xlim(), axis.get_title(), colorbar_label)
+        )
+
+    monkeypatch.setattr(plt, "savefig", record)
+    return figures
+
+
+def _chart_arguments(tmp_path: Path, units: str) -> dict:
+    """The constructor arguments of a line or carpet chart writing below ``tmp_path``."""
+    return {
+        "output": "PVSystem # ElectricityOutput",
+        "component_name": "PVSystem",
+        "units": units,
+        "directory_path": str(tmp_path),
+        "time_correction_factor_in_hours": 1.0,
+        "output_description": "electricity output",
+        "figure_format": FigureFormat.PNG,
+        "path_checker": lambda **_: None,
+    }
+
+
+def test_line_chart_labels_the_quantity_and_ends_at_the_last_timestep(  # pylint: disable=redefined-outer-name
+    tmp_path: Path, saved_figures: list[_SavedFigure]
+) -> None:
+    """The value axis reads "Power [kW]" and the time axis stops at the run's last timestep."""
+    import matplotlib.dates as mdates
+
+    index = pd.date_range("2021-01-01", periods=24 * 7, freq="h")
+    Line(**_chart_arguments(tmp_path, "W")).plot(data_in_self_units=pd.Series(np.full(len(index), 2500.0), index=index))
+    figure = saved_figures[-1]
+    assert figure.ylabel == "Power [kW]"
+    assert mdates.num2date(figure.xlim[1]).replace(tzinfo=None) == index[-1].to_pydatetime()
+
+
+def test_carpet_shows_the_same_unit_as_the_line_chart(  # pylint: disable=redefined-outer-name
+    tmp_path: Path, saved_figures: list[_SavedFigure]
+) -> None:
+    """A carpet of 1.2 kW is in kW (it stayed in W), and one of 2 000 kWh in MWh (it read "kkWh")."""
+    start = datetime.datetime(2021, 1, 1)
+    power = Carpet(**_chart_arguments(tmp_path, "W"))
+    power.plot(xdims=2, data_in_self_units=pd.Series(np.full(48, 1200.0)), window_start=start)
+    assert power.units == "kW"
+    assert saved_figures[-1].colorbar_label == "Power [kW]"
+
+    energy = Carpet(**_chart_arguments(tmp_path, "kWh"))
+    energy.plot(xdims=2, data_in_self_units=pd.Series(np.full(48, 2000.0)), window_start=start)
+    assert energy.units == "MWh"
+
+    temperature = Carpet(**_chart_arguments(tmp_path, "°C"))
+    temperature.plot(xdims=2, data_in_self_units=pd.Series(np.full(48, 2000.0)), window_start=start)
+    assert temperature.units == "°C"
+    assert saved_figures[-1].colorbar_label == "Temperature [°C]"

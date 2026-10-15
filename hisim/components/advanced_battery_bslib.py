@@ -640,8 +640,12 @@ class Battery(PhysicsComponent):
         the run (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so energy the battery still holds at
         the end, or held already at the start, is not booked as a loss. Charged, discharged and stored energy are each
         rounded to 0.1 kWh.
+
+        Raises:
+            ValueError: If ``all_outputs`` holds no stored-energy output of this battery, which would book the energy
+                it holds at the end as lost.
         """
-        stored_energy_increase_in_kwh: float = 0.0
+        stored_energy_increase_in_kwh: Optional[float] = None
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and output.component_name == self.component_name:
                 if InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag:
@@ -659,6 +663,12 @@ class Battery(PhysicsComponent):
                         / 3.6e6,
                         1,
                     ) * (-1)
+        if stored_energy_increase_in_kwh is None:
+            raise ValueError(
+                f"The outputs passed to the OPEX of battery {self.component_name} hold no output flagged "
+                f"{InandOutputType.STORED_ENERGY_INCREASE.name}, so its losses cannot subtract the change of its "
+                "stored energy."
+            )
         battery_losses_in_kwh = KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
             charged_energy_in_kilowatt_hour=self.battery_config.charge_in_kwh,
             discharged_energy_in_kilowatt_hour=self.battery_config.discharge_in_kwh,

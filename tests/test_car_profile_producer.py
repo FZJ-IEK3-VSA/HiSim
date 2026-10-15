@@ -254,6 +254,10 @@ def test_the_profile_enters_the_key_by_its_hash() -> None:
 
     assert CanonicalJson.dumps(base) == CanonicalJson.dumps(same)
     assert CanonicalJson.dumps(base) != CanonicalJson.dumps(other_profile)
+    locations = list(base.car_location)
+    locations[600] = "Shopping"
+    other_place = calculation_inputs(car_location=tuple(locations))
+    assert CanonicalJson.dumps(base) != CanonicalJson.dumps(other_place)
     assert "driven_distance_per_minute_in_meters" not in CanonicalJson.dumps(base)
     assert "car_location" not in CanonicalJson.dumps(base)
     one_day = dataclasses.replace(base, timesteps=24, duration_in_days=1)
@@ -278,3 +282,52 @@ def test_the_produced_profile_is_hourly_and_in_utc() -> None:
     assert list(locations.iloc[8:15]) == [2] * 7
     assert int(locations.iloc[0]) == 1
     assert isinstance(produced, pd.DataFrame)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("overrides", "refusal"),
+    [
+        ({"seconds_per_timestep": 30, "timesteps": 5760}, "whole multiple"),
+        ({"seconds_per_timestep": 90, "timesteps": 1920}, "whole multiple"),
+        ({"timesteps": 24}, "do not span"),
+    ],
+    ids=["sub-minute-timestep", "timestep-not-a-whole-number-of-minutes", "timesteps-not-covering-the-days"],
+)
+def test_a_run_the_producer_cannot_cut_a_profile_for_is_refused_when_the_inputs_are_built(
+    overrides: Dict[str, Any], refusal: str
+) -> None:
+    """A timestep shorter than or not a multiple of the profile's minute, or a span the timesteps miss, is refused.
+
+    Catches: such a run reaching the producer, where it fails as a pandas length error that names
+    neither the car nor the cause.
+    """
+    with pytest.raises(ValueError, match=refusal):
+        calculation_inputs(**overrides)
+
+
+@pytest.mark.base
+def test_a_missing_distance_is_hashed_instead_of_stopping_the_key() -> None:
+    """A minute without a distance hashes as such, as the producer's own numeric conversion reads it.
+
+    Catches: ``float(None)`` raising a ``TypeError`` while the key is built, for a profile the producer
+    itself would turn into a number.
+    """
+    distances: List[Optional[float]] = [0.0, None, 2.0]
+    with_gap = CarProfileInputs.content_hash("00:01:00", ["Home"] * 3, distances)  # type: ignore[arg-type]
+    without_gap = CarProfileInputs.content_hash("00:01:00", ["Home"] * 3, [0.0, 0.0, 2.0])
+
+    assert with_gap != without_gap
+
+
+@pytest.mark.base
+def test_the_location_of_a_timestep_is_its_most_frequent_minute_the_first_on_a_tie() -> None:
+    """The vote over a timestep's minutes picks the most frequent location, and the earliest one on a tie.
+
+    Catches: a rewrite of the vote that breaks ties differently, which would move the car's location in
+    every timestep it changes place in the middle of.
+    """
+    assert generic_car_profile.most_frequent([0, 1, 1, 2]) == 1
+    assert generic_car_profile.most_frequent([2, 1, 1, 2]) == 2
+    assert generic_car_profile.most_frequent([1, 0, 0, 1, 2]) == 1
+    assert generic_car_profile.most_frequent([0]) == 0

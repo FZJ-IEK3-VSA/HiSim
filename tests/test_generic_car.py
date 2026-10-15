@@ -258,6 +258,45 @@ def test_a_car_registered_with_a_simulator_finds_the_published_profile():
 
 
 @pytest.mark.base
+def test_a_second_car_of_the_same_run_reads_the_first_ones_profile_from_the_cache_unchanged(tmp_path):
+    """A cold and a warm preparation of the same car give the same series, and the warm one is a hit.
+
+    The run is at 900 s, so the producer sums the distances and votes the locations per timestep
+    before the profile is filed. Catches: a key that is not stable between two identical runs (the
+    second car would recompute, and a second entry would appear) and a cache read that loses
+    precision or rows (the warm series would differ from the cold one).
+    """
+    repository = SimRepository()
+    CarProfileHandover.publish(
+        repository=repository,
+        profiles=GenericCarInformation(
+            my_occupancy_instance=FakeOccupancy(
+                CarReports.report([{"household": "CHR01", "car": "Small Car"}, {"household": "CHR02", "car": "Van"}])
+            )
+        ).data_dict_for_car_component,
+    )
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    simulation_parameters.cache_dir_path = str(tmp_path)
+    config = _car_config(name="VanOfCHR02", household_name="CHR02", car_name="Van")
+
+    cold = Car(my_simulation_parameters=simulation_parameters, config=config)
+    cold.set_sim_repo(repository)
+    cold.i_prepare_simulation()
+    assert len(list(tmp_path.glob("*.cache"))) == 1
+
+    warm = Car(my_simulation_parameters=simulation_parameters, config=config)
+    warm.set_sim_repo(repository)
+    assert warm.cache_entry(warm.build_calculation_inputs(cold.car_information_dict)).exists
+    warm.i_prepare_simulation()
+
+    assert len(list(tmp_path.glob("*.cache"))) == 1
+    assert len(warm.meters_driven) == simulation_parameters.timesteps
+    assert list(warm.meters_driven) == list(cold.meters_driven)
+    assert list(warm.car_location) == list(cold.car_location)
+    assert sum(warm.meters_driven) > 0
+
+
+@pytest.mark.base
 def test_an_occupancy_without_car_data_publishes_nothing_and_the_car_complains_instead():
     """A predefined-profile household owns no car; the occupancy stays silent, the car does not.
 

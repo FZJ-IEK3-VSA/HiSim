@@ -189,9 +189,13 @@ def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
 
     computed = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
     computed.i_prepare_simulation()
+    assert len(list(tmp_path.glob("*.cache"))) == 1
 
     from_cache = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
     from_cache.i_prepare_simulation()
+    # A key that moved between the two runs would have made the second one recompute and file a second
+    # entry, and the comparison below would then compare two computations instead of a cache read.
+    assert len(list(tmp_path.glob("*.cache"))) == 1
 
     for column in WhatMayBeCached.COLUMNS:
         assert list(from_cache.solar_position[column]) == list(computed.solar_position[column]), (

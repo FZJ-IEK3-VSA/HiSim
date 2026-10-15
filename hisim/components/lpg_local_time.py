@@ -1,9 +1,10 @@
 """Converts the LoadProfileGenerator's local-time minute profiles to the UTC minute series HiSim simulates.
 
 The LoadProfileGenerator reports every profile per minute in local time and without daylight-saving
-shifts: its year is 525 600 gapless minutes. HiSim's occupancy and its cars run on the same UTC-based
-minute series, so the conversion here drops the hour that does not exist in spring, repeats the one that
-exists twice in autumn and moves the profile by the winter offset of one hour.
+shifts: every day of its year is 1440 gapless minutes (525 600 minutes in a 365-day year). HiSim's
+occupancy and its cars run on the same UTC-based minute series, so the conversion here drops the hour
+that does not exist in spring, repeats the one that exists twice in autumn and moves the profile by the
+winter offset of one hour.
 
 The function lives in a module of its own, rather than in :mod:`hisim.utils`, because the car's cached
 profile is computed with it: the car's producer imports it, so the cache key fingerprints this module
@@ -37,8 +38,9 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         pd.DataFrame: data with reformatted UTC ``Time`` column.
 
     Note:
-        The input DataFrame is modified in place; the returned object is the
-        same instance.
+        The input DataFrame is changed in place -- its index becomes the parsed times, and the
+        nonexistent spring hour is dropped from it -- but the result is a new DataFrame. Use the
+        returned object, never the input, after the call.
     """
     # convert Time information to pandas datetime and make it to index
     data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))

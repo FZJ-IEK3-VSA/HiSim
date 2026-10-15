@@ -207,8 +207,6 @@ class Car(cp.PhysicsComponent):
         self.car_location: List[Any] = []
         #: Metres driven per timestep.
         self.meters_driven: Any = []
-        #: Time resolution of the published profile, as an ``%H:%M:%S`` string.
-        self.time_resolution: str = ""
 
         if self.config.fuel == lt.LoadTypes.ELECTRICITY:
             self.electricity_output: cp.ComponentOutput = self.add_output(
@@ -470,7 +468,6 @@ class Car(cp.PhysicsComponent):
             car_information_dict: The payload the occupancy published for this car.
         """
         self.car_information_dict = car_information_dict
-        self.time_resolution = str(car_information_dict["time_resolution"])
         calculation_inputs = self.build_calculation_inputs(car_information_dict)
         entry = self.cache_entry(calculation_inputs)
         if entry.exists:
@@ -483,13 +480,38 @@ class Car(cp.PhysicsComponent):
             dataframe = pd.read_csv(
                 entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
             )
+            self.require_one_row_per_timestep(dataframe, f"the cache entry {entry.path}")
         else:
             log.information(f"Generic car data cache miss: computing it and filing it at {entry.path}")
             dataframe = produce_car_profile(calculation_inputs)
+            self.require_one_row_per_timestep(dataframe, "the computed driving profile")
             with entry.writing() as temporary_cache_filepath:
                 dataframe.to_csv(temporary_cache_filepath, index=False)
         self.car_location = dataframe[CarProfileInputs.LOCATION_COLUMN].tolist()
         self.meters_driven = dataframe[CarProfileInputs.DISTANCE_COLUMN].tolist()
+
+    def require_one_row_per_timestep(self, dataframe: pd.DataFrame, source: str) -> None:
+        """Refuse a driving profile that does not hold exactly one row per timestep of the run.
+
+        The car indexes its series by the timestep, so a shorter profile fails mid-run with an
+        ``IndexError`` and a longer one inflates the distance it reports, which sums the whole series.
+        A computed profile is checked before it is filed, so a wrong one never reaches the cache; a
+        cached one is checked after it is read, so a corrupt entry is named instead of replayed.
+        Example: a one-day run at 900 s needs 96 rows.
+
+        Args:
+            dataframe: the profile, one row per timestep.
+            source: where it came from, for the message.
+
+        Raises:
+            ValueError: if the row count differs from the run's number of timesteps.
+        """
+        timesteps = self.my_simulation_parameters.timesteps
+        if len(dataframe) != timesteps:
+            raise ValueError(
+                f"Car {self.component_name}: {source} holds {len(dataframe)} rows, but the run has {timesteps} "
+                "timesteps."
+            )
 
     def build_calculation_inputs(self, car_information_dict: Dict) -> CarProfileInputs:
         """Build the DTO the car-profile producer is a pure function of.

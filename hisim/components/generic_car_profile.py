@@ -10,8 +10,9 @@ the timestep.
 It is a module of its own, like the weather, PV and solar-gains producers, so that the cache key of the
 artifact carries a fingerprint of exactly the code that computes it: the key is
 ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
-(:class:`hisim.caching.keys.CacheKey`), and the code fingerprint covers this module and the LPG time
-conversion it imports, so an edit to either makes every cached car profile a miss. The legacy key it
+(:class:`hisim.caching.keys.CacheKey`), and the code fingerprint covers this module, the LPG time
+conversion it imports and :mod:`hisim.caching.keys`, which it reads its payload marker from, so an edit
+to any of the three makes every cached car profile a miss. The legacy key it
 replaces hashed the car's configuration and the simulation parameters only, so a changed conversion
 kept serving the profiles the old one had written.
 
@@ -20,11 +21,12 @@ that no configuration determines, so it enters the key as :attr:`CarProfileInput
 a hash of the profile itself, while the profile travels as payload. Two cars driving the same profile
 share one entry; a profile that differs in a single minute is a different entry.
 
-**The layering rule.** This module may import pandas, numpy and the LPG time conversion; it may not
-import the component base class, the simulator or a repository
+**The layering rule.** This module may import pandas, numpy, the LPG time conversion and the cache-key
+module; it may not import the component base class, the simulator or a repository
 (:class:`hisim.caching.keys.ProducerLayering`, checked by ``tests/test_car_profile_producer.py``).
 """
 
+import collections
 import datetime as dt
 import hashlib
 import json
@@ -48,9 +50,9 @@ __status__ = "development"
 
 @dataclass(frozen=True)
 class CarProfileInputs:
-    """Everything :func:`produce_car_profile` depends on, and nothing else.
+    """Everything :func:`produce_car_profile` depends on, plus the hash that names the profile in the key.
 
-    Key material: the hash of the minute profile, its resolution and the run's span and timestep.
+    Key material: the hash of the minute profile, its resolution, and the run's year, span and timestep.
     Payload, excluded from the key by :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`: the two minute
     series themselves, which the hash identifies.
     """
@@ -64,7 +66,8 @@ class CarProfileInputs:
     DISTANCE_COLUMN: ClassVar[str] = "meters_driven"
 
     #: The number each location of the LoadProfileGenerator stands for in the produced series: 1 at
-    #: home, 2 at the workplace and 0 anywhere else, a missing location included.
+    #: home, 2 at the workplace and 0 at the other places listed here, a missing location included. The
+    #: list is closed: a location it does not name stops the producer with a ``KeyError``.
     LOCATION_NUMBERS: ClassVar[Mapping[Optional[str], int]] = {
         "School": 0,
         "Event Location": 0,
@@ -74,7 +77,8 @@ class CarProfileInputs:
         "Workplace": 2,
     }
 
-    #: :meth:`content_hash` of the minute profile. This is what identifies the profile in the key.
+    #: :meth:`content_hash` of the minute profile. This is what identifies the profile in the key;
+    #: :func:`produce_car_profile` does not read it.
     profile_content_hash: str
 
     #: The resolution of the minute profile as the LoadProfileGenerator states it, ``"HH:MM:SS"``.
@@ -121,11 +125,48 @@ class CarProfileInputs:
             [
                 lpg_time_resolution,
                 [None if location is None else str(location) for location in car_location],
-                [float(distance) for distance in driven_distance_per_minute_in_meters],
+                [None if distance is None else float(distance) for distance in driven_distance_per_minute_in_meters],
             ],
             separators=(",", ":"),
         )
         return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+    def __post_init__(self) -> None:
+        """Refuse a run the producer cannot cut a profile for, before the cache is looked up.
+
+        Two things have to hold. The run's timestep must be a whole multiple of the profile's
+        resolution, because a timestep aggregates whole minutes: at 30 s per timestep there is no
+        minute to aggregate. And the run's timesteps must cover exactly its span in days, because the
+        producer cuts the minute profile by the one and returns one row per the other. Example: 48
+        timesteps of 3600 s span 2 days; 48 timesteps over 3 days are refused. Without this check both
+        mistakes surface as a pandas length error inside the producer.
+
+        Raises:
+            ValueError: if the timestep is not a whole multiple of the profile's resolution, or the
+                timesteps do not cover the span in days.
+        """
+        profile_seconds = self.profile_resolution_in_seconds()
+        if self.seconds_per_timestep < profile_seconds or self.seconds_per_timestep % profile_seconds:
+            raise ValueError(
+                f"The car's driving profile has one value per {profile_seconds} s, so the run's timestep "
+                f"must be a whole multiple of it; {self.seconds_per_timestep} s is not."
+            )
+        if self.timesteps * self.seconds_per_timestep != self.duration_in_days * 86400:
+            raise ValueError(
+                f"The car's driving profile is cut for {self.duration_in_days} days, but {self.timesteps} "
+                f"timesteps of {self.seconds_per_timestep} s do not span them."
+            )
+
+    def profile_resolution_in_seconds(self) -> int:
+        """Return the resolution of the minute profile in seconds.
+
+        Example: the LoadProfileGenerator's ``"00:01:00"`` is 60.
+
+        Returns:
+            int: the seconds between two values of the minute profile.
+        """
+        resolution = dt.datetime.strptime(self.lpg_time_resolution, "%H:%M:%S")
+        return resolution.hour * 3600 + resolution.minute * 60 + resolution.second
 
 
 def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
@@ -142,11 +183,7 @@ def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
         pd.DataFrame: the columns :attr:`CarProfileInputs.LOCATION_COLUMN` and
             :attr:`CarProfileInputs.DISTANCE_COLUMN`, one row per timestep.
     """
-    time_resolution_original = dt.datetime.strptime(inputs.lpg_time_resolution, "%H:%M:%S")
-    seconds_per_timestep_original = (
-        time_resolution_original.hour * 3600 + time_resolution_original.minute * 60 + time_resolution_original.second
-    )
-    minutes_per_timestep = int(inputs.seconds_per_timestep / seconds_per_timestep_original)
+    minutes_per_timestep = inputs.seconds_per_timestep // inputs.profile_resolution_in_seconds()
     steps_desired_in_minutes = inputs.timesteps * minutes_per_timestep
 
     # extract values for location and distance of car, include time information and translate the car
@@ -174,9 +211,7 @@ def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
 
     # sum / extract the most common value to match the run's time resolution
     if minutes_per_timestep > 1:
-        meters_driven = resample_meters_driven(
-            meters_driven=meters_driven, seconds_per_timestep=inputs.seconds_per_timestep
-        )
+        meters_driven = resample_meters_driven(meters_driven=meters_driven, minutes_per_timestep=minutes_per_timestep)
         car_location = [
             most_frequent(input_list=car_location[i * minutes_per_timestep: (i + 1) * minutes_per_timestep])
             for i in range(inputs.timesteps)
@@ -188,7 +223,7 @@ def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
     return pd.DataFrame(columns)
 
 
-def resample_meters_driven(meters_driven: List, seconds_per_timestep: int) -> Any:
+def resample_meters_driven(meters_driven: List, minutes_per_timestep: int) -> Any:
     """Sum the minute distances over each timestep of the run.
 
     Example: at a timestep of 900 s, every 15 minute values become one value, their sum. Minutes that
@@ -196,14 +231,13 @@ def resample_meters_driven(meters_driven: List, seconds_per_timestep: int) -> An
 
     Args:
         meters_driven: the distance driven in each minute, in metres.
-        seconds_per_timestep: the run's timestep in seconds.
+        minutes_per_timestep: how many values of the minute profile one timestep of the run holds; the
+            caller derives it from the profile's own resolution, so the distances and the locations are
+            grouped alike.
 
     Returns:
         Any: a numpy array with the distance driven in each timestep, in metres.
     """
-    # Convert seconds per timestep to minutes per timestep
-    minutes_per_timestep = seconds_per_timestep // 60
-
     # Check the length of the input list
     total_minutes = len(meters_driven)
 
@@ -231,12 +265,6 @@ def most_frequent(input_list: List) -> Any:
     Returns:
         Any: the most frequent value.
     """
-    max_count = 0
-    most_frequent_value = input_list[0]
-
-    for value in input_list:
-        curr_frequency = input_list.count(value)
-        if curr_frequency > max_count:
-            max_count = curr_frequency
-            most_frequent_value = value
-    return most_frequent_value
+    # Counter keeps the values in the order they first occur and most_common sorts stably, so a tie goes
+    # to the value that occurs first, as the timestep's location always has.
+    return collections.Counter(input_list).most_common(1)[0][0]

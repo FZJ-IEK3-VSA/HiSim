@@ -73,9 +73,10 @@ class SunPositionInputs:
         Returns:
             pd.DatetimeIndex: one instant per timestep.
         """
-        start = datetime.datetime.fromisoformat(self.window_start)
-        return pd.DatetimeIndex(
-            [start + datetime.timedelta(0, self.seconds_per_timestep * timestep) for timestep in range(self.timesteps)]
+        return pd.date_range(
+            start=datetime.datetime.fromisoformat(self.window_start),
+            periods=self.timesteps,
+            freq=f"{self.seconds_per_timestep}s",
         )
 
 

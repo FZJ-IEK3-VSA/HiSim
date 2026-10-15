@@ -576,18 +576,21 @@ class PumpCase:
 
 @pytest.mark.base
 @pytest.mark.parametrize("circuit", sorted(PumpCase.CIRCUITS))
-@pytest.mark.parametrize(("control_signal", "burner_power_in_watt"), [(1.0, 20000.0), (0.05, 2000.0)])
+@pytest.mark.parametrize(
+    ("control_signal", "burner_power_in_watt", "heat_in_watt"), [(1.0, 20000.0, 18000.0), (0.05, 2000.0, 1200.0)]
+)
 def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_heat(
-    circuit: str, control_signal: float, burner_power_in_watt: float
+    circuit: str, control_signal: float, burner_power_in_watt: float, heat_in_watt: float
 ) -> None:
     """A boiler that sized its flow to a lift close to 0 K pumped hundreds of kg/s and booked heat no store got.
 
     The pellet and wood-chip twins' on/off controller asks for full power on a lift that shrinks to a few mK while
-    the buffer reaches its set temperature: the boiler pumped up to 958 kg/s on the year's mean and booked 51.7 MWh of
+    the buffer reaches its set temperature: the boiler pumped 958 kg/s on the year's mean and booked 51.7 MWh of
     space heating for 11.0 MWh delivered (hisim-4g9.63). The pump moves at most
     :attr:`PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND`, so a 0.01 K lift is raised to the rise the heat gives at that
     flow: 5 K at full power (18000 W), 1/3 K at the 2 kW minimum (1200 W at 0.6). The heat the boiler books is the
-    heat that flow carries, which is the burner's heat, and the fuel the commanded power.
+    heat that flow carries, which is the burner's heat, and the fuel the commanded power. The expected heats are
+    written out by hand, not read from the burner's efficiency law, so a fault in that law fails here too.
     """
     mode, space_heating_return_in_celsius, hot_water_return_in_celsius = PumpCase.CIRCUITS[circuit]
     boiler, output = BoilerStep.run(
@@ -597,7 +600,6 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
     mass_flow_channel, supply_channel, power_channel = PumpCase.outputs_of(boiler, circuit)
     is_space_heating = mode == HeatingMode.SPACE_HEATING
     return_in_celsius = space_heating_return_in_celsius if is_space_heating else hot_water_return_in_celsius
-    heat_in_watt = burner_power_in_watt * boiler.burner.efficiency_at(burner_power_in_watt)
     assert output(mass_flow_channel) == pytest.approx(PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND, rel=1e-12)
     assert output(supply_channel) == pytest.approx(
         return_in_celsius
@@ -615,15 +617,15 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
 def test_a_lift_the_pump_carries_is_kept() -> None:
     """A boiler that raised every lift would overshoot the supply a modulating controller asks for.
 
-    At half signal the burner turns 10 kW into 10000 * 0.7333 = 7333 W, which the pump's largest flow carries over
-    2.04 K. A 3 K lift is above that, so the boiler runs it: the supply is the return plus 3 K, and the flow carries
+    At half signal the burner turns 10 kW into 10000 * 0.7333 = 7333 W (0.6 at 2 kW rising linearly to 0.9 at
+    20 kW, written out by hand), which the pump's largest flow carries over 2.04 K. A 3 K lift is above that, so the boiler runs it: the supply is the return plus 3 K, and the flow carries
     the heat over that lift.
     """
     boiler, output = BoilerStep.run(
         control_signal=0.5, operating_mode=HeatingMode.SPACE_HEATING.value, lift=3.0, space_heating_return=35.0,
         hot_water_return=50.0,
     )
-    heat_in_watt = 10000.0 * boiler.burner.efficiency_at(10000.0)
+    heat_in_watt = 10000.0 * (0.6 + (10000.0 - 2000.0) * (0.9 - 0.6) / (20000.0 - 2000.0))
     assert output(boiler.water_output_temperature_sh_channel) == 38.0
     assert output(boiler.water_output_mass_flow_sh_channel) == pytest.approx(
         heat_in_watt / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 3.0), rel=1e-12

@@ -118,11 +118,14 @@ class BoilerTwinDay:
 @pytest.mark.extendedbase2
 @pytest.mark.parametrize("twin", sorted(BoilerTwinDay.TWINS))
 def test_the_boiler_books_the_space_heating_its_buffer_receives(twin: str, tmp_path: Path) -> None:
-    """Booked space heating closes against delivered heat, buffer loss and content change, at a circuit's flow.
+    """Booked space heating closes against delivered heat, buffer loss and content change, within the pump's flow.
 
     The balance runs from the end of the first step to the end of the last, so the content change is the difference
     of the buffer's published contents and the powers are summed over every step but the first. A boiler that sized
-    its flow to a lift of a few mK booked almost three times the right heat on this day, at hundreds of kg/s.
+    its flow to a lift of a few mK booked almost three times the right heat on this day, at hundreds of kg/s. The
+    pump's largest flow is not bounded here in kg/s: it follows the twin's boiler, which is sized to the building, and
+    :func:`tests.test_generic_boiler.test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_heat`
+    pins how it is sized.
     """
     boiler = BoilerTwinDay.TWINS[twin]
     frame, maximal_mass_flow_in_kg_per_second = BoilerTwinDay.run(twin, tmp_path)
@@ -146,4 +149,3 @@ def test_the_boiler_books_the_space_heating_its_buffer_receives(twin: str, tmp_p
     assert booked_in_kwh > 0.0
     assert booked_in_kwh == pytest.approx(sinks_in_kwh, rel=BoilerTwinDay.RELATIVE_TOLERANCE)
     assert mass_flow_in_kg_per_second.max() <= maximal_mass_flow_in_kg_per_second * (1.0 + 1e-12)
-    assert maximal_mass_flow_in_kg_per_second < 1.0

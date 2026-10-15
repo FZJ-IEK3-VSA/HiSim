@@ -204,7 +204,10 @@ class SimulationParameters:
         1 January 2021 to 1 January 2022, passes: its last timestep starts on 31 December 2021.
 
         Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
-        say -- is not decided here, but by the component that owns the source.
+        say -- is not decided here, but by the component that owns the source. The contract fixes the
+        window's shape, not that its dates are served: until the profiles follow the start date
+        (hisim-9g2.4 and the later steps of the mid-year epic), a window that starts after 1 January
+        is read from 1 January, as :meth:`one_week_july` explains.
 
         Args:
             start_date: The first moment of the run.

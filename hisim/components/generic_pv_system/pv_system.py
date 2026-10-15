@@ -603,6 +603,8 @@ class PVSystem(cp.PhysicsComponent):
         The weather component publishes each of its series over the run's window: one value per
         timestep of the simulated period, in the order the simulation steps through it. This is
         exactly what the producer computes the PV output from, so the series are handed on unchanged.
+        (For a run that does not start on 1 January they are still read from 1 January; see
+        :meth:`hisim.components.weather.Weather.run_window_of`.)
 
         Returns:
             PvWeatherSeries: the eight series over the run's window.

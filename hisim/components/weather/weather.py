@@ -114,7 +114,8 @@ class Weather(DataSourceComponent):
     # period, one value per timestep -- into the per-simulation repository
     # (``self.simulation_repository``). They live here, on the writer, so that the readers -- the PV
     # system and the solar gains of the Building -- import the name instead of repeating a string
-    # literal that could drift away from the writer's.
+    # literal that could drift away from the writer's. For a run that does not start on 1 January the
+    # values are still January's; see run_window_of.
     RUN_WINDOW_TEMPERATURE_OUTSIDE: str = "weather_run_window_temperature_outside_in_celsius"
     RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE: str = (
         "weather_run_window_diffuse_horizontal_irradiance_in_watt_per_square_meter"
@@ -412,6 +413,13 @@ class Weather(DataSourceComponent):
 
         A series shorter than the window is returned whole; the readers check the length they get
         against the run's number of timesteps and say which series fell short.
+
+        The values are the window's own only for a run that starts on 1 January. A run that starts
+        later -- 1 July, say, which the window contract accepts -- still gets the first ``timesteps``
+        values, January's, as every HiSim run with a mid-year start always has (see
+        :meth:`hisim.simulationparameters.SimulationParameters.one_week_july`). Resolving the
+        window's start date against the source's own dates is the next step of the mid-year epic,
+        hisim-9g2.4.
 
         Args:
             series: One of the per-timestep lists :meth:`read_series` filled.

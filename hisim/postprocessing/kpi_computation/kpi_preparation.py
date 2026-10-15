@@ -14,7 +14,7 @@ from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiSource, KpiHelperClass
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFinder
 
 
@@ -86,6 +86,7 @@ class KpiPreparation:
         pv_production_ids = []
         windturbine_production_ids = []
         battery_charge_discharge_ids = []
+        battery_stored_energy_increase_ids = []
         buildings_consumption_ids = []
 
         index: int
@@ -126,6 +127,11 @@ class KpiPreparation:
                                 + str(output.unit)
                             )
 
+                    if (
+                        InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag
+                        and ComponentType.BATTERY in output.postprocessing_flag
+                    ):
+                        battery_stored_energy_increase_ids.append(index)
                     if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                         if ComponentType.BATTERY in output.postprocessing_flag:
                             battery_charge_discharge_ids.append(index)
@@ -163,6 +169,9 @@ class KpiPreparation:
         result_dataframe["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(
             upper=0
         ).sum(axis=1) * (-1)
+        result_dataframe["battery_stored_energy_increase_in_watt_hour"] = pd.DataFrame(
+            results.iloc[:, battery_stored_energy_increase_ids]
+        ).sum(axis=1)
 
         return result_dataframe
 
@@ -424,7 +433,21 @@ class KpiPreparation:
         return result_dataframe
 
     def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
-        """Compute battery kpis."""
+        """Return the batteries' charged energy, discharged energy and losses over the run, in kWh.
+
+        The losses are the charged minus the discharged energy minus the increase of the stored energy
+        (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so a battery that ends the run fuller than it
+        started does not report the energy it still holds as lost, and one that ends emptier does not report the
+        energy it held at the start as a negative loss. A frame without the stored-energy column counts no change.
+
+        Args:
+            result_dataframe: The frame of :meth:`filter_results_according_to_postprocessing_flags`, with the columns
+                ``battery_charge`` and ``battery_discharge`` in W and ``battery_stored_energy_increase_in_watt_hour``
+                in Wh per step.
+
+        Returns:
+            The charged energy, the discharged energy and the losses, in kWh.
+        """
 
         if not result_dataframe["battery_charge"].empty:
             battery_charging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
@@ -435,8 +458,15 @@ class KpiPreparation:
                 power_timeseries_in_watt=result_dataframe["battery_discharge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
-            battery_losses_in_kilowatt_hour = (
-                battery_charging_energy_in_kilowatt_hour - battery_discharging_energy_in_kilowatt_hour
+            stored_energy_increase_in_kilowatt_hour = (
+                float(result_dataframe["battery_stored_energy_increase_in_watt_hour"].sum()) / 1e3
+                if "battery_stored_energy_increase_in_watt_hour" in result_dataframe
+                else 0.0
+            )
+            battery_losses_in_kilowatt_hour = KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=battery_charging_energy_in_kilowatt_hour,
+                discharged_energy_in_kilowatt_hour=battery_discharging_energy_in_kilowatt_hour,
+                stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kilowatt_hour,
             )
         else:
             battery_charging_energy_in_kilowatt_hour = 0.0

@@ -163,7 +163,7 @@ def test_postprocessing_option_make_network_charts(
     """Test that PostProcessingOptions.MAKE_NETWORK_CHARTS produces network diagram PNG files."""
     postprocessing_option_framework.run(
         PostProcessingOptions.MAKE_NETWORK_CHARTS,
-        expected_files=["System_*.PNG"],
+        expected_files=["System_*.png"],
     )
 
 
@@ -200,7 +200,7 @@ def test_postprocessing_option_write_network_charts_to_report(
     """Test that PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT embeds network charts in the PDF report."""
     postprocessing_option_framework.run(
         PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT,
-        expected_files=["System_*.PNG", "report.pdf"],
+        expected_files=["System_*.png", "report.pdf"],
     )
 
 

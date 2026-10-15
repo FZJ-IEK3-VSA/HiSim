@@ -484,7 +484,7 @@ class SimulationParameters:
 
     @classmethod
     def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set for the first week of July; only the weather and its readers deliver July.
+        """Generates a parameter set for the first week of July; most profiles, not yet all, deliver July.
 
         The intent was a summer counterpart to ``one_week_only``: every week- and day-sized
         parameter set of this class starts on the first of January, which measures a cooling
@@ -495,12 +495,12 @@ class SimulationParameters:
         **It does that only in part today, and a caller must not assume more.** The weather looks
         the run's start up in its series and delivers July (``hisim/window_offset.py``), and with it
         the PV system and the building's solar gains, which compute from the weather's published
-        window. Every other profile-driven component -- the LoadProfileGenerator occupancy, the
-        cars, the CSV loader, the seasonal gates of the heat pump and the CHP -- still indexes its
-        year-long profile by the timestep number, so timestep 0 is read as the 1st of January
-        whatever this start date says, and a solar-thermal collector pairs its own sun position with
-        the weather's irradiance on a clock of its own. The mid-year-start epic
-        (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
+        window. The LoadProfileGenerator occupancy and its cars read July from their profiles
+        (``hisim/components/lpg_local_time.py``), and the CHP controller's heating season counts the
+        days of the year. The CSV loader still indexes its profile by the timestep number, so
+        timestep 0 is read as the 1st of January whatever this start date says, and a solar-thermal
+        collector pairs its own sun position with the weather's irradiance on a clock of its own. The
+        mid-year-start epic (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
 
         The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
         use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is

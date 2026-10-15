@@ -654,10 +654,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             - driving distances
         """
         # Create an LPG configuration and set the simulation parameters
-        start_date = self.my_simulation_parameters.start_date.strftime(self.LPG_DATE_FORMAT)
-        # Unlike HiSim the LPG includes the specified end day in the simulation --> subtract one day
-        last_day = self.my_simulation_parameters.end_date - datetime.timedelta(days=1)
-        end_date = last_day.strftime(self.LPG_DATE_FORMAT)
+        start_date, end_date = self.utsp_request_days(self.my_simulation_parameters)
 
         # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
@@ -1530,12 +1527,11 @@ class UtspLpgConnector(cp.DataSourceComponent):
     def local_lpg_request_days(cls, parameters: SimulationParameters) -> Tuple[str, str]:
         """Return the first and the last day a local LoadProfileGenerator run simulates, as it reads them.
 
-        The profiles are read from 1 January of the simulation year onwards and must cover the whole simulated
+        The run's window is asked for: the request starts on the window's first day and must cover its whole
         span (see :meth:`load_result_files_and_transform_to_lists`). The LoadProfileGenerator simulates its end
         day too, so the request reaches one day past the span, which also covers the hour a window ending in
-        summer reaches past its last day on the wall clock. Example: a week from 1 January 2021 is requested as
-        ``("2021-01-01", "2021-01-08")``. Written day-first, ``08-01-2021`` was read as 1 August, so a week was
-        simulated from 1 January to 1 August.
+        summer reaches past its last day on the wall clock. Example: a week from 1 July 2021 is requested as
+        ``("2021-07-01", "2021-07-08")``. Written day-first, ``01-07-2021`` was read as 7 January.
 
         Args:
             parameters: the run's simulation parameters.
@@ -1544,9 +1540,30 @@ class UtspLpgConnector(cp.DataSourceComponent):
             Tuple[str, str]: the first and the last day, in :attr:`LPG_DATE_FORMAT`.
         """
         simulated_days = (parameters.end_date - parameters.start_date).days
-        first_day = datetime.date(parameters.start_date.year, 1, 1)
+        first_day = parameters.start_date.date()
         last_day = first_day + datetime.timedelta(days=simulated_days)
         return first_day.strftime(cls.LPG_DATE_FORMAT), last_day.strftime(cls.LPG_DATE_FORMAT)
+
+    @classmethod
+    def utsp_request_days(cls, parameters: SimulationParameters) -> Tuple[str, str]:
+        """Return the first and the last day a UTSP request simulates, as the LoadProfileGenerator reads them.
+
+        The request starts on the window's first day and ends on the wall-clock day of the window's last minute
+        (:meth:`hisim.components.lpg_local_time.LpgLocalTime.last_wall_clock_day`), the end day included.
+        Example: a week from 1 January 2021 is requested as ``("2021-01-01", "2021-01-07")``, and a week from
+        1 July 2021 as ``("2021-07-01", "2021-07-08")``, because its last minute in standard time, 7 July 23:59,
+        is 8 July 00:59 on the wall clock.
+
+        Args:
+            parameters: the run's simulation parameters.
+
+        Returns:
+            Tuple[str, str]: the first and the last day, in :attr:`LPG_DATE_FORMAT`.
+        """
+        last_day = lpg_local_time.LpgLocalTime.last_wall_clock_day(
+            parameters.start_date, parameters.timesteps * parameters.seconds_per_timestep // 60
+        )
+        return parameters.start_date.strftime(cls.LPG_DATE_FORMAT), last_day.strftime(cls.LPG_DATE_FORMAT)
 
     def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str,
     str, str]:
@@ -2001,11 +2018,8 @@ class UtspLpgConnector(cp.DataSourceComponent):
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
         )
         steps_desired_in_minutes = steps_desired * minutes_per_timestep
-        # A window that ends in summer ends an hour later on the wall clock the profile is labelled in.
-        minutes_to_read = lpg_local_time.LpgLocalTime.minutes_to_read(steps_desired_in_minutes)
-        minutes_of_activity = min(
-            [minutes_to_read] + [len(activity["Values"]) for activity in occupancy_profile]
-        )
+        # The whole profile is read: the window is cut from it after it is on the run's clock.
+        minutes_of_activity = min(len(activity["Values"]) for activity in occupancy_profile)
 
         # initialize number of residence and heating by residents
         heating_by_residents = [0.0] * minutes_of_activity
@@ -2026,7 +2040,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
@@ -2038,7 +2051,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
@@ -2048,7 +2060,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
@@ -2062,7 +2073,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
-                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -2074,7 +2084,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
@@ -2083,8 +2092,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
-                nrows=minutes_to_read,
+                usecols=["Sum [kWh]"],
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -2101,13 +2109,13 @@ class UtspLpgConnector(cp.DataSourceComponent):
         minutes_in_common = min(len(values) for values in minute_columns.values())
         minute_profile = pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
 
-        # Put the profile onto the run's standard-time clock and cut out the window. Every mode still reads the
-        # profile as if it started on 1 January and the run did too; hisim-9g2.6 reads the run's own start.
-        new_year = datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
+        # Put the profile onto the run's standard-time clock and cut out the run's window. The profile starts
+        # where its activity files say it does: on 1 January for a shipped year, laid onto the run's year as the
+        # weather is, and on the window's first day for a profile the LoadProfileGenerator computed for the run.
         initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
             minute_values=minute_profile,
-            first_label=new_year,
-            window_start=new_year,
+            first_label=self.first_label_of_profile(occupancy_profile),
+            window_start=self.my_simulation_parameters.start_date,
             window_minutes=steps_desired_in_minutes,
             source=f"The LoadProfileGenerator profile of {self.component_name} ({data_acquisition_mode.name})",
         )
@@ -2150,6 +2158,29 @@ class UtspLpgConnector(cp.DataSourceComponent):
             heating_by_residents,
             number_of_residents,
         )
+
+    def first_label_of_profile(self, activity_profiles: List[Dict[str, Any]]) -> datetime.datetime:
+        """Return the wall-clock minute a household's profile starts at, from the ``StartTime`` its files state.
+
+        All files of a household come from one calculation and start together; the activity files say where.
+        Example: the shipped CHR01 profile states ``2021-01-01T00:00:00``, which a run of 2021 reads as it is.
+
+        Args:
+            activity_profiles: the household's bodily-activity files, as read from their JSON.
+
+        Returns:
+            datetime.datetime: the first row's wall-clock time, laid onto the run's year.
+
+        Raises:
+            ValueError: if the files state different starts, so the household's profile has no one start.
+        """
+        start_times = {profile["StartTime"] for profile in activity_profiles}
+        if len(start_times) != 1:
+            raise ValueError(
+                f"The bodily-activity files of {self.component_name} state different starts, {sorted(start_times)}; "
+                "the files of one household come from one LoadProfileGenerator calculation and start together."
+            )
+        return lpg_local_time.LpgLocalTime.first_label_in_year(start_times.pop(), self.my_simulation_parameters.year)
 
     def cache_results(
         self,

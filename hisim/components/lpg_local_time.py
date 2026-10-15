@@ -59,11 +59,6 @@ class LpgLocalTime:
     #: The resolution of the LoadProfileGenerator's profiles, in seconds.
     SECONDS_PER_MINUTE: ClassVar[int] = 60
 
-    #: How many minutes the wall clock runs ahead of standard time in summer. A window that ends in summer ends
-    #: this many minutes later on the wall clock, so a profile has to reach that far past the window's last
-    #: standard-time minute.
-    SUMMER_TIME_SHIFT_IN_MINUTES: ClassVar[int] = 60
-
     @classmethod
     def window_in_standard_time(
         cls,
@@ -143,20 +138,22 @@ class LpgLocalTime:
         return positions[order], labels
 
     @classmethod
-    def minutes_to_read(cls, window_minutes: int) -> int:
-        """Return how many profile minutes from the window's first wall-clock minute cover a window of this length.
+    def first_label_in_year(cls, start_time: str, year: int) -> datetime.datetime:
+        """Return a profile's first wall-clock minute from the ``StartTime`` it states, laid onto the run's year.
 
-        A window that ends in summer ends :attr:`SUMMER_TIME_SHIFT_IN_MINUTES` later on the wall clock than in
-        standard time, so reading this many rows covers every window. Example: a week needs 10 080 minutes, and
-        10 140 are read.
+        A profile the LoadProfileGenerator computed for the run starts on the window's first day of the run's
+        year, so laying it onto that year changes nothing. A shipped profile of another year is read by position
+        in the run's year, as the weather's files are. Example: ``"2021-01-01T00:00:00"`` in a run of 2022 is
+        1 January 2022 00:00.
 
         Args:
-            window_minutes: the length of the run in minutes.
+            start_time: the profile's ``StartTime``, ISO 8601 without a time zone.
+            year: the run's year.
 
         Returns:
-            int: the number of profile rows to read.
+            datetime.datetime: the wall-clock time of the profile's first row.
         """
-        return window_minutes + cls.SUMMER_TIME_SHIFT_IN_MINUTES
+        return datetime.datetime.fromisoformat(start_time).replace(year=year)
 
     @classmethod
     def last_wall_clock_day(cls, window_start: datetime.datetime, window_minutes: int) -> datetime.date:

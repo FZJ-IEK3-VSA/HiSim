@@ -180,19 +180,10 @@ def test_the_last_wall_clock_day_a_profile_of_whole_days_has_to_reach(
 
 
 @pytest.mark.base
-def test_reading_the_window_and_an_hour_covers_a_summer_window() -> None:
-    """Catches a reader that reads exactly the window's minutes from its first day, and so misses its last hour.
-
-    The profile starts at 00:00 of the window's first day on the wall clock, which in July is an hour before the
-    window starts in standard time.
-    """
-    minutes = 7 * 1440
-    first_day = datetime.datetime(2021, 7, 1)
-    profile = Profile.rows(LpgLocalTime.minutes_to_read(minutes))
-
-    window = LpgLocalTime.window_in_standard_time(profile, first_day, first_day, minutes, "the test profile")
-
-    assert list(window["row"]) == list(range(60, 60 + minutes))
+def test_a_profiles_stated_start_is_laid_onto_the_runs_year() -> None:
+    """Catches a shipped profile of 2021 refused, or read from another day, in a run of another year."""
+    assert LpgLocalTime.first_label_in_year("2021-01-01T00:00:00", 2022) == datetime.datetime(2022, 1, 1)
+    assert LpgLocalTime.first_label_in_year("2021-07-01T00:00:00", 2021) == datetime.datetime(2021, 7, 1)
 
 
 class PredefinedOccupancy:
@@ -243,6 +234,35 @@ def test_the_occupancy_reads_the_profiles_first_minute_at_the_runs_first_timeste
 
     assert len(occupancy.electricity_consumption) == 2 * 1440
     assert occupancy.electricity_consumption == pytest.approx(list(raw[: 2 * 1440]), rel=1e-12)
+
+
+@pytest.mark.base
+def test_a_july_occupancy_reads_the_profiles_july(tmp_path: pathlib.Path) -> None:
+    """Catches the occupancy of a run from 1 July reading January, as it did before hisim-9g2.6.
+
+    1 July 00:00 in standard time is 01:00 on the wall clock, row 260 700 of the shipped profile.
+    """
+    occupancy = PredefinedOccupancy.build(datetime.datetime(2021, 7, 1), 2, tmp_path)
+    raw = PredefinedOccupancy.raw_electricity_in_watt()
+
+    assert occupancy.electricity_consumption == pytest.approx(list(raw[260_700: 260_700 + 2 * 1440]), rel=1e-12)
+
+
+@pytest.mark.base
+def test_a_july_occupancy_is_the_july_of_the_full_year(tmp_path: pathlib.Path) -> None:
+    """Catches a window that is not the same slice of the year as the full-year run calls it (the oracle's gate).
+
+    The full-year run labels its row 260 640 "1 July 00:00"; the window from 1 July has to reproduce it exactly.
+    """
+    year = PredefinedOccupancy.build(datetime.datetime(2021, 1, 1), 365, tmp_path / "year")
+    july = PredefinedOccupancy.build(datetime.datetime(2021, 7, 1), 2, tmp_path / "july")
+
+    window = slice(260_640, 260_640 + 2 * 1440)
+    assert july.electricity_consumption == year.electricity_consumption[window]
+    assert july.number_of_residents == year.number_of_residents[window]
+    assert july.heating_by_residents == year.heating_by_residents[window]
+    assert july.water_consumption == year.water_consumption[window]
+    assert july.heating_by_devices == year.heating_by_devices[window]
 
 
 @pytest.mark.base

@@ -62,14 +62,48 @@ def test_a_local_request_names_its_days_in_iso_8601(days: int, requested: tuple,
     assert UtspLpgConnector.local_lpg_request_days(parameters) == requested
 
 
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("start", "days", "requested"),
+    [
+        (datetime.datetime(2021, 7, 1), 7, ("2021-07-01", "2021-07-08")),
+        (datetime.datetime(2021, 12, 1), 31, ("2021-12-01", "2022-01-01")),
+    ],
+)
+def test_a_local_request_asks_for_the_runs_window(
+    start: datetime.datetime, days: int, requested: tuple, tmp_path: pathlib.Path
+) -> None:
+    """Catches a mid-year run asking the generator for January, the days it read before hisim-9g2.6."""
+    assert UtspLpgConnector.local_lpg_request_days(parameters_of(start, days, tmp_path)) == requested
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("start", "days", "requested"),
+    [
+        (datetime.datetime(2021, 1, 1), 7, ("2021-01-01", "2021-01-07")),
+        (datetime.datetime(2021, 7, 1), 7, ("2021-07-01", "2021-07-08")),
+        (datetime.datetime(2021, 1, 1), 365, ("2021-01-01", "2021-12-31")),
+    ],
+)
+def test_a_utsp_request_reaches_the_wall_clock_day_of_the_windows_last_minute(
+    start: datetime.datetime, days: int, requested: tuple, tmp_path: pathlib.Path
+) -> None:
+    """Catches a summer window whose UTSP profile ends an hour before it on the wall clock.
+
+    A January request is the one it always was, so a January run is unchanged.
+    """
+    assert UtspLpgConnector.utsp_request_days(parameters_of(start, days, tmp_path)) == requested
+
+
 @pytest.mark.utsp
 def test_the_local_generator_simulates_the_requested_days(tmp_path: pathlib.Path) -> None:
     """Catches a request the local LoadProfileGenerator reads as other days than the ones meant.
 
-    A run of two days from 1 January asks for 1 to 3 January, the end day included, and gets three days of
-    minutes from 1 January 00:00; the day-first request got 32 days, to 1 February.
+    A run of two days from 1 July asks for 1 to 3 July, the end day included, and gets three days of minutes
+    from 1 July 00:00. Day-first, ``01-07-2021`` was read as 7 January.
     """
-    parameters = parameters_of(datetime.datetime(2021, 1, 1), 2, tmp_path)
+    parameters = parameters_of(datetime.datetime(2021, 7, 1), 2, tmp_path)
     config = UtspLpgConnectorConfig.for_household(
         "Occupancy", Households.CHR01_Couple_both_at_Work, data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG
     )
@@ -82,5 +116,5 @@ def test_the_local_generator_simulates_the_requested_days(tmp_path: pathlib.Path
     finally:
         PylpgWorkspace.release(occupancy.claimed_pylpg_calculation_indices, occupancy.pylpg_work_root())
 
-    assert high_activity["StartTime"] == "2021-01-01T00:00:00"
+    assert high_activity["StartTime"] == "2021-07-01T00:00:00"
     assert len(high_activity["Values"]) == 3 * 1440

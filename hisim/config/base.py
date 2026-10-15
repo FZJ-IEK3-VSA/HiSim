@@ -105,10 +105,11 @@ def _complete_sizable_enum_codecs(config_class: type) -> None:
 
     A sizable field replaces the serialization layer's own decoder with one that understands
     the ``AUTO`` sentinel, and that replacement is what makes an enum-typed sizable field a
-    trap: unless the declaration also passes ``value_type``, the member name read from a file
-    stays a plain string. Because HiSim's config enums derive from ``str``, the mistake is
-    invisible to every equality comparison and shows up only where a component compares by
-    identity — so the declaration is completed here instead of being left to be remembered.
+    trap: were the declaration not completed here, a field declared without ``value_type``
+    would leave the member name read from a file a plain string. Because HiSim's config enums
+    derive from ``str``, the mistake is invisible to every equality comparison and shows up
+    only where a component compares by identity — so the declaration is completed here
+    instead of being left to be remembered.
 
     The decoder is installed for a field that declared its ``value_type`` too, because only
     here is the field's name known: ``sized_field`` builds its decoder before the field has a

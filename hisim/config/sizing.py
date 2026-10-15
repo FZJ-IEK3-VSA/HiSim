@@ -128,6 +128,59 @@ def _encode_sizable(value: Any) -> Any:
     return _AutoSize.WIRE_SPELLING if value is AUTO else value
 
 
+def _accepted_enum_spellings(enum_type: Type[enum.Enum]) -> str:
+    """Renders the words a sizable enum field accepts, for its refusal of a misspelled member.
+
+    The decoder accepts a member's name and its value, so the list names both: each member by
+    its name, followed by its value in parentheses where the value is a different word.
+    Example: ``LoadTypes`` renders ``"..., GAS ('Gas'), ..."``, while
+    ``HeatDistributionSystemType``, whose names and values are the same words, renders
+    ``"RADIATOR, FLOORHEATING, LOW_TEMPERATURE_RADIATOR"``.
+
+    Args:
+        enum_type: The enum the field is typed by.
+
+    Returns:
+        The comma-separated list of the accepted words, without ``AUTO``.
+    """
+    return ", ".join(
+        name if member.value == name else f"{name} ({member.value!r})"
+        for name, member in enum_type.__members__.items()
+    )
+
+
+def _refuse_ambiguous_enum_spellings(enum_type: Type[enum.Enum]) -> None:
+    """Refuses an enum whose written words would decode to a member other than the one meant.
+
+    The sizable decoder reads ``AUTO`` as the sentinel before it looks at the enum, and it looks
+    a word up by member name before it tries member values. So a member named or valued
+    ``AUTO`` could never be read back, and a member whose value is another member's name would
+    decode to that other member. Neither occurs in HiSim's configuration enums; this check keeps
+    a new enum from introducing it silently. Example: ``class Carrier(Enum): UNKNOWN = "AUTO"``
+    is refused, because its member would be written ``"AUTO"`` and read back as the sentinel.
+
+    Args:
+        enum_type: The enum a sizable field is typed by.
+
+    Raises:
+        TypeError: A member is named or valued ``AUTO``, or a member's value is another
+            member's name.
+    """
+    for name, member in enum_type.__members__.items():
+        if _AutoSize.WIRE_SPELLING in (name, member.value):
+            raise TypeError(
+                f"{enum_type.__name__}.{name} is spelled {_AutoSize.WIRE_SPELLING!r}, which a sizable "
+                f"field reads as the AUTO sentinel; rename the member or its value."
+            )
+        other = enum_type.__members__.get(member.value) if isinstance(member.value, str) else None
+        if other is not None and other is not member:
+            raise TypeError(
+                f"{enum_type.__name__}.{name} holds the value {member.value!r}, which is the name of "
+                f"{enum_type.__name__}.{other.name}; a sizable field looks names up first, so the value "
+                f"would read back as the other member. Rename the member or its value."
+            )
+
+
 def _sizable_decoder(value_type: Optional[type], field_label: Optional[str] = None) -> Callable[[Any], Any]:
     """Builds the wire decoder of one sizable field.
 
@@ -146,10 +199,16 @@ def _sizable_decoder(value_type: Optional[type], field_label: Optional[str] = No
     ``test_every_enum_typed_sizable_field_in_the_repository_decodes_to_its_member`` asserts.
 
     A word that is neither a member name nor a member value is refused with a ``ValueError``
-    that names the field and lists the member names, so a misspelling read through the class's
-    own ``from_dict`` or ``from_json`` says what to write instead. Example: ``"FLOOR"`` on
-    ``HeatDistributionConfig.heating_system`` is refused with ``RADIATOR, FLOORHEATING,
-    LOW_TEMPERATURE_RADIATOR`` and ``AUTO`` listed.
+    that names the field and lists every word it accepts, so a misspelling read through the
+    class's own ``from_dict`` or ``from_json`` says what to write instead. Example: ``"FLOOR"``
+    on ``HeatDistributionConfig.heating_system`` is refused with ``RADIATOR, FLOORHEATING,
+    LOW_TEMPERATURE_RADIATOR`` and ``AUTO`` listed; a member whose value differs from its name
+    is listed with its value, ``GAS ('Gas')``.
+
+    An enum whose words would mean two things is refused when the decoder is built: a member
+    named or valued ``AUTO`` (the decoder reads that word as the sentinel, so the member could
+    never be read back), or a member whose value is another member's name (the name lookup
+    comes first, so the value would decode to the other member).
 
     Args:
         value_type: The concrete type the wire value is coerced into, or ``None`` for a field
@@ -160,10 +219,15 @@ def _sizable_decoder(value_type: Optional[type], field_label: Optional[str] = No
 
     Returns:
         The decoder: a callable from the wire value to the field value.
+
+    Raises:
+        TypeError: ``value_type`` is an enum whose words would mean two things (see above).
     """
     enum_type: Optional[Type[enum.Enum]] = (
         value_type if isinstance(value_type, type) and issubclass(value_type, enum.Enum) else None
     )
+    if enum_type is not None:
+        _refuse_ambiguous_enum_spellings(enum_type)
 
     def decode(raw: Any) -> Any:
         # dataclasses_json also runs this decoder on the *default* of a missing key, so ``raw`` can be
@@ -184,7 +248,7 @@ def _sizable_decoder(value_type: Optional[type], field_label: Optional[str] = No
         except ValueError as error:
             raise ValueError(
                 f"{field_label or 'this field'} is set to {raw!r}, which names no member of "
-                f"{enum_type.__name__}; write one of {', '.join(enum_type.__members__)}, "
+                f"{enum_type.__name__}; write one of {_accepted_enum_spellings(enum_type)}, "
                 f"or {_AutoSize.WIRE_SPELLING}."
             ) from error
 

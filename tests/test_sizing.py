@@ -10,6 +10,7 @@ by ``tests/test_presets.py``.
 
 import copy
 import dataclasses
+import enum
 import json
 from dataclasses import dataclass
 from typing import Dict, Optional
@@ -463,7 +464,10 @@ def test_an_unknown_member_name_on_a_sizable_enum_field_is_refused_naming_field_
     The class's own ``from_dict`` is a path no energy-system codec wraps, so the decoder's message
     is the whole report: it has to say which field was wrong and which words it accepts.
     """
-    from hisim.components.heat_distribution_system import HeatDistributionConfig
+    from hisim.components.heat_distribution_system import (
+        HeatDistributionConfig,
+        HeatDistributionSystemType,
+    )
 
     wire = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").to_dict()
     wire["heating_system"] = "FLOOR"
@@ -473,8 +477,47 @@ def test_an_unknown_member_name_on_a_sizable_enum_field_is_refused_naming_field_
 
     message = str(raised.value)
     assert "HeatDistributionConfig.heating_system" in message and "'FLOOR'" in message
-    for allowed in ("RADIATOR", "FLOORHEATING", "LOW_TEMPERATURE_RADIATOR", "AUTO"):
+    for allowed in (*HeatDistributionSystemType.__members__, str(AUTO)):
         assert allowed in message
+
+
+@pytest.mark.base
+def test_the_refusal_of_a_misspelled_member_lists_the_value_where_it_differs_from_the_name():
+    """Catches a refusal that lists only member names while the decoder also accepts their values.
+
+    ``LoadTypes.GAS`` holds ``"Gas"``, the word the class's own ``to_json`` writes; a refusal
+    listing only ``GAS`` would not tell the author of such a file that ``Gas`` is accepted too.
+    """
+    from hisim.components.gas_meter import GasMeterConfig
+
+    wire = GasMeterConfig.preset_standard("GasMeter").to_dict()
+    wire["gas_loadtype"] = "Gaas"
+
+    with pytest.raises(ValueError) as raised:
+        GasMeterConfig.from_dict(wire)
+
+    message = str(raised.value)
+    assert "GasMeterConfig.gas_loadtype" in message
+    assert "GAS ('Gas')" in message and "WOOD_CHIPS ('WoodChips')" in message
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "members",
+    [{"UNKNOWN": "AUTO"}, {"AUTO": "automatic"}, {"FIRST": "SECOND", "SECOND": "second"}],
+    ids=["value-is-AUTO", "name-is-AUTO", "value-is-another-name"],
+)
+def test_a_sizable_enum_whose_words_would_mean_two_things_is_refused(members):
+    """Catches an enum whose member could not be read back as itself from its own wire form.
+
+    The decoder reads ``AUTO`` as the sentinel before the enum, and member names before member
+    values, so either collision would turn a written member into the sentinel or into another
+    member without a word.
+    """
+    ambiguous = enum.Enum("Ambiguous", members)
+
+    with pytest.raises(TypeError, match="Ambiguous"):
+        sized_field(rule=0.0, value_type=ambiguous)
 
 
 @pytest.mark.base
@@ -512,7 +555,9 @@ def test_every_member_of_a_sizable_enum_field_survives_an_encode_decode_round_tr
     for member in HeatDistributionSystemType:
         pinned = dataclasses.replace(heat_distribution, heating_system=member)
         assert HeatDistributionConfig.from_json(pinned.to_json()).heating_system is member
-        assert HeatDistributionConfig.from_dict(pinned.to_dict()).heating_system is member
+        # to_dict keeps the member object, which the decoder passes through untouched; the dict
+        # read back from to_json carries the written word, which it has to coerce.
+        assert HeatDistributionConfig.from_dict(json.loads(pinned.to_json())).heating_system is member
     gas_meter = GasMeterConfig.preset_standard("GasMeter")
     for carrier in lt.LoadTypes:
         pinned_meter = dataclasses.replace(gas_meter, gas_loadtype=carrier)

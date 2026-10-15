@@ -101,14 +101,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_electric_heating_building_sizer`
 
-Recorded from `system_setups/household_electric_heating_building_sizer.py`, described in the grouped file as "Household electric heating system setup with building sizing." 7 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Four of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_electric_heating_building_sizer.py`, described in the grouped file as "Household electric heating system setup with building sizing." 8 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Four of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_electric_heating_building_sizer"]
-    fixed["fixed in every configuration (3)<br/>UTSPConnector<br/>Weather<br/>DHWStorage"]
+    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage"]
     knobs["knobs, stated at the baseline value (4)<br/>Building<br/>PVSystem<br/>ElectricHeatingController<br/>ElectricHeating"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -124,7 +124,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — seven components, of which the four knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eight components, of which the four knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -135,7 +135,7 @@ flowchart TD
 | `L2EMSElectricityController` | `variant:electricity_management/ems_with_battery` | The other half of that world, and the component the meter's two wirings are about. |
 | `Building` | `override` | Only the TABULA code moves. The envelope behind it - the U-values, the areas, the heat capacity class - is looked up by the component itself and never written into the file, so one archetype instead of another is a value a consumer picks and the component and its wiring are the same either way. |
 | `PVSystem` | `override` | Only the installed peak power moves, and only with the rooftop share. Nothing appears or disappears, so this is a number a consumer picks, not a part of the household. A share of zero is refused when the setup is built, so the knob's range is (0, 1] and no value it can take flips the household into another variant. |
-| `ElectricHeatingController` | `override` | Built from the heater's own power band, so it follows the generator one step further down the same cascade. |
+| `ElectricHeatingController` | `override` | No probe moves it; it reads the heating season from the heating curve and sizes nothing itself. Its two flags - hot-water preparation and serving both circuits at once - are the setup's choices, stated at the baseline, and a consumer may set them otherwise. |
 | `ElectricHeating` | `override` | The installed electric power is the building's heating load, so a better insulated envelope buys a smaller heater. Same heater, same wiring, a different rating. This setup has no heat-distribution axis - the heater warms the building directly and there is no emitter or emitter controller to move - so the archetype column is the only one that touches it. |
 
 Ordering rule: variant assignments first, then overrides. Within the variant assignments, groups in the order the grouped file's `variants:` section lists them; within a group, the members assigned to the group as a whole before the members assigned to a single option, then the options in the order that section lists them, and within each option the order that option's `components:` block lists them. Within the overrides, the order the shared `components:` section lists them. The judgement text is the note from the grouping table in full, with the YAML line wrapping undone.

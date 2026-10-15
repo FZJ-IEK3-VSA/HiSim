@@ -218,11 +218,6 @@ def test_electric_heating_controller_display_config_default_instances_are_isolat
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
     config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
-    # Both sizable fields are pinned rather than resolved: this test builds no building to size
-    # them from. 16 °C is the threshold the retired factory handed it, and 40 W/m² is a building
-    # efficiency the step table maps to exactly that threshold, so the two agree.
-    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
-    config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
 
     first = ElectricHeatingController(
         my_simulation_parameters=my_simulation_parameters,
@@ -322,13 +317,49 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
     )
 
     config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
-    # pinned rather than resolved, as above: no building to size them from
-    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
-    config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
     controller = ElectricHeatingController(
         SimulationParameters.one_day_only(year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP), config
     )
-    outputs = AllInputsRig.step_once(controller, {ElectricHeatingController.DailyAverageOutsideTemperature: 20.0})
+    outputs = AllInputsRig.step_once(controller, {ElectricHeatingController.HeatingSeason: 0.0})
     assert outputs[ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius] == (
         60.0 + config.hysteresis_water_temperature_offset
     )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("heating_season", "tank_temperature_in_celsius", "expected_mode"),
+    [
+        (1.0, 40.0, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL),
+        (0.0, 40.0, HeatingMode.DOMESTIC_HOT_WATER),  # out of the season the cold tank is charged, the rooms are not
+        (1.0, 70.0, HeatingMode.SPACE_HEATING),
+        (0.0, 70.0, HeatingMode.OFF),
+    ],
+)
+def test_the_controller_heats_the_rooms_only_in_the_heating_season_the_curve_publishes(
+    heating_season: float, tank_temperature_in_celsius: float, expected_mode: HeatingMode
+) -> None:
+    """Catches a controller that ignores the heating curve's season: rooms heated in summer, or not in winter.
+
+    The controller of the electric twin prepares hot water and may serve both circuits at once; it is stepped from its
+    initial mode with the season and the tank temperature, and its operating mode is read.
+    """
+    from hisim.components.generic_electric_heating import (  # pylint: disable=import-outside-toplevel  # only here
+        ElectricHeatingController,
+        ElectricHeatingControllerConfig,
+    )
+
+    config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+    config.with_domestic_hot_water_preparation = True
+    config.parallel_space_heating_and_dhw_option = True
+    controller = ElectricHeatingController(
+        SimulationParameters.one_day_only(year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP), config
+    )
+    outputs = AllInputsRig.step_once(
+        controller,
+        {
+            ElectricHeatingController.HeatingSeason: heating_season,
+            ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage: tank_temperature_in_celsius,
+        },
+    )
+    assert HeatingMode(outputs[ElectricHeatingController.OperatingMode]) is expected_mode

@@ -5,9 +5,10 @@ temperature: the colder the day, the hotter the supply. The same curve decides t
 space heating runs at all, by comparing the day's mean outside temperature with the heating threshold.
 
 Several L1 controllers share these two signals -- the heat pump's, the boiler's and the district-heating substation's
-controllers aim at the supply temperature, and they and the heat-distribution controller heat only in the heating
-season. A set point several L1 controllers share comes from an L2 controller, so the curve is a component of its own,
-:class:`HeatingCurveController`, and every L1 controller reads the signals from its outputs instead of keeping a copy.
+controllers aim at the supply temperature, and they, the heat-distribution controller and the direct electric heater's
+controller heat only in the heating season. A set point several L1 controllers share comes from an L2 controller, so
+the curve is a component of its own, :class:`HeatingCurveController`, and every L1 controller reads the signals from
+its outputs instead of keeping a copy.
 """
 
 import math
@@ -173,9 +174,13 @@ class HeatingCurveControllerConfig(ConfigBase):
         rule=HEATING_THRESHOLD_LAW,
         note="16 °C up to 50 W/m² of specific heating load, 18 °C up to 80 W/m², 20 °C above that",
     )
-    #: The emitter the curve is drawn for, the heat-distribution controller's emitter type.
+    #: The emitter the curve is drawn for, the heat-distribution controller's emitter type. A house without a
+    #: heat-distribution controller, heated directly in its rooms, has no such fact: its curve uses
+    #: :meth:`preset_direct_room_heating`, which pins the type.
     heat_distribution_system_type: Sizable[HeatDistributionSystemType] = sized_field(
-        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
+        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE,
+        value_type=HeatDistributionSystemType,
+        note="a house without a heat-distribution controller uses the preset direct_room_heating, which pins it",
     )
     #: The outside temperature of the design day, on which the emitter runs at its design point, in °C.
     heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
@@ -202,6 +207,27 @@ class HeatingCurveControllerConfig(ConfigBase):
             The configuration, with every field still ``AUTO``.
         """
         return cls(component_id=ComponentID(name=name))
+
+    @preset
+    @classmethod
+    def preset_direct_room_heating(cls, name: str) -> "HeatingCurveControllerConfig":
+        """The heating curve of a house heated directly in its rooms, without a water circuit, as by electric heaters.
+
+        Such a house has no heat-distribution controller to state the emitter type, so the preset pins it to
+        ``RADIATOR``: an electric room heater hands its heat to the room air the way a radiator does, and it is the
+        emitter of the curve's table that a reader expects for heating that is not a floor heating. Nothing reads the
+        supply temperature in such a house; its controllers read only the heating season, which the emitter type does
+        not change. The threshold, the design day and the room temperature still come from the building and the place.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            The configuration, with the emitter type pinned and every other field still ``AUTO``.
+        """
+        return cls(
+            component_id=ComponentID(name=name), heat_distribution_system_type=HeatDistributionSystemType.RADIATOR
+        )
 
 
 class HeatingCurveController(StatelessComponent, L2ControllerComponent):

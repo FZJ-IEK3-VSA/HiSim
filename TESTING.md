@@ -29,7 +29,7 @@ Every marker is declared in `pytest.ini`, and `--strict-markers` refuses an unde
 | Marker | What belongs there | CI job |
 |---|---|---|
 | `base` | Unit-scale tests: a pure function, a component stepped by hand, a config check, a file format. No full simulation of a system setup; a few seconds at most (§3). | `pytest (base)`, 4 workers |
-| `extendedbase`, `extendedbase2` | Tests that run a full simulation: a setup, an energy-system file, a twin. Two shards balanced by wall time. | `pytest (extendedbase)`, `pytest (extendedbase2)` |
+| `extendedbase`, `extendedbase2` | Tests that run a full simulation: a setup, an energy-system file, a twin. `extendedbase` runs two processes per job, each under 8 GB; `extendedbase2` holds the tests of which one needs most of a 16 GB runner, and runs them serially. | `pytest (extendedbase-1)` to `-3`, `pytest (extendedbase2-1)` and `-2` |
 | `system_setups` | Tests that run one of the Python setup files under `system_setups/` end to end. Nothing else. | `pytest (system-setups)` |
 | `buildingtest` | The systematic sweeps of the building component. | `pytest (buildingtest)` |
 | `assemblies` | Every test under `tests/assemblies/` except the nightly tier. `tests/assemblies/conftest.py` adds it and refuses `base`, `extendedbase` and `extendedbase2` there; never written by hand. Needs the local LoadProfileGenerator. | `pytest (assemblies)` |
@@ -39,10 +39,10 @@ Every marker is declared in `pytest.ini`, and `--strict-markers` refuses an unde
 | `utsp` | Tests that need the LPG/UTSP connector. Networked, needs credentials. | `pytest (utsp)` |
 | `mpc` | Model-predictive-control system tests. | none carry it today |
 | `hpcharness` | The HPC-harness tests. | `pytest (others)` |
+| `upstream_history` | Tests that need the unsquashed upstream history of `golden_references/`; carried instead of `base`. | `pytest (others)`, whose checkout fetches the full history |
 
-Three markers select a group inside a job and are carried beside a job marker: `worked_examples` (the cost
-module's hand-computed examples, inside `base`), `upstream_history` (needs the unsquashed history of
-`golden_references/`) and `xdist_group` (pytest-xdist's grouping).
+Two markers select a group inside a job and are carried beside a job marker: `worked_examples` (the cost
+module's hand-computed examples, inside `base`) and `xdist_group` (pytest-xdist's grouping).
 
 Rules:
 
@@ -52,10 +52,11 @@ Rules:
 - **`system_setups` is only for the Python setup files.** A test that runs an energy-system file, a twin or a rig
   of a few components is `extendedbase` or `extendedbase2`. Some older modules carry `system_setups` for other
   runs (for example `tests/test_write_guard.py`); they move when next touched.
-- **A new full-simulation test goes into the lighter shard.** Run `pytest -m extendedbase --durations=0` and
-  `pytest -m extendedbase2 --durations=0`, compare the totals and add the test to the shorter one, as the
-  `extendedbase` entry of `pytest.ini` says. A test that needs much memory goes into `extendedbase2`, which runs in
-  one process (the comments of the matrix in `tests.yml` give each shard's peak).
+- **Memory decides between `extendedbase` and `extendedbase2`, not wall time.** A test that runs beside a second
+  process in under 8 GB is `extendedbase`; one that needs most of a 16 GB runner is `extendedbase2` (the comments
+  of the matrix in `tests.yml` give each job's peak). CI splits each marker over its jobs by the committed weights
+  of `tests/ci_durations.json` (`tests/ci_split.py`, `--ci-group`), so a new test needs no balancing by hand: a
+  module the weights do not name yet gets their default until they are refreshed from the jobs' uploads.
 
 ## 3. The runtime budget of `base`
 
@@ -94,7 +95,8 @@ Rules:
   test per transition (`coding_style.md` §3, "Testing state machines").
 - **Tests are deterministic and independent** of each other and of their order: seeded random numbers, no network
   in `base`, no reliance on another test's files or cache entries. CI runs them under pytest-xdist with
-  `--dist loadfile`: the tests of one module share a worker, the modules run in any order.
+  `--dist loadfile`, or `loadgroup` where a job says so: the tests of one module share a worker (under
+  `loadgroup`, a test that declares an `xdist_group` goes with its group instead), the modules run in any order.
 
 ## 5. Fixtures, configuration and files
 

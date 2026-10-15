@@ -105,6 +105,11 @@ def test_the_constant_outputs_table_has_a_header_and_one_row_per_output() -> Non
     assert table == [["Component", "Output", "Value", "Unit"], ["Comp", "MinimumPower", "-10000", "W"]]
 
 
+def test_a_negative_zero_is_reported_as_zero() -> None:
+    """A storage publishing -0.0 all year is listed with the value 0, not -0."""
+    assert ConstantOutput("Storage", "ThermalPowerFromSecondaryHeatGenerator", -0.0, "W").report_row()[2] == "0"
+
+
 class _RecordingChart:
     """Stands in for a chart class and records the outputs it was asked to draw."""
 
@@ -176,8 +181,9 @@ def test_the_report_lists_the_constant_outputs_once() -> None:
     report = _RecordingReport()
     processor = PostProcessor()
     processor.chapter_counter = 7
+    selection = ChartSelection.of_results(outputs, results)
 
-    processor.write_constant_outputs_to_report(report, ChartSelection.of_results(outputs, results))  # type: ignore[arg-type]
+    processor.write_constant_outputs_to_report(report, selection)  # type: ignore[arg-type]
 
     assert report.headings == [["7. Constant Outputs"]]
     assert report.tables == [[["Component", "Output", "Value", "Unit"], ["Comp", "MinimumPower", "-10000", "W"]]]

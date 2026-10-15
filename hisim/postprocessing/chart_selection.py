@@ -40,12 +40,14 @@ class ConstantOutput:
     def report_row(self) -> List[str]:
         """Return the output's row in the report's table of constant outputs.
 
-        The value is written with six significant digits, e.g. ``-10000`` or ``0.123457``.
+        The value is written with six significant digits, e.g. ``-10000`` or ``0.123457``. A
+        negative zero, which a component computing ``-1 * 0.0`` publishes, is written as ``0``.
 
         Returns:
             The component, the output, the value and the unit, as text.
         """
-        return [self.component_name, self.field_name, f"{self.value:.6g}", self.unit]
+        value_without_negative_zero = self.value + 0.0
+        return [self.component_name, self.field_name, f"{value_without_negative_zero:.6g}", self.unit]
 
 
 class ChartSelection:

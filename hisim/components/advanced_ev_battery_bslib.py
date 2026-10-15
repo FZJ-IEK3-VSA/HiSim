@@ -3,7 +3,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import importlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, ClassVar, List
 
 import pandas as pd
 from bslib import bslib as bsl
@@ -105,6 +105,10 @@ class CarBattery(PhysicsComponent):
     StateOfChargeAtStartOfStep = "StateOfChargeAtStartOfStep"  # [0..1]
     AcBatteryDischargingPower = "AcBatteryDischargingPower"  # W
 
+    #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged car battery, which
+    #: can take a charge and cover a first trip from the first step, rather than an empty or a full one.
+    INITIAL_STATE_OF_CHARGE: ClassVar[float] = 0.5
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -132,7 +136,7 @@ class CarBattery(PhysicsComponent):
         self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
-        self.state = EVBatteryState(soc=0.5)
+        self.state = EVBatteryState(soc=self.INITIAL_STATE_OF_CHARGE)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
@@ -474,10 +478,14 @@ class CarBattery(PhysicsComponent):
 
 @dataclass
 class EVBatteryState:
-    """Electric vehicle battery state class."""
+    """The car battery's state between steps: its state of charge.
 
-    # state of charge of the battery
-    soc: float = 0
+    The state of charge has no default: the car battery states its start value once, as
+    :attr:`CarBattery.INITIAL_STATE_OF_CHARGE`.
+    """
+
+    #: State of charge of the battery, dimensionless between 0 and 1.
+    soc: float
 
     def clone(self):
         """Creates a copy of the Car Battery State."""

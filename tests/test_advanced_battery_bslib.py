@@ -85,7 +85,10 @@ def test_advanced_battery_bslib() -> None:
     # Check if set power is charged
     assert stsv.values[my_advanced_battery.ac_battery_power_channel.global_index] == 4000  # noqa B101
     assert stsv.values[my_advanced_battery.dc_battery_power_channel.global_index] == 3807.546  # noqa B101
-    assert stsv.values[my_advanced_battery.state_of_charge_channel.global_index] == 0.006185227970066665  # noqa B101
+    # The battery starts half charged, and one minute at 3807.546 W DC adds 0.0061852 to its state of charge.
+    assert stsv.values[my_advanced_battery.state_of_charge_channel.global_index] == pytest.approx(  # noqa B101
+        advanced_battery_bslib.Battery.INITIAL_STATE_OF_CHARGE + 0.006185227970066665, rel=1e-12
+    )
 
 
 @pytest.mark.base

@@ -172,10 +172,11 @@ jobs:
         dist="${dist:-loadfile}"
         # A split shard keeps its group, in the split's order (--no-loadscope-reorder: heaviest unit first,
         # instead of xdist's order by test count), and records its seconds per unit for the next refresh.
-        split=()
+        # The container's shell is sh, which has no arrays: the extra arguments are the positional ones.
+        set --
         if [ -n "${{ matrix.group }}" ]; then
-          split=(--ci-group "${{ matrix.group }}" --no-loadscope-reorder
-                 --ci-durations-out "../results/ci_durations/${{ matrix.name }}.json")
+          set -- --ci-group "${{ matrix.group }}" --no-loadscope-reorder \
+            --ci-durations-out "../results/ci_durations/${{ matrix.name }}.json"
         fi
         ret=0
         # pytest-cov starts coverage in every xdist worker (a bare 'coverage run' would follow only the
@@ -183,7 +184,7 @@ jobs:
         # matches the upload glob below, and so do the workers' own files should the combine not happen.
         # --cov-report= writes no report here: the combine coverage job reports once over all shards.
         export COVERAGE_FILE=".coverage.${{ matrix.name }}"
-        pytest -m "${{ matrix.marker }}" -n "${{ matrix.workers }}" --dist "$dist" "${split[@]}" \
+        pytest -m "${{ matrix.marker }}" -n "${{ matrix.workers }}" --dist "$dist" "$@" \
           --cov=../hisim --cov-report= --durations="$durations" || ret=$?
         # pytest exit code 5 means "no tests collected"; only the catch-all
         # "others" job is allowed to legitimately select zero tests.

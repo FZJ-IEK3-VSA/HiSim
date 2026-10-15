@@ -284,3 +284,43 @@ def test_the_file_name_carries_the_displayed_date(tmp_path: Path) -> None:
     data = _make_series(24 * 7)
     assert _chart(tmp_path, data, JANUARY_FIRST, 0).filename.startswith("days_m0_d0")
     assert _chart(tmp_path, data, JULY_FIRST, 2).filename.startswith("days_m6_d2")
+
+
+def test_the_file_is_a_png_named_by_the_date(tmp_path: Path) -> None:
+    """The file is days_m0_d0.png; formatting the enum member named it days_m0_d0FigureFormat.PNG."""
+    data = _make_series(24 * 7)
+    assert _chart(tmp_path, data, JANUARY_FIRST, 0).filename == "days_m0_d0.png"
+
+
+def test_plotting_leaves_the_global_font_size_alone(tmp_path: Path) -> None:
+    """Drawing a single-day chart does not change the font size of the charts drawn after it."""
+    import matplotlib.pyplot as plt
+
+    index = pd.date_range(JANUARY_FIRST, periods=48, freq="h")
+    font_size_before = plt.rcParams["font.size"]
+    _chart(tmp_path, pd.Series(np.arange(48, dtype=float), index=index), JANUARY_FIRST, 0).plot(close=True)
+    assert plt.rcParams["font.size"] == font_size_before
+
+
+def test_the_axes_name_the_time_of_day_and_the_quantity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The x axis reads "Time of day" (its ticks are clock times) and the y axis the quantity with its unit."""
+    import matplotlib.pyplot as plt
+
+    labels: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        plt, "savefig", lambda *_a, **_k: labels.append((plt.gca().get_xlabel(), plt.gca().get_ylabel()))
+    )
+    index = pd.date_range(JANUARY_FIRST, periods=48, freq="h")
+    chart = ChartSingleDay(
+        output="PVSystem # ElectricityOutput",
+        component_name="PVSystem",
+        units="W",
+        directory_path=str(tmp_path),
+        seconds_per_timestep=3600,
+        output_description="electricity output",
+        data_with_units=pd.Series(np.full(48, 2500.0), index=index),
+        window_start=JANUARY_FIRST,
+        path_checker=lambda **_: None,
+    )
+    chart.plot(close=True)
+    assert labels == [("Time of day", "Power [kW]")]

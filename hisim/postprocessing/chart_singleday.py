@@ -11,6 +11,7 @@ import pandas as pd
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.simulation_day import SimulationDay
+from hisim.simulationparameters import FigureFormat
 
 
 class ChartSingleDay(Chart, ChartFontsAndSize):
@@ -28,7 +29,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         seconds_per_timestep: int,
         day_in_window: int = 0,
         output2_with_units: pd.Series | None = None,
-        figure_format: str | None = None,
+        figure_format: FigureFormat = FigureFormat.PNG,
         path_checker: Callable[[str], None] | None = None,
     ) -> None:
         """Initializes a single-day chart.
@@ -54,7 +55,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 run's first day (default 0).
             output2_with_units: Optional secondary output data for comparison;
                 its physical unit is carried separately by ``units``.
-            figure_format: Format for the output figure (e.g., '.png').
+            figure_format: Format of the output figure; its value is the file extension (default PNG).
             path_checker: Optional callable to validate path length; defaults to
                 the global ``result_path_provider.check_path_length``.
         """
@@ -89,8 +90,10 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
         # Named by the zero-based month and day of month of the displayed date: the first of January is m0_d0.
+        # The extension is the format's value: formatting the enum member itself named every file
+        # "days_m0_d0FigureFormat.PNG".
         self.filename: str = (
-            f"{self.type.lower()}_m{displayed_date.month - 1}_d{displayed_date.day - 1}{self.figure_format}"
+            f"{self.type.lower()}_m{displayed_date.month - 1}_d{displayed_date.day - 1}{self.figure_format.value}"
         )
 
         self.filepath: str = str(Path(self.directory_path) / self.filename)
@@ -204,8 +207,9 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """Plot the single-day time series and optionally save the figure.
 
         Rescales the y-axis units, draws the day's data as a green line with a
-        time-of-day formatted x-axis under a title that names the day's date, and — when ``close`` is truthy — saves the
-        figure to ``self.filepath2`` and closes it.
+        time-of-day formatted x-axis under a title that names the day's date, and — when ``close`` is
+        truthy — saves the figure to ``self.filepath2`` and closes it. Every font size is set on its
+        own text, so drawing the chart leaves the matplotlib defaults of later charts untouched.
 
         Args:
             close: If truthy, persist the figure via :meth:`close` after drawing.
@@ -217,26 +221,30 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """
         self.ensure_output_dir()
         single_day_data_with_units = self.get_day_data()
-        plt.rcParams["font.size"] = "30"
-        plt.rcParams["agg.path.chunksize"] = 10000
+        # Font sizes are set on each text and never in ``plt.rcParams``: a global font size here (it
+        # was 30 pt) outlived the figure and changed every chart drawn after it in the process --
+        # the colour-bar numbers of the carpets and the tick density of every later axis.
         _fig, a_x = plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.xticks(fontsize=self.fontsize_ticks)
-        plt.yticks(fontsize=self.fontsize_ticks)
 
-        single_day_data_with_units, self.units = self.rescale_y_axis(y_values=single_day_data_with_units, units=self.units)
-        plt.title(self.plot_title, fontsize=self.fontsize_title)
+        single_day_data_with_units, self.units = self.rescale_y_axis(
+            y_values=single_day_data_with_units, units=self.declared_units
+        )
+        # The plot title is the chart title followed by the date; the date is wrapped as one piece.
+        date_of_the_day = self.plot_title[len(self.title):].strip()
+        plt.title(self.wrap_title(self.title, suffix=date_of_the_day), fontsize=self.fontsize_title)
         plt.plot(
             single_day_data_with_units.index,
             single_day_data_with_units,
             color="green",
             linewidth=1.0,
-            label=self.property,
         )
         plt.grid(True)
-        plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
-        plt.tight_layout()
+        plt.xlabel("Time of day", fontsize=self.fontsize_label)
+        plt.ylabel(self.axis_label(self.units), fontsize=self.fontsize_label)
         Axis.set_major_formatter(a_x.xaxis, DateFormatter("%H:%M"))
+        plt.xticks(fontsize=self.fontsize_ticks)
+        plt.yticks(fontsize=self.fontsize_ticks)
+        plt.tight_layout()
         if close:
             self.close()
         return ReportImageEntry(

@@ -6,6 +6,7 @@ import math
 from typing import Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import dates as mdates
 import numpy as np
 import pandas as pd
 
@@ -145,9 +146,11 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             log.error("Carpet plot can only deal with data containing entire days")
             return None
 
-        if np.max(np.abs(data_in_self_units.values)) > 1.5e3:
-            reshaped_data_in_self_units = reshaped_data_in_self_units * 1e-3
-            self.units = f"k{self.units}"
+        # The same unit as the line and single-day charts of this output show: a carpet of a power of
+        # 1.2 kW used to stay in W, and one of 2 000 kWh used to read "kkWh".
+        reshaped_data_in_self_units, self.units = self.rescale_y_axis(
+            y_values=reshaped_data_in_self_units, units=self.declared_units
+        )
 
         plot_data_in_self_units = np.flip(reshaped_data_in_self_units.transpose(), axis=0)
 
@@ -158,7 +161,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         color_map = mpl.colormaps.get_cmap(mycolors)
 
         plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
-        plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
+        plt.colorbar(plot).set_label(self.axis_label(self.units), fontsize=self.fontsize_label)
 
         # The ticks used to be placed per whole hour of rows, which is 0 rows for a step above one hour and
         # made np.arange divide by zero; they are placed on the day's own time axis now.
@@ -175,7 +178,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         # setting axis of the plot
         axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
         axis.set_xlabel(x_axis_title, fontsize=self.fontsize_label)
-        plt.title(self.title, fontsize=self.fontsize_title)
+        plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
         plt.tight_layout()
@@ -239,18 +242,26 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         time_index = data_in_self_units.index
-        plt.xticks(fontsize=self.fontsize_ticks, rotation=20)
         plt.yticks(fontsize=self.fontsize_ticks)
 
         # Rescale values in case they are too high
-        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.declared_units)
 
         plt.plot(time_index, data_in_self_units, color="green", linewidth=1.0)
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
+        plt.ylabel(self.axis_label(self.units), fontsize=self.fontsize_label)
         plt.xlabel("Time", fontsize=self.fontsize_label)
         plt.grid()
-        plt.title(self.title, fontsize=self.fontsize_title)
-        axis.set_xlim(xmin=time_index[0])
+        plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
+        if isinstance(time_index, pd.DatetimeIndex):
+            # Month names under a year, hours under a date: the concise formatter names each tick once
+            # and puts the year (or the date) beside the axis, where "2021-01" ... "2021-12" overlapped.
+            locator = mdates.AutoDateLocator()
+            axis.xaxis.set_major_locator(locator)
+            axis.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+        plt.xticks(fontsize=self.fontsize_ticks)
+        # Both ends at the data: a margin after the last timestep showed an empty strip and a tick of the next year.
+        if len(time_index) > 1:
+            axis.set_xlim(xmin=time_index[0], xmax=time_index[-1])
         plt.tight_layout()
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)

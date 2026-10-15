@@ -275,7 +275,8 @@ class TestTheChargingLimits:
         (0.0, False, 60, 11100.0),
         (0.5, False, 60, 11100.0),
         (0.999, False, 60, 666.0),
-        (0.999, False, 900, 44.4),
+        (0.999, False, 900, 0.0),
+        (0.995, False, 900, 222.0),
         (1.0, False, 60, 0.0),
         (1.0000001, False, 60, 0.0),
         (0.99, True, 60, 0.0),
@@ -287,7 +288,11 @@ class TestTheChargingLimits:
     @pytest.mark.base
     @pytest.mark.parametrize(("state_of_charge", "blocked", "seconds_per_timestep", "expected_in_watt"), MAXIMA)
     def test_every_maximum_of_the_table(self, state_of_charge: float, blocked: bool, seconds_per_timestep: int, expected_in_watt: float) -> None:
-        """Catches a maximum beyond the rated power, beyond what fills the battery in the step, or one while it is full."""
+        """Catches a maximum beyond the rated power or what fills the battery in the step, or one it refuses.
+
+        The battery refuses any power while it is full and any power at or below its minimum charging power: 0.999 at
+        900 s could fill at 44.4 W, below the minimum of 202.4 W, so the maximum is 0 W there.
+        """
         maximum_in_watt = advanced_battery_bslib.Battery.maximum_charging_power_in_watt(
             self.PARAMETERS, state_of_charge=state_of_charge, recharging_is_blocked=blocked, seconds_per_timestep=seconds_per_timestep
         )
@@ -360,6 +365,32 @@ class TestTheChargingLimits:
             battery.i_restore_state()
             battery.i_simulate(0, stsv, False)
             assert stsv.values[battery.ac_battery_power_channel.global_index] == pytest.approx(maximum_in_watt)
+
+    @pytest.mark.base
+    def test_the_battery_publishes_the_minimum_charging_power_it_reads_from_bslib(self) -> None:
+        """Catches a minimum-charging-power output that is never set or carries another value than the adapter's.
+
+        The energy manager takes nothing from a share at or below this output, so a wrong value there changes the
+        manager's distribution of the surplus. SG1 with 5 kW scales its minimum to 18.23 W per kW, 91.15 W.
+        """
+        battery, _, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.5)
+        battery.i_simulate(0, stsv, False)
+        assert stsv.values[battery.minimum_charging_power_channel.global_index] == pytest.approx(18.23 * 5)
+
+    @pytest.mark.base
+    def test_a_battery_that_could_take_no_more_than_its_minimum_publishes_0_watt_and_takes_nothing(self) -> None:
+        """Catches a published maximum below the minimum, a power the battery refuses.
+
+        At a state of charge of 0.99985 the 10 kWh battery has 1.5 Wh left, which fill within 60 s at 90 W, below its
+        minimum of 91.15 W. bslib then takes nothing even when offered 1,000 W, so the published maximum is 0 W.
+        """
+        battery, set_point, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.99985)
+        stsv.values[set_point.global_index] = 1000.0
+        battery.i_simulate(0, stsv, False)
+        assert stsv.values[battery.maximum_charging_power_channel.global_index] == 0.0
+        assert stsv.values[battery.ac_battery_power_channel.global_index] == 0.0
 
     @pytest.mark.base
     def test_the_battery_is_safe_to_iterate(self) -> None:

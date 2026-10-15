@@ -372,7 +372,8 @@ class Battery(PhysicsComponent):
             unit=Units.WATT,
             output_description=(
                 "The largest AC power the battery can take in this step, from its state at the step's start, in W; "
-                "zero or positive. Zero while it is full or waits to fall below its recharge threshold."
+                "zero or positive. Zero while it is full, while it waits to fall below its recharge threshold, and "
+                "while what it could take is not above its minimum charging power."
             ),
         )
         self.minimum_charging_power_channel: ComponentOutput = self.add_output(
@@ -474,8 +475,12 @@ class Battery(PhysicsComponent):
         fills its remaining capacity within the step. For example, 11,100 Wh at a state of charge of 0.999 leave
         11.1 Wh, which fill within a 60 s step at 666 W; at 0.5 the rated 11,100 W bound it.
 
-        The bound does not include the minimum charging power: an offer at or below that minimum is not taken even
-        when the bound is larger (:attr:`BslibChargingParameters.minimum_charging_power_in_watt`).
+        bslib charges nothing with a power at or below its minimum charging power
+        (:attr:`BslibChargingParameters.minimum_charging_power_in_watt`). So when the bound is not above that minimum,
+        which happens just below full, the battery takes nothing and the maximum is 0 W. For example, the same battery
+        at 0.999 and 900 s steps could fill its 11.1 Wh at 44.4 W, but its minimum of 202.4 W stops it, so the maximum
+        is 0 W. Publishing 44.4 W instead would announce a power the battery refuses. An offer at or below the
+        minimum is also not taken when the bound is larger.
 
         Args:
             parameters: The battery's capacity, rated and minimum charging powers and recharge threshold.
@@ -484,7 +489,7 @@ class Battery(PhysicsComponent):
             seconds_per_timestep: The step length, in s.
 
         Returns:
-            The largest AC power the battery takes in this step, in W; zero or positive.
+            The largest AC power the battery takes in this step, in W; either 0 or above the minimum charging power.
 
         Raises:
             ValueError: If the step length is not positive.
@@ -496,7 +501,10 @@ class Battery(PhysicsComponent):
             return 0.0
         remaining_capacity_in_watt_hour = parameters.capacity_in_watt_hour * (1.0 - state_of_charge)
         filling_power_in_watt = remaining_capacity_in_watt_hour * Battery.SECONDS_PER_HOUR / seconds_per_timestep
-        return max(0.0, min(parameters.rated_charging_power_in_watt, filling_power_in_watt))
+        bound_in_watt = min(parameters.rated_charging_power_in_watt, filling_power_in_watt)
+        if bound_in_watt <= parameters.minimum_charging_power_in_watt:
+            return 0.0
+        return bound_in_watt
 
     def write_to_report(self) -> List[str]:
         """Write to report."""

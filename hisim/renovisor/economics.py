@@ -1839,8 +1839,9 @@ class EconomicContextBuilder:
         (``lifetime_is_engine_fallback``), so the row's due years are stated either way.
 
         The size is the element's area (:meth:`_element_area`) in square metres, for the door as for
-        every other element: the cost database prices each envelope class per square metre, which
-        is the unit the register row and the measure's own subject declare too.
+        every other element: the cost database prices the class of each of the five elements per
+        square metre (``VENTILATION_SYSTEM``, priced per unit, is no element), which is the unit the
+        register row and the measure's own subject declare too.
 
         Each subject enters the report's ``subjects`` map with no measure (``None``), as every
         subject of the house as it was, so every unpriced subject is a named one and the result

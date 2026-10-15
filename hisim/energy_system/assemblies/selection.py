@@ -143,7 +143,8 @@ class SelectionPlan:
                 matching nothing, ``EF-7V`` for a derived weight that ties with another component
                 type's, ``EF-7U`` for a controllable output actuated by none or two.
             EnergySystemWiringError: ``EF-21``, ``EF-7M`` or ``EF-7N`` for a consuming output that its
-                consumer does not have, that carries another carrier, or that its meter declares no feed for.
+                consumer does not have, that carries another carrier, or that its meter declares no feed or more
+                than one feed for.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
         selected: Dict[str, List[AggregatorFeed]] = {}
@@ -184,7 +185,7 @@ class SelectionPlan:
         weight and its dispatch, while a landed meter feed keeps the declared weight and has none.
 
         Args:
-            request: The feed request, from a declaration of the observer's class.
+            request: The feed request, from a declaration of the aggregator's class (an observer's or the meter's).
             weight: The weight the written feed carries.
             dispatch: The dispatch of a ranked feed; ``None`` for a feed that is only measured.
 

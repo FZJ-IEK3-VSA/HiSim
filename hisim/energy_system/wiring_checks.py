@@ -25,7 +25,9 @@ here to be checked, and never needs to know how a check is written.
 Three checks see more than the wires. Two cover what an assembly's carrier need states and no
 wire shows (``assemblies_spec.md`` §3.3): a consuming output's energy port carries the need's
 carrier, and a provider's meter declares a feed for every consuming output named, which is the
-feed the output lands as (:func:`check_consuming_outputs`, :func:`meter_feed_of`; D30). The third
+feed the output lands as (:func:`check_consuming_outputs`, :func:`meter_feed_of`; D30); a metered
+consumer's output taking the same carrier in that the need leaves out is warned about, since no meter
+counts it (:func:`unmetered_outputs`). The third
 refuses a flow counted twice: two aggregators of which one reads any output of the other and both
 observe one flow, a source's output, by its resolved name (:func:`check_double_count`, §4.3).
 """
@@ -36,6 +38,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
+from hisim import loadtypes as lt
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.channels import FeedRequest
@@ -367,7 +370,9 @@ def check_consuming_outputs(
     carrier; one with a meter must also be an output the meter's class declares a feed for, and that
     feed is what the output lands as. Example: ``boiler-Boiler.FuelUse`` consumed as natural gas with
     the meter ``gas-Meter`` returns ``{("gas-Meter", "boiler-Boiler", "FuelUse"): <its declared feed>}``.
-    The feeds are returned so that the caller landing them reads each declaration once.
+    The feeds are returned so that the caller landing them reads each declaration once. A metered
+    consumer with an output that takes the same carrier in but is not named is legal and only logged as
+    a warning (:func:`unmetered_outputs`).
 
     Args:
         components_by_name: Every constructed component, keyed by its name in the file.
@@ -406,7 +411,54 @@ def check_consuming_outputs(
     for item in consuming:
         if item.meter is not None:
             landed[(item.meter, item.consumer, item.output)] = meter_feed_of(components_by_name, item)
+    for warning in unmetered_outputs(components_by_name, consuming):
+        log.warning(warning)
     return landed
+
+
+def unmetered_outputs(
+    components_by_name: Mapping[str, Component], consuming: Sequence[ConsumingOutput]
+) -> Tuple[str, ...]:
+    """Names the outputs of a metered consumer that take in the metered carrier but no carrier need names.
+
+    A carrier need may name only some of its consumer's outputs (D30), and only the named ones land at
+    the meter; any other output whose energy port takes the same carrier in is then counted by no meter,
+    and the carrier's consumption undercounts without an error. Leaving one out can be intended, so
+    this produces a warning line rather than a refusal. Example: a burner with the natural-gas inputs
+    ``FuelSh``, ``FuelDhw`` and ``FuelPilot`` whose need names the first two gives one line naming
+    ``FuelPilot``. Consumers without a meter (electricity) are not checked: no meter counts their outputs.
+
+    Args:
+        components_by_name: Every constructed component, keyed by its name in the file.
+        consuming: The consuming outputs, as :func:`check_consuming_outputs` receives them; every output
+            of one consumer and carrier is in the same list (the landed ones or the rest).
+
+    Returns:
+        One warning line per consumer and carrier with an output left out, in the order of ``consuming``.
+    """
+    named: Dict[Tuple[str, str], List[ConsumingOutput]] = {}
+    for item in consuming:
+        if item.meter is not None:
+            named.setdefault((item.consumer, item.carrier), []).append(item)
+    lines: List[str] = []
+    for (consumer, carrier), items in named.items():
+        named_outputs = [item.output for item in items]
+        left_out = [
+            output.field_name
+            for output in components_by_name[consumer].outputs
+            if output.energy_port is not None
+            and output.energy_port.role == lt.EnergyRole.IN
+            and output.energy_port.carrier.value == carrier
+            and output.field_name not in named_outputs
+        ]
+        if left_out:
+            meters = ", ".join(sorted({str(item.meter) for item in items}))
+            lines.append(
+                f"the carrier need of '{consumer}' names {', '.join(named_outputs)} but not "
+                f"{', '.join(left_out)}, which also take {carrier} in; the meter '{meters}' does not count them, "
+                f"so the {carrier} consumption undercounts. Name them in the need unless leaving them out is intended."
+            )
+    return tuple(lines)
 
 
 def meter_feed_of(components_by_name: Mapping[str, Component], item: ConsumingOutput) -> FeedRequest:

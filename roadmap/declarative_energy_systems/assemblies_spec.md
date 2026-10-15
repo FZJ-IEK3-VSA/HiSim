@@ -560,14 +560,15 @@ carrier need names lands at the meter's `{$port: connection}` placeholder as the
 that output, written explicitly** (`from`, tags, weight, as a twin writes it; never the consumer's bare name) (the
 `GenericBoiler`'s `EnergyDemandSh` and `EnergyDemandDhw` for the gas meter), whose `EnergyPort` names the carrier: that
 feed is the fuel link, and the meter the fuel port's balance peer as today (`hisim/components/generic_boiler.py:450`,
-`:501`; `energy_port.py:12-17`). A named output the meter's class declares no feed for is refused by name (`EF-7N`); an
-output the need does not name is not metered (D30). The declarations exist on the constructed meter, so the wiring
-writes the feeds, beside the observers' selections, and the realized record carries them.
+`:501`; `energy_port.py:12-17`). A named output the meter's class declares no feed or more than one feed for is
+refused by name (`EF-7N`); an output the need does not name is not metered (D30), and the wiring warns when such an
+output takes the need's carrier in. The declarations exist on the constructed meter, so the wiring writes the feeds,
+beside the observers' selections, and the realized record carries them.
 Control is a `control` import (§4.4). Every bound consumer's carrier is checked against the provider's at load time.
 
 **The meter's carrier in v1** (owner, 2026-10-08, D30): a meter's carrier, and a fuel meter's heating value and
 density, follow its class's law from the file's one `energy_carrier` provider (`hisim/components/gas_meter.py:68`,
-`:84`; `fuel_meter.py:59`, `:74`), as in the twins, which write no line for it (D28). A second `energy_carrier`
+`:84`; `fuel_meter.py:59`, `:65`, `:69`), as in the twins, which write no line for it (D28). A second `energy_carrier`
 provider of any value (two burners, a boiler beside a district heating connection) is refused at sizing, because the
 law cannot bind (`hisim/config/engine.py:360`). Pinning the carrier from the provider, which such a file needs, is cut
 from v1 like §6's meter fuel constants (D26, §13.1).
@@ -1036,7 +1037,8 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    *Oil, pellets, wood chips, hydrogen: done 2026-10-07* — one assembly and one supply per fuel (owner, 2026-10-07):
    `heating/oil_boiler`, `heating/pellet_boiler`, `heating/wood_chip_boiler`, `heating/hydrogen_boiler`, each the
    shape of `heating/gas_condensing_boiler` (the boiler at the fuel's preset, the controller at the twin's preset,
-   `modulating` or `on_off` with the twin's minimum runtime and resting time as parameters, the buffer as the twin's),
+   `modulating` or `on_off`, the buffer as the twin's; the `on_off` ones, pellets and wood chips, take the twin's
+   minimum runtime and resting time as parameters),
    and `supply/oil_tank`, `supply/pellet_store`, `supply/wood_chip_store` (`FuelMeter`) and
    `supply/hydrogen_connection` (`GasMeter`, as in its twin: the `FuelMeter` refuses hydrogen), each providing its
    carrier (`heating_oil`, `pellets`, `wood_chips`, `hydrogen`); the composed files
@@ -1268,11 +1270,11 @@ All by the owner on 2026-10-03.
   is the rule: every consuming output a carrier need names lands at the provider's meter as the feed the meter class
   declares for that output (its dynamic default connection for the consumer's class and output, read through feed
   resolution's own lookup), written explicitly with `from`, tags and weight as the twin writes it, never as the
-  consumer's bare name. A named output the meter's class declares no feed for is refused by name (`EF-7N`), and an
-  output the need does not name is not metered. The record's consuming outputs stay as they are; since only the
-  constructed meter states its declarations, the wiring writes the landed feeds and the realized record carries them
-  (a re-run lands nothing again). Found by the gas twin's gate (§13 step 5), where the bare name was the one line
-  differing from the twin. Amended (owner, 2026-10-08): the meter's carrier is not pinned from the provider in v1; it
+  consumer's bare name. A named output the meter's class declares no feed or more than one feed for is refused by name
+  (`EF-7N`), and an output the need does not name is not metered. The record's consuming outputs stay as they are;
+  since only the constructed meter states its declarations, the wiring writes the landed feeds and the realized record
+  carries them (a re-run lands nothing again). Found by the gas twin's gate (§13 step 5), where the bare name was the
+  one line differing from the twin. Amended (owner, 2026-10-08): the meter's carrier is not pinned from the provider in v1; it
   follows the meter class's law from the file's one `energy_carrier` provider, as in the twins, and a second provider
   of any value is refused at sizing (§5.1); pinning is cut from v1 (§13.1) and returns with the first file that has
   two providers.

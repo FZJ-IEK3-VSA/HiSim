@@ -517,14 +517,26 @@ class KpiHelperClass:
         discharged by 2 kWh that holds 7 kWh more at the end than at the start lost 1 kWh, not 8 kWh.
 
         Args:
-            charged_energy_in_kilowatt_hour: The energy that went into the storage over the run, in kWh.
-            discharged_energy_in_kilowatt_hour: The energy that came out of the storage over the run, in kWh.
+            charged_energy_in_kilowatt_hour: The energy that went into the storage over the run, in kWh, as a
+                magnitude: at least 0.
+            discharged_energy_in_kilowatt_hour: The energy that came out of the storage over the run, in kWh, as a
+                magnitude: at least 0, not the negative sum of a signed charging power.
             stored_energy_increase_in_kilowatt_hour: The stored energy at the end of the run minus the stored energy at
                 its start, in kWh; negative when the storage ends emptier than it started.
 
         Returns:
             The losses over the run, in kWh.
+
+        Raises:
+            ValueError: If the charged or the discharged energy is negative, which is a signed sum passed where a
+                magnitude belongs.
         """
+        if charged_energy_in_kilowatt_hour < 0 or discharged_energy_in_kilowatt_hour < 0:
+            raise ValueError(
+                "The charged and the discharged energy of a storage are magnitudes, at least 0; got "
+                f"{charged_energy_in_kilowatt_hour} kWh charged and {discharged_energy_in_kilowatt_hour} kWh "
+                "discharged."
+            )
         return (
             charged_energy_in_kilowatt_hour
             - discharged_energy_in_kilowatt_hour

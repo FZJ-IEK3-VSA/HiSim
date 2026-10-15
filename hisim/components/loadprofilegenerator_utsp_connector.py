@@ -369,6 +369,10 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
     Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
+    #: How a request names its first and last day to the LoadProfileGenerator: ISO 8601, which it reads
+    #: unambiguously. A day-first ``01-07-2021`` is read month-first, as 7 January.
+    LPG_DATE_FORMAT: ClassVar[str] = "%Y-%m-%d"
+
     @classmethod
     def electricity_consumption_of(
         cls,
@@ -650,10 +654,10 @@ class UtspLpgConnector(cp.DataSourceComponent):
             - driving distances
         """
         # Create an LPG configuration and set the simulation parameters
-        start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
+        start_date = self.my_simulation_parameters.start_date.strftime(self.LPG_DATE_FORMAT)
         # Unlike HiSim the LPG includes the specified end day in the simulation --> subtract one day
         last_day = self.my_simulation_parameters.end_date - datetime.timedelta(days=1)
-        end_date = last_day.strftime("%Y-%m-%d")
+        end_date = last_day.strftime(self.LPG_DATE_FORMAT)
 
         # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
@@ -1311,12 +1315,18 @@ class UtspLpgConnector(cp.DataSourceComponent):
         An entry holds the profiles after :mod:`hisim.components.lpg_local_time` put them onto the run's clock
         and cut out its window, so an entry written by another version of that conversion holds other values
         under the same configuration and simulation parameters. With the fingerprint of the conversion's code
-        in the key, an edit to it makes every entry a miss instead of serving the old values.
+        in the key, an edit to it makes every entry a miss instead of serving the old values. The days a local
+        LoadProfileGenerator run simulates are named too: its profile of the same days depends on how many
+        days it simulates, so an entry from another request holds another profile.
 
         Returns:
-            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure.
+            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure, and for a
+                local LoadProfileGenerator ``":lpg_request="`` and the first and the last day it simulates.
         """
-        return ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time))
+        material = ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time))
+        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+            material += ":lpg_request=" + "..".join(self.local_lpg_request_days(self.my_simulation_parameters))
+        return material
 
     def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(
         self,
@@ -1415,17 +1425,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
                 householdref = household
                 housetype = HouseTypes.HT23_No_Infrastructure_at_all
-                # The profiles are read from 1 January of the simulation year onwards and must cover the
-                # whole simulated time span (see load_result_files_and_transform_to_lists). Deriving the end
-                # date from its year alone would collapse start and end date for any simulation shorter than
-                # a year, so the LPG would return too few time steps.
-                simulated_days = (
-                    self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
-                ).days
-                lpg_start_date = datetime.date(self.my_simulation_parameters.start_date.year, 1, 1)
-                lpg_end_date = lpg_start_date + datetime.timedelta(days=simulated_days)
-                startdate = lpg_start_date.strftime("%d-%m-%Y")
-                enddate = lpg_end_date.strftime("%d-%m-%Y")
+                startdate, enddate = self.local_lpg_request_days(self.my_simulation_parameters)
                 geographic_location = None
 
                 chargingset = self.utsp_config.charging_station_set
@@ -1525,6 +1525,28 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 )
 
         return str(path_to_result_folder)
+
+    @classmethod
+    def local_lpg_request_days(cls, parameters: SimulationParameters) -> Tuple[str, str]:
+        """Return the first and the last day a local LoadProfileGenerator run simulates, as it reads them.
+
+        The profiles are read from 1 January of the simulation year onwards and must cover the whole simulated
+        span (see :meth:`load_result_files_and_transform_to_lists`). The LoadProfileGenerator simulates its end
+        day too, so the request reaches one day past the span, which also covers the hour a window ending in
+        summer reaches past its last day on the wall clock. Example: a week from 1 January 2021 is requested as
+        ``("2021-01-01", "2021-01-08")``. Written day-first, ``08-01-2021`` was read as 1 August, so a week was
+        simulated from 1 January to 1 August.
+
+        Args:
+            parameters: the run's simulation parameters.
+
+        Returns:
+            Tuple[str, str]: the first and the last day, in :attr:`LPG_DATE_FORMAT`.
+        """
+        simulated_days = (parameters.end_date - parameters.start_date).days
+        first_day = datetime.date(parameters.start_date.year, 1, 1)
+        last_day = first_day + datetime.timedelta(days=simulated_days)
+        return first_day.strftime(cls.LPG_DATE_FORMAT), last_day.strftime(cls.LPG_DATE_FORMAT)
 
     def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str,
     str, str]:

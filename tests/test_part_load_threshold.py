@@ -98,4 +98,4 @@ def test_a_part_load_ratio_is_a_fraction_aggregated_as_a_mean() -> None:
 
     A sum of part-load ratios over a year means nothing; their mean is the share of the year a device ran at full load.
     """
-    assert lt.Units.FRACTION in lt.UNITS_USING_MEAN_AGGREGATION
+    assert lt.Units.FRACTION in lt.OutputAggregation.units_averaged_by_default()

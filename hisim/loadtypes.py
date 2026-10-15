@@ -211,31 +211,6 @@ class Units(str, enum.Enum):
     BINARY = "binary"
 
 
-#: Units whose cumulative post-processing value is a *mean* over all
-#: timesteps rather than a *sum*.  This mirrors the distinction made in
-#: :func:`hisim.simulator.HiSimSimulator.get_std_results`: rate-like
-#: quantities (power, temperature, pressure, ...) are averaged so they keep
-#: their unit, while extensive quantities (energy, volume, mass, cost, ...)
-#: are summed to a total.  Keeping this set in one place avoids the system
-#: chart and the simulator drifting apart on which units are aggregated how.
-UNITS_USING_MEAN_AGGREGATION: frozenset[Units] = frozenset(
-    {
-        Units.CELSIUS,
-        Units.KELVIN,
-        Units.ANY,
-        Units.METER_PER_SECOND,
-        Units.DEGREES,
-        Units.WATT,
-        Units.KILOWATT,
-        Units.WATT_PER_SQUARE_METER,
-        Units.KG_PER_SEC,
-        Units.PERCENT,
-        Units.FRACTION,
-        Units.PASCAL,
-    }
-)
-
-
 @enum.unique
 class OutputAggregation(str, enum.Enum):
     """How the time steps of one output are combined into a monthly, daily or hourly value and a run total.
@@ -271,6 +246,34 @@ class OutputAggregation(str, enum.Enum):
     NONE = "none"
 
     @classmethod
+    def units_averaged_by_default(cls) -> frozenset[Units]:
+        """Return the units whose outputs are averaged when they declare no aggregation.
+
+        These are rates and states, which keep their unit when averaged: a power, a temperature,
+        a pressure, a fraction. Every other unit (an energy, a volume, a mass, a cost) is summed
+        to a total. Example: ``Units.WATT`` is in the set, ``Units.WATT_HOUR`` is not.
+
+        Returns:
+            The units averaged by default.
+        """
+        return frozenset(
+            {
+                Units.CELSIUS,
+                Units.KELVIN,
+                Units.ANY,
+                Units.METER_PER_SECOND,
+                Units.DEGREES,
+                Units.WATT,
+                Units.KILOWATT,
+                Units.WATT_PER_SQUARE_METER,
+                Units.KG_PER_SEC,
+                Units.PERCENT,
+                Units.FRACTION,
+                Units.PASCAL,
+            }
+        )
+
+    @classmethod
     def of_unit(cls, unit: typing.Any) -> "OutputAggregation":
         """Return the aggregation an output of this unit gets when it declares none.
 
@@ -282,10 +285,10 @@ class OutputAggregation(str, enum.Enum):
             unit: The output's unit, a :class:`Units` member or its string value.
 
         Returns:
-            ``MEAN`` for the units in ``UNITS_USING_MEAN_AGGREGATION``, ``SUM`` for all others.
+            ``MEAN`` for the units in :meth:`units_averaged_by_default`, ``SUM`` for all others.
         """
         unit_value = unit.value if isinstance(unit, Units) else unit
-        mean_unit_values = {mean_unit.value for mean_unit in UNITS_USING_MEAN_AGGREGATION}
+        mean_unit_values = {mean_unit.value for mean_unit in cls.units_averaged_by_default()}
         return cls.MEAN if unit_value in mean_unit_values else cls.SUM
 
 

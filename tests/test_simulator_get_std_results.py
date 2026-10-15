@@ -2,7 +2,7 @@
 
 ``get_std_results`` resamples the per-timestep results DataFrame into monthly,
 daily, hourly, and cumulative aggregations, using mean aggregation for units in
-``UNITS_USING_MEAN_AGGREGATION`` and sum aggregation for everything else.
+``OutputAggregation.units_averaged_by_default()`` and sum aggregation for everything else.
 
 These tests drive the method directly with a lightweight stub (no full
 simulation) and assert that the bulk-resample-by-group implementation produces
@@ -53,7 +53,7 @@ def _reference_std_results(
     seconds_per_timestep: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Per-column reference implementation (the pre-refactor behaviour)."""
-    units_mean = lt.UNITS_USING_MEAN_AGGREGATION
+    units_mean = lt.OutputAggregation.units_averaged_by_default()
     use_hourly_resample = seconds_per_timestep != 3600
     monthly_frames: list[pd.Series] = []
     daily_frames: list[pd.Series] = []

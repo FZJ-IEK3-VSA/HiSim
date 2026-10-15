@@ -14,8 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —
   proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
 
-- **Documents go where `system_docs/documentation_map.md` says**: the root holds README, AGENTS, CLAUDE,
-  CONTRIBUTING and HISTORY only; binding guidelines are in `system_docs/`, specs and plans in `roadmap/`.
+- **Documents go where `system_docs/documentation_map.md` says**: the root's only documents are README, AGENTS,
+  CLAUDE, CONTRIBUTING and HISTORY, beside what packaging, licensing and the tools need; binding guidelines are in
+  `system_docs/`, specs and plans in `roadmap/`.
 
 ## Project Overview
 

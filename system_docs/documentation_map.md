@@ -1,7 +1,8 @@
 # Documentation map
 
 Where each kind of document belongs, so a reader knows where to look and a writer where to put a new one. A
-document in the wrong place is moved with `git mv`, and every reference to it is updated in the same pull request.
+document in the wrong place is moved with `git mv`, and every reference to it is updated in the same pull request;
+closed beads and `obsolete/` keep their text.
 
 ## The root: five documents
 
@@ -16,7 +17,8 @@ document in the wrong place is moved with `git mv`, and every reference to it is
 Besides these, the root holds only what packaging, licensing and the tools need: `LICENSE`, `AUTHORS.rst`,
 `CITATION.cff`, the configuration of the build and the checks (`pyproject.toml`, `setup.py`, `setup.cfg`,
 `pytest.ini`, `mypy*.ini`, `.pylintrc`, ...), the Dockerfiles and the logos `README.md` shows. No spec, plan,
-notes, log or todo list lives in the root.
+notes, log or todo list lives in the root. Three files that fit none of this are still there and wait for removal
+(hisim-h2ib.10).
 
 ## `system_docs/`: binding guidelines
 
@@ -43,14 +45,17 @@ authority. It changes by pull request, with the owner's agreement.
   says so in its first lines.
 - **Templates**: `roadmap/templates/`.
 
-A spec is a design record, not a rule for the code: docstrings and guides never cite it (`coding_style.md` §6).
-A rule that a spec settles for good is written into a guideline in `system_docs/`.
+A spec is a design record, not a rule for the code: docstrings never cite it (`coding_style.md` §6), and a guide
+states its rules itself, naming a spec only as the source of an example or a decision. The spec citations that
+docstrings and comments in `hisim/` still carry are removed under hisim-h2ib.26. A rule that a spec settles for
+good is written into a guideline in `system_docs/`.
 
 ## Next to the code
 
 - **A `README.md` in a directory describes that directory**: `energy_systems/README.md`,
-  `system_setups/README.md`, `simulation_parameters/README.md`, `golden_references/README.md`,
-  `hisim/economics/README.md`, `scripts/hpc_harness/README.md`, and the data provenance notes under
+  `system_setups/README.md`, `system_setups/economic_example/README.md`, `simulation_parameters/README.md`,
+  `golden_references/README.md`, `hisim/economics/README.md`, `hisim/cost_database/spot_series/README.md`,
+  `scripts/hpc_harness/README.md`, `roadmap/renovisor/README.md`, and the data provenance notes under
   `hisim/inputs/`.
 - **Package usage pages** stay in their package: `hisim/renovisor/how_to_use.md`.
 - **CI documentation** stays beside the workflows: `.github/ci-monitoring.md`.

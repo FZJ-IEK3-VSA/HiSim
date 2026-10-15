@@ -8,8 +8,9 @@ rules are in `TESTING.md`, the commit and PR form in `coding_style.md` §9 and �
 
 - **A result change is any KPI that moves beyond the golden tolerance** (§3) in a pair of
   `scripts/golden_config.json`, or a KPI that appears, disappears or changes its unit or address. The golden
-  gate decides: `golden-check.yml` runs the one-week pairs on every pull request against `main`, `golden-year.yml`
-  the full-year pairs once the other CI has passed.
+  gate decides: on every pull request against `main`, `golden-check.yml` runs the one-week pairs and
+  `golden-year.yml` the full-year pairs, both at once and beside the rest of CI. A stacked pull request gets
+  neither until it is retargeted to `main`; dispatching both workflows on its branch checks it earlier.
 - **A changed output that no golden KPI shows is still a result change** when the change intends it, for example
   a new output column or a component's time series that changed shape. Say so in the PR description as well.
 
@@ -36,21 +37,24 @@ rules are in `TESTING.md`, the commit and PR form in `coding_style.md` §9 and �
    result change and its goldens reach `main` together. Why: a golden written on another machine differs in the
    last bits and fails the check (`golden_ref_spec.md` §7).
    - Never commit a golden written by a local run. `scripts/golden_update.py` may run locally to inspect what a
-     bless would write; its files are not committed.
+     bless would write, with `--golden-dir` pointing at a scratch directory: by default it writes into the
+     committed `golden_references/`. Nothing it writes is committed.
    - `force_rewrite` is only for retiring a KPI, clearing accumulated noise or repairing an unreadable golden.
      A normal bless is sticky: it rewrites only the KPIs that moved beyond the tolerance.
    - A pull request stacked on a re-blessed parent is blessed again on its own branch when its own change moves
      results.
 4. **A changed setup or configuration is re-recorded.** When a Python setup or a component's configuration
    changes, run `python scripts/record_all_setups.py` and commit the re-recorded twins under `energy_systems/`;
-   `energy-system-freshness.yml` fails a pull request whose twins are stale.
+   `energy-system-freshness.yml` fails a pull request against `main` whose twins are stale.
 5. **The other side is told** when the change moves what RenoVisor shows (§5).
 
 ## 3. The tolerance policy
 
 - **Two KPI values are equal when `math.isclose(got, ref, rel_tol=1e-9, abs_tol=1e-12)` holds**, the absolute
   tolerance in the KPI's own unit. The values live in `hisim/postprocessing/kpi_computation/tolerances.py`, which
-  every comparer reads; the reasoning is `golden_ref_spec.md` §7 (decision of hisim-b3b.6).
+  every golden comparer reads; the reasoning is `golden_ref_spec.md` §7 (decision of hisim-b3b.6). The assembly
+  harness's monotone check reads only the relative tolerance there and keeps its own absolute floor
+  (`MONOTONE_ABS_FLOOR` in `hisim/energy_system/assemblies/testing/checks.py`).
 - **Why so tight.** On one machine HiSim is byte-exact run to run, so the relative tolerance only absorbs
   cross-platform drift in the last bits. The absolute floor exists for KPIs that are physically zero and come
   out as rounding noise (the electric-heating house's temperature deviation below 20 °C, about 1.4e-9 K·h).
@@ -68,7 +72,7 @@ steps of §5.
 | Interface | Defined in | Read by |
 |---|---|---|
 | Component output and input names | the `ComponentOutput` / `ComponentInput` field names, as class constants of the component | the connections of energy-system files and assemblies, the result CSV columns, the webtool JSON |
-| KPI addresses | `KpiEntry` name and tag plus its `KpiSource` (`hisim/postprocessing/kpi_computation/kpi_structure.py`, `kpi_address.py`) | the golden references (one leaf per address), RenoVisor's `KpiSources` in `hisim/renovisor/kpis.py` (guarded by `tests/renovisor/test_kpis.py`), the cost engine, the webtool |
+| KPI addresses | the building, the `KpiEntry` name and tag, and for a component KPI its `KpiSource` (`hisim/postprocessing/kpi_computation/kpi_structure.py`, `kpi_address.py`) | the golden references (one leaf per address), RenoVisor's `KpiSources` in `hisim/renovisor/kpis.py` (guarded by `tests/renovisor/test_kpis.py`), the cost engine, the webtool |
 | Configuration field names and preset names | the `ConfigBase` dataclasses and their `@preset` class methods | every `*.energy_system.yaml` and assembly file, the RenoVisor translator (`hisim/renovisor/translate.py`), `hisim energy-system describe` |
 | Component class paths | `MAIN_CLASS` and the module path of the class | the `class:` key of every energy-system file and assembly |
 | The energy-system file format | `schema_version` 3 (flat) and 4 (with assemblies), `hisim/energy_system/loader.py`; the committed schemas `hisim/energy_system_v3.schema.json` and `hisim/assembly_v4.schema.json` | the RenoVisor translator, editors through the `$schema` line, every committed file |
@@ -77,15 +81,17 @@ steps of §5.
 Rules:
 
 - **A public name is referenced through its class constant**, never repeated as a string literal (AGENTS.md,
-  "Guidelines for coding"), so a rename inside HiSim is one edit.
+  "Guidelines for coding"), so a rename inside HiSim's Python code is one edit. The files that spell the name --
+  energy-system files, assemblies, goldens -- are renamed as §5 says.
 - **A new public name follows the naming rules from the start**: units in the name (AGENTS.md), `space_heating`
   not `sh` (`coding_style.md` §5). Existing names that break a rule are renamed only in a planned migration, not
   in passing.
 - **A KPI name is a display label beside its mandatory `unit` field** (AGENTS.md, "Guidelines for coding"). The
   KPI "Unmet DHW heat demand" (`hisim/components/simple_water_storage.py`) is to be renamed, as one pull request
   under §5 (owner, 2026-10-15; bead hisim-h2ib.7).
-- **The committed schema follows the code.** A change to the format regenerates `hisim/energy_system_v3.schema.json`
-  with `hisim energy-system schema`; `tests/test_energy_system_schema.py` fails otherwise. A change under which existing
+- **The committed schemas follow the code.** A change to the format regenerates
+  `hisim/energy_system_v3.schema.json` and `hisim/assembly_v4.schema.json` with `hisim energy-system schema`;
+  `tests/test_energy_system_schema.py` and `tests/assemblies/test_assembly_format.py` fail otherwise. A change under which existing
   files can no longer be read is a new `schema_version`, as the assemblies were (version 4).
 
 ## 5. Renaming a public name

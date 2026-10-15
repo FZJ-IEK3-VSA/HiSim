@@ -325,7 +325,7 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             ComponentConnection(
                 HeatingCurveController.BuildingTemperatureModifierInKelvin,
                 L2GenericEnergyManagementSystem.get_classname(),
-                L2GenericEnergyManagementSystem.BuildingIndoorTemperatureModifier,
+                L2GenericEnergyManagementSystem.BuildingTemperatureModifierInKelvin,
             )
         ]
 

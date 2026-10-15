@@ -10,8 +10,8 @@ name: control/ems_self_consumption
 description: Surplus controller maximising PV self-consumption (L2GenericEnergyManagementSystem).
 
 parameters:
-  building_offset_in_celsius:
-    {type: float, unit: CELSIUS, default: 2, range: {min: 0, max: 5},
+  building_offset_in_kelvin:
+    {type: float, unit: KELVIN, default: 2, range: {min: 0, max: 5},
      description: Building set point raise on a PV surplus.}
      # range: no raise up to 5 K, beyond which comfort suffers
   space_heating_storage_offset_in_celsius:
@@ -28,7 +28,7 @@ components:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption
     config:
-      building_indoor_temperature_offset_value: {$param: building_offset_in_celsius}
+      building_indoor_temperature_offset_in_kelvin: {$param: building_offset_in_kelvin}
       space_heating_water_storage_temperature_offset_value: {$param: space_heating_storage_offset_in_celsius}
       domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_celsius}
 
@@ -44,12 +44,12 @@ tests:
   bounds:
     - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -50000, max: 50000}            # signed grid balance
     - {output: EMS.TotalElectricityConsumption, unit: WATT, min: 0, max: 50000}
-    - {output: EMS.BuildingIndoorTemperatureModifier, unit: CELSIUS, min: 0, max: 5}             # 0 or the offset
+    - {output: EMS.BuildingTemperatureModifierInKelvin, unit: KELVIN, min: 0, max: 5}            # 0 or the offset
     - {output: EMS.DomesticHotWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}   # 0 or the offset
     - {output: EMS.SpaceHeatingWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}  # 0 or the offset
     - {output: EMS.ElectricityToBuildingFromDistrictEMSOutput, unit: WATT, min: -50000, max: 50000}   # zero outside a district
   monotone:
-    - {parameter: building_offset_in_celsius, kpi: Self-consumption of electricity, direction: increasing}
+    - {parameter: building_offset_in_kelvin, kpi: Self-consumption of electricity, direction: increasing}
       # a larger raise on surplus shifts at least as much heating into the surplus hours (a derived KPI)
   expect:
     - {kpi: Priority for ElectricalPowerConsumptionFromUTSPConnector, member: EMS, min: 0, max: 0}

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Charge controller of an electric car's battery, with its configuration."""
 
+import math
 from typing import ClassVar, List, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -57,8 +58,8 @@ class ChargingStationConfig(ConfigBase):
     lower_threshold_charging_power_in_watt: float
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int = 1
-    #: set point for the battery's state of charge, between 0 and 1: below it the car charges at full station
-    #: power, at or above it only with an offered surplus above the lower threshold
+    #: set point for the battery's state of charge, from 0 to 1 (the controller refuses any other value): below it
+    #: the car charges at full station power, at or above it only with an offered surplus above the lower threshold
     battery_set_soc: float = field(default=0.8, metadata={"unit": lt.Units.ANY})
     #: CO2 footprint of investment in kg. estimated value  # Todo: check value
     device_co2_footprint_in_kg: float = 100.0
@@ -174,7 +175,8 @@ class L1Controller(cp.StatelessComponent, cp.L1ControllerComponent):
 
     Why the set point comes first: it is there to have the car charged before it drives. Charged with a surplus
     below the station power, a car below its set point might not reach the set point before it leaves, and its
-    charging power would drop tenfold as soon as the offer crossed the threshold.
+    charging power would fall from the station power to the offer as soon as the offer crossed the threshold, to a
+    tenth of the station power at the threshold itself.
 
     Why both inputs are taken as they are: the start-of-step state of charge does not move while the step
     iterates, and the offer is the surplus before the car takes its share, so the car's own charging changes
@@ -458,7 +460,22 @@ class L1Controller(cp.StatelessComponent, cp.L1ControllerComponent):
         self,
         config: ChargingStationConfig,
     ) -> None:
-        """Translates and assigns config parameters to controller class and completes initialization."""
+        """Translates and assigns config parameters to controller class and completes initialization.
+
+        The set point is checked here rather than when the configuration is made, because setups assign it after
+        building the configuration (``config.battery_set_soc = 0.4``). For example, 0.4 and 1.0 (always charge at
+        full station power) are accepted; 80, meant as a percentage, is refused: the battery's state of charge would
+        always be below it, so the car would charge at full station power and ignore every offered surplus.
+
+        Raises:
+            ValueError: If :attr:`ChargingStationConfig.battery_set_soc` is not a finite number from 0 to 1.
+        """
+        if not math.isfinite(config.battery_set_soc) or not 0.0 <= config.battery_set_soc <= 1.0:
+            raise ValueError(
+                f"The charge controller {config.component_id.name}'s battery_set_soc must be a state of charge from 0 "
+                f"to 1, got {config.battery_set_soc!r}: below it the car charges at full station power whatever "
+                "surplus it is offered."
+            )
         self.name = config.component_id.name
         self.source_weight = config.source_weight
         self.config = config

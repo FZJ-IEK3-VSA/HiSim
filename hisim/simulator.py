@@ -350,9 +350,14 @@ class Simulator:
 
     @utils.measure_execution_time
     def connect_all_components(self) -> None:
-        """Connects the inputs from every component to the corresponding outputs."""
+        """Connects the inputs from every component to the corresponding outputs, and drops a cached evaluation plan.
+
+        The plan reads each component's sources from the outputs its inputs resolved to (:meth:`evaluation_plan`), so
+        a plan computed before the inputs were connected would order nothing by the wiring.
+        """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
+        self._evaluation_plan = None
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:
@@ -530,7 +535,7 @@ class Simulator:
 
         Returns:
             The wrapped components in evaluation order; the same list on every later call until a component is added
-            (:meth:`add_component` drops the plan).
+            or the inputs are connected (:meth:`add_component` and :meth:`connect_all_components` drop the plan).
         """
         if self._evaluation_plan is None:
             components = [wrapped_component.my_component for wrapped_component in self.wrapped_components]

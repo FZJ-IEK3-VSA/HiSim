@@ -556,3 +556,29 @@ def test_an_input_resolved_to_an_unregistered_output_is_refused(tmp_path: Path) 
 
     with pytest.raises(ValueError, match="C0 # FromP1"):
         simulator.evaluation_plan()
+
+
+def test_a_plan_computed_before_the_wiring_is_recomputed_after_it(tmp_path: Path) -> None:
+    """Catches a cached plan from before the inputs were connected, which orders nothing by the wiring.
+
+    Controller C1 reads store P0 and commands device P2. Before the inputs are connected the plan keeps the order
+    added among the physics; once they are, P2 goes before P0.
+    """
+    simulator = probe_simulator(tmp_path)
+    parameters = simulator.get_simulation_parameters()
+    evaluated: List[str] = []
+    store = DeviceProbe(parameters, "P0", evaluated)
+    controller = ControllerProbe(parameters, "C1", evaluated)
+    device = DeviceProbe(parameters, "P2", evaluated)
+    for reader, source in ((device, controller), (controller, device), (controller, store)):
+        field_name = f"From{source.component_name}"
+        reader.add_input(reader.component_name, field_name, lt.LoadTypes.ANY, lt.Units.ANY, True)
+        reader.connect_input(field_name, source.component_name, KindProbe.Value)
+    for probe in (store, controller, device):
+        simulator.add_component(probe)
+    simulator.prepare_calculation()
+    assert [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()] == ["C1", "P0", "P2"]
+
+    simulator.connect_all_components()
+
+    assert [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()] == ["C1", "P2", "P0"]

@@ -451,7 +451,8 @@ def run_energy_system_file(path: Path, params: SimulationParameters) -> None:
     The command line's :func:`hisim.energy_system.executor.run_energy_system` reads its parameters
     from a file; the golden runner builds them in memory from the config's parameter set
     (:func:`build_simulation_parameters`). Apart from that, this does what it does: one
-    calculation (:class:`hisim.calculation_scope.CalculationScope`, with its write guard), the file
+    calculation (:class:`hisim.calculation_scope.CalculationScope`, with its write guard) around
+    the run both share, :func:`hisim.energy_system.executor.simulate_energy_system`: the file
     built, its run records written, every time step simulated and the post-processing run.
 
     Args:
@@ -460,12 +461,10 @@ def run_energy_system_file(path: Path, params: SimulationParameters) -> None:
     """
     # Imported here so the pure helpers stay importable without the HiSim execution stack.
     from hisim.calculation_scope import CalculationScope
-    from hisim.energy_system.executor import build_energy_system, write_records
+    from hisim.energy_system.executor import simulate_energy_system
 
     with CalculationScope.open(label=str(path)):
-        built = build_energy_system(str(path), params)
-        write_records(built, built.simulator.get_simulation_parameters().result_directory)
-        built.simulator.run_all_timesteps()
+        simulate_energy_system(str(path), params)
 
 
 def run_one(

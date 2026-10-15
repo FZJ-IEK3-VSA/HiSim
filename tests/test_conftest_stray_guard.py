@@ -184,11 +184,13 @@ def test_guard_fails_the_dirty_module_only(tmp_path: Path) -> None:
     """The real guard, run on a throwaway repository: the dirty module fails by name, the others pass.
 
     The conftest is copied into a fresh git repository under ``tmp_path`` (its ``REPO_ROOT`` follows
-    ``__file__``), so the stray file never touches this checkout.
+    ``__file__``), so the stray file never touches this checkout; ``tests/ci_split.py``, which the
+    conftest imports as ``tests.ci_split``, is copied beside it.
     """
     repo = tmp_path / "repo"
     (repo / "tests").mkdir(parents=True)
     shutil.copy(REPO_ROOT / "tests" / "conftest.py", repo / "tests" / "conftest.py")
+    shutil.copy(REPO_ROOT / "tests" / "ci_split.py", repo / "tests" / "ci_split.py")
     (repo / "tests" / "__init__.py").write_text("")
     (repo / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
     for name, source in _SELFTEST_MODULES.items():

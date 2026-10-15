@@ -22,6 +22,7 @@ import jsonschema
 import pytest
 import yaml
 
+from hisim.components.building import Building
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import (
     build_schema,
@@ -61,45 +62,56 @@ class Documents:
 
 
 class Twins:
-    """Locates the recorded energy-system twins the schema is checked against.
+    """Locates the committed energy-system documents the schema is checked against.
 
-    A twin is the file a setup records as its declarative form, and it names each class by the
+    A recorded twin is the file a setup records as its declarative form. It names each class by the
     spelling of the module that defines it (``hisim.components.building.building.Building``),
-    not by the shorter package spelling the mockups use. The schema has to check a twin under
-    that spelling as strictly as a mockup under the other one.
+    which is not the shorter package spelling the mockups use. The one hand-written reference
+    file, ``gas_boiler_household``, writes the building in the shorter spelling as well. The schema
+    has to check an entry under either spelling equally strictly.
     """
 
-    #: The directory of the committed twins, found from this file so that the tests do not
+    #: The directory of the committed documents, found from this file so that the tests do not
     #: depend on the directory pytest is started from.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent.parent / "energy_systems"
 
-    #: A twin whose building entry carries a sparse ``config`` block, under the long spelling.
-    WITH_BUILDING_CONFIG: ClassVar[str] = "household_gas_building_sizer"
+    #: A recorded twin whose building entry carries a sparse ``config`` block, under the long
+    #: spelling.
+    WITH_BUILDING_CONFIG: ClassVar[Path] = DIRECTORY / "household_gas_building_sizer.energy_system.yaml"
 
-    #: The class path the twins write for the building.
-    BUILDING_CLASS_PATH: ClassVar[str] = "hisim.components.building.building.Building"
+    #: The class path the recorder writes for the building: its defining module and class name.
+    BUILDING_CLASS_PATH: ClassVar[str] = Building.get_full_classname()
 
     @classmethod
     def all_paths(cls) -> List[Path]:
-        """Returns every committed twin, grouped and realized, sorted by file name.
+        """Returns every committed energy-system document, sorted by file name.
+
+        These are the hand-written reference file, the recorded twins, and their grouped and
+        composed forms. The list feeds a parametrized test, and an empty parameter list would make
+        pytest skip that test instead of failing it, so finding no document is an error here.
 
         Returns:
-            The paths of the ``*.energy_system.yaml`` files in the twin directory.
+            The paths of the ``*.energy_system.yaml`` files in the directory.
+
+        Raises:
+            FileNotFoundError: If the directory holds no such file.
         """
-        return sorted(cls.DIRECTORY.glob("*.energy_system.yaml"))
+        paths = sorted(cls.DIRECTORY.glob("*.energy_system.yaml"))
+        if not paths:
+            raise FileNotFoundError(f"No *.energy_system.yaml file in {cls.DIRECTORY}.")
+        return paths
 
     @classmethod
-    def load(cls, stem: str) -> Dict[str, Any]:
-        """Reads one twin as plain data.
+    def load(cls, path: Path) -> Dict[str, Any]:
+        """Reads one committed document as plain data.
 
         Args:
-            stem: The file name without ``.energy_system.yaml``.
+            path: The document's file, as ``all_paths`` or ``WITH_BUILDING_CONFIG`` give it.
 
         Returns:
             The document.
         """
-        text = (cls.DIRECTORY / f"{stem}.energy_system.yaml").read_text(encoding="utf-8")
-        return cast(Dict[str, Any], yaml.safe_load(text))
+        return cast(Dict[str, Any], yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @pytest.fixture(name="schema", scope="module")
@@ -373,8 +385,8 @@ def test_every_class_spelling_the_schema_accepts_carries_exactly_one_class_branc
 def test_a_recorded_twin_with_a_bad_building_config_is_refused(validator: Any) -> None:
     """Catches the building entry of a twin escaping the schema's check of its ``config``.
 
-    The twins name the building by its defining module's path, which is not the spelling the
-    mockups use. The unchanged twin has to validate, and the same twin with a field the building
+    The recorded twins name the building by its defining module's path, which is not the spelling
+    the mockups use. The unchanged twin has to validate, and the same twin with a field the building
     does not have and a number written as a word has to be refused at exactly those two places.
     """
     twin = Twins.load(Twins.WITH_BUILDING_CONFIG)
@@ -401,11 +413,13 @@ def test_every_committed_twin_validates_except_on_a_class_the_schema_does_not_of
 
     The schema only describes the converted classes, so an entry naming any other class is refused
     on its ``class`` key, and nowhere else; every entry whose class the schema offers, the
-    building's ``config`` included, has to validate.
+    building's ``config`` included, has to validate. The refused class has to be a dotted path
+    written as a string: a ``class`` that is not a string is a broken file, not a class the schema
+    leaves out.
     """
     offered = set(schema["$defs"]["entry"]["properties"]["class"]["enum"])
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document = Twins.load(path)
 
     for error in errors_of(validator, document):
         assert error.absolute_path and error.absolute_path[-1] == "class", error.message
-        assert error.instance not in offered, error.message
+        assert isinstance(error.instance, str) and error.instance not in offered, error.message

@@ -29,6 +29,7 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 from hisim.postprocessing import system_chart
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.result_path_provider import ResultPathProviderSingleton
+from hisim.simulationparameters import FigureFormat
 from hisim.write_guard import GuardMode
 
 
@@ -542,3 +543,43 @@ def test_a_missing_graphviz_leaves_the_chart_out(tmp_path: Path, monkeypatch: py
     )
     assert entry is None
     assert not (tmp_path / "chart.png").exists()
+
+
+@pytest.mark.base
+def test_every_chart_variant_is_named_with_the_figure_format_extension(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The four chart files end in the format's extension, ``.png``, not in the enum member's name.
+
+    The names were built with ``f"...{figure_format}"``, which formats a ``str``-mixin enum as
+    ``FigureFormat.PNG``: the files were called ``System_no_Edge_labelsFigureFormat.PNG``.
+    """
+    requested: list = []
+
+    def record(**spec):
+        requested.append(spec["filename"])
+
+    chart = _chart_writing_into(Path("unused"))
+    chart.ppdt.simulation_parameters = SimpleNamespace(figure_format=FigureFormat.PNG)  # type: ignore[assignment]
+    chart.ppdt.results_cumulative = pd.DataFrame()
+    monkeypatch.setattr(chart, "make_graphviz_chart", record)
+    chart.make_chart()
+    assert requested == [
+        "System_no_Edge_with_class_labels.png",
+        "System_no_Edge_labels.png",
+        "System_with_Edge_labels.png",
+        "System_with_Edge_labels_and_results.png",
+    ]
+
+
+@pytest.mark.base
+def test_the_chart_with_results_is_left_out_of_a_run_without_cumulative_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without cumulative results the result variant is not attempted; it used to fail as "Graphviz is missing"."""
+    requested: list = []
+    chart = _chart_writing_into(Path("unused"))
+    chart.ppdt.simulation_parameters = SimpleNamespace(figure_format=FigureFormat.PNG)  # type: ignore[assignment]
+    chart.ppdt.results_cumulative = None
+    monkeypatch.setattr(chart, "make_graphviz_chart", lambda **spec: requested.append(spec["filename"]))
+    chart.make_chart()
+    assert "System_with_Edge_labels_and_results.png" not in requested
+    assert len(requested) == 3

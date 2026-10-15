@@ -149,7 +149,7 @@ class EnergyBalanceReport:
             json.dump(diagrams, stream, indent=2)
         if with_html:
             for name, diagram in diagrams.items():
-                figure = SankeyDiagram.figure(diagram, f"Energy flows over the run: {name} (kWh)")
+                figure = SankeyDiagram.figure(diagram, SankeyDiagram.title(name))
                 figure.write_html(str(sankey_directory / f"{name}.html"), include_plotlyjs="directory")
         return report_path
 

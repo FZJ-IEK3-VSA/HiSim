@@ -8,7 +8,7 @@ proves each of its steps.
 
 **Four runs, each with its own empty cache directory, in one process.**
 
-1. *Reference*: 1 January to the window's end (to the year's end with ``--reference-through-year-end``).
+1. *Reference*: 1 January to the window's end.
 2. *Perturbed reference*: the same, with every numeric ``initial_*`` field of every component's
    configuration moved (:class:`Perturbation`). A column whose values do not move is memoryless: it
    does not depend on the state the run started from.
@@ -81,13 +81,6 @@ class OracleWindow:
     #: The resolution of every run, in seconds.
     seconds_per_timestep: int
 
-    #: Whether the reference runs to the end of the year instead of to the window's end. The slice it
-    #: is compared over is the same; the longer reference exists because the LoadProfileGenerator's
-    #: conversion to UTC fails for a run that ends between the spring and the autumn clock change
-    #: (it removes the spring hour and adds the autumn hour only when the run reaches each), until the
-    #: epic's PR3 rewrites it.
-    reference_through_year_end: bool = False
-
     #: The window days the stateful report shows the deviation of, counted from 1.
     REPORTED_DAYS: ClassVar[Tuple[int, ...]] = (1, 2, 3, 5, 7)
 
@@ -111,7 +104,7 @@ class OracleWindow:
 
         Args:
             reference: whether to build the reference, which starts on 1 January of the window's year
-                and ends with the window, or with the year when :attr:`reference_through_year_end` is set.
+                and ends with the window.
             result_directory: where the run writes; created when missing.
             cache_directory: the run's own cache directory; created when missing.
 
@@ -121,12 +114,9 @@ class OracleWindow:
         result_directory.mkdir(parents=True, exist_ok=True)
         cache_directory.mkdir(parents=True, exist_ok=True)
         start = datetime.datetime(self.start.year, 1, 1) if reference else self.start_datetime
-        end = self.end_datetime
-        if reference and self.reference_through_year_end:
-            end = datetime.datetime(self.start.year + 1, 1, 1)
         return SimulationParameters(
             start_date=start,
-            end_date=end,
+            end_date=self.end_datetime,
             seconds_per_timestep=self.seconds_per_timestep,
             result_directory=str(result_directory),
             post_processing_options=[],
@@ -569,15 +559,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--seconds-per-timestep", type=int, default=900, help="the resolution (default 900)")
     parser.add_argument("--tolerance", type=float, default=0.0,
                         help="relative tolerance of the exact gate (default 0; anything else is reported loudly)")
-    parser.add_argument("--reference-through-year-end", action="store_true",
-                        help="run the reference to the end of the year instead of to the window's end")
     parser.add_argument("--work-dir", type=Path, default=None,
                         help="where the runs write their results and caches (default: a new temporary directory)")
     arguments = parser.parse_args(argv)
     work_directory = arguments.work_dir or Path(tempfile.mkdtemp(prefix="midyear_oracle_"))
-    window = OracleWindow(
-        arguments.start, arguments.days, arguments.seconds_per_timestep, arguments.reference_through_year_end
-    )
+    window = OracleWindow(arguments.start, arguments.days, arguments.seconds_per_timestep)
     verdict = MidyearOracle(arguments.setup.resolve(), window, arguments.tolerance, work_directory).run()
     print(verdict.render())
     print(f"(runs kept in {work_directory})")

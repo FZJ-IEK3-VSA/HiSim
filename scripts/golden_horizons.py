@@ -17,7 +17,7 @@ from typing import Any, ClassVar, Dict, Optional
 
 
 class HorizonVocabulary:
-    """The three horizons, their ``SimulationParameters`` factories, and the participation rule.
+    """The four horizons, their ``SimulationParameters`` factories, and the participation rule.
 
     Everything here is validation and vocabulary: the class holds no state and is never
     instantiated. The two ``check_*`` methods are the fail-loud half — a configuration mistake
@@ -26,10 +26,13 @@ class HorizonVocabulary:
     """
 
     #: Map a human-facing horizon name to the SimulationParameters factory that produces it.
-    #: Selecting by factory keeps this robust to parameter-set id naming.
+    #: Selecting by factory keeps this robust to parameter-set id naming. ``july_week`` is the first
+    #: week of July, the summer counterpart of ``week``, which starts on 1 January; it became possible
+    #: when a mid-year start read the window's profiles (``roadmap/midyear_start_epic.md``, hisim-9g2.8).
     HORIZON_FACTORIES: ClassVar[Dict[str, str]] = {
         "day": "one_day_only",
         "week": "one_week_only",
+        "july_week": "one_week_july",
         "year": "full_year",
     }
 

@@ -1,5 +1,5 @@
-# Manual "bless" of the golden KPI references. Re-runs EVERY pair (both the week
-# and full-year horizons) in the CI container — so the reference environment
+# Manual "bless" of the golden KPI references. Re-runs EVERY pair (the January week,
+# the July week and the full-year horizons) in the CI container — so the reference environment
 # matches the check environment — and opens a pull request with the updated
 # golden_references/ for review. This is the only sanctioned way to update goldens.
 #

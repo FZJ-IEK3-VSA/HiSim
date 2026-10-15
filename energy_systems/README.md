@@ -159,8 +159,9 @@ A house with more than one array — an east and a west roof, or a garage beside
 `PVSystem` entry per array, each with a name of its own and its own `power_in_watt`, `azimuth` and
 `tilt`. Nothing else needs to know how many there are:
 
-- the energy manager and the electricity meter take one production input per array and work on
-  their sum;
+- the energy manager takes one production input per array and works on their sum, and so does the
+  electricity meter of a household without a manager (in the worked example the meter reads the
+  manager's grid balance instead);
 - the battery's `sized_to_pv` laws sum the peak power of every array (`Sum(Many(...))`); a
   `sizing_sources: {pv_peak_power_in_watt: [PVSouth.pv_peak_power_in_watt]}` line sizes it to the
   arrays it names instead;
@@ -168,7 +169,8 @@ A house with more than one array — an east and a west roof, or a garage beside
   attributes to each array its own generation (`component_breakdowns` and
   `annual_energy_attribution_by_subject_in_kwh` in `lifecycle_costs.json`);
 - the General KPIs (`PV production`, self-consumption, grid injection) are the building's totals
-  over all arrays; an array's own generation is in its `ElectricityOutput` result column.
+  over all arrays; an array's own generation is in its result columns `ElectricityOutput` (power, W)
+  and `ElectricityEnergyOutput` (energy per step, Wh).
 
 A composed file imports `pv/array` once with one instance per array (`instances: {south: {...},
 west: {...}}`). `tests/energy_systems/two_pv_arrays.energy_system.yaml` (south 4 kWp, west 2 kWp)

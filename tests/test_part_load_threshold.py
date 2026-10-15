@@ -19,8 +19,10 @@ from tests.part_load_rigs import Parameters
 
 
 @pytest.mark.base
+# 640 s is the shortest step above 600 s that divides a day: a run covers whole timesteps and ends at midnight
+# (SimulationParameters' window rules), so 601 s cannot be simulated for one day.
 @pytest.mark.parametrize(
-    "seconds_per_timestep, runs", [(60, False), (600, False), (601, True), (900, True), (3600, True)]
+    "seconds_per_timestep, runs", [(60, False), (600, False), (640, True), (900, True), (3600, True)]
 )
 def test_the_default_threshold_is_600_s_and_applies_strictly_above_it(seconds_per_timestep: int, runs: bool) -> None:
     """Part load runs only when a step is longer than 600 s."""

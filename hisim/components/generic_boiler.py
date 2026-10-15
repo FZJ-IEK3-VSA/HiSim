@@ -662,7 +662,24 @@ class BurnerTimes:
         return cls(minimum_firing_time_in_seconds=0.0, minimum_pause_in_seconds=0.0)
 
     @staticmethod
-    def whole_steps_in_seconds(seconds: float, seconds_per_timestep: float) -> float:
+    def whole_steps(seconds: float, seconds_per_timestep: float) -> int:
+        """Return how many whole timesteps a minimum time holds, rounded down.
+
+        This is the one rounding rule of the module: the burner's minimum times and the controller's
+        (:meth:`GenericBoilerController.whole_timesteps`) both count with it. For example, 1500 s at 900 s per step
+        is 1 step, 600 s at 900 s per step is 0 steps, and 1800 s at 60 s per step is 30 steps.
+
+        Args:
+            seconds: The minimum time, in s, at least 0.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The number of whole timesteps.
+        """
+        return math.floor(seconds / seconds_per_timestep)
+
+    @classmethod
+    def whole_steps_in_seconds(cls, seconds: float, seconds_per_timestep: float) -> float:
         """Return a minimum time rounded down to whole timesteps, in s.
 
         For example, 1500 s at 900 s per step is 900 s, 600 s at 900 s per step is 0 s, and 1800 s at 60 s per step
@@ -675,7 +692,31 @@ class BurnerTimes:
         Returns:
             The whole timesteps the time holds, in s.
         """
-        return math.floor(seconds / seconds_per_timestep) * seconds_per_timestep
+        return cls.whole_steps(seconds, seconds_per_timestep) * seconds_per_timestep
+
+    def times_shorter_than_a_step(self, seconds_per_timestep: float) -> List[str]:
+        """Return the names of the minimum times that are above 0 but shorter than one step, so have no effect.
+
+        The burner counts its minimum times in whole steps, rounded down, so a pellet burner's 30 minutes of minimum
+        firing time and 15 minutes of minimum pause hold nothing at hourly steps: the burner then lights and goes out
+        as asked. For example, ``BurnerTimes.of_fuel(lt.LoadTypes.PELLETS).times_shorter_than_a_step(3600.0)`` is
+        ``["minimum firing time", "minimum pause"]``, and at 900 s it is empty. The boiler logs one warning per name,
+        the way the controller warns about its own minimum times (:meth:`GenericBoilerController.whole_timesteps`).
+
+        Args:
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The names of the times without effect, possibly none.
+        """
+        return [
+            name
+            for name, seconds in (
+                ("minimum firing time", self.minimum_firing_time_in_seconds),
+                ("minimum pause", self.minimum_pause_in_seconds),
+            )
+            if 0 < seconds < seconds_per_timestep
+        ]
 
     def burner_is_lit(self, *, asked_to_burn: bool, committed: BurnerState, seconds_per_timestep: float) -> bool:
         """Return whether the burner burns in this step: as asked, unless a minimum time holds it lit or out.
@@ -1082,6 +1123,20 @@ class GenericBoiler(PhysicsComponent):
             minimal_lift_at_maximal_power_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,
         )
         self.burner_times = BurnerTimes.of_fuel(self.energy_carrier)
+        if self.burner_times.minimum_firing_time_in_seconds > 0 and self.minimal_thermal_power_in_watt <= 0:
+            # a held burner burns at least its minimal power; at 0 W it carries no heat and its pump no flow
+            raise ValueError(
+                f"{self.component_name}: a {self.energy_carrier.value} burner keeps a minimum firing time and burns "
+                "at least its minimal power while it is held lit, so its minimal_thermal_power_in_watt must be "
+                f"above 0, not {self.minimal_thermal_power_in_watt}."
+            )
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        for name in self.burner_times.times_shorter_than_a_step(seconds_per_timestep):
+            log.warning(
+                f"{self.component_name}: the burner's {name} is shorter than one timestep of {seconds_per_timestep} s, "
+                "so it has no effect at this resolution (the burner counts its minimum times in whole timesteps, "
+                "rounded down)."
+            )
 
         # The fuel constants are derived by the config, which is also what contributes them
         # as sizing facts, so the meter accounting this boiler's consumption reads exactly
@@ -2023,7 +2078,7 @@ class GenericBoilerController(L1ControllerComponent):
                 f"{seconds_per_timestep} s, so it has no effect at this resolution (the controller counts "
                 "minimum times in whole timesteps, rounded down)."
             )
-        return int(seconds / seconds_per_timestep)
+        return BurnerTimes.whole_steps(seconds, seconds_per_timestep)
 
     def get_default_connections_from_simple_hot_water_storage(
         self,

@@ -139,9 +139,8 @@ def test_every_system_setup_is_in_the_golden_config() -> None:
     Catches a new energy system joining ``system_setups/`` without a golden: the gate would never
     notice a change to it. Drivers that call another setup's ``setup_function`` (the
     ``economic_example/`` scripts) define none of their own and are not energy systems of their own.
-    The config names Python setups only, so an energy system file without one
-    (``energy_systems/gas_boiler_household.energy_system.yaml``) has no golden pair and is not
-    checked here.
+    An energy system written in YAML alone (``energy_systems/gas_boiler_household.energy_system.yaml``)
+    is an entry of its own and has no ``system_setups/`` file, so it is not checked here.
     """
     config = json.loads(REAL_CONFIG.read_text())
     configured = {Path(s["path"]).as_posix() for s in config["setups"]}

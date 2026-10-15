@@ -11,16 +11,19 @@ Report generation process
 --------------------------
 
 Constructing a :class:`~hisim.postprocessing.reportgenerator.ReportGenerator`
-opens the document, writes a preamble (the HiSim and FZJ logos, the report
-title, the author list, the institute address, and the current timestamp),
-inserts a table of contents, and immediately calls
-:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.close`. That call
-runs ``BaseDocTemplate.multiBuild`` to finalise the PDF. Additional content
-(headings, figures, KPI tables, and page breaks) is appended afterwards
-through the ``write_*`` methods. Because ``multiBuild`` already ran during
-construction, :meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.close`
-must be called again as a mandatory flush step after every batch of new content
-so that it appears in the generated file.
+opens the document and starts the ``story`` with a preamble (the HiSim and FZJ
+logos, the report title, the author list, the institute address, and the
+current timestamp) and a table of contents. The ``write_*`` methods append
+headings, figures, KPI tables, and page breaks to the story; nothing is written
+to disk while they run. Once every chapter is in the story, the caller calls
+:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.build` exactly
+once. It runs ``BaseDocTemplate.multiBuild``, which lays out the whole story
+as often as the table of contents needs to settle its page numbers (usually
+twice) and writes ``report.pdf``.
+
+The PDF used to be rebuilt after every chapter, each time from the start of the
+story. In a full-year run with every report option that was 33 of the run's 46
+minutes; a single build at the end writes the same document.
 
 Template usage
 --------------
@@ -116,7 +119,17 @@ class ReportGenerator:
     LARGEST_FIGURE_HEIGHT: float = 18 * cm
 
     def __init__(self, dirpath: str) -> None:
-        """Initialize the pdf report."""
+        """Open the report and put the preamble and the table of contents into its story.
+
+        Nothing is written to disk here: the PDF is written by :meth:`build`, once every chapter
+        is in the story.
+
+        Args:
+            dirpath: The result directory; the report is written there as ``report.pdf``.
+
+        Raises:
+            ValueError: When ``dirpath`` is None.
+        """
         if dirpath is None:
             raise ValueError("Result path for the report was none.")
         self.story: list[Flowable] = []
@@ -126,10 +139,12 @@ class ReportGenerator:
         self.open()
         self.write_preamble()
         self.write_table_of_contents()
-        self.close()
 
     def open(self) -> None:
-        """Open a file."""
+        """Create the document template for ``report.pdf`` and the paragraph styles of the report.
+
+        Called by the constructor. It writes nothing; :meth:`build` writes the file.
+        """
         self.doc: MyDocTemplate = MyDocTemplate(
             self.filepath,
             pagesize=letter,
@@ -474,9 +489,27 @@ class ReportGenerator:
         canvas.drawRightString(200 * mm, 20 * mm, page_number_text)
         canvas.restoreState()
 
-    def close(self) -> None:
-        """Close the report."""
+    def build(self) -> None:
+        """Write the PDF from the whole story, with its table of contents and page numbers.
+
+        Call it once, after the last chapter: ``multiBuild`` lays the story out until the table of
+        contents has settled its page numbers, so one build of the full story gives the right
+        contents. Every build starts from the first page, which is why a build per chapter made
+        the report the slowest part of a full-year run. The story is deep-copied first, since a
+        build consumes its flowables; the story itself is kept, so a later chapter and a second
+        build are still possible (the tests do that).
+        """
         story = copy.deepcopy(self.story)
         self.doc.template.onPage = self.add_page_number
         self.doc.template.onPageEnd = self.add_page_number
         self.doc.multiBuild(story)
+
+    @utils.deprecated("Use build instead, once, after the last chapter.")
+    def close(self) -> None:
+        """Deprecated alias for :meth:`build`.
+
+        .. deprecated::
+            Renamed to ``build``: it writes the PDF and closes nothing. The report is built once,
+            after the last chapter, instead of after every chapter.
+        """
+        self.build()

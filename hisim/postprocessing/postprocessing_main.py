@@ -38,7 +38,9 @@ Execution flow
    instantiated and simulation parameters, components, outputs, and network charts are
    written into it.
 5. **Costs and KPIs** -- OPEX, CAPEX, and key-performance-indicator computations run and
-   are written to the open report when one exists.
+   are written to the open report when one exists. The KPI table is the report's last
+   chapter; the PDF is then built once
+   (:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.build`).
 6. **Database and scenario evaluation** -- CSV generation for the housing database and
    pyam-style output preparation for scenario evaluation.
 7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
@@ -452,6 +454,15 @@ class PostProcessor:
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
 
+        # Every chapter is in the report now (the KPI table is the last one); the PDF is written once, here
+        if report is not None:
+            log.information("Building the PDF report.")
+            start = timer()
+            report.build()
+            end = timer()
+            duration = end - start
+            log.information("Building the PDF report took " + f"{duration:1.2f}s.")
+
         # Shadow-mode parity (roadmap/cost_spec.md §9.7): compares the legacy CSVs written above
         # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
         # ran, so legacy config mutation cannot fake agreement.
@@ -836,7 +847,6 @@ class PostProcessor:
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
 
-        report.open()
         # sort report image entries
         component_names = []
         for report_image_entry in report_image_entries:
@@ -853,8 +863,6 @@ class PostProcessor:
                         output_types.append(report_image_entry.output_type)
 
             write_image_entry_to_report_for_one_component(component, report_image_entries_for_component)
-
-        report.close()
 
     #: What each chart class draws, by the first part of its file name (``Chart.type`` in lower case),
     #: for the figure captions of the report: the charts of one output differ only in this.
@@ -908,7 +916,6 @@ class PostProcessor:
         system_chart_entries: List[SystemChartEntry],
     ) -> None:
         """Write network charts to report."""
-        report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + ". System Network Charts"])
         if not system_chart_entries:
             # Said in the report itself, since the reason (Graphviz missing) is otherwise only in the log
@@ -923,7 +930,6 @@ class PostProcessor:
             self.figure_counter = self.figure_counter + 1
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def compute_kpis_and_write_to_report_and_to_ppdt(
         self,
@@ -1026,12 +1032,10 @@ class PostProcessor:
         self, report: reportgenerator.ReportGenerator, lines: List, headline: str
     ) -> None:
         """Write new chapter with headline and some general information e.g. KPIs to report."""
-        report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + headline])
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def write_new_chapter_with_table_to_report(
         self,
@@ -1041,13 +1045,11 @@ class PostProcessor:
         comment: List,
     ) -> None:
         """Write new chapter with headline and a table to report."""
-        report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + headline])
         report.write_tables_to_report(table_as_list_of_list)
         report.write_with_normal_alignment(comment)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
         """Opens files in given path.

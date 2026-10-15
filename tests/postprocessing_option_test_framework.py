@@ -89,14 +89,22 @@ class PostProcessingOptionTestFramework:
     _household_single_day_hourly_case: PreparedPostProcessingCase | None = None
     _runs_by_option: dict[PostProcessingOptions, Path] = field(default_factory=dict)
 
-    def run(self, option: PostProcessingOptions, expected_files: Sequence[str] | None = None) -> None:
+    def run(
+        self,
+        option: PostProcessingOptions,
+        expected_files: Sequence[str] | None = None,
+        extra_options: Sequence[PostProcessingOptions] = (),
+    ) -> None:
         """Run postprocessing for one option plus the minimal required support options.
 
         Args:
-            option: The PostProcessingOptions value to exercise.
+            option: The PostProcessingOptions value to exercise; it also chooses the prepared run.
             expected_files: Optional glob/path patterns that must each match at
                 least one file produced by postprocessing. When ``None``, no
                 file-pattern assertion is performed.
+            extra_options: Further options to switch on in the same run, after the option and its
+                support options; for a test of how several options work together, such as all the
+                chapters of the PDF report.
 
         Raises:
             AssertionError: If postprocessing creates or updates no files, or if
@@ -104,7 +112,7 @@ class PostProcessingOptionTestFramework:
         """
 
         case = self._case_for_option(option)
-        options = self._options_for(option)
+        options = _deduplicate([*self._options_for(option), *extra_options])
         run_directory = _result_directory_for(option)
         os.makedirs(run_directory, exist_ok=True)
         self._runs_by_option[option] = Path(run_directory)

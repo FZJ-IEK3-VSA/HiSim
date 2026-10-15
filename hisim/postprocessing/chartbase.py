@@ -5,7 +5,8 @@ post-processing builds on.  The :class:`Chart` base class parses an output
 identifier into a title, output type, and per-component folder layout, and
 exposes the small set of helper methods that concrete chart implementations
 reuse.  :class:`ChartFontsAndSize` collects the font and figure-size constants
-that keep the visual style of all plots consistent.
+that keep the visual style of all plots consistent, and
+:class:`SavedChartResolution` holds the one resolution every chart is saved at.
 
 Chart class
 -----------
@@ -426,12 +427,28 @@ class Chart:  # noqa: too-few-public-methods
         return "\n".join(wrapped)
 
 
+class SavedChartResolution:
+    """The one resolution, in dots per inch, at which HiSim saves every matplotlib chart.
+
+    The output charts (line, carpet, single day, monthly bar; through :class:`ChartFontsAndSize`)
+    and the lifecycle cost charts (``hisim.economics.report_plots``) are drawn at this resolution.
+    A chart's size in inches and its font sizes in points do not depend on it, so the PDF report,
+    which places a figure at its size in inches, shows it at the same size whatever the value;
+    only the number of pixels changes. Example: a 6 x 4 inch line chart is 1800 x 1200 pixels at
+    300 dpi. 300 dpi is the usual print resolution; at 600 dpi a full-year run wrote 143 MB of
+    time-series images and a 201 MB report for no visible gain.
+    """
+
+    #: Dots per inch of every saved chart.
+    DPI: int = 300
+
+
 @dataclass
 class ChartFontsAndSize:
     """Give the font sizes and figure sizes of the figures."""
 
     figsize = (6, 4)
-    dpi = 600
+    dpi = SavedChartResolution.DPI
     fontsize_title = 14
     fontsize_label = 12
     fontsize_legend = 12

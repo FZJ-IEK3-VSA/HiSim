@@ -60,6 +60,7 @@ from hisim.economics.results import (  # noqa: E402
 )
 from hisim.economics.timeline import CostCategory  # noqa: E402
 from hisim.economics.uncertainty import Slot  # noqa: E402
+from hisim.postprocessing.chartbase import SavedChartResolution  # noqa: E402
 
 # pylint: enable=wrong-import-position
 
@@ -166,7 +167,8 @@ def _figure(
 ) -> Iterator[Tuple[Figure, List[Axes]]]:
     """Yield a styled figure and its axes at the report's fixed resolution, and always close it.
 
-    Every chart is built with this, so all PNGs share a DPI and chrome. Two-panel charts (the liquidity fan, the
+    Every chart is built with this, so all PNGs share a DPI (`SavedChartResolution.DPI`, the one resolution of every
+    HiSim chart) and chrome. Two-panel charts (the liquidity fan, the
     treemap pair, the benchmark pair) pass `panels`. Closing in `finally`, with `plt.subplots` inside the `try`, keeps
     pyplot's global registry from leaking a figure when drawing fails.
 
@@ -184,7 +186,7 @@ def _figure(
     figure: Optional[Figure] = None
     try:
         figure, grid = plt.subplots(
-            rows, columns, figsize=(width, height), dpi=130, sharex=share_x, squeeze=False
+            rows, columns, figsize=(width, height), dpi=SavedChartResolution.DPI, sharex=share_x, squeeze=False
         )
         figure.patch.set_facecolor(_Palette.SURFACE)
         axes = [axis for row in grid for axis in row]

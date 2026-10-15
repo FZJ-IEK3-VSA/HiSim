@@ -1309,8 +1309,8 @@ def test_the_car_is_offered_the_surplus_before_its_own_charging() -> None:
     answered every pass with that remainder and the next pass sent it the surplus minus it, so its charging
     alternated between the passes of a step. The car is offered what is left before it, as the house battery is,
     and what it takes is subtracted for the participants after it. A heat pump after it keeps the booking signal:
-    with 3,000 W of surplus, a car drawing 2,000 W is offered 3,000 W and leaves 1,000 W, and a heat pump drawing
-    2,000 W is then sent -1,000 W, the part it takes from the grid.
+    with 3,000 W of surplus, a car above its set point is offered 3,000 W, charges at 3,000 W and leaves 0 W, and a
+    heat pump drawing 2,000 W is then sent -2,000 W, the part it takes from the grid.
     """
     manager = _energy_manager()
 
@@ -1331,7 +1331,7 @@ def test_the_car_is_offered_the_surplus_before_its_own_charging() -> None:
     for position, each_output in enumerate([car_draw, heat_pump_draw, car_signal, heat_pump_signal]):
         each_output.global_index = position
     stsv = cp.SingleTimeStepValues(4)
-    stsv.values[car_draw.global_index] = 2000.0
+    stsv.values[car_draw.global_index] = 3000.0
     stsv.values[heat_pump_draw.global_index] = 2000.0
 
     left_after_car_in_watt = manager.control_electricity_component_iterative(
@@ -1350,9 +1350,9 @@ def test_the_car_is_offered_the_surplus_before_its_own_charging() -> None:
     )
 
     assert stsv.values[car_signal.global_index] == 3000.0
-    assert left_after_car_in_watt == 1000.0
-    assert stsv.values[heat_pump_signal.global_index] == -1000.0
-    assert left_after_heat_pump_in_watt == -1000.0
+    assert left_after_car_in_watt == 0.0
+    assert stsv.values[heat_pump_signal.global_index] == -2000.0
+    assert left_after_heat_pump_in_watt == -2000.0
 
 
 @pytest.mark.base
@@ -1393,7 +1393,8 @@ def test_the_car_grid_kpi_reads_the_draw_beside_the_offer() -> None:
         output_description="Surplus offered to the car. ",
     )
     car_output = _wire_measured_participant(manager, "L1EVChargeControl_1", lt.ComponentType.CAR_BATTERY, 5)
-    # The draw is the first result column, so the KPI finds it only through its global index.
+    # The draw's column comes before the offer's, so the KPI finds it by the draw's own global index, not by its
+    # place beside the offer.
     car_output.global_index = 0
     dispatch_output.global_index = 1
     results = pd.DataFrame({car_output.field_name: [11000.0, 11000.0], dispatch_output.field_name: [3000.0, -1000.0]})
@@ -1405,3 +1406,27 @@ def test_the_car_grid_kpi_reads_the_draw_beside_the_offer() -> None:
     car_entries = [entry for entry in kpi_entries if entry.name == "Electric car electricity consumption from grid"]
     assert len(car_entries) == 1
     assert car_entries[0].value == pytest.approx(4.75)
+
+
+@pytest.mark.base
+def test_the_car_grid_kpi_refuses_a_draw_without_its_column() -> None:
+    """Catches the car's grid KPI reading another column for a draw output that was never registered.
+
+    An unregistered output keeps the global index -1, which would read the last result column without a word.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchToL1EVChargeControl_1_",
+        source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=5,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Surplus offered to the car. ",
+    )
+    car_output = _wire_measured_participant(manager, "L1EVChargeControl_1", lt.ComponentType.CAR_BATTERY, 5)
+    car_output.global_index = -1
+    dispatch_output.global_index = 0
+    results = pd.DataFrame({dispatch_output.field_name: [3000.0, -1000.0]})
+
+    with pytest.raises(ValueError, match="global index"):
+        manager.component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)

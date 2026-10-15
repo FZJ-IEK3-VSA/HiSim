@@ -133,7 +133,7 @@ def test_the_evaluation_order_is_by_kind_and_then_by_the_order_added(
     """Catches a kind evaluated out of its place, or two components of one kind swapped against the order they were added in."""
     order = Simulator.evaluation_positions(kinds, [frozenset()] * len(kinds))
     assert order.positions == expected_positions
-    assert not order.cycles
+    assert not order.physics_cycles
 
 
 class Wiring:
@@ -169,7 +169,7 @@ class Wiring:
     ) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, ...], ...]]:
         """Return the evaluation positions and the cycles of a system given as kind letters and source sets."""
         result = Simulator.evaluation_positions([cls.KIND_OF_LETTER[letter] for letter in letters], sources)
-        return result.positions, result.cycles
+        return result.positions, result.physics_cycles
 
 
 @pytest.mark.parametrize(
@@ -261,17 +261,36 @@ def test_an_l2_controller_is_evaluated_after_the_l2_controllers_it_reads(
     assert Simulator.evaluation_positions(kinds, sources).positions == tuple(expected_positions)
 
 
-def test_l2_controllers_that_read_one_another_are_reported_as_a_cycle() -> None:
-    """Catches an L2 cycle that is kept in the order added without being reported, while a physics cycle is.
+@pytest.mark.parametrize(
+    ("kinds", "sources", "expected_positions", "expected_cycles", "expected_late_readers"),
+    [
+        # 1 and 2 read each other and 0 reads nothing: the cycle is reported, and 1 reads 2 a pass late
+        ((L2ControllerComponent,) * 3, [set(), {2}, {1}], (0, 1, 2), ((1, 2),), (1,)),
+        # 0 reads into the cycle of 1 and 2 and goes first: it reads 1 a pass late without being in the cycle
+        ((L2ControllerComponent,) * 3, [{1}, {2}, {1}], (0, 1, 2), ((1, 2),), (0, 1)),
+        # a read without a cycle is placed after its source, so nothing is reported
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, set()], (1, 0), (), ()),
+        # an L1 controller that reads a later L2 controller is not an L2 read
+        ((L1ControllerComponent, L2ControllerComponent), [{1}, set()], (1, 0), (), ()),
+    ],
+)
+def test_l2_controllers_that_read_one_another_are_reported_as_a_cycle(
+    kinds: Tuple[Type[Component], ...],
+    sources: List[set],
+    expected_positions: Tuple[int, ...],
+    expected_cycles: Tuple[Tuple[int, ...], ...],
+    expected_late_readers: Tuple[int, ...],
+) -> None:
+    """Catches an L2 cycle, or an L2 controller reading a later one, that is kept without being reported.
 
-    L2 controllers 1 and 2 read each other and 0 reads nothing; the three keep the order added, the cycle (1, 2) is
-    reported, and the physics cycles stay empty.
+    A cycle and every L2 controller that reads a later L2 controller are reported; a serial read or a read of another
+    kind reports nothing, and the physics cycles stay empty.
     """
-    kinds = (L2ControllerComponent, L2ControllerComponent, L2ControllerComponent)
-    order = Simulator.evaluation_positions(kinds, [set(), {2}, {1}])
-    assert order.positions == (0, 1, 2)
-    assert order.l2_cycles == ((1, 2),)
-    assert not order.cycles
+    order = Simulator.evaluation_positions(kinds, sources)
+    assert order.positions == expected_positions
+    assert order.l2_cycles == expected_cycles
+    assert order.l2_late_readers == expected_late_readers
+    assert not order.physics_cycles
 
 
 @dataclass_json
@@ -461,6 +480,25 @@ def test_l2_controllers_that_read_one_another_are_warned_about_and_keep_the_orde
     assert "L0, L1" in warnings[0]
 
 
+def test_an_l2_controller_reading_into_an_l2_cycle_is_warned_about(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches an L2 controller that a cycle leaves reading a later L2 controller without a warning.
+
+    L1 and L2 read each other and L0 reads L1. No controller is ready first, so L0 keeps its place before L1 and reads
+    it a pass late; one warning names the cycle L1, L2 and one names L0.
+    """
+    simulator = probe_simulator(tmp_path)
+    wired_probes(simulator, "LLL", (frozenset({1}), frozenset({2}), frozenset({1})))
+    capsys.readouterr()
+    planned = [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()]
+    assert planned == ["L0", "L1", "L2"]
+    warnings = [line for line in capsys.readouterr().out.splitlines() if line.startswith("WRN:")]
+    assert len(warnings) == 2
+    assert "L1, L2" in warnings[0]
+    assert "L2 controller L0 " in warnings[1]
+
+
 def test_a_component_added_after_the_plan_is_part_of_the_next_plan(tmp_path: Path) -> None:
     """Catches a cached evaluation plan that leaves out a component added after it was computed."""
     simulator = probe_simulator(tmp_path)
@@ -502,3 +540,45 @@ def test_an_input_that_stays_unconnected_orders_nothing(tmp_path: Path) -> None:
 
     assert controller.inputs[-1].source_output is None
     assert planned == ["C1", "P0", "P2"]
+
+
+def test_an_input_resolved_to_an_unregistered_output_is_refused(tmp_path: Path) -> None:
+    """Catches the plan dropping the ordering constraint of an input whose output no added component registered.
+
+    Such an output would have no position, so its read would vanish from the order without a word; the plan refuses
+    it and names the input.
+    """
+    simulator = probe_simulator(tmp_path)
+    probes = wired_probes(simulator, "CP", (frozenset({1}), frozenset({0})))
+    probes[0].inputs[0].source_output = ComponentOutput(
+        "Elsewhere", KindProbe.Value, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID(name="Elsewhere")
+    )
+
+    with pytest.raises(ValueError, match="C0 # FromP1"):
+        simulator.evaluation_plan()
+
+
+def test_a_plan_computed_before_the_wiring_is_recomputed_after_it(tmp_path: Path) -> None:
+    """Catches a cached plan from before the inputs were connected, which orders nothing by the wiring.
+
+    Controller C1 reads store P0 and commands device P2. Before the inputs are connected the plan keeps the order
+    added among the physics; once they are, P2 goes before P0.
+    """
+    simulator = probe_simulator(tmp_path)
+    parameters = simulator.get_simulation_parameters()
+    evaluated: List[str] = []
+    store = DeviceProbe(parameters, "P0", evaluated)
+    controller = ControllerProbe(parameters, "C1", evaluated)
+    device = DeviceProbe(parameters, "P2", evaluated)
+    for reader, source in ((device, controller), (controller, device), (controller, store)):
+        field_name = f"From{source.component_name}"
+        reader.add_input(reader.component_name, field_name, lt.LoadTypes.ANY, lt.Units.ANY, True)
+        reader.connect_input(field_name, source.component_name, KindProbe.Value)
+    for probe in (store, controller, device):
+        simulator.add_component(probe)
+    simulator.prepare_calculation()
+    assert [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()] == ["C1", "P0", "P2"]
+
+    simulator.connect_all_components()
+
+    assert [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()] == ["C1", "P2", "P0"]

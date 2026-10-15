@@ -350,9 +350,14 @@ class Simulator:
 
     @utils.measure_execution_time
     def connect_all_components(self) -> None:
-        """Connects the inputs from every component to the corresponding outputs."""
+        """Connects the inputs from every component to the corresponding outputs, and drops a cached evaluation plan.
+
+        The plan reads each component's sources from the outputs its inputs resolved to (:meth:`evaluation_plan`), so
+        a plan computed before the inputs were connected would order nothing by the wiring.
+        """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
+        self._evaluation_plan = None
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:
@@ -479,7 +484,8 @@ class Simulator:
 
         Returns:
             The positions into ``kinds`` in evaluation order, the physics positions whose constraints form a cycle
-            and the L2 positions that read one another in a cycle; both keep the order they were added in.
+            and the L2 positions that read one another in a cycle, both of which keep the order they were added in,
+            and the L2 positions that read an L2 controller evaluated after them.
 
         Raises:
             ValueError: If a kind is not one of :attr:`EVALUATION_ORDER_OF_KINDS`, or ``kinds`` and ``sources``
@@ -490,8 +496,7 @@ class Simulator:
         if unknown:
             raise ValueError(f"Not kind base classes, so not placeable in a pass: {unknown}.")
         by_kind = sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
-        l2_positions = [position for position in by_kind if kinds[position] is cp.L2ControllerComponent]
-        l2 = L2Order.ordered(l2_positions, sources)
+        l2 = L2Order.ordered(kinds, sources)
         ordered_l2 = iter(l2.positions)
         physics = PhysicsOrder.ordered(kinds, sources)
         reordered_physics = iter(physics.positions)
@@ -503,7 +508,12 @@ class Simulator:
                 positions.append(next(reordered_physics))
             else:
                 positions.append(position)
-        return EvaluationOrder(positions=tuple(positions), cycles=physics.cycles, l2_cycles=l2.l2_cycles)
+        return EvaluationOrder(
+            positions=tuple(positions),
+            physics_cycles=physics.physics_cycles,
+            l2_cycles=l2.l2_cycles,
+            l2_late_readers=l2.l2_late_readers,
+        )
 
     def evaluation_plan(self) -> List[ComponentWrapper]:
         """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.
@@ -513,34 +523,50 @@ class Simulator:
         controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
         columns keep the order they were added in. A group of physics components whose constraints form a cycle, or
         of L2 controllers that read one another in a cycle, keeps the order it was added in, and a warning names its
-        components.
+        components. A warning also names every other L2 controller that a cycle's place leaves reading an L2
+        controller evaluated after it.
 
         A component's sources are read from the outputs its inputs resolved to, so an input that stayed unconnected
         (an optional one, or one the parameters allow to stay unconnected) adds no ordering constraint.
 
+        Raises:
+            ValueError: If an input resolved to an output that no added component registered; its ordering constraint
+                would otherwise be lost without a word.
+
         Returns:
             The wrapped components in evaluation order; the same list on every later call until a component is added
-            (:meth:`add_component` drops the plan).
+            or the inputs are connected (:meth:`add_component` and :meth:`connect_all_components` drop the plan).
         """
         if self._evaluation_plan is None:
             components = [wrapped_component.my_component for wrapped_component in self.wrapped_components]
+            # An output is keyed by the object itself: an input resolves to the very output its component registered.
             position_of_output = {
-                id(output): position
+                output: position
                 for position, wrapped_component in enumerate(self.wrapped_components)
                 for output in wrapped_component.component_outputs
             }
             kinds = [cp.ComponentKinds.of(type(component)) for component in components]
+            unregistered = [
+                component_input.fullname
+                for component in components
+                for component_input in component.inputs
+                if component_input.source_output is not None and component_input.source_output not in position_of_output
+            ]
+            if unregistered:
+                raise ValueError(
+                    f"The inputs {unregistered} resolved to outputs that no added component registered, so the "
+                    "evaluation order cannot place their sources."
+                )
             sources = [
                 frozenset(
-                    position_of_output[id(component_input.source_output)]
+                    position_of_output[component_input.source_output]
                     for component_input in component.inputs
                     if component_input.source_output is not None
-                    and id(component_input.source_output) in position_of_output
                 )
                 for component in components
             ]
             order = self.evaluation_positions(kinds, sources)
-            for cycle in order.cycles:
+            for cycle in order.physics_cycles:
                 names = ", ".join(components[position].component_name for position in cycle)
                 log.warning(
                     f"The physics components {names} require one another to be evaluated first: each is a device "
@@ -554,6 +580,15 @@ class Simulator:
                     f"The L2 controllers {names} read one another in a cycle. They keep the order they were added "
                     "in, so one of them applies the other's signal of the pass before, and its iteration may need "
                     "more passes or circle instead of settling."
+                )
+            in_l2_cycles = {position for cycle in order.l2_cycles for position in cycle}
+            for position in order.l2_late_readers:
+                if position in in_l2_cycles:
+                    continue
+                log.warning(
+                    f"The L2 controller {components[position].component_name} reads an L2 controller that is "
+                    "evaluated after it, because a read cycle among the L2 controllers holds that one back; it "
+                    "applies that controller's signal of the pass before."
                 )
             self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
         return self._evaluation_plan

@@ -834,8 +834,10 @@ against 60 s, fuel and electricity reported) and S10 (D25 without a buffer) stan
 remainder of the part-load mode. S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part
 load; the owner accepted that for stage D (hisim-fxix.26).
 
-**As built and measured** (pull requests stacked on #1000; full year 2021, predefined occupancy; 60 s is the
-reference every coarse step is compared with):
+**As built and measured** (full year 2021, predefined occupancy; 60 s is the reference every coarse step is compared
+with). Item n is pull request n of stage D, stacked on #1000 and on this spec: 1 #1007, 2 #1008, 3 #1009, 4 #1010,
+5 #1011, 6 #1013, 7 #1014, 8 #1012. None of them is merged with this spec, so the classes and ports named below exist
+on those branches only:
 
 1. The distribution system's own pump stands while its valve is shut (S5).
 2. The building publishes its start-of-step indoor temperature (S4).

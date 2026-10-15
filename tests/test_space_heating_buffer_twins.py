@@ -211,6 +211,10 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
         np.max(np.abs(residual_in_watt_hour))
     )
 
+    check_end_temperatures_without_each_circuit(
+        results, buffer, primary_in_watt_hour, secondary_in_watt_hour, distribution_in_watt_hour
+    )
+
     booked_in_watt = BufferTwins.column(results, booked_prefix)
     received_in_watt = BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.ThermalPowerFromHeatGenerator}")
     generator_tolerance_in_watt = BufferTwins.circuit_tolerance_in_watt(BufferTwins.column(results, flow_prefix))
@@ -230,6 +234,35 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
         np.max(np.abs(delivered_in_watt - given_in_watt))
     )
     assert np.any(delivered_in_watt > 0.0), "the distribution never heated in the window"
+
+
+def check_end_temperatures_without_each_circuit(
+    results: pd.DataFrame,
+    buffer: str,
+    primary_in_watt_hour: np.ndarray,
+    secondary_in_watt_hour: np.ndarray,
+    distribution_in_watt_hour: np.ndarray,
+) -> None:
+    """Each "end temperature without this circuit" lies below the end temperature by exactly that circuit's heat over C.
+
+    The buffer's heat capacity follows from its published content and end temperature, ``C = 3600 E / T_end``.
+    """
+    end_in_celsius = BufferTwins.column(
+        results, f"{buffer} - {SimpleHotWaterStorage.WaterTemperatureAtEndOfStepInCelsius}"
+    )
+    content_in_watt_hour = BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.ThermalEnergyInStorage}")
+    heat_capacity_in_watt_hour_per_kelvin = content_in_watt_hour / end_in_celsius
+    for field, heat_in_watt_hour in (
+        (SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius, primary_in_watt_hour),
+        (
+            SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius,
+            secondary_in_watt_hour,
+        ),
+        (SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius, distribution_in_watt_hour),
+    ):
+        without_in_celsius = BufferTwins.column(results, f"{buffer} - {field}")
+        change_in_watt_hour = (end_in_celsius - without_in_celsius) * heat_capacity_in_watt_hour_per_kelvin
+        assert np.allclose(change_in_watt_hour, heat_in_watt_hour, rtol=1e-9, atol=1e-6), field
 
 
 @pytest.mark.base

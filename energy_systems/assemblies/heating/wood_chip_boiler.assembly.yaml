@@ -111,6 +111,12 @@ tests:
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius, unit: CELSIUS, min: -300, max: 300}
+      # hypothetical end temperatures without one circuit, from which the controllers set their fractions: a step's
+      # whole draw or charge without its counterpart can carry them far outside the range of liquid water
     - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 450000}
       # the wood-chip law's 50 l/kW at 60 kW is 3000 l, 349 kWh at 100 °C (measured 117 kWh)
     - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -18750, max: 18750}

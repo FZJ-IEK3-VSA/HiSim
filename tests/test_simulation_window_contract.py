@@ -12,6 +12,7 @@ format error.
 import datetime
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from hisim.energy_system.errors import EnergySystemFormatError
@@ -54,6 +55,11 @@ class TestAcceptedWindows:
         """A window that ends on 1 January at midnight has its last timestep on 31 December."""
         assert _window(datetime.datetime(2021, 12, 31), datetime.datetime(2022, 1, 1), 60) == 1440
 
+    @pytest.mark.parametrize("seconds_per_timestep", [np.int64(900), np.float64(900.0)])
+    def test_a_numpy_step_length_is_a_number_of_seconds(self, seconds_per_timestep: float) -> None:
+        """A step length read through numpy or pandas is accepted, as before the contract."""
+        assert _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), seconds_per_timestep) == 96
+
     def test_a_step_length_that_divides_the_window_but_not_a_day_is_accepted(self) -> None:
         """Two days in three steps of 16 hours: the rule is whole timesteps over the window."""
         assert _window(datetime.datetime(2021, 3, 1), datetime.datetime(2021, 3, 3), 16 * 3600) == 3
@@ -92,9 +98,9 @@ class TestRefusedWindows:
         with pytest.raises(SimulationWindowError, match="whole number of 7000 s timesteps"):
             _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), 7000)
 
-    @pytest.mark.parametrize("seconds_per_timestep", [0, -60])
+    @pytest.mark.parametrize("seconds_per_timestep", [0, -60, float("inf"), float("nan")])
     def test_a_step_length_that_is_not_positive_is_refused(self, seconds_per_timestep: int) -> None:
-        """A step of zero or negative seconds divides nothing."""
+        """A step of zero, negative or not finite seconds divides nothing, and is refused as such."""
         with pytest.raises(SimulationWindowError, match="positive"):
             _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), seconds_per_timestep)
 

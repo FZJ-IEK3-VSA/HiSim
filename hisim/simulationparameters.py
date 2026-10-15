@@ -1,5 +1,7 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 from __future__ import annotations
+import math
+import numbers
 import os
 from typing import Any, ClassVar, List, Optional, Sequence, Tuple
 import enum
@@ -214,13 +216,15 @@ class SimulationParameters:
 
         Raises:
             SimulationWindowError: If the window breaks any of the four rules, or if
-                ``seconds_per_timestep`` is not a positive number.
+                ``seconds_per_timestep`` is not a positive, finite real number (``inf``, ``nan`` and
+                ``True`` are refused; a numpy integer or float is accepted).
         """
-        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, (int, float)):
+        # Any real number counts, numpy's included, as it did before the contract; a bool does not.
+        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, numbers.Real):
             raise SimulationWindowError(
                 f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep!r}."
             )
-        if not seconds_per_timestep > 0:
+        if not (math.isfinite(seconds_per_timestep) and seconds_per_timestep > 0):
             raise SimulationWindowError(
                 f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep}."
             )
@@ -235,7 +239,8 @@ class SimulationParameters:
                 f"The simulation must cover a whole number of days, at least one, but {start_date.isoformat()} "
                 f"to {end_date.isoformat()} is {duration}."
             )
-        timestep = datetime.timedelta(seconds=seconds_per_timestep)
+        # timedelta takes no numpy scalar; float() is exact for every step length a run can have.
+        timestep = datetime.timedelta(seconds=float(seconds_per_timestep))
         if duration % timestep:
             raise SimulationWindowError(
                 f"The simulated duration of {duration} is not a whole number of {seconds_per_timestep} s "

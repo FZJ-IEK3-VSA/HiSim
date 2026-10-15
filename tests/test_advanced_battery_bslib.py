@@ -3,6 +3,7 @@
 import dataclasses
 from typing import List, Tuple
 
+import pandas as pd
 import pytest
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
@@ -437,3 +438,72 @@ def battery_with_set_point_input() -> Tuple[advanced_battery_bslib.Battery, cp.C
     fft.add_global_index_of_components([battery, set_point])
     stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([battery, set_point]))
     return battery, set_point, stsv
+
+
+class TestStoredEnergyAndLosses:
+    """The battery publishes the change of its stored energy, and its OPEX losses subtract it."""
+
+    #: The capacity of the battery of :func:`battery_with_set_point_input`, in Wh.
+    CAPACITY_IN_WATT_HOUR = 10_000.0
+
+    @staticmethod
+    def run_steps(set_points_in_watt: List[float], state_of_charge_at_start: float) -> Tuple[
+        advanced_battery_bslib.Battery, List[cp.ComponentOutput], pd.DataFrame
+    ]:
+        """Step the battery once per set point, from the given start, and collect every output per step.
+
+        Args:
+            set_points_in_watt: The AC set point of each step, in W; positive charges.
+            state_of_charge_at_start: The state of charge before the first step.
+
+        Returns:
+            The battery, its outputs in column order, and one row of output values per step.
+        """
+        battery, set_point, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=state_of_charge_at_start)
+        rows = []
+        for timestep, set_point_in_watt in enumerate(set_points_in_watt):
+            stsv.values[set_point.global_index] = set_point_in_watt
+            battery.i_save_state()
+            battery.i_simulate(timestep, stsv, False)
+            battery.i_save_state()
+            rows.append([stsv.values[output.global_index] for output in battery.outputs])
+        return battery, list(battery.outputs), pd.DataFrame(rows)
+
+    @pytest.mark.base
+    def test_the_stored_energy_increase_sums_to_the_change_of_the_state_of_charge(self) -> None:
+        """Catches a stored-energy output that is not the step's state-of-charge change times the capacity.
+
+        One hour of charging at 4 kW from 0.2, then half an hour of discharging at 3 kW: summed over the run the output
+        must be the final minus the initial state of charge times the 10 kWh capacity, read from the published state
+        of charge.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 60 + [-3000.0] * 30, state_of_charge_at_start=0.2)
+        state_of_charge_column = outputs.index(battery.state_of_charge_channel)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        assert len(frame) == 90
+        expected_in_watt_hour = (frame.iloc[-1, state_of_charge_column] - 0.2) * self.CAPACITY_IN_WATT_HOUR
+        assert expected_in_watt_hour > 1000.0  # the run must leave the battery clearly fuller
+        # The per-step increases add up exactly to the state-of-charge change; 1e-9 absorbs float summation only.
+        assert frame.iloc[:, increase_column].sum() == pytest.approx(expected_in_watt_hour, rel=1e-9)
+
+    @pytest.mark.base
+    def test_energy_the_battery_still_holds_at_the_end_is_not_booked_as_a_loss(self) -> None:
+        """Catches the OPEX losses booking the charge the battery ends with as lost electricity.
+
+        Two hours of charging at 4 kW from empty and nothing discharged: the old formula, charged minus discharged,
+        reports all of the charged energy as lost. The losses are what was charged minus what the cells hold more at
+        the end, which for bslib's SG1 at 4 kW is a few percent of the charge, not all of it.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 120, state_of_charge_at_start=0.0)
+        ac_power_column = outputs.index(battery.ac_battery_power_channel)
+        charged_in_kilowatt_hour = round(frame.iloc[:, ac_power_column].sum() * 60 / 3.6e6, 1)
+        stored_in_kilowatt_hour = round(
+            frame.iloc[-1, outputs.index(battery.state_of_charge_channel)] * self.CAPACITY_IN_WATT_HOUR / 1e3, 1
+        )
+        opex = battery.get_cost_opex(all_outputs=outputs, postprocessing_results=frame)
+        assert charged_in_kilowatt_hour == pytest.approx(8.0, abs=0.05)
+        # Both sides are rounded to 0.1 kWh, so the expected losses are exact up to that rounding.
+        expected_losses_in_kilowatt_hour = charged_in_kilowatt_hour - stored_in_kilowatt_hour
+        assert opex.total_consumption_in_kwh == pytest.approx(expected_losses_in_kilowatt_hour, abs=0.11)
+        assert 0.0 < opex.total_consumption_in_kwh < 0.2 * charged_in_kilowatt_hour

@@ -26,7 +26,7 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import opex_calculation
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiSource, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -514,3 +514,45 @@ def test_the_building_maintenance_kpi_carries_the_prorated_annual_rate(tmp_path)
     assert collected["Maintenance costs for simulated period"]["value"] == pytest.approx(
         expected_maintenance_in_euro
     )
+
+
+class TestBatteryLosses:
+    """The battery losses subtract the change of the stored energy from charged minus discharged energy."""
+
+    @pytest.mark.base
+    def test_the_losses_of_a_storage_subtract_what_it_holds_more_at_the_end(self) -> None:
+        """Catches a losses formula that ignores the stored energy: 10 kWh in, 2 out, 7 kept is 1 kWh lost, not 8."""
+        assert KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+            charged_energy_in_kilowatt_hour=10.0,
+            discharged_energy_in_kilowatt_hour=2.0,
+            stored_energy_increase_in_kilowatt_hour=7.0,
+        ) == pytest.approx(1.0, abs=1e-12)
+
+    @pytest.mark.base
+    def test_a_storage_that_ends_emptier_does_not_report_a_negative_loss(self) -> None:
+        """Catches the energy held at the start showing up as a negative loss: 5 kWh out of 5.5 kWh held is 0.5 lost."""
+        assert KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+            charged_energy_in_kilowatt_hour=0.0,
+            discharged_energy_in_kilowatt_hour=5.0,
+            stored_energy_increase_in_kilowatt_hour=-5.5,
+        ) == pytest.approx(0.5, abs=1e-12)
+
+    @pytest.mark.base
+    def test_the_battery_kpis_read_the_stored_energy_column(self) -> None:
+        """Catches the battery KPIs dropping the stored-energy column of the result frame.
+
+        One hour at 60 s steps charging 10 kW (10 kWh) while the cells gain 150 Wh per step (9 kWh): the losses are
+        1 kWh. Without the column, the KPI books the 9 kWh the battery holds at the end as lost.
+        """
+        preparation = _bare_preparation("BUI1")
+        frame = pd.DataFrame(
+            {
+                "battery_charge": [10_000.0] * 60,
+                "battery_discharge": [0.0] * 60,
+                "battery_stored_energy_increase_in_watt_hour": [150.0] * 60,
+            }
+        )
+        charged, discharged, losses = preparation.compute_battery_kpis(result_dataframe=frame)
+        assert charged == pytest.approx(10.0, rel=1e-9)
+        assert discharged == 0.0
+        assert losses == pytest.approx(1.0, rel=1e-9)

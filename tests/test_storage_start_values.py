@@ -79,6 +79,15 @@ def test_the_hydrogen_tank_starts_half_full() -> None:
 
 
 @pytest.mark.base
+def test_a_hydrogen_tank_whose_floor_lies_above_its_capacity_is_refused() -> None:
+    """Catches a tank built with min_capacity above max_capacity silently starting outside its own range."""
+    with pytest.raises(ValueError, match="floor"):
+        generic_electrolyzer_and_h2_storage.HydrogenStorage.initial_fill_in_kg(
+            min_capacity_in_kg=600.0, max_capacity_in_kg=500.0
+        )
+
+
+@pytest.mark.base
 def test_the_hot_water_tank_starts_half_way_between_the_tap_temperature_and_the_warm_water_aim() -> None:
     """The hot-water tank starts at 50 °C: half way from the 40 °C tap temperature to the 60 °C warm-water aim."""
     tank_class = simple_water_storage.SimpleDHWStorage
@@ -109,6 +118,15 @@ def test_the_example_storage_starts_half_full() -> None:
     config = example_storage.SimpleStorageConfig.preset_thermal("SimpleThermalStorage")
     storage = example_storage.SimpleStorage(my_simulation_parameters=StartValues.parameters(), config=config)
     assert storage.state.fill_in_kwh == 25.0
+
+
+@pytest.mark.base
+def test_an_example_storage_state_outside_its_range_is_refused() -> None:
+    """Catches an example storage starting above its capacity or below its floor without a word."""
+    with pytest.raises(ValueError, match="outside"):
+        example_storage.ExampleStorageState(min_val_in_kwh=0.0, max_val_in_kwh=50.0, fill_in_kwh=60.0)
+    with pytest.raises(ValueError, match="outside"):
+        example_storage.ExampleStorageState(min_val_in_kwh=10.0, max_val_in_kwh=50.0, fill_in_kwh=5.0)
 
 
 @pytest.mark.base

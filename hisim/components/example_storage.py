@@ -24,8 +24,15 @@ class ExampleStorageState:
             min_val_in_kwh: The fill level below which nothing can be withdrawn, in kWh.
             max_val_in_kwh: The capacity, the fill level above which nothing can be stored, in kWh.
             fill_in_kwh: The fill level the storage starts with, in kWh.
-        """
 
+        Raises:
+            ValueError: If the start fill lies outside the floor and the capacity.
+        """
+        if not min_val_in_kwh <= fill_in_kwh <= max_val_in_kwh:
+            raise ValueError(
+                f"The example storage's start fill, {fill_in_kwh} kWh, lies outside its floor, {min_val_in_kwh} kWh, "
+                f"and its capacity, {max_val_in_kwh} kWh."
+            )
         self.fill_in_kwh: float = fill_in_kwh
         self.max_val_in_kwh: float = max_val_in_kwh
         self.min_val_in_kwh: float = min_val_in_kwh
@@ -110,10 +117,15 @@ class SimpleStorage(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
-    #: The share of the capacity the storage holds before the first step, dimensionless between 0 and 1: a half-full
-    #: storage, which can take a charge and give one from the first step, rather than an empty or a full one. For
-    #: example, the 50 kWh preset storage starts with 25 kWh.
+    #: The share of the usable range, from the floor to the capacity, that the storage holds before the first step,
+    #: dimensionless between 0 and 1: a half-full storage, which can take a charge and give one from the first step,
+    #: rather than an empty or a full one, as the hydrogen tank's fraction
+    #: (:attr:`hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage.INITIAL_FILL_FRACTION`). The
+    #: example storage's floor is :attr:`FLOOR_IN_KWH`, so the 50 kWh preset storage starts with 25 kWh.
     INITIAL_FILL_FRACTION: ClassVar[float] = 0.5
+
+    #: The fill level below which nothing can be withdrawn, in kWh: the example storage can be emptied completely.
+    FLOOR_IN_KWH: ClassVar[float] = 0.0
 
     ChargingAmount: str = "ChargingAmount"
     DischargingAmount: str = "DischargingAmount"
@@ -142,9 +154,10 @@ class SimpleStorage(PhysicsComponent):
         )
         # Initialized variables
         self.state: ExampleStorageState = ExampleStorageState(
-            min_val_in_kwh=0,
+            min_val_in_kwh=self.FLOOR_IN_KWH,
             max_val_in_kwh=self.simplestorageconfig.capacity_in_kwh,
-            fill_in_kwh=self.INITIAL_FILL_FRACTION * self.simplestorageconfig.capacity_in_kwh,
+            fill_in_kwh=self.FLOOR_IN_KWH
+            + self.INITIAL_FILL_FRACTION * (self.simplestorageconfig.capacity_in_kwh - self.FLOOR_IN_KWH),
         )
         self.capacity_in_kwh: float = self.simplestorageconfig.capacity_in_kwh
         self.previous_state: ExampleStorageState = copy.copy(self.state)

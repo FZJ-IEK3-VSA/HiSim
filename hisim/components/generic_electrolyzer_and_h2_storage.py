@@ -777,7 +777,15 @@ class HydrogenStorage(PhysicsComponent):
 
         Returns:
             The start fill, in kg.
+
+        Raises:
+            ValueError: If the floor lies above the capacity, which would start the tank outside its own range.
         """
+        if min_capacity_in_kg > max_capacity_in_kg:
+            raise ValueError(
+                f"The hydrogen tank's floor, min_capacity = {min_capacity_in_kg} kg, lies above its capacity, "
+                f"max_capacity = {max_capacity_in_kg} kg."
+            )
         return min_capacity_in_kg + cls.INITIAL_FILL_FRACTION * (max_capacity_in_kg - min_capacity_in_kg)
 
     def i_save_state(self):

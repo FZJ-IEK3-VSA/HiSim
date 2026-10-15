@@ -56,14 +56,15 @@ on:
   # requests that target main. A stacked pull request — one whose base is the branch below it
   # in a chain — therefore gets no run at all, and a whole stack can reach main having never
   # been tested. Dispatching this workflow against such a branch is how that is avoided.
-  # A dispatch can also choose the full year, for a heavier parity run of both modes.
+  # A dispatch can also choose the July week (july_week), or the full year for a heavier parity run
+  # of both modes. The automatic triggers check the January week only.
   workflow_dispatch:
     inputs:
       horizon:
         description: "Parameter horizon to check (the Python setups, their recorded YAML twins and the composed files)"
         type: choice
         default: week
-        options: [ week, year ]
+        options: [ week, july_week, year ]
 
 permissions:
   contents: read

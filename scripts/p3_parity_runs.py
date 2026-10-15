@@ -34,35 +34,22 @@ from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
-try:  # importable both as ``p3_parity_runs`` (a script from ``scripts/``) and as ``scripts.p3_parity_runs``
-    from p3_parity_matrix import MatrixPaths  # type: ignore[import-not-found]
-except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on the path
-    from scripts.p3_parity_matrix import MatrixPaths
-
 
 class ParityWindows:
-    """The simulation windows every triple is defined over, which of them may run, and how.
+    """The simulation windows every triple is defined over, and how each is built.
 
     R11.5 asked for two windows rather than one because every week- and day-sized parameter set
     HiSim ships starts on the first of January, which measures each cooling device, air conditioner
-    and solar-thermal collector in the darkest week of the year, and the July week was meant to be
-    the answer. It is not one yet: HiSim has never supported a mid-year start, so every
-    profile-driven component reads its year-long profile from timestep 0 as if that were the 1st of
-    January. A July triple therefore compares two runs that both simulate January — the January
-    triple's numbers under July timestamps for most setups, and physically incoherent for the three
-    with a solar-thermal collector, whose sun position follows the date while its irradiance does
-    not. The July window
-    is consequently **fenced**: its definition stays here for the mid-year-start epic that will fix
-    the profiles and unfence it, and :meth:`runnable` is what a dispatch actually covers.
+    and solar-thermal collector in the darkest week of the year, and the July week is the answer.
+    It was fenced out of the rig until the mid-year-start epic (``roadmap/midyear_start_epic.md``)
+    made a mid-year start read the window's profiles instead of January's (hisim-9g2.8).
 
-    Both names are still spelled here so the checker, the matrix emitter and the workflow agree on
-    them, and the fence itself is not repeated: it lives in ``p3_parity_matrix.MatrixPaths``, the
-    one module of the rig that imports nothing and can therefore be asked from anywhere.
+    Both names are spelled here and in ``p3_parity_matrix.MatrixPaths``, the one module of the rig
+    that imports nothing, so the checker, the matrix emitter and the workflow agree on them; a test
+    keeps the two equal.
     """
 
-    #: Window name to the ``SimulationParameters`` classmethod that builds it. Includes the fenced
-    #: windows: a definition that is kept has to stay buildable, or the epic would have to write it
-    #: again from scratch.
+    #: Window name to the ``SimulationParameters`` classmethod that builds it.
     FACTORIES: ClassVar[Dict[str, str]] = {
         "january": "one_week_only",
         "july": "one_week_july",
@@ -76,7 +63,7 @@ class ParityWindows:
 
     @classmethod
     def names(cls) -> Tuple[str, ...]:
-        """Every window name this rig defines, fenced ones included, in a stable order.
+        """Every window name this rig defines, in a stable order.
 
         Returns:
             The names, January first.
@@ -84,24 +71,11 @@ class ParityWindows:
         return tuple(cls.FACTORIES)
 
     @classmethod
-    def runnable(cls) -> Tuple[str, ...]:
-        """The window names a dispatch may actually ask for.
-
-        Delegates to :meth:`MatrixPaths.runnable_windows` rather than re-deriving the filter, so
-        the fence has exactly one implementation; the mirror test that keeps :meth:`names` equal
-        to ``MatrixPaths.WINDOWS`` is what makes the delegation safe.
-
-        Returns:
-            The defined names minus the fenced ones, in the same order.
-        """
-        return cast(Tuple[str, ...], MatrixPaths.runnable_windows())
-
-    @classmethod
     def build(cls, window: str, result_directory: Path, cache_directory: Path) -> SimulationParameters:
         """Builds the parameters of one side of one triple.
 
         Args:
-            window: One of :meth:`runnable`.
+            window: One of :meth:`names`.
             result_directory: Where this side writes its results; created when missing.
             cache_directory: This side's private cache directory; created when missing.
 
@@ -109,13 +83,10 @@ class ParityWindows:
             The parameters, with the rig's post-processing option set already applied.
 
         Raises:
-            ValueError: If the window is not one this rig knows, or is one it refuses to run. The
-                refusal is repeated here rather than left to the command line because this is the
-                last point before a fenced window would cost a simulation.
+            ValueError: If the window is not one this rig knows.
         """
         if window not in cls.FACTORIES:
             raise ValueError(f"Unknown window {window!r}; choose from {sorted(cls.FACTORIES)}.")
-        MatrixPaths.refuse_fenced([window])
         factory = cast(
             Callable[[int, int], SimulationParameters],
             getattr(SimulationParameters, cls.FACTORIES[window]),

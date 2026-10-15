@@ -1068,17 +1068,18 @@ class AirConditionerController(cp.L1ControllerComponent):
             my_display_config: How the controller shows in reports.
 
         Raises:
-            ValueError: If the hysteresis is not positive; the soft stop needs it to end (see the
-                class docstring). If the ramp time is not a finite number of seconds above 0; the
+            ValueError: If the hysteresis is not a finite positive number; the soft stop needs it to
+                end (see the class docstring). If a set point is not finite. If the ramp time is not a finite number of seconds above 0; the
                 power changes by the step length over it, so 0 divides by zero and a negative time
                 lowers the power of a unit whose room is too cold. If the heating set point is not
                 below the cooling set point; an idle unit would then heat a room that is warm enough. If
                 the minimum runtime or idle time is negative or not finite; a negative time would silently
                 mean no minimum.
         """
-        if config.hysteresis_in_kelvin <= 0.0:
+        if not math.isfinite(config.hysteresis_in_kelvin) or config.hysteresis_in_kelvin <= 0.0:
             raise ValueError(
-                f"The air conditioner's controller needs a positive hysteresis, got {config.hysteresis_in_kelvin} K: "
+                "The air conditioner's controller needs a finite positive hysteresis, got "
+                f"{config.hysteresis_in_kelvin} K: "
                 "a running unit ramps down to its minimum power before it stops, and only a positive "
                 "hysteresis bounds how long that takes."
             )
@@ -1090,6 +1091,15 @@ class AirConditionerController(cp.L1ControllerComponent):
                 "divides by zero and a negative time lowers the power while the room is on the wrong side of the "
                 "set point."
             )
+        for field_name, temperature_in_celsius in (
+            ("heating_set_temperature_deg_c", config.heating_set_temperature_deg_c),
+            ("cooling_set_temperature_deg_c", config.cooling_set_temperature_deg_c),
+        ):
+            if not math.isfinite(temperature_in_celsius):
+                raise ValueError(
+                    f"The air conditioner's controller needs a finite {field_name}, got {temperature_in_celsius!r} "
+                    "°C: the unit compares the room air with it in every step."
+                )
         if config.heating_set_temperature_deg_c >= config.cooling_set_temperature_deg_c:
             raise ValueError(
                 "The air conditioner's controller needs heating_set_temperature_deg_c below "

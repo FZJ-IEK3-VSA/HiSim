@@ -254,10 +254,19 @@ def test_the_ramp_per_step_is_capped_at_450_seconds(
 
 
 @pytest.mark.base
-def test_a_hysteresis_of_zero_is_refused() -> None:
-    """Without a positive hysteresis the soft stop has no bound, so the controller refuses to be built."""
-    with pytest.raises(ValueError, match="positive hysteresis"):
-        given_default_testee({"hysteresis_in_kelvin": 0.0})
+@pytest.mark.parametrize("hysteresis_in_kelvin", [0.0, float("nan")])
+def test_a_hysteresis_of_zero_or_nan_is_refused(hysteresis_in_kelvin: float) -> None:
+    """Without a finite positive hysteresis the soft stop has no bound, so the controller refuses to be built."""
+    with pytest.raises(ValueError, match="finite positive hysteresis"):
+        given_default_testee({"hysteresis_in_kelvin": hysteresis_in_kelvin})
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["heating_set_temperature_deg_c", "cooling_set_temperature_deg_c"])
+def test_a_set_point_that_is_not_finite_is_refused(field_name: str) -> None:
+    """Catches a NaN set point, which passes the order check because every comparison with NaN is false."""
+    with pytest.raises(ValueError, match=rf"finite {field_name}, got nan"):
+        given_default_testee({field_name: float("nan")})
 
 
 @pytest.mark.base

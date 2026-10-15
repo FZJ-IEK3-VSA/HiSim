@@ -1,9 +1,9 @@
-"""Economic parameters of the lifecycle cost evaluation: the assumptions, not the data (cost_spec.md §3.2).
+"""Economic parameters of the lifecycle cost evaluation: the assumptions, not the data.
 
 `EconomicParameters` holds horizon, interest, escalation rates, the CO2 scenario, the country and the data paths;
 prices, lifetimes and subsidy rules live in the data files. One instance travels with a run into `EvaluationInputs`,
 onto every `LifecycleCostResult` and into `economic_inputs.json`, so a stored result can be re-priced without
-re-simulating (§4.6). Scenario axes vary these fields.
+re-simulating. Scenario axes vary these fields.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ class EconomicParameters:
     All rates are nominal and results are nominal euros discounted to year 0; supply real rates consistently for a real
     calculation. `EconomicParameters()` is a complete baseline: 20-year horizon, 3 % interest, 2 % general escalation,
     "central" CO2 path, 250 EUR/t damage cost. An unset per-carrier or per-asset-class escalation rate falls back to
-    the country's `escalation_defaults_<COUNTRY>.json`, then to the general rate (§3.2, §3.5). `country` and the data
+    the country's `escalation_defaults_<COUNTRY>.json`, then to the general rate. `country` and the data
     paths cannot be changed by scenario overlays, so a sweep never switches datasets.
     """
 
@@ -168,7 +168,7 @@ class EconomicParameters:
     def annuity_factor(self) -> float:
         """Return the annuity factor over the horizon, ``i(1+i)^T / ((1+i)^T - 1)``; 1/T for a zero interest rate.
 
-        It turns a net present cost into the equivalent annual cost, the headline KPI (§7.3); it is the capital
+        It turns a net present cost into the equivalent annual cost, the headline KPI; it is the capital
         recovery factor of VDI 2067-1. At i = 0 the formula is 0/0 and the limit spreads the NPV evenly.
         """
         interest = self.interest_rate

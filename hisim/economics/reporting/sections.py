@@ -1,4 +1,4 @@
-"""Section builders of the HTML lifecycle report (cost_spec.md §7.2, §9.5), and the report CSS.
+"""Section builders of the HTML lifecycle report, and the report CSS.
 
 One function per section along the calculation chain: the primer, input audit, sources, assumptions, investment,
 timeline, energy bill, CO2 and subsidies. The chart sections live in `sections_charts`; every section opens through
@@ -195,7 +195,7 @@ def _origin_label(row: ResolvedInputRow) -> str:
 
 
 def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> str:
-    """Render the input audit: the declared facts and the prices they resolved to (§9.5).
+    """Render the input audit: the declared facts and the prices they resolved to.
 
     One row per priced fact with its size, resolved unit price and lifetime, where the price came from and any flags,
     built by `audit.build_input_audit` from the same rows as `cost_audit.csv`. A wiring mistake such as a 5000 kW heat
@@ -247,7 +247,7 @@ def anyway_credit_text(
 ) -> str:
     """Return one anyway credit's multiplication in the single spelling all three places print it in.
 
-    An anyway credit is the cost the building would have paid anyway (§4.1). `share x basis = credit` appears in the
+    An anyway credit is the cost the building would have paid anyway. `share x basis = credit` appears in the
     input audit, in the cash-flow detail table and in the timeline caption. The detail table already shows the amount
     in its own column, so it passes `credit=None` and gets the factor and basis only. A basis of None or zero (a result
     without the basis) yields the share alone.
@@ -286,7 +286,7 @@ def _anyway_credit_cell(row: ResolvedInputRow) -> str:
 
 
 def _sources_table_html(audit: InputAuditReport) -> str:
-    """Render the §3.10 source registry entries this evaluation cited, as resolved by the audit.
+    """Render the source registry entries this evaluation cited, as resolved by the audit.
 
     Citation, kind, retrieval date and link per entry, so prices can be checked for currency. Collapsed by default;
     omitted when the audit resolved no sources.
@@ -384,7 +384,7 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
 
     Each waterfall walks device + installation + planning + removal - subsidies - loan disbursement down to the net
     outflow, with a table of gross, support and net per subject. A binding subsidy cap shows as support short of the
-    scheme's headline rate. Sunk cost (the written-off residual value of a replaced asset, §4.1) is a note, not a step,
+    scheme's headline rate. Sunk cost (the written-off residual value of a replaced asset) is a note, not a step,
     since it is excluded from the decision KPIs. Only subjects with a year-0 flow appear.
 
     Args:
@@ -498,7 +498,7 @@ def _timeline_detail_table(result: LifecycleCostResult) -> str:
 
 
 def _timeline_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render the cash-flow timeline: annual cash flows and cumulative discounted cost, per perspective (§3.6).
+    """Render the cash-flow timeline: annual cash flows and cumulative discounted cost, per perspective.
 
     Legend, nominal stacked bars, the cumulative discounted curve with the NPV label, the NPV-by-category table and the
     full year x subject x category detail table, so any bar can be traced to its flows. One collapsible block per
@@ -738,7 +738,7 @@ def _scheme_html(display_name: Optional[str], scheme_id: str) -> str:
 
 
 def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
-    """Render all applied awards across measures: scheme, amount band, payout kind and binding caps (§5.4).
+    """Render all applied awards across measures: scheme, amount band, payout kind and binding caps.
 
     The payout kind (upfront grant, repayment grant, scheduled tax credit) decides when money lands and so its present
     value; a cap binding only in HIGH explains an asymmetric band. Amounts come from `views.describe_award`, so a
@@ -777,7 +777,7 @@ def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
 
 
 def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render the subsidies section: the cumulation solver's audit trail per measure (§5.4).
+    """Render the subsidies section: the cumulation solver's audit trail per measure.
 
     Each card lists what APPLIED (with the slots a cap bound in), what was REJECTED and why, and what is OPEN on an
     unanswered question, with the upper bound answering could unlock. There is one card per distinct decision
@@ -854,7 +854,7 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
 
 
 def _co2_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render the CO2 section: lifecycle emissions (§3.8), embodied and operational.
+    """Render the CO2 section: lifecycle emissions, embodied and operational.
 
     Embodied emissions (blue, per component, booked at installation and every replacement) and operational emissions
     (orange, per carrier) share one axis. These are masses; neither the CO2 price nor the CO2 damage cost is added to

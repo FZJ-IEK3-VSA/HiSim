@@ -1,4 +1,4 @@
-"""Subsidy catalog schema and parsing (cost_spec.md §5.1-§5.2, §5.6).
+"""Subsidy catalog schema and parsing.
 
 Turns a `subsidy_catalog/<COUNTRY>.json` file into typed objects: eligibility conditions, the benefit kinds,
 eligible-cost specs, `SubsidyScheme`, questionnaire entries and the `SubsidyCatalog` loader. Nothing is evaluated here;
@@ -42,7 +42,7 @@ from hisim.economics.subsidies.context import SubsidyContextFields, SubsidyDataE
 
 @dataclass(frozen=True)
 class Condition:
-    """One node of a scheme's eligibility condition tree (§5.3), as plain data.
+    """One node of a scheme's eligibility condition tree, as plain data.
 
     A node is either a combinator (``all``, ``any``, ``not``) over children or a leaf comparing one context field with
     a value. :func:`parse_condition` builds it and :func:`evaluate_condition` evaluates it.
@@ -138,7 +138,7 @@ def _check_asset_class_values(value: Any, fieldname: str, scheme_id: str) -> Non
 
 
 def referenced_fields(condition: Condition) -> List[str]:
-    """Return all context fields referenced anywhere in the tree, in tree order (§5.7).
+    """Return all context fields referenced anywhere in the tree, in tree order.
 
     Duplicates are kept, so a field tested twice weighs twice in the question ordering.
     """
@@ -151,9 +151,9 @@ def referenced_fields(condition: Condition) -> List[str]:
 
 
 class BenefitKind(str, enum.Enum):
-    """The mechanism a scheme uses to compute its support (§5.2).
+    """The mechanism a scheme uses to compute its support.
 
-    The kinds cover the EU schemes surveyed in §5.1: a share of the eligible cost, a stackable bonus share, a fixed
+    The kinds cover the common EU subsidy schemes: a share of the eligible cost, a stackable bonus share, a fixed
     lump sum, an amount per unit of size, a tiered amount per unit with a cap, a multi-year tax credit, a reduced VAT
     rate, soft-loan terms, and a per-kWh operational payment. Each kind has a typed payload class
     (:attr:`BenefitTypes.BY_KIND`). :class:`PayoutKind` is separate: it says when and in what form the money arrives.
@@ -286,7 +286,7 @@ def _tiers(raw: Any) -> Tuple[Tier, ...]:
 
 @dataclass(frozen=True)
 class Benefit:
-    """Typed benefit payload of a scheme (§5.2).
+    """Typed benefit payload of a scheme.
 
     The catalog states ``benefit: {"kind": ..., <parameters>}``; the loader parses it into one of the frozen subclasses
     below, so a missing or misspelled parameter fails at load time naming the scheme and the key. Subclasses declare
@@ -346,7 +346,7 @@ class Benefit:
             raise SubsidyDataError(f"Scheme {scheme_id}: {err}") from err
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """Return a rough upper bound of the support this benefit could unlock, for ordering questions (§5.7).
+        """Return a rough upper bound of the support this benefit could unlock, for ordering questions.
 
         Undiscounted, on the gross measure cost, not clamped to the eligible cost and not bounded by the solver's caps;
         a cap the benefit itself states (a TIERED_PER_UNIT ``cap_in_euro``) does apply. The exact per-slot valuation is
@@ -362,7 +362,7 @@ class ShareBenefit(Benefit):
 
     The common mechanism of the EU programmes (BEG EM: 30 % base plus speed, income and efficiency bonuses). It is the
     only payload the solver stacks: schemes in one ``cumulation_group`` have their rates added and scaled back to the
-    group's ``combined_rate_cap`` (§5.4). The rate applies to its own scheme's eligible cost, so two stacked schemes
+    group's ``combined_rate_cap``. The rate applies to its own scheme's eligible cost, so two stacked schemes
     may compute on different bases.
     """
 
@@ -398,7 +398,7 @@ class LumpSumBenefit(Benefit):
 class PerUnitBenefit(Benefit):
     """An amount per unit of measure size (EUR/kW, EUR/m², ...), in a unit the catalog states.
 
-    Covers EUR/m² insulation grants and EUR/kWp PV programmes (§5.1). The amount is multiplied by
+    Covers EUR/m² insulation grants and EUR/kWp PV programmes. The amount is multiplied by
     ``ComponentCostFacts.size``, which must be in ``size_unit`` (spelled as ``ComponentCostFacts.size_unit``, e.g.
     ``"kW"``, ``"m2"``); the solver refuses a measure sized in another unit, and ``validate`` checks the unit against
     the cost database before any run. The result is exact in all slots and clamped to the eligible cost.
@@ -558,7 +558,7 @@ class TaxCreditBenefit(Benefit):
     )
 
     def __post_init__(self) -> None:
-        """Validate the payout schedule (§5.2): whole years, shares summing to 1."""
+        """Validate the payout schedule: whole years, shares summing to 1."""
         if self.years < 1:
             raise SubsidyDataError(f"Tax credit benefit needs years >= 1, got {self.years}.")
         if self.annual_shares:
@@ -605,7 +605,7 @@ class ReducedVatBenefit(Benefit):
 class LoanTermsBenefit(Benefit):
     """Soft-loan terms: interest rate, term and an optional repayment grant (Tilgungszuschuss).
 
-    A subsidized loan overrides the financing plan (§4.4): ``calculators/financing_application.py`` substitutes these
+    A subsidized loan overrides the financing plan: ``calculators/financing_application.py`` substitutes these
     terms into the :class:`~hisim.economics.financing.FinancingPlan`, and the benefit shows as interest not paid. The
     repayment grant is the part paid as support. The solver values it on the gross measure cost, while the financing
     applies it to the loan principal; the two differ when less than the full cost is financed (the shipped KfW rate is
@@ -629,7 +629,7 @@ class OperationalBenefit(Benefit):
 
     Its value depends on the simulation: it is paid per kWh sold or, where no sold energy is recorded, bought (see
     :func:`_support_value`). Payments run for ``duration_years`` from year 1, cut at the observation horizon; the rate
-    is nominal and does not escalate, as in fixed-term EEG contracts (§8.5).
+    is nominal and does not escalate, as in fixed-term EEG contracts.
     """
 
     rate_per_kwh: float  # euro per kWh of the named carrier, nominal, fixed for the duration
@@ -664,7 +664,7 @@ class BenefitTypes:
 
 
 def parse_benefit(raw: Dict[str, Any], scheme_id: str) -> Tuple[BenefitKind, Benefit]:
-    """Parse a catalog `benefit` object into its kind and typed payload (§5.2).
+    """Parse a catalog `benefit` object into its kind and typed payload.
 
     Reads the ``kind`` tag, looks up the payload class in :attr:`BenefitTypes.BY_KIND` and hands the remaining keys to
     :meth:`Benefit.parse`.
@@ -693,7 +693,7 @@ def parse_benefit(raw: Dict[str, Any], scheme_id: str) -> Tuple[BenefitKind, Ben
 
 
 class PayoutKind(str, enum.Enum):
-    """When and in what form a scheme's support arrives on the timeline (§5.2).
+    """When and in what form a scheme's support arrives on the timeline.
 
     :class:`BenefitKind` says how much support is computed; this says how it is paid, which matters because the same 30
     % share may be a year-0 grant in one country and a multi-year tax deduction in another. A scheme declares it in
@@ -702,7 +702,7 @@ class PayoutKind(str, enum.Enum):
     - ``UPFRONT_GRANT``: one negative SUBSIDY entry at year 0.
     - ``TAX_CREDIT_SCHEDULE``: one entry per scheduled year 1..N, cut at the horizon.
     - ``OPERATIONAL``: one entry per year of the award's duration, valued on the annualized energy.
-    - ``LOAN_TERMS``: no entry of its own; it overrides the financing plan (§4.4).
+    - ``LOAN_TERMS``: no entry of its own; it overrides the financing plan.
     - ``VAT_REDUCTION``: typed but not booked (see :class:`ReducedVatBenefit`).
     """
 
@@ -715,7 +715,7 @@ class PayoutKind(str, enum.Enum):
 
 @dataclass
 class EligibleCostSpec:
-    """Which cost categories count toward a scheme's eligible cost, and how it is capped and prorated (§5.2).
+    """Which cost categories count toward a scheme's eligible cost, and how it is capped and prorated.
 
     The eligible cost is the euro figure a scheme's rate, lump sum or credit is computed on; it is per scheme, so two
     schemes on the same heat pump may count different categories. The settings are: the counted timeline categories
@@ -754,11 +754,11 @@ class EligibleCostSpec:
 
 @dataclass
 class SubsidyScheme:
-    """One funding programme of the catalog (§5.2).
+    """One funding programme of the catalog.
 
     States where and when it applies, to which asset classes and measure kinds, who qualifies, what it pays, on which
     cost basis and how it combines with other schemes. ``legal_basis`` and ``url`` are mandatory, so every amount can
-    be checked against the directive (§3.10). ``cumulation_group`` is a free-text label; every id in ``excludes`` must
+    be checked against the directive. ``cumulation_group`` is a free-text label; every id in ``excludes`` must
     name a real scheme, which the data-file checks verify.
     """
 
@@ -813,7 +813,7 @@ class SubsidyScheme:
 
 
 def scheme_context_fields(scheme: SubsidyScheme) -> List[str]:
-    """Return every context field a scheme depends on (§5.7).
+    """Return every context field a scheme depends on.
 
     Two sources: the eligibility conditions, and the eligible-cost spec, which needs the residential share when it
     prorates and the dwelling-unit count when it caps per unit. Question derivation and the coverage check both read
@@ -829,10 +829,10 @@ def scheme_context_fields(scheme: SubsidyScheme) -> List[str]:
 
 @dataclass
 class QuestionEntry:
-    """One localized question of the questionnaire catalog (§5.7).
+    """One localized question of the questionnaire catalog.
 
     How to ask a user for one context field, in every supported language, with answer options and help text. Entries
-    live in ``subsidy_catalog/questions_<COUNTRY>.json`` keyed by the field they fill; the data-file checks (§9.6) fail
+    live in ``subsidy_catalog/questions_<COUNTRY>.json`` keyed by the field they fill; the data-file checks fail
     if a field used by a shipped scheme has no entry.
     """
 
@@ -904,9 +904,9 @@ class SubsidyCatalog:
         """Load and validate `<base_path>/<COUNTRY>.json` plus `questions_<COUNTRY>.json`.
 
         Everything statically checkable is checked here, so a malformed programme is a load error naming the scheme:
-        ``legal_basis``, ``url``, ``benefit`` and ``source_ids`` are mandatory, the benefit payload is parsed (§5.2),
-        condition field names are checked against the context vocabulary (§5.3), and cited source ids are resolved
-        against ``sources.json``. The question file is optional here; its completeness is a data-file check (§9.6).
+        ``legal_basis``, ``url``, ``benefit`` and ``source_ids`` are mandatory, the benefit payload is parsed,
+        condition field names are checked against the context vocabulary, and cited source ids are resolved
+        against ``sources.json``. The question file is optional here; its completeness is a data-file check.
 
         Args:
             country: ISO country code selecting both file names.
@@ -1160,7 +1160,7 @@ class SubsidyCatalog:
         return [self.sources[source_id] for source_id in scheme.source_ids if source_id in self.sources]
 
     def source_resolver(self) -> Dict[str, ResolvedSource]:
-        """Return the catalog's registry entries in the report representation (§3.10).
+        """Return the catalog's registry entries in the report representation.
 
         The result object merges them with the cost database's registry (the id spaces are disjoint), so a subsidy flow
         explained through the provenance ledger resolves to a citation. Read by the report's "sources used" table and
@@ -1203,7 +1203,7 @@ class SubsidyCatalog:
     def candidate_schemes(
         self, asset_class: ComponentType, measure_kind: str, region: Optional[str], year: int
     ) -> List[SubsidyScheme]:
-        """Return the schemes that could apply to one measure, by jurisdiction, asset class and validity (§5.7).
+        """Return the schemes that could apply to one measure, by jurisdiction, asset class and validity.
 
         The first stage of every subsidy computation; it keeps the exponential solver and the question derivation on a
         handful of schemes. A scheme with no region is nationwide; a regional scheme matches only its region, and an

@@ -1,4 +1,4 @@
-"""Energy bills per carrier, billed for year 1 and projected over the horizon (cost_spec.md §3.6 rule 5, §8.5).
+"""Energy bills per carrier, billed for year 1 and projected over the horizon.
 
 Per carrier the simulated billing determinants (kWh bought and sold, peaks) are annualized, billed once under the
 tariff contract, and each bill component is escalated with its own rate:
@@ -9,7 +9,7 @@ tariff contract, and each bill component is escalated with its own rate:
 - FEED_IN_REVENUE: nominal for an EEG-style guaranteed duration, then the feed-in rate.
 - ENERGY_CO2_PRICE: not escalated; read off the CO2 price path per year.
 
-It also returns the operational CO2 mass per carrier (§3.8), which `calculators/co2.py` folds into the CO2 result, and
+It also returns the operational CO2 mass per carrier, which `calculators/co2.py` folds into the CO2 result, and
 handles plan-stated energy prices.
 """
 
@@ -42,7 +42,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 @dataclass
 class CarrierEmissions:
-    """Operational CO2 of one carrier in kg per year: emission factor times annualized energy bought (§3.8).
+    """Operational CO2 of one carrier in kg per year: emission factor times annualized energy bought.
 
     `carrier_value` is `EnergyCarrier.value`, the subject string of the carrier's cash-flow entries.
     """
@@ -51,7 +51,7 @@ class CarrierEmissions:
     annual_emissions_in_kg: float
     #: The factor the mass above was computed with, in kg per kWh bought, so the CO2 section can
     #: show the multiplication. The price entry's `emission_factor_in_kg_per_kwh`, constant over
-    #: the horizon (§3.8 asks for a per-year trend, which would make this a path).
+    #: the horizon (a per-year trend would make this a path).
     emission_factor_in_kg_per_kwh: float = 0.0
 
 
@@ -60,7 +60,7 @@ class EnergyFlowResult:
     """The cash flows, the CO2 mass and the diagnostics the energy calculator produces.
 
     `entries` are money for the timeline; `emissions` are kilograms for the separate CO2 accounting and are never
-    summed with money (§3.8). `raw_flexibility_value_by_carrier` holds each carrier's flexibility value before the
+    summed with money. `raw_flexibility_value_by_carrier` holds each carrier's flexibility value before the
     projection clamps it at zero; a negative value means the load was timed worse than a flat profile, which
     `plausibility.py` warns about. `tariffs_applied` lists the contract each carrier was billed under.
     """
@@ -103,8 +103,8 @@ class StatedPrices:
     #: The dotted parameter path a stated field is recorded under in the provenance ledger.
     PARAMETER_PATH: ClassVar[str] = "parameters.energy_prices.{carrier}.{field}"
 
-    #: How long a feed-in rate is held nominally fixed, stated or from the database (EEG
-    #: convention, §8.5).
+    #: How long a feed-in rate is held nominally fixed, stated or from the database (the EEG
+    #: convention).
     FEED_IN_DURATION_IN_YEARS: ClassVar[int] = 20
 
     #: Tolerance of the "not below the year-1 carbon price" check, in EUR/kWh: a price echoed by a
@@ -161,9 +161,10 @@ class StatedPrices:
 
 
 def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffContract:
-    """Build the default flat contract from a §3.5 energy price entry.
+    """Build the default flat contract from an energy price entry.
 
-    A carrier without an explicit contract is billed flat at the database price. This lives in the engine rather than
+    A carrier without an explicit contract is billed flat at the database price, or at the plan's stated terms when
+    `with_stated_terms` puts them in place on the contract built here. This lives in the engine rather than
     in `tariffs.py`, which holds only contract data, parsing and billing.
     """
     return TariffContract(
@@ -185,7 +186,7 @@ def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffCo
 def default_contract(
     carrier: EnergyCarrier, year: int, database: CostDatabase, country: str
 ) -> TariffContract:
-    """Build the default flat contract of a carrier from the §3.5 price entries, feed-in included (§8.2).
+    """Build the default flat contract of a carrier from the price entries, feed-in included.
 
     Records nothing in the ledger: `build_energy_flows` records the working price against the same entry, and the
     feed-in rate gets no record of its own.
@@ -352,14 +353,14 @@ def build_energy_flows(
     horizon: int,
     macro: bool,
 ) -> EnergyFlowResult:
-    """Return each carrier's energy cost flows over years 1..T and its operational CO2 (§3.6 rule 5, §8.5).
+    """Return each carrier's energy cost flows over years 1..T and its operational CO2.
 
     Per carrier: annualize the measured determinants, bill them once under the tariff contract for a year-1 bill, then
     repeat it for each year with every component escalated at its own rate (see the module docstring). The flexibility
     value (what load shifting saved against the year's average price) is added into the working band, escalated at the
     spread rate and subtracted back out, so it escalates separately from the volume. The CO2 price component uses the
     path value of calendar year `price_basis_year + t - 1` and is emitted only when the entry's `co2_price_exposure >
-    0`; entries whose working price already includes carbon declare 0 exposure (§3.5).
+    0`; entries whose working price already includes carbon declare 0 exposure.
 
     Args:
         billing: One `BillingDeterminants` per carrier over the simulated period (kWh, peaks, optional integrated cost
@@ -373,7 +374,7 @@ def build_energy_flows(
         parameters: Economic parameters: country, escalation rates, CO2 price scenario.
         price_basis_year: The economic "today" prices and the CO2 path are anchored on, not the weather year.
         horizon: Observation period T in years.
-        macro: MACROECONOMIC accounting (§4.5): strips the tax and levy share from the working price and drops feed-in
+        macro: MACROECONOMIC accounting: strips the tax and levy share from the working price and drops feed-in
             revenue and the CO2 price component, all transfers; `calculators/co2.py` adds the CO2 damage cost instead.
 
     Returns:

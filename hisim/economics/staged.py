@@ -7,7 +7,7 @@ per-stage evaluations: every stage is evaluated alone over the full horizon by `
 takes its operating flows from the stage active in it and each stage's investment flows are moved to the year the stage
 starts. A one-stage plan therefore equals a plain evaluation entry for entry. Equipment an earlier stage bought (kept
 equipment) enters the next stages' registers as existing assets, so replacements, residual values and removal costs
-fall in the right years through the engine's brownfield logic (cost_spec.md §4.1); stages are therefore evaluated in
+fall in the right years through the engine's brownfield logic; stages are therefore evaluated in
 order. Staged plans use the full-cost method: no stage books an anyway credit for what it replaces.
 
 Example::
@@ -171,7 +171,7 @@ class StagedCategories:
 
     #: The entries a residual value is written down from: the installations the plan charged.
     #: A purchase is split over an INVESTMENT and a PLANNING entry, and their sum in the purchase
-    #: year is the gross investment the engine's own write-down uses (``cost_spec.md`` §3.6).
+    #: year is the gross investment the engine's own write-down uses.
     RESIDUAL_BASIS: FrozenSet[CostCategory] = frozenset(
         {CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REPLACEMENT}
     )
@@ -1563,8 +1563,8 @@ class StagedEvaluator:
 
         Anything the stage's inventory newly declares replaced (`_newly_replaced_classes`) is bought whole, however
         large the old one was: a heating measure replacing a 430-litre buffer with a 970-litre one buys a 970-litre
-        vessel. The stage's own evaluation already prices it so, with the old unit's removal and written-off book value
-        (cost_spec.md §4.1). Without this rule a same-class replacement of equal or smaller size would be free.
+        vessel. The stage's own evaluation already prices it so, with the old unit's removal and written-off book value.
+        Without this rule a same-class replacement of equal or smaller size would be free.
 
         Args:
             stages: The plan as given.
@@ -1919,8 +1919,8 @@ class StagedEvaluator:
     ) -> List[Tuple[int, UncertainValue]]:
         """Return one stage's replacement schedule, re-dated exactly as its REPLACEMENT entries are.
 
-        The operating view charges no capital and levelizes replacements into a reserve (a sinking fund, cost_spec.md
-        §4.2), so the reserve must follow the plan's replacement years. The flows come from
+        The operating view charges no capital and levelizes replacements into a reserve (a sinking fund),
+        so the reserve must follow the plan's replacement years. The flows come from
         `LifecycleCostResult.replacement_flows`, which exist under every perspective.
 
         Args:
@@ -2140,8 +2140,8 @@ class StagedEvaluator:
         """Return the investment escalation rate for each of a stage's subjects.
 
         A stage's year-0 figures are year-0 prices; booking them in year `t` means paying year-`t` prices, so each is
-        escalated at its subject's own investment escalation rate (§3.2: explicit parameter, then the country defaults
-        file, then the general rate).
+        escalated at its subject's own investment escalation rate (the fallback chain: explicit parameter, then the
+        country defaults file, then the general rate).
 
         Args:
             stage: The stage whose subjects are rated.

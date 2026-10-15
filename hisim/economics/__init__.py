@@ -1,4 +1,4 @@
-"""Lifecycle cost engine (cost_spec.md): the successor of the per-component capex/opex calculation.
+"""Lifecycle cost engine: the successor of the per-component capex/opex calculation.
 
 It computes lifecycle costs over a configurable horizon (default 20 years, annuity method per VDI 2067-1) from facts
 declared by components, energy flows measured by the meters and versioned data files (prices, lifetimes, subsidy

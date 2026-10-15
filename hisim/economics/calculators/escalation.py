@@ -1,4 +1,4 @@
-"""Price escalation: the compound factor `(1 + rate)**n` and the rate fallback chains (cost_spec.md §3.2, §3.6).
+"""Price escalation: the compound factor `(1 + rate)**n` and the rate fallback chains.
 
 Rates are nominal annual price-change rates as fractions (0.02 = 2 %/a); a negative rate expresses a learning curve.
 Callers choose the exponent: year-anchored flows (a replacement in year t, the residual value, the anyway credit) use
@@ -34,7 +34,7 @@ def escalation_factor(rate: float, years: int) -> float:
 
 
 def escalate(amount: UncertainValue, rate: float, years: int) -> UncertainValue:
-    """Escalate a banded amount by ``(1 + rate)**years`` in every slot (§3.2).
+    """Escalate a banded amount by ``(1 + rate)**years`` in every slot.
 
     A band is an `UncertainValue`: a minimum, best estimate and maximum. The factor is a non-negative scalar, so the
     slots stay a coherent triple and a revenue band keeps its sign.
@@ -53,7 +53,7 @@ def escalate(amount: UncertainValue, rate: float, years: int) -> UncertainValue:
 def carrier_escalation_rate(
     carrier: EnergyCarrier, parameters: EconomicParameters, database: CostDatabase
 ) -> float:
-    """Return a carrier's energy price escalation rate (§3.2).
+    """Return a carrier's energy price escalation rate.
 
     The chain is: the explicit parameter, else the country defaults file, else the general rate.
     `calculators/energy.py` applies it to the working price of every projected year. The chain lets a scenario change
@@ -104,7 +104,7 @@ def resolve_carrier_escalation_rate(
 def investment_escalation_rate(
     asset_class: ComponentType, parameters: EconomicParameters, database: CostDatabase
 ) -> float:
-    """Return an asset class's investment escalation rate through the same three-step chain (§3.2).
+    """Return an asset class's investment escalation rate through the same three-step chain.
 
     Technology prices diverge (PV and batteries fall, labour-heavy trades rise), so the rate is per asset class. Used
     for replacements, the residual value and the anyway credit. The shipped per-class tables are empty until reviewed

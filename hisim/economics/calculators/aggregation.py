@@ -25,18 +25,18 @@ from hisim.economics.uncertainty import UncertainValue
 
 @dataclass
 class TimelineAggregation:
-    """The KPIs derived from one perspective's timeline, copied onto `LifecycleCostResult` (§3.7).
+    """The KPIs derived from one perspective's timeline, copied onto `LifecycleCostResult`.
 
     Units: `total_npv_in_euro` and every `npv_by_*` value are euro bands discounted to year 0, cost-positive (a
     negative NPV means the variant earns money). `equivalent_annual_cost_in_euro` is the NPV times the VDI 2067-1
     annuity factor, in euro per year; `monthly_equivalent_cost_in_euro` is that over twelve.
-    `annual_cost_series_nominal_in_euro` is undiscounted nominal euro per year 0..T (the liquidity view, §4.3) and
+    `annual_cost_series_nominal_in_euro` is undiscounted nominal euro per year 0..T (the liquidity view) and
     `monthly_cost_year1_in_euro` its year-1 element over twelve. All are scoped to `scope_payer` except `npv_by_payer`,
-    which covers every payer for the §6.5 zero-sum check.
+    which covers every payer for the zero-sum check.
     """
 
     #: Months per year: the one divisor behind every monthly figure the engine publishes — the
-    #: "monthly cost" display figures of §4.3, the monthly burden view and the warm-rent change.
+    #: "monthly cost" display figures, the monthly burden view and the warm-rent change.
     #: The engine has no intra-year resolution, so this is a unit conversion of an annual figure
     #: and never a statement about seasonal profiles.
     MONTHS_PER_YEAR: ClassVar[float] = 12.0
@@ -57,7 +57,7 @@ class TimelineAggregation:
 def annual_energy_quantities(
     billing: List[BillingDeterminants], simulated_period_fraction: float
 ) -> Dict[str, AnnualEnergyQuantities]:
-    """Return the annualized energy volumes per carrier, for the result object (§3.6 rule 5).
+    """Return the annualized energy volumes per carrier, for the result object.
 
     The plausibility panel and the report divide euros by these kWh to show effective prices, which exposes unit
     mix-ups. Volumes of the same carrier billed by several meters add up, as every other reading of those records does.
@@ -126,7 +126,7 @@ def build_breakdowns(
     annuity: float,
     horizon: int,
 ) -> Dict[str, ComponentCostBreakdown]:
-    """Return one `ComponentCostBreakdown` per subject, pivoted from the scoped timeline (§7.4 rule 1).
+    """Return one `ComponentCostBreakdown` per subject, pivoted from the scoped timeline.
 
     Every breakdown filters the same timeline, so the per-subject NPVs sum exactly to the perspective's total and
     stacked bars add up. `investment_gross_in_euro` is the year-0 cost before support; `subsidies_nominal_in_euro` sums
@@ -191,12 +191,12 @@ def aggregate_timeline(
     parameters: EconomicParameters,
     annual_heat_demand_in_kwh: Optional[float],
 ) -> TimelineAggregation:
-    """Derive the perspective's KPIs from the allocated timeline (§3.7).
+    """Derive the perspective's KPIs from the allocated timeline.
 
-    The last step of an evaluation and the only one that discounts. `npv_by_payer` is taken on the full timeline, so
-    both sides of the landlord/tenant split are visible; everything else on the timeline scoped with
-    `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The cost per kWh of heat is `NPV * annuity / annual
-    heat`, an annual cost per annual kWh.
+    The last step of an evaluation and the only evaluation step that discounts the timeline into KPIs. `npv_by_payer` is
+    taken on the full timeline, so both sides of the landlord/tenant split are visible; everything else on the timeline
+    scoped with `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The cost per kWh of heat is `NPV *
+    annuity / annual heat`, an annual cost per annual kWh.
 
     Args:
         timeline: The finished, payer-allocated timeline.

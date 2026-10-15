@@ -1,9 +1,9 @@
-"""Compatibility adapter: reads cost facts and meter flows from components by class name (cost_spec.md §10.0 rule 4).
+"""Compatibility adapter: reads cost facts and meter flows from components by class name.
 
 The engine never calls the legacy `get_cost_capex`/`get_cost_opex` methods, because they write back into the
 component's config. Facts come from a component's own `get_cost_facts()` where it has one, and otherwise from the
-class-name tables here, so `hisim.economics` imports no component module (§10.0 rule 1). `bridge.py` is the only
-caller; an entry becomes dead once its component implements the hook (§10.1 Phase 6). Energy stays in kWh for every
+class-name tables here, so `hisim.economics` imports no component module. `bridge.py` is the only
+caller; an entry becomes dead once its component implements the hook. Energy stays in kWh for every
 carrier; fuels quoted per ton or liter are converted on the price side (`database.get_energy_price`).
 """
 
@@ -24,7 +24,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 @dataclass
 class MeterSpec:
-    """How to read a meter's carrier flows from the postprocessing results (§3.4, §8.4).
+    """How to read a meter's carrier flows from the postprocessing results.
 
     Names the carrier the meter measures and its output columns for bought energy, sold energy and power, so
     `bridge.py` extracts billing determinants for every meter class the same way. Energy columns are per-timestep Wh
@@ -104,13 +104,13 @@ def _hds_facts(config: Any) -> Optional[ComponentCostFacts]:
 
 
 class FactsExtractors:
-    """Component class name -> function turning that component's config into `ComponentCostFacts` (§10.0).
+    """Component class name -> function turning that component's config into `ComponentCostFacts`.
 
-    Keyed by class name so `hisim.economics` imports no component module (§10.0 rule 1).
+    Keyed by class name so `hisim.economics` imports no component module.
     `tests/test_economics_adapter_contract.py` resolves every key against the real classes and runs every extractor on
     the real default configs, so a renamed class or config field fails a test. Each entry states the asset class, the
     config field the size comes from, the unit conversion and the KPI tag; entries are removed as components implement
-    `get_cost_facts()` (§10.1 Phase 6).
+    `get_cost_facts()`.
     """
 
     BY_CLASS_NAME: Dict[str, Callable[[Any], Optional[ComponentCostFacts]]] = {
@@ -271,7 +271,7 @@ class MeterOutputContract:
 
 
 class MeterOutputContracts:
-    """Meter class name -> `MeterOutputContract`: the four meter classes the engine can bill from (§3.4, §8.4).
+    """Meter class name -> `MeterOutputContract`: the four meter classes the engine can bill from.
 
     Keyed by class name like `FactsExtractors`, and pinned by the same contract test, which resolves every key and
     column constant against the real classes.
@@ -337,7 +337,7 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     """Return the meter descriptor of a known meter class, or None for any other component.
 
     Energy is billed only where a meter recorded a flow across the system boundary, so a component's internal
-    consumption can never be billed twice (§3.1). `bridge.py` calls this for every component and reads the named
+    consumption can never be billed twice. `bridge.py` calls this for every component it bills and reads the named
     columns into `BillingDeterminants`.
 
     Raises:
@@ -628,7 +628,7 @@ def resolve_useful_heat_source(component: Any) -> Optional[ResolvedUsefulHeatSou
 def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=too-many-return-statements
     """Return the cost facts of one component: its own `get_cost_facts()` first, the adapter table second.
 
-    Precedence: a component's `get_cost_facts()` wins; if it returns None on a class declared `FREE_OF_COST` (§9.2),
+    Precedence: a component's `get_cost_facts()` wins; if it returns None on a class declared `FREE_OF_COST`,
     the component has no cost and the table is not consulted; any other None falls through to the table. Without a
     reason only an unknown, undeclared class comes back. An unresolved reason is returned when a registered extractor
     yields None, when a class declared `PRICED` has neither hook nor table entry, when an extractor fails on a missing
@@ -728,7 +728,7 @@ def get_cost_facts(component: Any) -> Optional[ComponentCostFacts]:
 def get_energy_flow_facts(
     component: Any, all_outputs: Any, postprocessing_results: Any
 ) -> Optional[EnergyFlowFacts]:
-    """Return the component's own §3.4 energy flow declaration, or None if it has none.
+    """Return the component's own energy flow declaration, or None if it has none.
 
     `bridge.py` asks this first and falls back to `get_meter_spec` for components without the hook. `EnergyFlowFacts`
     carries carrier and kWh but no capacity peaks, so peaks keep coming from the `MeterSpec` where one exists.
@@ -753,7 +753,7 @@ def get_energy_flow_facts(
 
 
 def effective_cost_relevance(component: Any) -> CostRelevance:
-    """Return the component class's declared cost role (§9.2).
+    """Return the component class's declared cost role.
 
     Only the class's `cost_relevance` declaration is read; nothing is inferred from the adapter tables, so a class that
     declares nothing is `UNDECLARED`, which `bridge.py` treats as fatal. A meter that also costs money declares `METER`

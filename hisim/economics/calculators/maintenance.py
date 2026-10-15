@@ -2,7 +2,7 @@
 
 A subject is one costed thing on the timeline, such as a heat pump or the building envelope. Each year it pays a
 maintenance rate times its gross investment plus a flat fixed operation cost, both escalated with the general price
-escalation rate. The two are kept as separate entries because the actor rules split them differently (§6.2).
+escalation rate. The two are kept as separate entries because the actor rules split them differently.
 `evaluator.build_timeline` calls this once per subject; energy cost lives in `energy.py`.
 """
 
@@ -22,7 +22,7 @@ def build_maintenance_entries(
     general_escalation_rate: float,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """Return the maintenance and fixed operation entries of one subject for years 1..T (§3.6 rule 4).
+    """Return the maintenance and fixed operation entries of one subject for years 1..T.
 
     Each year gets up to two entries: MAINTENANCE (`maintenance_rate * gross`) and FIXED_OPERATION (the flat annual
     fee), both computed as `(maintenance_rate * I_gross + fixed_operation_cost) * (1 + r_gen)**(t-1)`. A kind that is

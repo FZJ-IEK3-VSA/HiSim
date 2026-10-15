@@ -30,7 +30,7 @@ from hisim.economics.staged import StagedEvaluationError, StagedEvaluator, Stage
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_cli import StagedCli
 from hisim.economics.staged_parameters import ParameterKeys
-from hisim.economics.staged_record import EconomicsStageRecord
+from hisim.economics.staged_record import EconomicsStageRecord, MainSubjectRule, StageRecordError
 from hisim.renovisor.economics import EconomicContextBuilder
 
 from tests.economics.synthetic_stages import (
@@ -276,6 +276,16 @@ class TestTheStageArgument:
         """The second field is a horizon year, and a word there is the caller's mistake."""
         with pytest.raises(StagedEvaluationError, match="is not a year"):
             StagedCli.parse_stage("jobs/base:soon:baseline", 0)
+
+    @pytest.mark.parametrize("argument", ["jobs/pkg:1:Stage 1: walls", "jobs/pkg:1:walls:", "jobs/pkg:1:a:b c"])
+    def test_a_fourth_field_that_is_no_job_id_is_refused(self, argument):
+        """A label with a colon in it must not be split silently into a shorter label and a job id.
+
+        If this fails, ``Stage 1: walls`` is filed as the label ``Stage 1`` with the job id `` walls``, and the
+        document traces the stage to a job that does not exist.
+        """
+        with pytest.raises(StagedEvaluationError, match="is not a job id"):
+            StagedCli.parse_stage(argument, 1)
 
 
 class TestTheHappyPath:
@@ -676,13 +686,18 @@ class TestTheMappingReportIsRequired:
         assert EconomicsStageRecord.KEY in message
         assert "translate the stage again" in message
 
-    def test_a_record_of_another_version_is_refused(self, workspace: Path) -> None:
-        """The engine reads one schema version; another one is not guessed at."""
+    @pytest.mark.parametrize("version", [99, True])
+    def test_a_record_of_another_version_is_refused(self, workspace: Path, version: Any) -> None:
+        """The engine reads one schema version; another one is not guessed at.
+
+        ``True`` equals 1 in Python, so without the record's bool guard a ``schema_version: true`` would pass as
+        version 1; this case fails if that guard goes.
+        """
         path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
         record = json.loads(path.read_text(encoding="utf-8"))[EconomicsStageRecord.KEY]
-        self._spoil_record(workspace, {**record, EconomicsStageRecord.SCHEMA_VERSION_KEY: 99})
+        self._spoil_record(workspace, {**record, EconomicsStageRecord.SCHEMA_VERSION_KEY: version})
         message = self._refusal(workspace)
-        assert "schema version 99" in message
+        assert f"schema version {version!r}" in message
         assert f"reads version {EconomicsStageRecord.SCHEMA_VERSION}" in message
 
     def test_a_malformed_record_is_refused_with_the_key_named(self, workspace: Path) -> None:
@@ -722,6 +737,23 @@ class TestTheMappingReportIsRequired:
         assert read.measures == ("heating_system",)
         assert read.replaces_subjects == {"HeatPump": ["GenericBoiler"]}
         assert read.catalogue.main_subjects["heating_system"].asset_classes
+
+    @pytest.mark.parametrize(
+        "raw, refusal",
+        [
+            ({"rule": "asset_class", "asset_classes": []}, "is empty"),
+            ({"rule": "named_by_measure", "asset_classes": ["HeatPump"]}, "is set on a 'named_by_measure' rule"),
+        ],
+    )
+    def test_a_main_subject_rule_that_cannot_mean_what_it_says_is_refused(self, raw: Any, refusal: str) -> None:
+        """An asset-class rule without classes, or a named rule with classes, is refused with its path.
+
+        If this fails, the first rule passes the record and the quote fails later with a message about subjects
+        "priced as" nothing, and the second rule's classes are dropped without a word.
+        """
+        with pytest.raises(StageRecordError, match=refusal) as caught:
+            MainSubjectRule.from_json(raw, "economics_stage.catalogue.main_subjects.heating_system")
+        assert "economics_stage.catalogue.main_subjects.heating_system.asset_classes" in str(caught.value)
 
 
 class TestTheStageMeasuresComeFromTheReport:

@@ -8,6 +8,7 @@ source can say what commit this is.
 """
 
 import re
+import subprocess
 
 import pytest
 
@@ -99,6 +100,26 @@ class TestHiSimCommit:
 
         monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE)
         assert HiSimCommit.of() is None, "an empty directory is not a checkout"
+
+    @pytest.mark.base
+    def test_a_git_that_hangs_is_given_up_on_and_answers_none(self, tmp_path, monkeypatch):
+        """The git lookup runs with a timeout, and running out of it is no commit rather than a failure.
+
+        If this fails, either the lookup is started without ``timeout`` and a hanging git would stall every
+        translation and staged run, or the timeout is raised to the caller instead of answering ``None``.
+        """
+        seen = {}
+
+        def hanging_git(arguments, **options):
+            """Stand in for a git that never returns: record the options and raise the timeout."""
+            seen.update(options)
+            raise subprocess.TimeoutExpired(arguments, options["timeout"])
+
+        monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
+        monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE, raising=False)
+        monkeypatch.setattr(subprocess, "run", hanging_git)
+        assert HiSimCommit.of() is None
+        assert seen["timeout"] == HiSimCommit.GIT_TIMEOUT_SECONDS
 
     @pytest.mark.base
     def test_a_full_hash_from_any_source_is_shortened_to_one_spelling(self, tmp_path, monkeypatch):

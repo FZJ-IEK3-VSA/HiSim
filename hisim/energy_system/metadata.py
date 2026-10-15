@@ -27,6 +27,7 @@ from typing import Any, ClassVar, Dict, Mapping, Optional
 
 import hisim
 from hisim import log
+from hisim.hisim_commit import HiSimCommit
 
 
 class RunMetadata:
@@ -53,8 +54,9 @@ class RunMetadata:
     UNKNOWN_VERSION: ClassVar[str] = "unknown"
 
     #: Seconds after which the git query is abandoned. Collecting metadata must never stall a
-    #: simulation, so a timeout simply means "no commit".
-    GIT_TIMEOUT_SECONDS: ClassVar[int] = 10
+    #: simulation, so a timeout simply means "no commit". The same limit as :class:`HiSimCommit`'s
+    #: lookup, so the two git queries of a run give up after the same time.
+    GIT_TIMEOUT_SECONDS: ClassVar[int] = HiSimCommit.GIT_TIMEOUT_SECONDS
 
     #: Key holding the version of HiSim that wrote the record.
     HISIM_VERSION_KEY: ClassVar[str] = "hisim_version"

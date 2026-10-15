@@ -36,10 +36,12 @@ component whose class inherits none or more than one.
 - The simulator evaluates a pass kind by kind: data sources, L2 controllers, L1 controllers, physics, meters
   (`Simulator.EVALUATION_ORDER_OF_KINDS`). Within one kind the components keep the order they were added in, except
   that an L2 controller goes after the L2 controllers it reads, and every device an L1 controller commands goes
-  before the other physics that controller reads (`hisim/evaluation_order.py`). An L2 signal read by another L2
-  controller, such as the energy manager's raise the heating curve applies, thus reaches the reader in the same
-  pass; a command reaches its device in the same pass, and the device's answer reaches the controller in the next
-  pass together with the answer of the store it charges.
+  before the other physics that controller reads (`hisim/evaluation_order.py`). Components that require one another
+  first in a cycle are placed as one block, in the order added, where the first of them would go, and the simulator
+  warns of the cycle; so an ordering rule is broken only between the members of a cycle. An L2 signal read by
+  another L2 controller, such as the energy manager's raise the heating curve applies, thus reaches the reader in
+  the same pass; a command reaches its device in the same pass, and the device's answer reaches the controller in the
+  next pass together with the answer of the store it charges.
 
 ## B. Principles
 

@@ -484,8 +484,7 @@ class Simulator:
 
         Returns:
             The positions into ``kinds`` in evaluation order, the physics positions whose constraints form a cycle
-            and the L2 positions that read one another in a cycle, both of which keep the order they were added in,
-            and the L2 positions that read an L2 controller evaluated after them.
+            and the L2 positions that read one another in a cycle, both of which keep the order they were added in.
 
         Raises:
             ValueError: If a kind is not one of :attr:`EVALUATION_ORDER_OF_KINDS`, or ``kinds`` and ``sources``
@@ -512,7 +511,6 @@ class Simulator:
             positions=tuple(positions),
             physics_cycles=physics.physics_cycles,
             l2_cycles=l2.l2_cycles,
-            l2_late_readers=l2.l2_late_readers,
         )
 
     def evaluation_plan(self) -> List[ComponentWrapper]:
@@ -522,9 +520,8 @@ class Simulator:
         For example, a setup that adds a hot-water tank, its boiler and the boiler's controller gets the plan
         controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
         columns keep the order they were added in. A group of physics components whose constraints form a cycle, or
-        of L2 controllers that read one another in a cycle, keeps the order it was added in, and a warning names its
-        components. A warning also names every other L2 controller that a cycle's place leaves reading an L2
-        controller evaluated after it.
+        of L2 controllers that read one another in a cycle, is evaluated as one block in the order it was added in,
+        and a warning names its components. Only a member of such a group waits for a component evaluated after it.
 
         A component's sources are read from the outputs its inputs resolved to, so an input that stayed unconnected
         (an optional one, or one the parameters allow to stay unconnected) adds no ordering constraint.
@@ -578,17 +575,8 @@ class Simulator:
                 names = ", ".join(components[position].component_name for position in cycle)
                 log.warning(
                     f"The L2 controllers {names} read one another in a cycle. They keep the order they were added "
-                    "in, so one of them applies the other's signal of the pass before, and its iteration may need "
-                    "more passes or circle instead of settling."
-                )
-            in_l2_cycles = {position for cycle in order.l2_cycles for position in cycle}
-            for position in order.l2_late_readers:
-                if position in in_l2_cycles:
-                    continue
-                log.warning(
-                    f"The L2 controller {components[position].component_name} reads an L2 controller that is "
-                    "evaluated after it, because a read cycle among the L2 controllers holds that one back; it "
-                    "applies that controller's signal of the pass before."
+                    "in, so each of them that reads a later one applies its signal of the pass before, and the "
+                    "iteration may need more passes or circle instead of settling."
                 )
             self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
         return self._evaluation_plan

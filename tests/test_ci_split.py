@@ -12,6 +12,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, ClassVar, Dict, List, Tuple
 
 import pytest
@@ -138,6 +139,23 @@ def test_loadgroup_gets_a_module_group_for_every_test_without_one(tmp_path: Path
         "tests/test_c.py",
     ]
     assert items[3].added == []
+
+
+@pytest.mark.parametrize(
+    "option, active",
+    [
+        ({"dist": "no", "loadgroup": True}, True),
+        ({"dist": "loadgroup"}, True),
+        ({"dist": "no", "loadgroup": False}, False),
+        ({"dist": "loadfile"}, False),
+    ],
+)
+def test_loadgroup_is_seen_on_the_workers_too(option: Dict[str, Any], active: bool) -> None:
+    """Catches the module groups being added only where xdist does not read them.
+
+    An xdist worker, where the tests are collected, sees ``dist`` reset to ``no`` and the mode in ``loadgroup``.
+    """
+    assert CiSplit.loadgroup_active(SimpleNamespace(**option)) is active
 
 
 @pytest.mark.parametrize("text", ["0/3", "4/3", "3", "a/b", "1/0"])

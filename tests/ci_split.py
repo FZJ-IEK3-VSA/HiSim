@@ -48,7 +48,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import pytest
 
@@ -176,6 +176,16 @@ class CiSplit:
         kept.sort(key=lambda pair: (-seconds.get(pair[1], default_seconds), first_seen[pair[1]]))
         return [item for item, _ in kept], deselected
 
+    @staticmethod
+    def loadgroup_active(option: Any) -> bool:
+        """Whether this process collects for ``--dist loadgroup``: on an xdist worker, or in the controller.
+
+        Example: a worker of ``pytest -n 2 --dist loadgroup`` sees ``dist == "no"`` and ``loadgroup is True``
+        (xdist resets ``dist`` on its workers), the controller ``dist == "loadgroup"``; ``--dist loadfile``
+        gives neither.
+        """
+        return bool(getattr(option, "loadgroup", False)) or getattr(option, "dist", None) == "loadgroup"
+
     @classmethod
     def mark_module_groups(cls, items: List[pytest.Item]) -> None:
         """Gives every test without an ``xdist_group`` its module's, so ``--dist loadgroup`` keeps modules whole.
@@ -202,8 +212,12 @@ class CiSplitPlugin:
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_collection_modifyitems(self, config: pytest.Config, items: List[pytest.Item]) -> None:
-        """Under ``--dist loadgroup``, gives every test without a group its module's, before pytest-xdist reads them."""
-        if getattr(config.option, "dist", None) == "loadgroup":
+        """Under ``--dist loadgroup``, gives every test without a group its module's, before pytest-xdist reads them.
+
+        On an xdist worker, where the tests are collected, xdist has set ``dist`` to ``no`` and kept the
+        mode as ``loadgroup``; in a run without workers the mode is ``dist`` itself.
+        """
+        if CiSplit.loadgroup_active(config.option):
             CiSplit.mark_module_groups(items)
 
     @pytest.hookimpl(trylast=True)

@@ -618,8 +618,8 @@ def test_a_lift_the_pump_carries_is_kept() -> None:
     """A boiler that raised every lift would overshoot the supply a modulating controller asks for.
 
     At half signal the burner turns 10 kW into 10000 * 0.7333 = 7333 W (0.6 at 2 kW rising linearly to 0.9 at
-    20 kW, written out by hand), which the pump's largest flow carries over 2.04 K. A 3 K lift is above that, so the boiler runs it: the supply is the return plus 3 K, and the flow carries
-    the heat over that lift.
+    20 kW, written out by hand), which the pump's largest flow carries over 2.04 K. A 3 K lift is above that, so the
+    boiler runs it: the supply is the return plus 3 K, and the flow carries the heat over that lift.
     """
     boiler, output = BoilerStep.run(
         control_signal=0.5, operating_mode=HeatingMode.SPACE_HEATING.value, lift=3.0, space_heating_return=35.0,

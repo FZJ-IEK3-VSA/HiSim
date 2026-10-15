@@ -892,12 +892,14 @@ four pieces:
 - *The comfort remainder (S6).* In the heating season the rest of a hot-water part-load step charges the buffer, at
   most that rest, with the lift to the supply temperature.
 
-**Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat
-pump overshot a start-of-step buffer (the heat-pump assemblies failed: sample s007 at 93.3 °C, a 50 l buffer in the
-volume sweep at −0.27 °C). Its space-heating controller now sets the same exact fraction, with the heating curve's
-supply temperature plus the energy manager's raise as the target; while it heats, a buffer at its target that its
-draw would empty is charged too, and the distribution's floor applies as for the boilers. The heat pump's hot-water
-part load stays parked with #916 (decision 18 of the part-load spec). Decision 22 of the part-load spec records it.
+**Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat pump
+overshot a start-of-step buffer, and the heat-pump assemblies failed: sample s007 reached 93.3 °C. (A 50 l buffer in the
+volume sweep also drained to −0.27 °C, but because the distribution controller's test partner could not read the buffer,
+so its floor never acted; pull request 8 binds it.) Its space-heating controller now sets the same exact fraction, with
+the heating curve's supply temperature plus the energy manager's raise as the target; while it heats, a buffer at its
+target that its draw would empty is charged too, and the distribution's floor applies as for the boilers. The heat
+pump's hot-water part load stays parked with #916 (decision 18 of the part-load spec). Decision 22 of the part-load spec
+records it.
 
 Measured, full year 2021, predefined occupancy, against 60 s. The boilers with the mode (pull request 7), the heat
 pumps with their part load (pull request 8). The 60 s references:

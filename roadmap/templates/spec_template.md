@@ -2,12 +2,15 @@
 
 How a HiSim spec is written: when one is needed, what goes into it and what into beads, and how a decision is
 taken, amended and recorded. Copy the skeleton below into `roadmap/<topic>_spec.md` (or a subdirectory of
-`roadmap/` for an epic with several documents) and replace every `<...>`. The form follows the specs that work
-well today: `roadmap/hydronic_coupling_spec.md`, `roadmap/hydronic_part_load_spec.md` and
-`roadmap/renovisor/challenges.md`.
+`roadmap/` for an epic with several documents) and replace every `<...>`. The form is drawn from the specs that
+work well today, `roadmap/hydronic_coupling_spec.md` and `roadmap/hydronic_part_load_spec.md`, and the decision
+register `roadmap/renovisor/challenges.md`. Their older spellings (`*Amended (owner, ...)*`, an amendment ending in
+a full stop) stay as they are, since a decision is never rewritten; a new spec uses the spellings below.
 
 For a large new subsystem with a separate requirements phase, `requirements_template.md` and
-`implementation_spec_template.md` in this directory are the longer forms; their decisions follow the rules below.
+`implementation_spec_template.md` in this directory are the longer forms. They keep their own convention: status
+tags (`[decided YYYY-MM-DD]`, `[superseded YYYY-MM-DD]`) and a decision log, and their `D1, D2 …` are derived
+requirements, not owner decisions. The rules below apply to specs written from this template.
 
 ## When a spec is needed
 
@@ -27,8 +30,9 @@ A single bug fix, a refactoring or a new preset needs no spec: its bead and its 
 - **Every todo is a bead**, never a list in the spec (AGENTS.md, "How HiSim uses beads"). The spec's bead table
   names each bead, what it covers and its PR; an open question is an `owner-decision` bead as well as an entry in
   the spec's open questions.
-- **The spec is a design record, not documentation of the code.** Docstrings and guides never cite it ("see spec
-  §4"); they state the rule themselves (`system_docs/coding_style.md` §6). A spec may cite code by file path and
+- **The spec is a design record, not documentation of the code.** Docstrings never cite it ("see spec §4"); they
+  state the rule themselves (`system_docs/coding_style.md` §6). A guide states its rules itself too and may name
+  a spec as the source of an example or a decision. A spec may cite code by file path and
   name; line numbers are cited against a named commit, since they drift.
 
 ## How a decision is taken, amended and recorded

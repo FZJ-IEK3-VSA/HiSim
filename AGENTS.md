@@ -52,7 +52,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Specs and decisions
 
-- Work that spans several pull requests, changes a model or changes a public interface starts with a spec in `roadmap/`, written from `roadmap/templates/spec_template.md` and agreed with the owner before the first pull request.
+- Work that spans several pull requests, changes a model, or changes a public interface in a way one pull request cannot finish starts with a spec in `roadmap/`, written from `roadmap/templates/spec_template.md` and agreed with the owner before the first pull request.
 - A spec holds the design, the numbered and dated owner decisions D1..Dn and a bead table; every todo is a bead, never a list in the spec.
 - A decision is amended under its own number with a dated `*Amendment (owner, YYYY-MM-DD):*` line, never rewritten, in the pull request that acts on it, together with the spec's status line and bead table.
 

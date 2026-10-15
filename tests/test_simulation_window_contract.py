@@ -116,7 +116,7 @@ class TestRefusedWindows:
         ],
     )
     def test_a_step_length_that_divides_the_window_but_not_a_day_is_refused(
-        self, days: int, seconds_per_timestep: float
+        self, days: int, seconds_per_timestep: int
     ) -> None:
         """Rule 5: every day of the run must start a timestep, so the step length divides 86 400 s."""
         start = datetime.datetime(2021, 3, 1)

@@ -23,6 +23,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.postprocessing.reportgenerator import ReportGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode
 from hisim.simulationparameters import SimulationParameters
@@ -541,6 +542,63 @@ def test_postprocessing_option_export_energy_balance(
         PostProcessingOptions.EXPORT_ENERGY_BALANCE,
         expected_files=["balance_report.json", "energy_sankeys/energy_sankey.json", "energy_sankeys/overall.html"],
     )
+
+
+def test_the_pdf_report_is_built_once_after_its_last_chapter(
+    postprocessing_option_framework: PostProcessingOptionTestFramework,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With every report chapter switched on, the PDF is built once, from the whole story in chapter order.
+
+    The report used to be rebuilt from its first page after every chapter: in a full-year run that
+    was 33 of 46 minutes. A spy on :meth:`ReportGenerator.build` counts the builds and records the
+    chapter headings the one build sees: simulation parameters, the components, all outputs, the
+    network charts, the operational costs, the investment costs and the KPIs, in that order.
+    """
+    built_headings: list[list[str]] = []
+    unspied_build = ReportGenerator.build
+
+    def spied_build(report: ReportGenerator) -> None:
+        """Record the level-one headings of the story, then build as usual."""
+        built_headings.append(
+            [
+                flowable.getPlainText()
+                for flowable in report.story
+                if getattr(getattr(flowable, "style", None), "name", None) == "Heading1"
+            ]
+        )
+        unspied_build(report)
+
+    monkeypatch.setattr(ReportGenerator, "build", spied_build)
+    postprocessing_option_framework.run(
+        PostProcessingOptions.COMPUTE_KPIS,
+        expected_files=["report.pdf"],
+        extra_options=[
+            PostProcessingOptions.PLOT_LINE,
+            PostProcessingOptions.MAKE_NETWORK_CHARTS,
+            PostProcessingOptions.GENERATE_PDF_REPORT,
+            PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT,
+            PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT,
+            PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT,
+            PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT,
+            PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT,
+            PostProcessingOptions.COMPUTE_OPEX,
+            PostProcessingOptions.COMPUTE_CAPEX,
+        ],
+    )
+
+    assert len(built_headings) == 1
+    headings = built_headings[0]
+    assert headings[0] == "1. Simulation Parameters"
+    assert headings[-5:] == [
+        f"{len(headings) - 4}. All Outputs",
+        f"{len(headings) - 3}. System Network Charts",
+        f"{len(headings) - 2}. Operational Costs and Emissions for simulated period",
+        f"{len(headings) - 1}. Investment Cost and CO2-Emissions of devices for simulated period",
+        f"{len(headings)}. KPIs",
+    ]
+    # One chapter per component with a chart in between
+    assert len(headings) > 6
 
 
 def test_each_postprocessing_option_has_a_named_test() -> None:

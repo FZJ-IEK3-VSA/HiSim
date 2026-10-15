@@ -237,6 +237,59 @@ UNITS_USING_MEAN_AGGREGATION: frozenset[Units] = frozenset(
 
 
 @enum.unique
+class OutputAggregation(str, enum.Enum):
+    """How the time steps of one output are combined into a monthly, daily or hourly value and a run total.
+
+    Every component output has one of these (``ComponentOutput.aggregation``). Post-processing
+    reads it to form the monthly bar charts, the monthly, daily and hourly result tables, the run
+    totals and the values on the network chart. An output that declares nothing gets the rule of
+    its unit (:meth:`of_unit`): a rate or a state such as W, °C or a fraction is averaged, an
+    amount such as Wh is summed.
+
+    The unit is not enough for every output, so a component declares the aggregation where the
+    unit's rule is wrong:
+
+    - a running total or a counter (``CumulativeConsumption`` in Wh, ``CounterOnOff``) is ``LAST``:
+      its monthly value is its value at the end of the month, its run total the final value;
+    - a stored energy (``ThermalEnergyInStorage`` in Wh) is ``MEAN``: the energy held on average;
+    - an on/off flag (``HeatingSeason``, 0 or 1) is ``MEAN``: the share of the time it was on;
+    - a state with more than two values (a controller mode such as -1 cooling, 0 off, 1 heating),
+      a timer that restarts at every switch, or an angle of the sun is ``NONE``: no monthly
+      value or run total of it means anything. Such an output gets no charts, and its cells in
+      the aggregated tables are empty (NaN); the per-time-step exports still contain it.
+
+    The KPIs do not read these aggregations; they are computed from the time series.
+    """
+
+    #: The sum over the period, for amounts per time step such as an energy in Wh.
+    SUM = "sum"
+    #: The mean over the period, for rates and states such as a power in W or a temperature.
+    MEAN = "mean"
+    #: The value of the period's last time step, for running totals and counters.
+    LAST = "last"
+    #: No aggregate: a monthly value or run total of this output means nothing.
+    NONE = "none"
+
+    @classmethod
+    def of_unit(cls, unit: typing.Any) -> "OutputAggregation":
+        """Return the aggregation an output of this unit gets when it declares none.
+
+        This is the rule post-processing applied to every output before outputs declared their
+        aggregation, so an output that declares nothing is aggregated as before. Example:
+        ``of_unit(Units.WATT)`` is ``MEAN``, ``of_unit(Units.WATT_HOUR)`` is ``SUM``.
+
+        Args:
+            unit: The output's unit, a :class:`Units` member or its string value.
+
+        Returns:
+            ``MEAN`` for the units in ``UNITS_USING_MEAN_AGGREGATION``, ``SUM`` for all others.
+        """
+        unit_value = unit.value if isinstance(unit, Units) else unit
+        mean_unit_values = {mean_unit.value for mean_unit in UNITS_USING_MEAN_AGGREGATION}
+        return cls.MEAN if unit_value in mean_unit_values else cls.SUM
+
+
+@enum.unique
 class OutputPostprocessingRules(str, enum.Enum):
 
     """Rules for postprocessing."""

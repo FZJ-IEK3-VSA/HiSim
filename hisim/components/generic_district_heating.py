@@ -18,7 +18,14 @@ from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
-from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
+from hisim.loadtypes import (
+    EnergyBalanceCarrier,
+    EnergyRole,
+    LoadTypes,
+    Units,
+    ComponentType,
+    OutputAggregation,
+)
 from hisim.component import (
     L1ControllerComponent,
     PhysicsComponent,
@@ -1099,6 +1106,7 @@ class DistrictHeatingController(L1ControllerComponent):
             LoadTypes.ANY,
             Units.ANY,
             output_description="Operating mode of district heating.",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution())

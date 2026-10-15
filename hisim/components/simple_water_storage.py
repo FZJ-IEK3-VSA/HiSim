@@ -806,6 +806,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyInStorage} will follow.",
+            aggregation=lt.OutputAggregation.MEAN,
         )
         self.thermal_energy_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1767,6 +1768,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description="The heat the tank holds at the end of the step, counted from 0 °C: C T_end.",
+            aggregation=lt.OutputAggregation.MEAN,
         )
         self.thermal_energy_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,

@@ -57,6 +57,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         *,
         component_id: cfg.ComponentID,
         display_config: Optional[cfg.DisplayConfig] = None,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ):
         """Defines a component output.
 
@@ -86,6 +87,11 @@ class ComponentOutput:  # noqa: too-few-public-methods
         :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` exactly as the
         component names it itself. ``None`` only on an output built by hand, outside a component.
 
+        ``aggregation`` says how post-processing combines the output's time steps into monthly
+        values and a run total (:class:`~hisim.loadtypes.OutputAggregation`). Left out, it follows
+        the unit: a power in W is averaged, an energy in Wh summed. A component declares it where
+        that is wrong, e.g. ``LAST`` for a running total in Wh, whose monthly sum means nothing.
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
@@ -110,6 +116,9 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
         self.display_config: Optional[cfg.DisplayConfig] = display_config
+        self.aggregation: lt.OutputAggregation = (
+            aggregation if aggregation is not None else lt.OutputAggregation.of_unit(unit)
+        )
 
     @property
     def building_label(self) -> str:
@@ -418,8 +427,14 @@ class Component:
         postprocessing_flag: Optional[List[Any]] = None,
         energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ) -> ComponentOutput:
-        """Adds an output definition; ``energy_port`` declares its role in the energy balance."""
+        """Adds an output definition.
+
+        ``energy_port`` declares the output's role in the energy balance. ``aggregation`` declares
+        how its time steps are combined into monthly values and a run total; left out, the unit
+        decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`).
+        """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
@@ -433,6 +448,7 @@ class Component:
             output_description,
             component_id=self.config.component_id,
             display_config=self.my_display_config,
+            aggregation=aggregation,
         )
         self.outputs.append(outp)
         return outp

@@ -16,7 +16,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hisim.postprocessing.charts import BarChart, Carpet, Line, MonthlyAggregation
+from hisim import loadtypes as lt
+from hisim.postprocessing.charts import BarChart, Carpet, Line
 from hisim.postprocessing.chartbase import AxisUnit, Chart
 from hisim.simulationparameters import FigureFormat
 
@@ -333,7 +334,7 @@ def test_carpet_shows_the_same_unit_as_the_line_chart(  # pylint: disable=redefi
     assert saved_figures[-1].colorbar_label == "Temperature [°C]"
 
 
-def _bar_chart(tmp_path: Path, units: str) -> BarChart:
+def _bar_chart(tmp_path: Path, units: str, aggregation: lt.OutputAggregation | None = None) -> BarChart:
     """A monthly bar chart of one output, writing into ``tmp_path`` only when it plots."""
     return BarChart(
         output="PVSystem # ElectricityOutput",
@@ -344,6 +345,7 @@ def _bar_chart(tmp_path: Path, units: str) -> BarChart:
         output_description="PV output",
         figure_format=FigureFormat.PNG,
         path_checker=lambda **_: None,
+        aggregation=aggregation,
     )
 
 
@@ -386,14 +388,22 @@ def test_the_bar_chart_axis_names_mean_or_sum(
     assert label == expected_label
 
 
-def test_the_monthly_aggregation_follows_the_simulator_rule() -> None:
-    """Every unit the simulator averages is drawn as a mean, every other one as a sum."""
-    from hisim import loadtypes as lt  # pylint: disable=import-outside-toplevel
+def test_a_running_total_is_drawn_as_its_end_of_month_value(tmp_path: Path) -> None:
+    """A running total in Wh declared LAST is labelled as the value at the end of the month, not a sum."""
+    label, _texts = _plot_and_read(_bar_chart(tmp_path, "Wh", lt.OutputAggregation.LAST), [1000.0 * m for m in range(12)])
+    assert label == "Energy, end of month [kWh]"
 
-    for unit in lt.Units:
-        expected = MonthlyAggregation.MEAN if unit in lt.UNITS_USING_MEAN_AGGREGATION else MonthlyAggregation.SUM
-        assert MonthlyAggregation.of_unit(unit) == expected
-        assert MonthlyAggregation.of_unit(unit.value) == expected
+
+def test_a_stored_energy_declared_mean_is_drawn_as_a_monthly_mean(tmp_path: Path) -> None:
+    """A stored energy in Wh declared MEAN overrides the sum its unit would get."""
+    label, _texts = _plot_and_read(_bar_chart(tmp_path, "Wh", lt.OutputAggregation.MEAN), [500.0] * 12)
+    assert label == "Energy, monthly mean [Wh]"
+
+
+def test_an_output_without_aggregate_gets_no_bar_chart(tmp_path: Path) -> None:
+    """An output declared NONE has no monthly values, so a bar chart of it is refused."""
+    with pytest.raises(ValueError, match="none"):
+        _bar_chart(tmp_path, "-", lt.OutputAggregation.NONE)
 
 
 def test_a_bar_chart_of_zeros_says_so(tmp_path: Path) -> None:

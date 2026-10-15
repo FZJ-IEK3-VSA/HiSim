@@ -53,6 +53,7 @@ from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.loadtypes import (
+    OutputAggregation,
     ComponentType,
     EnergyBalanceCarrier,
     EnergyRole,
@@ -645,6 +646,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="OnOffState",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.t_in_space_heating: ComponentOutput = self.add_output(
@@ -677,6 +679,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for heating",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.time_on_cooling: ComponentOutput = self.add_output(
@@ -685,6 +688,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for cooling",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -693,6 +697,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned off",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.thermal_power_from_environment: ComponentOutput = self.add_output(
@@ -747,6 +752,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeThermalEnergySH} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.cumulative_hp_electrical_energy_space_heating_channel: ComponentOutput = self.add_output(
@@ -755,6 +761,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeElectricalEnergySH} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.counter_on_off_channel: ComponentOutput = self.add_output(
@@ -763,6 +770,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description=f"{self.CounterOnOff} is a counter of starting procedures hp.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.p_el_tot: ComponentOutput = self.add_output(
@@ -808,6 +816,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeThermalEnergyTotal} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.cumulative_hp_electrical_energy_tot_channel: ComponentOutput = self.add_output(
@@ -816,6 +825,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeElectricalEnergyTotal} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.delta_t_hp_secondary_side_channel: ComponentOutput = self.add_output(
@@ -896,6 +906,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.HEATING,
                 unit=Units.WATT_HOUR,
                 output_description=f"here a description for {self.CumulativeThermalEnergyDHW} will follow.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.cumulative_hp_electrical_energy_dhw_channel: ComponentOutput = self.add_output(
@@ -904,6 +915,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT_HOUR,
                 output_description=f"here a description for {self.CumulativeElectricalEnergyDHW} will follow.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.counter_switch_space_heating_channel: ComponentOutput = self.add_output(
@@ -912,6 +924,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.ANY,
                 unit=Units.ANY,
                 output_description=f"{self.CounterSwitchToSH} is a counter of switching the mode to SH, NOT counting starting of on_off.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.counter_switch_dhw_channel: ComponentOutput = self.add_output(
@@ -920,6 +933,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.ANY,
                 unit=Units.ANY,
                 output_description=f"{self.CounterSwitchToDHW} is a counter of switching the mode to DHW, NOT counting starting of on_off.",
+                aggregation=OutputAggregation.LAST,
             )
 
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
@@ -2881,6 +2895,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             LoadTypes.ANY,
             Units.ANY,
             output_description=f"here a description for {self.State_SH} will follow.",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.space_heating_part_load = StartOfStepPartLoadControl(
@@ -3476,6 +3491,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
             output_description=(
                 "The hot-water mode the controller commands the heat pump: 2 charges the hot-water tank, 0 does not."
             ),
+            aggregation=OutputAggregation.NONE,
         )
 
         self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(

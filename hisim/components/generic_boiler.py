@@ -2090,6 +2090,7 @@ class GenericBoilerController(L1ControllerComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Operating mode.",
+            aggregation=lt.OutputAggregation.NONE,
         )
         self.temperature_delta_channel: ComponentOutput = self.add_output(
             self.component_name,

@@ -12,7 +12,7 @@ import pydot
 
 from hisim import log
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
+from hisim.loadtypes import OutputAggregation, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 
@@ -107,7 +107,7 @@ class SystemChart:
                 "filename": f"System_with_Edge_labels_and_results{fig_format}",
                 "caption": (
                     "System chart: every connection labelled with its output, input and unit, "
-                    "and the output's sum or mean over the run."
+                    "and the output's sum, mean or final value over the run."
                 ),
                 "with_results": True,
             },
@@ -331,31 +331,26 @@ class SystemChart:
     ) -> Optional[str]:
         """Build the cumulative result ``": value unit (kind)"`` suffix for an edge.
 
-        Looks up the cumulative result value for ``source_output`` in
-        ``self.ppdt.results_cumulative``, determines whether the value is a
-        *mean* (for rate-like units such as W, °C) or a *sum* (for extensive
-        units such as Wh, L, kg, Euro) of the source output over all timesteps,
-        derives the unit to display next to the aggregated value, and returns
-        the annotation suffix.
-
-        A mean keeps the source output's unit, but a sum is a cumulative total
-        whose unit may differ from the input field's unit (e.g.
-        ``"kWh per timestep"`` sums to ``"kWh"``). The ``"in <unit>"`` clause of
-        the edge label describes the input field, not this aggregated value, so
-        the value is annotated with its own derived unit and the aggregation
-        kind (mean/sum) to avoid a unit-label mismatch.
+        Looks up the run value of ``source_output`` in ``self.ppdt.results_cumulative``. How that
+        value was formed is the output's declared aggregation
+        (:class:`~hisim.loadtypes.OutputAggregation`): a *mean* (a power in W, a temperature)
+        and a *last* value (a running total at the end of the run) keep the output's unit, a
+        *sum* (an energy per time step in Wh, a volume, a cost) is a total whose unit may differ
+        from the input field's unit (``"kWh per timestep"`` sums to ``"kWh"``). The ``"in <unit>"``
+        clause of the edge label describes the input field, not this value, so the value is
+        annotated with its own unit and the aggregation kind. Example: ``": 1234.5 Wh (sum)"``.
 
         Args:
-            source_output: The :class:`ComponentOutput` whose cumulative result
-                is annotated. ``None`` (or any non-:class:`ComponentOutput`)
-                yields no annotation.
+            source_output: The :class:`ComponentOutput` whose run value is annotated. ``None``
+                (or any non-:class:`ComponentOutput`) yields no annotation.
 
         Returns:
-            The ``": <value> <unit> (<kind>)"`` suffix, or ``None`` when
-            ``source_output`` is not a :class:`ComponentOutput` and there is no
-            cumulative value to annotate.
+            The ``": <value> <unit> (<kind>)"`` suffix, or ``None`` when ``source_output`` is not
+            a :class:`ComponentOutput` or declares the aggregation ``NONE`` and so has no run value.
         """
         if not isinstance(source_output, ComponentOutput):
+            return None
+        if source_output.aggregation == OutputAggregation.NONE:
             return None
         assert self.ppdt.results_cumulative is not None
         # The unit is runtime-determined from source_output.unit and tracked
@@ -364,13 +359,11 @@ class SystemChart:
             0, source_output.get_pretty_name()
         ]
         output_unit = source_output.unit
-        if output_unit in UNITS_USING_MEAN_AGGREGATION:
-            cumulative_unit = output_unit.value
-            aggregation_kind = "mean"
-        else:
+        if source_output.aggregation == OutputAggregation.SUM:
             cumulative_unit = _cumulative_unit_for_sum(output_unit)
-            aggregation_kind = "sum"
+        else:
+            cumulative_unit = output_unit.value
         return (
             f": {round(output_cumulative_result_value, 3)} {cumulative_unit}"
-            f" ({aggregation_kind})"
+            f" ({source_output.aggregation.value})"
         )

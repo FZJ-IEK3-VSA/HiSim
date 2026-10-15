@@ -321,6 +321,7 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             output_description=(
                 "1 while the day's mean outside temperature is at or below the heating threshold, else 0."
             ),
+            aggregation=lt.OutputAggregation.MEAN,
         )
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())

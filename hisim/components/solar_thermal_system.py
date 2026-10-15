@@ -1575,6 +1575,7 @@ class SolarThermalSystemController(L1ControllerComponent):
             loadtypes.LoadTypes.ANY,
             loadtypes.Units.BINARY,
             output_description="Control signal to solar pump in SolarThermalSystem",
+            aggregation=loadtypes.OutputAggregation.MEAN,
         )
 
         #: The pump state of the step being iterated, as the latest pass decided it.

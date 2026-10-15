@@ -70,6 +70,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
+from hisim.postprocessing.chart_selection import ChartSelection
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -294,26 +295,29 @@ class PostProcessor:
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
         # Collected first, from the result table as the simulator left it; concluded last (below)
         energy_balance = self.check_energy_balance(ppdt)
+        # Which outputs get charts: not the constant ones (listed in the report instead) and not
+        # those declaring the aggregation NONE. The exports below still write every output.
+        chart_selection = ChartSelection.of_results(ppdt.all_outputs, ppdt.results)
 
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
             start = timer()
-            self.make_line_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_line_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making line plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
             log.information("Making carpet plots.")
             start = timer()
-            self.make_carpet_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_carpet_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making carpet plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(0, ppdt, report_image_entries=report_image_entries)
+            self.make_single_day_plots(0, ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
@@ -327,7 +331,7 @@ class PostProcessor:
         ):
             log.information("Making monthly bar charts.")
             start = timer()
-            self.make_monthly_bar_charts(ppdt, report_image_entries=report_image_entries)
+            self.make_monthly_bar_charts(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making monthly bar plots took " + f"{duration:1.2f}s.")
@@ -375,6 +379,7 @@ class PostProcessor:
             start = timer()
             if report is not None:
                 self.write_components_to_report(ppdt, report, report_image_entries)
+                self.write_constant_outputs_to_report(report, chart_selection)
             else:
                 raise ValueError(
                     "report is None but should be a ReportGenerator object. "
@@ -564,12 +569,21 @@ class PostProcessor:
     def make_monthly_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Make bar charts."""
+        """Make the monthly bar chart of every charted output.
+
+        A bar is the month's sum, mean or end-of-month value, by the output's declared aggregation.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         assert ppdt.results_monthly is not None
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_bar = charts_module.BarChart(
                 output=output.full_name,
                 component_name=output.component_name,
@@ -578,6 +592,7 @@ class PostProcessor:
                 time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
+                aggregation=output.aggregation,
             )
             my_entry = my_bar.plot(data_in_self_units=ppdt.results_monthly.iloc[:, index])
             report_image_entries.append(my_entry)
@@ -586,18 +601,20 @@ class PostProcessor:
         self,
         day_in_window: int,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes one plot per output of one day of the run.
+        """Makes one plot per charted output of one day of the run.
 
         Args:
             day_in_window: The day of the run to plot, counted from 0 for its first day; the chart
                 names it by its calendar date.
             ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
             report_image_entries: The list the entry of every plot is appended to.
         """
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_days = chart_single_day_class(
                 output=output.full_name,
                 component_name=output.component_name,
@@ -616,11 +633,18 @@ class PostProcessor:
     def make_carpet_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Make carpet plots."""
+        """Make the carpet plot of every charted output.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every plot is appended to.
+        """
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             log.trace("Making carpet plots")
             my_carpet = charts_module.Carpet(
                 output=output.full_name,
@@ -643,11 +667,18 @@ class PostProcessor:
     def make_line_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes the line plots."""
+        """Make the line chart of every charted output.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             if output.output_description is None:
                 raise ValueError("Output description was missing for " + output.full_name)
             my_line = charts_module.Line(
@@ -670,7 +701,8 @@ class PostProcessor:
         With ``EXPORT_RESULTS_IN_ONE_FILE`` every output goes into ``all_results.csv`` and, with
         ``EXPORT_MONTHLY_RESULTS``, their monthly values into ``all_results_monthly.csv``; without it
         each output gets its own file, and with ``EXPORT_MONTHLY_RESULTS`` its own ``*_monthly.csv``.
-        A monthly value is the month's mean or sum, by the output's unit (``Simulator.get_std_results``).
+        A monthly value is the month's sum, mean or last value, by the output's declared aggregation, and
+        empty for an output declaring ``NONE`` (``Simulator.get_std_results``).
 
         Args:
             ppdt: The finished run.
@@ -893,6 +925,31 @@ class PostProcessor:
         prefix = os.path.basename(entry.file_path).split("_", 1)[0].split(".", 1)[0]
         kind = cls.CHART_KINDS_BY_FILE_PREFIX.get(prefix)
         return caption if kind is None else f"{caption}, {kind}"
+
+    def write_constant_outputs_to_report(
+        self, report: reportgenerator.ReportGenerator, chart_selection: ChartSelection
+    ) -> None:
+        """Write the chapter listing the outputs that kept one value over the whole run.
+
+        These outputs get no charts (:class:`ChartSelection`), so the report names each of them
+        once, with its value and unit, after the chapters of the charted outputs. Nothing is
+        written when no output is constant.
+
+        Args:
+            report: The report.
+            chart_selection: The run's chart selection.
+        """
+        if not chart_selection.constant_outputs:
+            return
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=chart_selection.constant_outputs_table(),
+            headline=". Constant Outputs",
+            comment=[
+                f"These {len(chart_selection.constant_outputs)} outputs have the same value in every time step "
+                "of the run, so they get no charts."
+            ],
+        )
 
     def write_all_outputs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator

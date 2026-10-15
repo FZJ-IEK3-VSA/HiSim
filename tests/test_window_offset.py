@@ -27,6 +27,7 @@ import pandas as pd
 import pytest
 
 from hisim import sim_repository
+from hisim.component import SingleTimeStepValues
 from hisim.components import weather
 from hisim.components.weather import calculation
 from hisim.components.weather.calculation import WeatherDataSourceEnum, WeatherSeriesInputs
@@ -206,6 +207,12 @@ def test_the_offset_is_the_row_labelled_with_the_start_and_the_window_must_fit()
         WindowOffset.resolve(hourly, datetime.datetime(2021, 1, 1), 96, 900, "the profile")
     with pytest.raises(WindowOffsetError, match="time zone"):
         WindowOffset.resolve(hourly.tz_localize("UTC"), datetime.datetime(2021, 1, 1), 24, 3600, "the profile")
+    with pytest.raises(WindowOffsetError, match="has no rows"):
+        WindowOffset.resolve(pd.DatetimeIndex([]), datetime.datetime(2021, 1, 1), 24, 3600, "the profile")
+    with pytest.raises(WindowOffsetError, match="carries a time zone"):
+        WindowOffset.resolve(
+            hourly, datetime.datetime(2021, 1, 1, tzinfo=datetime.timezone.utc), 24, 3600, "the profile"
+        )
 
 
 @pytest.mark.base
@@ -416,3 +423,28 @@ def test_a_july_window_from_a_warm_cache_is_the_window_from_a_cold_one(
     july_temperatures = cold.simulation_repository.get_entry(weather.Weather.RUN_WINDOW_TEMPERATURE_OUTSIDE)
     assert list(july_temperatures) == cold.temperature_list[4344:4512]
     assert list(july_temperatures) != cold.temperature_list[:168]
+
+
+@pytest.mark.base
+def test_a_july_window_feeds_july_into_the_weather_outputs_at_every_timestep(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The per-timestep outputs of a July week read row 4344 + t, not row t.
+
+    The published window is pinned above; this pins the other path the weather serves, the outputs
+    other components are wired to. Catches: ``i_simulate`` dropping the window offset, which would hand
+    every wired consumer January's temperature and irradiance while the published series say July.
+    """
+    for variable in ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR"):
+        monkeypatch.delenv(variable, raising=False)
+    july = prepared_july_weather(tmp_path)
+    outputs = july.get_outputs()
+    for global_index, output in enumerate(outputs):
+        output.global_index = global_index
+    stsv = SingleTimeStepValues(len(outputs))
+
+    for timestep in (0, 1, 167):
+        july.i_simulate(timestep, stsv, False)
+        assert stsv.values[july.air_temperature_output.global_index] == july.temperature_list[4344 + timestep]
+        assert stsv.values[july.ghi_output.global_index] == july.ghi_list[4344 + timestep]
+    assert july.temperature_list[4344:4347] != july.temperature_list[0:3]

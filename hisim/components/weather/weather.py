@@ -439,13 +439,6 @@ class Weather(DataSourceComponent):
         always ``timesteps`` long there; called on a shorter series, it returns what there is, and the
         readers say which series fell short.
 
-        The values are the window's own only for a run that starts on 1 January. A run that starts
-        later -- 1 July, say, which the window contract accepts -- still gets the first ``timesteps``
-        values, January's, as every HiSim run with a mid-year start always has (see
-        :meth:`hisim.simulationparameters.SimulationParameters.one_week_july`). Resolving the
-        window's start date against the source's own dates is the next step of the mid-year epic,
-        hisim-9g2.4.
-
         Args:
             series: One of the per-timestep lists :meth:`read_series` filled.
 

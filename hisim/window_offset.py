@@ -106,11 +106,20 @@ class WindowOffset:
             int: the window offset, the row labelled ``window_start``.
 
         Raises:
-            WindowOffsetError: if the labels carry a time zone or are not in ascending order, if
-                ``window_start`` is not among them, if the profile ends before the window's last
-                timestep, or if the label of that last timestep is not where an even grid at the run's
-                resolution puts it.
+            WindowOffsetError: if the labels are empty, carry a time zone or are not in ascending
+                order, if ``window_start`` carries a time zone or is not among them, if the profile
+                ends before the window's last timestep, or if the label of that last timestep is not
+                where an even grid at the run's resolution puts it.
         """
+        if len(labels) == 0:
+            raise WindowOffsetError(
+                f"{source} has no rows, so it cannot serve a window starting at {window_start}."
+            )
+        if window_start.tzinfo is not None:
+            raise WindowOffsetError(
+                f"The window of {source} starts at {window_start}, which carries a time zone; a window start is "
+                "read in the profile's standard time without a time zone, as SimulationParameters.start_date is."
+            )
         if labels.tz is not None:
             raise WindowOffsetError(
                 f"The labels of {source} carry the time zone {labels.tz}; a window is looked up among labels "

@@ -412,8 +412,7 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     Based on the tsib project @[tsib-kotzur] (Check header)
 
     Args:
-        inputs: the calculation's inputs; supplies the path, the year and, where a reader needs it,
-            the simulated span.
+        inputs: the calculation's inputs; supplies the path and the year.
 
     Returns:
         pd.DataFrame: the raw frame, indexed by time at the file's own resolution.

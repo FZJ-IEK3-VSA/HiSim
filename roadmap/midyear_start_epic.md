@@ -104,9 +104,10 @@ and lists the components whose state no `initial_*` field sets as false alarms.
 
 1. **The offset must never be arithmetic.** (The clock was decided on 2026-10-14 as standard time;
    see the owner decisions above for what the numbers below became.) The Berlin-anchored weather sources index elapsed
-   instants: for 1 July 2021, the correct row is **260 550**; naive minutes from the series' own
+   instants: for 1 July 2021, the wall-clock row is 260 550; naive minutes from the series' own
    start give 260 610 (the March DST hour), naive minutes from Jan 1 give 260 640 (DST plus the
-   source's 00:30 anchor). The error is *energy-neutral over whole days* — no aggregate or KPI
+   source's 00:30 anchor). Under the decided standard-time clock, 260 610 is the correct row of
+   a frame anchored at 00:30, and 260 640 that of the delivered frame padded to midnight. The error is *energy-neutral over whole days* — no aggregate or KPI
    test can ever catch it — and only a per-timestep phase test against wall-clock labels can. Pin
    the three numbers, and pin a December window too (where the DST correction is zero again).
    The LPG frame, by contrast, is gapless naive local time (uniform 1-minute diffs across all

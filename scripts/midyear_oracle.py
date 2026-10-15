@@ -6,7 +6,8 @@ run from 1 January to the window's end. This script runs both and compares them,
 window, and prints one verdict table. It is how the mid-year-start epic (``roadmap/midyear_start_epic.md``)
 proves each of its steps.
 
-**Four runs, each with its own empty cache directory, in one process.**
+**Four runs in one process.** The reference, the perturbed reference and the cold window run each
+start from an empty cache directory of their own; the warm window run reuses the cold run's.
 
 1. *Reference*: 1 January to the window's end (to the year's end with ``--reference-through-year-end``).
 2. *Perturbed reference*: the same, with every numeric ``initial_*`` field of every component's
@@ -290,7 +291,8 @@ class ColumnTiers:
     """Sorts the result columns into the fixed exact set, the discovered memoryless set and the stateful set."""
 
     #: The components whose columns are compared exactly whatever the perturbation says, and which of
-    #: their outputs: ``None`` for all of them. They are the profiles a window has to reproduce.
+    #: their outputs: ``None`` (all of them) for the weather and the occupancy, only the solar gains
+    #: for the building. They are the profiles a window has to reproduce.
     FIXED_EXACT: ClassVar[Mapping[type, Optional[Tuple[str, ...]]]] = {
         Weather: None,
         UtspLpgConnector: None,

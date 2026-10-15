@@ -271,6 +271,10 @@ class ComponentName(PhysicsComponent):
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
             output_description="Output with State",
+            # A running total: its monthly value is its value at the end of the month. Left out,
+            # the unit decides (W averaged, Wh summed), and a sum of a running total means nothing.
+            # A controller mode or an angle declares NONE: it gets no aggregate and no charts.
+            aggregation=loadtypes.OutputAggregation.LAST,
         )
 
         self.output_without_state: ComponentOutput = self.add_output(

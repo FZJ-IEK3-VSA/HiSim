@@ -223,6 +223,7 @@ class Car(cp.PhysicsComponent):
                 load_type=lt.LoadTypes.ANY,
                 unit=lt.Units.ANY,
                 output_description="Location of the car as integer.",
+                aggregation=lt.OutputAggregation.NONE,
             )
         elif self.config.fuel == lt.LoadTypes.DIESEL:
             self.fuel_consumption: cp.ComponentOutput = self.add_output(

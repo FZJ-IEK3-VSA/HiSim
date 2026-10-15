@@ -242,6 +242,7 @@ class Weather(DataSourceComponent):
             lt.LoadTypes.ANY,
             lt.Units.DEGREES,
             output_description=f"here a description for {self.Altitude} will follow.",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.azimuth_output: ComponentOutput = self.add_output(
@@ -250,6 +251,7 @@ class Weather(DataSourceComponent):
             lt.LoadTypes.ANY,
             lt.Units.DEGREES,
             output_description=f"here a description for {self.Azimuth} will follow.",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.apparent_zenith_output: ComponentOutput = self.add_output(
@@ -258,6 +260,7 @@ class Weather(DataSourceComponent):
             lt.LoadTypes.ANY,
             lt.Units.DEGREES,
             output_description=f"here a description for {self.ApparentZenith} will follow.",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.wind_speed_output: ComponentOutput = self.add_output(

@@ -58,6 +58,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         component_id: cfg.ComponentID,
         display_config: Optional[cfg.DisplayConfig] = None,
         may_be_non_finite: bool = False,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ):
         """Defines a component output.
 
@@ -92,6 +93,11 @@ class ComponentOutput:  # noqa: too-few-public-methods
         :class:`~hisim.postprocessing.finite_results.FiniteResultsCheck` fails a run whose result table holds a NaN
         or an infinity in a column that does not declare it.
 
+        ``aggregation`` says how post-processing combines the output's time steps into monthly
+        values and a run total (:class:`~hisim.loadtypes.OutputAggregation`). Left out, it follows
+        the unit: a power in W is averaged, an energy in Wh summed. A component declares it where
+        that is wrong, e.g. ``LAST`` for a running total in Wh, whose monthly sum means nothing.
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
@@ -117,6 +123,9 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.component_id: cfg.ComponentID = component_id
         self.display_config: Optional[cfg.DisplayConfig] = display_config
         self.may_be_non_finite: bool = may_be_non_finite
+        self.aggregation: lt.OutputAggregation = (
+            aggregation if aggregation is not None else lt.OutputAggregation.of_unit(unit)
+        )
 
     @property
     def building_label(self) -> str:
@@ -427,12 +436,14 @@ class Component:
         output_description: Optional[str] = None,
         *,
         may_be_non_finite: bool = False,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ) -> ComponentOutput:
         """Adds an output definition; ``energy_port`` declares its role in the energy balance.
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
         after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
-        infinity in any other.
+        infinity in any other. ``aggregation`` declares how its time steps are combined into monthly values and a
+        run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`).
         """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
@@ -448,6 +459,7 @@ class Component:
             component_id=self.config.component_id,
             display_config=self.my_display_config,
             may_be_non_finite=may_be_non_finite,
+            aggregation=aggregation,
         )
         self.outputs.append(outp)
         return outp

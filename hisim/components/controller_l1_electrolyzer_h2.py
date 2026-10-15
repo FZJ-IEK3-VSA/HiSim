@@ -212,6 +212,7 @@ class ElectrolyzerController(L1ControllerComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="standby count",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.distributed_load: ComponentOutput = self.add_output(
@@ -228,6 +229,7 @@ class ElectrolyzerController(L1ControllerComponent):
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             output_description="current mode of electrolyzer",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.curtailed_load: ComponentOutput = self.add_output(
@@ -244,6 +246,7 @@ class ElectrolyzerController(L1ControllerComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of switching off",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # =================================================================================================================================
         # Initialize variables

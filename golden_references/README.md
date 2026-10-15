@@ -122,10 +122,10 @@ In CI this runs as two tiers (see `.github/workflows/`):
   `report.json` records a fresh `duration_s` per pair when they need refreshing.
 - **`golden-year.yml`** — full-year pairs, on every PR and push to `main`, starting at the
   same time as `golden-check` and the rest of CI on the self-hosted runners and reporting as
-  ordinary checks of the pull request; a pull request from a fork skips it. Five shards running
-  two simulations at once, since a full-year pair needs about 6 GiB: the Python setups and, where
-  the setup has one, its composed file (`golden_check.py --mode python composed`,
-  `golden_matrix.py --with-composed`). Every setup of the config runs the full year (owner
+  ordinary checks of the pull request; a pull request from a fork skips it. One job per run
+  (`golden_matrix.py --runs --with-composed`, `golden_check.py --jobs 1 --mode <mode> --pairs
+  <pair>`): each Python setup's full-year pair and, separately, where the setup has one, its
+  composed file's, so the tier takes as long as its slowest run. Every setup of the config runs the full year (owner
   decision 2026-10-11), because the first week of January never runs a solar collector's pump;
   only a setup that cannot finish a year yet carries `"horizons": ["week"]`, named with its bead
   in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). A setup without a golden for a configured pair fails the check before anything

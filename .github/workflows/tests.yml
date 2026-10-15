@@ -40,12 +40,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # workers: pytest-xdist processes for the shard (-n, always with --dist loadfile, so all of a
-        # module's tests run on one worker: module fixtures and the stray-file guard's per-module window
-        # stay whole). The runner has 4 cores and 16 GB; the peaks quoted are the resource monitor's
-        # job-wide cgroup figure on main (run 36303671417, 2026-09-27), of which ~1.4 GB is the idle
-        # container. 0 runs the shard in one process as before: xdist is off, and loadfile could not
-        # spread a single module anyway.
+        # workers: pytest-xdist processes for the shard (-n). dist: how xdist spreads them, loadfile unless
+        # the entry says loadgroup. Under loadfile all of a module's tests run on one worker, so module
+        # fixtures and the stray-file guard's per-module window stay whole. Under loadgroup the same holds
+        # for every test without an xdist_group (tests/ci_split.py gives it its module's), while a test that
+        # declares a group of its own is scheduled by that group, so one module's independent parts can
+        # run on different workers. The runner has 4 cores and 16 GB; the peaks quoted are the resource
+        # monitor's job-wide cgroup figure on main (run 36303671417, 2026-09-27), of which ~1.4 GB is the
+        # idle container. 0 runs the shard in one process: xdist is off.
+        #
+        # group: k/n splits one marker's tests over n jobs (tests/ci_split.py, --ci-group): every job
+        # collects the same tests and keeps its k-th group, cut by the committed weights of
+        # tests/ci_durations.json, a module (or a declared xdist_group) never cut. Each such job also
+        # records its seconds per unit and uploads them (ci-durations-<name>), which is how the weights
+        # are refreshed; tests/test_ci_split.py fails when a group of a split marker has no job here.
         include:
           - name: base
             marker: "base"
@@ -56,27 +64,48 @@ jobs:
             marker: "assemblies"
             # Every test under tests/assemblies/ but the nightly tier: the format, expansion and harness tests,
             # the PR tier of the assembly test contracts and the heat-pump gate, which need the local
-            # LoadProfileGenerator. They ran in the base shard until 2026-10-08, inside its 2.5 GB peak; ~1,600
-            # tests in 13 modules, of which test_library_contracts.py (one isolation run per sample) is the
-            # longest and stays on one worker under loadfile.
+            # LoadProfileGenerator. They ran in the base shard until 2026-10-08, inside its 2.5 GB peak; ~2,900
+            # tests in 13 modules. test_library_contracts.py (one isolation run per sample, about 700 s in all)
+            # declares every sample, sweep and library check an xdist_group, so loadgroup spreads it over the
+            # four workers, each making the runs of its own samples only; the other modules stay whole.
             workers: 4
+            dist: loadgroup
           - name: buildingtest
             marker: "buildingtest"
             # 2.2 GB peak; seven modules, bounded by test_building_scalability_with_factor (62 s).
             workers: 4
-          - name: extendedbase
+          # extendedbase: about 900 s of tests, as three jobs of two workers each. 6.9 GB peak (~5.5 GB above
+          # idle) for one process; four could pass 16 GB, two cannot. The two ~185 s participant canaries
+          # (test_p3_parity_participants_*.py, a module each) set the floor: the split puts them in different
+          # jobs, and test_dhw_chain_time_resolution.py's four twins without a heat pump (60 to 95 s each, an
+          # xdist_group per twin) wherever they fit, beside test_p3_parity.py (~120 s).
+          - name: extendedbase-1
             marker: "extendedbase"
-            # 6.9 GB peak (~5.5 GB above idle) for one process; four could pass 16 GB. Its two 220 s
-            # participant canaries sit in one module each (test_p3_parity_participants_*.py), so
-            # loadfile can give them a worker each. test_dhw_chain_time_resolution.py's four twins without a
-            # heat pump (about 65 s on a local machine, several minutes in CI) run as one module on one worker.
+            group: "1/3"
             workers: 2
-          - name: extendedbase2
+            dist: loadgroup
+          - name: extendedbase-2
+            marker: "extendedbase"
+            group: "2/3"
+            workers: 2
+            dist: loadgroup
+          - name: extendedbase-3
+            marker: "extendedbase"
+            group: "3/3"
+            workers: 2
+            dist: loadgroup
+          # extendedbase2: about 500 s of tests, as two jobs, each still serial: test_hisim_main_python.py
+          # peaks at 11.3 GB, and a second process beside it would risk the 16 GB limit. The shard also holds
+          # the heat-pump booking runs of test_heat_pump_flow_booking.py, the hot-water chain runs of
+          # test_dhw_chain_twins.py and the two heat-pump twins of test_dhw_chain_time_resolution.py (~130
+          # and ~150 s, an xdist_group each, so the split can put them in different jobs).
+          - name: extendedbase2-1
             marker: "extendedbase2"
-            # test_hisim_main_python.py peaks at 11.3 GB: a second process beside it would risk the 16 GB
-            # limit, so the shard runs serially (it also holds the heat-pump booking runs of
-            # test_heat_pump_flow_booking.py, the hot-water chain runs of test_dhw_chain_twins.py and the two
-            # heat-pump twins of test_dhw_chain_time_resolution.py).
+            group: "1/2"
+            workers: 0
+          - name: extendedbase2-2
+            marker: "extendedbase2"
+            group: "2/2"
             workers: 0
           - name: postprocessingoptions
             marker: "postprocessingoptions"
@@ -139,13 +168,23 @@ jobs:
       run: |
         durations="${{ matrix.durations }}"
         durations="${durations:-20}"
+        dist="${{ matrix.dist }}"
+        dist="${dist:-loadfile}"
+        # A split shard keeps its group, in the split's order (--no-loadscope-reorder: heaviest unit first,
+        # instead of xdist's order by test count), and records its seconds per unit for the next refresh.
+        # The container's shell is sh, which has no arrays: the extra arguments are the positional ones.
+        set --
+        if [ -n "${{ matrix.group }}" ]; then
+          set -- --ci-group "${{ matrix.group }}" --no-loadscope-reorder \
+            --ci-durations-out "../results/ci_durations/${{ matrix.name }}.json"
+        fi
         ret=0
         # pytest-cov starts coverage in every xdist worker (a bare 'coverage run' would follow only the
         # controller) and combines the workers' data into $COVERAGE_FILE when the run ends; its name
         # matches the upload glob below, and so do the workers' own files should the combine not happen.
         # --cov-report= writes no report here: the combine coverage job reports once over all shards.
         export COVERAGE_FILE=".coverage.${{ matrix.name }}"
-        pytest -m "${{ matrix.marker }}" -n "${{ matrix.workers }}" --dist loadfile \
+        pytest -m "${{ matrix.marker }}" -n "${{ matrix.workers }}" --dist "$dist" "$@" \
           --cov=../hisim --cov-report= --durations="$durations" || ret=$?
         # pytest exit code 5 means "no tests collected"; only the catch-all
         # "others" job is allowed to legitimately select zero tests.
@@ -175,6 +214,15 @@ jobs:
       with:
         name: iteration-histogram-${{ matrix.name }}
         path: results/iteration_histogram/
+        if-no-files-found: ignore
+    # The seconds per unit of a split shard (tests/ci_split.py), the input of its weights' next refresh.
+    - name: Upload the split durations
+      if: always() && matrix.group != ''
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: ci-durations-${{ matrix.name }}
+        path: results/ci_durations/
         if-no-files-found: ignore
     # Kept even when the job failed; see the action for why that is safe.
     - name: Save the HiSim inputs cache

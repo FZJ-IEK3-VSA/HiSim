@@ -13,22 +13,24 @@
 # is skipped for it, and every other job depends on that one. Fork pull requests still get
 # tier 1 and everything below it; the full-year tier is for branches with push access.
 #
-# THE FULL-YEAR PAIRS run the Python setups and, beside each, where its setup has one, the
-# composed file (golden_check.py --mode python composed, assemblies_spec.md §13 step 4): the
-# assemblies reproduce the Python setup's full-year golden too. The matrix counts those runs
+# THE FULL-YEAR PAIRS run the Python setups and, for each setup that has one, the composed
+# file (golden_check.py --mode composed, assemblies_spec.md §13 step 4): the assemblies
+# reproduce the Python setup's full-year golden too. The matrix lists those runs
 # (golden_matrix.py --with-composed). Every setup of golden_config.json runs the full year
 # (owner decision 2026-10-11: the first week of January never runs a solar collector's pump,
 # so only a year exercises the solar systems); a setup that cannot finish a year would keep a
 # week-only 'horizons' entry until its bead is fixed.
 #
-# SHARDS. The pairs run as five shards, each running two simulations at once (golden_matrix.py
-# --shards 5, golden_check.py --jobs 2, a child process per pair): a full-year pair peaks at
-# about 6 GiB (the heaviest measured, the heat pump with solar thermal, at 5.2 GiB), so a 16 GB
-# runner holds two at once. That is 22 Python pairs plus the composed files of the eight
-# generator setups, 30 runs of about 98 runner-minutes in all; five shards keep the slowest
-# near 15 to 16 minutes of simulation (the heat pump with solar thermal alone takes about 10).
-# The weights the shards are balanced by are "seconds" in golden_config.json.
-#
+# ONE RUN PER JOB. Every run is a matrix job of its own (golden_matrix.py --runs, golden_check.py
+# --jobs 1 --pairs <pair> --mode <mode>): each Python full-year pair, and separately each composed
+# file's full-year run, 30 jobs in all. The tier's wall time is then its slowest single run (the
+# heat pump with the car or with solar thermal, about 10 minutes) plus a job's fixed minute or so,
+# instead of the busiest of five shards that each ran two runs at once (12 to 16 minutes measured
+# on #1002); owner decision 2026-10-15. The matrix comes heaviest first, so when the 32 runners
+# are busy the long runs are queued first. A run's weight is its pair's "seconds" in
+# golden_config.json, the composed run weighing what the Python run weighs. One run peaks at
+# about 6 GiB, well inside a 16 GB runner.
+
 # THE ASSEMBLY NIGHTLY TIER (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
 # seeded Latin hypercube sample of every assembly's parameter box, beside the full-year pairs.
@@ -59,7 +61,7 @@ concurrency:
 
 jobs:
   discover:
-    name: discover full-year shards
+    name: discover full-year runs
     # The fork guard (see the header): skipped for a pull request from a fork, and with it
     # every job below, since they all need this one.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -78,7 +80,7 @@ jobs:
       - name: Build the full-year matrix
         id: gen
         run: |
-          matrix="$(python3 scripts/golden_matrix.py --horizon year --shards 5 --with-composed)"
+          matrix="$(python3 scripts/golden_matrix.py --horizon year --runs --with-composed)"
           echo "$matrix" | python3 -m json.tool
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
@@ -90,7 +92,7 @@ jobs:
           mode: report
 
   golden-year:
-    name: golden-year ${{ matrix.name }} (${{ matrix.count }} pairs)
+    name: golden-year ${{ matrix.mode }} ${{ matrix.setup }}
     needs: discover
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
@@ -103,10 +105,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     env:
-      # Space-separated setup:param tokens, split on purpose where they are used. Passed
-      # through the environment rather than interpolated into the script.
-      PAIRS: ${{ matrix.pairs }}
-      JOBS: ${{ matrix.jobs }}
+      # One setup:param token and one mode, passed through the environment rather than
+      # interpolated into the script.
+      PAIR: ${{ matrix.pair }}
+      MODE: ${{ matrix.mode }}
     steps:
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
@@ -125,10 +127,8 @@ jobs:
         with:
           mode: restore
           scope: ${{ github.workflow }}-${{ matrix.name }}
-      - name: Golden KPI check (full year, Python setups and composed files)
-        run: |
-          # shellcheck disable=SC2086  # PAIRS is split into one argument per pair on purpose
-          python scripts/golden_check.py --mode python composed --jobs "$JOBS" --pairs $PAIRS
+      - name: Golden KPI check (full year, one run)
+        run: python scripts/golden_check.py --mode "$MODE" --jobs 1 --pairs "$PAIR"
       - name: Upload deviation report
         if: failure()
         uses: actions/upload-artifact@v7
@@ -200,7 +200,8 @@ jobs:
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
-      - name: Fail if a full-year pair or the nightly tier failed or did not run
+      # needs.golden-year.result is 'success' only when every one of its matrix jobs succeeded.
+      - name: Fail if a full-year run or the nightly tier failed or did not run
         run: |
           echo "discover=${{ needs.discover.result }}  golden-year=${{ needs.golden-year.result }}  assemblies-nightly=${{ needs.assemblies-nightly.result }}"
           [ "${{ needs.golden-year.result }}" = "success" ] && [ "${{ needs.assemblies-nightly.result }}" = "success" ]

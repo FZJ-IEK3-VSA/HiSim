@@ -25,6 +25,16 @@ YAML twin side by side in one pool (``golden_check.py --mode both``): every pair
 two runs of its weight, on two different lanes. The twin weighs what its Python pair weighs; the
 two measured within about 10 % of each other when they were still separate jobs.
 
+``--runs`` is for golden-year, which gives every run a job of its own instead (``golden_check.py --mode
+<mode> --jobs 1 --pairs <pair>``): one cell per (pair, mode), so the tier's wall time is its slowest
+single run rather than its busiest shard, and a cell reads::
+
+    {"name": "python-setup_a-full_year_60s", "setup": "setup_a", "param": "full_year_60s",
+     "mode": "python", "pair": "setup_a:full_year_60s", "seconds": 623}
+
+The cells come heaviest first, so the runs that would otherwise finish last are queued first when
+the runners are busy. ``--runs`` takes ``--with-yaml`` and ``--with-composed`` like ``--shards``.
+
 ``--with-composed`` adds the ``composed`` mode's run (``golden_check.py --mode all``, or ``--mode
 python composed`` in the year tier) for every pair whose setup has a composed file,
 ``energy_systems/<stem>.composed.energy_system.yaml`` beside the config's repository
@@ -236,6 +246,56 @@ def build_shards(
     return {"include": include}
 
 
+def build_runs(
+    config: dict,
+    horizon: Optional[str] = None,
+    with_yaml: bool = False,
+    composed: frozenset[str] = frozenset(),
+) -> dict:
+    """Return a GitHub matrix with one cell per run: every pair's Python run, and its other modes.
+
+    Every pair :func:`build_matrix` would emit gets a ``python`` cell; ``with_yaml`` adds a ``yaml``
+    cell for each, and a pair whose setup is in ``composed`` (the ids of :func:`composed_setups`) a
+    ``composed`` cell. Each cell weighs its pair's :func:`pair_seconds`, the other modes weighing
+    what the Python run weighs, as in :func:`build_shards`. The cells are sorted heaviest first,
+    ties in config order and then python, yaml, composed, so the output is deterministic.
+
+    Raises:
+        ValueError: if a ``seconds`` weight is malformed or names a parameter set the config does
+            not have, or :func:`build_matrix` refuses the config.
+    """
+    pairs = build_matrix(config, horizon=horizon)["include"]
+    setups = {setup["id"]: setup for setup in config["setups"]}
+    params = {param["id"] for param in config["parameter_sets"]}
+    for setup in config["setups"]:
+        pair_seconds(setup, "")  # refuses a malformed 'seconds' before its keys are read
+        unknown = sorted(set(setup.get("seconds", {})) - params)
+        if unknown:
+            raise ValueError(f"setup {setup['id']!r}: 'seconds' names unknown parameter sets {unknown}.")
+
+    cells = []
+    for pair in pairs:
+        modes = ["python"]
+        if with_yaml:
+            modes.append("yaml")
+        if pair["setup"] in composed:
+            modes.append("composed")
+        seconds = pair_seconds(setups[pair["setup"]], pair["param"])
+        for mode in modes:
+            cells.append(
+                {
+                    "name": f"{mode}-{pair['setup']}-{pair['param']}",
+                    "setup": pair["setup"],
+                    "param": pair["param"],
+                    "mode": mode,
+                    "pair": f"{pair['setup']}:{pair['param']}",
+                    "seconds": round(seconds),
+                }
+            )
+    # sorted() is stable: equal weights keep config order, and within a pair python, yaml, composed.
+    return {"include": sorted(cells, key=lambda cell: -cell["seconds"])}
+
+
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     """Parses the command line of one matrix emission."""
     parser = argparse.ArgumentParser(description="Emit a GitHub Actions matrix from golden_config.json.")
@@ -246,6 +306,12 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=int,
         default=None,
         help="Emit at most this many shards per horizon, each a list of pairs, instead of one cell per pair.",
+    )
+    parser.add_argument(
+        "--runs",
+        action="store_true",
+        help="Emit one cell per run, every pair's Python run and its other modes each a job of its own, "
+        "instead of one cell per pair or shard.",
     )
     parser.add_argument(
         "--with-yaml",
@@ -264,11 +330,15 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[list[str]] = None) -> int:
     """Prints the matrix as one compact JSON line, ready for ``$GITHUB_OUTPUT``."""
     args = _parse_args(argv)
+    if args.runs and args.shards is not None:
+        raise SystemExit("--runs and --shards exclude each other: a cell is either one run or one shard.")
     config = json.loads(args.config.read_text())
-    if args.shards is None:
+    composed = composed_setups(config, args.config.resolve().parent.parent) if args.with_composed else frozenset()
+    if args.runs:
+        matrix = build_runs(config, horizon=args.horizon, with_yaml=args.with_yaml, composed=composed)
+    elif args.shards is None:
         matrix = build_matrix(config, horizon=args.horizon)
     else:
-        composed = composed_setups(config, args.config.resolve().parent.parent) if args.with_composed else frozenset()
         matrix = build_shards(config, args.shards, horizon=args.horizon, with_yaml=args.with_yaml, composed=composed)
     # Compact single line: consumed by ``echo "matrix=$(...)" >> $GITHUB_OUTPUT``.
     print(json.dumps(matrix, separators=(",", ":")))

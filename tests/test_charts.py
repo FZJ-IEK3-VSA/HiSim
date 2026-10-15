@@ -84,6 +84,45 @@ def test_carpet_x_axis_of_a_long_short_window_keeps_at_most_seven_day_ticks() ->
     assert labels[:2] == ["01 Jul", "04 Jul"]
 
 
+@pytest.mark.parametrize("timesteps_per_day", [1440, 96, 24])
+def test_carpet_y_ticks_of_steps_up_to_an_hour_are_the_whole_hours_they_always_were(timesteps_per_day: int) -> None:
+    """Up to an hour per step, the ticks sit every six hours of rows, 24 at the bottom, as before."""
+    rows_per_hour = timesteps_per_day // 24
+    positions, labels = Carpet.y_axis_ticks(timesteps_per_day)
+    assert positions == [float(hour * rows_per_hour) for hour in (0, 6, 12, 18, 24)]
+    assert labels == ["24", "18", "12", "6", "0"]
+
+
+def test_carpet_y_ticks_of_four_hour_steps_lie_at_their_hours() -> None:
+    """Six rows a day: 18:00 and 06:00 fall inside the rows that hold them."""
+    assert Carpet.y_axis_ticks(6)[0] == [0.0, 1.5, 3.0, 4.5, 6.0]
+
+
+@pytest.mark.parametrize("hours_per_step", [2, 3, 4, 6, 8, 12, 24])
+def test_a_carpet_is_drawn_for_every_step_above_an_hour_that_divides_a_day(tmp_path: Path, hours_per_step: int) -> None:
+    """A week at two to 24 hours per step gives a carpet of 12 down to one row a day.
+
+    The rows per hour were 0 above an hour, and ``np.arange(0, 0, 0)`` raised ZeroDivisionError.
+    """
+    carpet = Carpet(
+        output="Test # Output",
+        component_name="TestComponent",
+        units="W",
+        directory_path=str(tmp_path),
+        time_correction_factor_in_hours=float(hours_per_step),
+        output_description="Test output description",
+        figure_format=FigureFormat.PNG,
+        path_checker=lambda **_: None,
+    )
+    timesteps_per_day = 24 // hours_per_step
+    data = pd.Series(np.arange(7 * timesteps_per_day, dtype=float))
+
+    entry = carpet.plot(xdims=7, data_in_self_units=data, window_start=datetime.datetime(2021, 7, 1))
+
+    assert entry is not None
+    assert Path(entry.file_path).is_file()
+
+
 class _ChartFixture(NamedTuple):
     """A Chart built with an injected path checker, plus the captured calls and target directory."""
 

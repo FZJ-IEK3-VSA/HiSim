@@ -90,6 +90,33 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             "Day",
         )
 
+    @staticmethod
+    def y_axis_ticks(timesteps_per_day: int) -> Tuple[List[float], List[str]]:
+        """Return where the time-of-day axis of a carpet is labelled, and with which hours.
+
+        The carpet has one row per timestep of the day, ``timesteps_per_day`` rows from 0 at the bottom
+        to ``timesteps_per_day`` at the top, and the bottom row is the day's last timestep. The axis is
+        labelled every six hours, 24 at the bottom and 0 at the top, at the positions those hours have on
+        it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example: hourly data puts "18" at 6.0;
+        two-hour steps put it at 3.0; four-hour steps put "6" at 4.5, inside the row of 04:00 to 08:00,
+        because that is where 06:00 lies.
+
+        Every step that divides a day gets a carpet, up to one row per day at 24 h: the rows are fewer
+        but each still covers the hours it simulated, and the columns still show one day after the
+        other, so there is no step length above which the plot would say something wrong.
+
+        Args:
+            timesteps_per_day: The number of rows of the carpet, at least 1.
+
+        Returns:
+            The tick positions, bottom to top, and their labels.
+        """
+        quarters = range(0, 5)
+        return (
+            [timesteps_per_day * quarter / 4 for quarter in quarters],
+            [str(24 - 6 * quarter) for quarter in quarters],
+        )
+
     def plot(
         self, xdims: int, data_in_self_units: pd.Series, window_start: datetime.datetime
     ) -> ReportImageEntry | None:
@@ -113,7 +140,6 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         log.trace("starting carpet plots")
         self.ensure_output_dir()
         ydims = len(data_in_self_units) // xdims  # number of calculated timesteps per day
-        y_steps_per_hour = ydims // 24
 
         try:
             reshaped_data_in_self_units = data_in_self_units.values.reshape(xdims, ydims)
@@ -136,10 +162,11 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
         plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
 
-        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
+        # The ticks used to be placed per whole hour of rows, which is 0 rows for a step above one hour and
+        # made np.arange divide by zero; they are placed on the day's own time axis now.
+        y_ticks, y_tick_labels = self.y_axis_ticks(ydims)
         axis.set_yticks(y_ticks)
-        y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
-        axis.set_yticklabels([str(i) for i in y_ticks_labels])
+        axis.set_yticklabels(y_tick_labels)
 
         x_ticks, x_tick_labels, x_axis_title = self.x_axis_ticks(window_start, xdims)
         axis.set_xticks(x_ticks)

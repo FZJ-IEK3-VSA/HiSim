@@ -1132,9 +1132,16 @@ class GenericBoiler(PhysicsComponent):
         or without a lift, the controller asks for no fire. The burner then burns as asked, unless its minimum times
         (:class:`BurnerTimes`) hold it: a burner lit for less than its minimum firing time burns on, at the commanded
         power and at least its minimal power, and sends that heat to the space-heating circuit, the buffer an on/off
-        burner charges (:meth:`held_firing`); a burner out for less than its minimum pause stays out. Out, no circuit
-        moves water and no fuel is burnt. The decision reads only this step's inputs and the burner's state committed
-        at the end of the previous step, so every pass of a step decides the same way on the same inputs.
+        burner charges, at the pump's largest flow (:meth:`commanded_firing` with a lift of 0 K). For example, a pellet
+        burner whose controller switched to off burns at its minimal power, a twelfth of its maximal one, and one whose
+        controller still names space heating with the buffer above its set temperature burns at full power. A burner
+        out for less than its minimum pause stays out. Out, no circuit moves water and no fuel is burnt. The decision
+        reads only this step's inputs and the burner's state committed at the end of the previous step, so every pass
+        of a step decides the same way on the same inputs.
+
+        The burner counts as lit in a step when it burns fuel (:attr:`BurnerState.is_lit`). A held burner whose
+        space-heating return is already at the maximal flow temperature carries no heat, so it burns no fuel: it
+        goes out, the way a boiler's high-limit thermostat stops its burner, and its minimum pause starts.
 
         Raises:
             ValueError: If the control signal is outside [0, 1] or the operating mode is unknown.
@@ -1169,10 +1176,11 @@ class GenericBoiler(PhysicsComponent):
             seconds_per_timestep=seconds_per_timestep,
         )
         if burner_is_lit and not asked_to_burn:
-            # held lit by the minimum firing time
-            firing = self.held_firing(stsv, control_signal=control_signal)
+            # held lit by the minimum firing time: the heat goes to the space-heating buffer at the pump's largest flow
             fired, idle = self.space_heating_circuit, self.hot_water_circuit
-            hot_water_ratio_run = 0.0
+            firing, hot_water_ratio_run = self.commanded_firing(
+                stsv, fired=fired, control_signal=control_signal, lift_in_kelvin=0.0
+            )
         elif asked_to_burn and not burner_is_lit:
             # held out by the minimum pause
             firing = None
@@ -1201,13 +1209,14 @@ class GenericBoiler(PhysicsComponent):
         (:class:`BoilerPump`), so the flow stays one a household circuit carries and the supply ends above the one
         asked for. The hot-water supply stops at the controller's set temperature and both supplies at the maximal
         flow temperature. A hot-water charge runs the part-load ratio the controller commands; a space-heating
-        firing reports a ratio of 0.
+        firing reports a ratio of 0. A burner its minimum firing time holds lit although no fire is asked for fires
+        the space-heating circuit with a lift of 0 K, so it runs at the pump's largest flow.
 
         Args:
             stsv: The step's values, read for the circuit's return, the hot-water set temperature and the ratio.
             fired: The circuit the controller's mode names.
             control_signal: The share of the maximal burner power the controller commands, 0 to 1.
-            lift_in_kelvin: The lift the controller asks for, in K, above 0.
+            lift_in_kelvin: The lift the controller asks for, in K, above 0; 0 for a burner held lit.
 
         Returns:
             The circuit's firing, and the hot-water part-load ratio it ran with.
@@ -1246,41 +1255,6 @@ class GenericBoiler(PhysicsComponent):
                 firing, part_load_ratio=hot_water_ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
             )
         return firing, hot_water_ratio_run
-
-    def held_firing(self, stsv: SingleTimeStepValues, *, control_signal: float) -> "BoilerFiring":
-        """Return the space-heating firing of a burner its minimum firing time holds lit although no fire is asked for.
-
-        The burner burns at the power the control signal commands, at least its minimal power, and its heat goes to
-        the space-heating circuit, the buffer an on/off burner charges, at the pump's largest flow: the lift is the
-        rise that heat gives at that flow (:class:`BoilerPump`), and the supply stops at the maximal flow
-        temperature. For example, a pellet burner whose controller switched to off burns at its minimal power, a
-        twelfth of its maximal one, and one whose controller still names space heating with the buffer above its set
-        temperature burns at full power.
-
-        Args:
-            stsv: The step's values, read for the space-heating return.
-            control_signal: The share of the maximal burner power the controller commands, 0 to 1.
-
-        Returns:
-            The space-heating circuit's firing.
-        """
-        commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
-        lift_in_kelvin = self.pump.lift_in_kelvin(
-            asked_lift_in_kelvin=0.0,
-            heat_power_in_watt=commanded_power_in_watt * self.burner.efficiency_at(commanded_power_in_watt),
-        )
-        return_temperature_in_celsius = stsv.get_input_value(self.space_heating_circuit.return_temperature)
-        return self.fired_circuit(
-            burner=self.burner,
-            control_signal=control_signal,
-            lift_in_kelvin=lift_in_kelvin,
-            return_temperature_in_celsius=return_temperature_in_celsius,
-            supply_temperature_in_celsius=hydronics.throttled_supply_temperature_c(
-                unthrottled_supply_c=return_temperature_in_celsius + lift_in_kelvin,
-                return_c=return_temperature_in_celsius,
-                supply_limit_c=self.maximal_flow_temperature_in_celsius,
-            ),
-        )
 
     @staticmethod
     def fired_circuit(

@@ -7,7 +7,7 @@ moved verbatim from the former single-module ``building.py``.
 """
 
 import importlib
-from typing import Any, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple
 
 import pandas as pd
 
@@ -169,6 +169,13 @@ class Building(cp.PhysicsComponent):
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
     TemperatureInternalSurface = "TemperatureInternalSurface"
     TemperatureIndoorAir = "TemperatureIndoorAir"
+
+    #: How far above the cooling set temperature the room must be for the occupants to open the windows, in K. A room
+    #: that a distribution system cools in the same step ends exactly at the cooling set temperature; without a margin
+    #: float noise decides whether the windows open, and the step has no consistent state (the room flips between the
+    #: set temperature and the aired temperature from pass to pass). The margin lies far above that noise and far
+    #: above the simulator's convergence tolerance, and far below a temperature anyone would notice.
+    WINDOW_OPENING_MARGIN_IN_KELVIN: ClassVar[float] = 0.01
     #: The indoor air temperature at the start of the step, the value the previous step converged to: a sensor
     #: value no pass of the step moves, for components that decide on the room temperature within the step.
     TemperatureIndoorAirAtStartOfStepInCelsius = "TemperatureIndoorAirAtStartOfStepInCelsius"
@@ -702,12 +709,11 @@ class Building(cp.PhysicsComponent):
         self.state.thermal_mass_temperature_in_celsius = thermal_mass_average_bulk_temperature_in_celsius
 
         # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or initial temperature is reached
-        if (
-            self.buildingconfig.enable_opening_windows is True
-            and self.buildingconfig.initial_internal_temperature_in_celsius
-            < self.set_cooling_temperature_in_celsius
-            < indoor_air_temperature_in_celsius
-            and temperature_outside_in_celsius < indoor_air_temperature_in_celsius
+        if self.buildingconfig.enable_opening_windows is True and self.occupants_open_the_windows(
+            initial_temperature_in_celsius=self.buildingconfig.initial_internal_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
+            indoor_air_temperature_in_celsius=indoor_air_temperature_in_celsius,
+            outside_temperature_in_celsius=temperature_outside_in_celsius,
         ):
             indoor_air_temperature_in_celsius = max(
                 self.buildingconfig.initial_internal_temperature_in_celsius,
@@ -823,6 +829,40 @@ class Building(cp.PhysicsComponent):
         )
 
     # =================================================================================================================================
+
+    @classmethod
+    def occupants_open_the_windows(
+        cls,
+        *,
+        initial_temperature_in_celsius: float,
+        set_cooling_temperature_in_celsius: float,
+        indoor_air_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+    ) -> bool:
+        """Return whether the occupants air the room by opening the windows in this step.
+
+        They do when the room is more than :attr:`WINDOW_OPENING_MARGIN_IN_KELVIN` above the cooling set temperature,
+        the outside is cooler than the room, and the cooling set temperature lies above the initial temperature the
+        aired room falls back to. For example, with a 22 °C initial and a 25 °C cooling set temperature, a room at
+        25.5 °C with 18 °C outside is aired, a room at exactly 25.0 °C (where a distribution system cooling it in the
+        same step leaves it) is not.
+
+        Args:
+            initial_temperature_in_celsius: The building's initial indoor temperature, which an aired room falls back
+                to unless the outside is warmer, in °C.
+            set_cooling_temperature_in_celsius: The cooling set temperature, in °C.
+            indoor_air_temperature_in_celsius: The indoor air temperature of this step before airing, in °C.
+            outside_temperature_in_celsius: The outside temperature, in °C.
+
+        Returns:
+            True if the windows open.
+        """
+        return (
+            initial_temperature_in_celsius
+            < set_cooling_temperature_in_celsius
+            < indoor_air_temperature_in_celsius - cls.WINDOW_OPENING_MARGIN_IN_KELVIN
+            and outside_temperature_in_celsius < indoor_air_temperature_in_celsius
+        )
 
     def i_save_state(
         self,

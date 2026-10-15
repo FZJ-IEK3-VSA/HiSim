@@ -13,7 +13,9 @@ from pathlib import Path
 
 import pytest
 from PIL import Image as PilImage
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import Image
 
 from hisim.postprocessing.reportgenerator import ReportGenerator
 
@@ -36,19 +38,35 @@ def fixture_figure_path(tmp_path: Path) -> str:
     ],
 )
 def test_a_drawn_figure_holds_no_decoded_image(tmp_path: Path, figure_path: str, method_name: str) -> None:
-    """After drawing, the flowable has no ImageReader left, so its bitmap can be freed."""
+    """The figure method appends one image flowable, and after drawing it holds no ImageReader.
+
+    ReportLab keeps a decoded bitmap only inside an ``ImageReader``, so a drawn flowable with no
+    ``ImageReader`` among its attributes holds no bitmap, whatever ReportLab names the attribute.
+    With the default ``lazy=1`` the drawn flowable keeps one, and this test fails.
+    """
     report = ReportGenerator(dirpath=str(tmp_path))
+    story_length = len(report.story)
     getattr(report, method_name)(figure_path)
+    assert len(report.story) == story_length + 1
     flowable = report.story[-1]
+    assert isinstance(flowable, Image)
     canvas = Canvas(str(tmp_path / "drawn.pdf"))
     flowable.wrap(500, 700)
     flowable.drawOn(canvas, 0, 0)
-    assert flowable.__dict__.get("_img") is None
+    assert not [name for name, value in vars(flowable).items() if isinstance(value, ImageReader)]
 
 
 @pytest.mark.base
 def test_a_report_with_figures_builds(tmp_path: Path, figure_path: str) -> None:
-    """Two builds of a story with the same figure twice both write the PDF, with the figure embedded."""
+    """Two builds of a story with figures write a PDF that embeds more images than the report without them.
+
+    Every report embeds the two logos of its preamble, so the figure counts only as image objects
+    beyond those of a report built without figures.
+    """
+    figure_free_directory = tmp_path / "without_figures"
+    figure_free_directory.mkdir()
+    ReportGenerator(dirpath=str(figure_free_directory))
+    figure_free_images = (figure_free_directory / "report.pdf").read_bytes().count(b"/Subtype /Image")
     report = ReportGenerator(dirpath=str(tmp_path))
     report.open()
     report.write_figures_to_report(figure_path)
@@ -58,4 +76,4 @@ def test_a_report_with_figures_builds(tmp_path: Path, figure_path: str) -> None:
     report.write_figures_to_report_with_size_four_six(figure_path)
     report.close()
     content = (tmp_path / "report.pdf").read_bytes()
-    assert content.count(b"/Subtype /Image") >= 1
+    assert content.count(b"/Subtype /Image") > figure_free_images

@@ -122,6 +122,7 @@ class GenericCarInformation:
             time_resolutions=self.time_resolutions,
             car_locations=self.car_location_value_list,
             driven_meters=self.driven_meters,
+            start_times=self.start_times,
         )
 
     @staticmethod
@@ -173,6 +174,7 @@ class GenericCarInformation:
         ) = self.get_important_parameters_from_occupancy_car_data(car_data_dict=car_data_dict)
 
         self.driven_meters = self.get_meters_driven_from_occupancy_car_data(car_data_dict=car_data_dict)
+        self.start_times = self.get_start_times_from_occupancy_car_data(car_data_dict=car_data_dict)
 
     def get_important_parameters_from_occupancy_car_data(
         self, car_data_dict: Mapping[str, Any]
@@ -229,8 +231,29 @@ class GenericCarInformation:
         driven_distances_list = car_data_dict["driving_distances"]
         return [driven_distance_data["Values"] for driven_distance_data in driven_distances_list]
 
+    def get_start_times_from_occupancy_car_data(self, car_data_dict: Mapping[str, Any]) -> List[str]:
+        """Reads the wall-clock time each car's profile starts at, in the same order as the other lists.
+
+        The LoadProfileGenerator states it as ``StartTime`` in every profile it writes, for example
+        ``"2021-07-01T00:00:00"`` for a calculation of the window from 1 July. The car reads its run's window
+        from the profile by it.
+
+        Args:
+            car_data_dict: The occupancy's raw LPG car report.
+
+        Returns:
+            The ``StartTime`` of every car's location profile, ISO 8601 without a time zone.
+        """
+        return [str(car_location["StartTime"]) for car_location in car_data_dict["car_locations"]]
+
     def prepare_data_dict_for_car_component(
-        self, car_names: List, household_names: List, time_resolutions: List, car_locations: List, driven_meters: List
+        self,
+        car_names: List,
+        household_names: List,
+        time_resolutions: List,
+        car_locations: List,
+        driven_meters: List,
+        start_times: List[str],
     ) -> Dict[CarProfileKey, Dict[str, Any]]:
         """Rearranges the parallel lists into one payload per car, keyed by household and car.
 
@@ -240,6 +263,7 @@ class GenericCarInformation:
             time_resolutions: Time resolution of every car's profile, as an ``%H:%M:%S`` string.
             car_locations: Location value series of every car.
             driven_meters: Driven-metres value series of every car.
+            start_times: The wall-clock time every car's profile starts at, ISO 8601.
 
         Returns:
             The payloads, keyed by :class:`CarProfileKey`.
@@ -253,6 +277,7 @@ class GenericCarInformation:
                 "time_resolution": time_resolutions[index],
                 "car_location": car_locations[index],
                 "driven_meters": driven_meters[index],
+                "start_time": start_times[index],
             }
         return data_dict_for_car_component
 

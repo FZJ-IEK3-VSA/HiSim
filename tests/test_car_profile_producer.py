@@ -169,7 +169,7 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
     )
     arguments: Dict[str, Any] = {
         "profile_content_hash": content_hash,
-        "year": 2021,
+        "profile_start": "2021-01-01T00:00:00",
         "seconds_per_timestep": 3600,
         "timesteps": 48,
         "window_start": "2021-01-01T00:00:00",
@@ -283,3 +283,20 @@ def test_the_produced_profile_is_hourly_and_in_standard_time() -> None:
     assert int(locations.iloc[17]) == 1
     assert int(locations.iloc[0]) == 1
     assert isinstance(produced, pd.DataFrame)
+
+
+@pytest.mark.base
+def test_a_july_window_reads_the_profile_from_its_stated_start() -> None:
+    """Catches a car whose July window reads the profile as if it started on 1 January, or at its 00:00.
+
+    The profile the LoadProfileGenerator computed for a run from 1 July starts at 1 July 00:00 on the wall
+    clock, which is an hour before the window in standard time: the drive at 08:00 summer time falls into the
+    hour starting at 07:00 of the run's clock.
+    """
+    inputs = calculation_inputs(profile_start="2021-07-01T00:00:00", window_start="2021-07-01T00:00:00", timesteps=24)
+
+    produced = produce_car_profile(inputs)
+
+    assert len(produced) == 24
+    assert float(produced[CarProfileInputs.DISTANCE_COLUMN].iloc[7]) == pytest.approx(15000.0)
+    assert list(produced[CarProfileInputs.LOCATION_COLUMN].iloc[8:16]) == [2] * 8

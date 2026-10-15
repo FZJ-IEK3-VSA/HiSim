@@ -278,37 +278,69 @@ class ReportGenerator:
             self.story.append(Spacer(1, 10))
 
     def write_figures_to_report(self, file_path: str) -> None:
-        """Add figure to the report."""
+        """Add a plot to the report at its own size, computed from the pixel size and the image's DPI.
 
-        path = Path(file_path)
-        if path.is_file():
-            image = Image(str(path), useDPI=True)
-            image.hAlign = "CENTER"
-            self.story.append(image)
-        else:
-            raise ValueError("no files found")
+        Args:
+            file_path: Path of the plot's image file.
+
+        Raises:
+            ValueError: If no file exists at ``file_path``.
+        """
+        self._append_figure(file_path, width_in_points=None, height_in_points=None, use_dpi=True)
 
     def write_figures_to_report_with_size_four_six(self, file_path: str) -> None:
-        """Add figure to the report with certain size."""
+        """Add a plot to the report, drawn 4 inches wide and 6 inches high.
 
-        path = Path(file_path)
-        if path.is_file():
-            image = Image(str(path), width=4 * inch, height=6 * inch)
-            image.hAlign = "CENTER"
-            self.story.append(image)
-        else:
-            raise ValueError("no files found")
+        Args:
+            file_path: Path of the plot's image file.
+
+        Raises:
+            ValueError: If no file exists at ``file_path``.
+        """
+        self._append_figure(file_path, width_in_points=4 * inch, height_in_points=6 * inch, use_dpi=False)
 
     def write_figures_to_report_with_size_seven_four(self, file_path: str) -> None:
-        """Add figure to the report with certain size."""
+        """Add a plot to the report, drawn 7 inches wide and 4 inches high.
 
+        Args:
+            file_path: Path of the plot's image file.
+
+        Raises:
+            ValueError: If no file exists at ``file_path``.
+        """
+        self._append_figure(file_path, width_in_points=7 * inch, height_in_points=4 * inch, use_dpi=False)
+
+    def _append_figure(
+        self, file_path: str, width_in_points: float | None, height_in_points: float | None, use_dpi: bool
+    ) -> None:
+        """Append a plot to the story as a centred ReportLab ``Image`` that drops its pixels after drawing.
+
+        Every figure method of this class goes through here, so the memory rule below holds for
+        each plot. A build keeps every flowable of the story alive until it ends. ReportLab's default
+        image flowable (``lazy=1``) keeps its decoded bitmap until then, so a report of a few hundred
+        3600 x 2400 pixel PNG plots held all of them at once, about 75 MB each. With ``lazy=2``
+        ReportLab opens the file when it needs it (at layout for the size, again to draw) and drops
+        the decoded bitmap after drawing. The price is time: each build pass decodes each plot
+        again (``multiBuild`` runs at least two passes, for the table of contents). ReportLab copies
+        a JPEG plot's compressed data into the PDF without decoding it and ignores ``lazy`` for JPEG
+        files, so the rule matters for PNG plots only. The two logos of the preamble keep the
+        default; they are small.
+
+        Args:
+            file_path: Path of the plot's image file.
+            width_in_points: Drawn width (1 point = 1/72 inch), or None for the width from the image.
+            height_in_points: Drawn height (1 point = 1/72 inch), or None for the height from the image.
+            use_dpi: Whether the size taken from the image is scaled by its DPI.
+
+        Raises:
+            ValueError: If no file exists at ``file_path``.
+        """
         path = Path(file_path)
-        if path.is_file():
-            image = Image(str(path), width=7 * inch, height=4 * inch)
-            image.hAlign = "CENTER"
-            self.story.append(image)
-        else:
+        if not path.is_file():
             raise ValueError("no files found")
+        image = Image(str(path), width=width_in_points, height=height_in_points, useDPI=use_dpi, lazy=2)
+        image.hAlign = "CENTER"
+        self.story.append(image)
 
     def write_tables_to_report(self, table_as_list_of_lists: list[list[Any]]) -> None:
         """Add table to the report."""

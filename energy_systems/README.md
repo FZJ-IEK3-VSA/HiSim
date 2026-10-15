@@ -116,29 +116,42 @@ preset, a constructor or a field.
 
 A preset that leaves a sizable field `AUTO` sizes the device from the system around it: the heat
 pump `MoreAdvancedHeatPumpHPLib` from the building's heating load, the battery `Battery` from the
-photovoltaic peak power. To build a device of a size you already know, write the number into the
-entry's `config:` block; the field's law is then not evaluated and the number reaches the
-component unchanged:
+photovoltaic peak power. To build a device of a size you already know, add the number to the
+entry's `config:` block, beside the fields the file already records there; the field's law is then
+not evaluated and the number reaches the component unchanged. In
+`household_heatpump_building_sizer.energy_system.yaml` that reads:
 
 ```yaml
   MoreAdvancedHeatPumpHPLib:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
-      set_thermal_output_power_in_watt: 8000
+      with_domestic_hot_water_preparation: true  # recorded
+      set_thermal_output_power_in_watt: 8000  # added: 8 kW, written in watt as the name says
   Battery:
     class: hisim.components.advanced_battery_bslib.Battery
     preset: sized_to_pv
-    config:
+    config:  # added, with both lines
       custom_battery_capacity_generic_in_kilowatt_hour: 10
       custom_pv_inverter_power_generic_in_watt: 5000
 ```
+
+An entry keeps its place in the file: in the grouped twin
+`household_heatpump_building_sizer.grouped.energy_system.yaml` the battery is not a top-level
+component but sits in the `ems_with_battery` option of the `electricity_management` variant
+(`variants: electricity_management: options: ems_with_battery: components: Battery:`), and the
+lines go on that entry. Write the sizes into your own copy of a file: the recorded twins in this
+directory are regenerated from their Python setups (see below), which size both devices
+automatically, so a line added to a twin here is lost at the next recording.
 
 Components sized *from* the device follow the stated number: the heating-water buffer beside the
 heat pump reads the heat pump's power, whether computed or written. The battery's two fields are
 sized independently, both from the photovoltaic power, so state both: a capacity alone keeps the
 power the array would have given. Leaving the lines out keeps the automatic sizing.
-`tests/test_energy_system_explicit_sizes.py` checks all of this on the recorded heat-pump twin.
+`tests/test_energy_system_explicit_sizes.py` checks all of this on the recorded grouped heat-pump
+twin. The RenoVisor translator always writes both battery fields: a request that states only the
+capacity gets a power of 500 W per kWh, a C-rate of 0.5, the rule the measure catalogue states for
+an unset power.
 
 ### Several PV arrays
 

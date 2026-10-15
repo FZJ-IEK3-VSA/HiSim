@@ -45,15 +45,18 @@ the subclasses own the matplotlib rendering.
 Customization hooks
 -------------------
 
-Subclasses interact with the base class through two helper methods:
+Subclasses interact with the base class through these helper methods:
 
 * :meth:`Chart.ensure_output_dir` — creates
   ``component_output_folder_path`` (and parents) immediately before a figure
   is written, so construction never touches the disk.
-* :meth:`Chart.rescale_y_axis` — applies an SI prefix (T, G, M, k) to the
-  plotted values and unit string based on the maximum absolute value, keeping
-  axis numbers readable.  Units already carrying a ``k`` prefix (kg, kWh,
-  kg/s, kW) are normalised first; ``-`` and ``%`` are returned unchanged.
+* :meth:`Chart.rescale_y_axis` — returns the values in the unit the chart
+  shows them in, following :class:`AxisUnit`: the largest SI prefix the values
+  reach for a unit that takes one, never below the declared prefix, and the
+  declared unit for every other one.
+* :meth:`Chart.axis_label` — the label of the value axis, the quantity and the
+  shown unit, such as ``"Power [kW]"``.
+* :meth:`Chart.wrap_title` — breaks a title line that would run off the figure.
 
 The class-level ``months_abbrev_uppercase`` and ``label_months_lowercase``
 lists supply consistent month labels shared by the bar and single-day charts.
@@ -61,10 +64,144 @@ lists supply consistent month labels shared by the bar and single-day charts.
 
 from pathlib import Path
 import re
-from typing import Any, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple
 from dataclasses import dataclass
 import numpy as np
 from hisim import result_path_provider
+
+
+class AxisUnit:
+    """How a chart shows the values of one output: in which unit, under which axis label.
+
+    An output declares its unit as a string of :class:`hisim.loadtypes.Units` (``"W"``, ``"kWh"``,
+    ``"°C"``, ``"W per square meter"``, ...). A chart shows its values in that unit, with two
+    changes. First, a unit that takes an SI prefix gets the largest prefix the values reach, but
+    never one smaller than the declared prefix: 20 914 W are shown as 20.9 kW, 0.1 kg/s stay
+    0.1 kg/s instead of becoming 100 g/s, and 2 000 kWh become 2 MWh rather than "kkWh". A unit
+    that does not take a prefix -- a temperature, a fraction, a count of timesteps -- is shown as
+    declared, so no axis reads "k°C" or "ktimesteps". Second, durations in seconds that reach
+    :attr:`SECONDS_SHOWN_IN_HOURS` are shown in hours, because "2.3 Ms" is correct SI and still
+    unreadable. The axis label names the quantity and the unit, for example ``"Power [kW]"``.
+    """
+
+    #: Declared units that take an SI prefix: the unit shown without prefix, and the power of ten of
+    #: the declared prefix (3 for "kWh", which is 10^3 Wh).
+    PREFIXABLE_UNITS: ClassVar[Dict[str, Tuple[str, int]]] = {
+        "W": ("W", 0),
+        "kW": ("W", 3),
+        "Wh": ("Wh", 0),
+        "kWh": ("Wh", 3),
+        "J": ("J", 0),
+        "kJ": ("J", 3),
+        "Pa": ("Pa", 0),
+        "W per square meter": ("W/m²", 0),
+        "Wh per square meter": ("Wh/m²", 0),
+        "W per meter": ("W/m", 0),
+        "m": ("m", 0),
+        "L": ("L", 0),
+    }
+
+    #: The SI prefixes a value may take, largest first, each with its power of ten.
+    PREFIXES: ClassVar[List[Tuple[int, str]]] = [(12, "T"), (9, "G"), (6, "M"), (3, "k"), (0, "")]
+
+    #: From this many seconds on, a duration is shown in hours (about three hours).
+    SECONDS_SHOWN_IN_HOURS: ClassVar[float] = 1e4
+
+    #: Declared units that are shown in a shorter symbol and are otherwise left as they are.
+    DISPLAY_SYMBOLS: ClassVar[Dict[str, str]] = {"Degrees": "°", "m2": "m²", "m3": "m³"}
+
+    #: The quantity each declared unit measures, which names the axis. A unit not listed here is
+    #: labelled "Value".
+    QUANTITIES: ClassVar[Dict[str, str]] = {
+        "W": "Power",
+        "kW": "Power",
+        "Wh": "Energy",
+        "kWh": "Energy",
+        "J": "Energy",
+        "kJ": "Energy",
+        "kWh per timestep": "Energy",
+        "W per square meter": "Power per area",
+        "Wh per square meter": "Energy per area",
+        "W per meter": "Power per length",
+        "°C": "Temperature",
+        "K": "Temperature difference",
+        "Pa": "Pressure",
+        "bar": "Pressure",
+        "kg": "Mass",
+        "kg/s": "Mass flow",
+        "L": "Volume",
+        "m3": "Volume",
+        "Liter per timestep": "Volume per timestep",
+        "Cubic meters per second": "Volume flow",
+        "m": "Length",
+        "m2": "Area",
+        "m/s": "Speed",
+        "s": "Duration",
+        "h": "Duration",
+        "years": "Duration",
+        "timesteps": "Timesteps",
+        "Degrees": "Angle",
+        "%": "Share",
+        "fraction": "Fraction",
+        "binary": "State",
+        "Euro": "Cost",
+        "Euros per kWh": "Price",
+    }
+
+    @classmethod
+    def scale(cls, values: Any, declared_unit: str) -> Tuple[Any, str]:
+        """Return the values in the unit a chart shows them in, and that unit.
+
+        Example: ``scale(np.array([0.0, 20914.0]), "W")`` returns ``([0.0, 20.914], "kW")``;
+        ``scale(np.array([0.1]), "kg/s")`` returns ``([0.1], "kg/s")``; ``scale(np.array([2.3e6]), "s")``
+        returns ``([638.9], "h")``.
+
+        Args:
+            values: The values in the declared unit; a numpy array or a pandas Series.
+            declared_unit: The unit the output declares, as the string of its ``Units`` member.
+
+        Returns:
+            The values multiplied into the shown unit, and the shown unit.
+        """
+        magnitude = cls.largest_magnitude(values)
+        if declared_unit in cls.PREFIXABLE_UNITS:
+            base_unit, declared_power = cls.PREFIXABLE_UNITS[declared_unit]
+            magnitude_in_base_unit = magnitude * 10.0**declared_power
+            for power, prefix in cls.PREFIXES:
+                if power <= declared_power or magnitude_in_base_unit >= 10.0**power:
+                    return values * 10.0 ** (declared_power - power), f"{prefix}{base_unit}"
+        if declared_unit == "s" and magnitude >= cls.SECONDS_SHOWN_IN_HOURS:
+            return values / 3600.0, "h"
+        return values, cls.DISPLAY_SYMBOLS.get(declared_unit, declared_unit)
+
+    @classmethod
+    def label(cls, declared_unit: str, shown_unit: str) -> str:
+        """Return the axis label of an output: the quantity its unit measures and the shown unit.
+
+        Example: ``label("W", "kW")`` is ``"Power [kW]"``, ``label("-", "-")`` is ``"Value [-]"``.
+
+        Args:
+            declared_unit: The unit the output declares, which decides the quantity.
+            shown_unit: The unit the chart shows the values in, as :meth:`scale` returned it.
+
+        Returns:
+            The label, in the form ``"Quantity [unit]"``.
+        """
+        return f"{cls.QUANTITIES.get(declared_unit, 'Value')} [{shown_unit}]"
+
+    @staticmethod
+    def largest_magnitude(values: Any) -> float:
+        """Return the largest absolute finite value, or 0 when there is none.
+
+        Args:
+            values: A numpy array or a pandas Series of numbers.
+
+        Returns:
+            The largest absolute value that is not NaN or infinite; 0.0 for an empty or all-NaN input.
+        """
+        absolute = np.abs(np.asarray(values, dtype=float))
+        finite = absolute[np.isfinite(absolute)]
+        return float(finite.max()) if finite.size else 0.0
 
 
 class Chart:  # noqa: too-few-public-methods
@@ -98,6 +235,14 @@ class Chart:  # noqa: too-few-public-methods
         "November",
         "December",
     ]
+
+    #: A title line longer than this many characters is broken; at the 14 pt title font of a 6 inch
+    #: wide figure a longer line reaches the edge of the figure.
+    MAXIMUM_TITLE_CHARACTERS: ClassVar[int] = 45
+
+    #: Where a title line may be broken: after a space or an underscore, and at the word boundaries
+    #: of camel case ("HeatPump" between "Heat" and "Pump", "HPLib" between "HP" and "Lib").
+    TITLE_BREAK_PATTERN: ClassVar[str] = r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[_ ])"
 
     def __init__(
         self,
@@ -148,10 +293,10 @@ class Chart:  # noqa: too-few-public-methods
 
         if hasattr(units, "value"):
             self.units = units.value
-            # self.ylabel = units.value
         else:
             self.units = units
-            # self.ylabel = units
+        # The unit the output declares; ``self.units`` becomes the unit a chart shows once it has plotted.
+        self.declared_units: str = self.units
         self.time_correction_factor_in_hours = time_correction_factor_in_hours
 
         self.title: str = ""
@@ -209,50 +354,76 @@ class Chart:  # noqa: too-few-public-methods
         Path(self.component_output_folder_path).mkdir(parents=True, exist_ok=True)
 
     def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
-        """Rescale y_values of plots.
+        """Return the values in the unit the chart shows them in, and that unit.
 
-        Chooses an SI prefix (T, G, M, k) based on the maximum absolute
-        value so that axis numbers stay readable.  Units already prefixed
-        with ``k`` (kg, kWh, kg/s, kW) are first stripped of the ``k`` and
-        the values multiplied by 1e3 before the new prefix is applied.
-        Units ``-`` and ``%`` are left unchanged.
+        Delegates to :meth:`AxisUnit.scale`: a unit that takes an SI prefix gets the largest prefix
+        the values reach but never one below its declared prefix (20 914 W become 20.9 kW, 0.1 kg/s
+        stay kg/s), a duration in seconds of three hours or more is shown in hours, and any other
+        unit is left as declared. Example: ``rescale_y_axis(np.array([1500.0]), "W")`` returns
+        ``([1.5], "kW")``.
 
         Args:
-            y_values: Array-like numeric values to rescale.
-            units: Current unit string (may be modified in the returned
-                tuple).
+            y_values: Array-like numeric values in ``units``.
+            units: The declared unit of the values, as the string of its ``Units`` member.
 
         Returns:
-            A tuple ``(rescaled_y_values, updated_units)`` where
-            ``updated_units`` carries the new SI prefix, or the original
-            values and units when no rescaling was needed.
+            A tuple ``(rescaled_y_values, shown_units)``.
         """
-        max_scale = np.max(np.abs(y_values))  # type: ignore
+        return AxisUnit.scale(y_values, units)
 
-        if units not in ["-", "%"]:
-            scale = ""
+    def axis_label(self, shown_units: str) -> str:
+        """Return the label of the value axis: the quantity of the output and the shown unit.
 
-            # if k already in unit, remove k first and then scale
-            if units in ["kg", "kWh", "kg/s", "kW"]:
-                y_values = y_values * 1e3
-                units = units.strip("k")
+        Example: an output declared in W and shown in kW is labelled ``"Power [kW]"``.
 
-            if max_scale >= 1e12:
-                y_values = y_values * 1e-12
-                scale = "T"
-            elif 1e9 <= max_scale < 1e12:
-                y_values = y_values * 1e-9
-                scale = "G"
-            elif 1e6 <= max_scale < 1e9:
-                y_values = y_values * 1e-6
-                scale = "M"
-            elif 1e3 <= max_scale < 1e6:
-                y_values = y_values * 1e-3
-                scale = "k"
+        Args:
+            shown_units: The unit the chart shows the values in, as :meth:`rescale_y_axis` returned it.
 
-            units = f"{scale}{units}"
+        Returns:
+            The label, in the form ``"Quantity [unit]"``.
+        """
+        return AxisUnit.label(self.declared_units, shown_units)
 
-        return y_values, units
+    @classmethod
+    def wrap_title(cls, title: str, suffix: str = "") -> str:
+        """Break every line of a title that is longer than :attr:`MAXIMUM_TITLE_CHARACTERS`.
+
+        Output names are written in camel case without spaces, so a long one such as
+        ``WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius`` has no space to break
+        at and runs off both edges of the figure. A line is broken at spaces, underscores and the
+        word boundaries of camel case, and its words are kept as they are written, so the name can
+        still be searched for. Example: with a limit of 20 characters,
+        ``"ThermalPowerFromSecondaryHeatGenerator"`` becomes
+        ``"ThermalPowerFrom\nSecondaryHeatGenerator"``.
+
+        A ``suffix`` such as the date of a single-day chart is kept whole: it follows the last line
+        when it fits there and gets a line of its own when it does not, so "January 1st" is never
+        split between two lines.
+
+        Args:
+            title: The title, whose lines are separated by newlines.
+            suffix: Text appended to the title as one unbroken piece; empty for none.
+
+        Returns:
+            The title with every line no longer than the limit, unless a single word is longer.
+        """
+        wrapped: List[str] = []
+        for line in title.split("\n"):
+            pieces = [piece for piece in re.split(cls.TITLE_BREAK_PATTERN, line) if piece]
+            current = ""
+            for piece in pieces:
+                if current and len(current) + len(piece) > cls.MAXIMUM_TITLE_CHARACTERS:
+                    wrapped.append(current.rstrip())
+                    current = piece.lstrip()
+                else:
+                    current += piece
+            wrapped.append(current.rstrip())
+        if suffix:
+            if len(wrapped[-1]) + 1 + len(suffix) > cls.MAXIMUM_TITLE_CHARACTERS:
+                wrapped.append(suffix)
+            else:
+                wrapped[-1] = f"{wrapped[-1]} {suffix}"
+        return "\n".join(wrapped)
 
 
 @dataclass

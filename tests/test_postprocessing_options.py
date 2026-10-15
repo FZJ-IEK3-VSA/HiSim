@@ -128,7 +128,7 @@ def test_postprocessing_option_plot_single_days(
     """Test that PostProcessingOptions.PLOT_SINGLE_DAYS produces per-component single-day plot PNG files."""
     postprocessing_option_framework.run(
         PostProcessingOptions.PLOT_SINGLE_DAYS,
-        expected_files=["*/*/days_m0_d0*.PNG"],
+        expected_files=["*/*/days_m0_d0.png"],
     )
 
 
@@ -210,7 +210,7 @@ def test_postprocessing_option_plot_special_testing_single_day(
     """Test that PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY produces single-day plot PNG files using the minutely baseline."""
     postprocessing_option_framework.run(
         PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY,
-        expected_files=["*/*/days_m0_d0*.PNG"],
+        expected_files=["*/*/days_m0_d0.png"],
     )
 
 

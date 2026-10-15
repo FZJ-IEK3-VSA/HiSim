@@ -132,9 +132,9 @@ In CI this runs as two tiers (see `.github/workflows/`):
   composed file's, so the tier takes as long as its slowest run. Every setup of the config runs the full year (owner
   decision 2026-10-11), because the first week of January never runs a solar collector's pump;
   only a setup that cannot finish a year yet carries `"horizons": ["week"]`, named with its bead
-  in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). The config names Python
-  setups only, so an energy system file without one (`energy_systems/gas_boiler_household.energy_system.yaml`)
-  has no golden pair. A setup without a golden for a configured pair fails the check before anything
+  in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). The energy-system file
+  `gas_boiler_household`, which has no Python setup, runs the full year too, as its own entry (see
+  Configuration). A setup without a golden for a configured pair fails the check before anything
   runs; the next bless writes the missing file.
 
 ## Blessing (updating the goldens)

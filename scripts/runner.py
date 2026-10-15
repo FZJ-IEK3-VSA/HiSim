@@ -373,7 +373,7 @@ def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     """Resolve ``setup.path`` relative to ``repo_root`` and return the absolute ``Path``.
 
     The path names either a Python setup (``.py``) or an energy-system file
-    (``.energy_system.yaml``, :meth:`SetupConfig.is_energy_system_file`).
+    (``.energy_system.yaml`` or ``.energy_system.yml``, :meth:`SetupConfig.is_energy_system_file`).
 
     Raises:
         FileNotFoundError: if the file does not exist or is neither a ``.py`` file nor an
@@ -383,8 +383,12 @@ def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     if not resolved.exists():
         raise FileNotFoundError(f"Setup script not found: {setup.path} (resolved to {resolved})")
     if resolved.suffix != ".py" and not setup.is_energy_system_file():
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.hisim_main import EnergySystemMode
+
         raise FileNotFoundError(
-            f"Setup must be a .py file or an .energy_system.yaml file: {setup.path} (resolved to {resolved})"
+            "Setup must be a .py file or an energy-system file "
+            f"(*{' or *'.join(EnergySystemMode.SUFFIXES)}): {setup.path} (resolved to {resolved})"
         )
     return resolved
 

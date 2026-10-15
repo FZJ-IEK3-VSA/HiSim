@@ -156,7 +156,7 @@ def test_load_config_real_file_setups_exist_on_disk() -> None:
     for setup in cfg.setups:
         resolved = resolve_setup_path(setup, REPO_ROOT)
         assert resolved.exists()
-        assert resolved.suffix == ".py" or resolved.name.endswith(".energy_system.yaml")
+        assert resolved.suffix == ".py" or setup.is_energy_system_file()
 
 
 # --------------------------------------------------------------------------- #
@@ -280,7 +280,8 @@ def test_resolve_setup_path_accepts_an_energy_system_file_and_refuses_other_file
 
 def test_an_energy_system_file_is_its_own_yaml_twin() -> None:
     """YAML mode runs the entry's own file: it has no recorded twin, and none is looked for."""
-    assert resolve_twin_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT) == resolve_setup_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT)
+    own_file = (REPO_ROOT / "energy_systems" / "gas_boiler_household.energy_system.yaml").resolve()
+    assert resolve_twin_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT) == own_file
 
 
 def test_python_mode_runs_an_energy_system_file_through_the_declarative_executor(

@@ -155,16 +155,18 @@ class BslibChargingParameters:
     recharge_threshold_state_of_charge: float
 
     def __post_init__(self) -> None:
-        """Refuse a parameter that is not a finite number of at least 0, naming the field and the value.
+        """Refuse a parameter that is not a finite number of at least 0, or a recharge threshold above 1.
 
         bslib describes some systems only partly: the DC-coupled systems ``S3`` and ``S4`` give NaN rated and minimum
         charging powers, and ``INV1`` also a NaN capacity. A NaN bound would reach the energy manager as the battery's
         published charging power and fail there in the first step; refusing it here fails the battery's construction
         instead, with the field that is wrong. For example, SG1 with 10 kWh and 5 kW (10,000 Wh, 5,000 W, 91.15 W,
-        0.98) is accepted; a NaN minimum charging power or a capacity of -1 Wh is refused.
+        0.98) is accepted; a NaN minimum charging power, a capacity of -1 Wh or a recharge threshold of 1.5 is
+        refused. The recharge threshold is a state of charge, so it must also be at most 1: above 1, a battery whose
+        recharge hysteresis is set would be let charge past full.
 
         Raises:
-            ValueError: If any field is not finite or is below 0.
+            ValueError: If any field is not finite or is below 0, or the recharge threshold is above 1.
         """
         for field_name, value in (
             ("capacity_in_watt_hour", self.capacity_in_watt_hour),
@@ -177,6 +179,11 @@ class BslibChargingParameters:
                     f"The bslib battery's {field_name} must be a finite number of at least 0, got {value!r}: the "
                     "battery's charging limits are computed from it."
                 )
+        if self.recharge_threshold_state_of_charge > 1.0:
+            raise ValueError(
+                "The bslib battery's recharge_threshold_state_of_charge must be a state of charge of at most 1, got "
+                f"{self.recharge_threshold_state_of_charge!r}."
+            )
 
     @classmethod
     def of_battery(cls, battery: bsl.ACBatMod, *, system_id: str) -> "BslibChargingParameters":

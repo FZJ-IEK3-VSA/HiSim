@@ -244,7 +244,8 @@ def get_cache_file(
     component_key: str,
     parameter_class: Any,
     my_simulation_parameters: SimulationParameters,
-    cache_dir_path: Optional[str] = None
+    cache_dir_path: Optional[str] = None,
+    extra_key_material: str = "",
 ) -> Tuple[bool, str]:  # noqa
     """Return ``(exists, path)`` for the cache entry of a configuration under the given simulation parameters.
 
@@ -267,6 +268,9 @@ def get_cache_file(
         parameter_class: a dataclass with ``to_json``; its ``component_id.building`` is cleared before hashing.
         my_simulation_parameters: provides the default directory and the simulation part of the key.
         cache_dir_path: optional directory override; see the order above.
+        extra_key_material: appended to the key material, for what the configuration and the simulation
+            parameters do not show, such as the fingerprint of the code that computed the entry. The writer
+            appends the same string to the material it records.
 
     Returns:
         Tuple[bool, str]: ``(exists, absolute_path)``.
@@ -274,7 +278,7 @@ def get_cache_file(
     Raises:
         ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
-    key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
+    key_material = build_cache_key_string(parameter_class, my_simulation_parameters) + extra_key_material
     client = CacheClient.from_environment()
     if cache_dir_path is not None:
         # The explicit argument outranks the environment and the parameter list; the override is

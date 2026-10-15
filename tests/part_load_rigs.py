@@ -272,16 +272,8 @@ class BoilerControllerRig:
                 lt.Units.CELSIUS,
             ),
             "ratio_run": (controller.dhw_part_load.ratio_run_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
-            "flow_set_c": (
-                controller.heating_flow_temperature_from_heat_distribution_system_channel,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
-            ),
-            "outside_c": (
-                controller.daily_avg_outside_temperature_input_channel,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
-            ),
+            "flow_set_c": (controller.supply_temperature_set_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            "heating_season": (controller.heating_season_channel, lt.LoadTypes.ANY, lt.Units.ANY),
         }
         stsv, fakes = Rig.wire(controller, list(names.values()))
         return controller, stsv, dict(zip(names, fakes))
@@ -290,7 +282,7 @@ class BoilerControllerRig:
     def set_inputs(
         stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float, ratio_run: float = 1.0
     ) -> None:
-        """Write a cold winter day with a warm buffer, the given tank temperatures and the boiler's ratio run.
+        """Write a heating-season step with a warm buffer, the given tank temperatures and the boiler's ratio run.
 
         Args:
             stsv: The controller's step values.
@@ -305,7 +297,7 @@ class BoilerControllerRig:
             ("tank_end_c", tank_end_c),
             ("ratio_run", ratio_run),
             ("flow_set_c", 40.0),
-            ("outside_c", 0.0),
+            ("heating_season", 1.0),
         ):
             stsv.set_output_value(fakes[name], value)
 

@@ -10,6 +10,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
 )
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext, concrete
+from hisim.components import heating_curve
 from hisim.components import (
     gas_meter,
     generic_boiler,
@@ -306,6 +307,24 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
+    # Build the heating curve, the L2 controller that sends the supply temperature and the heating season to the
+    # generator's controller and the heat distribution controller
+    my_heating_curve_config = heating_curve.HeatingCurveControllerConfig.preset_building_derived(
+        "HeatingCurveController"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+        )
+    )
+    my_heating_curve = heating_curve.HeatingCurveController(
+        my_simulation_parameters=my_simulation_parameters, config=my_heating_curve_config
+    )
+    my_sim.add_component(my_heating_curve, connect_automatically=True)
+
     # Build Gas heater For Space Heating and DHW
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(
         SizingContext(
@@ -329,9 +348,6 @@ def setup_function(
         )
     )
     my_gas_heater_controller_config.with_domestic_hot_water_preparation = True
-    my_gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
-        my_hds_controller_information.set_heating_threshold_temperature_in_celsius
-    )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_gas_heater_controller_config,

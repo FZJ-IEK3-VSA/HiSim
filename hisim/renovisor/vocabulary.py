@@ -26,7 +26,7 @@ that member for member, so the two cannot drift.
 from enum import Enum
 from typing import Optional, Tuple
 
-from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.components.heating_curve import HeatDistributionSystemType
 
 
 class HeatGenerator(str, Enum):

@@ -242,16 +242,15 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         Real.LIBRARY: TestPartnerRegistry.from_directories(real.directories),
         Mocks.LIBRARY: TestPartnerRegistry.from_directories([Mocks.LIBRARY]),
     }
-    heating_site = ["Weather", "UTSPConnector", "Building", "HeatDistributionController"]
+    heating_site = ["Weather", "UTSPConnector", "Building", "HeatingCurveController"]
     for path, root, components, verbs in (
         (
             "heating/gas_condensing_boiler",
             Real.LIBRARY,
-            heating_site + ["DHWStorage", "GasMeter", "HeatDistributionSystem"],
+            heating_site + ["DHWStorage", "GasMeter", "HeatDistributionController", "HeatDistributionSystem"],
             {
                 "bind": {
-                    "weather": "Weather",
-                    "flow_temperature": "HeatDistributionController",
+                    "heating_curve": "HeatingCurveController",
                     "dhw_temperature": "DHWStorage",
                     "space_heating": "HeatDistributionSystem",
                     "dhw": "DHWStorage",
@@ -261,7 +260,15 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         (
             "supply/gas_connection",
             Real.LIBRARY,
-            heating_site + ["GasBoilerController", "HeatDistributionSystem", "GasBuffer", "GasCylinder", "GasBoiler"],
+            heating_site
+            + [
+                "GasBoilerController",
+                "HeatDistributionController",
+                "HeatDistributionSystem",
+                "GasBuffer",
+                "GasCylinder",
+                "GasBoiler",
+            ],
             {},
         ),
         ("storage/battery", Real.LIBRARY, ["Weather", "UTSPConnector", "Building", "PVArray", "EnergyManager"], {}),

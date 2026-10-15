@@ -39,7 +39,7 @@ FactValue = Optional[Union[float, Tuple[float, ...]]]
 
 if TYPE_CHECKING:
     from hisim.components.building.config import BuildingConfig
-    from hisim.components.heat_distribution_system import HeatDistributionSystemType
+    from hisim.components.heating_curve import HeatDistributionSystemType
     from hisim.loadtypes import LoadTypes
 
 
@@ -66,7 +66,6 @@ class SizingContext:
     minimal_thermal_power_in_watt: FactValue = None
     set_heating_temperature_in_celsius: FactValue = None
     set_cooling_temperature_in_celsius: FactValue = None
-    set_heating_threshold_outside_temperature_in_celsius: FactValue = None
     roof_area_in_m2: FactValue = None
     pv_peak_power_in_watt: FactValue = None
 
@@ -166,8 +165,6 @@ class Size:
     MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("minimal_thermal_power_in_watt")
     SET_HEATING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_heating_temperature_in_celsius")
     SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")
-    SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm(
-        "set_heating_threshold_outside_temperature_in_celsius")
     ROOF_AREA_IN_M2: ClassVar[_FactTerm] = _FactTerm("roof_area_in_m2")
     PV_PEAK_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("pv_peak_power_in_watt")
     ENERGY_CARRIER: ClassVar[_FactTerm] = _FactTerm("energy_carrier")

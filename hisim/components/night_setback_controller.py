@@ -4,7 +4,7 @@
 This component provides a temperature offset for the Building component.
 It returns a configurable setback value during the configured night window
 and zero otherwise. The output is meant to be connected to
-``Building.BuildingTemperatureModifier`` so that the heating set temperature
+``Building.BuildingTemperatureModifierInKelvin`` so that the heating set temperature
 is reduced during the night.
 """
 
@@ -86,13 +86,13 @@ class NightSetbackController(cp.L2ControllerComponent):
 
     The component emits a negative temperature offset during the configured
     night window and zero otherwise. Connect the output to the Building input
-    ``BuildingTemperatureModifier`` to reduce the heating set temperature
+    ``BuildingTemperatureModifierInKelvin`` to reduce the heating set temperature
     during the night.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
-    BuildingTemperatureModifier: str = "BuildingTemperatureModifier"
+    BuildingTemperatureModifierInKelvin: str = "BuildingTemperatureModifierInKelvin"
 
     @utils.measure_execution_time
     def __init__(
@@ -136,14 +136,17 @@ class NightSetbackController(cp.L2ControllerComponent):
             # Window wraps across midnight.
             self._night_mode = "wrap"
 
-        # Units.CELSIUS is required here because Building.BuildingTemperatureModifier
-        # declares its input as CELSIUS. The value is a delta-T, so 1 K == 1 degC numerically.
+        # The modifier is a temperature difference, so it is declared in kelvin, as
+        # Building.BuildingTemperatureModifierInKelvin declares its input.
         self.building_temperature_modifier_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.BuildingTemperatureModifier,
+            self.BuildingTemperatureModifierInKelvin,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description="Temperature modifier for the building during the night setback window.",
+            lt.Units.KELVIN,
+            output_description=(
+                "The lowering of the building's heating set temperature, a temperature difference in K: "
+                "the configured setback delta (negative, setback_delta_in_kelvin) during the night window, else 0."
+            ),
         )
 
         self.add_default_connections(self.get_default_connections_to_building())
@@ -152,9 +155,9 @@ class NightSetbackController(cp.L2ControllerComponent):
         """Connect the output to the building temperature modifier input."""
         return [
             cp.ComponentConnection(
-                NightSetbackController.BuildingTemperatureModifier,
+                NightSetbackController.BuildingTemperatureModifierInKelvin,
                 Building.get_classname(),
-                Building.BuildingTemperatureModifier,
+                Building.BuildingTemperatureModifierInKelvin,
             )
         ]
 

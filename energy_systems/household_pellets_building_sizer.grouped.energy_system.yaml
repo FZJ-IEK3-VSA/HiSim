@@ -41,9 +41,14 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
+      - HeatingCurveController
+      - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
       - L2EMSElectricityController
       - Weather
-      - Building
   ConventionalPelletBoiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: pellets
@@ -55,13 +60,11 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: on_off
     config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
       minimum_runtime_in_seconds: 1800.0
       minimum_resting_time_in_seconds: 900.0
       with_domestic_hot_water_preparation: true
     inputs:
-      - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - ConventionalPelletBoiler
       - DHWStorage
       - SimpleHotWaterStorage

@@ -45,10 +45,11 @@ class EMSConfig(ConfigBase):
     strategy: str = "optimize_own_consumption"
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float = 0
-    # increase building set temperatures for heating when PV surplus is available.
+    # Raise of the building's heating set temperature while PV surplus is available, a temperature difference in K:
+    # the value of the output BuildingTemperatureModifierInKelvin, also in K, while the raise is on.
     # Must be smaller than difference of set_heating_temperature and set_cooling_temperature.
-    # The three offsets are declared in °C, the unit of the modifier outputs they become.
-    building_indoor_temperature_offset_value: float = field(default=2, metadata={"unit": lt.Units.CELSIUS})
+    # The two storage offsets below are declared in °C, the unit of the storage modifier outputs they become.
+    building_indoor_temperature_offset_in_kelvin: float = field(default=2, metadata={"unit": lt.Units.KELVIN})
     # increase in dhw buffer set temperatures when PV surplus is available for heating
     domestic_hot_water_storage_temperature_offset_value: float = field(
         default=10, metadata={"unit": lt.Units.CELSIUS}
@@ -198,7 +199,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
     TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
-    BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
+    BuildingTemperatureModifierInKelvin = "BuildingTemperatureModifierInKelvin"  # read by Building, heating curve
     DomesticHotWaterStorageTemperatureModifier = (
         "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
     )
@@ -335,7 +336,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         self.operating_mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
-        self.building_indoor_temperature_offset_value = self.ems_config.building_indoor_temperature_offset_value
+        self.building_indoor_temperature_offset_in_kelvin = self.ems_config.building_indoor_temperature_offset_in_kelvin
         self.domestic_hot_water_storage_temperature_offset_value = (
             self.ems_config.domestic_hot_water_storage_temperature_offset_value
         )
@@ -379,10 +380,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
         self.building_indoor_temperature_modifier: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.BuildingIndoorTemperatureModifier,
+            field_name=self.BuildingTemperatureModifierInKelvin,
             load_type=lt.LoadTypes.TEMPERATURE,
-            unit=lt.Units.CELSIUS,
-            output_description=f"here a description for {self.BuildingIndoorTemperatureModifier} will follow.",
+            unit=lt.Units.KELVIN,
+            output_description=(
+                "The raise of the building's heating set temperature, a temperature difference in K. It equals "
+                "the configured building offset (building_indoor_temperature_offset_in_kelvin) while the PV "
+                "surplus after the battery raises the set temperatures and a heat pump heating the building "
+                "(HEAT_PUMP_BUILDING) is among the ranked participants, else 0. The building and the heating curve "
+                "add it to the room set temperature."
+            ),
         )
 
         self.domestic_hot_water_storage_temperature_modifier: cp.ComponentOutput = self.add_output(
@@ -1018,7 +1025,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 if set_temperatures_are_raised:
                     stsv.set_output_value(
                         self.building_indoor_temperature_modifier,
-                        self.building_indoor_temperature_offset_value,
+                        self.building_indoor_temperature_offset_in_kelvin,
                     )
                     stsv.set_output_value(
                         self.space_heating_water_storage_temperature_modifier,

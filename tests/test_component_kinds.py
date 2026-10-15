@@ -1,8 +1,9 @@
 """Every component inherits one kind base class, and the simulator evaluates the components of a pass kind by kind.
 
 The kinds are the five kind base classes of :mod:`hisim.component` (:class:`hisim.component.ComponentKinds`): data
-sources, L2 controllers, L1 controllers, physics and meters. The simulator evaluates a pass in that order, keeping the order the components were added in within one kind,
-except that within the physics every device an L1 controller commands runs before the other physics the controller
+sources, L2 controllers, L1 controllers, physics and meters. The simulator evaluates a pass in that order, keeping the
+order the components were added in within one kind, except that an L2 controller reading another L2 controller follows
+it and that within the physics every device an L1 controller commands runs before the other physics the controller
 reads; the outputs, their indices and the result columns keep the order the components were added in.
 """
 
@@ -227,6 +228,56 @@ def test_a_cycle_keeps_its_place_among_the_ordered_physics() -> None:
     """
     sources = (frozenset({3}), frozenset({4}), frozenset({5}), frozenset({1}), frozenset({0}), frozenset({0}))
     assert Wiring.order("PPPCCC", sources) == ((3, 4, 5, 2, 0, 1), ((0, 1),))
+
+
+@pytest.mark.parametrize(
+    ("kinds", "sources", "expected_positions"),
+    [
+        # the heating curve added before the energy manager it reads
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, set()], [1, 0]),
+        # independent L2 controllers keep the order added
+        ((L2ControllerComponent, L2ControllerComponent), [set(), set()], [0, 1]),
+        # a cycle keeps the order added
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, {0}], [0, 1]),
+        # two readers of one source keep their order behind it
+        ((L2ControllerComponent, L2ControllerComponent, L2ControllerComponent), [{2}, {2}, set()], [2, 0, 1]),
+        # reads of other kinds do not reorder
+        (
+            (PhysicsComponent, L2ControllerComponent, L1ControllerComponent, L2ControllerComponent),
+            [set(), {3}, {1}, {0}],
+            [3, 1, 2, 0],
+        ),
+        # only L2 controllers are reordered by their reads
+        ((L1ControllerComponent, L1ControllerComponent), [{1}, set()], [0, 1]),
+    ],
+)
+def test_an_l2_controller_is_evaluated_after_the_l2_controllers_it_reads(
+    kinds: Tuple[Type[Component], ...], sources: List[set], expected_positions: List[int]
+) -> None:
+    """Catches the heating curve evaluated before the energy manager whose raise it applies: it lags it a pass.
+
+    It also catches a reordering of anything but L2 controllers, and a cycle that loses a controller.
+    """
+    assert Simulator.evaluation_positions(kinds, sources).positions == tuple(expected_positions)
+
+
+@pytest.mark.parametrize(
+    ("kinds", "sources", "expected_late_readers"),
+    [
+        # a cycle: the first controller reads the second, which comes after it
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, {0}], [0]),
+        # a read without a cycle is placed after its source, so nobody reads late
+        ((L2ControllerComponent, L2ControllerComponent), [{1}, set()], []),
+        # an L1 controller that reads a later L2 controller is not an L2 read
+        ((L1ControllerComponent, L2ControllerComponent), [{1}, set()], []),
+    ],
+)
+def test_an_l2_controller_that_reads_a_later_one_is_found(
+    kinds: Tuple[Type[Component], ...], sources: List[set], expected_late_readers: List[int]
+) -> None:
+    """Catches an L2 read cycle that the plan keeps silently, so that one controller reads the other a pass late."""
+    order = Simulator.evaluation_positions(kinds, sources)
+    assert Simulator.l2_positions_reading_a_later_l2(kinds, sources, order.positions) == expected_late_readers
 
 
 @dataclass_json

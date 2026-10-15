@@ -52,20 +52,19 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
             "minimum_runtime_in_seconds": min_state_time,
             "minimum_resting_time_in_seconds": min_state_time,
             "with_domestic_hot_water_preparation": True,
-            "set_heating_threshold_outside_temperature_in_celsius": 15,
         }
     )
     testee.controller_mode = operating_mode
     testee.warm_water_temperature_aim_in_celsius = 60
     testee.config.hysteresis_water_temperature_offset = 5
 
-    daily_avg_outside_temperature = 10
+    is_heating_season = True
     heating_flow_temperature = 55
     timestep = 5
 
     """ WHEN """
     _, _ = testee.determine_operating_mode(
-        daily_avg_outside_temperature,
+        is_heating_season,
         water_temp_sh_in_celsius,
         water_temp_dhw_in_celsius,
         heating_flow_temperature,
@@ -98,10 +97,6 @@ def given_default_testee(
         "with_domestic_hot_water_preparation",
         config.with_domestic_hot_water_preparation,
     )
-    config.set_heating_threshold_outside_temperature_in_celsius = config_overwrite.get(
-        "set_heating_threshold_outside_temperature_in_celsius",
-        config.set_heating_threshold_outside_temperature_in_celsius,
-    )
     config.hysteresis_water_temperature_offset = 0
     testee = GenericBoilerController(
         simulationparameters,
@@ -113,47 +108,23 @@ def given_default_testee(
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    [
-        "daily_avg_outside_temperature_in_celsius",
-        "set_heating_threshold_temperature_in_celsius",
-        "expected_mode",
-    ],
-    [
-        # Equality: exactly at threshold → "on" (cold enough for heating)
-        (10.0, 10.0, "on"),
-        # Below threshold → "on"
-        (5.0, 10.0, "on"),
-        # Above threshold → "off"
-        (15.0, 10.0, "off"),
-        # No threshold set → "on"
-        (5.0, None, "on"),
-        (15.0, None, "on"),
-        # Equality with negative temperatures
-        (0.0, 0.0, "on"),
-        # Slightly above threshold
-        (10.1, 10.0, "off"),
-        # Slightly below threshold
-        (9.9, 10.0, "on"),
-    ],
+    ["daily_avg_outside_temperature_in_celsius", "expected"],
+    [(10.0, True), (5.0, True), (10.1, False), (9.9, True), (15.0, False)],
 )
-def test_determine_summer_heating_mode_handles_equality_case(
-    daily_avg_outside_temperature_in_celsius: float,
-    set_heating_threshold_temperature_in_celsius: Optional[float],
-    expected_mode: str,
-):
-    """Test determine_summer_heating_mode with emphasis on the equality boundary case.
+def test_a_generator_without_heating_curve_heats_on_a_day_exactly_at_its_threshold(
+    daily_avg_outside_temperature_in_celsius: float, expected: bool
+) -> None:
+    """Catches a day exactly at the 10 °C threshold of a generator without heating curve falling out of the season."""
 
-    The original code used strict '>' and '<' comparisons, leaving an unreachable
-    else branch that raised ValueError when temperatures were exactly equal.
-    This test ensures the equality case returns 'on' (cold enough for heating).
-    """
     from hisim.components.dual_circuit_system import DiverterValve
 
-    result = DiverterValve.determine_summer_heating_mode(
-        daily_avg_outside_temperature_in_celsius,
-        set_heating_threshold_temperature_in_celsius,
+    assert (
+        DiverterValve.is_heating_season(
+            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+            heating_threshold_in_celsius=10.0,
+        )
+        is expected
     )
-    assert result == expected_mode
 
 
 class FuelConstants:
@@ -305,7 +276,6 @@ def test_controller_presets_reproduce_the_factories_they_replaced(
     assert config.minimum_resting_time_in_seconds == expected_resting
     assert config.set_temperature_difference_for_full_power == 5.0
     assert config.hysteresis_water_temperature_offset == 10.0
-    assert config.set_heating_threshold_outside_temperature_in_celsius == 16.0
     assert config.secondary_mode is False
     assert config.with_domestic_hot_water_preparation is False
     assert config.maximal_thermal_power_in_watt == 2500

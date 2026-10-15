@@ -207,15 +207,20 @@ components:
     config:
       heating_system: FLOORHEATING
     inputs:
+      - HeatingCurveController
+      - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
       - L2EMSElectricityController
       - Weather
-      - Building
   MoreAdvancedHeatPumpHPLibControllerSH:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - L2EMSElectricityController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:

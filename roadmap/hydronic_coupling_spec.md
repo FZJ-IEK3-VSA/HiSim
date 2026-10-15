@@ -476,7 +476,8 @@ freezes controllers, and after 100 it aborts (`simulator.py:415-419`). D7: the i
 D7 amendment (owner, 2026-10-09) every step starts from the values the previous step converged to, and only step 0
 from zeros. Since 2026-10-12 (owner) a pass evaluates the components kind by kind (data sources, L2 controllers, L1
 controllers, physics, meters; each class inherits its kind base class from `hisim/component.py`), in the order they
-were added within one kind, except that every device an L1 controller commands goes before the other physics the
+were added within one kind, except that an L2 controller reading another L2 controller (the heating curve reading the
+energy manager's raise) follows it, and that every device an L1 controller commands goes before the other physics the
 controller reads (`hisim/evaluation_order.py`); the outputs and result columns keep the order added.
 
 **Why it converges.** For a node fed by one circuit whose supply follows the return 1:1 (a generator holding its

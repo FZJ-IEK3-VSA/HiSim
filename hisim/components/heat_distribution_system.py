@@ -2,7 +2,7 @@
 
 import importlib
 from enum import Enum, unique
-from typing import Any, ClassVar, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple, assert_never
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -11,7 +11,9 @@ import numpy as np
 
 import hisim.component as cp
 from hisim.components.building import Building
-from hisim.components.weather import Weather
+# HeatDistributionSystemType and EmitterDesign live in heating_curve, which this module imports; their old import
+# path through this module stays valid for the setups and tests that use it, but new code imports them from there.
+from hisim.components.heating_curve import EmitterDesign, HeatDistributionSystemType, HeatingCurveController
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
@@ -25,29 +27,13 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
-    SizingLaw,
     concrete,
-    law,
     preset,
     sized_field,
 )
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
-
-
-@unique
-class HeatDistributionSystemType(str, Enum):
-    """Set Heating System Types.
-
-    Every member carries its own name as its value so that a serialized
-    configuration names the heating system explicitly instead of encoding it as
-    an integer. Only member identity is meaningful; no ordinal is used anywhere.
-    """
-
-    RADIATOR = "RADIATOR"
-    FLOORHEATING = "FLOORHEATING"
-    LOW_TEMPERATURE_RADIATOR = "LOW_TEMPERATURE_RADIATOR"
 
 
 @unique
@@ -835,104 +821,49 @@ class HeatDistribution(cp.PhysicsComponent):
 @dataclass_json
 @dataclass
 class HeatDistributionControllerConfig(ConfigBase):
-    """HeatDistribution Controller Config Class.
+    """Configuration of the heat-distribution controller: the emitter of the water circuit and the load it is sized for.
 
-    The heating curve of the water circuit: which emitter it feeds, and the temperatures it runs
-    at. Everything but the emitter is a property of the building, so :meth:`preset_building_derived`
-    pins nothing and the fields resolve from the building's facts.
+    The controller switches the circuit's valve; what it contributes to the components around it at configuration
+    time is the emitter type and the water mass flow the circuit carries at the building's heating load. The emitter
+    is the author's choice between floor heating and radiators, the heating load a property of the building, so
+    :meth:`preset_building_derived` pins nothing.
     """
 
     MAIN_CLASS = "hisim.components.heat_distribution_system.HeatDistributionController"
 
-    @staticmethod
-    def heating_threshold_for(specific_heating_load_of_building_in_watt_per_m2: float) -> float:
-        """Returns the outside temperature above which heating stops, by building efficiency.
-
-        An inefficient building cools out quickly in the mornings and evenings of the shoulder
-        season, so the worse the specific heating load, the earlier the heating has to come on:
-        16 °C up to 50 W/m², 18 °C up to 80 W/m² and 20 °C above that. The steps are the ones
-        :meth:`set_heating_threshold_temperature_based_on_building_efficiency` has always used.
-        """
-        threshold = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
-        )
-        return float(threshold)
-
-    #: Sizing law of the heating threshold: the step table above, over the building's
-    #: specific heating load. That ratio is a property of the building and not of the
-    #: controller, so the law reads the two facts it is made of straight from the context
-    #: instead of having the controller store it; an author who knows the threshold writes
-    #: it down and the law steps aside.
-    HEATING_THRESHOLD_LAW: ClassVar[SizingLaw] = law(
-        lambda ctx: HeatDistributionControllerConfig.heating_threshold_for(
-            ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2
-        ),
-        reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
-        description=(
-            "heating_threshold_for(Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2)"
-        ),
-    )
-
     component_id: ComponentID
     #: Which emitter the water circuit feeds; an author choice, contributed onwards as a fact.
     heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING
-    #: Derived from the building's efficiency by :meth:`heating_threshold_for`.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HEATING_THRESHOLD_LAW,
-        note="16 °C up to 50 W/m² of specific heating load, 18 °C up to 80 W/m², 20 °C above that",
-    )
-    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
-    )
-    set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(
-        rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS
-    )
-    set_cooling_temperature_for_building_in_celsius: Sizable[float] = sized_field(
-        rule=Size.SET_COOLING_TEMPERATURE_IN_CELSIUS
-    )
     heating_load_of_building_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT.rounded(2))
 
     @staticmethod
     def sizing_facts(config: "HeatDistributionControllerConfig", ctx: SizingContext) -> dict:
-        """Contributes what the emitter circuit decides for the components around it.
+        """Return the facts the emitter circuit decides for the components around it: the mass flow and the emitter.
 
-        The water mass flow and the emitter type are the two facts :class:`HeatDistributionConfig`
-        resolves from, and they are derived here through the same
-        :class:`HeatDistributionControllerInformation` the setups have always used, so an
-        engine-resolved value is the hand-threaded one.
-
-        The heating threshold is passed on as the value this controller resolved to, whether that
-        came from :attr:`HEATING_THRESHOLD_LAW` or from an author pinning it: every generator
-        controller that heats below the same threshold reads the one the emitter circuit actually
-        uses, instead of repeating the step table.
+        The water mass flow is the one :class:`HeatDistributionControllerInformation` derives, the flow that carries
+        the building's heating load at the emitter's design temperature difference.
 
         Args:
-            config: this controller configuration, fully resolved.
-            ctx: the sizing context; unused, the controller carries its building-derived
-                parameters itself.
+            config: This controller's configuration, fully resolved.
+            ctx: The sizing context; unused, the configuration carries the heating load itself.
 
         Returns:
-            dict: the three facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            The two facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
         information = HeatDistributionControllerInformation(config=config)
         return {
             "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
             "heat_distribution_system_type": config.heating_system,
-            "set_heating_threshold_outside_temperature_in_celsius": concrete(
-                config.set_heating_threshold_outside_temperature_in_celsius
-            ),
         }
 
     #: Sizing facts this config contributes: the water mass flow it derives via
-    #: :class:`HeatDistributionControllerInformation`, the emitter type, and the outside
-    #: temperature above which nothing heats.
+    #: :class:`HeatDistributionControllerInformation`, and the emitter type.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=(
                 "water_mass_flow_rate_in_kg_per_second",
                 "heat_distribution_system_type",
-                "set_heating_threshold_outside_temperature_in_celsius",
             ),
             compute=sizing_facts,
         ),
@@ -943,53 +874,52 @@ class HeatDistributionControllerConfig(ConfigBase):
     def preset_building_derived(cls, name: str) -> "HeatDistributionControllerConfig":
         """The one heat distribution controller, derived entirely from the building it serves.
 
-        Everything this controller needs is a property of the building — its heating load, its
-        floor area, its design outside temperature and the indoor temperatures the residents
-        set — so the preset pins nothing but the emitter type, which is the author's choice
-        between floor heating and radiators and is a one-line override in the file.
+        The heating load is a property of the building, so the preset pins nothing but the emitter type, which is the
+        author's choice between floor heating and radiators and is a one-line override in the file.
         """
         return cls(component_id=ComponentID(name=name))
 
-    @staticmethod
-    def set_heating_threshold_temperature_based_on_building_efficiency(
-        specific_heating_load_of_building_in_watt_per_m2: float,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-    ):
-        """Set heating threshold outside temperature based on building efficiency."""
-        # avoid that inefficient building cool out in summer time (in the mornings and evenings)
-        if 50 < specific_heating_load_of_building_in_watt_per_m2 <= 80.0:
-            set_heating_threshold_outside_temperature_in_celsius = 18.0
-        elif 80 < specific_heating_load_of_building_in_watt_per_m2:
-            set_heating_threshold_outside_temperature_in_celsius = 20.0
-        else:
-            pass
-        return set_heating_threshold_outside_temperature_in_celsius
+
+@unique
+class HeatDistributionValveMode(str, Enum):
+    """The mode of the heat-distribution valve: closed, open for heating, or open for cooling."""
+
+    OFF = "off"
+    HEATING = "heating"
+    COOLING = "cooling"
+
+
+@dataclass(frozen=True)
+class HeatDistributionControllerState:
+    """The heat-distribution controller's state from one step to the next: the mode of its valve.
+
+    ``i_simulate`` reads the mode the last step converged to and writes this pass's mode as the end-of-step state;
+    ``i_save_state`` makes the converged pass's mode the next step's start, so every pass of a step starts from the
+    same mode.
+    """
+
+    valve_mode: HeatDistributionValveMode
 
 
 class HeatDistributionController(cp.L1ControllerComponent):
-    """Heat Distribution Controller.
+    """L1 controller of the heat distribution: it opens the circuit's valve for heating or cooling, or closes it.
 
-    It takes data from the building, weather and water storage and sends signal to the heat distribution for
-    activation or deactivation.
-
+    The valve follows the building's theoretical demand (:meth:`next_valve_mode`): a closed valve opens for heating
+    on a positive demand and for cooling on a negative one, and an open valve closes when the demand is zero. A
+    valve open for heating passes heat only in the heating season, which the heating curve
+    (:class:`hisim.components.heating_curve.HeatingCurveController`) decides. The controller publishes ``State``:
+    1 for heating, -1 for cooling, and 0 for a closed valve or for a valve open for heating outside the heating season.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
-    # Inputs -> energy management system
-    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    HeatingSeason = "HeatingSeason"
 
     # Outputs
     State = "State"
-    HeatingFlowTemperature = "HeatingFlowTemperature"
-    HeatingReturnTemperature = "HeatingReturnTemperature"
-    HeatingTemperatureDifference = "HeatingTemperatureDifference"
 
-    # Similar components to connect to:
-    # 1. Building
     @utils.measure_execution_time
     def __init__(
         self,
@@ -997,7 +927,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
         config: HeatDistributionControllerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
-        """Construct all the neccessary attributes."""
+        """Construct the controller and declare its ports."""
         self.hsd_controller_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -1008,25 +938,6 @@ class HeatDistributionController(cp.L1ControllerComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.state_controller: int = 0
-        self.building_temperature_modifier: float = 0
-        my_heat_distribution_controller_information = HeatDistributionControllerInformation(
-            config=self.hsd_controller_config
-        )
-
-        self.build(
-            set_heating_threshold_temperature_in_celsius=my_heat_distribution_controller_information.set_heating_threshold_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=my_heat_distribution_controller_information.heating_reference_temperature_in_celsius,
-            heat_distribution_system_type=my_heat_distribution_controller_information.heat_distribution_system_type,
-            max_flow_temperature_in_celsius=my_heat_distribution_controller_information.max_flow_temperature_in_celsius,
-            max_return_temperature_in_celsius=my_heat_distribution_controller_information.max_return_temperature_in_celsius,
-            min_flow_temperature_in_celsius=my_heat_distribution_controller_information.min_flow_temperature_in_celsius,
-            min_return_temperature_in_celsius=my_heat_distribution_controller_information.min_return_temperature_in_celsius,
-            factor_of_oversizing_of_heat_distribution_system=my_heat_distribution_controller_information.factor_of_oversizing_of_heat_distribution_system,
-            exponent_factor_of_heating_distribution_system=my_heat_distribution_controller_information.exponent_factor_of_heating_distribution_system,
-            set_room_temperature_for_building_in_celsius=my_heat_distribution_controller_information.set_room_temperature_for_building_in_celsius,
-        )
-
         # Inputs
         self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -1035,19 +946,12 @@ class HeatDistributionController(cp.L1ControllerComponent):
             lt.Units.WATT,
             True,
         )
-        self.daily_avg_outside_temperature_input_channel: cp.ComponentInput = self.add_input(
+        self.heating_season_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.DailyAverageOutsideTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            self.HeatingSeason,
+            lt.LoadTypes.ANY,
+            lt.Units.BINARY,
             True,
-        )
-        self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.BuildingTemperatureModifier,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            mandatory=False,
         )
         # Outputs
         self.state_channel: cp.ComponentOutput = self.add_output(
@@ -1055,52 +959,18 @@ class HeatDistributionController(cp.L1ControllerComponent):
             self.State,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description=f"here a description for {self.State} will follow.",
-        )
-        self.heating_flow_temperature_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.HeatingFlowTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.HeatingFlowTemperature} will follow.",
-        )
-        self.heating_return_temperature_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.HeatingReturnTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.HeatingReturnTemperature} will follow.",
-        )
-        self.heating_temperature_difference_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.HeatingTemperatureDifference,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.HeatingTemperatureDifference} will follow.",
+            output_description=(
+                "The valve: 1 open for heating, -1 open for cooling, 0 closed or open for heating outside the heating "
+                "season."
+            ),
         )
 
-        self.controller_heat_distribution_mode: str = "off"
-        self.previous_controller_heat_distribution_mode: str = "off"
+        #: The valve's mode at the start of the step, and the mode the latest free pass of the step decided.
+        self.state = HeatDistributionControllerState(valve_mode=HeatDistributionValveMode.OFF)
+        self.end_of_step_state = self.state
 
         self.add_default_connections(self.get_default_connections_from_building())
-        self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_energy_management_system())
-
-    def get_default_connections_from_weather(
-        self,
-    ):
-        """Get weather default connections."""
-
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistributionController.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
 
     def get_default_connections_from_building(
         self,
@@ -1118,66 +988,35 @@ class HeatDistributionController(cp.L1ControllerComponent):
         )
         return connections
 
-    def get_default_connections_from_energy_management_system(
-        self,
-    ):
-        """Get energy management system default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.controller_l2_energy_management_system"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "L2GenericEnergyManagementSystem")
-        connections = []
-        ems_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistributionController.BuildingTemperatureModifier,
-                ems_classname,
-                component_class.BuildingIndoorTemperatureModifier,
-            )
-        )
-        return connections
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[cp.ComponentConnection]:
+        """Return the connection of the heating season from the heating curve.
 
-    def build(
-        self,
-        set_heating_threshold_temperature_in_celsius: float,
-        heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: HeatDistributionSystemType,
-        max_flow_temperature_in_celsius: float,
-        min_flow_temperature_in_celsius: float,
-        max_return_temperature_in_celsius: float,
-        min_return_temperature_in_celsius: float,
-        factor_of_oversizing_of_heat_distribution_system: float,
-        exponent_factor_of_heating_distribution_system: float,
-        set_room_temperature_for_building_in_celsius: float,
-    ) -> None:
-        """Build function.
-
-        The function sets important constants and parameters for the calculations.
+        Returns:
+            The one connection.
         """
-        # Configuration
-        self.set_heating_threshold_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
-        self.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        self.heat_distribution_system_type = heat_distribution_system_type
-
-        self.max_flow_temperature_in_celsius = max_flow_temperature_in_celsius
-        self.min_flow_temperature_in_celsius = min_flow_temperature_in_celsius
-        self.max_return_temperature_in_celsius = max_return_temperature_in_celsius
-        self.min_return_temperature_in_celsius = min_return_temperature_in_celsius
-        self.factor_of_oversizing_of_heat_distribution_system = factor_of_oversizing_of_heat_distribution_system
-        self.exponent_factor_of_heating_distribution_system = exponent_factor_of_heating_distribution_system
-        self.set_room_temperature_for_building_in_celsius = set_room_temperature_for_building_in_celsius
+        return [
+            cp.ComponentConnection(
+                HeatDistributionController.HeatingSeason,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.HeatingSeason,
+            )
+        ]
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state."""
-        self.previous_controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        """Make the valve mode the converged pass decided the next step's start."""
+        self.state = self.end_of_step_state
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        """Restore nothing: a pass reads only the start-of-step state, which no pass changes.
+
+        The end-of-step state is not reset either. A free pass overwrites it; under forced convergence the controller
+        is frozen, so the step ends with the mode of its last free pass, the mode its frozen ``State`` output shows.
+        """
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -1190,189 +1029,72 @@ class HeatDistributionController(cp.L1ControllerComponent):
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat distribution controller."""
+        """Set the valve from the building's demand and the heating season, and publish its state."""
         if force_convergence:
-            pass
-        else:
-            # Retrieves inputs
-            theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
-                self.theoretical_thermal_building_demand_channel
-            )
-            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
-            )
-            self.building_temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
+            return
+        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.theoretical_thermal_building_demand_channel
+        )
+        is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
+        valve_mode = self.next_valve_mode(self.state.valve_mode, theoretical_thermal_building_demand_in_watt)
+        self.end_of_step_state = HeatDistributionControllerState(valve_mode=valve_mode)
+        stsv.set_output_value(self.state_channel, self.valve_state(valve_mode, is_heating_season=is_heating_season))
 
-            list_of_heating_distribution_system_flow_and_return_temperatures = (
-                self.calc_heat_distribution_flow_and_return_temperatures(
-                    daily_avg_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius
-                )
-            )
+    @staticmethod
+    def next_valve_mode(
+        mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float
+    ) -> HeatDistributionValveMode:
+        """Return the valve's mode for this pass, from its mode and the building's theoretical demand.
 
-            self.conditions_for_opening_or_shutting_heat_distribution(
-                theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
-            )
+        A closed valve opens for heating on a positive demand and for cooling on a negative one; an open valve closes
+        when the demand is exactly zero and otherwise stays in its mode. For example, a valve open for heating stays
+        open on a demand of 300 W and closes on 0 W.
 
-            # turning heat distributon system off when the average daily outside temperature is above a certain threshold
-            summer_heating_mode = self.summer_heating_condition(
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=concrete(
-                    self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                ),
-            )
+        Args:
+            mode: The valve's mode before this pass.
+            theoretical_thermal_building_demand_in_watt: The building's theoretical heating demand, in W; negative
+                for a cooling demand.
 
-            if self.controller_heat_distribution_mode == "heating":
-                if summer_heating_mode == "on":
-                    self.state_controller = 1
-                elif summer_heating_mode == "off":
-                    self.state_controller = 0
-
-            elif self.controller_heat_distribution_mode == "cooling":
-                self.state_controller = -1
-
-            elif self.controller_heat_distribution_mode == "off":
-                self.state_controller = 0
-
-            else:
-                raise ValueError("unknown hds controller mode or summer mode or dew point protection mode.")
-
-            stsv.set_output_value(self.state_channel, self.state_controller)
-            stsv.set_output_value(
-                self.heating_flow_temperature_channel,
-                list_of_heating_distribution_system_flow_and_return_temperatures[0],
-            )
-            stsv.set_output_value(
-                self.heating_return_temperature_channel,
-                list_of_heating_distribution_system_flow_and_return_temperatures[1],
-            )
-
-            stsv.set_output_value(
-                self.heating_temperature_difference_channel,
-                list_of_heating_distribution_system_flow_and_return_temperatures[0]
-                - list_of_heating_distribution_system_flow_and_return_temperatures[1],
-            )
-
-    def conditions_for_opening_or_shutting_heat_distribution(
-        self,
-        theoretical_thermal_building_demand_in_watt: float,
-    ) -> None:
-        """Set conditions for the valve in heat distribution."""
-
-        if self.controller_heat_distribution_mode in ("cooling", "heating"):
-            # no heat exchange with building if theres no demand
-            if theoretical_thermal_building_demand_in_watt == 0:
-                self.controller_heat_distribution_mode = "off"
-                return
-        elif self.controller_heat_distribution_mode == "off":
-            # if heating or cooling is needed for building
-            if theoretical_thermal_building_demand_in_watt > 0:
-                self.controller_heat_distribution_mode = "heating"
-            elif theoretical_thermal_building_demand_in_watt < 0:
-                self.controller_heat_distribution_mode = "cooling"
-                return
-
-        else:
-            raise ValueError("unknown hds controller mode.")
-
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: float,
-    ) -> str:
-        """Set conditions for the valve in heat distribution."""
-
-        if daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
-            heating_mode = "off"
-
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
-            heating_mode = "on"
-
-        else:
-            raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is invalid."
-            )
-
-        return heating_mode
-
-    def calc_heat_distribution_flow_and_return_temperatures(
-        self, daily_avg_outside_temperature_in_celsius: float
-    ) -> List[float]:
-        """Calculate the heat distribution flow and return temperature as a function of the moving average daily mean outside temperature.
-
-        Calculations are based on DIN/TS 18599-12: 2021-04, p.170, Eq. 127,128
-
-        Returns
-        -------
-        list with heating flow and heating return temperature
-
+        Returns:
+            The valve's mode.
         """
-        # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available.
-        # only used for heating case
-        set_room_temperature_for_building_modified_in_celsius = (
-            self.set_room_temperature_for_building_in_celsius + self.building_temperature_modifier
-        )
-        min_flow_temperature_modified_in_celsius = (
-            self.min_flow_temperature_in_celsius + self.building_temperature_modifier
-        )
-        min_return_temperature_modified_in_celsius = (
-            self.min_return_temperature_in_celsius + self.building_temperature_modifier
-        )
+        match mode:
+            case HeatDistributionValveMode.HEATING | HeatDistributionValveMode.COOLING:
+                if theoretical_thermal_building_demand_in_watt == 0:
+                    return HeatDistributionValveMode.OFF
+                return mode
+            case HeatDistributionValveMode.OFF:
+                if theoretical_thermal_building_demand_in_watt > 0:
+                    return HeatDistributionValveMode.HEATING
+                if theoretical_thermal_building_demand_in_watt < 0:
+                    return HeatDistributionValveMode.COOLING
+                return mode
+            case _:
+                assert_never(mode)
 
-        # cooling case, daily avg temperature is higher than set indoor temperature.
-        # flow and return temperatures can not be lower than set indoor temperature (because number would be complex)
-        if self.set_room_temperature_for_building_in_celsius < daily_avg_outside_temperature_in_celsius:
-            # prevent that flow and return temperatures get colder than 19 °C because this could cause condensation of the indoor air on the heating system
-            # https://suissetec.ch/files/PDFs/Merkblaetter/Heizung/Deutsch/2021_11_MB_Kuehlung_mit_Fussbodenheizung_DE_Web.pdf
+    @staticmethod
+    def valve_state(mode: HeatDistributionValveMode, *, is_heating_season: bool) -> int:
+        """Return the valve's published state: 1 for heating, -1 for cooling and 0 for no flow.
 
-            flow_temperature_in_celsius = max(self.min_flow_temperature_in_celsius, 19.0)
-            return_temperature_in_celsius = max(self.min_return_temperature_in_celsius, 19.0)
+        A closed valve publishes 0, and so does a valve open for heating outside the heating season, which passes
+        nothing.
 
-        else:
-            # heating case, daily avg outside temperature is lower than indoor temperature
-            flow_temperature_in_celsius = float(
-                min_flow_temperature_modified_in_celsius
-                + (
-                    (1 / self.factor_of_oversizing_of_heat_distribution_system)
-                    * (
-                        (
-                            set_room_temperature_for_building_modified_in_celsius
-                            - daily_avg_outside_temperature_in_celsius
-                        )
-                        / (
-                            set_room_temperature_for_building_modified_in_celsius
-                            - self.heating_reference_temperature_in_celsius
-                        )
-                    )
-                )
-                ** (1 / self.exponent_factor_of_heating_distribution_system)
-                * (self.max_flow_temperature_in_celsius - min_flow_temperature_modified_in_celsius)
-            )
-            return_temperature_in_celsius = float(
-                min_return_temperature_modified_in_celsius
-                + (
-                    (1 / self.factor_of_oversizing_of_heat_distribution_system)
-                    * (
-                        (
-                            set_room_temperature_for_building_modified_in_celsius
-                            - daily_avg_outside_temperature_in_celsius
-                        )
-                        / (
-                            set_room_temperature_for_building_modified_in_celsius
-                            - self.heating_reference_temperature_in_celsius
-                        )
-                    )
-                )
-                ** (1 / self.exponent_factor_of_heating_distribution_system)
-                * (self.max_return_temperature_in_celsius - min_return_temperature_modified_in_celsius)
-            )
+        Args:
+            mode: The valve's mode.
+            is_heating_season: Whether the day is in the heating season.
 
-        list_of_heating_flow_and_return_temperature_in_celsius = [
-            flow_temperature_in_celsius,
-            return_temperature_in_celsius,
-        ]
-
-        return list_of_heating_flow_and_return_temperature_in_celsius
+        Returns:
+            The state.
+        """
+        match mode:
+            case HeatDistributionValveMode.HEATING:
+                return 1 if is_heating_season else 0
+            case HeatDistributionValveMode.COOLING:
+                return -1
+            case HeatDistributionValveMode.OFF:
+                return 0
+            case _:
+                assert_never(mode)
 
     def get_cost_opex(
         self,
@@ -1400,113 +1122,42 @@ class HeatDistributionController(cp.L1ControllerComponent):
         return []
 
 
-@dataclass_json
-@dataclass
 class HeatDistributionControllerInformation:
-    """Class for collecting important heat distribution parameters to pass to other components."""
+    """The emitter circuit's facts a setup passes to the components around it: the emitter type and the mass flow."""
 
     def __init__(self, config: HeatDistributionControllerConfig) -> None:
-        """Initialize the class."""
+        """Derive the emitter type and the circuit's water mass flow from a resolved configuration.
 
+        Args:
+            config: The heat-distribution controller's configuration, its heating load resolved.
+        """
         self.hds_controller_config: HeatDistributionControllerConfig = config
-
-        self.build(
-            set_heating_threshold_temperature_in_celsius=concrete(
-                self.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius
-            ),
-            heating_reference_temperature_in_celsius=concrete(
-                self.hds_controller_config.heating_reference_temperature_in_celsius
-            ),
-            heat_distribution_system_type=self.hds_controller_config.heating_system,
-            set_heating_temperature_for_building_in_celsius=concrete(
-                self.hds_controller_config.set_heating_temperature_for_building_in_celsius
-            ),
-            set_cooling_temperature_for_building_in_celsius=concrete(
-                self.hds_controller_config.set_cooling_temperature_for_building_in_celsius
-            ),
-        )
-        self.prepare_heating_distribution_temperature_calculation(
-            set_room_temperature_for_building_in_celsius=concrete(
-                self.hds_controller_config.set_heating_temperature_for_building_in_celsius
-            ),
-            factor_of_oversizing_of_heat_distribution_system=1.0,
+        self.heat_distribution_system_type: HeatDistributionSystemType = config.heating_system
+        self.water_mass_flow_rate_in_kg_per_second: float = self.water_mass_flow_rate_for(
+            heating_load_in_watt=concrete(config.heating_load_of_building_in_watt),
+            emitter_design=EmitterDesign.for_type(config.heating_system),
         )
 
-        self.water_mass_flow_rate_in_kg_per_second: float = self.calculate_heating_distribution_system_water_mass_flow_rate(
-            max_thermal_building_demand_in_watt=concrete(
-                self.hds_controller_config.heating_load_of_building_in_watt
-            )
-        )
+    @staticmethod
+    def water_mass_flow_rate_for(*, heating_load_in_watt: float, emitter_design: EmitterDesign) -> float:
+        """Return the water mass flow that carries the heating load at the emitter's design temperature lift, in kg/s.
 
-    def build(
-        self,
-        set_heating_threshold_temperature_in_celsius: float,
-        heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: HeatDistributionSystemType,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
-    ) -> None:
-        """Build function.
+        For example, 7000 W through a floor heating designed for 35/28 °C (7 K) needs 7000 / (4180 x 7) = 0.24 kg/s.
 
-        The function sets important constants and parameters for the calculations.
+        Args:
+            heating_load_in_watt: The building's heating load, in W.
+            emitter_design: The design point of the emitter.
+
+        Returns:
+            The mass flow, in kg/s.
         """
-        # Configuration
-        self.set_heating_threshold_temperature_in_celsius: float = set_heating_threshold_temperature_in_celsius
-        self.heating_reference_temperature_in_celsius: float = heating_reference_temperature_in_celsius
-        self.heat_distribution_system_type: HeatDistributionSystemType = heat_distribution_system_type
-
-        self.set_heating_temperature_for_building_in_celsius: float = set_heating_temperature_for_building_in_celsius
-        self.set_cooling_temperature_for_building_in_celsius: float = set_cooling_temperature_for_building_in_celsius
-
-    def prepare_heating_distribution_temperature_calculation(
-        self,
-        set_room_temperature_for_building_in_celsius: float = 20.0,
-        factor_of_oversizing_of_heat_distribution_system: float = 1.0,
-    ) -> None:
-        """Function to set several input parameters for functions regarding the heating system.
-
-        This function is taken from the HeatingSystem class of hplib and slightly adapted here.
-        """
-
-        self.set_room_temperature_for_building_in_celsius: float = set_room_temperature_for_building_in_celsius
-        if self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
-            exponent_factor_of_heating_distribution_system = 1.1
-
-        elif self.heat_distribution_system_type == HeatDistributionSystemType.RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
-            exponent_factor_of_heating_distribution_system = 1.3
-
-        elif self.heat_distribution_system_type == HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [55, 45]
-            exponent_factor_of_heating_distribution_system = 1.2
-        else:
-            raise ValueError(
-                "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
-            )
-
-        self.max_flow_temperature_in_celsius: float = list_of_maximum_flow_and_return_temperatures_in_celsius[0]
-        self.min_flow_temperature_in_celsius: float = set_room_temperature_for_building_in_celsius
-        self.max_return_temperature_in_celsius: float = list_of_maximum_flow_and_return_temperatures_in_celsius[1]
-        self.min_return_temperature_in_celsius: float = set_room_temperature_for_building_in_celsius
-        self.factor_of_oversizing_of_heat_distribution_system: float = factor_of_oversizing_of_heat_distribution_system
-        self.exponent_factor_of_heating_distribution_system: float = exponent_factor_of_heating_distribution_system
-
-        self.temperature_difference_between_flow_and_return_in_celsius: float = (
-            self.max_flow_temperature_in_celsius - self.max_return_temperature_in_celsius
-        )
-
-    def calculate_heating_distribution_system_water_mass_flow_rate(
-        self,
-        max_thermal_building_demand_in_watt: float,
-    ) -> float:
-        """Calculate water mass flow between heating distribution system and hot water storage."""
-        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = PhysicsConfig.get_properties_for_energy_carrier(
+        specific_heat_capacity_of_water_in_joule_per_kg_per_kelvin = PhysicsConfig.get_properties_for_energy_carrier(
             energy_carrier=lt.LoadTypes.WATER
         ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-
-        heating_distribution_system_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
-            specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-            * self.temperature_difference_between_flow_and_return_in_celsius
+        return heating_load_in_watt / (
+            specific_heat_capacity_of_water_in_joule_per_kg_per_kelvin
+            * (
+                emitter_design.maximal_supply_temperature_in_celsius
+                - emitter_design.maximal_return_temperature_in_celsius
+            )
         )
-        return heating_distribution_system_water_mass_flow_in_kg_per_second

@@ -153,7 +153,7 @@ class Building(cp.PhysicsComponent):
     TemperatureOutside = "TemperatureOutside"
 
     # Inputs -> energy management system
-    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    BuildingTemperatureModifierInKelvin = "BuildingTemperatureModifierInKelvin"
 
     # Outputs
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
@@ -331,9 +331,9 @@ class Building(cp.PhysicsComponent):
 
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.BuildingTemperatureModifier,
+            self.BuildingTemperatureModifierInKelvin,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            lt.Units.KELVIN,
             mandatory=False,
         )
 
@@ -604,9 +604,9 @@ class Building(cp.PhysicsComponent):
         ems_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
-                Building.BuildingTemperatureModifier,
+                Building.BuildingTemperatureModifierInKelvin,
                 ems_classname,
-                component_class.BuildingIndoorTemperatureModifier,
+                component_class.BuildingTemperatureModifierInKelvin,
             )
         )
         return connections
@@ -630,7 +630,7 @@ class Building(cp.PhysicsComponent):
 
         temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
 
-        building_temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
+        building_temperature_modifier_in_kelvin = stsv.get_input_value(self.building_temperature_modifier_channel)
 
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
@@ -695,7 +695,7 @@ class Building(cp.PhysicsComponent):
 
         # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
         set_heating_temperature_modified_in_celsius = (
-            self.set_heating_temperature_in_celsius + building_temperature_modifier
+            self.set_heating_temperature_in_celsius + building_temperature_modifier_in_kelvin
         )
 
         theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(

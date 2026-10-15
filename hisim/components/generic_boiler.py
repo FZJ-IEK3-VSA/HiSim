@@ -60,10 +60,7 @@ from hisim.components.simple_water_storage import (
     SimpleHotWaterStorage,
     SimpleDHWStorage,
 )
-from hisim.components.weather import Weather
-from hisim.components.heat_distribution_system import (
-    HeatDistributionController,
-)
+from hisim.components.heating_curve import HeatingCurveController
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
@@ -1377,10 +1374,6 @@ class GenericBoilerControllerConfig(ConfigBase):
     component_id: ComponentID
     #: Whether the controller modulates the burner continuously or switches it on and off.
     is_modulating: bool = True
-    #: Outside temperature above which the controller stops heating at all.
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = field(
-        default=16.0, metadata={"unit": lt.Units.CELSIUS}
-    )
     #: Lower end of the boiler's power band; copied from the boiler this controller regulates.
     minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MINIMAL_THERMAL_POWER_IN_WATT)
     #: Upper end of the boiler's power band; copied from the boiler this controller regulates.
@@ -1506,10 +1499,9 @@ class GenericBoilerController(L1ControllerComponent):
     #: The fraction of the step the boiler's hot-water charge ran, as the boiler reports it.
     PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
 
-    # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
-
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    # The heating curve's signals: the space-heating supply temperature to aim at, and the heating season.
+    SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
+    HeatingSeason = "HeatingSeason"
 
     # Outputs
     ControlSignalToGenericBoiler = "ControlSignalToGenericBoiler"
@@ -1586,18 +1578,18 @@ class GenericBoilerController(L1ControllerComponent):
             controls_a_store=self.config.with_domestic_hot_water_preparation,
         )
 
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            self.SpaceHeatingSupplyTemperatureSetInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+        self.heating_season_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.DailyAverageOutsideTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            self.HeatingSeason,
+            lt.LoadTypes.ANY,
+            lt.Units.BINARY,
             True,
         )
 
@@ -1637,10 +1629,9 @@ class GenericBoilerController(L1ControllerComponent):
         self.controller_mode: HeatingMode
         self.previous_controller_mode: HeatingMode
 
-        self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
     def whole_timesteps(self, field_name: str, seconds: float) -> int:
@@ -1724,37 +1715,25 @@ class GenericBoilerController(L1ControllerComponent):
             )
         ]
 
-    def get_default_connections_from_weather(
-        self,
-    ):
-        """Get simple_water_storage default connections."""
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the connections of the supply temperature set point and the heating season from the heating curve.
 
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(
+        Returns:
+            The two connections.
+        """
+        return [
             ComponentConnection(
-                GenericBoilerController.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get heat distribution controller default connections."""
-
-        connections = []
-        hds_controller_classname = HeatDistributionController.get_classname()
-        connections.append(
+                GenericBoilerController.SpaceHeatingSupplyTemperatureSetInCelsius,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.SpaceHeatingSupplyTemperatureSetInCelsius,
+            ),
             ComponentConnection(
-                GenericBoilerController.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hds_controller_classname,
-                HeatDistributionController.HeatingFlowTemperature,
-            )
-        )
-        return connections
+                GenericBoilerController.HeatingSeason,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.HeatingSeason,
+            ),
+        ]
 
     def build(
         self,
@@ -1816,15 +1795,11 @@ class GenericBoilerController(L1ControllerComponent):
                 )
 
             heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
-            )
-
-            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
+                self.supply_temperature_set_channel
             )
 
             control_signal, temperature_delta = self.determine_operating_mode(
-                daily_avg_outside_temperature_in_celsius,
+                stsv.get_input_value(self.heating_season_channel) > 0.5,
                 water_temperature_input_from_space_heating_water_storage_in_celsius,
                 water_temperature_input_from_dhw_water_storage_in_celsius,
                 heating_flow_temperature_from_heat_distribution_system,
@@ -1846,7 +1821,7 @@ class GenericBoilerController(L1ControllerComponent):
 
     def determine_operating_mode(
         self,
-        daily_avg_outside_temperature_in_celsius: float,
+        is_heating_season: bool,
         water_temperature_input_from_space_heating_water_storage_in_celsius: float,
         water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
         heating_flow_temperature_from_heat_distribution_system: float,
@@ -1858,14 +1833,13 @@ class GenericBoilerController(L1ControllerComponent):
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=previous_controller_mode,
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+            is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
             water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold_in_celsius=self.config.set_heating_threshold_outside_temperature_in_celsius
             ),
             parallel_space_heating_and_dhw_option=False
         )

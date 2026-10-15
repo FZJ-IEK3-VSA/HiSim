@@ -130,14 +130,13 @@ class TestDiverterValve:
         mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=True,
             current_controller_mode=current_mode,
-            daily_average_outside_temperature_in_celsius=0.0,
+            is_heating_season=True,
             water_temperature_input_sh_in_celsius=space_heating_water_temperature_in_celsius,
             water_temperature_input_dhw_in_celsius=storage_temperature_in_celsius,
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating_in_celsius=30.0,
                 set_temperature_dhw_in_celsius=self.SET_TEMPERATURE_IN_CELSIUS,
                 hysteresis_water_temperature_offset_in_celsius=self.HYSTERESIS_IN_KELVIN,
-                outside_temperature_threshold_in_celsius=16.0,
             ),
             parallel_space_heating_and_dhw_option=True,
         )
@@ -149,14 +148,13 @@ class TestDiverterValve:
         mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=True,
             current_controller_mode=HeatingMode.DOMESTIC_HOT_WATER,
-            daily_average_outside_temperature_in_celsius=0.0,
+            is_heating_season=True,
             water_temperature_input_sh_in_celsius=25.0,
             water_temperature_input_dhw_in_celsius=50.0,
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating_in_celsius=30.0,
                 set_temperature_dhw_in_celsius=self.SET_TEMPERATURE_IN_CELSIUS,
                 hysteresis_water_temperature_offset_in_celsius=self.HYSTERESIS_IN_KELVIN,
-                outside_temperature_threshold_in_celsius=16.0,
             ),
             parallel_space_heating_and_dhw_option=False,
         )

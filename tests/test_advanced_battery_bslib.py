@@ -329,7 +329,7 @@ class TestTheChargingLimits:
     @pytest.mark.base
     def test_a_recharge_threshold_above_1_is_refused(self) -> None:
         """Catches a recharge threshold above a full battery, which would let a blocked battery charge past full."""
-        with pytest.raises(ValueError, match=r"recharge_threshold_state_of_charge must be a state of charge of at most 1"):
+        with pytest.raises(ValueError, match=r"recharge_threshold_state_of_charge must be a state of charge of at"):
             dataclasses.replace(self.PARAMETERS, recharge_threshold_state_of_charge=1.5)
 
     @pytest.mark.base

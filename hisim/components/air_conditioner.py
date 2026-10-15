@@ -1069,12 +1069,12 @@ class AirConditionerController(cp.L1ControllerComponent):
 
         Raises:
             ValueError: If the hysteresis is not a finite positive number; the soft stop needs it to
-                end (see the class docstring). If a set point is not finite. If the ramp time is not a finite number of seconds above 0; the
-                power changes by the step length over it, so 0 divides by zero and a negative time
-                lowers the power of a unit whose room is too cold. If the heating set point is not
-                below the cooling set point; an idle unit would then heat a room that is warm enough. If
-                the minimum runtime or idle time is negative or not finite; a negative time would silently
-                mean no minimum.
+                end (see the class docstring). If a set point is not finite. If the ramp time is not a
+                finite number of seconds above 0; the power changes by the step length over it, so 0
+                divides by zero and a negative time lowers the power of a unit whose room is too cold.
+                If the heating set point is not below the cooling set point; an idle unit would then
+                heat a room that is warm enough. If the minimum runtime or idle time is negative or not
+                finite; a negative time would silently mean no minimum.
         """
         if not math.isfinite(config.hysteresis_in_kelvin) or config.hysteresis_in_kelvin <= 0.0:
             raise ValueError(

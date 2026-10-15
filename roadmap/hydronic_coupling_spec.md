@@ -23,9 +23,9 @@ receives are three different numbers:
   already at its supply temperature and could not have accepted it (the bug class #864 repaired by capping). The
   standby loss is taken at the mixed temperature after the step (`:1147-1160`, DHW `:1956-1969`).
 - **Generators are power sources.** The boiler computes a power from a control signal and sets
-  `T_out = T_in + ΔT`, `m = P/(c ΔT)` (`generic_boiler.py:663-690`); district heating
-  (`generic_district_heating.py:653-685`, DHW `:687-707`) and electric DHW heating
-  (`generic_electric_heating.py:542-560`) do the same with `P = P_max ΔT/100`. Their own power and the heat the
+  `T_out = T_in + ΔT`, `m = P/(c ΔT)` (`GenericBoiler.fired_circuit`); district heating
+  (`DistrictHeating._calculate_space_heating_outputs`, DHW `DistrictHeating.hot_water_circuit`) and electric DHW
+  heating (`ElectricHeating.hot_water_circuit`) do the same with `P = P_max ΔT/100`. Their own power and the heat the
   water carries agree only by construction of `m`, and nothing checks what the receiver did with it.
 - **The distribution system lags one step.** `HeatDistribution.i_simulate` publishes the previous step's state
   (`heat_distribution_system.py:471-491`) and writes this step's result into the state afterwards (`:498-501`).
@@ -294,7 +294,7 @@ Consequence: a firing boiler holds its lift, so every firing boiler step is the 
 cannot see the boiler's within-step reaction, and the iteration needs about 11 tries at 900 s, just past the
 simulator's `force_convergence` limit of 10. The iteration histogram test covers the boiler setups explicitly; since
 the acceleration was removed (§6), the boiler charges forced at 900 s are accepted (hisim-4g9.50). The **electric
-DHW heater** stays the same way: it keeps its `P_max ΔT/100` regulation (`generic_electric_heating.py:542-560`) and
+DHW heater** stays the same way: it keeps its `P_max ΔT/100` regulation (`ElectricHeating.hot_water_circuit`) and
 fixed lift, publishing `T_sup = T_ret + ΔT`.
 
 The boiler's maximum supply temperature is `GenericBoilerConfig.maximal_flow_temperature_in_celsius`, 80 °C: the usual

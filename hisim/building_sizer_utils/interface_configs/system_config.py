@@ -77,6 +77,16 @@ building's roof area and ``share_of_maximum_pv_potential``. The battery
 capacity in turn follows the PV peak power, so storage scales with generation
 rather than with demand.
 
+This config carries no battery capacity and no heat-pump power: in the
+``*_building_sizer.py`` setups that read it, both are always sized
+automatically. A caller who knows the sizes runs a copy of the setup's
+recorded energy-system file instead and writes them into the ``config:``
+block of the ``Battery`` and ``MoreAdvancedHeatPumpHPLib`` entries (see
+"Stating a size instead of letting the system size it" in
+``energy_systems/README.md``). It is a copy because the recorded file is
+regenerated from the setup, which would drop the added lines. That is also
+how the RenoVisor translator pins a stated battery.
+
 Valid component combinations
 ----------------------------
 

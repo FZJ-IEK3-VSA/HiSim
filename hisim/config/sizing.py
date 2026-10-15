@@ -398,6 +398,100 @@ def optional_sized_fields(config_class: type) -> Set[str]:
     }
 
 
+class SizedTogether:
+    """The groups of sized fields of a config class that are stated all together or not at all.
+
+    Some devices have two sizes that only make sense as a pair. A battery's capacity and its
+    inverter power are an example: each has its own law from the photovoltaic peak power, so a
+    capacity stated alone would be built with the power the array gives, and on a small array that
+    is a C-rate nobody chose. A class lists such a group in its ``SIZED_TOGETHER`` class attribute,
+    for example::
+
+        SIZED_TOGETHER: ClassVar[Tuple[Tuple[str, ...], ...]] = (
+            ("custom_battery_capacity_generic_in_kilowatt_hour", "custom_pv_inverter_power_generic_in_watt"),
+        )
+
+    Sizing then refuses a configuration that states some members of a group and leaves others to
+    their laws: either every member is stated, or every member is ``AUTO``. The check runs in
+    :func:`resolve_config` and when the fact engine registers the configuration, so an energy-system
+    file, an assembly and a Python setup are refused alike, before any law is evaluated.
+    """
+
+    #: The class attribute a configuration class lists its groups in.
+    CLASS_ATTRIBUTE: ClassVar[str] = "SIZED_TOGETHER"
+
+    #: The fragment every refusal carries, by which the energy-system layer recognizes it.
+    MARKER: ClassVar[str] = "are sized together"
+
+    @classmethod
+    def groups_of(cls, config_class: type) -> Tuple[Tuple[str, ...], ...]:
+        """Returns the groups a configuration class declares, each checked against its sized fields.
+
+        Example: ``SizedTogether.groups_of(BatteryConfig)`` gives the one pair of the capacity and
+        the inverter power field.
+
+        Args:
+            config_class: The configuration class to inspect.
+
+        Returns:
+            The groups, each a tuple of field names; empty for a class that declares none.
+
+        Raises:
+            TypeError: If a group has fewer than two members or names a field the class does not
+                declare with :func:`sized_field`; a mistake in the class, not in a configuration.
+        """
+        groups = tuple(tuple(group) for group in getattr(config_class, cls.CLASS_ATTRIBUTE, ()))
+        sized = sizable_fields(config_class)
+        for group in groups:
+            unknown = [name for name in group if name not in sized]
+            if len(group) < 2 or unknown:
+                raise TypeError(
+                    f"{config_class.__name__}.{cls.CLASS_ATTRIBUTE} lists the group {group!r}; a group names two "
+                    f"or more sized fields of the class, and {', '.join(unknown) or 'a single field'} is not."
+                )
+        return groups
+
+    @classmethod
+    def check(cls, config: Any) -> None:
+        """Refuses a configuration that states only some members of a group it declares.
+
+        A member counts as left to its law when it is ``AUTO``, a per-preset law or, for a field
+        that is not optional, empty; every other value is stated. For example a battery with a
+        capacity of 15 kWh and an ``AUTO`` inverter power is refused with a message ending
+        ``custom_battery_capacity_generic_in_kilowatt_hour = 15.0 is stated and
+        custom_pv_inverter_power_generic_in_watt is left AUTO; state both or neither.``
+
+        Args:
+            config: The configuration about to be sized.
+
+        Raises:
+            ConfigSizingError: If a group is stated in part, naming every member, the values stated
+                and the remedy.
+        """
+        groups = cls.groups_of(type(config))
+        if not groups:
+            return
+        optional = optional_sized_fields(type(config))
+        for group in groups:
+            left = [
+                name
+                for name in group
+                if _needs_sizing(getattr(config, name)) or (name not in optional and _is_vacuous(getattr(config, name)))
+            ]
+            if not left or len(left) == len(group):
+                continue
+            stated = [name for name in group if name not in left]
+            remedy = "state both or neither" if len(group) == 2 else "state all of them or none"
+            identity = getattr(config, "component_id", None)
+            instance = getattr(identity, "address", None) or getattr(identity, "name", None) or "<unnamed>"
+            raise ConfigSizingError(
+                f"{type(config).__name__} '{instance}': {', '.join(group[:-1])} and {group[-1]} {cls.MARKER}, but "
+                + ", ".join(f"{field_name} = {getattr(config, field_name)!r}" for field_name in stated)
+                + f" {'is' if len(stated) == 1 else 'are'} stated and {', '.join(left)} "
+                + f"{'is' if len(left) == 1 else 'are'} left AUTO; {remedy}."
+            )
+
+
 def reads_a_null_fact(law: SizingLaw, ctx: "SizingContext") -> bool:
     """Whether any context fact this law reads is carried as ``None``.
 
@@ -612,7 +706,8 @@ def resolve_config(
         NothingToSizeError: If the config class declares no sizable field.
         ConfigSizingError: If a law reads a fact the context does not carry, names a
             sibling field that does not exist, sits in a cycle of sibling reads, or a
-            function law raises.
+            function law raises; or if the config states only some fields of a group its
+            class sizes together (:class:`SizedTogether`).
     """
     laws = sizable_fields(type(config))
     if not laws:
@@ -620,6 +715,7 @@ def resolve_config(
             f"{type(config).__name__} declares no sizable field; passing a SizingContext "
             "to it cannot have any effect. Remove the resolve call."
         )
+    SizedTogether.check(config)
     # A preset may override the class law for one field by assigning a SizingLaw as the
     # field value (the per-preset escape hatch) — e.g. the pellet boiler's minimal power
     # is a twelfth of its own maximal power, while the gas boiler's is a constant zero.

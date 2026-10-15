@@ -471,8 +471,9 @@ def configure_energy_system(
 
     Raises:
         EnergySystemBindingError: For an entry whose configuration cannot be built.
-        EnergySystemSizingError: ``EF-4A`` … ``EF-4H`` for the kernel's eight failure modes,
-            each keeping the kernel's own message and naming the file location that caused it.
+        EnergySystemSizingError: ``EF-4A`` … ``EF-4H`` for the kernel's eight failure modes and
+            ``EF-4J`` for a group of fields sized together stated only in part, each keeping the
+            kernel's own message and naming the file location that caused it.
     """
     resolved_bindings = bindings if bindings is not None else validate_classes(model)
     resolver = path_resolver if path_resolver is not None else PathResolver.default()

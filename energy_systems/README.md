@@ -146,12 +146,15 @@ automatically, so a line added to a twin here is lost at the next recording.
 
 Components sized *from* the device follow the stated number: the heating-water buffer beside the
 heat pump reads the heat pump's power, whether computed or written. The battery's two fields are
-sized independently, both from the photovoltaic power, so state both: a capacity alone keeps the
-power the array would have given. Leaving the lines out keeps the automatic sizing.
-`tests/test_energy_system_explicit_sizes.py` checks all of this on the recorded grouped heat-pump
-twin. The RenoVisor translator always writes both battery fields: a request that states only the
-capacity gets a power of 500 W per kWh, a C-rate of 0.5, the rule the measure catalogue states for
-an unset power.
+stated together or not at all: each has its own law from the photovoltaic power, so a capacity
+alone would be built with the power the array gives, a C-rate nobody chose. A battery that states
+one of them and leaves the other `AUTO` is refused at sizing, `EF-4J`, naming both fields and the
+value stated: "state both or neither". The class declares the pair in `BatteryConfig.SIZED_TOGETHER`,
+and the sizing kernel refuses it for a file, an assembly and a Python setup alike. Leaving both
+lines out keeps the automatic sizing. `tests/test_energy_system_explicit_sizes.py` checks all of
+this on the recorded grouped heat-pump twin. The RenoVisor translator always writes both battery
+fields: a request that states only the capacity gets a power of 500 W per kWh, a C-rate of 0.5, the
+rule the measure catalogue states for an unset power.
 
 ### Several PV arrays
 
@@ -349,7 +352,9 @@ An **assembly** is a fragment of an energy system in a file of its own,
 type, a default, a description, and for a number a `unit` of `lt.Units` and a `range`),
 `exactly_one_of` constraints (the defaults state exactly one member; an import that states one member
 unstates the others' defaults, which resolve to `none`; a member written as `none` is an explicit
-unstatement; one stating two is refused, `EF-77`),
+unstatement; one stating two is refused, `EF-77`), `all_or_none_of` constraints (every member stated
+or none, as the battery's `capacity_in_kwh` and `power_in_watt`; an import stating some members and
+leaving others at `AUTO` or `none` is refused, `EF-77`, and nothing is filled in for it),
 internal variants a parameter selects (`selected_by`, `when:`), an interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
 defaults). A file of `schema_version: 4` imports assemblies under `imports:`, once or as named
 instances:
@@ -450,13 +455,14 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-70` … `EF-72` | an assembly file of the wrong shape, not found, found twice |
 | `EF-73` | a construct v1 does not have, by name |
 | `EF-75`, `EF-78`, `EF-79` | the library check (every problem at once), units |
-| `EF-76`, `EF-77` | an import's parameter, a violated `exactly_one_of` |
+| `EF-76`, `EF-77` | an import's parameter, a violated `exactly_one_of` or `all_or_none_of` |
 | `EF-7A` … `EF-7F` | no partner, several and no verb, `none:` on a required port, an absent `bind:` partner, an undecided optional port, a verb on an inactive port |
 | `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
 | `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
 | `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed or more than one feed for |
 | `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
+| `EF-4J` | (sizing) a group of fields its class sizes together stated in part: a battery's capacity without its inverter power, or the other way round |
 
 ### Testing an assembly
 
@@ -477,7 +483,11 @@ tests:
 `tests/assemblies/test_library_contracts.py` draws the samples from the declarations — the defaults,
 the `min` and `max` of every `range`, every allowed value, every internal variant, and a seeded Latin
 hypercube per `exactly_one_of` branch (`--samples` points per branch, an upper bound for a branch whose
-dimensions are all discrete, where two points drawing the same values are one sample) — and runs each
+dimensions are all discrete, where two points drawing the same values are one sample) — every sample
+within the constraints: a value that states one member of an `all_or_none_of` states the others at
+their companion value (a stated default, else the middle of the range, else the first stated allowed
+value), the hypercube states every member, and a sweep of one member from a base that leaves the
+constraint unstated holds the others at their companion values — and runs each
 sample once in isolation: the assembly as one import beside a test partner for every active port whose
 binding changes what the assembly computes (optional ports included; a providing port gets none, except
 a consumer for a fuel it provides), and beside the provider of every sizing fact its members read from

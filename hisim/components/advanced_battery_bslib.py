@@ -54,10 +54,19 @@ class BatteryConfig(ConfigBase):
     line they read every array of the system. The named default battery, :meth:`preset_sized_to_pv`,
     leaves both fields ``AUTO`` to these laws (D27). Over one array the sum is that array's peak
     power, so a battery beside one array — every recorded twin — is sized as before. An author who
-    knows the device pins the two fields instead.
+    knows the device pins the two fields instead, always both: a battery that states one of them and
+    leaves the other ``AUTO`` is refused at sizing (:data:`SIZED_TOGETHER`).
     """
 
     MAIN_CLASS = "hisim.components.advanced_battery_bslib.Battery"
+
+    #: The capacity and the inverter power are stated together or not at all (owner, 2026-10-15). Each
+    #: has its own law from the PV peak power, so a capacity stated alone would be built with the power
+    #: the array gives, a C-rate nobody chose; the sizing kernel refuses it with "state both or neither"
+    #: (``hisim.config.sizing.SizedTogether``, ``EF-4J`` in an energy-system file).
+    SIZED_TOGETHER: ClassVar[Tuple[Tuple[str, ...], ...]] = (
+        ("custom_battery_capacity_generic_in_kilowatt_hour", "custom_pv_inverter_power_generic_in_watt"),
+    )
 
     #: Sizing law of the battery's capacity: one kilowatt hour of storage per kilowatt peak of
     #: every PV array the battery is sized to, summed, rounded to two decimals. Named as a ClassVar

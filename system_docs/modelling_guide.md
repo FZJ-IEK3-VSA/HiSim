@@ -10,11 +10,12 @@ controller (#941).
 
 ## 1. Energy is conserved at every port
 
-- **Sender and receiver book the same energy.** A quantity that crosses a port is computed once, from the port
-  quantities both ends see, by one function. A water circuit carries a mass flow `m` (kg/s), a supply temperature
-  and a return temperature (°C); its heat is `Q = m c (T_sup - T_ret)`, computed by `hisim.hydronics.circuit_power_w`
-  (W) and `circuit_heat_kwh` (kWh) with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`. Neither end books a heat of
-  its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
+- **Sender and receiver book the same energy** (`component_design_principles.md`, part B, principle 4). A
+  quantity that crosses a port is computed once, from the port quantities both ends see, by one function. A water
+  circuit carries a mass flow `m` (kg/s), a supply temperature and a return temperature (°C); its heat flow is
+  `P = m c (T_sup - T_ret)` in W (`hisim.hydronics.circuit_power_w`), and its heat over a step of `dt` seconds is
+  `Q = m c (T_sup - T_ret) dt` (`circuit_heat_kwh`, in kWh), with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`.
+  Neither end books a heat of its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two
   differed by up to 1.5 % per step. Now the heat pump books `m c (T_out - T_in)` of its own outputs, and
   `tests/test_heat_pump_flow_booking.py` checks it on every step.
@@ -62,10 +63,10 @@ Today HiSim mixes conventions:
 | Hot water drawn at the tap | positive (`ThermalPowerConsumptionDHW`, stated in its description since #909) | `hisim/components/simple_water_storage.py` |
 | Grid balance of the energy manager | signed net, positive for a surplus to the grid, in an output whose description states no sign (`TotalElectricityToOrFromGrid`) | `hisim/components/controller_l2_energy_management_system.py` |
 | Battery power | signed (`AcBatteryPowerUsed`), the description states no sign | `hisim/components/advanced_battery_bslib.py` |
-| Building heat demand | signed, positive for heating and negative for cooling (`TheoreticalThermalBuildingDemand`) | `hisim/components/building/building.py` |
+| Building heat demand | signed, positive for heating and negative for cooling (`TheoreticalThermalBuildingDemand`), the description states no sign | `hisim/components/building/building.py` |
 
-The rule for new code (and for an existing output when it is next touched, `component_design_principles.md`
-B10):
+The rule for new code (and for an existing output when it is next touched, `component_design_principles.md`,
+part B, principle 10):
 
 - **A one-directional name carries a value `>= 0`** in the direction it names: `ThermalPowerDeliveredInWatt`,
   `ElectricityConsumptionInWatt`. Two directions are two outputs, or one signed output whose name names both
@@ -78,17 +79,18 @@ B10):
 ## 3. 60 s is the reference
 
 - **A 60 s run is the reference every coarser run is measured against.** A model must give the same result at
-  every step length up to a stated tolerance; a coarse-step adaptation lives inside the component and switches on
+  every step length a run accepts (one that divides a day) up to a stated tolerance; a coarse-step adaptation lives inside the component and switches on
   only above `SimulationParameters.part_load_above_seconds` (600 s by default), so a 60 s run is unchanged
-  (`component_design_principles.md` B6). Example: the boiler's part-load rule (#915) left every 60 s result and
+  (`component_design_principles.md`, part B, principle 6). Example: the boiler's part-load rule (#915) left every 60 s result and
   golden bit-identical, and changed the gas twin's hot-water gas at 900 s by -0.002 % against 60 s
   (`roadmap/hydronic_part_load_spec.md` §11).
 - **A coarse-step model agrees with the 60 s run within 1 %** at 900 s and 3600 s, on the energy figures it is
   measured by (heat delivered, fuel or electricity, the bill), unless its spec states and justifies another
   tolerance (owner, 2026-10-15). A test runs the same system at 60 s and at the coarse steps and asserts the
   tolerance. Example: `tests/test_dhw_chain_time_resolution.py` runs six twins for four weeks at 60, 900 and
-  3600 s; the heat drawn at the tap agrees within 1 %, the generators' hot-water heat within 1 % at 900 s and
-  1.5 % at 3600 s, and its docstring justifies the 1.5 %.
+  3600 s; the heat drawn at the tap agrees within 1 %, the generators' hot-water heat within 1 % at 900 s. Its
+  1.5 % for the generators at 3600 s is justified only in the test's docstring; the spec
+  (`roadmap/hydronic_coupling_spec.md`, stage C) states 1 % and accepts only the electric heater's 1.08 %.
 - **A change is measured, not assumed.** The PR description gives the change against the 60 s run of the same
   head at 900 s and 3600 s for the twins it affects (part-load spec §11, the tables of #941). A deviation beyond the
   tolerance is a bug or a decision for the owner, never a widened tolerance.

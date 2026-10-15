@@ -46,6 +46,7 @@ generated table of contents and footer page numbers.
 from pathlib import Path
 import copy
 import time
+from html import escape
 from typing import Any
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
@@ -54,6 +55,7 @@ from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle, StyleSheet1
 from reportlab.lib.units import inch, cm, mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus.tableofcontents import TableOfContents
 from hisim import utils
@@ -62,11 +64,26 @@ from hisim import utils
 class MyDocTemplate(BaseDocTemplate):
     """MyDocTemplate class."""
 
-    def __init__(self, filename: str | Path, **kw: Any) -> None:
-        """Initialize the doc template."""
+    #: The margin on every side of the page, in points.
+    MARGIN: float = 2.5 * cm
+
+    def __init__(self, filename: str | Path, pagesize: tuple[float, float] = letter, **kw: Any) -> None:
+        """Initialize the doc template with one frame, :attr:`MARGIN` inside every edge of the page.
+
+        Args:
+            filename: Where the PDF is written.
+            pagesize: Width and height of the page, in points; US letter by default.
+            **kw: Passed on to ``BaseDocTemplate``.
+        """
         self.allow_splitting = 0
-        super().__init__(filename, **kw)
-        self.template: PageTemplate = PageTemplate("normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")])
+        super().__init__(filename, pagesize=pagesize, **kw)
+        # 2.5 cm margins on every side of the page: the frame used to be 15 x 25 cm from the lower left
+        # corner, which left 4 mm above the first line of each page and 4.1 cm on the right.
+        page_width, page_height = pagesize
+        self.template: PageTemplate = PageTemplate(
+            "normal",
+            [Frame(self.MARGIN, self.MARGIN, page_width - 2 * self.MARGIN, page_height - 2 * self.MARGIN, id="F1")],
+        )
         self.addPageTemplates(self.template)
 
     # Entries to the table of contents can be done either manually by
@@ -92,6 +109,11 @@ class MyDocTemplate(BaseDocTemplate):
 
 class ReportGenerator:
     """Class for generating reports."""
+
+    #: The largest figure a page holds beside a heading and a caption: the frame's width less its
+    #: padding, and most of its height, in points.
+    LARGEST_FIGURE_WIDTH: float = 16 * cm
+    LARGEST_FIGURE_HEIGHT: float = 18 * cm
 
     def __init__(self, dirpath: str) -> None:
         """Initialize the pdf report."""
@@ -177,13 +199,13 @@ class ReportGenerator:
         data = [[hisim_logo_image, fzj_logo_image]]
         report_table = Table(data)
         story.append(report_table)
-        story.append(Spacer(1, 50))
+        story.append(Spacer(1, 30))
 
         # Insert Title
         titel = "HiSim Simulation Report"
         paragraph_text = f'<font size="30">{titel}</font>'
         story.append(Paragraph(paragraph_text, self.styles["Title"]))
-        story.append(Spacer(1, 150))
+        story.append(Spacer(1, 40))
 
         # Inserts authors
         authors = [
@@ -204,11 +226,12 @@ class ReportGenerator:
             "Markus Blasberg",
         ]
 
+        # 12 pt lines without spacers between them: at 16 pt with 10 pt spacers the developers and the
+        # address did not fit on the title page and the address and date ran onto page 2.
+        title_page_text = ParagraphStyle(name="TitlePageText", parent=self.styles["Normal"], fontSize=12, leading=16)
         for author in authors:
-            paragraph_text = f'<font size="16">{author.strip()}</font>'
-            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
-            story.append(Spacer(1, 10))
-        story.append(Spacer(1, 30))
+            story.append(Paragraph(author.strip(), title_page_text))
+        story.append(Spacer(1, 20))
 
         # Inserts address
         address_parts = [
@@ -220,22 +243,12 @@ class ReportGenerator:
             "Germany",
         ]
         for address_line in address_parts:
-            paragraph_text = f'<font size="16">{address_line.strip()}</font>'
-            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
-            story.append(Spacer(1, 10))
-        story.append(Spacer(1, 30))
+            story.append(Paragraph(address_line.strip(), title_page_text))
+        story.append(Spacer(1, 20))
 
         # Inserts time
         formatted_time = time.ctime()
-        paragraph_text = f'<font size="16">{formatted_time}</font>'
-        story.append(Paragraph(paragraph_text, self.styles["Normal"]))
-        story.append(Spacer(1, 30))
-
-        if hasattr(self, "executation_time"):
-            # formatted_time
-            paragraph_text = f'<font size="16">{formatted_time}</font>'
-            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
-            story.append(Spacer(1, 30))
+        story.append(Paragraph(formatted_time, title_page_text))
         self.story = story
         self.story.append(PageBreak())
 
@@ -342,12 +355,111 @@ class ReportGenerator:
         image.hAlign = "CENTER"
         self.story.append(image)
 
-    def write_tables_to_report(self, table_as_list_of_lists: list[list[Any]]) -> None:
-        """Add table to the report."""
+    def write_figure_fitted_to_page(
+        self, file_path: str, max_width: float = LARGEST_FIGURE_WIDTH, max_height: float = LARGEST_FIGURE_HEIGHT
+    ) -> None:
+        """Add a figure scaled to fit a box, keeping its aspect ratio; read lazily, as in `write_figures_to_report`.
 
+        A figure whose shape is not known in advance, such as a Graphviz network chart, is shrunk or
+        enlarged until it touches the box on one side. Example: a 2000 x 1000 pixel chart in a box
+        of 15 x 20 cm is drawn at 15 x 7.5 cm. A fixed size such as 4 x 6 inches would stretch it.
+
+        Args:
+            file_path: The image file.
+            max_width: The width of the box, in points; the page's largest figure by default.
+            max_height: The height of the box, in points; the page's largest figure by default.
+
+        Raises:
+            ValueError: When the file does not exist.
+        """
+        path = Path(file_path)
+        if not path.is_file():
+            raise ValueError("no files found")
+        width_in_pixels, height_in_pixels = ImageReader(str(path)).getSize()
+        scale = min(max_width / width_in_pixels, max_height / height_in_pixels)
+        image = Image(str(path), width=width_in_pixels * scale, height=height_in_pixels * scale, lazy=2)
+        image.hAlign = "CENTER"
+        self.story.append(image)
+
+    #: Font size of table cells, in points; the header row is set in bold at the same size.
+    TABLE_FONT_SIZE: float = 8
+    #: Font size of the cells of a table with more than :attr:`TABLE_COLUMNS_AT_FULL_SIZE` columns, in points.
+    TABLE_FONT_SIZE_WIDE: float = 7
+    TABLE_COLUMNS_AT_FULL_SIZE: int = 6
+    #: A bold header letter is about this much wider than a body letter.
+    TABLE_HEADER_WIDTH_FACTOR: float = 1.2
+    #: A column is given width in proportion to its longest cell, counted up to this many characters,
+    #: so one long text column cannot squeeze the number columns beside it to nothing.
+    TABLE_COLUMN_WEIGHT_CAP: int = 45
+
+    @classmethod
+    def table_column_widths(cls, table_as_list_of_lists: list[list[Any]], total_width: float) -> list[float]:
+        """Share a table's width among its columns by the length of what they must hold on one line.
+
+        A column must hold its longest body cell, which is usually a number or a name that should
+        not break, and the longest single word of its header; the header itself wraps between
+        words. Its weight is the longer of the two in characters (a bold header letter counting
+        :attr:`TABLE_HEADER_WIDTH_FACTOR`), capped at
+        :attr:`TABLE_COLUMN_WEIGHT_CAP`, plus 2; the widths are the total width in proportion to the
+        weights. Example: a header ``["Component", "Investment [EUR]"]`` over the row
+        ``["PVSystem", "17693.32"]`` weighs 12.8 (``Component``, 9 x 1.2 + 2) and 14 (``Investment``,
+        10 x 1.2 + 2).
+
+        Args:
+            table_as_list_of_lists: The rows, the first one the header; a row may be shorter than the
+                longest one.
+            total_width: The width to share, in points.
+
+        Returns:
+            One width per column, in points, adding up to ``total_width``.
+        """
+        column_count = max((len(row) for row in table_as_list_of_lists), default=0)
+        header = table_as_list_of_lists[0] if table_as_list_of_lists else []
+        weights = []
+        for column in range(column_count):
+            body = [row[column] for row in table_as_list_of_lists[1:] if column < len(row)]
+            longest_body_cell = max((len(str(cell).strip()) for cell in body if cell is not None), default=0)
+            header_words = str(header[column]).split() if column < len(header) and header[column] is not None else []
+            longest_header_word = max((len(word) for word in header_words), default=0) * cls.TABLE_HEADER_WIDTH_FACTOR
+            weights.append(min(max(longest_body_cell, longest_header_word), cls.TABLE_COLUMN_WEIGHT_CAP) + 2)
+        total_weight = sum(weights)
+        return [total_width * weight / total_weight for weight in weights]
+
+    def write_tables_to_report(self, table_as_list_of_lists: list[list[Any]]) -> None:
+        """Add a table that fits the page width, its first row as the header.
+
+        Every cell is set as a paragraph (8 pt, 7 pt above six columns), so a long text wraps between words inside its
+        column
+        instead of running past the page edge; the columns share the page's width by the length of
+        their contents (:meth:`table_column_widths`), and the header row repeats on every page the
+        table continues on. A ``None`` cell is left empty.
+
+        Args:
+            table_as_list_of_lists: The rows, the first one the header.
+        """
+        column_count = max((len(row) for row in table_as_list_of_lists), default=0)
+        wide = column_count > self.TABLE_COLUMNS_AT_FULL_SIZE
+        font_size = self.TABLE_FONT_SIZE_WIDE if wide else self.TABLE_FONT_SIZE
+        cell_style = ParagraphStyle(
+            name="TableCell",
+            parent=self.styles["Normal"],
+            fontSize=font_size,
+            leading=font_size * 1.2,
+        )
+        header_style = ParagraphStyle(name="TableHeader", parent=cell_style, fontName="Helvetica-Bold")
+        rows = []
+        for row_index, row in enumerate(table_as_list_of_lists):
+            style = header_style if row_index == 0 else cell_style
+            texts = ["" if cell is None else escape(str(cell).strip(), quote=False) for cell in row]
+            rows.append([Paragraph(text, style) for text in texts])
         table = Table(
-            table_as_list_of_lists,
+            rows,
+            colWidths=self.table_column_widths(table_as_list_of_lists, self.LARGEST_FIGURE_WIDTH),
+            repeatRows=1,
             style=[
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ("LINEABOVE", (0, 0), (-1, 0), 1, "black"),
                 ("LINEABOVE", (0, 1), (-1, 1), 0.5, "black"),
                 ("LINEBELOW", (0, -1), (-1, -1), 1, "black"),

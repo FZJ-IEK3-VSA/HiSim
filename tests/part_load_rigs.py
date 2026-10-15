@@ -8,7 +8,6 @@ district-heating and electric-heating tests.
 
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -399,8 +398,6 @@ class CollectorRig:
         collector = solar_thermal_system.SolarThermalSystem(
             config=config, my_simulation_parameters=Parameters.one_day(seconds_per_timestep)
         )
-        collector.apparent_zenith = np.array([30.0])
-        collector.solar_azimuth = np.array([180.0])
         collector.previous_state = solar_thermal_system.SolarThermalSystemState(pump_ran=pump_ran_in_previous_step)
         system = solar_thermal_system.SolarThermalSystem
         return AllInputsRig.step_once(
@@ -410,6 +407,8 @@ class CollectorRig:
                 system.GlobalHorizontalIrradianceWM2: 800.0,
                 system.DiffuseHorizontalIrradianceWM2: 100.0,
                 system.TemperatureOutsideDegC: 20.0,
+                system.ApparentZenith: 30.0,
+                system.Azimuth: 180.0,
                 system.TemperatureCollectorInletDegC: 45.0,
                 system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
                 system.PartLoadRatio: ratio,

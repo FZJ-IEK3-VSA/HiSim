@@ -1393,9 +1393,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
     #: The tank's temperature before its first step, in °C: a tank at half its usable charge. Below the 40 °C the
     #: household draws its warm water at (``HouseholdWarmWaterDemandConfig.ww_temperature_demand`` minus
-    #: ``temperature_difference_hot``) the tank's water is no longer usable, and the 60 °C warm-water aim every
-    #: generator controller of the fleet charges it to is full; 50 °C lies halfway between, so a run starts neither
-    #: on a full tank nor on one that cannot serve the first draw.
+    #: ``temperature_difference_hot``) the tank's water is no longer usable, and at the 60 °C warm-water aim the
+    #: boiler's, the district heating's, the electric heating's and the heat pump's controllers charge it to it is
+    #: full; 50 °C lies halfway between, so a run starts neither on a full tank nor on one that cannot serve the first
+    #: draw. A solar collector may heat the tank further, up to its 80 °C maximum; that charge is not counted here.
     INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 50.0
 
     #: The tap valve's local solve stops when the step mean it assumed and the one it got differ by at most this.

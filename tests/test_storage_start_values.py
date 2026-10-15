@@ -30,9 +30,6 @@ from hisim.simulationparameters import SimulationParameters
 class StartValues:
     """The simulation parameters and the arithmetic every start-value test shares."""
 
-    #: The warm-water aim every generator controller of the fleet charges the hot-water tank to, in °C.
-    WARM_WATER_AIM_IN_CELSIUS = 60.0
-
     #: A PV peak power to size the house battery against, in W; any positive value builds a battery.
     PV_PEAK_POWER_IN_WATT = 10_000.0
 
@@ -88,13 +85,16 @@ def test_the_hot_water_tank_starts_half_way_between_the_tap_temperature_and_the_
     tap_temperature_in_celsius = (
         HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.temperature_difference_hot
     )
+    # The warm-water aim, read where it is configured: the heat pump's hot-water controller.
+    warm_water_aim_in_celsius = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.t_max_dhw_storage_in_celsius
+    )
     assert tap_temperature_in_celsius == 40
+    assert warm_water_aim_in_celsius == 60.0
     assert tank_class.INITIAL_TEMPERATURE_IN_CELSIUS == 50.0
     assert tank_class.INITIAL_TEMPERATURE_IN_CELSIUS == pytest.approx(
-        (tap_temperature_in_celsius + StartValues.WARM_WATER_AIM_IN_CELSIUS) / 2, abs=1e-12
+        (tap_temperature_in_celsius + warm_water_aim_in_celsius) / 2, abs=1e-12
     )
-    heat_pump_dhw_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig
-    assert heat_pump_dhw_config.t_max_dhw_storage_in_celsius == StartValues.WARM_WATER_AIM_IN_CELSIUS
     config = simple_water_storage.SimpleDHWStorageConfig(
         component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0
     )

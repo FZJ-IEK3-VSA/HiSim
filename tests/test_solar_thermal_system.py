@@ -9,12 +9,23 @@ import pytest
 from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_plate_precalc
 from hisim import hydronics
 from hisim import sim_repository, component, log, simulator as sim
-from hisim.components import weather, solar_thermal_system
+from hisim.components import (
+    generic_boiler,
+    generic_district_heating,
+    generic_electric_heating,
+    solar_thermal_system,
+    weather,
+)
+from hisim.components.controller_l2_energy_management_system import EMSConfig
+from hisim.components.more_advanced_heat_pump_hplib import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-from tests.part_load_rigs import AllInputsRig, CollectorRig, SolarControllerRig
+from tests.part_load_rigs import AllInputsRig, CollectorRig, Parameters, SolarControllerRig
 
 
 @pytest.mark.base
@@ -818,27 +829,29 @@ class PumpTransitions:
 class FullStorageStopTransitions:
     """The full-storage stop's transitions: the saved stop, the storage's start-of-step temperature, the stop."""
 
-    #: The warm-water aim above which the stop sets, °C.
-    AIM_IN_CELSIUS = solar_thermal_system.SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
+    #: The maximum storage temperature above which the stop sets, °C.
+    MAXIMUM_IN_CELSIUS = solar_thermal_system.SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
 
-    #: The temperature at and below which a holding stop releases, °C: 3 K below the aim.
+    #: The temperature at and below which a holding stop releases, °C: 3 K below the maximum.
     RESTART_IN_CELSIUS = (
-        AIM_IN_CELSIUS - solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+        MAXIMUM_IN_CELSIUS
+        - solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
     )
 
     #: Each row: whether the stop held in the previous step, the storage's start-of-step temperature in °C, whether
     #: the stop holds, and what the row checks.
     TABLE = [
-        (False, 44.0, False, "a storage well below the aim sets no stop"),
-        (False, AIM_IN_CELSIUS, False, "exactly at the aim the stop does not set (it sets strictly above)"),
-        (False, AIM_IN_CELSIUS + 0.025, True, "a storage the part-load rule ended just above the aim sets the stop"),
-        (False, 58.5, False, "inside the restart band a released stop stays released"),
-        (True, 61.0, True, "a holding stop holds above the aim"),
-        (True, AIM_IN_CELSIUS, True, "a holding stop holds at the aim"),
-        (True, 58.5, True, "a holding stop holds inside the restart band"),
+        (False, 44.0, False, "a storage well below the maximum sets no stop"),
+        (False, 60.5, False, "a storage above the backups' 60 °C warm-water aim sets no stop"),
+        (False, MAXIMUM_IN_CELSIUS, False, "exactly at the maximum the stop does not set (it sets strictly above)"),
+        (False, MAXIMUM_IN_CELSIUS + 0.025, True, "a storage just above the maximum sets the stop"),
+        (False, 78.5, False, "inside the restart band a released stop stays released"),
+        (True, 81.0, True, "a holding stop holds above the maximum"),
+        (True, MAXIMUM_IN_CELSIUS, True, "a holding stop holds at the maximum"),
+        (True, 78.5, True, "a holding stop holds inside the restart band"),
         (True, RESTART_IN_CELSIUS + 1e-6, True, "a holding stop holds just above the restart temperature"),
-        (True, RESTART_IN_CELSIUS, False, "a holding stop releases exactly 3 K below the aim"),
-        (True, 45.0, False, "a holding stop releases well below the aim"),
+        (True, RESTART_IN_CELSIUS, False, "a holding stop releases exactly 3 K below the maximum, at 77 °C"),
+        (True, 59.0, False, "a holding stop releases well below the maximum"),
     ]
 
 
@@ -855,15 +868,91 @@ def test_the_switch_off_difference_lies_below_the_switch_on_difference_as_differ
 
 
 @pytest.mark.base
-def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_aim() -> None:
+def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_maximum() -> None:
     """Catches a full-storage restart band outside what solar controllers use.
 
-    Without a band the part-load rule, which ends a charging step just above the aim, and the next step's standby
-    loss switch the pump every second step; a band wider than 5 K leaves solar heat on the roof that real controllers
+    Without a band a storage that started a step just above the maximum cools below it by the next step's standby loss,
+    and the pump switches every second step; a band wider than 5 K leaves solar heat on the roof that real controllers
     take.
     """
-    band_in_kelvin = solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+    band_in_kelvin = solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
     assert 3.0 <= band_in_kelvin <= 5.0
+
+
+class BackupAims:
+    """The highest tank temperature each backup generator's controller charges the hot-water tank to, in °C."""
+
+    @staticmethod
+    def built_controllers() -> Dict[str, Any]:
+        """Return the boiler's, the district-heating substation's and the electric heater's controllers, built.
+
+        Each is built from its first preset with its sizable fields set by hand (a boiler of 1 to 10 kW, a heating
+        threshold of 16 °C, a specific heating load of 50 W/m²); its warm-water aim depends on none of them.
+
+        Returns:
+            The controllers by name.
+        """
+        parameters = Parameters.one_day(900)
+        boiler = generic_boiler.GenericBoilerControllerConfig.preset_modulating("BoilerController")
+        boiler.minimal_thermal_power_in_watt = 1000.0
+        boiler.maximal_thermal_power_in_watt = 10000.0
+        district = generic_district_heating.DistrictHeatingControllerConfig.preset_standard("DistrictController")
+        district.set_heating_threshold_outside_temperature_in_celsius = 16.0
+        electric = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricController")
+        electric.set_heating_threshold_outside_temperature_in_celsius = 16.0
+        electric.specific_heating_load_of_building_in_watt_per_m2 = 50.0
+        return {
+            "boiler": generic_boiler.GenericBoilerController(my_simulation_parameters=parameters, config=boiler),
+            "district heating": generic_district_heating.DistrictHeatingController(
+                my_simulation_parameters=parameters, config=district
+            ),
+            "electric heater": generic_electric_heating.ElectricHeatingController(
+                my_simulation_parameters=parameters, config=electric
+            ),
+        }
+
+    @staticmethod
+    def heat_pump_raised_aim_in_celsius() -> float:
+        """Return the tank temperature at which the heat pump ends a charge under the energy manager's full raise, °C.
+
+        The heat pump's controller ends a hot-water charge 0.5 K below its set temperature, and the energy manager
+        raises that set temperature by its hot-water offset (10 K) while PV surplus is available: 69.5 °C.
+
+        Returns:
+            The raised aim, in °C.
+        """
+        config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+        energy_manager = EMSConfig.preset_optimize_own_consumption("EMS")
+        raise_in_kelvin = energy_manager.domestic_hot_water_storage_temperature_offset_value
+        return (
+            config.t_max_dhw_storage_in_celsius
+            + raise_in_kelvin
+            - MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
+        )
+
+
+@pytest.mark.base
+def test_the_solar_maximum_lies_above_the_warm_water_aim_of_every_backup() -> None:
+    """Catches a solar maximum storage temperature at or below a temperature a backup generator charges the tank to.
+
+    The boiler, the district-heating substation and the electric heater charge to their 60 °C warm-water aim, the
+    heat pump to 59.5 °C and, under the energy manager's raise, to 69.5 °C. With the solar maximum at or below such an
+    aim, the full-storage stop would hold the pump on sunny days while that backup supplies heat the sun could have
+    delivered. The maximum stays within the 60 to 80 °C real solar controllers are set to.
+    """
+    maximum_in_celsius = solar_thermal_system.SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
+    aims_in_celsius = {
+        name: controller.warm_water_temperature_aim_in_celsius
+        for name, controller in BackupAims.built_controllers().items()
+    }
+    aims_in_celsius["heat pump, raised"] = BackupAims.heat_pump_raised_aim_in_celsius()
+    assert aims_in_celsius == {
+        "boiler": 60.0,
+        "district heating": 60.0,
+        "electric heater": 60.0,
+        "heat pump, raised": 69.5,
+    }
+    assert max(aims_in_celsius.values()) < maximum_in_celsius <= 80.0
 
 
 @pytest.mark.base
@@ -901,13 +990,14 @@ def test_the_pump_switches_on_above_seven_kelvin_off_at_three_and_stands_while_t
     [row[:3] for row in FullStorageStopTransitions.TABLE],
     ids=[row[3] for row in FullStorageStopTransitions.TABLE],
 )
-def test_the_full_storage_stop_sets_above_the_aim_and_releases_three_kelvin_below_it(
+def test_the_full_storage_stop_sets_above_the_maximum_and_releases_three_kelvin_below_it(
     stop_held_in_previous_step: bool, storage_temperature_at_start_in_celsius: float, expected: bool
 ) -> None:
-    """Every transition of the full-storage stop, with the edges at the aim and at the restart temperature.
+    """Every transition of the full-storage stop, with the edges at the maximum and at the restart temperature.
 
-    A stop without its band would release as soon as the storage cools below the aim and switch the pump every second
-    step; a stop that set at the aim itself would never let the part-load rule bring the storage to its aim.
+    A stop without its band would release as soon as the storage cools below the maximum and switch the pump every
+    second step; a stop that set at the maximum itself would stop a storage the sun has just brought to its maximum;
+    a stop that set at the backups' 60 °C aim would leave the sun's heat above 60 °C on the roof.
     """
     assert (
         solar_thermal_system.SolarThermalSystemController.full_storage_stop_holds(
@@ -1084,7 +1174,7 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
         controller.i_save_state()
     for difference in (steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, 0.0, steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN):
         steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(difference))
-    full_storage = steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, start_c=61.0)
+    full_storage = steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, start_c=81.0)
     steps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
     final = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
     expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
@@ -1121,21 +1211,21 @@ def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
 def test_an_unforced_pass_that_signals_the_pump_on_at_ratio_zero_saves_it_as_standing() -> None:
     """The saved pump state is what the collector will report: a pump signalled on at ratio 0 did not run.
 
-    Above the part-load threshold a step that ends the storage at the aim gets ratio 0 with the signal on; the
+    Above the part-load threshold a step that ends the storage at the maximum gets ratio 0 with the signal on; the
     collector idles and reports a ratio run of 0. A controller that saved the signal instead would choose the
     switch-off difference in the next step as if the pump had run, unlike a forced pass on the same step.
     """
     steps = SolarControllerSteps
     controller, stsv, fakes = SolarControllerRig.build(900)
     controller.i_save_state()
-    at_the_aim = SolarControllerRig.values(
-        start_c=58.0,
-        end_c=60.03,
+    at_the_maximum = SolarControllerRig.values(
+        start_c=78.0,
+        end_c=80.03,
         ratio_run=0.0,
         collector_above_storage_in_kelvin=steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN,
     )
     controller.i_restore_state()
-    outputs = AllInputsRig.step(controller, stsv, fakes, at_the_aim, timestep=steps.TIMESTEP)
+    outputs = AllInputsRig.step(controller, stsv, fakes, at_the_maximum, timestep=steps.TIMESTEP)
     assert outputs[controller.ControlSignalToSolarThermalSystem] == 1
     assert outputs[controller.PartLoadRatio] == 0.0
     controller.i_save_state()
@@ -1145,10 +1235,10 @@ def test_an_unforced_pass_that_signals_the_pump_on_at_ratio_zero_saves_it_as_sta
 
 
 @pytest.mark.base
-def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts_three_kelvin_below_the_aim() -> None:
-    """The full-storage stop holds across steps until the storage starts a step 3 K below the aim, then it releases.
+def test_a_pump_the_full_storage_stopped_runs_again_only_three_kelvin_below_the_maximum() -> None:
+    """The full-storage stop holds across steps until the storage starts a step 3 K below the maximum, at 77 °C.
 
-    A controller without the band would restart the pump as soon as the storage cools below 60 °C and switch it every
+    A controller without the band would restart the pump as soon as the storage cools below 80 °C and switch it every
     second step; one that kept the stop in a pass instead of the saved state would hold or release it within a step.
     """
     steps = SolarControllerSteps
@@ -1160,17 +1250,36 @@ def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts
         return steps.signal(controller, stsv, fakes, sunny)
 
     controller.i_save_state()  # the first step starts with the pump standing and the stop released
-    assert signal(59.5) == 1  # a storage below the aim with no stop: the pump switches on
+    assert signal(60.5) == 1  # above the backups' 60 °C aim, below the maximum, no stop: the pump switches on
     controller.i_save_state()
-    assert signal(60.025) == 0  # the storage started just above the aim: the stop sets
+    assert signal(79.5) == 1  # just below the maximum: the pump keeps running
     controller.i_save_state()
-    assert signal(59.5) == 0  # the storage cooled below the aim, but not 3 K below it: the stop holds
+    assert signal(80.025) == 0  # the storage started just above the maximum: the stop sets
     controller.i_save_state()
-    assert signal(57.5) == 0
+    assert signal(79.5) == 0  # the storage cooled below the maximum, but not 3 K below it: the stop holds
     controller.i_save_state()
-    assert signal(57.0) == 1  # exactly 3 K below the aim: the stop releases and the sunny collector starts the pump
+    assert signal(77.5) == 0
     controller.i_save_state()
-    assert signal(58.5) == 1  # inside the band, the released stop stays released
+    assert signal(77.0) == 1  # exactly 3 K below the maximum: the stop releases and the sunny collector starts the pump
+    controller.i_save_state()
+    assert signal(78.5) == 1  # inside the band, the released stop stays released
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("start_c", "expected_signal"), [(61.0, 1), (81.0, 0)])
+def test_a_storage_above_the_backups_aim_keeps_the_sunny_pump_on_until_the_maximum(
+    start_c: float, expected_signal: int
+) -> None:
+    """A storage at 61 °C, above the backups' 60 °C aim, keeps a sunny pump on; one above the 80 °C maximum stops it.
+
+    A controller that stopped at the backups' aim would leave the heat on the roof; one without a maximum would heat
+    the storage without bound.
+    """
+    steps = SolarControllerSteps
+    controller, stsv, fakes = SolarControllerRig.build(900)
+    controller.i_save_state()
+    values = steps.values(steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN, start_c=start_c)
+    assert steps.signal(controller, stsv, fakes, values) == expected_signal
 
 
 @pytest.mark.base

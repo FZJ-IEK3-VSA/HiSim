@@ -200,7 +200,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 | `GenericBoiler`, hot water, every fuel | `GenericBoilerController` | its warm-water aim, 60 °C (the charge ends at `T0 ≥ 60 °C`) | `PLR m_full` at the full-load supply; heat `m c (T_sup − T_ret)`; fuel `PLR · fuel_full` |
 | `MoreAdvancedHeatPumpHPLib`, hot water (parked, #916) | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less the 0.5 K switch-off tolerance | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
 | `ElectricHeating`, hot water (parked, #916) | `ElectricHeatingController` | the 60 °C warm-water aim, where the diverter valve ends a charge alone and beside space heating (its parallel mode latches like the hot-water mode) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
-| `SolarThermalSystem`, pump (#917) | `SolarThermalSystemController` | its warm-water aim, 60 °C (the pump stops at `T0 > 60 °C`) | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
+| `SolarThermalSystem`, pump (#917) | `SolarThermalSystemController` | its maximum storage temperature, 80 °C since 2026-10-11 (the pump stops at `T0 > 80 °C` and restarts at `T0 ≤ 77 °C`); 60 °C, the backups' warm-water aim, before | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
 
 Each device publishes its ratio run (`PartLoadRatioRunDhw`, the solar pump `PartLoadRatioRun`), and its controller
 reads it. A device whose target is where its controller ends the charge, rather than its supply set temperature
@@ -220,14 +220,18 @@ The space-heating buffer (`SimpleHotWaterStorage`) follows once it is a node (st
 The gas + solar and heat pump + solar twins charge one cylinder with a collector and a backup. Both controllers apply
 the rule to the same end temperature, each with its own ratio run and target, and nothing ranks them (decision 9):
 
-- with equal targets (gas boiler and collector, both 60 °C) the rule scales both ratios by the same factor, so the
-  store's rise follows the same line as with one device and lands as fast; the split is the one the two ratios had
-  when they started, not a unique one;
-- with different targets (heat pump: 59.5 °C, 69.5 °C under the energy manager's raise; collector: 60 °C) the device
-  with the lower target sees the store above its band once the other reaches its own aim, and its ratio decays
-  geometrically towards 0, by the factor `(T_aim,low − T_start) / (T_end − T_start)` per pass, without swinging back;
-  it reaches 0 only in the limit, so such a step may run into the simulator's forced passes
-  (`test_a_device_whose_target_another_device_overshoots_decays_towards_zero_without_oscillating`).
+- with equal targets (gas boiler and collector, both 60 °C until 2026-10-11) the rule scales both ratios by the same
+  factor, so the store's rise follows the same line as with one device and lands as fast; the split is the one the
+  two ratios had when they started, not a unique one;
+- with different targets (heat pump: 59.5 °C, 69.5 °C under the energy manager's raise; boiler: 60 °C; collector:
+  80 °C since 2026-10-11, owner decision, hisim-fxix.22) the device with the lower target sees the store above its
+  band once the other reaches its own aim, and its ratio decays geometrically towards 0, by the factor
+  `(T_aim,low − T_start) / (T_end − T_start)` per pass, without swinging back; it reaches 0 only in the limit, so such
+  a step may run into the simulator's forced passes
+  (`test_a_device_whose_target_another_device_overshoots_decays_towards_zero_without_oscillating`). Since the
+  collector's target lies above every backup's, the backup is the device whose ratio decays when the sun lifts the
+  store past the backup's aim within a step; a store that starts a step above the backup's aim keeps the backup off
+  (its ratio is 0) while the collector charges on to 80 °C.
 
 What the split is and how many passes it takes is measured in §11.
 
@@ -429,6 +433,53 @@ the table above to the digit; the heat pump + solar one does not (537.5 against 
 60 s). Both columns here come from one script on the same day, so the comparison holds; the cause of the difference
 to the earlier table was not traced.
 
+**The 80 °C solar maximum on #917 and the flow-hysteresis #941 (#942), measured 2026-10-14**, full year 2021 with the
+predefined occupancy, against the 60 s run of the same head. The 60 s years are those of #942 without #917 (gas + solar:
+971.1 kWh of collector heat, 2173.0 kWh of the boiler's hot-water heat, the full-year golden values committed then; heat
+pump + solar: 1099.8 kWh and 587.2 kWh of hot-water electricity). Each cell gives #942 with the collector's part load,
+then #942 without it (the pump runs whole steps, as #942 was measured on #915 on 2026-10-13), 900 s / 3600 s:
+
+| twin: quantity | with #917 | without #917 |
+|---|---|---|
+| gas + solar: collector heat | -0.31 % / -3.09 % | +0.21 % / -0.53 % |
+| gas + solar: backup's hot-water heat | +0.09 % / +1.29 % | -0.12 % / +0.22 % |
+| gas + solar: flagged steps (with a forced pass) | 72 (53) / 45 (40) | 65 (46) / 43 (37) |
+| gas + solar: partial collector steps converged | 45 of 55 / 49 of 56 | – |
+| gas + solar: the tank's highest temperature (60 s: 80.11 °C) | 80.05 / 80.05 °C | 81.37 / 86.45 °C |
+| heat pump + solar: collector heat | -0.11 % / -2.58 % | +0.27 % / -1.25 % |
+| heat pump + solar: hot-water electricity | +2.47 % / +16.16 % | +2.29 % / +15.64 % |
+| heat pump + solar: flagged steps (with a forced pass) | 987 (973) / 317 (309) | 994 (979) / 311 (305) |
+| heat pump + solar: the tank's highest temperature (60 s: 80.10 °C) | 80.05 / 80.05 °C | 81.52 / 85.59 °C |
+| gas + solar with a 20 m² collector, 3600 s | runs; tank at most 80.46 °C | stops: "way too high", 94.3 °C |
+| gas + solar with a 20 m² collector, 900 s | runs; tank at most 80.05 °C | runs; tank at most 87.46 °C |
+
+With the collector's part load the tank ends a charging step at the solar maximum, 80.025 °C, instead of wherever a
+whole-step pump run leaves it; the highest tank temperature of a year drops from 86.5 °C to 80.1 °C at 3600 s, and a
+20 m² collector, the top of the solar assembly's declared range, runs the year at 3600 s instead of stopping at the
+tank's 90 °C check. At 900 s the collector heat stays within 0.4 % of 60 s in both twins; at 3600 s it is 2.6 to
+3.1 % below, further than without the part load (-0.53 % / -1.25 %), whose whole-step runs carry the tank past
+80 °C. Unmet hot water is 0.0 kWh (gas + solar) and 15.9 / 16.0 / 19.4 kWh at 60 / 900 / 3600 s (heat pump + solar).
+
+**The 80 °C solar maximum on the differential controller of #941 (#942), measured 2026-10-14**, full year 2021 with
+the predefined occupancy, #941 → #942. The controller underneath now switches on the collector's sensor (§5.3 of the
+hydronic coupling spec); "flagged" are the steps at `force_convergence`, in brackets those with a pump signal that
+changes between passes; the backup is the tank's heat from the boiler or the heat pump:
+
+| twin, step | collector heat, kWh | backup, kWh | standby loss, kWh | unmet, kWh | flagged | pump switch-ons | max tank, °C |
+|---|---|---|---|---|---|---|---|
+| gas + solar, 60 s | 400.6 → 1062.1 | 2719.9 → 2083.9 | 268.0 → 293.6 | 0.00 → 0.00 | 0 → 0 | 348 → 363 | 60.47 → 80.10 |
+| gas + solar, 900 s | 393.7 → 1053.6 | 2726.1 → 2091.7 | 267.4 → 292.9 | 0.00 → 0.00 | 92 (2) → 69 (1) | 321 → 342 | 61.00 → 80.04 |
+| gas + solar, 3600 s | 354.5 → 1046.0 | 2763.8 → 2097.8 | 265.6 → 291.0 | 0.00 → 0.00 | 58 (17) → 59 (9) | 282 → 302 | 68.83 → 80.05 |
+| heat pump + solar, 60 s | 607.2 → 1237.9 | 2652.6 → 2055.0 | 235.8 → 264.7 | 20.10 → 15.82 | 371 (0) → 322 (0) | 458 → 344 | 60.12 → 80.09 |
+| heat pump + solar, 900 s | 571.7 → 1229.7 | 2689.4 → 2064.4 | 236.5 → 265.9 | 18.95 → 15.36 | 1295 (22) → 1032 (22) | 433 → 332 | 60.05 → 80.04 |
+| heat pump + solar, 3600 s | 533.7 → 1211.9 | 2707.8 → 2071.1 | 236.1 → 265.1 | 33.39 → 20.98 | 479 (85) → 309 (30) | 375 → 300 | 62.89 → 80.56 |
+| gas + solar 20 m², 900 s | 666.9 → 1753.0 | 2455.2 → 1420.3 | 269.6 → 320.9 | 0.00 → 0.00 | 87 (14) → 148 (2) | 355 → 414 | 60.40 → 80.05 |
+| gas + solar 20 m², 3600 s | 548.5 → 1696.1 | 2571.8 → 1473.6 | 267.6 → 317.0 | 0.00 → 0.00 | 172 (117) → 140 (38) | 296 → 362 | 71.20 → 83.63 |
+
+The collector heat at 900 s / 3600 s against 60 s: gas + solar −1.72 % / −11.51 % on #941 and −0.80 % / −1.52 % on
+#942; heat pump + solar −5.85 % / −12.10 % on #941 and −0.66 % / −2.10 % on #942. The 20 m² collector runs the year at
+both step lengths; its tank reaches 83.63 °C at 3600 s, below the tank's 90 °C check.
+
 
 ## 12. Beads
 
@@ -442,6 +493,7 @@ Epic hisim-fxix.
 | hisim-fxix.11 (P1) | the collector | #917 |
 | hisim-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
 | hisim-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
+| hisim-fxix.22 (P3, closed) | the solar controller's own 80 °C maximum storage temperature instead of the backups' 60 °C aim | #942 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P3) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |

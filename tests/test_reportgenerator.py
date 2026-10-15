@@ -10,6 +10,7 @@ drops its bitmap after it is drawn, and that a report with figures still builds.
 """
 
 from pathlib import Path
+from typing import Any, List
 
 import pytest
 from PIL import Image as PilImage
@@ -111,7 +112,7 @@ def test_a_wide_table_is_wrapped_within_the_page_width(tmp_path: Path) -> None:
     column (the component names) was cut off at the left edge.
     """
     report = ReportGenerator(dirpath=str(tmp_path))
-    rows = [
+    rows: List[List[Any]] = [
         ["Component", "Total energy consumption [kWh]", "CO2-emissions of energy consumption [kg]", "Costs [EUR]"],
         ["UTSPConnector", 4658.48, 1909.98, None],
     ]

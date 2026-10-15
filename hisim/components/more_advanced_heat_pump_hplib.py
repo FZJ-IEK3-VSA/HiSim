@@ -2571,7 +2571,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
 
     component_id: ComponentID
     #: Which control law runs: 1 is the plain on/off switch, 2 adds a cooling state and is
-    #: only admissible for floor heating, which is what the component checks before using it.
+    #: only admissible for floor heating. The controller refuses any other value, and mode 2
+    #: with another emitter, when it is built.
     mode: int = 1
     #: Daily average outside temperature below which the machine does not cool in ``mode``
     #: 2. ``None`` means cooling is available at any outside temperature.
@@ -2809,11 +2810,33 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
-        """Build function.
+        """Set the control law and the hysteresis band, and start the controller switched off.
 
-        The function sets important constants and parameters for the calculations.
+        The control law is refused here, when the controller is built, rather than in its first simulated step:
+        mode 1 (on/off) is accepted for every emitter, mode 2 (heating, cooling, off) only for floor heating,
+        because only a floor can be cooled through. For example, mode 2 with radiators, or a mode of 3, fails the
+        construction with the field that is wrong instead of failing the run at its first step.
+
+        Args:
+            mode: The control law, 1 or 2.
+            upper_temperature_offset_for_state_conditions_in_celsius: How far the water may rise above the requested
+                flow temperature before the machine switches off, in K.
+            lower_temperature_offset_for_state_conditions_in_celsius: How far it may fall below it before the machine
+                switches on, in K.
+
+        Raises:
+            ValueError: If ``mode`` is neither 1 nor 2, or is 2 while the emitter is not floor heating.
         """
-        # Sth
+        if mode not in (1, 2):
+            raise ValueError(
+                f"{self.component_name}: the space-heating controller's mode must be 1 (on/off) or 2 (heating, "
+                f"cooling, off), got {mode!r}."
+            )
+        if mode == 2 and self.heat_distribution_system_type != HeatDistributionSystemType.FLOORHEATING:
+            raise ValueError(
+                f"{self.component_name}: the space-heating controller's mode 2 cools through the emitter, which only "
+                f"floor heating can do, but the emitter is {self.heat_distribution_system_type!r}."
+            )
         self.controller_heatpumpmode = "off"
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
@@ -2882,8 +2905,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                     lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
                 )
 
-            # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
-            elif self.mode == 2 and self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
+            # mode 2 is the regulated controller (heating, cooling, off); build() admits it only for floor heating
+            elif self.mode == 2:
                 # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
                 summer_cooling_mode = self.summer_cooling_condition(
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
@@ -2900,10 +2923,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 )
 
             else:
-                raise ValueError(
-                    "Either the Advanced HP Lib Controller Mode is neither 1 nor 2,"
-                    "or the heating system is not floor heating which is the condition for cooling (mode 2)."
-                )
+                raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
 
             if self.controller_heatpumpmode == "heating":
                 state = 1

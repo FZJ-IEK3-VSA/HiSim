@@ -65,13 +65,8 @@ Thresholds live in `RegressionRules` in `scripts/ci_usage_report.py`:
 The last of those is the one that caught the full-year golden gate. `golden-year.yml` used to
 wait for `quality`, `tests` and `golden-check` in an ordinary job that polled the runs API, so
 the wait held a runner: 28 idle minutes in a good run, an hour when it timed out, once per pull
-request. With eight pull requests re-running at once, eight idle gates sat on the runners the
-golden matrices were queued behind and the full-year tier stopped running at all. It now waits
-by not running: `workflow_run` fires it when a prerequisite completes, the gate classifies the
-three prerequisites with one API query each (`scripts/ci_prereqs_done.sh`) and exits in seconds
-unless it is the last completion with everything green. Because `workflow_run` runs are absent
-from a pull request's checks list, the result comes back as a `golden-year` commit status on the
-head commit instead. A wait that costs a runner is a bug, not a cost.
+request. Since CI moved to the self-hosted runners it waits for nothing: it starts on the same
+push or pull request as every other workflow. A wait that costs a runner is a bug, not a cost.
 
 The golden gates run as shards (`scripts/golden_matrix.py --shards 4`): four week jobs, each
 running four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has
@@ -80,8 +75,7 @@ full-year jobs (`--shards 5`) running two simulations at once, the composed file
 (`--mode python composed`). A shard is
 expected to use all four cores, so "holding a runner idle" on one of them means a pair ran far
 past its weight (`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit
-means a pair outgrew its horizon's `PAIRS_AT_ONCE`. Since the YAML twins are part of
-`golden-check`, a diverging twin also keeps `golden-year` from starting — deliberately.
+means a pair outgrew its horizon's `PAIRS_AT_ONCE`.
 
 Both a proportional and an absolute threshold have to be crossed, and only successful runs
 form a baseline. Shared runners vary by tens of percent for reasons nobody controls, a

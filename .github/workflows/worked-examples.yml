@@ -31,7 +31,8 @@ concurrency:
 jobs:
   drift-check:
     name: yaml matches the workbooks
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.

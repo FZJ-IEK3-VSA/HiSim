@@ -37,7 +37,8 @@ permissions:
 jobs:
   discover:
     name: discover all shards
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -60,7 +61,8 @@ jobs:
   update:
     name: regenerate ${{ matrix.name }} (${{ matrix.count }} pairs)
     needs: discover
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -120,7 +122,8 @@ jobs:
   collect:
     name: assemble goldens and open PR
     needs: update
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:

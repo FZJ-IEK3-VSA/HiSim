@@ -34,7 +34,7 @@ components:
       - UTSPConnector
       - HeatDistributionSystem
     ports:
-      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifierInKelvin
     optional-bind: {temperature_modifier: control}
   UTSPConnector:
     order: 2

@@ -127,7 +127,7 @@ class SyntheticDayProfiles:
     THERMAL_POWER_CHP_IN_WATT: float = 600.0
     THERMAL_POWER_CHP_FIRST_TIMESTEP: int = 48
     #: The set-heating-temperature modifier (the EMS surplus signal) is raised for a window.
-    BUILDING_TEMPERATURE_MODIFIER_IN_CELSIUS: float = 2.0
+    BUILDING_TEMPERATURE_MODIFIER_IN_KELVIN: float = 2.0
     BUILDING_TEMPERATURE_MODIFIER_FIRST_TIMESTEP: int = 40
     BUILDING_TEMPERATURE_MODIFIER_LAST_TIMESTEP: int = 55
 
@@ -192,14 +192,14 @@ class SyntheticDayProfiles:
         return cls.THERMAL_POWER_CHP_IN_WATT if timestep >= cls.THERMAL_POWER_CHP_FIRST_TIMESTEP else 0.0
 
     @classmethod
-    def building_temperature_modifier_in_celsius(cls, timestep: int) -> float:
+    def building_temperature_modifier_in_kelvin(cls, timestep: int) -> float:
         """Return the set-heating-temperature modifier, raised for one afternoon window."""
         if (
             cls.BUILDING_TEMPERATURE_MODIFIER_FIRST_TIMESTEP
             <= timestep
             <= cls.BUILDING_TEMPERATURE_MODIFIER_LAST_TIMESTEP
         ):
-            return cls.BUILDING_TEMPERATURE_MODIFIER_IN_CELSIUS
+            return cls.BUILDING_TEMPERATURE_MODIFIER_IN_KELVIN
         return 0.0
 
     @classmethod
@@ -238,7 +238,7 @@ class SyntheticDayProfiles:
             "thermal_power_delivered_channel": [cls.thermal_power_delivered_in_watt(step) for step in timesteps],
             "thermal_power_chp_channel": [cls.thermal_power_chp_in_watt(step) for step in timesteps],
             "building_temperature_modifier_channel": [
-                cls.building_temperature_modifier_in_celsius(step) for step in timesteps
+                cls.building_temperature_modifier_in_kelvin(step) for step in timesteps
             ],
         }
 

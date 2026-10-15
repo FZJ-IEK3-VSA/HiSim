@@ -1366,7 +1366,7 @@
                   "limit_to_shave": {
                     "type": "number"
                   },
-                  "building_indoor_temperature_offset_value": {
+                  "building_indoor_temperature_offset_in_kelvin": {
                     "type": "number"
                   },
                   "domestic_hot_water_storage_temperature_offset_value": {

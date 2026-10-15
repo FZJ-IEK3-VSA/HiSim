@@ -874,7 +874,8 @@ class AirConditionerControllerConfig(ConfigBase):
     #: starts cooling.
     cooling_set_temperature_deg_c: float = 24.0
     #: Shortest time the unit stays in heating or cooling once it has started, in seconds.
-    #: Rounded down to whole time steps, so a value below one time step imposes nothing.
+    #: Rounded down to whole time steps, so a value below one time step imposes nothing. 0
+    #: means no minimum; a negative or non-finite time is refused.
     minimum_runtime_s: float = 1800.0
     #: Shortest time the unit stays off once it has stopped, in seconds, rounded down the
     #: same way. Together with the runtime it is what stops the unit chattering on and off
@@ -1071,7 +1072,9 @@ class AirConditionerController(cp.L1ControllerComponent):
                 class docstring). If the ramp time is not a finite number of seconds above 0; the
                 power changes by the step length over it, so 0 divides by zero and a negative time
                 lowers the power of a unit whose room is too cold. If the heating set point is not
-                below the cooling set point; an idle unit would then heat a room that is warm enough.
+                below the cooling set point; an idle unit would then heat a room that is warm enough. If
+                the minimum runtime or idle time is negative or not finite; a negative time would silently
+                mean no minimum.
         """
         if config.hysteresis_in_kelvin <= 0.0:
             raise ValueError(
@@ -1094,6 +1097,15 @@ class AirConditionerController(cp.L1ControllerComponent):
                 f"{config.cooling_set_temperature_deg_c} °C: the comfort band lies between the two, and with the "
                 "heating set point on top an idle unit heats a room that is already above the cooling set point."
             )
+        for field_name, seconds in (
+            ("minimum_runtime_s", config.minimum_runtime_s),
+            ("minimum_idle_time_s", config.minimum_idle_time_s),
+        ):
+            if not math.isfinite(seconds) or seconds < 0.0:
+                raise ValueError(
+                    f"The air conditioner's controller needs {field_name} to be a finite time of at least 0 s, got "
+                    f"{seconds!r} s: 0 means no minimum, and a negative time would silently mean no minimum as well."
+                )
 
         self.config = config
         self.my_simulation_parameters = my_simulation_parameters

@@ -156,7 +156,10 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: Whether the machine is allowed to cycle, which is what makes the minimum running and
     #: idle times below take effect.
     cycling_mode: bool = True
+    #: Shortest run once the machine switched on, in s, while :attr:`cycling_mode` is on. 0 means no
+    #: minimum; a negative or non-finite time is refused when the heat pump is built.
     minimum_running_time_in_seconds: Optional[int] = 3600
+    #: Shortest pause once the machine switched off, in s, refused and read as the running time is.
     minimum_idle_time_in_seconds: Optional[int] = 3600
     #: Lowest thermal power the machine modulates down to before it has to cycle.
     minimum_thermal_output_power_in_watt: float = 1800.0
@@ -376,12 +379,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
-        # self.m_dot_ref = float(
-        #     config.massflow_nominal_secondary_side_in_kg_per_s.value
-        #     if config.massflow_nominal_secondary_side_in_kg_per_s
-        #     else config.massflow_nominal_secondary_side_in_kg_per_s
-        # )
-
         self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
 
         # A negative nominal flow would only fail at the first fixed-flow step (NegativeMassFlowError), so it is
@@ -407,17 +404,19 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         self.specific_heat_capacity_of_primary_fluid = config.specific_heat_capacity_of_primary_fluid
 
-        self.minimum_running_time_in_seconds = (
-            config.minimum_running_time_in_seconds
-            if config.minimum_running_time_in_seconds
-            else config.minimum_running_time_in_seconds
-        )
-
-        self.minimum_idle_time_in_seconds = (
-            config.minimum_idle_time_in_seconds
-            if config.minimum_idle_time_in_seconds
-            else config.minimum_idle_time_in_seconds
-        )
+        # A negative or non-finite minimum time would silently mean no minimum (or never switching), so it is
+        # refused here, where the field that is wrong can still be named.
+        for field_name, seconds in (
+            ("minimum_running_time_in_seconds", config.minimum_running_time_in_seconds),
+            ("minimum_idle_time_in_seconds", config.minimum_idle_time_in_seconds),
+        ):
+            if seconds is not None and not (math.isfinite(seconds) and seconds >= 0):
+                raise ValueError(
+                    f"The heat pump's {field_name} must be a finite time of at least 0 s, got {seconds!r} s: 0 means "
+                    "no minimum, and a negative time would silently mean no minimum as well."
+                )
+        self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
+        self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
         self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt
 

@@ -446,6 +446,21 @@ def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_running_time_in_seconds", "minimum_idle_time_in_seconds"])
+@pytest.mark.parametrize("seconds", [-900, float("nan"), float("inf")])
+def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_pump_is_built(
+    field_name: str, seconds: float
+) -> None:
+    """Catches a negative minimum time that would mean no minimum in cycling mode without a word."""
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    setattr(config, field_name, seconds)
+    with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
 def test_active_cooling_books_the_heat_its_flow_draws_and_that_heat_over_the_eer() -> None:
     """Cooling at 30 °C outside from a 22.04 °C return: a negative flow heat, electricity at hplib's EER."""
     outputs = SingleStep.step(

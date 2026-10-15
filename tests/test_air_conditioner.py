@@ -261,6 +261,15 @@ def test_a_hysteresis_of_zero_is_refused() -> None:
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_runtime_s", "minimum_idle_time_s"])
+@pytest.mark.parametrize("seconds", [-900.0, float("nan"), float("inf")])
+def test_a_minimum_time_that_is_negative_or_not_finite_is_refused(field_name: str, seconds: float) -> None:
+    """Catches a negative minimum time that would round to no minimum without a word."""
+    with pytest.raises(ValueError, match=rf"{field_name} to be a finite time of at least 0 s, got"):
+        given_default_testee({field_name: seconds})
+
+
+@pytest.mark.base
 @pytest.mark.parametrize("ramp_time_s", [0.0, -1800.0, float("nan"), float("inf")])
 def test_a_ramp_time_that_is_not_a_finite_positive_time_is_refused(ramp_time_s: float) -> None:
     """A ramp time of 0 divides by zero and a negative one inverts the ramp, so the controller refuses to be built.

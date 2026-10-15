@@ -36,7 +36,7 @@ timezonefinder<10.0
 cdsapi
 xarray
 pygfunction
-pyloadprofilegenerator
+pyloadprofilegenerator==0.1.1
 portalocker
 pydantic
 # Assembly test harness (hisim/energy_system/assemblies/testing): the seeded Latin hypercube sample of an

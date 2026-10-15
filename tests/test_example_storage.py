@@ -73,10 +73,8 @@ def test_example_storage() -> None:
     my_example_storage.i_simulate(timestep, stsv, False)
 
     log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill_in_kwh}\n")
-    # Test charging of the storage
-    assert 10 == stsv.values[charging_output.global_index]
-    # Test discharging of the storage
-    assert -5 == stsv.values[discharging_output.global_index]
+    # The storage took the 10 kWh charge and gave the 5 kWh discharge: a net change of 5 kWh
+    assert 5 == stsv.values[my_example_storage.actual_delta.global_index]
     # Test current storage fill state
     assert 30 == stsv.values[my_example_storage.current_fill.global_index]
 

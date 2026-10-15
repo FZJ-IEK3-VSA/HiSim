@@ -1,4 +1,4 @@
-"""The resolved-input audit as data: which price each declared fact resolved to, from where (cost_spec.md §2.4, §9.5).
+"""The resolved-input audit as data: which price each declared fact resolved to, from where.
 
 Both `cost_audit.csv` (written by `audit.py`) and the input section of the HTML report render these types, so they
 agree on override precedence. A wrong unit price makes everything downstream wrong yet arithmetically correct, so this

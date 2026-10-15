@@ -283,7 +283,7 @@ Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` 
 
 Full year 2021, the shipped predefined occupancy profile, measured on 2026-10-12 with the simulator's kind order
 (#922) below, at 60 s, 900 s and 3600 s; every figure is against the 60 s run of the same head. "Flagged" counts the
-steps the simulator returns with `force_convergence` set; it sets it after the eleventh pass, so a step that converges
+steps the simulator returns with `force_convergence` set; it sets it after the twelfth pass, so a step that converges
 on its twelfth pass is flagged without having run a forced pass. "Forced" counts the steps with at least one forced
 pass (13 passes or more). A partial step is one whose controller's ratio lies strictly between 0 and 1; it converged
 when it is not flagged.

@@ -97,8 +97,9 @@ jobs:
           # extendedbase2: about 500 s of tests, as two jobs, each still serial: test_hisim_main_python.py
           # peaks at 11.3 GB, and a second process beside it would risk the 16 GB limit. The shard also holds
           # the heat-pump booking runs of test_heat_pump_flow_booking.py, the hot-water chain runs of
-          # test_dhw_chain_twins.py and the two heat-pump twins of test_dhw_chain_time_resolution.py (~130
-          # and ~150 s, an xdist_group each, so the split can put them in different jobs).
+          # test_dhw_chain_twins.py, the two heat-pump twins of test_dhw_chain_time_resolution.py (~130
+          # and ~150 s, an xdist_group each, so the split can put them in different jobs) and the household
+          # runs of test_energy_balance_generators.py.
           - name: extendedbase2-1
             marker: "extendedbase2"
             group: "1/2"

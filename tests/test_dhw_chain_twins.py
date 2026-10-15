@@ -21,10 +21,10 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   bound like any other, and a file over the bound fails with those steps named: they point at a regression of the
   rule rather than of the boiler's own iteration. The simulator's
   kind order already evaluates every controller before its device and the device before the tank. The heat-pump
-  files are recorded, not asserted: their forced steps come from the energy manager, which switches its
-  set-temperature raise on the sign of a surplus that includes the heat pump's own draw, so a float's flip turns it
-  on and off within a step, and from controllers that decide once for a whole step, which a converged iteration
-  cannot always reconcile with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
+  files are recorded, not asserted: their forced steps come from the energy manager's set-temperature raise, which
+  cycles within a step where the heat pump's extra draw under the raise removes the surplus that raised it
+  (hisim-4g9.53), and from controllers that decide once for a whole step, which a converged iteration cannot always
+  reconcile with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is

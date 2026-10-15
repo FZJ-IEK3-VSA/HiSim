@@ -1987,19 +1987,21 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         hplib is called, and its results are cached, at grid points 0.1 K apart. The source and ambient temperatures
         come from the weather and stay constant while a step iterates, so they are rounded to the grid. The return
-        temperature is the storage's step mean, which moves from iteration to iteration: it is not rounded, and the
-        results of the two neighbouring grid points are interpolated linearly in it, so the heat pump's answer is
-        continuous in the return and the storage's step mean has a fixed point. Every number of the result is
-        interpolated (:meth:`HplibResult.interpolated`). For example, a return of 47.04 °C takes 60 % of hplib's
-        results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
+        temperature is the storage's step mean, which moves from iteration to iteration: it is not rounded. Away from
+        hplib's switch to its heating rod alone, the results of the two neighbouring grid points are interpolated
+        linearly in it, field by field (:meth:`HplibResult.interpolated`), so the heat pump's answer changes without
+        steps between grid points and the storage's step mean has a fixed point. For example, a return of 47.04 °C
+        takes 60 % of hplib's results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
 
-        Between two grid points on either side of hplib's switch to its heating rod alone
-        (:meth:`HplibResult.straddle_the_heating_rod_switch`), hplib is evaluated at the return itself instead. The
-        interpolation would turn the jump of the thermal power there (about 2.5 kW) into a ramp of about 25 kW/K,
-        and the hot-water tank's step mean answers a watt more with some 3.5e-5 K at 60 s: together a loop that
-        contracts by only about 0.9 per pass and needs more than the simulator's 100 passes. With hplib's own
-        jump, a higher return gives more heat and the tank a higher return, so the iteration settles on one side of
-        the switch within a few passes.
+        Between two grid points on either side of that switch (:meth:`HplibResult.straddle_the_heating_rod_switch`),
+        hplib is evaluated at the return itself instead. The thermal power jumps at the switch: for the 8 kW air-water
+        heat pump at 0 °C outside that the rod-switch tests build, it jumps between a return of 64.0 and 64.1 °C from
+        the compressor's 4.8 kW to the rod's 8.1 kW, by 3.3 kW. The interpolation would turn that jump into a ramp of
+        about 33 kW/K, and the hot-water tank's step mean answers a watt more with some 3.5e-5 K at 60 s: together a
+        loop that contracts by only about 0.9 per pass and needs more than the simulator's 100 passes. With hplib's
+        own jump the iteration settles on one side of the switch within a few passes. Across the switch a higher
+        return gives more heat (the rod's); on the compressor side a higher return gives less (6.1 kW at 60 °C, 4.8 kW
+        at 64 °C).
 
         Args:
             source_temperature_in_celsius: The source temperature, in °C, rounded to the grid.

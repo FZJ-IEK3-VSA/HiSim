@@ -239,13 +239,18 @@ def test_compare_within_tolerance_no_errors() -> None:
 
 
 def test_compare_outside_tolerance_reports_change() -> None:
-    """A difference beyond tolerance is reported with its absolute and relative magnitude."""
+    """A difference beyond tolerance is reported with its absolute and relative magnitude.
+
+    The relative difference is taken against the larger magnitude, as ``math.isclose`` takes it:
+    1 against max(1, 2) is 0.5.
+    """
     found = compare("x", general({"a": 2.0}), general({"a": 1.0}))
     assert [deviation.kind for deviation in found] == [VALUE]
     msg = str(found[0])
     assert msg.startswith("x: KPI 'BUI1.General.a' changed: ref=1.0 got=2.0")
     assert "abs diff=1" in msg
-    assert "rel diff=1;" in msg
+    assert "rel diff=0.5;" in msg
+    assert "allowed diff=2e-09, set by the relative tolerance;" in msg
     assert "tolerance rel=1e-09" in msg
 
 
@@ -329,8 +334,14 @@ def test_compare_a_near_zero_kpi_moving_above_the_floor_is_a_change() -> None:
     """The floor is no blanket: a near-zero KPI that moves by more than 1e-12 is still reported."""
     found = compare("x", general({"a": 2e-9}), general({"a": 1e-9}))
     assert [deviation.kind for deviation in found] == [VALUE]
-    assert "rel diff=1;" in str(found[0])
+    assert "rel diff=0.5;" in str(found[0])
     assert "abs=1e-12" in str(found[0])
+
+
+def test_compare_names_the_absolute_floor_when_it_sets_the_allowed_difference() -> None:
+    """Below 1e-3 in its unit a KPI's allowed difference is the floor, and the report says so."""
+    found = compare("x", general({"a": 2e-6}), general({"a": 1e-6}))
+    assert "allowed diff=1e-12, set by the absolute tolerance;" in str(found[0])
 
 
 def test_compare_reports_the_relative_difference_unrounded() -> None:

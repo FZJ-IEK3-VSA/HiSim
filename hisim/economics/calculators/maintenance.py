@@ -1,4 +1,4 @@
-"""Maintenance and fixed operation cost of one subject over years 1..T (cost_spec.md §2.3, §3.6 rule 4).
+"""Maintenance and fixed operation cost of one subject over years 1..T.
 
 A subject is one costed thing on the timeline, such as a heat pump or the building envelope. Each year it pays a
 maintenance rate times its gross investment plus a flat fixed operation cost, both escalated with the general price

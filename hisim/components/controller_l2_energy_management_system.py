@@ -92,7 +92,7 @@ class EMSState:
     """The energy manager's state from one time step to the next: whether it raised the set temperatures.
 
     The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
-    storage while PV electricity is left over after the battery has charged. Close to zero surplus it keeps the
+    storage while generated electricity is left over after the battery has charged. Close to zero surplus it keeps the
     decision of the step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision
     is the one value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes
     the decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
@@ -120,7 +120,9 @@ class BatteryChargingLimitInputs:
 class SurplusAfterParticipants:
     """What is left of the electricity balance after every ranked participant has taken its share, in W.
 
-    Positive means electricity goes to the grid. The two values differ only in how they count a battery from a surplus.
+    Positive means electricity goes to the grid. The two values differ in how a battery is counted. The grid balance
+    books its realized power; the decision surplus counts it only as a sink: its charging share in a surplus, and
+    nothing in a deficit.
     """
 
     #: The balance with every participant's realized power, the battery's included; the manager publishes it.
@@ -747,7 +749,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restore the state the step started with, so every pass decides from the previous step's decision."""
+        """Restore the state the step started with. The decision of the previous step is read from the saved state."""
         self.state = dataclasses.replace(self.previous_state)
 
     def i_prepare_simulation(self) -> None:
@@ -866,13 +868,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
     @staticmethod
     def raises_set_temperatures(*, surplus_after_battery_in_watt: float, raised_in_previous_step: bool) -> bool:
-        """Return whether the energy manager raises the set temperatures, from the PV surplus and its previous decision.
+        """Return whether the energy manager raises the set temperatures, from the surplus and its previous decision.
 
         The surplus after the battery is the electricity left over once every participant has taken its share, a
         battery counted only as a sink: it takes from a surplus what its charging limits for the step allow,
-        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means PV electricity would go to the
-        grid. So only PV electricity keeps a raise: when keeping it needs the battery to discharge, the surplus is
-        negative and the raise ends.
+        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means generated electricity (PV in
+        the household twins) would go to the grid. So only generated electricity keeps a raise: when keeping it needs
+        the battery to discharge, the surplus is negative and the raise ends.
 
         The transitions, from the decision of the previous step:
 

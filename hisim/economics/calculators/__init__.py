@@ -1,4 +1,4 @@
-"""The calculators of the lifecycle cost engine, one module per financial mechanism (cost_spec.md §2.3).
+"""The calculators of the lifecycle cost engine, one module per financial mechanism.
 
 `evaluator.EconomicEvaluator` composes them: `annualization` (scaling a partial simulated year to a full one),
 `escalation` (`(1+r)**n` and the rate fallbacks), `categories` (cost category sets), `context_resolution` (new, kept or

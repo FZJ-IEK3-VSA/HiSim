@@ -1,4 +1,4 @@
-"""Automated plausibility checks on an evaluated result, as typed numbers (cost_spec.md §2.4).
+"""Automated plausibility checks on an evaluated result, as typed numbers.
 
 A check either FAILs (a structural invariant is broken, e.g. subject NPVs do not sum to the total) or WARNs (a
 magnitude left a generous range, which usually means a unit mix-up). Nothing here raises or suppresses output: the

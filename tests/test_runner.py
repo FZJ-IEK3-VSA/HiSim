@@ -10,7 +10,9 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +87,19 @@ def test_load_config_happy_path(tmp_path: Path) -> None:
     assert ps.factory == "one_week_only"
     assert ps.post_processing_options == ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]
     assert ps.nondeterministic is False
+
+
+def test_load_config_reads_the_recorded_seconds_and_refuses_a_malformed_entry(tmp_path: Path) -> None:
+    """The runner reads the weights the matrix reads, for the per-pair timeout, and refuses a typo alike."""
+    data = _minimal_config_dict()
+    data["setups"][0]["seconds"] = {"one_week_60s": 42}
+    setup = load_config(_write_config(tmp_path, data)).setups[0]
+    assert setup.recorded_seconds("one_week_60s") == 42.0
+    assert setup.recorded_seconds("unrecorded") == 120.0  # golden_matrix.DEFAULT_PAIR_SECONDS
+
+    data["setups"][0]["seconds"] = {"one_week_60s": "42"}
+    with pytest.raises(ValueError, match="positive numbers"):
+        load_config(_write_config(tmp_path, data))
 
 
 def test_load_config_missing_file_raises(tmp_path: Path) -> None:
@@ -444,6 +459,84 @@ def test_a_child_that_dies_is_a_run_error_of_its_pair(tmp_path: Path, monkeypatc
         assert result.error is not None
         assert "killed by signal 9" in result.error and "out-of-memory" in result.error
         assert "dying" in result.error
+
+
+def test_a_child_timeout_is_a_multiple_of_its_recorded_seconds_with_a_minimum() -> None:
+    """A full-year pair gets three times its recorded wall time; a short pair gets the minimum."""
+    week = ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])
+    year = ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"])
+    setup = SetupConfig("car", "a.py", seconds={"one_week_60s": 124, "full_year_60s": 690})
+
+    assert ChildRuns.timeout_in_seconds(setup, year) == 2070.0
+    assert ChildRuns.timeout_in_seconds(setup, week) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+
+
+def test_a_child_that_hangs_is_killed_and_fails_its_pair_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child past its timeout is killed and becomes a run error naming its pair, not a hung CI job."""
+    hang = "import time; print('hanging', flush=True); time.sleep(60)"
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", hang]))
+    monkeypatch.setattr(ChildRuns, "MINIMAL_TIMEOUT_IN_SECONDS", 2.0)
+    monkeypatch.setattr(ChildRuns, "TIMEOUT_TO_RECORDED_SECONDS_RATIO", 0.0)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)
+
+    assert [(r.setup_id, r.parameter_set_id) for r in results] == [("s1", "p1"), ("s2", "p1")]
+    for result in results:
+        assert result.error is not None
+        assert "ran longer than its timeout of 2 s" in result.error
+        assert f"recorded for {result.setup_id} / p1 in golden_config.json" in result.error
+        assert "hanging" in result.error
+        assert result.duration_s is not None and result.duration_s < 30
+
+
+@pytest.mark.skipif(not ChildRuns.KILLS_PROCESS_GROUP, reason="needs POSIX process groups")
+def test_a_child_that_hangs_is_killed_with_the_processes_it_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A timed-out child's own children (an LPG binary in CI) die with it instead of running on as orphans."""
+    pid_directory = tmp_path / "grandchildren"
+    pid_directory.mkdir()
+    grandchild = "import time; time.sleep(60)"
+    hang = (
+        "import os, subprocess, sys, time; "
+        f"p = subprocess.Popen([sys.executable, '-c', {grandchild!r}]); "
+        f"open(os.path.join({str(pid_directory)!r}, str(p.pid)), 'w').close(); "
+        "print('hanging', flush=True); time.sleep(60)"
+    )
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", hang]))
+    monkeypatch.setattr(ChildRuns, "MINIMAL_TIMEOUT_IN_SECONDS", 3.0)
+    monkeypatch.setattr(ChildRuns, "TIMEOUT_TO_RECORDED_SECONDS_RATIO", 0.0)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)  # one job would run the pairs in-process
+
+    assert all(r.error is not None and "ran longer than its timeout" in r.error for r in results)
+    grandchild_pids = [int(path.name) for path in pid_directory.iterdir()]
+    assert len(grandchild_pids) == 2
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and any(_process_is_running(pid) for pid in grandchild_pids):
+        time.sleep(0.1)
+    assert not any(_process_is_running(pid) for pid in grandchild_pids)
+
+
+def _process_is_running(pid: int) -> bool:
+    """Return whether a process with this id runs and is not a zombie waiting to be reaped.
+
+    The killed grandchild's parent is gone, so init reaps it; until then it is a zombie, which
+    ``os.kill(pid, 0)`` still finds. ``/proc/<pid>/stat`` tells the two apart where it exists.
+    """
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.exists():
+        try:
+            return stat.read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0] != "Z"
+        except (OSError, IndexError):
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 def test_run_modes_runs_each_pair_in_every_mode_side_by_side(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

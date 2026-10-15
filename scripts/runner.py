@@ -25,11 +25,12 @@ import hashlib
 import json
 import os
 import platform
+import signal
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence, cast
 
@@ -40,9 +41,11 @@ from hisim.simulationparameters import SimulationParameters
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
     from golden_kpis import golden_leaves, renamed_leaves  # type: ignore[import-not-found]
     from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
+    from golden_matrix import pair_seconds  # type: ignore[import-not-found]
 except ModuleNotFoundError:
     from scripts.golden_kpis import golden_leaves, renamed_leaves
     from scripts.golden_horizons import HorizonVocabulary
+    from scripts.golden_matrix import pair_seconds
 
 
 # ---------------------------------------------------------------------------
@@ -56,9 +59,28 @@ class SetupConfig:
     path: str
     #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
     #: ``None`` for all of them. Every shipped setup runs both the week and the full year
-    #: (owner decision 2026-10-11: every energy system has a full-year golden), so the
+    #: (owner decision 2026-10-11: every system setup has a full-year golden), so the
     #: shipped config sets this nowhere; it stays for a setup that may join one horizon only.
     horizons: Optional[list[str]] = None
+    #: The recorded wall time of each of its pairs on a GitHub runner, in seconds, by parameter-set
+    #: id: the config's ``seconds`` entry. The CI shards are balanced by it, and a pair run in a
+    #: child process gets a timeout from it (:meth:`ChildRuns.timeout_in_seconds`).
+    seconds: dict[str, float] = field(default_factory=dict)
+
+    def recorded_seconds(self, parameter_set_id: str) -> float:
+        """Return the recorded wall time of this setup's pair with one parameter set, in seconds.
+
+        A pair the config records no time for weighs the shard balance's default
+        (``golden_matrix.DEFAULT_PAIR_SECONDS``, a typical building-sizer week), so the matrix and
+        the runner read the same number for every pair.
+
+        Args:
+            parameter_set_id: The id of the parameter set the pair runs.
+
+        Returns:
+            The recorded wall time in seconds, or the default when none is recorded.
+        """
+        return float(pair_seconds({"id": self.id, "seconds": self.seconds}, parameter_set_id))
 
     def runs_factory(self, factory: str) -> bool:
         """Whether this setup participates in parameter sets built by ``factory``.
@@ -178,7 +200,10 @@ def load_config(config_path: Path) -> GoldenConfig:
             raise ValueError(f"Golden config setups[{idx}] must have 'id' and 'path'.")
         horizons = entry.get("horizons")
         HorizonVocabulary.check_horizons(horizons, f"Golden config setups[{idx}]")
-        setups.append(SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons))
+        pair_seconds(entry, "")  # refuses a malformed 'seconds' entry
+        setups.append(
+            SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons, seconds=dict(entry.get("seconds", {})))
+        )
 
     parameter_sets: list[ParameterSetConfig] = []
     for idx, entry in enumerate(param_sets_raw):
@@ -535,7 +560,11 @@ class ChildRuns:
     the pair; it calls :func:`run_one` and writes the :class:`RunResult` to a file the parent
     reads back. Everything the child prints goes to ``<pair>.log`` in :data:`WORK_SUBDIR`, and a
     child that ends without writing its result — a crash of the interpreter, or the kernel's
-    out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines.
+    out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines. A child
+    that runs longer than its timeout (:meth:`timeout_in_seconds`) is killed together with the
+    processes it started (:meth:`kill_with_its_children`) and becomes a ``run_error`` of its pair
+    the same way, so a hung simulation fails its pair by name instead of holding a CI runner until
+    the job's own limit.
 
     The children keep the process-id default of the LoadProfileGenerator base index
     (``PylpgWorkspace.default_base_index``) rather than borrowing from an ``LpgBaseIndexPool``:
@@ -549,6 +578,59 @@ class ChildRuns:
     WORK_SUBDIR = "_children"
     #: How much of a failed child's log its ``run_error`` carries.
     LOG_TAIL_LINES = 40
+    #: A child's timeout as a multiple of its pair's recorded wall time. The recorded times are
+    #: measured on a GitHub runner; a composed run beside its Python pair took up to 1.3 times its
+    #: pair's weight there (2026-10-13), so three leaves room for a slower machine.
+    TIMEOUT_TO_RECORDED_SECONDS_RATIO = 3.0
+    #: The shortest timeout a child gets, in seconds, so a pair recorded at a few seconds still
+    #: has time to import HiSim and read its inputs on a busy machine.
+    MINIMAL_TIMEOUT_IN_SECONDS = 600.0
+
+    #: Whether a timed-out child is killed together with every process it started (POSIX), or alone
+    #: (Windows, which has no process groups to kill).
+    KILLS_PROCESS_GROUP = hasattr(os, "killpg")
+
+    @classmethod
+    def kill_with_its_children(cls, child: subprocess.Popen) -> None:
+        """Kill a timed-out child and every process it started, then wait for the child.
+
+        The child runs in a session of its own (``start_new_session``), so its process id is also
+        the id of its process group, and ``os.killpg`` reaches the processes it started too: a
+        LoadProfileGenerator calculation the child is waiting for, which killing the child alone
+        would leave running on the machine. Example: a full-year pair hangs inside the LPG; the
+        Python child and the LPG binary both receive SIGKILL. Where there are no process groups
+        (Windows), only the child is killed.
+
+        Args:
+            child: The child process, started with ``start_new_session=KILLS_PROCESS_GROUP``.
+        """
+        if cls.KILLS_PROCESS_GROUP:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # the whole group ended between the timeout and the kill
+        else:
+            child.kill()
+        child.wait()
+
+    @classmethod
+    def timeout_in_seconds(cls, setup: SetupConfig, parameter_set: ParameterSetConfig) -> float:
+        """Return how long the child running one pair may run before it is killed, in seconds.
+
+        The timeout is :data:`TIMEOUT_TO_RECORDED_SECONDS_RATIO` times the pair's recorded wall
+        time, and at least :data:`MINIMAL_TIMEOUT_IN_SECONDS`. Example: the heat pump with car
+        records 690 s for its full year, so its child is killed after 2070 s; a week recorded at
+        115 s gets the minimum of 600 s.
+
+        Args:
+            setup: The pair's setup, which carries the recorded wall times.
+            parameter_set: The pair's parameter set.
+
+        Returns:
+            The timeout in seconds.
+        """
+        recorded = setup.recorded_seconds(parameter_set.id)
+        return max(cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO * recorded, cls.MINIMAL_TIMEOUT_IN_SECONDS)
 
     @classmethod
     def command(cls, payload: str) -> list[str]:
@@ -590,20 +672,41 @@ class ChildRuns:
         env = dict(os.environ)
         repo_of_this_file = str(Path(__file__).resolve().parent.parent)
         env["PYTHONPATH"] = os.pathsep.join(p for p in (repo_of_this_file, env.get("PYTHONPATH", "")) if p)
+        timeout_in_seconds = cls.timeout_in_seconds(setup, parameter_set)
         started = time.monotonic()
         with log_path.open("w", encoding="utf-8") as log:
-            completed = subprocess.run(
-                cls.command(payload), stdout=log, stderr=subprocess.STDOUT, cwd=repo_root, env=env, check=False
-            )
+            # A session of its own makes the child the leader of a process group that also holds the
+            # processes it starts, so a timeout can end the LoadProfileGenerator binary along with it.
+            with subprocess.Popen(
+                cls.command(payload),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=repo_root,
+                env=env,
+                start_new_session=cls.KILLS_PROCESS_GROUP,
+            ) as child:
+                returncode: Optional[int]
+                try:
+                    returncode = child.wait(timeout=timeout_in_seconds)
+                except subprocess.TimeoutExpired:
+                    cls.kill_with_its_children(child)
+                    returncode = None
         duration = round(time.monotonic() - started, 1)
-        if completed.returncode == 0 and out_path.exists():
+        if returncode == 0 and out_path.exists():
             result = RunResult(**json.loads(out_path.read_text(encoding="utf-8")))
             result.duration_s = duration
             return result
-        code = completed.returncode
-        how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
-        if code in (-9, 137):
-            how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"
+        if returncode is None:
+            how = (
+                f"ran longer than its timeout of {timeout_in_seconds:g} s "
+                f"({cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO:g} times the {setup.recorded_seconds(parameter_set.id):g} s "
+                f"recorded for {setup.id} / {parameter_set.id} in golden_config.json) and was killed"
+            )
+        else:
+            code = returncode
+            how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
+            if code in (-9, 137):
+                how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"
         lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
         tail = "\n".join(lines[-cls.LOG_TAIL_LINES:]) or "(the child wrote nothing)"
         return RunResult(

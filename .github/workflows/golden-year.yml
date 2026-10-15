@@ -30,6 +30,13 @@
 # are busy the long runs are queued first. A run's weight is its pair's "seconds" in
 # golden_config.json, the composed run weighing what the Python run weighs. One run peaks at
 # about 6 GiB, well inside a 16 GB runner.
+#
+# TIMEOUTS. A hung simulation must not hold a runner until GitHub's six-hour default. A run job
+# runs its one pair in-process (--jobs 1), so the job's own limit is the guard: 30 minutes, about
+# three times the slowest run job measured (about 10 minutes). Where pairs run in child processes
+# (--jobs above 1: the week shards of golden-check.yml and the bless in golden-update.yml), each
+# child is killed after three times its recorded seconds (at least ten minutes) and fails that
+# pair by name (scripts/runner.py, ChildRuns.timeout_in_seconds).
 
 # THE ASSEMBLY NIGHTLY TIER (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
@@ -96,6 +103,8 @@ jobs:
     needs: discover
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
+    # See TIMEOUTS above: about three times the slowest run job measured (about 10 minutes).
+    timeout-minutes: 30
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:

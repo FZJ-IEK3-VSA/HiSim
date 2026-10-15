@@ -3,7 +3,7 @@
 Outputs: `cost_summary.md` (fixed rounding and row order, so golden diffs show only moved numbers),
 `lifecycle_report.html` (self-contained, inline SVG) and matplotlib PNGs (`report_plots.py`). Each section opens with
 explanation prose from `report_prose.ReportProse`. This package never computes: every number is read off the result or
-`views.py`, and only SVG geometry and rounding happen here (§2.4). The modules stack as `charts` -> `scaffold` ->
+`views.py`, and only SVG geometry and rounding happen here. The modules stack as `charts` -> `scaffold` ->
 `sections`/`sections_charts` -> `assembly`.
 """
 

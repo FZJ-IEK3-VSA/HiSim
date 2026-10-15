@@ -458,9 +458,10 @@ class Car(cp.PhysicsComponent):
     def build(self, car_information_dict: Dict) -> None:
         """Turns the published minute-resolution profile into the series this run's timesteps need.
 
-        The LoadProfileGenerator always reports per minute and in local time, so the profile has to
-        be converted to UTC and then aggregated — summed for distances, most-frequent for the
-        location — down to the run's own resolution. That calculation is the producer
+        The LoadProfileGenerator always reports per minute and on the wall clock, so the profile has
+        to be put onto the run's standard-time clock, cut to the run's window and then aggregated —
+        summed for distances, most-frequent for the location — down to the run's own resolution.
+        That calculation is the producer
         :func:`hisim.components.generic_car_profile.produce_car_profile`, and its result is cached
         under the producer's key: a hash of the published profile, the run's span and timestep, and a
         fingerprint of the producer's code, so an edit to the calculation is a cache miss.
@@ -518,8 +519,7 @@ class Car(cp.PhysicsComponent):
         """Build the DTO the car-profile producer is a pure function of.
 
         The published minute profile enters as payload, identified in the key by its hash; the run
-        enters as its year, timestep, number of timesteps, span in days and first instant
-        (``window_start``). Nothing the car keeps to
+        enters as its year, timestep, number of timesteps and first instant (``window_start``). Nothing the car keeps to
         itself -- its name, fuel, consumption or costs -- is part of the calculation, so none of it is
         part of the key.
 
@@ -541,7 +541,6 @@ class Car(cp.PhysicsComponent):
             year=parameters.year,
             seconds_per_timestep=parameters.seconds_per_timestep,
             timesteps=parameters.timesteps,
-            duration_in_days=(parameters.end_date - parameters.start_date).days,
             window_start=parameters.start_date.isoformat(),
             car_location=car_location,
             driven_distance_per_minute_in_meters=driven_distance_per_minute_in_meters,

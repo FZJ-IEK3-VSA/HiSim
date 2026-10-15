@@ -27,7 +27,11 @@ concurrency:
 jobs:
   pytest:
     name: pytest (${{ matrix.name }})
-    runs-on: ubuntu-latest
+    # Self-hosted runners (label hisim-local) for pushes, pull requests from branches of this repository
+    # and manual runs; a pull request from a fork stays on a GitHub-hosted runner, so code from outside
+    # contributors never runs on our machines. github.event.pull_request is empty for every event that
+    # is not a pull request, so those land on hisim-local as well.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -184,7 +188,8 @@ jobs:
   coverage:
     name: combine coverage
     needs: pytest
-    runs-on: ubuntu-latest
+    # On the self-hosted runners like the pytest jobs, with the same fork guard (see there).
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     # Runs in the same image so the source paths recorded by the pytest jobs
     # (/__w/HiSim/HiSim/...) resolve when generating the report.
     container:

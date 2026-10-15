@@ -7,14 +7,16 @@ rich in-memory fixture — no simulation run, no result directory — renders `c
 `tests/goldens/`.
 
 **Normalization.** Exactly one thing in the output is not a function of the fixture: the
-generation date, which both reports stamp via `datetime.date.today()`. It is replaced by the
-literal ``<DATE>`` — the *only* substitution made, and a targeted one (today's ISO date string,
-not "any date-shaped text"), so the `retrieved` dates of the §3.10 source registry stay in the
-golden and a data PR that changes one shows up as a diff. Everything else — every euro figure,
-every SVG coordinate, every tooltip — is compared exactly. The PNG companions are not goldens
-(matplotlib output is not byte-stable across versions); `report_plots` is covered by the
-numbers it now reads out of the view-model plus `tests/test_economics_report_plots.py`, which
-checks that the files are written and that what they plot still reconciles.
+generation date, which both reports stamp via `datetime.date.today()` as "Generated <date>". That
+stamp is replaced by ``Generated <DATE>`` — the *only* substitution made, and a targeted one (the
+stamp with today's ISO date, not today's date wherever it appears, nor "any date-shaped text"), so
+the `retrieved` dates of the §3.10 source registry stay in the golden even when a golden is
+regenerated on the day a source was retrieved, and a data PR that changes one shows up as a diff.
+Everything else — every euro figure, every SVG coordinate, every tooltip — is compared exactly.
+The PNG companions are not goldens (matplotlib output is not byte-stable across versions);
+`report_plots` is covered by the numbers it now reads out of the view-model plus
+`tests/test_economics_report_plots.py`, which checks that the files are written and that what
+they plot still reconciles.
 
 Regenerate deliberately with ``HISIM_REGEN_GOLDENS=1 pytest tests/test_economics_report_goldens.py``.
 Any regeneration outside a change that is *meant* to move numbers is a bug being papered over.
@@ -281,8 +283,13 @@ def fixture_rendered() -> RenderedReports:
 
 
 def _normalize(text: str) -> str:
-    """The single documented substitution: today's date -> `<DATE>` (see the module docstring)."""
-    return text.replace(datetime.date.today().isoformat(), "<DATE>")
+    """The single documented substitution: the generation stamp's date -> `<DATE>` (see the module docstring).
+
+    Only the stamp "Generated <today>" is replaced. A source registry row retrieved today shows
+    the same date, and replacing every occurrence would write `<DATE>` into that row of a golden
+    regenerated today, so the golden would fail on every later day.
+    """
+    return text.replace(f"Generated {datetime.date.today().isoformat()}", "Generated <DATE>")
 
 
 def _assert_matches_golden(file_name: str, text: str) -> None:
@@ -631,3 +638,13 @@ class TestGoldenFiles:
     def test_lifecycle_report_html_matches_golden(self, rendered):
         """`lifecycle_report.html`, byte-for-byte (numbers, SVG geometry, tooltips)."""
         _assert_matches_golden(REPORT_GOLDEN, rendered.report)
+
+    def test_only_the_generation_stamp_is_normalized(self):
+        """Today's date is replaced in the generation stamp and kept everywhere else.
+
+        A source registry row retrieved today shows today's date as data. It must stay literal in
+        a golden regenerated today, or that golden fails on every later day.
+        """
+        today = datetime.date.today().isoformat()
+        rendered = f"<p>Generated {today}.</p><td>{today}</td>"
+        assert _normalize(rendered) == f"<p>Generated <DATE>.</p><td>{today}</td>"

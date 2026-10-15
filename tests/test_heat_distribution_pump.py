@@ -67,18 +67,26 @@ class HdsRig:
                 ("SupplyTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
                 ("Demand", lt.LoadTypes.HEATING, lt.Units.WATT),
                 ("Room", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+                ("PartLoadRatio", lt.LoadTypes.ANY, lt.Units.FRACTION),
             )
         }
         self.hds.state_channel.source_output = self.sources["State"]
         self.hds.water_temperature_input_channel.source_output = self.sources["SupplyTemperature"]
         self.hds.theoretical_thermal_building_demand_channel.source_output = self.sources["Demand"]
         self.hds.residence_temperature_input_channel.source_output = self.sources["Room"]
+        self.hds.part_load_command.ratio_channel.source_output = self.sources["PartLoadRatio"]
         everything = list(self.sources.values()) + [self.hds]
         self.stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs(everything))
         fft.add_global_index_of_components(everything)
 
     def step(
-        self, *, valve_state: float, supply_in_celsius: float, demand_in_watt: float, room_in_celsius: float
+        self,
+        *,
+        valve_state: float,
+        supply_in_celsius: float,
+        demand_in_watt: float,
+        room_in_celsius: float,
+        part_load_ratio: float = 1.0,
     ) -> HdsStep:
         """Run one step from the saved state and save it, as the simulator does at the end of a converged step.
 
@@ -87,6 +95,7 @@ class HdsRig:
             supply_in_celsius: The supply temperature the circuit receives, in °C.
             demand_in_watt: The building's theoretical demand, in W.
             room_in_celsius: The indoor air temperature, in °C.
+            part_load_ratio: The fraction of the step the controller commands, 1 by default.
 
         Returns:
             The published outputs.
@@ -96,6 +105,7 @@ class HdsRig:
             "SupplyTemperature": supply_in_celsius,
             "Demand": demand_in_watt,
             "Room": room_in_celsius,
+            "PartLoadRatio": part_load_ratio,
         }
         for name, value in values.items():
             self.stsv.values[self.sources[name].global_index] = value
@@ -144,3 +154,23 @@ def test_an_open_valve_pumps_the_design_flow() -> None:
 def test_only_a_shut_valve_stops_the_pump(valve_state: float, stops: bool) -> None:
     """The pump stands for the valve state 0 only."""
     assert HeatDistribution.pump_stopped_by_the_valve(valve_state) is stops
+
+
+@pytest.mark.base
+def test_behind_a_buffer_the_circuit_runs_the_commanded_fraction_of_its_flow_and_heat() -> None:
+    """At a ratio of 0.4 the circuit pumps 0.4 of its design flow, delivers 0.4 of the demand and reports 0.4.
+
+    Its return is that of the whole step, so the heat the buffer books, the flow times ``c`` times the drop, is the
+    delivered heat.
+    """
+    rig = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL)
+    whole = rig.step(valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0)
+    part = rig.step(
+        valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0, part_load_ratio=0.4
+    )
+    design_flow_in_kg_per_second = HdsRig.DESIGN_MASS_FLOW_IN_KG_PER_SECOND
+    assert part.outputs[HeatDistribution.WaterMassFlowHDS] == pytest.approx(0.4 * design_flow_in_kg_per_second)
+    assert part.outputs[HeatDistribution.ThermalPowerDelivered] == pytest.approx(1200.0)
+    outlet = HeatDistribution.WaterTemperatureOutput
+    assert part.outputs[outlet] == whole.outputs[outlet]
+    assert part.outputs[HeatDistribution.PartLoadRatioRun] == 0.4

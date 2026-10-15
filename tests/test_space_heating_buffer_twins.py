@@ -26,6 +26,7 @@ import yaml
 
 from hisim import hydronics
 from hisim.calculation_scope import CalculationScope
+from hisim.components.building.building import Building
 from hisim.components.generic_boiler import GenericBoiler
 from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
@@ -81,6 +82,9 @@ class BufferTwins:
         MoreAdvancedHeatPumpHPLib.get_classname(): MoreAdvancedHeatPumpHPLib.MassFlowOutputSH,
     }
 
+    #: How far below the room's start-of-step temperature a heated buffer may end, in K: the convergence tolerance.
+    FLOOR_TOLERANCE_IN_KELVIN: ClassVar[float] = 1e-3
+
     #: Per generator class, the output of the space heat it books, in W.
     BOOKED_SPACE_HEATING_POWER: ClassVar[Dict[str, str]] = {
         GenericBoiler.get_classname(): GenericBoiler.ThermalPowerGenerationSh,
@@ -99,13 +103,13 @@ class BufferTwins:
 
     @classmethod
     @lru_cache(maxsize=None)
-    def run(cls, name: str, directory: str) -> Tuple[pd.DataFrame, str, str, str, str]:
+    def run(cls, name: str, directory: str) -> Tuple[pd.DataFrame, str, str, str, str, str]:
         """Simulate ``energy_systems/<name>.energy_system.yaml`` over :attr:`WINTER_DAY` at 900 s.
 
         Returns:
             The result frame, the buffer's component name, the column prefixes ``"<component> - <field>"`` of the space
             heat its primary generator books and of that generator's space-heating mass flow, and the heat
-            distribution system's component name.
+            distribution system's and the building's component names.
         """
         source = cls.ROOT / "energy_systems" / f"{name}.energy_system.yaml"
         model = yaml.safe_load(source.read_text(encoding="utf-8"))
@@ -147,10 +151,12 @@ class BufferTwins:
             booked_prefix = f"{generator_name} - {cls.BOOKED_SPACE_HEATING_POWER[classname]}"
             flow_prefix = f"{generator_name} - {cls.SPACE_HEATING_MASS_FLOW[classname]}"
             buffer_name = buffer.component_name
+            (building,) = [component for component in components if isinstance(component, Building)]
+            building_name = building.component_name
             distribution_name = distribution.component_name
             simulator.run_all_timesteps()
             results = simulator.results_data_frame
-        return results, buffer_name, booked_prefix, flow_prefix, distribution_name
+        return results, buffer_name, booked_prefix, flow_prefix, distribution_name, building_name
 
     @classmethod
     def circuit_tolerance_in_watt(cls, mass_flow_in_kg_per_second: np.ndarray) -> np.ndarray:
@@ -180,7 +186,7 @@ class BufferTwins:
 
 def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Run one file and check the buffer's closure and both of its circuits on every step."""
-    results, buffer, booked_prefix, flow_prefix, distribution = BufferTwins.run(
+    results, buffer, booked_prefix, flow_prefix, distribution, building = BufferTwins.run(
         name, str(tmp_path_factory.mktemp(name.replace(".", "_")))
     )
     hours_per_step = BufferTwins.SECONDS_PER_TIMESTEP / BufferTwins.SECONDS_PER_HOUR
@@ -236,6 +242,19 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
         np.max(np.abs(delivered_in_watt - given_in_watt))
     )
     assert np.any(delivered_in_watt > 0.0), "the distribution never heated in the window"
+
+    # above the part-load threshold the distribution circuit runs only the fraction that keeps the buffer at or above
+    # the room's start-of-step temperature, so a step it heats in never ends the buffer below the room
+    end_in_celsius = BufferTwins.column(
+        results, f"{buffer} - {SimpleHotWaterStorage.WaterTemperatureAtEndOfStepInCelsius}"
+    )
+    room_in_celsius = BufferTwins.column(
+        results, f"{building} - {Building.TemperatureIndoorAirAtStartOfStepInCelsius}"
+    )
+    heating = delivered_in_watt > 0.0
+    assert np.all(end_in_celsius[heating] >= room_in_celsius[heating] - BufferTwins.FLOOR_TOLERANCE_IN_KELVIN), float(
+        np.min(end_in_celsius[heating] - room_in_celsius[heating])
+    )
 
 
 def check_end_temperatures_without_each_circuit(

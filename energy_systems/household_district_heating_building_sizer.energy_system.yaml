@@ -41,6 +41,7 @@ components:
     preset: building_derived
     inputs:
       - HeatingCurveController
+      - HeatDistributionSystem
       - Building
   HeatingCurveController:
     class: hisim.components.heating_curve.HeatingCurveController
@@ -79,8 +80,8 @@ components:
     config:
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - DistrictHeating
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter

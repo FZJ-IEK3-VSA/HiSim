@@ -57,6 +57,7 @@ components:
     preset: building_derived
     inputs:
       - HeatingCurveController
+      - HeatDistributionSystem
       - Building
   HeatingCurveController:
     order: 6
@@ -75,8 +76,8 @@ components:
     config:
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # the site states it until stage D (D25)
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - {$port: space_heating}
     ports:
       space_heating: {circuit: space_heating}               # pump and return leg are the distribution's, no storage

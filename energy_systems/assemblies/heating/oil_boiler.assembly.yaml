@@ -90,6 +90,16 @@ tests:
       # the tank temperature at which the controller ends a hot-water charge, its 60 °C warm-water aim
     - {output: Controller.PartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
+    - {output: Controller.TargetTemperatureShInCelsius, unit: CELSIUS, min: 0, max: 100}
+      # the heating curve's supply temperature, at which the space-heating charge ends the buffer
+    - {output: Controller.PartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge runs: 1 at and below the part-load threshold
+    - {output: Controller.ControlSignalForSpaceHeatingRemainder, unit: PERCENT, min: 0, max: 1}
+      # the signal of that charge: 1 (full power) while the buffer gets one, else 0
+    - {output: Controller.TemperatureDeltaForSpaceHeatingRemainderInKelvin, unit: KELVIN, min: 0, max: 80}
+      # the lift of a space-heating charge in the rest of a hot-water step: 0 without one, else at least 0.1 K
+    - {output: Boiler.PartLoadRatioRunSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge ran, reported back to the controller
     - {output: Boiler.PartLoadRatioRunDhw, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the hot-water charge ran, reported back to the controller
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}

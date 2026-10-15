@@ -85,7 +85,9 @@ class SimulationParameters:
         Args:
             start_date: The start of the simulation period, at midnight.
             end_date: The end of the simulation period, excluded, a whole number of days after
-                ``start_date`` and in the same year as the start of the last timestep.
+                ``start_date``. The start of the last timestep, ``end_date - seconds_per_timestep``,
+                lies in the year of ``start_date``; ``end_date`` itself may be 1 January of the next
+                year, as it is for a full year.
             seconds_per_timestep: The duration of each simulation timestep in seconds; it divides the
                 period into whole timesteps.
             country: Country code for location-specific data (e.g., weather, tariffs).

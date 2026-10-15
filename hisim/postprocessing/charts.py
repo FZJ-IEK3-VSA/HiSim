@@ -2,6 +2,7 @@
 
 import datetime
 import gc
+import math
 from typing import Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -81,11 +82,11 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
                     positions.append(column + 0.5)
                     labels.append(label)
             return positions, labels, "Month of the year"
-        step_in_days = max(1, -(-number_of_days // cls.MAXIMUM_DAY_TICKS))
+        step_in_days = max(1, math.ceil(number_of_days / cls.MAXIMUM_DAY_TICKS))
         columns = range(0, number_of_days, step_in_days)
         return (
             [column + 0.5 for column in columns],
-            [(first_day + datetime.timedelta(days=column)).strftime("%d %b") for column in columns],
+            [cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
             "Day",
         )
 

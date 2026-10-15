@@ -56,9 +56,12 @@ Subclasses interact with the base class through two helper methods:
   kg/s, kW) are normalised first; ``-`` and ``%`` are returned unchanged.
 
 The class-level ``months_abbrev_uppercase`` and ``label_months_lowercase``
-lists supply consistent month labels shared by the bar and single-day charts.
+lists supply consistent month labels shared by the bar and single-day charts, and
+``Chart.date_of_day`` the calendar date of a day of the run, which the carpet and the
+single-day chart both name their days by.
 """
 
+import datetime
 from pathlib import Path
 import re
 from typing import Any, Tuple
@@ -98,6 +101,23 @@ class Chart:  # noqa: too-few-public-methods
         "November",
         "December",
     ]
+
+    @staticmethod
+    def date_of_day(window_start: datetime.datetime, day_in_window: int) -> datetime.date:
+        """Return the calendar date of one day of the run.
+
+        The carpet names its columns and the single-day chart its title by this date, so both
+        count the days of a run the same way. Example: day 0 of a run from 1 July 2021 is
+        1 July 2021, day 3 is 4 July 2021.
+
+        Args:
+            window_start: The first moment of the run.
+            day_in_window: The day of the run, counted from 0.
+
+        Returns:
+            The date of that day.
+        """
+        return (window_start + datetime.timedelta(days=day_in_window)).date()
 
     def __init__(
         self,

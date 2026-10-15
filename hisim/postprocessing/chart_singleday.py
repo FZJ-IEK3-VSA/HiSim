@@ -80,30 +80,15 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.window_start: datetime.datetime = window_start
         self.day_in_window: int = day_in_window
         displayed_date = self.date_of_day(window_start, day_in_window)
-        # Zero-based month and day of month of the displayed date: the first of January is m0_d0.
-        self.month: int = displayed_date.month - 1
-        self.day: int = displayed_date.day - 1
         self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
-        self.filename: str = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
+        # Named by the zero-based month and day of month of the displayed date: the first of January is m0_d0.
+        self.filename: str = (
+            f"{self.type.lower()}_m{displayed_date.month - 1}_d{displayed_date.day - 1}{self.figure_format}"
+        )
 
         self.filepath: str = str(Path(self.directory_path) / self.filename)
         self.filepath2: str = str(Path(self.component_output_folder_path) / self.filename)
-
-    @staticmethod
-    def date_of_day(window_start: datetime.datetime, day_in_window: int) -> datetime.date:
-        """Return the calendar date of one day of the run.
-
-        Example: day 0 of a run from 1 July 2021 is 1 July 2021, day 3 is 4 July 2021.
-
-        Args:
-            window_start: The first moment of the run.
-            day_in_window: The day of the run, counted from 0.
-
-        Returns:
-            The date of that day.
-        """
-        return (window_start + datetime.timedelta(days=day_in_window)).date()
 
     @staticmethod
     def build_day_slice(

@@ -1,34 +1,87 @@
-"""The order of the physics components within a pass: each L1 controller's device before the other physics it reads.
+"""The order of the components within one kind of a pass: the L2 controllers and the physics.
 
-The simulator evaluates a pass kind by kind (data sources, L2 controllers, L1 controllers, physics, meters). Within the
-physics kind the order matters too. An L1 controller that decides from what its device reports and from the answer of
-a store it reads, such as a hot-water tank's end-of-step temperature, pairs two values of the same run only if, in
-every pass, the device is evaluated before the store. :class:`PhysicsOrder` orders the physics kind so, from the kinds
-and the wiring alone. A kind is a kind base class of :mod:`hisim.component`, such as
+The simulator evaluates a pass kind by kind (data sources, L2 controllers, L1 controllers, physics, meters). Within two
+kinds the order matters too. An L2 controller that reads another L2 controller's signal, such as the heating curve
+applying the energy manager's raise, gets the signal of the same pass only if the other is evaluated first:
+:class:`L2Order` orders the L2 kind so. An L1 controller that decides from what its device reports and from the answer
+of a store it reads, such as a hot-water tank's end-of-step temperature, pairs two values of the same run only if, in
+every pass, the device is evaluated before the store: :class:`PhysicsOrder` orders the physics kind so. Both rules use
+the kinds and the wiring alone. A kind is a kind base class of :mod:`hisim.component`, such as
 :class:`~hisim.component.PhysicsComponent`.
 """
 
 from dataclasses import dataclass
 from typing import AbstractSet, Dict, FrozenSet, List, Sequence, Set, Tuple, Type
 
-from hisim.component import Component, L1ControllerComponent, PhysicsComponent
+from hisim.component import Component, L1ControllerComponent, L2ControllerComponent, PhysicsComponent
 
 
 @dataclass(frozen=True)
 class EvaluationOrder:
-    """The order a pass evaluates the components in, and the physics components whose constraints form a cycle.
+    """The order a pass evaluates components in, and the components whose ordering constraints form a cycle.
 
     A position is a component's index in the order the components were added. For example, a boiler added at
     position 1 and a tank added at position 0, with the boiler's controller at position 2, give the positions
-    (2, 1, 0): the controller, the boiler, the tank.
+    (2, 1, 0): the controller, the boiler, the tank. The same type holds the order of all components of a pass
+    (:meth:`hisim.simulator.Simulator.evaluation_positions`) and the order of one kind alone
+    (:meth:`PhysicsOrder.ordered`, :meth:`L2Order.ordered`).
     """
 
-    #: The positions of all components, in the order a pass evaluates them.
+    #: The positions of the components the order covers, in the order a pass evaluates them: all components for a
+    #: pass, the physics or L2 positions alone for the order of one kind.
     positions: Tuple[int, ...]
 
     #: Each group of physics positions whose ordering constraints require one another first, in the order added. The
-    #: components of a group keep the order they were added in.
-    cycles: Tuple[Tuple[int, ...], ...]
+    #: components of a group keep the order they were added in. Empty for the order of the L2 kind.
+    physics_cycles: Tuple[Tuple[int, ...], ...]
+
+    #: Each group of L2 controller positions that read one another in a cycle, in the order added. The controllers of
+    #: a group keep the order they were added in. Empty for the order of the physics kind.
+    l2_cycles: Tuple[Tuple[int, ...], ...] = ()
+
+    #: The L2 controller positions that read an L2 controller evaluated after them, in evaluation order: a member of
+    #: every L2 cycle, and any L2 controller that a cycle's place in the order puts before an L2 controller it reads.
+    #: Each applies that controller's signal of the pass before. Empty for the order of the physics kind.
+    l2_late_readers: Tuple[int, ...] = ()
+
+
+class ConstraintGraph:
+    """The cycles of a graph of ordering constraints, which every kind's order rule reports the same way.
+
+    A constraint graph gives, for every position, the positions that must be evaluated before it. The physics rule
+    (:class:`PhysicsOrder`) and the L2 rule (:class:`L2Order`) build their own graphs and find their cycles here.
+    """
+
+    @staticmethod
+    def cycles(predecessors: Dict[int, FrozenSet[int]]) -> Tuple[Tuple[int, ...], ...]:
+        """Return the groups of positions whose constraints require one another first, each in the order added.
+
+        A group is a set of two or more positions each of which must, through the constraints, come before every
+        other (a strongly connected component of the constraint graph). For example,
+        ``{0: frozenset({1}), 1: frozenset({0}), 2: frozenset({0})}`` gives ``((0, 1),)``.
+
+        Args:
+            predecessors: For every position, the positions that must come before it.
+
+        Returns:
+            The groups, ordered by their first position.
+        """
+        reachable: Dict[int, Set[int]] = {}
+        for start in predecessors:
+            seen: Set[int] = set()
+            stack = list(predecessors[start])
+            while stack:
+                position = stack.pop()
+                if position not in seen:
+                    seen.add(position)
+                    stack.extend(predecessors[position])
+            reachable[start] = seen
+        groups = {
+            tuple(sorted({start} | {other for other in reachable[start] if start in reachable[other]}))
+            for start in predecessors
+            if start in reachable[start]
+        }
+        return tuple(sorted(groups))
 
 
 class PhysicsOrder:
@@ -55,7 +108,8 @@ class PhysicsOrder:
     ) -> Dict[int, FrozenSet[int]]:
         """Return, for every physics position, the physics positions the rule requires to be evaluated before it.
 
-        For example, a tank at 0 read by a controller at 2 that commands a boiler at 1 gives ``{0: {1}, 1: {}}``.
+        For example, a tank at 0 read by a controller at 2 that commands a boiler at 1 gives
+        ``{0: frozenset({1}), 1: frozenset()}``: the tank waits for the boiler, the boiler for nothing.
 
         Args:
             kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
@@ -82,37 +136,6 @@ class PhysicsOrder:
         return {position: frozenset(devices) for position, devices in before.items()}
 
     @staticmethod
-    def cycles(predecessors: Dict[int, FrozenSet[int]]) -> Tuple[Tuple[int, ...], ...]:
-        """Return the groups of positions whose constraints require one another first, each in the order added.
-
-        A group is a set of two or more positions each of which must, through the constraints, come before every
-        other (a strongly connected component of the constraint graph). For example, ``{0: {1}, 1: {0}, 2: {0}}``
-        gives ``((0, 1),)``.
-
-        Args:
-            predecessors: For every position, the positions that must come before it.
-
-        Returns:
-            The groups, ordered by their first position.
-        """
-        reachable: Dict[int, Set[int]] = {}
-        for start in predecessors:
-            seen: Set[int] = set()
-            stack = list(predecessors[start])
-            while stack:
-                position = stack.pop()
-                if position not in seen:
-                    seen.add(position)
-                    stack.extend(predecessors[position])
-            reachable[start] = seen
-        groups = {
-            tuple(sorted({start} | {other for other in reachable[start] if start in reachable[other]}))
-            for start in predecessors
-            if start in reachable[start]
-        }
-        return tuple(sorted(groups))
-
-    @staticmethod
     def ordered(kinds: Sequence[Type[Component]], sources: Sequence[AbstractSet[int]]) -> EvaluationOrder:
         """Return the physics positions in the order the rule gives, and the groups that form a cycle.
 
@@ -130,7 +153,7 @@ class PhysicsOrder:
             The physics positions only, in evaluation order, and the cycles among them.
         """
         predecessors = PhysicsOrder.predecessors(kinds, sources)
-        cycles = PhysicsOrder.cycles(predecessors)
+        cycles = ConstraintGraph.cycles(predecessors)
         block_of: Dict[int, Tuple[int, ...]] = {position: (position,) for position in predecessors}
         for group in cycles:
             for position in group:
@@ -146,4 +169,69 @@ class PhysicsOrder:
             block = min(block for block in blocks if block not in placed and waiting_for[block] <= placed)
             placed.add(block)
             order.extend(block)
-        return EvaluationOrder(positions=tuple(order), cycles=cycles)
+        return EvaluationOrder(positions=tuple(order), physics_cycles=cycles)
+
+
+class L2Order:
+    """The rule that orders the L2 controllers within a pass: every L2 controller after the L2 controllers it reads.
+
+    An L2 controller *reads* another when one of the other's outputs feeds one of its inputs. The order added is kept
+    wherever the reads allow it. For example, the heating curve added before the energy manager whose raise it
+    applies is evaluated after it.
+
+    Why: an L2 signal read by another L2 controller then reaches the reader, and through it the L1 controllers, in
+    the same pass; evaluated the other way round the reader applies the signal of the pass before, a pass late.
+    """
+
+    @staticmethod
+    def ordered(kinds: Sequence[Type[Component]], sources: Sequence[AbstractSet[int]]) -> EvaluationOrder:
+        """Return the L2 positions reordered so that each comes after the L2 controllers it reads, and their cycles.
+
+        The next controller is always the first one, in the order added, whose L2 sources have all been placed. When
+        every remaining controller waits for another, which only a read cycle causes, the first one added goes next.
+        So the controllers of a cycle keep the order added and the cycle is reported, and a controller that reads into
+        a cycle may go before a controller it reads; every controller that reads a later one is reported too. For
+        example, with the L2 controllers at 3 and 7, 3 reading 7 gives the positions (7, 3); neither reading the other
+        keeps (3, 7); each reading the other keeps (3, 7), with the cycle (3, 7) and the late reader 3. With the L2
+        controllers 0, 1 and 2, where 0 reads 1 and 1 and 2 read each other, the positions stay (0, 1, 2), with the
+        cycle (1, 2) and the late readers 0 and 1.
+
+        Args:
+            kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
+                the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+
+        Returns:
+            The L2 positions only, in evaluation order, with the groups of them that read one another in a cycle as
+            :attr:`EvaluationOrder.l2_cycles` and those that read a later one as
+            :attr:`EvaluationOrder.l2_late_readers`; :attr:`EvaluationOrder.physics_cycles` is empty.
+
+        Raises:
+            ValueError: If ``kinds`` and ``sources`` differ in length.
+        """
+        if len(kinds) != len(sources):
+            raise ValueError(f"Every component needs its sources: {len(kinds)} kinds, but {len(sources)} source sets.")
+        positions = [position for position, kind in enumerate(kinds) if kind is L2ControllerComponent]
+        remaining = list(positions)
+        placed: List[int] = []
+        while remaining:
+            ready = [position for position in remaining if not (set(sources[position]) & set(remaining)) - {position}]
+            chosen = ready[0] if ready else remaining[0]
+            placed.append(chosen)
+            remaining.remove(chosen)
+        l2_positions = set(positions)
+        predecessors = {
+            position: frozenset((set(sources[position]) & l2_positions) - {position}) for position in positions
+        }
+        index_of = {position: index for index, position in enumerate(placed)}
+        late_readers = tuple(
+            position
+            for position in placed
+            if any(index_of[read] > index_of[position] for read in predecessors[position])
+        )
+        return EvaluationOrder(
+            positions=tuple(placed),
+            physics_cycles=(),
+            l2_cycles=ConstraintGraph.cycles(predecessors),
+            l2_late_readers=late_readers,
+        )

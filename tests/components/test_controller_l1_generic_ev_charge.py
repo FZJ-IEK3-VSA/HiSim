@@ -1,7 +1,8 @@
 """Tests for the electric car's charge controller and its car battery in one step's iteration.
 
-The controller decides its state-of-charge rule on the battery's state of charge at the start of the step, and
-charges with the surplus the energy manager offers the car. These tests run the passes of a step the way the
+The controller decides its state-of-charge rule on the battery's state of charge at the start of the step: below
+its set point it charges at full station power, at or above it with the surplus the energy manager offers the car
+when that offer exceeds the lower charging threshold. These tests run the passes of a step the way the
 simulator does (restore every component's state, then simulate each in turn, until no output moves) in both
 evaluation orders, with the car parked at its station and the battery starting just below its set point.
 """
@@ -162,11 +163,32 @@ def test_a_step_crossing_the_set_point_converges_without_forcing(controller_firs
 
 @pytest.mark.base
 @pytest.mark.parametrize("controller_first", [False, True])
-def test_the_car_charges_with_the_surplus_it_is_offered(controller_first: bool) -> None:
-    """Catches the car's surplus charging depending on its own charging.
+def test_below_the_set_point_the_car_charges_at_station_power_whatever_the_surplus(controller_first: bool) -> None:
+    """Catches a surplus offer that slows the charging of a car below its set point.
 
-    A car above its set point offered 3,000 W charges at 3,000 W. When it was sent the surplus left after its own
-    charging instead, it answered 3,000 W, was then sent 0 W, answered 0 W, and alternated.
+    A car at 0.3, below its 0.4 set point, offered 3,000 W of surplus, above the 1,100 W threshold, charges at the
+    station's 11 kW in every pass. When the offer took precedence it charged at 3,000 W, so it might not reach its
+    set point before it left, and its charging dropped from 11 kW to the offer as soon as the offer crossed the
+    threshold.
+    """
+    step = ParkedCarStep(
+        state_of_charge_at_start=0.3, surplus_offered_in_watt=3000.0, previous_state_of_charge_at_start=0.3
+    )
+
+    commands_in_watt, passes = step.run(controller_first=controller_first)
+
+    assert set(commands_in_watt) == {11000.0}
+    assert passes <= 3
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("controller_first", [False, True])
+def test_above_the_set_point_the_car_charges_with_the_surplus_it_is_offered(controller_first: bool) -> None:
+    """Catches a car above its set point that does not charge with an offered surplus above the threshold.
+
+    A car at 0.6, above its 0.4 set point, offered 3,000 W, above the 1,100 W threshold, charges at 3,000 W in every
+    pass. The offer is a fixed input here, so the test pins the rule, not the energy manager's side of the loop; that
+    the manager offers the car the surplus before its own charging is pinned in the energy manager's tests.
     """
     step = ParkedCarStep(
         state_of_charge_at_start=0.6, surplus_offered_in_watt=3000.0, previous_state_of_charge_at_start=0.6
@@ -179,19 +201,76 @@ def test_the_car_charges_with_the_surplus_it_is_offered(controller_first: bool) 
 
 
 @pytest.mark.base
-def test_above_the_set_point_and_without_surplus_the_car_does_not_charge() -> None:
+@pytest.mark.parametrize("controller_first", [False, True])
+def test_above_the_set_point_and_without_surplus_the_car_does_not_charge(controller_first: bool) -> None:
     """Catches the set-point rule charging a car that starts the step at or above its set point.
 
-    The previous step started below the set point, so a controller evaluated before the battery reads that value
-    in its first pass and commands a charge; the second pass reads this step's start and decides no charge, and
-    two more passes carry that through the battery's report.
+    The offer of 500 W is below the 1,100 W threshold. The previous step started below the set point, so a
+    controller evaluated before the battery reads that value in its first pass and commands a charge; the second
+    pass reads this step's start and decides no charge, and two more passes carry that through the battery's report.
     """
     step = ParkedCarStep(
         state_of_charge_at_start=0.4, surplus_offered_in_watt=500.0, previous_state_of_charge_at_start=0.395
     )
 
-    commands_in_watt, passes = step.run(controller_first=True)
+    commands_in_watt, passes = step.run(controller_first=controller_first)
 
     assert commands_in_watt[-1] == 0.0
     assert step.end_state_of_charge() == pytest.approx(0.4)
     assert passes <= 4
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("surplus_offered_in_watt", "expected_command_in_watt"),
+    [
+        # at the 1,100 W threshold the station's efficiency collapses, so the car does not charge
+        (1100.0, 0.0),
+        # just above it the car charges with the offer
+        (1101.0, 1101.0),
+        # an offer above the station power is capped at the 11 kW the station delivers
+        (15000.0, 11000.0),
+    ],
+)
+def test_above_the_set_point_the_offer_is_bounded_by_the_threshold_and_the_station(
+    surplus_offered_in_watt: float, expected_command_in_watt: float
+) -> None:
+    """Catches a car above its set point that charges at the threshold, or above what its station delivers.
+
+    A car at 0.6, above its 0.4 set point, at an 11 kW station charges only with an offer strictly above the 1,100 W
+    threshold, and with at most the station power.
+    """
+    step = ParkedCarStep(
+        state_of_charge_at_start=0.6,
+        surplus_offered_in_watt=surplus_offered_in_watt,
+        previous_state_of_charge_at_start=0.6,
+    )
+
+    command_in_watt = step.controller.control_power_in_watt(
+        car_consumption_in_watt=0.0,
+        car_location=int(ParkedCarStep.AT_HOME),
+        soc=0.6,
+        electricity_target_in_watt=surplus_offered_in_watt,
+    )
+
+    assert command_in_watt == expected_command_in_watt
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("set_state_of_charge", [-0.1, 1.5, 80.0, float("nan")])
+def test_a_set_point_outside_0_to_1_is_refused(set_state_of_charge: float) -> None:
+    """Catches a set point outside 0 to 1, such as 80 meant as a percentage, that the controller accepts.
+
+    The battery's state of charge is always below such a set point, so the car would charge at full station power
+    whatever surplus it is offered. 1.0, the always-charge variant of the car house, stays accepted.
+    """
+    parameters = SimulationParameters.one_day_only(2021, 60)
+    config = controller_l1_generic_ev_charge.ChargingStationConfig.for_charging_station_set(
+        "L1EVChargeControl_1", ChargingStationSets.Charging_At_Home_with_11_kW
+    )
+    config.battery_set_soc = 1.0
+    controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=parameters, config=config)
+    config.battery_set_soc = set_state_of_charge
+
+    with pytest.raises(ValueError, match="battery_set_soc"):
+        controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=parameters, config=config)

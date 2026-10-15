@@ -775,16 +775,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         This function controls how surplus electricity is distributed and how much of each components'
         electricity need is covered onsite or from grid.
 
-        The signal a participant gets depends on what it does with it. A battery and an electric car decide
-        their power from the signal, so they get the surplus offered to them, before their own share is
+        The signal a participant gets depends on what it does with it. The house battery decides its power from
+        the signal, and so does an electric car at or above its set point; below it the car charges at full
+        station power whatever it is offered. Both get the surplus offered to them, before their own share is
         subtracted. Every other consumer gets what is left after its own consumption, negative for the part it
         takes from the grid; that signal only books the consumer's grid share. For example, with 3,000 W of
-        surplus left and a car charging at 2,000 W, the car is offered 3,000 W, and a heat pump drawing 2,000 W
-        is sent 1,000 W.
+        surplus left, a car above its set point is offered 3,000 W, charges at 3,000 W and leaves 0 W; a heat
+        pump after it that draws 2,000 W is then sent 0 - 2,000 = -2,000 W, the 2,000 W it takes from the grid,
+        and leaves -2,000 W.
 
-        Why the car gets the offer: its charge controller charges with the signal. Sent the surplus left after
-        its own charging, it would answer every pass with that remainder, the next pass would send it the
-        surplus minus that remainder, and its charging would alternate between the passes of a step.
+        Why the car gets the offer: at or above its set point its charge controller charges with the signal. Sent
+        the surplus left after its own charging, it would answer every pass with that remainder, the next pass
+        would send it the surplus minus that remainder, and its charging would alternate between the passes of a
+        step.
 
         Args:
             available_surplus_electricity_in_watt: The surplus left before this participant, in W.
@@ -799,17 +802,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         # get electricity demand from input component and substract from (or add to) available surplus electricity
         electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
 
-        # if available_surplus_electricity > 0: electricity is fed into battery
-        # if available_surplus_electricity < 0: electricity is taken from battery
-        if current_component_type == lt.ComponentType.BATTERY:
-            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # difference between what is fed into battery and what battery really used
-            available_surplus_electricity_in_watt = (
-                available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-            )
-
-        # an electric car charges with the surplus it is offered, so it gets the offer, as the battery does
-        elif current_component_type == lt.ComponentType.CAR_BATTERY:
+        # The house battery, and the electric car at or above its set point, decide their power from the signal,
+        # so both get the surplus offered to them (negative: the deficit the battery may cover); what they really
+        # draw is subtracted. Below its set point the car charges at full station power whatever it is offered.
+        if current_component_type in (lt.ComponentType.BATTERY, lt.ComponentType.CAR_BATTERY):
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
@@ -1382,16 +1378,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
             if dispatch_target == lt.ComponentType.CAR_BATTERY:
                 # The car is offered the surplus; it takes from the grid what its draw exceeds the offer by.
+                # The draw's column is its global index, its position in all_outputs; an output that was never
+                # registered there (global index -1) would read another column without a word.
                 draw_output = cast(ComponentOutput, self.dispatch_measuring_input(output.field_name).source_output)
-                draw_index = next(
-                    position
-                    for position, candidate in enumerate(all_outputs)
-                    if candidate.component_name == draw_output.component_name
-                    and candidate.field_name == draw_output.field_name
-                )
+                if not (
+                    0 <= draw_output.global_index < len(all_outputs)
+                    and all_outputs[draw_output.global_index] is draw_output
+                ):
+                    raise ValueError(
+                        f"The car's draw {draw_output.full_name} is not at its global index "
+                        f"{draw_output.global_index} in the outputs, so its result column is unknown."
+                    )
                 electricity_from_grid_in_watt_series = self.offered_participant_grid_draw_in_watt(
                     surplus_offered_in_watt=postprocessing_results.iloc[:, index],
-                    realized_draw_in_watt=postprocessing_results.iloc[:, draw_index],
+                    realized_draw_in_watt=postprocessing_results.iloc[:, draw_output.global_index],
                 )
             else:
                 # A negative dispatch is what the participant had to take from the grid.

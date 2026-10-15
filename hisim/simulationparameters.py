@@ -223,7 +223,7 @@ class SimulationParameters:
                 ``True`` are refused; a numpy integer or float is accepted).
         """
         # Any real number counts, numpy's included, as it did before the contract; a bool does not.
-        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, numbers.Real):
+        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, (int, float, numbers.Real)):
             raise SimulationWindowError(
                 f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep!r}."
             )

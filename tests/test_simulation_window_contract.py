@@ -11,6 +11,7 @@ format error.
 
 import datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -56,7 +57,7 @@ class TestAcceptedWindows:
         assert _window(datetime.datetime(2021, 12, 31), datetime.datetime(2022, 1, 1), 60) == 1440
 
     @pytest.mark.parametrize("seconds_per_timestep", [np.int64(900), np.float64(900.0)])
-    def test_a_numpy_step_length_is_a_number_of_seconds(self, seconds_per_timestep: float) -> None:
+    def test_a_numpy_step_length_is_a_number_of_seconds(self, seconds_per_timestep: Any) -> None:
         """A step length read through numpy or pandas is accepted, as before the contract."""
         assert _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), seconds_per_timestep) == 96
 

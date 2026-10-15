@@ -254,14 +254,15 @@ class TestTheProbeSet:
             assert entry["cost"]["min_in_euro_per_m2"] <= entry["cost"]["max_in_euro_per_m2"], probe.name
 
 
-@pytest.mark.base
 class TestTheListIsHonestInBothDirections:
     """T-NIY, which runs on every pull request."""
 
+    @pytest.mark.renovisor_probes
     def test_every_not_implemented_line_carries_a_note(self, document: CapabilityDocument) -> None:
         """Only the list may produce that status, so a line without a note cannot exist."""
         assert not unlisted_lines(document.results)
 
+    @pytest.mark.renovisor_probes
     def test_every_entry_of_the_list_is_reached_by_a_probe(self, document: CapabilityDocument) -> None:
         """An entry nothing reaches is a promise no run can keep; delete it or reach it."""
         assert document.unhit_entries() == (), (
@@ -269,6 +270,7 @@ class TestTheListIsHonestInBothDirections:
             + ", ".join(document.unhit_entries())
         )
 
+    @pytest.mark.base
     def test_every_entry_names_its_bead_or_why_it_has_none(self) -> None:
         """hisim-bc02: an omission is written down with an owner or with a reason, never bare."""
         entries = Whitelist.load().entries()
@@ -278,6 +280,7 @@ class TestTheListIsHonestInBothDirections:
             assert bool(entry.tracked) != bool(entry.deliberate), entry.key()
             assert all(Whitelist.BEAD_ID.match(bead) for bead in entry.tracked), entry.key()
 
+    @pytest.mark.base
     @pytest.mark.parametrize(
         "fate",
         [
@@ -296,6 +299,7 @@ class TestTheListIsHonestInBothDirections:
         with pytest.raises(TranslatorError, match="cooking_range"):
             Whitelist.load(listed)
 
+    @pytest.mark.base
     def test_a_list_of_beads_is_read_as_one_entry_tracked_by_each(self, tmp_path: Path) -> None:
         """One entry may cover several features, each with its own bead."""
         listed = tmp_path / "not_implemented_yet.yaml"
@@ -306,10 +310,12 @@ class TestTheListIsHonestInBothDirections:
 
         assert Whitelist.load(listed).entries()[0].tracked == ("hisim-6clg", "hisim-epc.4")
 
+    @pytest.mark.renovisor_probes
     def test_no_probe_ends_in_a_translator_error(self, document: CapabilityDocument) -> None:
         """A probe that raised would have failed the build already; this says what that proves."""
         assert len(document.results) == document.body["translator"]["probes"]
 
+    @pytest.mark.renovisor_probes
     def test_an_excepted_value_is_not_noted(self, document: CapabilityDocument) -> None:
         """A value in ``except`` is not on the list, so it must not carry the entry's sentence.
 
@@ -331,14 +337,15 @@ class TestTheListIsHonestInBothDirections:
         assert "not configurable" in mechanical["note"]
 
 
-@pytest.mark.base
 class TestTheDocument:
     """T-CAP: the shape, the tally and the notes."""
 
+    @pytest.mark.renovisor_probes
     def test_it_validates_against_the_vendored_openapi_schema(self, document: CapabilityDocument) -> None:
         """The document is what ``GET /measures`` returns, so it has to be that shape."""
         document.validate()
 
+    @pytest.mark.renovisor_probes
     def test_every_catalogue_measure_appears_exactly_once(self, document: CapabilityDocument) -> None:
         """A consumer that finds one missing treats the whole answer as invalid."""
         ids = [entry["measure_id"] for entry in document.body["measures"]]
@@ -346,6 +353,7 @@ class TestTheDocument:
         assert ids == list(CatalogueTable.ids())
         assert len(ids) == len(set(ids)) == 32
 
+    @pytest.mark.renovisor_probes
     def test_every_option_of_every_measure_appears_exactly_once(self, document: CapabilityDocument) -> None:
         """Option names and, for an enum, every one of its values."""
         for entry in document.body["measures"]:
@@ -356,6 +364,7 @@ class TestTheDocument:
                     assert option["accepted_values"] == list(spec.values)
                     assert [value["value"] for value in option["values"]] == list(spec.values)
 
+    @pytest.mark.renovisor_probes
     def test_a_material_option_entry_has_exactly_its_name_status_and_note(
         self, document: CapabilityDocument
     ) -> None:
@@ -376,12 +385,14 @@ class TestTheDocument:
                 "note": MeasureRegistry.MATERIAL_NOTE,
             }, measure_id
 
+    @pytest.mark.renovisor_probes
     def test_the_measure_tally_is_the_contracts_table_as_decision_dd_leaves_it(
         self, document: CapabilityDocument
     ) -> None:
         """Computed from the probes, never declared; this is what it comes to."""
         assert document.tally() == EXPECTED_TALLY
 
+    @pytest.mark.renovisor_probes
     def test_the_measures_on_the_list_are_the_ones_the_list_names(
         self, document: CapabilityDocument
     ) -> None:
@@ -394,6 +405,7 @@ class TestTheDocument:
 
         assert listed == EXPECTED_NOT_IMPLEMENTED
 
+    @pytest.mark.renovisor_probes
     def test_a_substitution_is_told_apart_from_a_gap(self, document: CapabilityDocument) -> None:
         """The review's D-E: the frontend hides one class and may offer the other with its note."""
         measures = {entry["measure_id"]: entry for entry in document.body["measures"]}
@@ -411,6 +423,7 @@ class TestTheDocument:
         assert Aggregation.is_substitution(hybrid["note"])
         assert hybrid["substitution"] is True
 
+    @pytest.mark.renovisor_probes
     def test_every_value_entry_announces_whether_it_is_a_substitution(
         self, document: CapabilityDocument
     ) -> None:
@@ -429,6 +442,7 @@ class TestTheDocument:
                 assert isinstance(value["substitution"], bool)
                 assert value["substitution"] is Aggregation.is_substitution(value.get("note"))
 
+    @pytest.mark.renovisor_probes
     def test_the_heat_pump_values_carry_their_own_flags(self, document: CapabilityDocument) -> None:
         """The concrete values F8 reads: stand-ins say so, implemented values do not."""
         heating = next(
@@ -447,6 +461,7 @@ class TestTheDocument:
         assert statuses["conventional_lpg_heating"]["substitution"] is True
         assert statuses["condensing_lpg_heating"]["substitution"] is True
 
+    @pytest.mark.renovisor_probes
     def test_hvo_is_reported_as_lpg_is(self, document: CapabilityDocument) -> None:
         """HVO runs the oil twin as heating oil: a listed stand-in on the measure and on the house (hisim-epc.19)."""
         heating = next(
@@ -464,6 +479,7 @@ class TestTheDocument:
         assert values["hvo_heating"]["note"] == "No HVO fuel in HiSim; modelled as heating oil."
         assert "HVO" in house["hvo_heating"]["note"]
 
+    @pytest.mark.renovisor_probes
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument
     ) -> None:
@@ -482,6 +498,7 @@ class TestTheDocument:
         assert statuses["air_source_heat_pump"] == ReportStatus.USED.value
         assert statuses["hybrid_heat_pump"] == ReportStatus.NOT_IMPLEMENTED_YET.value
 
+    @pytest.mark.renovisor_probes
     def test_the_document_names_the_build_it_came_from(self, document: CapabilityDocument) -> None:
         """Immutable per engine version, so it has to say which version it is of."""
         translator = document.body["translator"]
@@ -491,6 +508,7 @@ class TestTheDocument:
         assert translator["catalogue_revision"].startswith("renovisor-api-contract@")
         assert translator["probes"] > 0
 
+    @pytest.mark.renovisor_probes
     def test_the_inventory_fields_are_aggregated_the_same_way(self, document: CapabilityDocument) -> None:
         """``fields`` is the same report, taken over the house instead of over the package."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -505,6 +523,7 @@ class TestTheDocument:
         )
         assert fields["house.building.roof.area_in_m2"]["status"] == ReportStatus.DEFAULTED.value
 
+    @pytest.mark.renovisor_probes
     def test_the_retrofit_status_announces_every_variant_and_defaults_to_unrenovated(
         self, document: CapabilityDocument
     ) -> None:
@@ -531,6 +550,7 @@ class TestTheDocument:
         for stem in ("BE.N.SFH.05", "IE.N.AB.10", "IE.N.SFH.10", "NL.N.TH.06"):
             assert stem in note
 
+    @pytest.mark.renovisor_probes
     def test_the_pairs_are_published_as_conditions(self, document: CapabilityDocument) -> None:
         """measure-capabilities 0.5.0: what a pair reports differently is a condition on the leaf it states."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -574,6 +594,7 @@ class TestTheDocument:
             }]
         assert "conditions" not in emitters["low_temperature_radiator"]
 
+    @pytest.mark.renovisor_probes
     def test_the_worst_case_pair_is_no_condition(self, document: CapabilityDocument) -> None:
         """usual_refurb stays approximated everywhere; its pair gives no condition anywhere (owner decision)."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -585,6 +606,7 @@ class TestTheDocument:
             [entry.get("conditions", []) for entry in document.body["fields"]]
         )
 
+    @pytest.mark.renovisor_probes
     def test_every_condition_is_one_a_pair_request_holds(self, document: CapabilityDocument) -> None:
         """Each condition's terms hold for a pair probe's request: a condition is what a probe tried."""
         anchor = ProbeSet.anchor()
@@ -605,6 +627,7 @@ class TestTheDocument:
         # is listed (renovisorissues #72).
         assert len(found) == 13
 
+    @pytest.mark.base
     def test_a_term_is_matched_as_the_request_states_it(self) -> None:
         """A leaf the request does not state never matches; a value compares as JSON, so 1 is not true."""
         request = {"house": {"heating": {"type_of_system": "air_source_heat_pump"}},
@@ -618,6 +641,7 @@ class TestTheDocument:
         assert not Conditions.holds([{"path": "house.heating.cooking_range", "in": [1]}],
                                     {"house": {"heating": {"cooking_range": True}}})
 
+    @pytest.mark.base
     def test_a_term_the_schema_cannot_spell_stops_the_build(self) -> None:
         """A removal or an applicant answer is no term; a condition that needed one would announce too much."""
         with pytest.raises(ValueError, match="cannot state"):
@@ -628,6 +652,7 @@ class TestTheDocument:
             Conditions.terms({"house.heating.flow_temperature_in_celsius": 40},
                              "house.heating.flow_temperature_in_celsius", "pair:x")
 
+    @pytest.mark.renovisor_probes
     def test_two_builds_of_one_state_are_byte_identical(
         self, document: CapabilityDocument, independent_capability_document: CapabilityDocument, tmp_path: Path
     ) -> None:
@@ -644,10 +669,10 @@ class TestTheDocument:
         assert first_path.read_text(encoding="utf-8").endswith("\n")
 
 
-@pytest.mark.base
 class TestTheRunner:
     """Every probe goes through validate, apply and translate, and nothing else."""
 
+    @pytest.mark.renovisor_probes
     def test_a_probe_of_added_insulation_is_refused_by_the_semantic_check_alone(
         self, document: CapabilityDocument
     ) -> None:
@@ -660,6 +685,7 @@ class TestTheRunner:
         for result in layers:
             assert result.refused == ("added_insulation.not_allowed",), result.probe.name
 
+    @pytest.mark.base
     def test_a_refused_probe_is_a_result_rather_than_an_exception(self) -> None:
         """``ES`` has no TABULA typology; that is a refusal the document records, not a crash."""
         probe = Probe(name="field:location.country=ES", kind=ProbeKind.FIELD)
@@ -671,6 +697,7 @@ class TestTheRunner:
 
         assert results[0].refused == ("location.country.unsupported",)
 
+    @pytest.mark.renovisor_probes
     def test_the_solid_fuel_probe_is_refused_by_name(self, document: CapabilityDocument) -> None:
         """The value is probed, refused, and so left out of the field's values (renovisorissues #76)."""
         [result] = [
@@ -682,7 +709,6 @@ class TestTheRunner:
         assert result.refused == ("heating.type_of_system.unsupported",)
 
 
-@pytest.mark.base
 class TestANoteFollowsTheStatusItExplains:
     """The step 8 addendum A: an entry is explained by the probe that set its status.
 
@@ -699,6 +725,7 @@ class TestANoteFollowsTheStatusItExplains:
             probe=Probe(name=name, kind=ProbeKind.BLOCK), fields={path: (status, note)}
         )
 
+    @pytest.mark.base
     def test_a_two_probe_field_carries_the_note_of_the_probe_that_set_the_status(self) -> None:
         """Two probes, two statuses, two sentences: the published one follows the status."""
         path = "house.example.field"
@@ -712,6 +739,7 @@ class TestANoteFollowsTheStatusItExplains:
         assert entries[0]["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value
         assert entries[0]["note"] == "no model for it"
 
+    @pytest.mark.base
     def test_probes_that_tie_at_the_worst_status_carry_all_their_sentences(self) -> None:
         """Each is true of a different request, so picking one of them would hide the other."""
         path = "house.example.field"
@@ -725,6 +753,7 @@ class TestANoteFollowsTheStatusItExplains:
 
         assert entries[0]["note"] == f"no heat pump{NoteAggregation.SEPARATOR}no immersion"
 
+    @pytest.mark.base
     def test_two_probes_that_tie_with_the_same_sentence_carry_it_once(self) -> None:
         """A sentence repeated by every probe of a kind is still one sentence."""
         observations = (
@@ -734,6 +763,7 @@ class TestANoteFollowsTheStatusItExplains:
 
         assert NoteAggregation.note_of(observations, ReportStatus.NOT_IMPLEMENTED_YET) == "one sentence"
 
+    @pytest.mark.base
     def test_a_status_with_no_sentence_behind_it_carries_none(self) -> None:
         """A note belonging to another status is not borrowed to fill the gap."""
         observations = (
@@ -743,6 +773,7 @@ class TestANoteFollowsTheStatusItExplains:
 
         assert NoteAggregation.note_of(observations, ReportStatus.APPROXIMATED) is None
 
+    @pytest.mark.renovisor_probes
     def test_the_document_explains_the_field_that_the_defect_was_found_on(
         self, document: CapabilityDocument
     ) -> None:
@@ -754,6 +785,7 @@ class TestANoteFollowsTheStatusItExplains:
         assert "modelled as dhw_only" in supplies["note"]
         assert supplies["substitution"] is True
 
+    @pytest.mark.renovisor_probes
     def test_the_two_unimplemented_hot_water_supplies_are_both_named(
         self, document: CapabilityDocument
     ) -> None:
@@ -765,6 +797,7 @@ class TestANoteFollowsTheStatusItExplains:
         assert "domestic-hot-water heat pump" in supply["note"]
         assert "immersion-heater" in supply["note"]
 
+    @pytest.mark.renovisor_probes
     def test_a_used_option_carries_no_sentence_from_one_of_its_values(
         self, document: CapabilityDocument
     ) -> None:
@@ -780,10 +813,10 @@ class TestANoteFollowsTheStatusItExplains:
         assert "modelled as air_source_heat_pump" in hybrid["note"]
 
 
-@pytest.mark.base
 class TestTheResultsSection:
     """The step 8 addendum B: what the caller gets back, beside what the translator accepts."""
 
+    @pytest.mark.renovisor_probes
     def test_every_payload_field_has_an_entry(self, document: CapabilityDocument) -> None:
         """Generated from the tables the payload is built from, so it cannot miss one."""
         results = document.body["results"]
@@ -793,6 +826,7 @@ class TestTheResultsSection:
         assert kpis == {f"kpis.{field.value}" for field in KpiField}
         assert {f"costs.{field.value}" for field in CostField} <= costs
 
+    @pytest.mark.base
     def test_it_is_generated_from_the_payload_tables_and_not_from_a_second_list(self) -> None:
         """The section is the two schema tables serialized, entry for entry."""
         section = ResultsSection.build()
@@ -800,6 +834,7 @@ class TestTheResultsSection:
         assert section["kpis"] == [row.to_json() for row in KpiSchema.rows()]
         assert section["costs"] == [row.to_json() for row in CostSchema.rows()]
 
+    @pytest.mark.renovisor_probes
     def test_a_published_field_names_its_source_and_its_provenance(
         self, document: CapabilityDocument
     ) -> None:
@@ -811,6 +846,7 @@ class TestTheResultsSection:
         assert "Purchased energy consumption" in demand["source"]
         assert any("PARTIAL when the period" in condition for condition in demand["conditions"])
 
+    @pytest.mark.renovisor_probes
     def test_every_cost_field_is_absent_with_the_reason_the_payload_writes(
         self, document: CapabilityDocument
     ) -> None:
@@ -832,6 +868,7 @@ class TestTheResultsSection:
         assert "economics_result.json" in entries["costs.grant_in_euro"]["reason"]
         assert "A13" in entries["costs.property_value_increase_in_percent"]["reason"]
 
+    @pytest.mark.renovisor_probes
     def test_a_field_that_is_published_but_can_be_absent_says_both(
         self, document: CapabilityDocument
     ) -> None:
@@ -843,12 +880,13 @@ class TestTheResultsSection:
         assert "no insulation layer" in embodied["reason"]
         assert "element area" in embodied["when"]
 
+    @pytest.mark.renovisor_probes
     def test_the_section_is_what_the_shared_schema_declares(self, document: CapabilityDocument) -> None:
         """``results`` is validated with the rest of the document against the shared schema."""
         document.validate()
 
 
-@pytest.mark.base
+@pytest.mark.renovisor_probes
 class TestTheSchemaIsStrict:
     """The shared schema admits exactly what the document carries (decision of 2026-09-23).
 
@@ -957,7 +995,6 @@ def _request_schema_leaf(path: str) -> Optional[Dict[str, Any]]:
     return {key: value for candidate in expand(node) for key, value in candidate.items() if key in BOUND_KEYWORDS}
 
 
-@pytest.mark.base
 class TestNumericOptions:
     """A numeric option publishes bounds only where the request schema bounds its field inclusively."""
 
@@ -973,6 +1010,7 @@ class TestNumericOptions:
         "battery_system.power_in_watt": "house.battery.power_in_watt",
     }
 
+    @pytest.mark.base
     def test_every_free_numeric_option_has_two_probe_points(self) -> None:
         """A numeric option the catalogue adds without points fails here by name, not in a probe."""
         for measure_id in CatalogueTable.ids():
@@ -981,6 +1019,7 @@ class TestNumericOptions:
                     (low, high), _published = ProbeSet.option_points(measure_id, option.name)
                     assert low < high, (measure_id, option.name)
 
+    @pytest.mark.base
     def test_an_option_with_a_schema_field_is_probed_inside_it_and_publishes_only_inclusive_bounds(self) -> None:
         """Published bounds are the schema's own; an exclusive or missing bound makes them private points."""
         for qualified, path in self.OPTION_FIELDS.items():
@@ -997,6 +1036,7 @@ class TestNumericOptions:
             if published:
                 assert (low, high) == (declared["minimum"], declared["maximum"]), qualified
 
+    @pytest.mark.renovisor_probes
     def test_a_private_probe_point_never_reaches_the_document(self, document: CapabilityDocument) -> None:
         """The battery's two numbers and the array's power and shading publish no minimum or maximum."""
         measures = {entry["measure_id"]: entry for entry in document.body["measures"]}
@@ -1006,10 +1046,10 @@ class TestNumericOptions:
             assert "minimum" not in option and "maximum" not in option, qualified
 
 
-@pytest.mark.base
 class TestNumericFields:
     """A numeric field publishes the request schema's bounds, never its probe points (PR #807)."""
 
+    @pytest.mark.renovisor_probes
     def test_a_numeric_field_publishes_exactly_the_schemas_bounds(self, document: CapabilityDocument) -> None:
         """Each of the four bound keywords the schema declares, under its own name; nothing invented, no ``values``."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -1028,6 +1068,7 @@ class TestNumericFields:
                 else:
                     assert key not in entry, (path, key)
 
+    @pytest.mark.renovisor_probes
     def test_the_exclusive_bounds_of_the_request_schema_are_published(self, document: CapabilityDocument) -> None:
         """hisim-9h7t: roof U-value, SCOP, collector area and the two device powers are > 0 or > 1."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -1040,6 +1081,7 @@ class TestNumericFields:
         assert fields["house.battery.power_in_watt"]["exclusiveMinimum"] == 0
         assert "minimum" not in fields["house.battery.power_in_watt"]
 
+    @pytest.mark.renovisor_probes
     def test_only_a_probed_numeric_field_carries_bounds(self, document: CapabilityDocument) -> None:
         """A bound on any other entry would be one nobody derived from the schema."""
         numeric = {path for path, shape in ProbeSet.field_shapes().items() if shape is FieldShape.NUMERIC}
@@ -1047,6 +1089,7 @@ class TestNumericFields:
             if set(entry) & {"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}:
                 assert entry["path"] in numeric, entry["path"]
 
+    @pytest.mark.renovisor_probes
     def test_an_enum_declared_field_publishes_the_schemas_enum(self, document: CapabilityDocument) -> None:
         """The three ``electric_vehicles`` fields are enums, not ranges, and read as such."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
@@ -1061,6 +1104,7 @@ class TestNumericFields:
             assert [value["value"] for value in fields[full]["values"]] == expected, path
             assert "minimum" not in fields[full] and "maximum" not in fields[full], path
 
+    @pytest.mark.renovisor_probes
     def test_every_enum_declared_inventory_field_is_probed_per_value(self, document: CapabilityDocument) -> None:
         """An inventory enum the document lists without ``values`` would hide which values run."""
         for entry in document.body["fields"]:
@@ -1071,6 +1115,7 @@ class TestNumericFields:
                 accepted = [value["value"] for value in entry["values"]]
                 assert accepted == [value for value in declared["enum"] if value in accepted], path
 
+    @pytest.mark.renovisor_probes
     def test_a_country_without_a_typology_is_left_out_of_the_countrys_values(
         self, document: CapabilityDocument
     ) -> None:
@@ -1079,6 +1124,7 @@ class TestNumericFields:
 
         assert [value["value"] for value in fields["location.country"]["values"]] == ["IE", "NL"]
 
+    @pytest.mark.renovisor_probes
     def test_a_free_text_field_publishes_neither_values_nor_bounds(self, document: CapabilityDocument) -> None:
         """The TABULA override is a string: its probe counts towards the field's status and nothing else."""
         entry = {entry["path"]: entry for entry in document.body["fields"]}["house.building.tabula_building_code"]
@@ -1086,6 +1132,7 @@ class TestNumericFields:
         assert entry["status"] == ReportStatus.USED.value
         assert not set(entry) & {"values", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}
 
+    @pytest.mark.renovisor_probes
     def test_every_varied_leaf_some_probe_translated_is_in_the_document(self, document: CapabilityDocument) -> None:
         """Only a leaf whose every probe was refused (``added_insulation``) is absent; a cost line never shows."""
         fields = {entry["path"] for entry in document.body["fields"]}
@@ -1093,6 +1140,7 @@ class TestNumericFields:
         assert set(_published(document)) <= fields
         assert not {path for path in fields if path.startswith(Aggregation.PACKAGE_PREFIX)}
 
+    @pytest.mark.base
     def test_every_probe_point_lies_inside_the_schema(self) -> None:
         """A probe the schema refuses would report a refusal rather than a capability."""
         numeric = [path for path, shape in ProbeSet.field_shapes().items() if shape is FieldShape.NUMERIC]
@@ -1106,6 +1154,7 @@ class TestNumericFields:
                 assert point > declared.get("exclusiveMinimum", point - 1), (path, point)
                 assert point < declared.get("exclusiveMaximum", point + 1), (path, point)
 
+    @pytest.mark.base
     def test_the_walker_reads_through_references_and_nullable_alternatives(self) -> None:
         """A bound behind ``$ref`` and a nullable ``oneOf`` is found; an exclusive one keeps its own keyword."""
         schema = {
@@ -1126,6 +1175,7 @@ class TestNumericFields:
         with pytest.raises(KeyError):
             RequestSchemaBounds.of("house.block.missing", schema)
 
+    @pytest.mark.base
     def test_a_path_is_either_enumerated_or_numeric(self) -> None:
         """The two tables are disjoint, so neither silently shadows the other in the probe set."""
         assert not set(ProbeSet.FIELD_VALUES) & set(ProbeSet.FIELD_PROBE_POINTS)
@@ -1135,6 +1185,7 @@ class TestNumericFields:
         for path in ProbeSet.FIELD_PROBE_POINTS:
             assert shapes[f"{ProbeSet.HOUSE_PREFIX}{path}"] is FieldShape.NUMERIC, path
 
+    @pytest.mark.renovisor_probes
     def test_the_conditioned_floor_area_publishes_the_range_hisim_simulates(
         self, document: CapabilityDocument
     ) -> None:
@@ -1154,6 +1205,7 @@ class TestNumericFields:
         assert living["exclusiveMinimum"] == 0
         assert "minimum" not in living and "maximum" not in living and "exclusiveMaximum" not in living
 
+    @pytest.mark.base
     @pytest.mark.parametrize("path", sorted(RequestSchemaBounds.SEMANTIC_RANGES))
     def test_every_semantic_range_lies_within_the_schemas_bounds(self, path: str) -> None:
         """A published range replaces the schema's, so it must not reach past it.
@@ -1175,6 +1227,7 @@ class TestNumericFields:
         if "exclusiveMaximum" in declared:
             assert high < declared["exclusiveMaximum"], path
 
+    @pytest.mark.renovisor_probes
     def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
         """Enumerations, booleans and the glazing-pane counts still list their values.
 

@@ -29,7 +29,7 @@ def fixture_page(translation_map_page: str) -> str:
     return translation_map_page
 
 
-@pytest.mark.base
+@pytest.mark.renovisor_probes
 class TestTheCommittedPageIsCurrent:
     """The freshness claim of decision V1."""
 
@@ -64,36 +64,41 @@ class TestTheCommittedPageIsCurrent:
         assert target.read_text(encoding="utf-8") == before
 
 
-@pytest.mark.base
 class TestWhatThePageShows:
     """One row per measure, one per inventory field, and the two kinds of omission apart."""
 
+    @pytest.mark.renovisor_probes
     def test_it_is_one_self_contained_html_file(self, page: str) -> None:
         """It travels as an attachment to a contract discussion and opens from a file system."""
         assert page.startswith("<!doctype html>")
         assert "<script src=" not in page
         assert "<link rel=" not in page
 
+    @pytest.mark.renovisor_probes
     def test_every_catalogue_measure_has_a_row(self, page: str) -> None:
         """A measure that fell out of the registry would fall off the page with it."""
         for measure_id in CatalogueTable.ids():
             assert f"<code>{measure_id}</code>" in page
 
+    @pytest.mark.renovisor_probes
     def test_the_header_counts_the_measures_by_status(self, page: str) -> None:
         """The tally the acceptance criterion names, printed where a reader sees it first."""
         assert re.search(r"measures: \d+ supported, \d+ approximated, \d+ not_implemented_yet", page)
 
+    @pytest.mark.renovisor_probes
     def test_the_legend_tells_a_substitution_apart_from_a_gap(self, page: str) -> None:
         """The review's D-E: the frontend hides one class and may offer the other."""
         assert "substituted" in page
         assert MapPalette.BY_STATUS["substituted"][2] in page
         assert MapPalette.BY_STATUS["not_implemented_yet"][2] in page
 
+    @pytest.mark.renovisor_probes
     def test_a_measure_with_no_model_is_marked_as_a_gap(self, page: str) -> None:
         """``outside_shading`` has no Building parameter at all, so it is not a substitution."""
         row = page[page.index("<code>outside_shading</code>"):][:400]
         assert "not_implemented_yet" in row
 
+    @pytest.mark.renovisor_probes
     def test_the_worked_example_traces_the_vendored_mockup(self, page: str) -> None:
         """One example, and the page shows all four of its stages."""
         assert "The request (the vendored mockup)" in page
@@ -101,11 +106,13 @@ class TestWhatThePageShows:
         assert "The mapping report" in page
         assert "renovisor_" in page
 
+    @pytest.mark.renovisor_probes
     def test_the_inventory_table_names_request_paths(self, page: str) -> None:
         """A reader looking for one field looks for its own path, not for a HiSim name."""
         assert "house.building.facade.u_value_in_watt_per_m2_per_kelvin" in page
         assert "house.occupancy.number_of_residents" in page
 
+    @pytest.mark.base
     @pytest.mark.parametrize(
         "entry, shown",
         [
@@ -120,7 +127,7 @@ class TestWhatThePageShows:
         assert TranslationMap._bounds(entry) == shown  # pylint: disable=protected-access
 
 
-@pytest.mark.base
+@pytest.mark.renovisor_probes
 class TestTheResultPane:
     """What one finished calculation answers with, printed beside what it accepts."""
 

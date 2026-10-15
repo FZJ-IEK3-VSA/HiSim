@@ -34,7 +34,9 @@ pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
 Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `assemblies` (every test under
-`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job)
+`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job), `renovisor_probes` (the
+tests that read RenoVisor's capability document or translation map; its own CI job, one process, so the
+document is built once)
 
 ### Run an energy system (declarative YAML — the declarative input)
 ```bash
@@ -201,7 +203,11 @@ has not implemented is a note in the mapping report and the calculation runs, bu
 `not_implemented_yet.yaml` says so; anything else that cannot be mapped fails the translator's own build.
 `tests/renovisor/test_capabilities.py` keeps that list honest in both directions.
 
-Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_setups`).
+Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_setups`) and the tests that read
+the session fixtures `capability_document`, `independent_capability_document` or `translation_map_page` of
+`tests/renovisor/conftest.py` (`renovisor_probes`: each build runs the whole probe set, about 100 s, so they
+run in one process in their own CI job). The conftest refuses such a test marked `base` or unmarked, and the
+marker on a test that reads none of them.
 
 ## Adding a new component
 

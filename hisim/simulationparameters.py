@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from hisim import log
 from hisim.caching.locations import CacheLocations
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulation_day import SimulationDay
 
 
 class PartLoadThresholdError(ValueError):
@@ -35,7 +36,8 @@ class SimulationWindowError(ValueError):
     """A simulated period that breaks the window contract of :class:`SimulationParameters`.
 
     The window is the span from ``start_date`` to ``end_date`` that a run simulates. It must start at
-    midnight, cover whole days, lie within one calendar year and divide into whole timesteps; see
+    midnight, cover whole days, lie within one calendar year and divide into whole timesteps, with a step
+    length that divides a day; see
     :meth:`SimulationParameters.validated_window`. Raised at construction, so a simulation-parameters
     file with such a window is refused before anything runs.
     """
@@ -82,7 +84,8 @@ class SimulationParameters:
         logging configuration, and various simulation options.
 
         The window from ``start_date`` to ``end_date`` must obey the window contract of
-        :meth:`validated_window`: start at midnight, whole days, one calendar year, whole timesteps.
+        :meth:`validated_window`: start at midnight, whole days, one calendar year, whole timesteps, a step
+        length that divides a day.
 
         Args:
             start_date: The start of the simulation period, at midnight.
@@ -90,8 +93,8 @@ class SimulationParameters:
                 ``start_date``. The start of the last timestep, ``end_date - seconds_per_timestep``,
                 lies in the year of ``start_date``; ``end_date`` itself may be 1 January of the next
                 year, as it is for a full year.
-            seconds_per_timestep: The duration of each simulation timestep in seconds; it divides the
-                period into whole timesteps.
+            seconds_per_timestep: The duration of each simulation timestep in seconds; it divides a day of
+                86 400 s, and with it the period, into whole timesteps.
             country: Country code for location-specific data (e.g., weather, tariffs).
                 Defaults to 'DE' (Germany).
             result_directory: Directory path where simulation results will be stored.
@@ -180,7 +183,18 @@ class SimulationParameters:
         self.part_load_above_seconds: float = self.validated_part_load_above_seconds(part_load_above_seconds)
 
     #: The length of the days a window is made of. A window is a whole number of these.
-    SECONDS_PER_DAY: ClassVar[int] = 86400
+    SECONDS_PER_DAY: ClassVar[int] = SimulationDay.SECONDS_PER_DAY
+
+    @property
+    def timesteps_per_day(self) -> int:
+        """The exact number of timesteps in each day of the run, which rule 5 of the window contract makes whole.
+
+        Example: 96 at 900 s, 24 at 3600 s. The single-day chart slices a day of the run by it.
+
+        Returns:
+            The number of timesteps per day.
+        """
+        return SimulationDay.timesteps_per_day(self.seconds_per_timestep)
 
     @classmethod
     def validated_window(
@@ -196,11 +210,16 @@ class SimulationParameters:
         3. lie within one calendar year: ``start_date`` and the start of the last timestep,
            ``end_date - seconds_per_timestep``, fall in the same year. The profiles a run reads are
            one year long, so a window across 31 December has no single source to read from;
-        4. divide into whole timesteps: the duration is a multiple of ``seconds_per_timestep``.
+        4. divide into whole timesteps: the duration is a multiple of ``seconds_per_timestep``;
+        5. split every day into whole timesteps: ``seconds_per_timestep`` divides the 86 400 s of a day.
+           Every day of the run then starts a timestep and has the same number of them
+           (:attr:`timesteps_per_day`), which the single-day chart, the carpet and the weather's daily
+           average outside temperature rely on. A step longer than a day is refused by this rule too.
 
         Example: 1 July 2021 to 8 July 2021 at 900 s passes and gives 672 timesteps; 1 July 2021
         06:00 to 8 July 2021 is refused (not midnight), as is 30 December 2021 to 2 January 2022
-        (two years) and one day at 7000 s (86 400 s is not a multiple of 7000 s). A full year,
+        (two years), one day at 7000 s (86 400 s is not a multiple of 7000 s), and two days at 16 h
+        (three whole timesteps, but a day is one and a half of them). A full year,
         1 January 2021 to 1 January 2022, passes: its last timestep starts on 31 December 2021.
 
         Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
@@ -218,7 +237,7 @@ class SimulationParameters:
             The number of timesteps in the window.
 
         Raises:
-            SimulationWindowError: If the window breaks any of the four rules, or if
+            SimulationWindowError: If the window breaks any of the five rules, or if
                 ``seconds_per_timestep`` is not a positive, finite real number (``inf``, ``nan`` and
                 ``True`` are refused; a numpy integer or float is accepted).
         """
@@ -255,6 +274,13 @@ class SimulationParameters:
                 f"The simulation must lie within one calendar year, but it starts in {start_date.year} and "
                 f"its last timestep starts in {last_timestep_start.year} ({last_timestep_start.isoformat()}). "
                 f"The profiles a run reads are one year long; split the run at 1 January."
+            )
+        if not SimulationDay.divides_a_day(seconds_per_timestep):
+            raise SimulationWindowError(
+                f"A step length of {seconds_per_timestep} s does not divide a day of {cls.SECONDS_PER_DAY} s, so "
+                f"the days of the run are not whole numbers of timesteps. Every day must start a timestep: the "
+                f"single-day plot, the carpet and the daily average outside temperature are taken per day. Use a "
+                f"step length that divides {cls.SECONDS_PER_DAY} s, such as 60, 900 or 3600 s."
             )
         return duration // timestep
 

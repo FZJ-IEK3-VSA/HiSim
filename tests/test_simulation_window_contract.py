@@ -1,12 +1,12 @@
 """Tests for the window contract of :class:`hisim.simulationparameters.SimulationParameters`.
 
 The window is the span from ``start_date`` to ``end_date`` a run simulates. Every profile-driven
-component, the simulator's results index and the carpet and single-day plots rely on four facts
+component, the simulator's results index and the carpet and single-day plots rely on five facts
 about it, and ``SimulationParameters`` -- the only way a run gets its parameters -- refuses a
 window that breaks any of them: it starts at midnight, covers whole days, lies within one
-calendar year, and divides into whole timesteps. These tests pin each rule from both sides, the
-factories that build the shipped windows, and the energy-system reader reporting a refusal as a
-format error.
+calendar year, divides into whole timesteps, and has a step length that divides a day. These
+tests pin each rule from both sides, the factories that build the shipped windows, and the
+energy-system reader reporting a refusal as a format error.
 """
 
 import datetime
@@ -61,9 +61,17 @@ class TestAcceptedWindows:
         """A step length read through numpy or pandas is accepted, as before the contract."""
         assert _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), seconds_per_timestep) == 96
 
-    def test_a_step_length_that_divides_the_window_but_not_a_day_is_accepted(self) -> None:
-        """Two days in three steps of 16 hours: the rule is whole timesteps over the window."""
-        assert _window(datetime.datetime(2021, 3, 1), datetime.datetime(2021, 3, 3), 16 * 3600) == 3
+    @pytest.mark.parametrize(
+        "seconds_per_timestep",
+        [divisor for divisor in range(1, SimulationParameters.SECONDS_PER_DAY + 1)
+         if SimulationParameters.SECONDS_PER_DAY % divisor == 0],
+    )
+    def test_every_step_length_that_divides_a_day_is_accepted(self, seconds_per_timestep: int) -> None:
+        """All 96 divisors of 86 400 s, from 1 s to a whole day, give a day of whole timesteps."""
+        start = datetime.datetime(2021, 3, 1)
+        end = start + datetime.timedelta(days=2)
+        timesteps = SimulationParameters.validated_window(start, end, seconds_per_timestep)
+        assert timesteps == 2 * SimulationParameters.SECONDS_PER_DAY // seconds_per_timestep
 
 
 class TestRefusedWindows:
@@ -98,6 +106,28 @@ class TestRefusedWindows:
         """86 400 s are not a multiple of 7000 s; the old code dropped the remainder silently."""
         with pytest.raises(SimulationWindowError, match="whole number of 7000 s timesteps"):
             _window(datetime.datetime(2021, 7, 1), datetime.datetime(2021, 7, 2), 7000)
+
+    @pytest.mark.parametrize(
+        ("days", "seconds_per_timestep"),
+        [
+            (2, 16 * 3600),  # three whole timesteps over the window, but a day is one and a half
+            (7, 7 * 3600),  # 24 timesteps over the week, but a day is 24/7 of them
+            (2, 2 * 86400),  # one timestep over the window, longer than a day
+        ],
+    )
+    def test_a_step_length_that_divides_the_window_but_not_a_day_is_refused(
+        self, days: int, seconds_per_timestep: float
+    ) -> None:
+        """Rule 5: every day of the run must start a timestep, so the step length divides 86 400 s."""
+        start = datetime.datetime(2021, 3, 1)
+        with pytest.raises(SimulationWindowError, match="does not divide a day of 86400 s"):
+            SimulationParameters.validated_window(start, start + datetime.timedelta(days=days), seconds_per_timestep)
+
+    def test_the_number_of_timesteps_per_day_is_exact(self) -> None:
+        """640 s, the part-load threshold test's step, is 135 timesteps a day; 15 minutes are 96."""
+        start = datetime.datetime(2021, 1, 1)
+        assert SimulationParameters(start, start + datetime.timedelta(days=1), 640).timesteps_per_day == 135
+        assert SimulationParameters.one_week_only(2021, 900).timesteps_per_day == 96
 
     @pytest.mark.parametrize("seconds_per_timestep", [0, -60, float("inf"), float("nan")])
     def test_a_step_length_that_is_not_positive_is_refused(self, seconds_per_timestep: int) -> None:

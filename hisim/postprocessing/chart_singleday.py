@@ -126,9 +126,15 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         Returns:
             A ``(data_slice, plot_title)`` tuple, where ``data_slice`` is the
             sub-series covering the requested day with its own index (or the original
-            ``data_with_units`` when the data ends before that day does) and ``plot_title``
-            is the assembled title string ``"{title} {month} {day}{ordinal}"``.
+            ``data_with_units`` when a timestep is so long that a day rounds to no timestep at all)
+            and ``plot_title`` is the assembled title string ``"{title} {month} {day}{ordinal}"``.
+
+        Raises:
+            ValueError: If ``day_in_window`` is negative or names a day the data does not reach,
+                so that the day plotted is always the day the title names.
         """
+        if day_in_window < 0:
+            raise ValueError(f"day_in_window counts the days of the run from 0, so it cannot be {day_in_window}.")
         timesteps_per_day = int(round(24 / time_correction_factor_in_hours))
         firstindex = day_in_window * timesteps_per_day
         lastindex = firstindex + timesteps_per_day
@@ -144,9 +150,14 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             ordinal = "th"
         plot_title = f"{title} {label_months_lowercase[date.month - 1]} {day_number}{ordinal}"
 
-        if 0 < timesteps_per_day and lastindex <= len(data_with_units):
-            return data_with_units.iloc[firstindex:lastindex], plot_title
-        return data_with_units, plot_title
+        if timesteps_per_day <= 0:
+            return data_with_units, plot_title
+        if lastindex > len(data_with_units):
+            raise ValueError(
+                f"Day {day_in_window} of the run, {date.isoformat()}, ends at row {lastindex}, but the data "
+                f"has {len(data_with_units)} rows."
+            )
+        return data_with_units.iloc[firstindex:lastindex], plot_title
 
     def get_day_data(self) -> pd.Series:
         """Extract the sub-series for the configured day of the run.

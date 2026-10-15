@@ -140,19 +140,30 @@ def test_build_day_slice_subhourly_resolution() -> None:
     assert list(data_slice.values) == [float(v) for v in range(96, 192)]
 
 
-def test_build_day_slice_returns_full_data_when_the_data_ends_before_the_day() -> None:
-    """When the requested day runs past the end of the data, the whole series is returned unchanged."""
-    short_data = _make_series(5)
-    data_slice, plot_title = ChartSingleDay.build_day_slice(
-        data_with_units=short_data,
-        window_start=JANUARY_FIRST,
-        day_in_window=0,
-        time_correction_factor_in_hours=1.0,
-        label_months_lowercase=LABEL_MONTHS,
-        title="Short",
-    )
-    assert plot_title == "Short January 1st"
-    assert data_slice is short_data
+def test_build_day_slice_refuses_a_day_the_data_does_not_reach() -> None:
+    """A day past the end of the data is refused, instead of plotting the whole series under its date."""
+    with pytest.raises(ValueError, match="2021-01-08"):
+        ChartSingleDay.build_day_slice(
+            data_with_units=_make_series(24 * 7),
+            window_start=JANUARY_FIRST,
+            day_in_window=7,
+            time_correction_factor_in_hours=1.0,
+            label_months_lowercase=LABEL_MONTHS,
+            title="Short",
+        )
+
+
+def test_build_day_slice_refuses_a_negative_day() -> None:
+    """Day -1 would be an empty slice titled with the last day of the year before."""
+    with pytest.raises(ValueError, match="cannot be -1"):
+        ChartSingleDay.build_day_slice(
+            data_with_units=_make_series(24 * 7),
+            window_start=JANUARY_FIRST,
+            day_in_window=-1,
+            time_correction_factor_in_hours=1.0,
+            label_months_lowercase=LABEL_MONTHS,
+            title="Short",
+        )
 
 
 def test_build_day_slice_does_not_mutate_input_series() -> None:

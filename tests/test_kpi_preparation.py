@@ -538,6 +538,16 @@ class TestBatteryLosses:
         ) == pytest.approx(0.5, abs=1e-12)
 
     @pytest.mark.base
+    def test_a_negative_discharged_energy_is_refused(self) -> None:
+        """Catches a signed discharge sum (negative) passed as the discharged energy, which would double the losses."""
+        with pytest.raises(ValueError, match="magnitudes"):
+            KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=10.0,
+                discharged_energy_in_kilowatt_hour=-2.0,
+                stored_energy_increase_in_kilowatt_hour=7.0,
+            )
+
+    @pytest.mark.base
     def test_the_battery_kpis_read_the_stored_energy_column(self) -> None:
         """Catches the battery KPIs dropping the stored-energy column of the result frame.
 

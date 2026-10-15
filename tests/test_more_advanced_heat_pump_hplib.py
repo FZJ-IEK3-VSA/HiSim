@@ -38,6 +38,34 @@ def _eight_kilowatt_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("thermal_power_in_watt", [0.0, -8000.0, float("nan"), float("inf")])
+def test_a_thermal_power_that_is_not_finite_or_not_above_0_is_refused_when_the_heat_pump_is_built(
+    thermal_power_in_watt: float,
+) -> None:
+    """Catches a stated power that builds: hplib scales its fit to it and the buffer beside it gets 0 l or less.
+
+    A power stated in the configuration replaces the heating-load law, so the heat pump checks it when it is built.
+    """
+    config = _eight_kilowatt_heat_pump_config()
+    config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    with pytest.raises(
+        ValueError,
+        match=rf"MoreAdvancedHeatPumpHPLib: the heat pump's set_thermal_output_power_in_watt must be a finite power "
+        rf"above 0 W, got {thermal_power_in_watt!r} W",
+    ):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
+def test_an_eight_kilowatt_heat_pump_is_built_at_its_stated_power() -> None:
+    """Catches a guard that refuses or rounds a valid stated power: 8000 W reaches hplib's fit as 8000 W."""
+    heat_pump = MoreAdvancedHeatPumpHPLib(
+        config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+    )
+    assert heat_pump.p_th_set == 8000
+
+
+@pytest.mark.base
 def test_heat_pump_hplib_new() -> None:
     """Test MoreAdvancedHeatPumpHPLib with a generic model in heating mode.
 

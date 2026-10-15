@@ -338,8 +338,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Loads the parameters of the specified heat pump.
 
         Raises:
-            ValueError: If the nominal secondary mass flow is negative or not finite, or if it is unset or 0 in a
-                setup whose water pump runs at that fixed flow (hot-water storage in series or no storage).
+            ValueError: If the set thermal output power is not a finite power above 0 W
+                (:meth:`refuse_an_impossible_thermal_power`), if the nominal secondary mass flow is negative or not
+                finite, or if it is unset or 0 in a setup whose water pump runs at that fixed flow (hot-water storage
+                in series or no storage).
         """
 
         self.my_simulation_parameters = my_simulation_parameters
@@ -362,7 +364,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         self.t_out_val = int(config.flow_temperature_in_celsius)
 
-        self.p_th_set = int(concrete(config.set_thermal_output_power_in_watt))
+        self.p_th_set = int(self.refuse_an_impossible_thermal_power(config))
 
         self.cycling_mode = config.cycling_mode
 
@@ -1026,6 +1028,37 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             )
         )
         return connections
+
+    @staticmethod
+    def refuse_an_impossible_thermal_power(config: MoreAdvancedHeatPumpHPLibConfig) -> float:
+        """Return the machine's set thermal output power in W, refusing one that is not finite or not above 0 W.
+
+        The power is ``p_th_set`` of hplib's curve fit, and the buffer vessel beside the machine is sized from it.
+        Its sizing law gives the building's heating load, but a power stated in a configuration replaces the law,
+        so nothing else checks it. For example, 8000.0 is returned unchanged; 0, -8000 and NaN are refused, since
+        hplib would scale its fit to them and the buffer would get a volume of 0 l, a negative volume or NaN.
+
+        There is no upper bound. hplib's device database spans 2.4 to 69.9 kW of rated thermal power, but its
+        generic fit scales linearly with the stated power, so that range is not a limit of the model, and a heat
+        pump for a building with several units may lie above it.
+
+        Args:
+            config: The heat pump's configuration, with its power resolved.
+
+        Returns:
+            float: The set thermal output power in W.
+
+        Raises:
+            ValueError: If the power is not finite or is at or below 0 W.
+        """
+        thermal_power_in_watt = float(concrete(config.set_thermal_output_power_in_watt))
+        if not (math.isfinite(thermal_power_in_watt) and thermal_power_in_watt > 0.0):
+            raise ValueError(
+                f"{config.component_id.name}: the heat pump's set_thermal_output_power_in_watt must be a finite "
+                f"power above 0 W, got {thermal_power_in_watt!r} W: hplib's fit and the buffer beside the machine "
+                "are sized from it."
+            )
+        return thermal_power_in_watt
 
     #: The largest standardised SCOP a configuration may state.
     MAXIMUM_STANDARDIZED_SCOP: ClassVar[float] = 10.0

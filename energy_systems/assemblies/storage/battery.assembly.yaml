@@ -1,7 +1,9 @@
 # A home battery (bslib). It has no L1 controller: the energy manager writes its LoadingPowerInput directly (D21),
 # which is why its controllable output names a device input and binds exactly one controller. Its preset leaves
 # capacity and inverter power to the class laws, which sum the peak power of every array (D10, D27): the fact port
-# lists them in instance order, a one-element list beside one array (G7).
+# lists them in instance order, a one-element list beside one array (G7). The two sizes are stated together or not at
+# all (D31): the component refuses a capacity without its power and the other way round ("state both or neither", EF-4J),
+# so an import stating one is refused here already (EF-77), and the harness always samples them as a pair.
 
 schema_version: 4
 kind: assembly
@@ -19,6 +21,9 @@ parameters:
     {type: float, unit: WATT, default: AUTO, range: {min: 500, max: 15000},
      description: Charge and discharge power; AUTO is 0.5 W per Wp of all arrays.}
      # range: 0.5 W per Wp over the PV box, up to a 15 kW hybrid inverter
+
+constraints:
+  - {all_or_none_of: [capacity_in_kwh, power_in_watt]}
 
 components:
   Battery:

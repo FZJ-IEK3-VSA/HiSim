@@ -699,11 +699,12 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   loss of a hotter tank under start-of-step control: a controller decides on the tank's start temperature, which
   does not move while the step iterates, so an hour-long charge keeps the tank near its supply cap, the
   controller's set temperature, longer than a quarter-hour one. The rest of the amendment of 2026-10-09 stands.
-- **D. SH chain.** *Replaced by §12 (owner, 2026-10-15): start-of-step coupling instead of the step-mean node.*
-  Scope as first written: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
-  buffer, the SH circuits, the iteration histogram test. Done when: buffer and HDS close per step, district
-  heating's bill equals pipe-water `ΔU` plus delivered heat (hisim-9uoo.12 closed), no step at
-  `force_convergence` at 900 s in the boiler, heat-pump and district-heating twins, goldens re-blessed.
+- **D. SH chain.** *Replaced by §12 (owner, 2026-10-15): start-of-step coupling instead of the step-mean node. The
+  done-when below is the first one; §12 says how the stage stands against it.* Scope as first written:
+  `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a buffer, the SH circuits, the
+  iteration histogram test. Done when: buffer and HDS close per step, district heating's bill equals pipe-water `ΔU`
+  plus delivered heat (hisim-9uoo.12 closed), no step at `force_convergence` at 900 s in the boiler, heat-pump and
+  district-heating twins, goldens re-blessed.
 - **E. Energy balance.** Scope: `HydronicPort` on every circuit in #870/#871's check. Done when: the balance
   report closes for every twin, stratification-path storages flagged, no result changes.
 - **F. Cooling.** Scope: cooling into a buffer, heat-pump cooling and brine-pump electricity to the meter, the
@@ -961,6 +962,18 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
   not asserted, like the gas fuel; the P1 bead hisim-fxix.27, filed with pull request 8, addresses it once the
   current pull requests are merged.
   RenoVisor runs at 900 s, so a RenoVisor heat pump's electricity is about 3.5 % low against 60 s.
+
+**Against the first done-when of §9.5 D** (and hisim-fxix.5's):
+
+- *The buffer and the distribution system close per step:* met behind a buffer
+  (`tests/test_space_heating_buffer_twins.py`, every file with a buffer, a January day at 900 s); without a buffer not
+  built (Open).
+- *District heating's bill (hisim-9uoo.12):* not built (Open).
+- *No step at `force_convergence` at 900 s:* not met. The owner accepted the gas twin's forced steps (hisim-fxix.25)
+  and the heat-pump twins' (hisim-fxix.26); the district-heating twin forces none.
+- *Heat-pump comfort at 900 s (hisim-6ehm):* 23.0 degree-hours against 16.3 at 60 s (gas 36.8 against 9.5); open.
+- *Goldens re-blessed, the change announced on renovisorissues (D8):* still to do. Pull requests 1, 4, 5, 7 and 8 name
+  the golden references they move, to be re-blessed with the golden-update workflow; none records an announcement yet.
 
 **Open:**
 

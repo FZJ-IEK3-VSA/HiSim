@@ -1,7 +1,9 @@
 """Contains all the chart classes."""
 
+import datetime
 import gc
-from typing import Callable, ClassVar
+import math
+from typing import Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,8 +45,85 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             path_checker=path_checker,
         )
 
-    def plot(self, xdims: int, data_in_self_units: pd.Series) -> ReportImageEntry | None:
-        """Make a carpet plot.
+    #: Below this many days the x axis names each day by its date; from it on, each month by its name.
+    DAYS_FOR_MONTH_TICKS: ClassVar[int] = 28
+
+    #: At most this many day ticks on the x axis of a window shorter than :attr:`DAYS_FOR_MONTH_TICKS`.
+    MAXIMUM_DAY_TICKS: ClassVar[int] = 7
+
+    @classmethod
+    def x_axis_ticks(
+        cls, window_start: datetime.datetime, number_of_days: int
+    ) -> Tuple[List[float], List[str], str]:
+        """Return where the x axis of a carpet over a run's window is labelled, with what, and its title.
+
+        Column ``i`` of the carpet is the ``i``-th day of the window, counted from ``window_start``,
+        and spans ``i`` to ``i + 1`` on the x axis. A window of at least
+        :attr:`DAYS_FOR_MONTH_TICKS` days is labelled with the month names, each in the column of the
+        15th of its month; a shorter one with the dates of up to :attr:`MAXIMUM_DAY_TICKS` of its
+        days. Example: a full year from 1 January puts "JAN" at 14.5 and "DEC" at 348.5; the week
+        from 1 July 2021 puts "01 Jul" at 0.5 and "07 Jul" at 6.5. The labels come from the window's
+        own dates, so a window that starts in July is not labelled as if it started in January.
+
+        Args:
+            window_start: The first moment of the run, at midnight.
+            number_of_days: The number of days, and carpet columns, in the window.
+
+        Returns:
+            The tick positions, their labels and the title of the x axis.
+        """
+        first_day = window_start.date()
+        if number_of_days >= cls.DAYS_FOR_MONTH_TICKS:
+            positions: List[float] = []
+            labels: List[str] = []
+            for month_index, label in enumerate(cls.months_abbrev_uppercase):
+                column = (datetime.date(first_day.year, month_index + 1, 15) - first_day).days
+                if 0 <= column < number_of_days:
+                    positions.append(column + 0.5)
+                    labels.append(label)
+            return positions, labels, "Month of the year"
+        step_in_days = max(1, math.ceil(number_of_days / cls.MAXIMUM_DAY_TICKS))
+        columns = range(0, number_of_days, step_in_days)
+        return (
+            [column + 0.5 for column in columns],
+            [cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
+            "Day",
+        )
+
+    @staticmethod
+    def y_axis_ticks(timesteps_per_day: int) -> Tuple[List[float], List[str]]:
+        """Return where the time-of-day axis of a carpet is labelled, and with which hours.
+
+        The carpet has one row per timestep of the day, ``timesteps_per_day`` rows from 0 at the bottom
+        to ``timesteps_per_day`` at the top, and the bottom row is the day's last timestep. The axis is
+        labelled every six hours, 24 at the bottom and 0 at the top, at the positions those hours have on
+        it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example: hourly data puts "18" at 6.0;
+        two-hour steps put it at 3.0; four-hour steps put "6" at 4.5, inside the row of 04:00 to 08:00,
+        because that is where 06:00 lies.
+
+        Every step that divides a day gets a carpet, up to one row per day at 24 h: the rows are fewer
+        but each still covers the hours it simulated, and the columns still show one day after the
+        other, so there is no step length above which the plot would say something wrong.
+
+        Args:
+            timesteps_per_day: The number of rows of the carpet, at least 1.
+
+        Returns:
+            The tick positions, bottom to top, and their labels.
+        """
+        quarters = range(0, 5)
+        return (
+            [timesteps_per_day * quarter / 4 for quarter in quarters],
+            [str(24 - 6 * quarter) for quarter in quarters],
+        )
+
+    def plot(
+        self, xdims: int, data_in_self_units: pd.Series, window_start: datetime.datetime
+    ) -> ReportImageEntry | None:
+        """Make a carpet plot: one column per day of the run, one row per timestep of the day.
+
+        Each column starts at midnight, which the window contract of the simulation parameters
+        guarantees for the run's first day and with it for every other.
 
         Args:
             xdims: Number of days (columns) the data is reshaped into.
@@ -52,6 +131,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
                 expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
                 °C, kg/s). The unit is dynamic and may be rescaled during
                 plotting.
+            window_start: The first moment of the run, which names the days on the x axis.
 
         Returns:
             ReportImageEntry or None -- None when the data cannot be reshaped
@@ -60,7 +140,6 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         log.trace("starting carpet plots")
         self.ensure_output_dir()
         ydims = len(data_in_self_units) // xdims  # number of calculated timesteps per day
-        y_steps_per_hour = ydims // 24
 
         try:
             reshaped_data_in_self_units = data_in_self_units.values.reshape(xdims, ydims)
@@ -83,21 +162,21 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
         plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
 
-        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
+        # The ticks used to be placed per whole hour of rows, which is 0 rows for a step above one hour and
+        # made np.arange divide by zero; they are placed on the day's own time axis now.
+        y_ticks, y_tick_labels = self.y_axis_ticks(ydims)
         axis.set_yticks(y_ticks)
-        y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
-        axis.set_yticklabels([str(i) for i in y_ticks_labels])
+        axis.set_yticklabels(y_tick_labels)
 
-        if xdims == 365:
-            x_ticks = np.arange(15, 346, 30).tolist()
-            axis.set_xticks(x_ticks)
-            axis.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
+        x_ticks, x_tick_labels, x_axis_title = self.x_axis_ticks(window_start, xdims)
+        axis.set_xticks(x_ticks)
+        axis.set_xticklabels(x_tick_labels)
 
         # optimizing fonts
         fig.autofmt_xdate(rotation=45)
         # setting axis of the plot
         axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
-        axis.set_xlabel("Month of the year", fontsize=self.fontsize_label)
+        axis.set_xlabel(x_axis_title, fontsize=self.fontsize_label)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)

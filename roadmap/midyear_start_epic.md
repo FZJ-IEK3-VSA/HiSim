@@ -91,7 +91,10 @@ connector, which is the profile owner for both.
 all keyword construction; every factory routes through it). It gains four validations: start at
 midnight; whole days; `start` and `end − 1 timestep` in the same year (a window crossing Dec 31
 has no single-year source and the DST surgery is keyed to one year — refuse loudly); duration
-divisible by `seconds_per_timestep` (today `timesteps` truncates silently). **Leap-year refusal
+divisible by `seconds_per_timestep` (today `timesteps` truncates silently). A fifth was added on the
+review of #982 (owner, 2026-10-15): the step length divides a day of 86 400 s, so every day starts a
+timestep; the single-day chart and the weather's daily average take the one exact
+`SimulationParameters.timesteps_per_day` from it. **Leap-year refusal
 does not live here** — whether an 8760-row source can serve 2020 is the source's answer, so it
 lands in the offset resolver, next to the lookup that discovers the missing label.
 

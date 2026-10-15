@@ -288,7 +288,6 @@ class PostProcessor:
             log.information(f"Selected post processing option: {option}")
         report_image_entries: List[ReportImageEntry] = []
         report: Optional[reportgenerator.ReportGenerator] = None
-        single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
         # Collected first, from the result table as the simulator left it; concluded last (below)
@@ -312,12 +311,14 @@ class PostProcessor:
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(single_day_plot_selection, ppdt, report_image_entries=report_image_entries)
+            self.make_single_day_plots(0, ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
 
-        # make monthly bar plots only if simulation duration approximately a year
+        # make monthly bar plots only if simulation duration approximately a year. The window contract keeps a run
+        # within one calendar year, so a run this long starts in the first week of January and its twelve monthly
+        # values are January to December, which is how the bar chart labels them.
         if (
             PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in ppdt.post_processing_options
             and ppdt.simulation_parameters.duration.days >= 360
@@ -531,8 +532,9 @@ class PostProcessor:
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 data_with_units=ppdt.results.iloc[:, index],
-                day=0,
-                month=0,
+                window_start=ppdt.simulation_parameters.start_date,
+                timesteps_per_day=ppdt.simulation_parameters.timesteps_per_day,
+                day_in_window=0,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -572,11 +574,18 @@ class PostProcessor:
 
     def make_single_day_plots(
         self,
-        days: Dict[str, int],
+        day_in_window: int,
         ppdt: PostProcessingDataTransfer,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes plots for selected days."""
+        """Makes one plot per output of one day of the run.
+
+        Args:
+            day_in_window: The day of the run to plot, counted from 0 for its first day; the chart
+                names it by its calendar date.
+            ppdt: The run's results and parameters.
+            report_image_entries: The list the entry of every plot is appended to.
+        """
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
             my_days = chart_single_day_class(
@@ -585,8 +594,9 @@ class PostProcessor:
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                day=days["day"],
-                month=days["month"],
+                window_start=ppdt.simulation_parameters.start_date,
+                timesteps_per_day=ppdt.simulation_parameters.timesteps_per_day,
+                day_in_window=day_in_window,
                 data_with_units=ppdt.results.iloc[:, index],
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
@@ -616,6 +626,7 @@ class PostProcessor:
             my_entry = my_carpet.plot(
                 xdims=int((ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days),
                 data_in_self_units=ppdt.results.iloc[:, index],
+                window_start=ppdt.simulation_parameters.start_date,
             )
             report_image_entries.append(my_entry)
 

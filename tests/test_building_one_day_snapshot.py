@@ -253,12 +253,12 @@ class SyntheticDayProfiles:
         """
         vectors = cls.input_vectors()
         return {
-            Weather.YEARLY_AZIMUTH: vectors["azimuth_channel"],
-            Weather.YEARLY_APPARENT_ZENITH: vectors["apparent_zenith_channel"],
-            Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE: vectors["direct_normal_irradiance_channel"],
-            Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA: vectors["direct_normal_irradiance_extra_channel"],
-            Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE: vectors["direct_horizontal_irradiance_channel"],
-            Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE: vectors["global_horizontal_irradiance_channel"],
+            Weather.RUN_WINDOW_AZIMUTH: vectors["azimuth_channel"],
+            Weather.RUN_WINDOW_APPARENT_ZENITH: vectors["apparent_zenith_channel"],
+            Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE: vectors["direct_normal_irradiance_channel"],
+            Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE_EXTRA: vectors["direct_normal_irradiance_extra_channel"],
+            Weather.RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE: vectors["direct_horizontal_irradiance_channel"],
+            Weather.RUN_WINDOW_GLOBAL_HORIZONTAL_IRRADIANCE: vectors["global_horizontal_irradiance_channel"],
         }
 
 

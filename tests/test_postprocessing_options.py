@@ -242,7 +242,7 @@ def _run_converging_feedback_simulation(
 
     Creates a fresh result directory, wires two :class:`_ConvergingFeedbackComponent`
     instances into a circular dependency (``output = 0.5 * input + offset``), and
-    runs the simulator for three one-second timesteps.  The circular dependency
+    runs the simulator for one day in three timesteps of eight hours.  The circular dependency
     needs more than two iterations to converge, so when
     ``PROVIDE_DETAILED_ITERATION_LOGGING`` is in ``post_processing_options`` the
     simulator writes per-iteration value differences to ``Detailed_Iteration_Log.txt``;
@@ -270,9 +270,10 @@ def _run_converging_feedback_simulation(
     result_directory = str(result_directory_path)
 
     simulation_parameters = SimulationParameters(
+        # Three timesteps: a run covers whole days (the window contract), so one day in steps of 8 h.
         start_date=datetime.datetime(2021, 1, 1),
-        end_date=datetime.datetime(2021, 1, 1, 0, 0, 3),
-        seconds_per_timestep=1,
+        end_date=datetime.datetime(2021, 1, 2),
+        seconds_per_timestep=8 * 3600,
         result_directory=result_directory,
         post_processing_options=post_processing_options,
     )

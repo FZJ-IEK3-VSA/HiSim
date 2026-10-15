@@ -92,11 +92,14 @@ def uncosted_config() -> CostedDummyConfig:
     )
 
 
-def make_simulation_parameters(days: float) -> SimulationParameters:
+def make_simulation_parameters(days: int) -> SimulationParameters:
     """Build simulation parameters spanning ``days`` days from the start of 2021.
 
-    The helper divides the simulated duration by a fixed 365-day year, so a span of 182.5 days
-    is exactly half a year and a span of 365 days is exactly one year.
+    The proration (``prorate_to_simulated_period``) divides the simulated duration by a fixed
+    365-day year, so a span of 73 days is exactly a fifth of a year and a span of 365 days is
+    exactly one year. A run covers whole
+    days (the window contract of ``SimulationParameters``), which is why the partial period is a
+    fifth of a year rather than half of one.
 
     Args:
         days: Length of the simulated period in days.
@@ -113,29 +116,29 @@ def make_simulation_parameters(days: float) -> SimulationParameters:
 
 
 @pytest.mark.base
-def test_half_year_prorates_investment_over_lifetime_but_not_maintenance() -> None:
-    """Half a year of a 1000 EUR / 10 a / 100 EUR-per-year device costs 50 EUR of each.
+def test_fifth_of_a_year_prorates_investment_over_lifetime_but_not_maintenance() -> None:
+    """A fifth of a year of a 1000 EUR / 10 a / 100 EUR-per-year device costs 20 EUR of each.
 
-    Derivation, with a simulated fraction of a year of 182.5 / 365 = 0.5:
+    Derivation, with a simulated fraction of a year of 73 / 365 = 0.2:
 
-    * investment share: (1000 EUR / 10 a) * 0.5 a = 50 EUR
-    * CO2 share:        (200 kg / 10 a) * 0.5 a   = 10 kg
-    * maintenance:      100 EUR/a * 0.5 a         = 50 EUR
+    * investment share: (1000 EUR / 10 a) * 0.2 a = 20 EUR
+    * CO2 share:        (200 kg / 10 a) * 0.2 a   = 4 kg
+    * maintenance:      100 EUR/a * 0.2 a         = 20 EUR
 
-    The two 50 EUR figures coincide only because of the numbers chosen; the maintenance figure
-    is the one that pins the rule, since dividing it by the lifetime as well would give 5 EUR.
+    The two 20 EUR figures coincide only because of the numbers chosen; the maintenance figure
+    is the one that pins the rule, since dividing it by the lifetime as well would give 2 EUR.
     """
     capex_data = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=make_simulation_parameters(days=182.5),
+        simulation_parameters=make_simulation_parameters(days=73),
         component_type=ComponentType.HEAT_PUMP,
         unit=Units.KILOWATT,
         size_of_energy_system=1.0,
         config=make_config(),
     )
 
-    assert capex_data.capex_investment_cost_for_simulated_period_in_euro == 50.0
-    assert capex_data.device_co2_footprint_for_simulated_period_in_kg == 10.0
-    assert capex_data.maintenance_cost_per_simulated_period_in_euro == 50.0
+    assert capex_data.capex_investment_cost_for_simulated_period_in_euro == 20.0
+    assert capex_data.device_co2_footprint_for_simulated_period_in_kg == 4.0
+    assert capex_data.maintenance_cost_per_simulated_period_in_euro == 20.0
     # The lifetime figures themselves pass through untouched.
     assert capex_data.capex_investment_cost_in_euro == 1000.0
     assert capex_data.maintenance_costs_in_euro_per_year == 100.0
@@ -167,49 +170,49 @@ def test_full_year_maintenance_equals_the_annual_rate() -> None:
 def test_maintenance_does_not_depend_on_the_technical_lifetime() -> None:
     """Doubling the lifetime halves the investment share and leaves maintenance alone.
 
-    Over half a year with a 20-year lifetime instead of a 10-year one:
+    Over a fifth of a year with a 20-year lifetime instead of a 10-year one:
 
-    * investment share: (1000 EUR / 20 a) * 0.5 a = 25 EUR, half of the 50 EUR above
-    * maintenance:      100 EUR/a * 0.5 a         = 50 EUR, unchanged
+    * investment share: (1000 EUR / 20 a) * 0.2 a = 10 EUR, half of the 20 EUR above
+    * maintenance:      100 EUR/a * 0.2 a         = 20 EUR, unchanged
 
     This is the discriminating case: a formula that divided maintenance by the lifetime would
-    report 2.50 EUR here and 5 EUR at a 10-year lifetime, i.e. it would make maintenance
+    report 1 EUR here and 2 EUR at a 10-year lifetime, i.e. it would make maintenance
     lifetime-dependent.
     """
     capex_data = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=make_simulation_parameters(days=182.5),
+        simulation_parameters=make_simulation_parameters(days=73),
         component_type=ComponentType.HEAT_PUMP,
         unit=Units.KILOWATT,
         size_of_energy_system=1.0,
         config=make_config(lifetime_in_years=20.0),
     )
 
-    assert capex_data.capex_investment_cost_for_simulated_period_in_euro == 25.0
-    assert capex_data.maintenance_cost_per_simulated_period_in_euro == 50.0
+    assert capex_data.capex_investment_cost_for_simulated_period_in_euro == 10.0
+    assert capex_data.maintenance_cost_per_simulated_period_in_euro == 20.0
 
 
 @pytest.mark.base
-def test_prorate_to_simulated_period_applies_both_rules_over_half_a_year() -> None:
+def test_prorate_to_simulated_period_applies_both_rules_over_a_fifth_of_a_year() -> None:
     """Pins the shared proration function directly, without a helper or a config around it.
 
-    Over half a year the one-time figures lose both the lifetime and the half-year factor,
-    while the annual maintenance rate loses only the half-year factor:
+    Over a fifth of a year the one-time figures lose both the lifetime and the period factor,
+    while the annual maintenance rate loses only the period factor:
 
-    * investment: (1000 EUR / 10 a) * 0.5 a = 50 EUR
-    * CO2:        (200 kg / 10 a) * 0.5 a   = 10 kg
-    * maintenance: 100 EUR/a * 0.5 a        = 50 EUR
+    * investment: (1000 EUR / 10 a) * 0.2 a = 20 EUR
+    * CO2:        (200 kg / 10 a) * 0.2 a   = 4 kg
+    * maintenance: 100 EUR/a * 0.2 a        = 20 EUR
     """
     prorated = prorate_to_simulated_period(
         investment_in_euro=1000.0,
         co2_footprint_in_kg=200.0,
         maintenance_in_euro_per_year=100.0,
         lifetime_in_years=10.0,
-        simulation_parameters=make_simulation_parameters(days=182.5),
+        simulation_parameters=make_simulation_parameters(days=73),
     )
 
-    assert prorated.investment_for_simulated_period_in_euro == 50.0
-    assert prorated.co2_footprint_for_simulated_period_in_kg == 10.0
-    assert prorated.maintenance_for_simulated_period_in_euro == 50.0
+    assert prorated.investment_for_simulated_period_in_euro == 20.0
+    assert prorated.co2_footprint_for_simulated_period_in_kg == 4.0
+    assert prorated.maintenance_for_simulated_period_in_euro == 20.0
 
 
 @pytest.mark.base
@@ -241,7 +244,7 @@ def test_prorate_to_simulated_period_keeps_maintenance_free_of_the_lifetime() ->
     divided maintenance by the lifetime as well would report a different maintenance figure
     for each of the two lifetimes, and both would be a factor of the lifetime too small.
     """
-    simulation_parameters = make_simulation_parameters(days=182.5)
+    simulation_parameters = make_simulation_parameters(days=73)
     ten_years = prorate_to_simulated_period(
         investment_in_euro=1000.0,
         co2_footprint_in_kg=200.0,
@@ -259,7 +262,7 @@ def test_prorate_to_simulated_period_keeps_maintenance_free_of_the_lifetime() ->
 
     assert twenty_years.investment_for_simulated_period_in_euro == ten_years.investment_for_simulated_period_in_euro / 2
     assert twenty_years.maintenance_for_simulated_period_in_euro == ten_years.maintenance_for_simulated_period_in_euro
-    assert twenty_years.maintenance_for_simulated_period_in_euro == 50.0
+    assert twenty_years.maintenance_for_simulated_period_in_euro == 20.0
 
 
 @pytest.mark.base
@@ -271,15 +274,15 @@ def test_device_database_branch_prorates_maintenance_without_the_lifetime() -> N
     figure itself, out of the tabulated investment cost and the tabulated maintenance share.
     With every capex field on the config left ``None``, the helper looks the factors up for the
     simulation year and country and scales them by the size, and the maintenance for a
-    half-year period must be
+    period of a fifth of a year must be
 
-        investment_per_kw * size * maintenance_share_per_year * 0.5
+        investment_per_kw * size * maintenance_share_per_year * 0.2
 
     with no division by the tabulated technical lifetime anywhere in it. The expected numbers
     are read from the same table rather than written down, so a revised device row moves the
     test with it instead of breaking it.
     """
-    simulation_parameters = make_simulation_parameters(days=182.5)
+    simulation_parameters = make_simulation_parameters(days=73)
     size_in_kw = 8.0
     device_factors = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
         year=simulation_parameters.year,
@@ -289,7 +292,7 @@ def test_device_database_branch_prorates_maintenance_without_the_lifetime() -> N
     assert device_factors.investment_costs_in_euro_per_kw is not None
     investment_in_euro = device_factors.investment_costs_in_euro_per_kw * size_in_kw
     expected_maintenance_in_euro = (
-        investment_in_euro * device_factors.maintenance_costs_as_percentage_of_investment_per_year * 0.5
+        investment_in_euro * device_factors.maintenance_costs_as_percentage_of_investment_per_year * 0.2
     )
 
     capex_data = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(

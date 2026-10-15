@@ -15,12 +15,9 @@ from hisim import loadtypes as lt
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.simulationparameters import SimulationParameters
 
-# Conversion factors used to derive the seconds-per-timestep of a
-# full-year simulation from the requested number of timesteps:
-# days/year -> hours/day -> seconds/hour -> seconds/timestep.
-SECONDS_PER_HOUR: int = 3600
-HOURS_PER_DAY: int = 24
-DAYS_PER_YEAR: int = 365
+# The length of the one-day run the tests simulate, in seconds; the requested number of timesteps
+# must divide it, because a step length must divide a day (SimulationParameters' window rules).
+SECONDS_PER_DAY: int = 86400
 
 
 def _make_config(
@@ -41,10 +38,13 @@ def _make_config(
 
 
 def _make_simulation_parameters(timesteps: int) -> SimulationParameters:
-    """Build :class:`SimulationParameters` for the requested number of timesteps."""
-    return SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=DAYS_PER_YEAR * HOURS_PER_DAY * SECONDS_PER_HOUR // timesteps
-    )
+    """Build :class:`SimulationParameters` for one day of 2021 in exactly the requested number of timesteps.
+
+    One day keeps every step length a divisor of a day, as the window rules require; a full year in a
+    handful of steps would not (e.g. 24 steps of 1,314,000 s).
+    """
+    assert SECONDS_PER_DAY % timesteps == 0, f"{timesteps} timesteps do not divide a day"
+    return SimulationParameters.one_day_only(year=2021, seconds_per_timestep=SECONDS_PER_DAY // timesteps)
 
 
 @pytest.mark.base

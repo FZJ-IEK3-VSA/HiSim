@@ -1,8 +1,10 @@
 """Fails the collection when a test carries no job marker, or more than one, of the testing guide's table.
 
-Each job of ``.github/workflows/tests.yml`` runs one marker, so a test's job marker decides where and how
-often it runs (``system_docs/testing.md`` §2). A test with none runs only in the catch-all
-``pytest (others)`` job and is missed by ``pytest -m base``; a test with two runs in two jobs. The rule
+Each job of ``.github/workflows/tests.yml`` runs one job marker, except the catch-all
+``pytest (others)``, which runs every test that carries none of the other jobs' markers: the tests of
+``mpc``, ``hpcharness`` and ``upstream_history``, and an unmarked test. A test's job marker thus decides
+where and how often it runs (``system_docs/testing.md`` §2). A test with none runs only in
+``pytest (others)`` and is missed by ``pytest -m base``; a test with two can run in two jobs. The rule
 "a test carries exactly one job marker of the table" is checked here, for every collected test, in every
 run. Example: a test written without a marker stops the collection with
 ``tests/test_x.py::test_y carries no job marker``.
@@ -39,8 +41,9 @@ class MarkedTest(Protocol):
 class JobMarkers:
     """The job markers of the table in ``system_docs/testing.md`` §2, and the rule that a test carries one.
 
-    The two group markers carried beside a job marker, ``worked_examples`` and ``xdist_group``, are not job
-    markers and are not counted.
+    The two group markers carried beside a job marker, ``worked_examples`` and ``xdist_group``
+    (:attr:`GROUP_NAMES`), are not job markers and are not counted. Every marker ``pytest.ini`` declares is
+    one or the other, which ``tests/test_job_markers.py`` keeps true.
     """
 
     #: Every job marker of the guide's table. A new CI job's marker goes here, into the table and into pytest.ini.
@@ -61,6 +64,9 @@ class JobMarkers:
             "upstream_history",
         }
     )
+    #: The guide's group markers: they select a group inside a job, are carried beside a job marker, and are
+    #: not counted. A marker pytest.ini declares that is in neither set fails ``tests/test_job_markers.py``.
+    GROUP_NAMES: ClassVar[FrozenSet[str]] = frozenset({"worked_examples", "xdist_group"})
 
     @classmethod
     def of(cls, test: MarkedTest) -> List[str]:
@@ -99,7 +105,7 @@ class JobMarkers:
             raise pytest.UsageError(
                 f"{len(found)} test(s) do not carry exactly one job marker of the table in system_docs/testing.md "
                 f"§2 ({', '.join(sorted(cls.NAMES))}); a test with none runs only in 'pytest (others)' and is "
-                "missed by 'pytest -m base', a test with two runs twice: " + "; ".join(found)
+                "missed by 'pytest -m base', a test with two can run in two jobs: " + "; ".join(found)
             )
 
 

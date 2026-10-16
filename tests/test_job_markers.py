@@ -181,12 +181,17 @@ class TestTheList:
     """The check's job markers are the guide's table, and pytest.ini declares them and the group markers only."""
 
     def test_the_list_is_the_guides_table(self) -> None:
-        """A marker in the table but not here would refuse every test that carries it as unmarked; one here but
-        not in the table would be accepted by the check while the guide does not name it. Either fails here."""
+        """The check's list of job markers equals the guide's table.
+
+        A marker in the table but not here would refuse every test that carries it as unmarked; one here but not in
+        the table would be accepted by the check while the guide does not name it. Either fails here.
+        """
         assert JobMarkers.NAMES == Guide.table_markers()
 
     def test_every_declared_marker_is_a_job_or_a_group_marker(self, request: pytest.FixtureRequest) -> None:
-        """A job marker pytest.ini does not declare would be refused by --strict-markers on its first use; a
+        """Every marker pytest.ini declares is a job marker or a group marker, and every job marker is declared.
+
+        A job marker pytest.ini does not declare would be refused by --strict-markers on its first use; a
         declared marker in neither list would pass beside a job marker uncounted, as if it were a group marker.
 
         pytest.ini is read itself: ``config.getini("markers")`` also holds the markers of pytest and its plugins.
@@ -204,13 +209,19 @@ class TestTheWorkflow:
     """The jobs of tests.yml run the job markers the table gives them, and the catch-all job none of the others."""
 
     def test_pytest_others_excludes_each_job_marker_that_the_table_gives_another_job(self) -> None:
-        """A job marker that 'pytest (others)' does not exclude runs its tests twice, in its own job and there;
-        excluding a marker the table gives to 'pytest (others)' would leave its tests out of CI."""
+        """The catch-all job excludes exactly the job markers that have a job of their own.
+
+        A job marker that 'pytest (others)' does not exclude runs its tests twice, in its own job and there;
+        excluding a marker the table gives to 'pytest (others)' would leave its tests out of CI.
+        """
         assert Workflow.excluded_by_others() == JobMarkers.NAMES - Guide.markers_of_others()
 
     def test_every_other_job_runs_a_job_marker_that_pytest_others_excludes(self) -> None:
-        """A job running a marker outside the list would run tests the check counts as unmarked, and tests that
-        'pytest (others)' runs as well."""
+        """Every dedicated job runs one of the markers the catch-all job excludes.
+
+        A job running a marker outside the list would run tests the check counts as unmarked, and tests that
+        'pytest (others)' runs as well.
+        """
         assert Workflow.dedicated_markers() <= Workflow.excluded_by_others()
 
 
@@ -266,8 +277,11 @@ class TestARealRun:
     """A real pytest run on a throwaway repository fails its collection, naming the offending tests."""
 
     def test_pytest_minus_m_base_fails_on_the_tests_it_deselects(self, tmp_path: Path) -> None:
-        """The stand-in tests above call the hooks by hand; this covers pytest's own -m deselection reaching the
-        check, so a 'pytest -m base' that dropped an unmarked test without a word would fail here."""
+        """A real collection with -m base refuses the unmarked and the double-marked test and names both.
+
+        The stand-in tests above call the hooks by hand; this covers pytest's own -m deselection reaching the
+        check, so a 'pytest -m base' that dropped an unmarked test without a word would fail here.
+        """
         completed = ThrowawayRepository.collect(tmp_path, "-m", "base")
 
         output = completed.stdout + completed.stderr

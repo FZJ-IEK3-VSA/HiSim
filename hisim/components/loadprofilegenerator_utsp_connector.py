@@ -1488,9 +1488,9 @@ class UtspLpgConnector(cp.DataSourceComponent):
                     jsonrequest = request.to_json(indent=4)
                     calcspecfile.write(jsonrequest)
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
-                # The results are checked here, not by the readers downstream. pylpg discards the
-                # binary's return code, so a failed calculation is indistinguishable from a successful
-                # one until somebody opens a file that was never written -- and the FileNotFoundError
+                # The results are checked here, not by the readers downstream. The binary's return
+                # code does not decide success, so a failed calculation is indistinguishable from a
+                # successful one until somebody opens a file that was never written -- and the FileNotFoundError
                 # that results names one arbitrary json and never mentions the LoadProfileGenerator.
                 # The names, not merely the count: a calculation that dies partway leaves some of
                 # its outputs behind, and a directory that is non-empty tells the reader nothing

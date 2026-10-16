@@ -17,6 +17,7 @@ import ast
 import inspect
 import pathlib
 import re
+import sys
 from typing import Any, ClassVar, List, Optional
 
 import pytest
@@ -24,6 +25,7 @@ from pylpg import lpg_execution
 
 from hisim.calculation_scope import CalculationScope
 from hisim.components.pylpg_workspace import (
+    GeneratorRun,
     LocalLpgCalculationFailedError,
     LpgBaseIndexPool,
     PylpgWorkingDirectoryInUseError,
@@ -319,22 +321,34 @@ class ScriptedGenerator:
         self.sleeps: List[float] = []
         self.discarded: List[str] = []
 
-    def execute_lpg_binaries(self) -> None:
-        """Count one run of the binary. The outcome is decided by :meth:`verify`, as in the real flow."""
-        self.runs += 1
+    def run(self, executor: Any) -> GeneratorRun:
+        """Count one run of the binary. The outcome is decided by :meth:`verify`, as in the real flow.
 
-    def verify(self, calculation_index: int, result_folder: str, required_files: Any = None) -> None:
+        Args:
+            executor: ignored.
+
+        Returns:
+            GeneratorRun: a clean exit with no output, so only the scripted message can ask for a retry.
+        """
+        del executor
+        self.runs += 1
+        return GeneratorRun(return_code=0, output="")
+
+    def verify(
+        self, calculation_index: int, result_folder: str, required_files: Any = None, run: Any = None
+    ) -> None:
         """Plays back the next scripted outcome.
 
         Args:
             calculation_index: ignored.
             result_folder: ignored.
             required_files: ignored.
+            run: ignored.
 
         Raises:
             LocalLpgCalculationFailedError: when the next scripted outcome is a message.
         """
-        del calculation_index, result_folder, required_files
+        del calculation_index, result_folder, required_files, run
         outcome = self.outcomes.pop(0)
         if outcome is not None:
             raise LocalLpgCalculationFailedError(outcome)
@@ -349,21 +363,34 @@ class ScriptedGenerator:
         self.discarded.append(path)
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Points the workspace's check, pause and folder removal at this script.
+        """Points the workspace's binary run, check, pause and folder removal at this script.
 
         Args:
             monkeypatch: the test's monkeypatch.
         """
+        monkeypatch.setattr(PylpgWorkspace, "run_generator", self.run)
         monkeypatch.setattr(PylpgWorkspace, "verify_results_were_produced", self.verify)
         monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", self.sleep)
         monkeypatch.setattr("hisim.components.pylpg_workspace.shutil.rmtree", self.discard)
 
 
 class LockedLog:
-    """The generator log line that marks a locked database, spelled as the generator writes it."""
+    """The generator log line that marks a locked database, spelled as the generator writes it.
+
+    ``STACK_TRACE`` is what the binary printed to stderr on a CI runner when it died in its
+    post-processing before it wrote its log: the error line and the .NET stack trace below it, longer
+    than :attr:`PylpgWorkspace.OUTPUT_LINES_TO_QUOTE`, so that the error line is not in the quoted tail.
+    """
 
     TEXT: ClassVar[str] = (
         "Unhandled exception. code = Busy (5), message = SQLiteException (0x87AF00AA): database is locked"
+    )
+    STACK_TRACE: ClassVar[str] = "\n".join(
+        [TEXT]
+        + [
+            f"   at CalcPostProcessor.Postprocessor.RunPostProcessing() frame {frame}"
+            for frame in range(PylpgWorkspace.OUTPUT_LINES_TO_QUOTE + 5)
+        ]
     )
 
 
@@ -421,38 +448,56 @@ def test_any_other_failure_is_raised_at_once_without_a_retry(monkeypatch: pytest
 class GeneratorOnDisk:
     """Stands in for the binary only: it writes files where the real one would, and the real check reads them.
 
-    The first run leaves the generator's log ending in the locked-database line and one of the two required
-    files, the way a run that died partway does. The second run writes both files. What the folder held when
-    each run started is recorded, so a test can see whether the first attempt's leftovers were still there.
+    The first run leaves one of the two required files, the way a run that died partway does, and reports a
+    locked database in one of two places: by default in the generator's log, ending in the locked-database
+    line; with ``dies_before_its_log`` in no log at all, only in the printed stack trace
+    (:attr:`LockedLog.STACK_TRACE`), the way the binary failed on the CI runners. The second run writes both
+    files. What the folder held when each run started is recorded, so a test can see whether the first
+    attempt's leftovers were still there.
     """
 
-    def __init__(self, calculation_directory: pathlib.Path, result_folder: pathlib.Path) -> None:
+    def __init__(
+        self, calculation_directory: pathlib.Path, result_folder: pathlib.Path, dies_before_its_log: bool = False
+    ) -> None:
         """Prepares the stand-in.
 
         Args:
             calculation_directory: where the generator writes its log.
             result_folder: where it writes its results.
+            dies_before_its_log: whether the first run reports the locked database only in its output.
         """
         self.calculation_directory = calculation_directory
         self.result_folder = result_folder
+        self.dies_before_its_log = dies_before_its_log
         self.runs = 0
         self.files_present_at_start: List[List[str]] = []
 
-    def execute_lpg_binaries(self) -> None:
-        """Writes what the scripted run of the binary would have left behind."""
+    def run(self, executor: Any) -> GeneratorRun:
+        """Writes what the scripted run of the binary would have left behind.
+
+        Args:
+            executor: ignored.
+
+        Returns:
+            GeneratorRun: what the scripted run printed and its exit code.
+        """
+        del executor
         self.runs += 1
         self.files_present_at_start.append(
             sorted(path.name for path in self.result_folder.iterdir()) if self.result_folder.is_dir() else []
         )
         self.result_folder.mkdir(parents=True, exist_ok=True)
         (self.result_folder / "a.json").write_text("{}", encoding="utf-8")
+        if self.runs == 1 and self.dies_before_its_log:
+            return GeneratorRun(return_code=134, output=LockedLog.STACK_TRACE + "\n")
         if self.runs == 1:
             (self.calculation_directory / PylpgWorkspace.LOG_FILE_NAME).write_text(
                 "Calculating...\n" + LockedLog.TEXT + "\n", encoding="utf-8"
             )
-        else:
-            (self.result_folder / "b.json").write_text("{}", encoding="utf-8")
-            (self.calculation_directory / PylpgWorkspace.LOG_FILE_NAME).write_text("Finished.\n", encoding="utf-8")
+            return GeneratorRun(return_code=0, output="")
+        (self.result_folder / "b.json").write_text("{}", encoding="utf-8")
+        (self.calculation_directory / PylpgWorkspace.LOG_FILE_NAME).write_text("Finished.\n", encoding="utf-8")
+        return GeneratorRun(return_code=0, output="Finished.\n")
 
 
 @pytest.mark.base
@@ -468,6 +513,7 @@ def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_
     result_folder = calculation_directory / "results"
     calculation_directory.mkdir()
     generator = GeneratorOnDisk(calculation_directory, result_folder)
+    monkeypatch.setattr(PylpgWorkspace, "run_generator", generator.run)
     monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", lambda seconds: None)
 
     PylpgWorkspace.execute_and_verify(
@@ -477,6 +523,116 @@ def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_
     assert generator.runs == 2
     assert generator.files_present_at_start == [[], []], "the second run must start without the first one's a.json"
     assert (result_folder / "b.json").is_file()
+
+
+@pytest.mark.base
+def test_a_locked_database_reported_only_in_the_binarys_output_is_retried(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run that died before writing its log, with the locked database only in its stack trace, is run again.
+
+    This is the failure of the CI runners on 2026-10-16: the binary died in its post-processing, wrote no
+    log, left part of the results and printed the locked-database error followed by a long stack trace. The
+    error text then reaches neither the log tail nor the quoted output tail, so the retry has to look at
+    everything the binary printed.
+    """
+    calculation_directory = tmp_path / "C7"
+    result_folder = calculation_directory / "results"
+    calculation_directory.mkdir()
+    generator = GeneratorOnDisk(calculation_directory, result_folder, dies_before_its_log=True)
+    monkeypatch.setattr(PylpgWorkspace, "run_generator", generator.run)
+    monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", lambda seconds: None)
+
+    PylpgWorkspace.execute_and_verify(
+        generator, 7, str(result_folder), required_files=["a.json", "b.json"]  # type: ignore[arg-type]
+    )
+
+    assert generator.runs == 2
+    assert generator.files_present_at_start == [[], []], "the second run must start without the first one's a.json"
+    assert (result_folder / "b.json").is_file()
+
+
+class ExecutorOfAScript:
+    """Stands in for a pylpg executor whose binary is a small shell script, for :meth:`PylpgWorkspace.run_generator`.
+
+    It exposes only the two members ``run_generator`` reads: ``lpg_simengine_filepath()`` and
+    ``calculation_directory``.
+    """
+
+    def __init__(self, script: pathlib.Path, calculation_directory: pathlib.Path) -> None:
+        """Prepares the stand-in.
+
+        Args:
+            script: the executable that plays the binary.
+            calculation_directory: the directory the binary is to run in.
+        """
+        self.script = script
+        self.calculation_directory = calculation_directory
+
+    def lpg_simengine_filepath(self) -> str:
+        """Returns the script's path, as the executor returns the binary's."""
+        return str(self.script)
+
+
+@pytest.mark.base
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="the stand-in binary is a POSIX shell script")
+def test_running_the_binary_captures_both_streams_and_the_exit_code(tmp_path: pathlib.Path) -> None:
+    """The real ``run_generator`` runs pylpg's command in the calculation directory and keeps what it printed.
+
+    The script prints its arguments and working directory to stdout and an error to stderr and exits 3.
+    Catches: stderr not captured (the trace of a binary that dies before its log would be lost again), a
+    command or working directory that differ from pylpg's, and a non-zero exit raising instead of being
+    reported.
+    """
+    calculation_directory = tmp_path / "C7"
+    calculation_directory.mkdir()
+    script = tmp_path / "simengine2"
+    script.write_text(
+        '#!/bin/sh\necho "arguments: $*"\necho "directory: $(pwd)"\necho "error: database is locked" >&2\nexit 3\n',
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+
+    run = PylpgWorkspace.run_generator(ExecutorOfAScript(script, calculation_directory))  # type: ignore[arg-type]
+
+    assert run.return_code == 3
+    assert "arguments: processhousejob -j calcspec.json" in run.output
+    assert f"directory: {calculation_directory}" in run.output
+    assert "error: database is locked" in run.output, "stderr must be captured with stdout"
+
+
+@pytest.mark.base
+def test_the_failure_quotes_the_exit_code_and_the_output_when_there_is_no_log(tmp_path: pathlib.Path) -> None:
+    """A run that wrote no log is explained by its exit code and the end of its output, not called an early failure.
+
+    Catches: the message claiming the binary "failed early" although it printed a stack trace, and the
+    output tail or the exit code missing from the message.
+    """
+    results = tmp_path / "C7" / "results"
+    results.mkdir(parents=True)
+    run = GeneratorRun(return_code=134, output=LockedLog.STACK_TRACE + "\nthe last line printed\n")
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(7, str(results), required_files=["a.json"], run=run)
+
+    message = str(failure.value)
+    assert "exited with code 134" in message
+    assert "the last line printed" in message
+    assert "failed early" not in message
+    assert "printed nothing" not in message
+
+
+@pytest.mark.base
+def test_a_run_that_left_neither_log_nor_output_says_so(tmp_path: pathlib.Path) -> None:
+    """With no log and no output, the message says that nothing explains the failure, and gives the exit code."""
+    results = tmp_path / "C7" / "results"
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(7, str(results), run=GeneratorRun(return_code=-9, output=""))
+
+    message = str(failure.value)
+    assert "exited with code -9" in message
+    assert "printed nothing" in message
 
 
 @pytest.mark.base

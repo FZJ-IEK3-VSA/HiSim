@@ -496,9 +496,8 @@ class SimulationParameters:
         up in its series (``hisim/window_offset.py``), and with it the PV system, the building's solar
         gains and the solar-thermal collector read July; the LoadProfileGenerator occupancy and its cars
         read July from their profiles (``hisim/components/lpg_local_time.py``); the CHP controller's
-        heating season counts the days of the year. One exception remains: the CSV loader indexes its
-        profile by the timestep number, so its timestep 0 is read as the 1st of January whatever this
-        start date says (hisim-9g2.14).
+        heating season counts the days of the year. The CSV loader reads July from a file with a time
+        column and refuses a July run from a file without one (hisim-9g2.14).
 
         Args:
             year: Calendar year the week is taken from.

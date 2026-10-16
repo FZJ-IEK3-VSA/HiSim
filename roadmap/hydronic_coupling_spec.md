@@ -690,6 +690,12 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   the energy manager's raise switching inside a step; it moves to hisim-fxix.12 (owner, 2026-10-09). The
   heat-pump-and-solar twin's year at 3600 s aborts on a 2-cycle the pinned 0.5 under-relaxation cannot damp
   (hisim-fxix.13; the owner kept 0.5, 2026-10-09).
+  *Amended (owner, Noah, 2026-10-16):* at 3600 s the generators' hot-water heat, net of the change of the heat the
+  tank holds over the window, may differ from the 60 s run by up to 1.5 %; at 900 s it stays within 1 %
+  (`tests/test_dhw_chain_time_resolution.py`, the first four weeks of 2021). The excess at 3600 s is the standby
+  loss of a hotter tank under start-of-step control: a controller decides on the tank's start temperature, which
+  does not move while the step iterates, so an hour-long charge keeps the tank near its supply cap, the
+  controller's set temperature, longer than a quarter-hour one. The rest of the amendment of 2026-10-09 stands.
 - **D. SH chain.** Scope: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
   buffer, the SH circuits, the iteration histogram test. Done when: buffer and HDS close per step, district
   heating's bill equals pipe-water `ΔU` plus delivered heat (hisim-9uoo.12 closed), no step at

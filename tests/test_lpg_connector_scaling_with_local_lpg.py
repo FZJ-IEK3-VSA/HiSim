@@ -12,7 +12,8 @@ The connector class is still UtspLpgConnector and the utsp marker still selects 
 the component, not the remote service.
 """
 
-from typing import List, Tuple
+import os
+from typing import List, Optional, Tuple
 import pytest
 import numpy as np
 from utspclient.helpers.lpgdata import (
@@ -104,8 +105,90 @@ def test_occupancy_scaling_with_local_lpg():
     np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
+@pytest.mark.utsp
+def test_partly_filled_cache_does_not_duplicate_a_household(tmp_path):
+    """Test that a household whose cache entry is missing is counted once, not twice.
+
+    With the production guid (``""``) every duplicate is requested under its own guid and so
+    cached under its own key -- one entry per apartment, not one for the list. A run that finds
+    some of those entries and computes the rest must return what a fully cached run returns.
+
+    It did not. ``cache_complete`` was initialised once *before* the loop over the households
+    rather than at the start of each iteration, and inside the loop it was only ever set to
+    True. From the first cache hit onwards it stayed True, so a household whose entry was
+    missing satisfied both branches at once: the cache branch on the stale flag, serving the
+    equally stale ``cache_content`` of the household before it, and the compute branch on its
+    own ``file_exists``. Both appended to ``value_dict``, which is summed element-wise, so the
+    run ended up with one household more than the building has apartments (issue #879).
+
+    The miss has to *follow* a hit. Guids are assigned in descending order and the cache fills
+    from the bottom, so in a plain sequence of runs the missing entry is always the first one
+    examined, where the flag is still False and nothing goes wrong. Deleting the last
+    household's entry after a complete run puts a hit before a miss deterministically, instead
+    of waiting for two parallel runs to interleave the way they did in the field.
+    """
+
+    household_list = [
+        Households.CHR02_Couple_30_64_age_with_work,
+        Households.CHR02_Couple_30_64_age_with_work,
+    ]
+
+    # First run: nothing is cached yet, so every household is computed and written to its own
+    # entry in this test's own cache directory.
+    my_occupancy, _ = build_lpg_utsp_connector(
+        households=household_list, guid="", cache_dir_path=str(tmp_path)
+    )
+    fft.add_global_index_of_components([my_occupancy])
+    (
+        number_of_residents_cached,
+        heating_by_residents_cached,
+        heating_by_devices_cached,
+        electricity_consumption_cached,
+        water_consumption_cached,
+    ) = simulate_and_read_occupancy_outputs(my_occupancy)
+
+    cache_files = [path for _file_exists, path in my_occupancy.list_of_file_exists_and_cache_files]
+
+    # Both guards keep the test from passing vacuously, in the spirit of the baseline guards in
+    # the scaling test above: one entry for the whole list, or a run that caches nothing, would
+    # make the deletion below unable to produce the partly filled cache this test is about.
+    assert len(cache_files) == len(household_list), "each household must be cached under its own key"
+    assert all(os.path.exists(path) for path in cache_files), "the first run must leave every entry cached"
+
+    # Drop the entry of the household the loop reaches last, so the surviving hit comes first
+    # and the miss after it.
+    os.remove(cache_files[-1])
+
+    my_occupancy, _ = build_lpg_utsp_connector(
+        households=household_list, guid="", cache_dir_path=str(tmp_path)
+    )
+    fft.add_global_index_of_components([my_occupancy])
+    (
+        number_of_residents_partial,
+        heating_by_residents_partial,
+        heating_by_devices_partial,
+        electricity_consumption_partial,
+        water_consumption_partial,
+    ) = simulate_and_read_occupancy_outputs(my_occupancy)
+
+    log.information(
+        f"number of residents with a full cache {number_of_residents_cached}, "
+        f"with one of {len(cache_files)} entries deleted {number_of_residents_partial}"
+    )
+
+    # A deleted cache entry is a question of where a profile comes from, never of how many
+    # there are. Every output has to come back unchanged.
+    np.testing.assert_allclose(number_of_residents_partial, number_of_residents_cached, rtol=0.01)
+    np.testing.assert_allclose(heating_by_residents_partial, heating_by_residents_cached, rtol=0.01)
+    np.testing.assert_allclose(heating_by_devices_partial, heating_by_devices_cached, rtol=0.01)
+    np.testing.assert_allclose(electricity_consumption_partial, electricity_consumption_cached, rtol=0.01)
+    np.testing.assert_allclose(water_consumption_partial, water_consumption_cached, rtol=0.01)
+
+
 def build_lpg_utsp_connector(
-    households: JsonReference | List[JsonReference]
+    households: JsonReference | List[JsonReference],
+    guid: str = "guid should not be varied automatically",
+    cache_dir_path: Optional[str] = None,
 ) -> Tuple[
     loadprofilegenerator_utsp_connector.UtspLpgConnector,
     loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
@@ -121,6 +204,13 @@ def build_lpg_utsp_connector(
     Args:
         households: A single household reference or a list of household
             references to simulate with the LPG connector, generated locally by pylpg.
+        guid: The request guid. The default pins it to a constant, which switches off the
+            per-duplicate variation and gives a list of households a single cache entry.
+            Pass ``""`` for the production behaviour, where each duplicate is requested under
+            its own guid and therefore cached separately.
+        cache_dir_path: Where the profile cache lives; ``None`` is the installation's own
+            cache directory. A test that manipulates cache entries passes a directory of its
+            own so it neither reads nor deletes the real ones.
 
     Returns:
         A tuple of:
@@ -142,7 +232,6 @@ def build_lpg_utsp_connector(
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
-    guid = "guid should not be varied automatically"
     data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
 
     # Build Simu Params
@@ -161,6 +250,7 @@ def build_lpg_utsp_connector(
         predictive_control=False,
         energy_intensity=energy_intensity,
         guid=guid,
+        cache_dir_path=cache_dir_path,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

@@ -6,7 +6,10 @@ Each twin runs the first week of 2021 with the shipped predefined occupancy prof
   lies in [0, 1], and a step whose ratio lies strictly between 0 and 1 and that converged before the simulator forced
   convergence ends the tank in the controller's target band, from its published target to the target plus
   ``PartLoadRule.TARGET_BAND_IN_KELVIN``;
-* at 900 s with the threshold at 900 s, every hot-water step runs whole.
+* at 900 s with the threshold at 900 s the twin is refused when it is built, since its space-heating buffer is a
+  start-of-step node that cannot take whole steps above 600 s
+  (``tests/test_space_heating_buffer_whole_step_refusal.py``); that a threshold at the step length keeps every
+  hot-water charge whole is checked on the controller (``tests/test_part_load_dhw.py``).
 
 Every test here simulates a whole energy system, so it runs in the ``extendedbase2`` shard.
 """
@@ -115,14 +118,3 @@ def test_a_partial_charge_ends_the_tank_at_its_target(twin: str, tmp_path: Path)
     assert partial.sum() > 0
     deviation_k = end_c[partial] - target_c[partial]
     assert np.all((deviation_k >= 0.0) & (deviation_k <= PartLoadRule.TARGET_BAND_IN_KELVIN))
-
-
-@pytest.mark.extendedbase2
-@pytest.mark.parametrize("twin", sorted(PartLoadTwins.TWINS))
-def test_a_threshold_at_the_step_length_keeps_every_charge_whole(twin: str, tmp_path: Path) -> None:
-    """With ``part_load_above_seconds`` at the step length, every hot-water step runs the whole step."""
-    ratio_prefix, _ = PartLoadTwins.TWINS[twin]
-    frame, _ = PartLoadTwins.run(twin, tmp_path, part_load_above_seconds=900)
-    ratio = PartLoadTwins.column(frame, ratio_prefix)
-    assert set(np.unique(ratio)) <= {0.0, 1.0}
-    assert (ratio == 1.0).sum() > 0

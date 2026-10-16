@@ -1,6 +1,6 @@
 {
-  "config_sha256": "b08eab24d5a00121c67e7c19defde76fcf5401c55f30f3b4210675edb3a60d6a",
-  "generated_at": "2026-10-16T11:15:28.554866+00:00",
+  "config_sha256": "5088268d618ba58b8c9ff6c29e1143af179291d427bc79e04a8b63d2ce760b68",
+  "generated_at": "2026-10-16T12:16:20.803878+00:00",
   "golden_files": [
     "air_conditioned_house__full_year_60s.json",
     "air_conditioned_house__one_week_60s.json",
@@ -16,6 +16,8 @@
     "dynamic_components__one_week_60s.json",
     "electrolyzer_with_renewables__full_year_60s.json",
     "electrolyzer_with_renewables__one_week_60s.json",
+    "gas_boiler_household__full_year_60s.json",
+    "gas_boiler_household__one_week_60s.json",
     "household_district_heating_building_sizer__full_year_60s.json",
     "household_district_heating_building_sizer__one_week_60s.json",
     "household_electric_heating_building_sizer__full_year_60s.json",
@@ -47,7 +49,7 @@
     "simple_system_setup_two__full_year_60s.json",
     "simple_system_setup_two__one_week_60s.json"
   ],
-  "hisim_commit": "66ecc50173455baee6e5188d7242fbbe44ac5e6a",
-  "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.36",
+  "hisim_commit": "400d5e4cb9d4431a50b61fd3e615445395443bf6",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.36",
   "python_version": "3.11.17"
 }

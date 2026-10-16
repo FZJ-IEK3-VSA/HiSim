@@ -22,7 +22,8 @@
     {"id": "simple_system_setup_one",                       "path": "system_setups/simple_system_setup_one.py", "seconds": {"one_week_60s": 5, "full_year_60s": 8}},
     {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "seconds": {"one_week_60s": 6, "full_year_60s": 9}},
     {"id": "dynamic_components",                            "path": "system_setups/dynamic_components.py", "seconds": {"one_week_60s": 12, "full_year_60s": 117}},
-    {"id": "electrolyzer_with_renewables",                  "path": "system_setups/electrolyzer_with_renewables.py", "seconds": {"one_week_60s": 19, "full_year_60s": 364}}
+    {"id": "electrolyzer_with_renewables",                  "path": "system_setups/electrolyzer_with_renewables.py", "seconds": {"one_week_60s": 19, "full_year_60s": 364}},
+    {"id": "gas_boiler_household",                          "path": "energy_systems/gas_boiler_household.energy_system.yaml", "seconds": {"one_week_60s": 14, "full_year_60s": 110}}
   ],
   "parameter_sets": [
     {"id": "one_week_60s", "factory": "one_week_only", "year": 2021, "seconds_per_timestep": 60,

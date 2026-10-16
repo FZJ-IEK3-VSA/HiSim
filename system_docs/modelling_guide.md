@@ -88,9 +88,10 @@ part B, principle 10):
   measured by (heat delivered, fuel or electricity, the bill), unless its spec states and justifies another
   tolerance (owner, 2026-10-15). A test runs the same system at 60 s and at the coarse steps and asserts the
   tolerance. Example: `tests/test_dhw_chain_time_resolution.py` runs six twins for four weeks at 60, 900 and
-  3600 s; the heat drawn at the tap agrees within 1 %, the generators' hot-water heat within 1 % at 900 s. Its
-  1.5 % for the generators at 3600 s is justified only in the test's docstring; the spec
-  (`roadmap/hydronic_coupling_spec.md`, stage C) states 1 % and accepts only the electric heater's 1.08 %.
+  3600 s; the heat drawn at the tap agrees within 1 %, the generators' hot-water heat within 1 % at 900 s and
+  within 1.5 % at 3600 s. The spec states and justifies the 1.5 % (`roadmap/hydronic_coupling_spec.md` §9.5,
+  stage C, amended by the owner on 2026-10-16): at 3600 s a hotter tank loses more standby heat, because its
+  controller decides on the tank's start-of-step temperature.
 - **A change is measured, not assumed.** The PR description gives the change against the 60 s run of the same
   head at 900 s and 3600 s for the twins it affects (part-load spec §11, the tables of #941). A deviation beyond the
   tolerance is a bug or a decision for the owner, never a widened tolerance.

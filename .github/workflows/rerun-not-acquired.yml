@@ -1,0 +1,93 @@
+# Re-runs the jobs the self-hosted runners lost, once the run they belong to has finished.
+#
+# THE BUG (actions/runner#4728, analysed in renovisorissues #120). While a runner works on a job it
+# keeps a long poll for its next message open. When the job ends, the runner cancels that poll and
+# opens a new one 5 to 14 s later. A job GitHub offered into the cancelled poll is lost on the
+# runner's side; GitHub offers it again about 61 s later, the runner refuses the expired offer, and
+# after a few rounds GitHub cancels the job with "The job was not acquired by Runner of type
+# self-hosted even after multiple attempts". The job never ran a step. The more runners finish at
+# the same moment, the more offers are lost, so lost jobs come in bursts while several pull
+# requests' CI runs at once: 31 on 2026-10-15. The fix (actions/runner PR #4729) is not released;
+# runner 2.338.0 still has the bug. Delete this file once a runner release contains it (the
+# runners update themselves); bead hisim-7fh2 tracks that.
+#
+# WHAT IS RE-RUN. A finished run that did not succeed is re-run with rerun-failed-jobs, which also
+# re-runs the jobs that depended on a lost one, only when every job that failed or was cancelled
+# was either lost or one of the AGGREGATE_JOBS below. A job counts as lost when no runner took
+# it (runner_id 0) and its annotation is GitHub's "not acquired" message; a job cancelled by a
+# newer push or by hand does not qualify. A run that also has a real failure is left alone, so a
+# real failure is never re-run without a person looking at it; the step summary counts both.
+#
+# AGGREGATE_JOBS are the jobs that run after a failure on purpose and fail because a job they wait
+# for did not succeed: golden-year's and golden-check's summaries and the bless's collect job.
+# Their failure says nothing of their own, so a lost run job beside them still gets its re-run.
+# A new job of that kind goes into the list.
+#
+# THE RETRY LIMIT. run_attempt < 3 stops a loop. A re-run made with GITHUB_TOKEN may not start
+# this workflow again when it finishes, so expect about one automatic re-run per run; every
+# re-run in renovisorissues #120 succeeded.
+#
+# SAFETY. The job runs on a GitHub-hosted runner, which does not have the bug, and checks out no
+# code, so a fork's pull request cannot run anything here with the write permission. A
+# workflow_run workflow takes effect only from the default branch.
+
+name: rerun-not-acquired
+
+on:
+  workflow_run:
+    workflows:
+      - tests
+      - quality
+      - docs-build
+      - golden-check
+      - golden-year
+      - golden-update
+      - energy-system-freshness
+      - path-verification
+      - worked-examples
+      - p3-parity
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: re-run jobs no runner acquired
+    if: github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write  # rerun-failed-jobs
+      checks: read    # the jobs' annotations
+    steps:
+      - name: Re-run the run's failed jobs if every failure is a lost job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.event.workflow_run.id }}
+          AGGREGATE_JOBS: |
+            golden-year summary
+            golden-check summary
+            assemble goldens and open PR
+        run: |
+          set -euo pipefail
+          lost=0; aggregate=0; other=0
+          jobs=$(gh api --paginate "repos/$REPO/actions/runs/$RUN/jobs?filter=latest&per_page=100" \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
+                  | "\(.id)\t\(.runner_id // 0)\t\(.name)"')
+          while IFS=$'\t' read -r id runner name; do
+            [ -n "$id" ] || continue
+            if [ "$runner" = 0 ] && gh api "repos/$REPO/check-runs/$id/annotations" --jq '.[].message' \
+                 | grep -q 'not acquired by Runner'; then
+              lost=$((lost + 1)); echo "not acquired: $name (job $id)"
+            elif grep -qxF "$name" <<< "$AGGREGATE_JOBS"; then
+              aggregate=$((aggregate + 1)); echo "aggregate: $name (job $id)"
+            else
+              other=$((other + 1)); echo "other failure: $name (job $id)"
+            fi
+          done <<< "$jobs"
+          echo "not acquired: $lost, aggregate: $aggregate, other failures: $other" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$lost" -gt 0 ] && [ "$other" -eq 0 ]; then
+            gh api -X POST "repos/$REPO/actions/runs/$RUN/rerun-failed-jobs"
+            echo "re-ran the failed jobs of run $RUN" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

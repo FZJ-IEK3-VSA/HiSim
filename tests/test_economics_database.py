@@ -1,4 +1,4 @@
-"""Cost database and data-file tests (cost_spec.md §3.5, §3.10, §9.6).
+"""Cost database and data-file tests (roadmap/cost_spec.md §3.5, §3.10, §9.6).
 
 Everything here runs against the shipped ``hisim/cost_database`` directory: it loads, every
 datapoint carries a source, the lookup rules behave as specified, and a datapoint without a

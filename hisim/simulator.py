@@ -32,7 +32,7 @@ from hisim.write_guard import CalculationDirectories
 
 
 def _has_cost_facts_source(component_class: type) -> bool:
-    """Whether anything can produce `ComponentCostFacts` for this class (cost_spec.md §9.1).
+    """Whether anything can produce `ComponentCostFacts` for this class (roadmap/cost_spec.md §9.1).
 
     Mirrors the precedence `adapter.extract_cost_facts` applies at postprocessing time, so the
     pre-run refusal and the D7 abort can never disagree about which classes have a facts source:
@@ -698,7 +698,7 @@ class Simulator:
     def check_cost_declarations(self) -> None:
         """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
 
-        The completeness check cost_spec.md §9.2 asks for "at simulation start, not end", and this
+        The completeness check roadmap/cost_spec.md §9.2 asks for "at simulation start, not end", and this
         method answers it for the two defects that are visible without the cost database:
 
         1. a class that declares no `cost_relevance` at all and therefore keeps the `UNDECLARED`
@@ -779,7 +779,7 @@ class Simulator:
             raise ValueError("Not a single component was defined. Quitting.")
 
         # A lifecycle-cost run needs every component to have declared a cost role; refuse now
-        # rather than after hours of simulation (cost_spec.md §9.2).
+        # rather than after hours of simulation (roadmap/cost_spec.md §9.2).
         self.check_cost_declarations()
 
         # prepare logging and simulation directory

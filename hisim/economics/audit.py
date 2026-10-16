@@ -424,7 +424,7 @@ def write_parity_report(
                 round(delta, 2),
                 ""
                 if abs(delta) < 0.01 * max(1.0, abs(legacy["investment"]))
-                else "DISCREPANCY (see cost_module_issues.md)",
+                else "DISCREPANCY (see roadmap/cost_module_issues.md)",
             ]
         )
         delta_period = new_period - legacy["investment_period"]

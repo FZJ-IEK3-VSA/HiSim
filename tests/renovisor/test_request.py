@@ -684,6 +684,7 @@ class TestTheContentHash:
         assert all(character in "0123456789abcdef" for character in content_hash)
 
 
+@pytest.mark.base
 class TestTheMeasurePriceBand:
     """T-VAL: a ``measures[i].cost`` block that is not a price band is a request problem.
 

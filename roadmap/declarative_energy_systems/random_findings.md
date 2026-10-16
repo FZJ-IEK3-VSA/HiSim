@@ -4,7 +4,7 @@ Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below poi
 
 Accidental discoveries, implementation friction and elegance opportunities logged while
 building the design-B spike (branch `config_presets`, spec
-`system_docs/config_defaults_spec.md` §8b PR 1). Not a to-do list yet — a raw capture to
+`roadmap/declarative_energy_systems/config_defaults_spec.md` §8b PR 1). Not a to-do list yet — a raw capture to
 work through later, one by one.
 
 Legend: **[bug]** latent defect found along the way · **[friction]** implementation issue

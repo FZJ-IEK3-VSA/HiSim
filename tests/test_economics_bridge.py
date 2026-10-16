@@ -1,4 +1,4 @@
-"""End-to-end test: a real simulation with COMPUTE_LIFECYCLE_COSTS on (cost_spec.md §10).
+"""End-to-end test: a real simulation with COMPUTE_LIFECYCLE_COSTS on (roadmap/cost_spec.md §10).
 
 Modeled on tests/test_electricity_meter.py. Verifies the parallel engine runs in shadow mode
 next to the legacy COMPUTE_OPEX/COMPUTE_CAPEX path and writes only new files.
@@ -307,6 +307,7 @@ def _evaluated_empty_matrix():
     )
 
 
+@pytest.mark.base
 class TestExtrapolationOfAPartialYear:
     """§8.5: a run shorter than a year is multiplied up, and both outputs have to say so."""
 
@@ -355,6 +356,7 @@ class TestExtrapolationOfAPartialYear:
         assert not [f for f in report.findings if f.check_id == CheckIds.CHECK_SIMULATED_PERIOD]
 
 
+@pytest.mark.base
 class TestFailuresAbortInsteadOfDegrading:
     """Every failure that used to be logged and worked around now fails the run (§10)."""
 
@@ -449,6 +451,7 @@ class TestFailuresAbortInsteadOfDegrading:
         assert not os.listdir(tmp_path)
 
 
+@pytest.mark.base
 class TestChartsThatWereNotDrawn:
     """A figure the run could not draw is reported, and never takes an export down with it.
 
@@ -497,6 +500,7 @@ class TestChartsThatWereNotDrawn:
         assert "no fonts in this environment" in note
 
 
+@pytest.mark.base
 class TestCapacityChargeBillingInterval:
     """§8.4: peaks are metered over the *contract's* interval, not over a hard-coded 15 minutes."""
 
@@ -533,6 +537,7 @@ class TestCapacityChargeBillingInterval:
         assert "400" in logged and "15" in logged
 
 
+@pytest.mark.base
 class TestContextMerge:
     """`_merge_context`: what the setup declared fills gaps, and a declared zero is a declaration."""
 
@@ -667,6 +672,7 @@ class TestContextMerge:
         assert facts.lifetime_of_asset_class is loadtypes.ComponentType.BATTERY
 
 
+@pytest.mark.base
 class TestSharedHelpers:
     """The two duplications the review asked to collapse, pinned so they stay collapsed."""
 

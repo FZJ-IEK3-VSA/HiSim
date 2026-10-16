@@ -9,7 +9,7 @@ Scope: restructuring `hisim/economics` for independent review/testing, plus a
 human-checkable worked-example library. This spec does not change any pricing
 methodology; it changes how the existing calculations are organized and verified.
 
-Naming note: the repo root's `cost_spec.md` (self-titled "v2") is the
+Naming note: `roadmap/cost_spec.md` (self-titled "v2") is the
 *methodology* spec; this document is the *reviewability* spec layered on top of
 it. Its §10 migration constraints (strictly parallel implementation, no legacy
 edits) continue to govern; everything below happens inside the new module and
@@ -234,7 +234,7 @@ importers churn once (open question 1).
   Shipped data passes: `validate_all()` reported 0 errors and 1 warning (the
   inline tariff source) and reports **0 errors, 0 warnings** since W2.4b.
 - **W2.6 — `legacy_flat_subsidy_share`. Done** (commit 8696c966), by marking
-  rather than moving. cost_spec.md §10.1 keeps the flat shim alive until Phase 4
+  rather than moving. roadmap/cost_spec.md §10.1 keeps the flat shim alive until Phase 4
   has a catalog for every shipped country (Ireland has none), so the capability
   stays; a separate data file for one float per entry — with its own loader,
   validation, overlay and provenance plumbing, to be dismantled again at Phase 4
@@ -686,7 +686,7 @@ what the example asserted — a declared `0.025` was stored as `0.03` (looser),
 demands bit-exact equality. Plain decimal rather than an exponent because
 `1e-06` parses as a *string* under a YAML 1.1 loader.
 
-The `spec_section` metadata field names a subsection of **`cost_spec.md`**, the
+The `spec_section` metadata field names a subsection of **`roadmap/cost_spec.md`**, the
 domain specification — not of this document, whose §3 describes the library
 itself. Both have a §3.2 and a §3.6 with different meanings, so a reader
 following the field needs to know which document it points at. The field is not

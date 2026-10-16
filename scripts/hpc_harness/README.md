@@ -3,8 +3,8 @@
 Runs large batches (10 000+) of simulations across many HPC compute nodes:
 one long-lived **queue server** (FastAPI + SQLite) hands out jobs over HTTP to a
 fleet of Slurm-started **workers**, each running a warm pool of forked child
-interpreters. Full design: [`hpc_harnes_spec.md`](../../hpc_harnes_spec.md) at the
-repository root (Draft v2). Replaces the retired MPI harness that lived in
+interpreters. Full design: [`roadmap/hpc_harness_spec.md`](../../roadmap/hpc_harness_spec.md)
+(Draft v2). Replaces the retired MPI harness that lived in
 `hisim/hpc_harness/`.
 
 Key properties (spec references):

@@ -65,7 +65,7 @@ the fixture — verified by grep). Do:
   `tests/components/test_configuration_placeholder_country.py`.
 - Fix every path the moved files compute (`Path(__file__).resolve().parent.parent` becomes
   `.parent.parent.parent`, and so on; grep for `__file__` in the moved tests).
-- Update every reference to the old names: `CLAUDE.md` (three lines), `simulation_issues.md`
+- Update every reference to the old names: `CLAUDE.md` (three lines), `roadmap/simulation_issues.md`
   (two), the docstrings in `hisim/renovisor/vocabulary.py`, `occupancy.py`, `map.py`, `kpis.py`,
   `contract/__init__.py`, `contract/refresh.py` (its `PINNED.yaml` header string — then re-run
   `python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract` so `PINNED.yaml` is

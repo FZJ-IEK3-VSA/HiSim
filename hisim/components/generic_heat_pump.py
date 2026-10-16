@@ -664,7 +664,7 @@ class GenericHeatPump(cp.PhysicsComponent):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the heat pump as one priced subject of the database's `HEAT_PUMP` class, sized by
         its nominal heating power in kW.

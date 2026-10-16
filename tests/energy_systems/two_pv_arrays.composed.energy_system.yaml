@@ -1,0 +1,35 @@
+# Hand-written test fixture of tests/test_multiple_pv_arrays.py: the household of two_pv_arrays.energy_system.yaml
+# composed from the assembly library, the two arrays as two instances of one pv/array import (assemblies_spec.md
+# §10.4). The battery's fact port lists both arrays, so it is sized to their sum, and the grid's meter observes the
+# manager's grid balance only. `order:` reproduces the flat file's evaluation order.
+schema_version: 4
+name: two_pv_arrays
+description: A household with a south and a west array, a battery and the self-consumption manager.
+
+components:
+  UTSPConnector:
+    order: 1
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+  Weather:
+    order: 2
+    class: hisim.components.weather.Weather
+    preset: aachen
+
+imports:
+  pv:
+    order: 3
+    assembly: pv/array
+    instances:
+      south: {azimuth_in_degree: 180, power_in_watt: 4000}
+      west: {azimuth_in_degree: 270, power_in_watt: 2000}
+  grid:
+    order: 4
+    assembly: supply/electricity_grid
+    observes: [{output: TotalElectricityToOrFromGrid}]
+  battery:
+    order: 5
+    assembly: storage/battery
+  control:
+    order: 6
+    assembly: control/ems_self_consumption

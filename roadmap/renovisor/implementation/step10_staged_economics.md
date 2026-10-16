@@ -169,7 +169,7 @@ report's `subjects` map (§4).
      (`installation_year` = `construction_year`), with `replaced_by_asset_classes` filled from
      the package (`heating_system` replaces the generator, `window_replacement` the windows, …) and
      `anyway_share` from a `constants.AnywayShareByPlacement` table (TO BE REVIEWED, sourced to
-     `cost_module_issues.md` #12; first-time insulation well below 1);
+     `roadmap/cost_module_issues.md` #12; first-time insulation well below 1);
    - `extra_cost_facts`: one `SubjectCostFacts` per envelope measure, sized in m² of its element
      from the realized `Building` config (fall back to the request's `area_in_m2`; if neither,
      the subject is `unpriced`), priced from `measures[i].cost` when present (§1);

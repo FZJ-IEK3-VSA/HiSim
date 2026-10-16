@@ -14,9 +14,10 @@ Before a change counts as done, on the files it touches:
    (`grep -rl <module> tests/`), with `pytest <files> -n 8 -q`. Once before pushing, the `base` set:
    `pytest -m base -n 32 -q`, and `pytest -m renovisor_probes -q` when the change touches `hisim/renovisor/`.
 3. **The golden gate**, when the change can move simulation results: `python scripts/golden_check.py` on the
-   affected pairs (`--pairs setup:param`). A golden reference is never regenerated locally; it is blessed only
-   through the CI workflow `golden-update.yml`. A change that moves results says so in its PR description, with
-   the KPI deltas (`system_docs/results_and_interfaces.md`).
+   affected pairs (`--pairs setup:param`). A golden reference is blessed only through the CI workflow
+   `golden-update.yml`; `scripts/golden_update.py` may run locally to inspect what a bless would write, and what
+   it writes locally is never committed. A change that moves results says so in its PR description, with the KPI
+   deltas (`system_docs/results_and_interfaces.md`).
 
 The full suite (`pytest` without `-m`) is for CI. Locally, the slow markers run only for the test files a change
 touches.
@@ -24,7 +25,9 @@ touches.
 ## 2. Markers: which one a test carries
 
 Every marker is declared in `pytest.ini`, and `--strict-markers` refuses an undeclared one. Each job of
-`.github/workflows/tests.yml` runs one marker, so the marker decides where and how often a test runs.
+`.github/workflows/tests.yml`, the CI of every pull request, runs one marker, so the marker decides where and how
+often a test runs. `.gitlab-ci.yml` runs the same markers on demand only, one job per marker and none split, and
+has no `renovisor_probes` job: its `pytest-others` takes those tests.
 
 | Marker | What belongs there | CI job |
 |---|---|---|
@@ -37,7 +40,7 @@ Every marker is declared in `pytest.ini`, and `--strict-markers` refuses an unde
 | `renovisor_probes` | The RenoVisor tests that read the capability document or the translation map rendered from it (the session fixtures of `tests/renovisor/conftest.py`, which build the whole probe set). `tests/renovisor/conftest.py` refuses such a test without this marker or with `base`. | `pytest (renovisor-probes)`, one process |
 | `postprocessingoptions` | One named test per `PostProcessingOptions` value. | `pytest (postprocessingoptions)` |
 | `utsp` | Tests that need the LPG/UTSP connector. Networked, needs credentials. | `pytest (utsp)` |
-| `mpc` | Model-predictive-control system tests. | none carry it today |
+| `mpc` | Model-predictive-control system tests. | `pytest (others)`; no test carries it today |
 | `hpcharness` | The HPC-harness tests. | `pytest (others)` |
 | `upstream_history` | Tests that need the unsquashed upstream history of `golden_references/`; carried instead of `base`. | `pytest (others)`, whose checkout fetches the full history |
 
@@ -51,7 +54,8 @@ Rules:
   `extendedbase2`.
 - **`system_setups` is only for the Python setup files.** A test that runs an energy-system file, a twin or a rig
   of a few components is `extendedbase` or `extendedbase2`. Some older modules carry `system_setups` for other
-  runs (for example `tests/test_write_guard.py`); they move when next touched.
+  runs (for example `tests/test_water_storage_temperature_check.py`, which runs an energy-system file, and
+  `tests/test_example_component.py`, which steps one component by hand); they move when next touched.
 - **Memory decides between `extendedbase` and `extendedbase2`, not wall time.** A test that runs beside a second
   process in under 8 GB is `extendedbase`; one that needs most of a 16 GB runner is `extendedbase2` (the comments
   of the matrix in `tests.yml` give each job's peak). CI splits each marker over its jobs by the committed weights
@@ -60,24 +64,29 @@ Rules:
 
 ## 3. The runtime budget of `base`
 
-`base` is the edit loop: about 7,300 tests that every agent and contributor runs many times a day.
+`base` is the edit loop: about 9,100 tests in about 250 modules (October 2026) that every agent and contributor
+runs many times a day.
 
 - **One `base` test takes a few seconds at most** (`pytest.ini`). Anything longer, and anything that runs a full
   simulation, is `extendedbase` or `extendedbase2`.
 - **Expensive setup is built once.** A fixture that builds something costly -- a translated energy system, a
   capability document, a simulated week -- has `scope="module"` or `scope="session"` and is not rebuilt per test.
   Bead hisim-60sv.1 found the RenoVisor capability document built six times per `base` run, about 100 s each.
-- **Measure before adding.** `pytest <file> --durations=10` shows the slowest tests of a module; CI prints the 20
-  slowest of every job (`--durations` in `tests.yml`). A new test that shows up there is moved or made faster in
-  the same pull request.
+- **Measure before adding.** `pytest <file> --durations=10` shows the slowest tests of a module; CI prints the
+  slowest of every job, 20 by default and 40 in `pytest (postprocessingoptions)` (`durations` in `tests.yml`). A
+  new test that shows up there is moved or made faster in the same pull request.
 - **Simulate the shortest period that shows the effect**: a day or a week, not a year, unless the test is about the
   year.
 
 ## 4. What a test must prove
 
 - **Every bug fix comes with a regression test that fails without the fix.** Write the test first, see it fail on
-  the unfixed code, then fix. Before pushing, check once more: stash the fix but keep the test
-  (`git stash push -- hisim/`), run the test, see it fail, `git stash pop`. A test that passes on the unfixed code
+  the unfixed code, then fix. Before pushing, check once more: revert the fix, keep the test, run the test, see it
+  fail, restore the fix. Revert every file of the fix, also those outside `hisim/` (an energy-system file, a setup,
+  input data), and make sure the revert took effect. An uncommitted fix is stashed with
+  `git stash push --include-untracked -- <its files>`, which must report that it saved them, and comes back with
+  `git stash pop`. A committed one is reverted with `git checkout <the commit before it> -- <its files>`, deleting
+  a file it added, and comes back with `git checkout HEAD -- <its files>`. A test that passes on the unfixed code
   proves nothing; the review of #880 found such a test.
 - **A test asserts the behaviour, not that the code ran.** Compare with an expected value obtained independently
   -- by hand, from a physical law, from a datasheet -- not with the value the code under test produced. "The run

@@ -57,8 +57,8 @@ jobs:
         include:
           - name: base
             marker: "base"
-            # 2.5 GB peak (~1.1 GB above idle) for one process: four fit easily; ~7,300 tests in
-            # ~200 modules, so loadfile spreads well.
+            # 2.5 GB peak (~1.1 GB above idle) for one process: four fit easily; ~9,100 tests in
+            # ~250 modules, so loadfile spreads well.
             workers: 4
           - name: assemblies
             marker: "assemblies"

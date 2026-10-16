@@ -558,6 +558,7 @@ class TestAValueThatSelectsNothingIsNotUsed:
         assert line.note == SelectsNothing.HOT_WATER_SEPARATE_HEAT_PUMP
 
 
+@pytest.mark.base
 class TestTheEmitterOnDirectElectricHeating:
     """hisim-vdbp: the schema requires an emitter, which direct electric heating has no water circuit for."""
 

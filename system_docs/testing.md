@@ -64,7 +64,7 @@ Rules:
 
 ## 3. The runtime budget of `base`
 
-`base` is the edit loop: about 9,100 tests in about 250 modules (October 2026) that every agent and contributor
+`base` is the edit loop: about 9,200 tests in about 250 modules (October 2026) that every agent and contributor
 runs many times a day.
 
 - **One `base` test takes a few seconds at most** (`pytest.ini`). Anything longer, and anything that runs a full

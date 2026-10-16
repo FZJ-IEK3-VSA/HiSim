@@ -5,7 +5,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 21.683315346730485
+    "value": 13.58917797894207
   },
   "BUI1.Battery.Battery discharging energy": {
     "building": "BUI1",
@@ -13,7 +13,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 4.504844292052843
+    "value": 4.513970757434228
   },
   "BUI1.Battery.Battery losses": {
     "building": "BUI1",
@@ -21,7 +21,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 2.1875483129339113
+    "value": 1.5842844797640598
   },
   "BUI1.CHP.Electrical energy produced (CHP1)": {
     "building": "BUI1",
@@ -417,7 +417,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 10534.82300196892
+    "value": 10541.721851977984
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -449,7 +449,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 397.41971711075854
+    "value": 397.50033522464173
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -465,7 +465,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 397.41971711075854
+    "value": 397.50033522464173
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -481,7 +481,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 1272.8701499722793
+    "value": 1272.8792764376606
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -497,7 +497,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 10.767689828209312
+    "value": 10.767767032430383
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -513,7 +513,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 42.79292245463338
+    "value": 42.80191005011923
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -521,7 +521,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 2974.487548312934
+    "value": 2973.884284479764
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",

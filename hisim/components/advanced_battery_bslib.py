@@ -112,7 +112,7 @@ class BatteryConfig(ConfigBase):
         """The fleet's home battery, scaled to the PV arrays it is installed beside.
 
         The field defaults are this battery: a single ``SG1`` lithium-ion system from the bslib
-        database, first in the energy management hierarchy, starting empty and rated for five
+        database, first in the energy management hierarchy, starting half charged and rated for five
         thousand full cycles. What the preset does not fix is how big the device is:
         ``custom_battery_capacity_generic_in_kilowatt_hour`` and
         ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that :data:`CAPACITY_LAW`
@@ -255,6 +255,13 @@ class Battery(PhysicsComponent):
     #: The seconds in an hour, which convert between energy in Wh and power over a step in s.
     SECONDS_PER_HOUR: ClassVar[float] = 3600.0
 
+    #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged battery. A run
+    #: that starts on an empty battery cannot discharge on its first night and one that starts full cannot store
+    #: its first day's PV surplus; half charged, the battery can do either from the first step. Neither
+    #: the "Battery losses" KPI nor the battery's OPEX counts the energy it holds at the start as a loss: both subtract
+    #: the change of the stored energy from the charged minus the discharged energy.
+    INITIAL_STATE_OF_CHARGE: ClassVar[float] = 0.5
+
     # Inputs
     LoadingPowerInput = "LoadingPowerInput"  # W
 
@@ -307,7 +314,7 @@ class Battery(PhysicsComponent):
         ) = self.refuse_an_impossible_size(self.battery_config)
 
         # Component has states
-        self.state = BatteryState()
+        self.state = BatteryState(state_of_charge=self.INITIAL_STATE_OF_CHARGE)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
@@ -760,8 +767,9 @@ class BatteryState:
     converged pass's state the next step's start.
     """
 
-    #: state of charge of the battery, dimensionless between 0 and 1
-    state_of_charge: float = 0
+    #: State of charge of the battery, dimensionless between 0 and 1. No default: the battery states its start value
+    #: once, as :attr:`Battery.INITIAL_STATE_OF_CHARGE`.
+    state_of_charge: float
     #: Whether bslib's recharge hysteresis blocks charging: set only when a step ended above a state of charge of 1,
     #: cleared below the threshold (see :meth:`BslibChargingParameters.recharging_is_blocked`).
     recharging_is_blocked: bool = False

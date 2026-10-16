@@ -1,7 +1,7 @@
 """Generic electrolyzer and h2 storage module."""
 
 # Owned
-from typing import List, Any
+from typing import Any, ClassVar, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -72,9 +72,10 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     """Capacity, fill and charging rates of the hydrogen tank behind the electrolyzer.
 
-    The tank holds between ``min_capacity`` and ``max_capacity`` kilograms of hydrogen,
-    accepts and releases at most the two rates per hour, and starts a simulation holding
-    ``starting_fill``. The one tank this library states is :meth:`preset_standard`::
+    The tank holds between ``min_capacity`` and ``max_capacity`` kilograms of hydrogen and
+    accepts and releases at most the two rates per hour. It starts a simulation half full, the
+    component's :attr:`HydrogenStorage.INITIAL_FILL_FRACTION`, which is not a configuration field.
+    The one tank this library states is :meth:`preset_standard`::
 
         ElectrolyzerWithHydrogenStorageConfig.preset_standard("HydrogenStorage")
     """
@@ -86,8 +87,6 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     min_capacity: float = 0  # [kg_H2]
     #: Hydrogen the tank holds when it is full, in kg.
     max_capacity: float = 500  # [kg_H2]
-    #: Hydrogen in the tank when the simulation starts, in kg.
-    starting_fill: float = 400  # [kg_H2]
     #: Most hydrogen the tank takes in an hour, in kg/h.
     max_charging_rate_hour: float = 2  # [kg/h]
     #: Most hydrogen the tank gives out in an hour, in kg/h.
@@ -99,15 +98,16 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     #: Share of the stored hydrogen lost per day, in percent.
     loss_factor_per_day: float = 0  # [lost_%/day]
 
-    @preset(note="the 500 kg tank, four fifths full at the start")
+    @preset(note="the 500 kg tank")
     @classmethod
     def preset_standard(cls, name: str) -> "ElectrolyzerWithHydrogenStorageConfig":
         """The 500 kg hydrogen tank, the only one this module has ever built.
 
-        The field defaults are that tank: 500 kg of capacity down to an empty floor, 400 kg in
-        it when the simulation starts, 2 kg an hour in and out, and neither compression work
-        nor a daily loss. ``standard`` is the name -- a tank of this size names no
-        manufacturer and nothing here is derived from the scenario.
+        The field defaults are that tank: 500 kg of capacity down to an empty floor, 2 kg an
+        hour in and out, and neither compression work nor a daily loss. It starts a simulation
+        holding 250 kg, half its capacity (:attr:`HydrogenStorage.INITIAL_FILL_FRACTION`).
+        ``standard`` is the name -- a tank of this size names no manufacturer and nothing here is
+        derived from the scenario.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -498,12 +498,31 @@ class HydrogenStorageSimulation:
         energy_to_discharge: float,
         loss_factor: float,
     ):
-        """Initialize the class.
+        """Hold the tank's fill between its floor and its capacity, with its charge and discharge limits.
 
-        The storage has a minimum and maximum storage level and a current fill status
-        The fill status must be between the min and max capacity
-        A maximum charging and discharging rate restrict these processes.
+        The tank has a floor (``min_capacity``), a capacity (``max_capacity``) and a current fill, and a maximum
+        charging and discharging rate restrict how fast the fill changes. For example, the 500 kg preset tank with an
+        empty floor starts with a fill of 250 kg. The start fill must lie between the floor and the capacity: a tank
+        that started outside its own range would report a fill it was never built to hold.
+
+        Args:
+            fill: The hydrogen in the tank before the first step, in kg.
+            max_capacity: The hydrogen the tank holds when it is full, in kg.
+            min_capacity: The hydrogen that always stays in the tank, in kg.
+            max_charging_rate: The most hydrogen the tank takes in per second, in kg/s.
+            max_discharging_rate: The most hydrogen the tank releases per second, in kg/s.
+            energy_to_charge: The electricity spent compressing a kilogram into the tank, in kWh/kg.
+            energy_to_discharge: The electricity spent releasing a kilogram from the tank, in kWh/kg.
+            loss_factor: The share of the stored hydrogen lost per day, in percent.
+
+        Raises:
+            ValueError: If the start fill lies outside the floor and the capacity.
         """
+        if not min_capacity <= fill <= max_capacity:
+            raise ValueError(
+                f"The hydrogen tank's start fill, {fill} kg, lies outside its floor, min_capacity = {min_capacity} kg, "
+                f"and its capacity, max_capacity = {max_capacity} kg."
+            )
         self.fill = fill
         self.max_capacity = max_capacity
         self.min_capacity = min_capacity
@@ -648,6 +667,12 @@ class HydrogenStorage(PhysicsComponent):
     HydrogenLosses = "HydrogenLosses"  # kg
     DischargingHydrogenAmountReal = "DischargingHydrogenAmountReal"  # kg/s
 
+    #: The share of the usable range, from ``min_capacity`` to ``max_capacity``, that the tank holds before the first
+    #: step, dimensionless between 0 and 1: a half-full tank. A run that starts on an empty tank cannot supply its
+    #: first hours and one that starts full cannot store its first production; half full, the tank can do either.
+    #: For example, the 500 kg preset tank with an empty floor starts with 250 kg.
+    INITIAL_FILL_FRACTION: ClassVar[float] = 0.5
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -746,7 +771,9 @@ class HydrogenStorage(PhysicsComponent):
         self.max_discharging_rate = config.max_discharging_rate_hour / 3600
 
         self.hydrogenstorage = HydrogenStorageSimulation(
-            fill=config.starting_fill,
+            fill=self.initial_fill_in_kg(
+                min_capacity_in_kg=config.min_capacity, max_capacity_in_kg=config.max_capacity
+            ),
             max_capacity=config.max_capacity,
             min_capacity=config.min_capacity,
             max_charging_rate=self.max_charging_rate,
@@ -755,6 +782,30 @@ class HydrogenStorage(PhysicsComponent):
             energy_to_discharge=config.energy_for_discharge,
             loss_factor=config.loss_factor_per_day,
         )
+
+    @classmethod
+    def initial_fill_in_kg(cls, *, min_capacity_in_kg: float, max_capacity_in_kg: float) -> float:
+        """Return the hydrogen the tank holds before the first step, in kg.
+
+        The tank starts :attr:`INITIAL_FILL_FRACTION` of the way from its floor to its capacity. For example, a tank
+        of 500 kg with an empty floor starts with 250 kg, and one with a 100 kg floor starts with 300 kg.
+
+        Args:
+            min_capacity_in_kg: The hydrogen that always stays in the tank, in kg.
+            max_capacity_in_kg: The hydrogen the tank holds when it is full, in kg.
+
+        Returns:
+            The start fill, in kg.
+
+        Raises:
+            ValueError: If the floor lies above the capacity, which would start the tank outside its own range.
+        """
+        if min_capacity_in_kg > max_capacity_in_kg:
+            raise ValueError(
+                f"The hydrogen tank's floor, min_capacity = {min_capacity_in_kg} kg, lies above its capacity, "
+                f"max_capacity = {max_capacity_in_kg} kg."
+            )
+        return min_capacity_in_kg + cls.INITIAL_FILL_FRACTION * (max_capacity_in_kg - min_capacity_in_kg)
 
     def i_save_state(self):
         """Saves the state."""

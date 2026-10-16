@@ -295,9 +295,13 @@ class SimpleDHWStorageConfig(ConfigBase):
 
 @dataclass
 class SimpleWaterStorageState:
-    """SimpleHotWaterStorageState class."""
+    """The space-heating buffer's state between steps: its mean water temperature and its last standby loss.
 
-    mean_water_temperature_in_celsius: float = 25.0
+    The mean water temperature has no default: the buffer states its start value once, as
+    :attr:`SimpleHotWaterStorage.INITIAL_TEMPERATURE_IN_CELSIUS`, and builds its first state from it.
+    """
+
+    mean_water_temperature_in_celsius: float
     temperature_loss_in_celsius_per_timestep: float = 0.0
     heat_loss_in_watt: float = 0.0
 
@@ -577,6 +581,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     cost_relevance = CostRelevance.PRICED
 
+    #: The buffer's mean water temperature before its first step, in °C: 35 °C, the value the buffer always started
+    #: at and the design supply temperature of a floor heating, kept by the owner's decision of 2026-10-15. The
+    #: space-heating buffer has no operating range of its own: it runs between the return and the supply temperature
+    #: of the emitter it feeds (floor heating 28 to 35 °C, low-temperature radiator 45 to 55 °C, radiator 55 to
+    #: 70 °C), which the buffer does not know, so no single "half charged" value exists for it.
+    INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 35.0
+
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
@@ -629,7 +640,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 35
+        self.mean_water_temperature_in_water_storage_in_celsius: float = self.INITIAL_TEMPERATURE_IN_CELSIUS
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
@@ -1380,8 +1391,13 @@ class SimpleDHWStorage(SimpleWaterStorage):
     #: The temperature of the room the tank stands in, which it loses its standby heat to.
     AMBIENT_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 20.0
 
-    #: The tank's temperature before its first step, in °C: a charged tank at the warm-water aim.
-    INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 60.0
+    #: The tank's temperature before its first step, in °C: a tank at half its usable charge. Below the 40 °C the
+    #: household draws its warm water at (``HouseholdWarmWaterDemandConfig.ww_temperature_demand`` minus
+    #: ``temperature_difference_hot``) the tank's water is no longer usable, and at the 60 °C warm-water aim the
+    #: boiler's, the district heating's, the electric heating's and the heat pump's controllers charge it to it is
+    #: full; 50 °C lies halfway between, so a run starts neither on a full tank nor on one that cannot serve the first
+    #: draw. A solar collector may heat the tank further, up to its 80 °C maximum; that charge is not counted here.
+    INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 50.0
 
     #: The tap valve's local solve stops when the step mean it assumed and the one it got differ by at most this.
     TAP_SOLVE_TOLERANCE_IN_KELVIN: ClassVar[float] = 1e-10

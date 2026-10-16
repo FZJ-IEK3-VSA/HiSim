@@ -16,6 +16,8 @@ household composed from the assembly library, all over one June day at 15 minute
 - the lifecycle cost engine prices each array alone and attributes to each array its own generation;
 - the composed file, two instances of ``pv/array``, reproduces the flat file;
 - a run's record names both arrays as the battery's sizing sources and says it reads every provider.
+
+The tests that read the runs are ``extendedbase``; the check of the variant builder runs nothing and is ``base``.
 """
 
 from __future__ import annotations
@@ -32,10 +34,9 @@ import pytest
 import yaml
 
 from hisim.energy_system.assemblies.twins import rename_column
+from hisim.energy_system.comments import ProvenanceComments
 from hisim.energy_system.configure import ConfiguredSystem
 from hisim.energy_system.executor import run_energy_system
-
-pytestmark = pytest.mark.extendedbase
 
 
 @dataclass
@@ -297,6 +298,7 @@ def fixture_runs(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[str,
     yield runs
 
 
+@pytest.mark.extendedbase
 def test_each_array_generates_what_it_generates_alone(runs: Dict[str, ArrayRun]) -> None:
     """Catches a second array changing the first: a shared cache entry, a shared state or an overwritten output."""
     for array in TwoArrays.ARRAYS:
@@ -314,6 +316,7 @@ def test_each_array_generates_what_it_generates_alone(runs: Dict[str, ArrayRun])
     assert not np.allclose(south.to_numpy() / 2.0, west.to_numpy()), "the west array is not the south one halved"
 
 
+@pytest.mark.extendedbase
 def test_the_manager_balances_the_summed_production(runs: Dict[str, ArrayRun]) -> None:
     """Catches the manager reading one array of two: its grid balance is both arrays minus what it dispatched."""
     run = runs["both"]
@@ -336,6 +339,7 @@ def test_the_manager_balances_the_summed_production(runs: Dict[str, ArrayRun]) -
     assert run.column(TwoArrays.BATTERY, "AcBatteryPowerUsed").max() > 0.0, "the surplus must charge the battery"
 
 
+@pytest.mark.extendedbase
 def test_a_meter_observing_both_arrays_sums_them(runs: Dict[str, ArrayRun]) -> None:
     """Catches a meter that keeps one production input of two, the shape a household without a manager has."""
     run = runs["metered"]
@@ -360,6 +364,7 @@ def test_a_meter_observing_both_arrays_sums_them(runs: Dict[str, ArrayRun]) -> N
     )
 
 
+@pytest.mark.extendedbase
 def test_the_building_kpis_report_the_sum_of_the_arrays(runs: Dict[str, ArrayRun]) -> None:
     """Catches a total that counts one array, or self-consumption computed on part of the production."""
     both = runs["both"]
@@ -381,6 +386,7 @@ def test_the_building_kpis_report_the_sum_of_the_arrays(runs: Dict[str, ArrayRun
     assert metered.general_kpi("PV production") == both.general_kpi("PV production")
 
 
+@pytest.mark.extendedbase
 def test_the_battery_is_sized_to_the_sum_of_the_arrays(runs: Dict[str, ArrayRun]) -> None:
     """Catches the battery law reading one array of two, or refusing two providers of its fact."""
     total_in_watt = sum(TwoArrays.PEAK_POWER_IN_WATT.values())
@@ -393,6 +399,7 @@ def test_the_battery_is_sized_to_the_sum_of_the_arrays(runs: Dict[str, ArrayRun]
     )
 
 
+@pytest.mark.extendedbase
 def test_the_cost_engine_prices_and_credits_each_array_on_its_own(runs: Dict[str, ArrayRun]) -> None:
     """Catches arrays merged into one cost subject, or one array priced at the other's size.
 
@@ -419,6 +426,7 @@ def test_the_cost_engine_prices_and_credits_each_array_on_its_own(runs: Dict[str
     ) == pytest.approx(energy[TwoArrays.SOUTH] / energy[TwoArrays.WEST], rel=1e-6)
 
 
+@pytest.mark.extendedbase
 def test_the_composed_file_with_two_array_instances_reproduces_the_flat_file(runs: Dict[str, ArrayRun]) -> None:
     """Catches the assembly path losing an instance, mis-binding the battery's fact port or reordering the arrays."""
     flat = runs["both"].results
@@ -431,15 +439,17 @@ def test_the_composed_file_with_two_array_instances_reproduces_the_flat_file(run
     )
 
 
+@pytest.mark.extendedbase
 def test_the_record_names_every_array_as_the_batterys_sizing_source(runs: Dict[str, ArrayRun]) -> None:
     """Catches a record that re-runs against one array of two, or calls a list of providers a unique provider."""
     record = yaml.safe_load(runs["both"].record_text)
     sources = record["components"][TwoArrays.BATTERY]["sizing_sources"]["pv_peak_power_in_watt"]
     assert sources == [f"{array}.pv_peak_power_in_watt" for array in TwoArrays.ARRAYS]
     battery_lines = [line for line in runs["both"].record_text.splitlines() if "pv_peak_power_in_watt:" in line]
-    assert any("every provider, written for re-execution" in line for line in battery_lines), battery_lines
+    assert any(ProvenanceComments.ADDED_MANY_FOR_REEXECUTION in line for line in battery_lines), battery_lines
 
 
+@pytest.mark.base
 def test_a_variant_differs_from_the_fixture_only_where_it_says() -> None:
     """Catches a variant builder that edits more than the entries it names, which would void the comparisons."""
     fixture = TwoArrays.document()

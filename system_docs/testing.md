@@ -50,8 +50,11 @@ module's hand-computed examples, inside `base`) and `xdist_group` (pytest-xdist'
 Rules:
 
 - **A test carries exactly one job marker of the table.** A test with none runs only in the catch-all
-  `pytest (others)` job and is missed by `pytest -m base`. A test carries at most one of `base`, `extendedbase` and
-  `extendedbase2`.
+  `pytest (others)` job and is missed by `pytest -m base`; a test with two runs in two jobs. A hook enforces it:
+  `tests/job_markers.py`, registered by `tests/conftest.py`, fails the collection of every run, `-m base`
+  included, naming each test that carries none or more than one, after `tests/assemblies/conftest.py` has added
+  its marker. Its list `JobMarkers.NAMES` is this table; `tests/test_job_markers.py` keeps the two equal, so a
+  new job marker goes into the table, `pytest.ini` and that list together.
 - **`system_setups` is only for the Python setup files.** A test that runs an energy-system file, a twin or a rig
   of a few components is `extendedbase` or `extendedbase2`. Some older modules carry `system_setups` for other
   runs (for example `tests/test_water_storage_temperature_check.py`, which runs an energy-system file, and

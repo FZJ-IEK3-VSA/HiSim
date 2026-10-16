@@ -12,6 +12,7 @@ import pytest
 
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim import utils
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.simulationparameters import SimulationParameters
 
@@ -267,3 +268,197 @@ def test_csvloader_non_finite_error_message_names_file_column_and_rows() -> None
     assert "'Profile'" in message
     assert "non-finite" in message
     assert "[2, 5]" in message
+
+
+class TestTimeColumn:
+    """The loader finds the run's window in a file with a time column, and refuses a mid-year run without one.
+
+    The fixture is a minutely profile of 2021 whose value is its own row number, so the value a timestep reads
+    says which row it read. In the run's standard time 1 July 2021 00:00 is row 260 640 (181 days of minutes),
+    the row the weather resolves too (``tests/test_window_offset.py``).
+    """
+
+    #: The year of the fixture profile and of every run here.
+    YEAR = 2021
+    #: The resolution of the fixture profile and of the runs, in seconds.
+    SECONDS_PER_TIMESTEP = 60
+    #: The rows of a minutely profile of 2021.
+    ROWS_OF_A_MINUTELY_YEAR = 365 * 24 * 60
+    #: The row of the fixture labelled 1 July 2021 00:00.
+    FIRST_OF_JULY_ROW = 181 * 24 * 60
+    #: The minutely wind profile the setup ``electrolyzer_with_renewables`` reads, with its time in column 0.
+    WIND_PROFILE = "wind_generated_power_1_min.csv"
+
+    @classmethod
+    def minutely_year(cls, label_format: str = "%Y-%m-%d %H:%M:%S") -> pd.DataFrame:
+        """Build the fixture: a time column and a value column holding each row's own number.
+
+        Args:
+            label_format: How the time labels are written, as a ``strftime`` format.
+
+        Returns:
+            The profile, with the time labels in column 0 and the values in column 1.
+        """
+        labels = pd.date_range(f"{cls.YEAR}-01-01", periods=cls.ROWS_OF_A_MINUTELY_YEAR, freq="min")
+        return pd.DataFrame(
+            {"time": labels.strftime(label_format), "value": np.arange(cls.ROWS_OF_A_MINUTELY_YEAR, dtype=float)}
+        )
+
+    @staticmethod
+    def config(time_column: int | None) -> CSVLoaderConfig:
+        """Build the configuration of the fixture's value column, with or without its time column.
+
+        Args:
+            time_column: The index of the time column, or ``None`` for a file read without one.
+
+        Returns:
+            The configuration.
+        """
+        return CSVLoaderConfig.for_csv_file(
+            "CSV",
+            csv_filename="fake_profile.csv",
+            column=1,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            column_name="value",
+            time_column=time_column,
+        )
+
+    @staticmethod
+    def outputs(loader: CSVLoader) -> list[float]:
+        """Step the loader through every timestep of its run and collect its output.
+
+        Args:
+            loader: The loader to step.
+
+        Returns:
+            The output of each timestep.
+        """
+        stsv = cp.SingleTimeStepValues(1)
+        loader.output1_channel.global_index = 0
+        values = []
+        for timestep in range(loader.my_simulation_parameters.timesteps):
+            loader.i_simulate(timestep, stsv, force_convergence=False)
+            values.append(stsv.values[0])
+        return values
+
+    @pytest.mark.base
+    def test_a_july_run_with_a_time_column_reads_the_july_rows(self) -> None:
+        """Catches a July run reading January: timestep 0 must read the row labelled 1 July 00:00."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+        loader = CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                           dataframe=self.minutely_year())
+
+        expected = np.arange(self.FIRST_OF_JULY_ROW, self.FIRST_OF_JULY_ROW + parameters.timesteps, dtype=float)
+        np.testing.assert_array_equal(loader.column_values_in_loaded_unit, expected)
+        assert self.outputs(loader) == expected.tolist()
+
+    @pytest.mark.base
+    def test_the_time_labels_may_be_written_with_a_t(self) -> None:
+        """Catches the loader accepting only one spelling of ISO 8601: ``2021-07-01T00:00`` is a label too."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+        loader = CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                           dataframe=self.minutely_year("%Y-%m-%dT%H:%M"))
+
+        assert loader.column_values_in_loaded_unit[0] == self.FIRST_OF_JULY_ROW
+
+    @pytest.mark.base
+    def test_a_july_run_without_a_time_column_is_refused(self) -> None:
+        """Catches a file without a time column serving a July run with its January rows."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+
+        with pytest.raises(ValueError, match="without a time column.*only serve a run that starts on 1 January"):
+            CSVLoader(config=self.config(time_column=None), my_simulation_parameters=parameters,
+                      dataframe=self.minutely_year())
+
+    @pytest.mark.base
+    def test_a_january_run_without_a_time_column_reads_the_file_as_before(self) -> None:
+        """Catches the time column changing a January run that has none: it reads row ``t`` at timestep ``t``.
+
+        The loader keeps the whole column, byte for byte, as it did before the time column existed, and the
+        outputs are the first rows. A run with the time column reads the same values over its window.
+        """
+        parameters = SimulationParameters.one_week_only(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+        dataframe = self.minutely_year()
+        without = CSVLoader(config=self.config(time_column=None), my_simulation_parameters=parameters,
+                            dataframe=dataframe)
+        with_time = CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                              dataframe=dataframe)
+
+        assert without.column_values_in_loaded_unit.tobytes() == dataframe["value"].to_numpy(dtype=float).tobytes()
+        outputs_without = self.outputs(without)
+        assert outputs_without == list(range(parameters.timesteps))
+        assert outputs_without == self.outputs(with_time)
+
+    @pytest.mark.base
+    def test_a_file_at_another_resolution_is_refused(self) -> None:
+        """Catches a minutely file serving a 15-minute run by reading consecutive minutes as quarter hours."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=900)
+
+        with pytest.raises(ValueError, match="does not run on an even grid of 900 s"):
+            CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                      dataframe=self.minutely_year())
+
+    @pytest.mark.base
+    def test_a_window_the_file_does_not_cover_is_refused(self) -> None:
+        """Catches a file of the first half year serving a July run by reading past its end."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+
+        with pytest.raises(ValueError, match="has no row labelled 2021-07-01 00:00:00"):
+            CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                      dataframe=self.minutely_year().iloc[: self.FIRST_OF_JULY_ROW])
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        "label, message",
+        [
+            pytest.param("2021-07-01 00:00:00+02:00", "carry the UTC offset", id="utc_offset"),
+            pytest.param("first of July", "not an ISO 8601 date and time", id="not_a_date"),
+        ],
+    )
+    def test_a_label_the_loader_cannot_read_in_standard_time_is_refused(self, label: str, message: str) -> None:
+        """Catches a label with a UTC offset, or one that is no date, being read in some clock of its own.
+
+        Args:
+            label: The label every row of the time column carries.
+            message: The part of the refusal that names the reason.
+        """
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+        dataframe = self.minutely_year()
+        dataframe["time"] = label
+
+        with pytest.raises(ValueError, match=message):
+            CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters, dataframe=dataframe)
+
+    @pytest.mark.base
+    def test_a_time_column_that_is_the_value_column_is_refused(self) -> None:
+        """Catches one column named as both the time and the values."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+
+        with pytest.raises(ValueError, match="both its time column and its value column"):
+            CSVLoader(config=self.config(time_column=1), my_simulation_parameters=parameters,
+                      dataframe=self.minutely_year())
+
+    @pytest.mark.base
+    def test_the_shipped_wind_profile_serves_a_july_run_from_its_time_column(self) -> None:
+        """Catches the shipped wind profile's time labels not being in the format the loader reads.
+
+        Its timestep 0 must be the value the file writes on the row labelled 2021-07-01 00:00:00.
+        """
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+        config = CSVLoaderConfig.for_csv_file(
+            "CSV",
+            csv_filename=self.WIND_PROFILE,
+            column=1,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.KILOWATT,
+            column_name="generated_power",
+            time_column=0,
+        )
+        loader = CSVLoader.from_config_file(config=config, my_simulation_parameters=parameters)
+        profile = pd.read_csv(Path(utils.HISIMPATH["inputs"]) / self.WIND_PROFILE)
+        july_rows = profile.index[profile["time"] == "2021-07-01 00:00:00"]
+
+        assert list(july_rows) == [self.FIRST_OF_JULY_ROW]
+        assert loader.column_values_in_loaded_unit[0] == profile["generated_power"].iloc[self.FIRST_OF_JULY_ROW]
+        assert len(loader.column_values_in_loaded_unit) == parameters.timesteps

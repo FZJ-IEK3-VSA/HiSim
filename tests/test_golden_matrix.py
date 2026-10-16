@@ -108,8 +108,9 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
 #: restriction to the January week and the year in ``golden_config.json``. A setup leaves this table in the
 #: change that fixes it.
 CANNOT_RUN_JULY: dict[str, str] = {
-    # The CSV loader indexes its wind profile by the timestep number, so a July week reads January's wind.
-    "electrolyzer_with_renewables": "hisim-9g2.14",
+    # Its CSV loader names no time column, so it refuses a July week (hisim-9g2.14). Its minutely wind profile
+    # has one, but the setup is recorded at 900 s, which a time column refuses for a minutely file.
+    "electrolyzer_with_renewables": "hisim-xgzf",
 }
 
 

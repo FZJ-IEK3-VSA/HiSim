@@ -24,6 +24,7 @@ components:
       decimal: .
       multiplier: 1.0
       output_description: Values from CSV
+      time_column: null
   L1ElectrolyzerController:
     class: hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController
     config:

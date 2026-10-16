@@ -44,6 +44,15 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.economics.facts import CostRelevance
 
 
+class StartOfStepBufferWholeStepError(ValueError):
+    """A run that would give a start-of-step buffer whole steps longer than it can take.
+
+    Raised by :class:`SimpleHotWaterStorage` when it is built, so a step length above
+    :attr:`SimpleHotWaterStorage.LONGEST_WHOLE_STEP_IN_SECONDS` together with a part-load threshold at or above that
+    step is refused before anything runs (:meth:`SimpleHotWaterStorage.check_whole_steps_are_safe`).
+    """
+
+
 @unique
 class HotWaterStorageSizingEnum(str, Enum):
     """Set Simple Hot Water Storage sizing options.
@@ -605,6 +614,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     #: 70 °C), which the buffer does not know, so no single "half charged" value exists for it.
     INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 35.0
 
+    #: The longest step, s, at which a start-of-step buffer may run whole steps, its generators and its heat
+    #: distribution system each bringing or taking a whole step's heat. Above it they have to run a fraction of the
+    #: step (:mod:`hisim.part_load`, decision 21 of ``roadmap/hydronic_part_load_spec.md``), since the buffer does not
+    #: see its own temperature change inside the step. Whole steps were measured safe at 60 s and at 600 s (full year
+    #: 2021, the gas, pellet and heat-pump twins, stage D's close-out); at 3600 s they drained the gas twin's buffer
+    #: below 0 °C, and a heat pump's whole steps overshot its buffer to 93.3 °C (stage D, pull requests 5 and 7).
+    LONGEST_WHOLE_STEP_IN_SECONDS: ClassVar[float] = 600.0
+
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
@@ -675,6 +692,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
+        if self.heat_exchanger_is_present:
+            self.check_whole_steps_are_safe(
+                buffer_name=self.component_name,
+                seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
+                part_load_above_seconds=my_simulation_parameters.part_load_above_seconds,
+            )
 
         self.state: SimpleWaterStorageState = SimpleWaterStorageState(
             mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
@@ -951,6 +974,44 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             )
         )
         return connections
+
+    @classmethod
+    def check_whole_steps_are_safe(
+        cls, *, buffer_name: str, seconds_per_timestep: float, part_load_above_seconds: float
+    ) -> None:
+        """Refuse a run that would give this start-of-step buffer whole steps above 600 s.
+
+        A start-of-step buffer books every circuit on the temperature it starts the step at, so it does not see its
+        own temperature change inside the step. Above :attr:`LONGEST_WHOLE_STEP_IN_SECONDS` its circuit ends must
+        therefore run a fraction of the step, and they do only above the run's part-load threshold
+        (``SimulationParameters.part_load_above_seconds``). A step above 600 s with a threshold at or above that step
+        gives every circuit whole steps, which drained a buffer below 0 °C or overshot it in stage D's measurements.
+
+        Example: 900 s steps with a threshold of 900 s are refused; 900 s with the default 600 s, and 600 s with any
+        threshold, are accepted.
+
+        Args:
+            buffer_name: The buffer's component name, for the message.
+            seconds_per_timestep: The run's step length, s.
+            part_load_above_seconds: The run's part-load threshold, s.
+
+        Raises:
+            StartOfStepBufferWholeStepError: If the step is longer than :attr:`LONGEST_WHOLE_STEP_IN_SECONDS` and not
+                longer than the threshold.
+        """
+        if seconds_per_timestep <= cls.LONGEST_WHOLE_STEP_IN_SECONDS or seconds_per_timestep > part_load_above_seconds:
+            return
+        raise StartOfStepBufferWholeStepError(
+            f"The space-heating buffer {buffer_name!r} cannot run {seconds_per_timestep:g} s steps with "
+            f"part_load_above_seconds = {part_load_above_seconds:g} s. The buffer is a start-of-step node: it does "
+            f"not see its own temperature change inside a step, so above {cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s its "
+            f"generators and its heat distribution system must run a fraction of the step, and they do only for steps "
+            f"longer than part_load_above_seconds. With this threshold every circuit runs whole "
+            f"{seconds_per_timestep:g} s steps, which drained a buffer below 0 °C or overshot it in stage D's "
+            f"measurements. Lower part_load_above_seconds below {seconds_per_timestep:g} s (the default is "
+            f"{SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), or run with steps of at most "
+            f"{cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s."
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

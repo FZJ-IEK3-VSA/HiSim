@@ -53,6 +53,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Set CSV Parameters
     csv_filename = "wind_generated_power_1_min.csv"
     csv_data_column = 1  # The column number in the CSV file containing the load profile data
+    # The column holding each row's time label: a run from any date reads its own rows, and a run coarser
+    # than the file's minutes reads the mean of the minutes in each timestep.
+    csv_time_column = 0
     loadtype = lt.LoadTypes.ELECTRICITY  # Replace with the desired load type
     unit = lt.Units.KILOWATT  # Replace with the desired unit
     column_name = "generated_power"
@@ -89,6 +92,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
+        time_column=csv_time_column,
     )
 
     # Create new CSV loader object

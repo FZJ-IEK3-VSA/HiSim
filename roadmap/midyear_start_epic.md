@@ -107,9 +107,10 @@ time column, so it read timestep 0 as 1 January whatever `start_date` said. `CSV
 an optional `time_column`: its labels are ISO 8601 dates and times without a UTC offset, read in the
 run's standard time like the weather's, and the loader resolves the window with `WindowOffset` and
 reads the window's rows. A file without a time column serves only a run that starts on 1 January;
-any other start is refused. `electrolyzer_with_renewables` does not name its profile's time column
-yet, because it is recorded at 900 s and its profile is minutely (hisim-xgzf); it stays out of the
-July pairs until then.
+any other start is refused. A file finer than the run is averaged over each timestep (15 one-minute
+rows give one 900 s value, which keeps the energy of a power column); a file coarser than the run,
+or one whose row step does not divide the run's step, is refused (hisim-xgzf, the same day).
+`electrolyzer_with_renewables` names its wind profile's time column and runs the July pairs.
 
 ## The two traps that decide success (write their tests before the code)
 

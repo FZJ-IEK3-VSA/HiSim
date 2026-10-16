@@ -304,6 +304,21 @@ class TestTimeColumn:
             {"time": labels.strftime(label_format), "value": np.arange(cls.ROWS_OF_A_MINUTELY_YEAR, dtype=float)}
         )
 
+    @classmethod
+    def year_at(cls, row_step_in_seconds: int) -> pd.DataFrame:
+        """Build a profile of the fixture's year at another row step, each value its own row number.
+
+        Args:
+            row_step_in_seconds: The distance of two rows, in seconds.
+
+        Returns:
+            The profile, with the time labels in column 0 and the values in column 1.
+        """
+        labels = pd.date_range(f"{cls.YEAR}-01-01", f"{cls.YEAR}-12-31 23:59", freq=f"{row_step_in_seconds}s")
+        return pd.DataFrame(
+            {"time": labels.strftime("%Y-%m-%d %H:%M:%S"), "value": np.arange(len(labels), dtype=float)}
+        )
+
     @staticmethod
     def config(time_column: int | None) -> CSVLoaderConfig:
         """Build the configuration of the fixture's value column, with or without its time column.
@@ -391,13 +406,44 @@ class TestTimeColumn:
         assert outputs_without == self.outputs(with_time)
 
     @pytest.mark.base
-    def test_a_file_at_another_resolution_is_refused(self) -> None:
-        """Catches a minutely file serving a 15-minute run by reading consecutive minutes as quarter hours."""
+    def test_a_finer_file_is_averaged_over_each_timestep_and_keeps_its_energy(self) -> None:
+        """Catches a minutely file in a 15-minute run reading consecutive minutes as quarter hours.
+
+        Each 900 s timestep must read the mean of its 15 one-minute rows: from 1 July, timestep ``t`` averages
+        rows ``260 640 + 15 t`` to ``260 640 + 15 t + 14``, whose mean is ``260 640 + 15 t + 7``. The energy of the
+        window, each value times its step, is the same at both resolutions.
+        """
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=900)
+        dataframe = self.minutely_year()
+        loader = CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                           dataframe=dataframe)
+
+        rows_per_timestep = 15
+        expected = self.FIRST_OF_JULY_ROW + rows_per_timestep * np.arange(parameters.timesteps) + 7.0
+        np.testing.assert_array_equal(loader.column_values_in_loaded_unit, expected)
+        window_rows = dataframe["value"].to_numpy()[
+            self.FIRST_OF_JULY_ROW:self.FIRST_OF_JULY_ROW + parameters.timesteps * rows_per_timestep
+        ]
+        energy_of_the_rows = float(window_rows.sum() * self.SECONDS_PER_TIMESTEP)
+        assert float(loader.column_values_in_loaded_unit.sum() * 900) == pytest.approx(energy_of_the_rows, rel=1e-12)
+
+    @pytest.mark.base
+    def test_a_file_coarser_than_the_run_is_refused(self) -> None:
+        """Catches a quarter-hourly file serving a 60 s run, which would have to invent the minutes between rows."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=self.SECONDS_PER_TIMESTEP)
+
+        with pytest.raises(ValueError, match="coarser than the run's timestep"):
+            CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
+                      dataframe=self.year_at(row_step_in_seconds=900))
+
+    @pytest.mark.base
+    def test_a_row_step_that_does_not_divide_the_timestep_is_refused(self) -> None:
+        """Catches a 600 s file serving a 900 s run, whose timesteps would each hold one and a half rows."""
         parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=900)
 
-        with pytest.raises(ValueError, match="does not run on an even grid of 900 s"):
+        with pytest.raises(ValueError, match="does not divide the run's timestep"):
             CSVLoader(config=self.config(time_column=0), my_simulation_parameters=parameters,
-                      dataframe=self.minutely_year())
+                      dataframe=self.year_at(row_step_in_seconds=600))
 
     @pytest.mark.base
     def test_a_window_the_file_does_not_cover_is_refused(self) -> None:

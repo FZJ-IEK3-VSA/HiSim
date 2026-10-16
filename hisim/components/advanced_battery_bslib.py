@@ -38,7 +38,7 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 
@@ -266,6 +266,8 @@ class Battery(PhysicsComponent):
     DischargingPower = "DischargingPower"
     MaximumChargingPowerInWatt = "MaximumChargingPowerInWatt"
     MinimumChargingPowerInWatt = "MinimumChargingPowerInWatt"
+    #: The increase of the energy stored in the cells over the step, in Wh; negative while the battery discharges.
+    StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
 
     def __init__(
         self,
@@ -385,6 +387,18 @@ class Battery(PhysicsComponent):
                 "The smallest AC power the battery charges with, in W; positive. An offer at or below it is not taken."
             ),
         )
+        self.stored_energy_increase_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StoredEnergyIncreaseInWattHour,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            postprocessing_flag=[InandOutputType.STORED_ENERGY_INCREASE, ComponentType.BATTERY],
+            output_description=(
+                "The increase of the energy stored in the cells over the step, in Wh: the change of the state of "
+                "charge times the capacity, negative while the battery discharges. Summed over the run it is the "
+                "stored energy at the end minus the stored energy at the start, which the battery's losses subtract."
+            ),
+        )
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -455,6 +469,10 @@ class Battery(PhysicsComponent):
         stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
+        stsv.set_output_value(
+            self.stored_energy_increase_channel,
+            (state_of_charge - self.state.state_of_charge) * self.charging_parameters.capacity_in_watt_hour,
+        )
         stsv.set_output_value(self.charging_power_channel, charging_power_in_watt)
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
@@ -616,24 +634,57 @@ class Battery(PhysicsComponent):
         )
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of maintenance costs."""
-        battery_losses_in_kwh: float = 0.0
+        """Calculate the OPEX: the maintenance, and the electricity the battery lost, priced and with its CO2.
+
+        The lost electricity is what was charged minus what was discharged minus the increase of the stored energy over
+        the run (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so energy the battery still holds at
+        the end, or held already at the start, is not booked as a loss. The three energies enter unrounded, the same
+        sums the KPI "Battery losses" uses, and only the loss is rounded, to 0.01 kWh, the resolution of the OPEX
+        table. Rounding each term first could put the loss up to 0.15 kWh off the KPI, and below zero for a battery
+        that barely cycles.
+
+        The charged and the discharged energy are also stored on the config, rounded to 0.1 kWh, as
+        ``charge_in_kwh`` and ``discharge_in_kwh``; :meth:`get_battery_aging_information` counts the charge cycles from
+        them.
+
+        Raises:
+            ValueError: If ``all_outputs`` holds no stored-energy output of this battery, which would book the energy
+                it holds at the end as lost.
+        """
+        stored_energy_increase_in_kwh: Optional[float] = None
+        charged_energy_in_kwh = 0.0
+        discharged_energy_in_kwh = 0.0
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and output.component_name == self.component_name:
+                if InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag:
+                    stored_energy_increase_in_kwh = float(postprocessing_results.iloc[:, index].sum()) / 1e3
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
-                    self.battery_config.charge_in_kwh = round(
+                    charged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(lower=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     )
-                    self.battery_config.discharge_in_kwh = round(
+                    discharged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     ) * (-1)
-                    battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
+                    self.battery_config.charge_in_kwh = round(charged_energy_in_kwh, 1)
+                    self.battery_config.discharge_in_kwh = round(discharged_energy_in_kwh, 1)
+        if stored_energy_increase_in_kwh is None:
+            raise ValueError(
+                f"The outputs passed to the OPEX of battery {self.component_name} hold no output flagged "
+                f"{InandOutputType.STORED_ENERGY_INCREASE.name}, so its losses cannot subtract the change of its "
+                "stored energy."
+            )
+        battery_losses_in_kwh = round(
+            KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=charged_energy_in_kwh,
+                discharged_energy_in_kilowatt_hour=discharged_energy_in_kwh,
+                stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kwh,
+            ),
+            2,
+        )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country

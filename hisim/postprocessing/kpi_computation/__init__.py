@@ -42,7 +42,8 @@ an explicit ``unit`` field. The KPIs, grouped by their physical domain, are:
   - ``PV production`` / ``Windturbine production`` / ``Building production``
     -- production split by source.
   - ``Battery charging energy`` / ``Battery discharging energy`` / ``Battery
-    losses`` -- battery charge, discharge, and the difference (losses).
+    losses`` -- battery charge, discharge, and the losses: charge minus
+    discharge minus the increase of the stored energy over the run.
   - ``Self-consumption of electricity`` -- on-site generation consumed
     locally.
   - ``Grid injection of electricity`` -- surplus generation fed into the
@@ -113,9 +114,13 @@ and
   balance. To avoid double counting, self-consumption is evaluated on the
   *production side only* (battery discharge is included, battery charge is
   not added again).
-* Battery losses are ``charging energy - discharging energy`` and are added
-  to the total electricity consumption, because they represent energy
-  dissipated by the battery independent of the charge/discharge flows.
+* Battery losses are ``charging energy - discharging energy - stored energy
+  increase`` (the stored energy at the end of the run minus that at its start,
+  summed from the battery's ``StoredEnergyIncreaseInWattHour`` output), and are
+  added to the total electricity consumption, because they represent energy
+  dissipated by the battery independent of the charge/discharge flows. Energy
+  the battery still holds at the end, or held already at the start, is not a
+  loss.
 * Per time step, self-consumption is ``min(production_with_battery,
   consumption_with_battery)`` and grid injection is the positive part of
   ``production_with_battery - consumption_with_battery``.

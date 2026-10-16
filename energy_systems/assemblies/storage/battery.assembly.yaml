@@ -47,6 +47,10 @@ tests:
       # the largest power it can take in the step: zero when full, at most the box's 15 kW inverter
     - {output: Battery.MinimumChargingPowerInWatt, unit: WATT, min: 0, max: 1000}
       # bslib's minimum charging power, 18.23 W per kW of inverter: 273 W at the box's 15 kW
+    - {output: Battery.StoredEnergyIncreaseInWattHour, unit: WATT_HOUR, min: -5000, max: 5000}
+      # the cells' energy change in one 900 s step at the box's 15 kW: charging, the cells gain less than the 3750 Wh
+      # taken in (3470 Wh measured); discharging, they give up the 3750 Wh delivered plus the inverter losses
+      # (4053 Wh measured), so 5000 Wh keeps a margin on both sides
   monotone:
     - {parameter: capacity_in_kwh, kpi: Battery charging energy, direction: increasing}
       # a larger battery absorbs at least as much surplus in a day; a derived KPI (no member, spec §9.4)

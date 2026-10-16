@@ -14,7 +14,7 @@ from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiSource, KpiHelperClass
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFinder
 
 
@@ -86,6 +86,7 @@ class KpiPreparation:
         pv_production_ids = []
         windturbine_production_ids = []
         battery_charge_discharge_ids = []
+        battery_stored_energy_increase_ids = []
         buildings_consumption_ids = []
 
         index: int
@@ -126,6 +127,11 @@ class KpiPreparation:
                                 + str(output.unit)
                             )
 
+                    if (
+                        InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag
+                        and ComponentType.BATTERY in output.postprocessing_flag
+                    ):
+                        battery_stored_energy_increase_ids.append(index)
                     if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                         if ComponentType.BATTERY in output.postprocessing_flag:
                             battery_charge_discharge_ids.append(index)
@@ -140,6 +146,11 @@ class KpiPreparation:
                 else:
                     continue
 
+        self._refuse_batteries_without_stored_energy_increase(
+            all_outputs=all_outputs,
+            battery_charge_discharge_ids=battery_charge_discharge_ids,
+            battery_stored_energy_increase_ids=battery_stored_energy_increase_ids,
+        )
         result_dataframe = pd.DataFrame()
         result_dataframe["total_consumption"] = (
             pd.DataFrame(results.iloc[:, total_consumption_ids]).clip(lower=0).sum(axis=1)
@@ -163,8 +174,43 @@ class KpiPreparation:
         result_dataframe["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(
             upper=0
         ).sum(axis=1) * (-1)
+        result_dataframe["battery_stored_energy_increase_in_watt_hour"] = pd.DataFrame(
+            results.iloc[:, battery_stored_energy_increase_ids]
+        ).sum(axis=1)
 
         return result_dataframe
+
+    @staticmethod
+    def _refuse_batteries_without_stored_energy_increase(
+        all_outputs: List,
+        battery_charge_discharge_ids: List[int],
+        battery_stored_energy_increase_ids: List[int],
+    ) -> None:
+        """Refuse a battery whose charging power is counted but whose stored-energy change is not.
+
+        The battery losses are charged minus discharged energy minus the increase of the stored energy
+        (:meth:`compute_battery_kpis`). A battery that flags its charging power with ``CHARGE_DISCHARGE`` and
+        ``ComponentType.BATTERY`` but publishes no ``STORED_ENERGY_INCREASE`` output would add nothing to the
+        stored-energy column, so the energy it holds at the end would silently be booked as lost. The reverse, a
+        stored-energy output without a counted charging power, would subtract energy that was never charged.
+
+        Args:
+            all_outputs: Every output of the run, in column order.
+            battery_charge_discharge_ids: The columns of the batteries' charging power in one building.
+            battery_stored_energy_increase_ids: The columns of the batteries' stored-energy increase in that building.
+
+        Raises:
+            ValueError: If the components behind the two lists differ.
+        """
+        charging_batteries = {all_outputs[index].component_name for index in battery_charge_discharge_ids}
+        storing_batteries = {all_outputs[index].component_name for index in battery_stored_energy_increase_ids}
+        if charging_batteries != storing_batteries:
+            raise ValueError(
+                "Every battery whose charging power counts in the KPIs (CHARGE_DISCHARGE and BATTERY) must publish "
+                "the increase of its stored energy (STORED_ENERGY_INCREASE and BATTERY), and the other way round. "
+                f"Charging power only: {sorted(charging_batteries - storing_batteries)}; stored energy only: "
+                f"{sorted(storing_batteries - charging_batteries)}."
+            )
 
     def compute_total_energy_from_power_timeseries(
         self, power_timeseries_in_watt: pd.Series, timeresolution: int
@@ -424,7 +470,21 @@ class KpiPreparation:
         return result_dataframe
 
     def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
-        """Compute battery kpis."""
+        """Return the batteries' charged energy, discharged energy and losses over the run, in kWh.
+
+        The losses are the charged minus the discharged energy minus the increase of the stored energy
+        (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so a battery that ends the run fuller than it
+        started does not report the energy it still holds as lost, and one that ends emptier does not report the
+        energy it held at the start as a negative loss.
+
+        Args:
+            result_dataframe: The frame of :meth:`filter_results_according_to_postprocessing_flags`, with the columns
+                ``battery_charge`` and ``battery_discharge`` in W and ``battery_stored_energy_increase_in_watt_hour``
+                in Wh per step.
+
+        Returns:
+            The charged energy, the discharged energy and the losses, in kWh.
+        """
 
         if not result_dataframe["battery_charge"].empty:
             battery_charging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
@@ -435,8 +495,13 @@ class KpiPreparation:
                 power_timeseries_in_watt=result_dataframe["battery_discharge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
-            battery_losses_in_kilowatt_hour = (
-                battery_charging_energy_in_kilowatt_hour - battery_discharging_energy_in_kilowatt_hour
+            stored_energy_increase_in_kilowatt_hour = (
+                float(result_dataframe["battery_stored_energy_increase_in_watt_hour"].sum()) / 1e3
+            )
+            battery_losses_in_kilowatt_hour = KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=battery_charging_energy_in_kilowatt_hour,
+                discharged_energy_in_kilowatt_hour=battery_discharging_energy_in_kilowatt_hour,
+                stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kilowatt_hour,
             )
         else:
             battery_charging_energy_in_kilowatt_hour = 0.0

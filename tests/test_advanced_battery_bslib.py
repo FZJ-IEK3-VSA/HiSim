@@ -384,6 +384,28 @@ class TestTheChargingLimits:
             )
 
     @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("capacity_in_kilowatt_hour", "inverter_power_in_watt"), [(10.0, 5000.0), (0.001, 0.001)]
+    )
+    def test_a_battery_is_built_at_its_stated_sizes(
+        self, capacity_in_kilowatt_hour: float, inverter_power_in_watt: float
+    ) -> None:
+        """Catches a guard that refuses a valid size or changes it: bslib is given both sizes as stated.
+
+        0.001 kWh with 0.001 W lies just above the bound of 0, so a bound moved above it fails here.
+        """
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
+            custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
+        )
+        battery = advanced_battery_bslib.Battery(
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+        )
+        assert battery.charging_parameters.capacity_in_watt_hour == pytest.approx(capacity_in_kilowatt_hour * 1e3)
+        assert battery.charging_parameters.rated_charging_power_in_watt == pytest.approx(inverter_power_in_watt)
+
+    @pytest.mark.base
     def test_a_battery_offered_its_maximum_takes_it(self) -> None:
         """Catches a published maximum the battery does not take: the energy manager's share would then be wrong."""
         battery, set_point, stsv = battery_with_set_point_input()

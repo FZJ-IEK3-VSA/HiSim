@@ -299,15 +299,10 @@ class Battery(PhysicsComponent):
 
         self.system_id = self.battery_config.system_id
 
-        self.refuse_an_impossible_size(self.battery_config)
-
-        self.custom_pv_inverter_power_generic_in_watt = concrete(
-            self.battery_config.custom_pv_inverter_power_generic_in_watt
-        )
-
-        self.custom_battery_capacity_generic_in_kilowatt_hour = concrete(
-            self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-        )
+        (
+            self.custom_battery_capacity_generic_in_kilowatt_hour,
+            self.custom_pv_inverter_power_generic_in_watt,
+        ) = self.refuse_an_impossible_size(self.battery_config)
 
         # Component has states
         self.state = BatteryState()
@@ -473,16 +468,18 @@ class Battery(PhysicsComponent):
         )
 
     @staticmethod
-    def refuse_an_impossible_size(config: BatteryConfig) -> None:
-        """Refuse a battery whose capacity or inverter power is not finite or not above 0.
+    def refuse_an_impossible_size(config: BatteryConfig) -> Tuple[float, float]:
+        """Return the battery's capacity and inverter power, refusing either if it is not finite or not above 0.
 
         Both fields have sizing laws from the PV peak power, but a size stated in a configuration replaces the
         law, so nothing else checks it. bslib's generic systems take both numbers as they are: with a capacity of
         0 kWh the first step divides by zero, with an inverter power of 0 W the battery never charges or
         discharges, and with -5000 W it charges 5000 W when offered 3000 W. For example, 10 kWh with 5000 W
-        passes; 0 kWh, -5000 W or a NaN capacity is refused. The check covers every bslib system, also the
-        non-generic ones whose sizes bslib ignores, because the capacity also prices the battery and counts its
-        cycles.
+        returns ``(10.0, 5000.0)``; 0 kWh, -5000 W or a NaN capacity is refused.
+
+        The check covers every bslib system. A non-generic system takes both sizes from bslib's database, but its
+        capacity still prices the battery and counts its cycles. Its inverter power is read by nothing, and it is
+        refused all the same, so that one rule holds for the field whatever the system.
 
         There is no upper bound: bslib's generic systems scale linearly with both numbers, and no datasheet limit
         applies to a configured battery of unknown make.
@@ -490,26 +487,24 @@ class Battery(PhysicsComponent):
         Args:
             config: The battery's configuration, with both sizes resolved.
 
+        Returns:
+            Tuple[float, float]: The capacity in kWh and the inverter power in W, unchanged.
+
         Raises:
             ValueError: If the capacity or the inverter power is not finite or is at or below 0.
         """
+        capacity_in_kilowatt_hour = concrete(config.custom_battery_capacity_generic_in_kilowatt_hour)
+        inverter_power_in_watt = concrete(config.custom_pv_inverter_power_generic_in_watt)
         for field_name, value, unit in (
-            (
-                "custom_battery_capacity_generic_in_kilowatt_hour",
-                concrete(config.custom_battery_capacity_generic_in_kilowatt_hour),
-                "kWh",
-            ),
-            (
-                "custom_pv_inverter_power_generic_in_watt",
-                concrete(config.custom_pv_inverter_power_generic_in_watt),
-                "W",
-            ),
+            ("custom_battery_capacity_generic_in_kilowatt_hour", capacity_in_kilowatt_hour, "kWh"),
+            ("custom_pv_inverter_power_generic_in_watt", inverter_power_in_watt, "W"),
         ):
             if not (math.isfinite(value) and value > 0.0):
                 raise ValueError(
                     f"{config.component_id.name}: the bslib battery's {field_name} must be a finite number above "
                     f"0 {unit}, got {value!r} {unit}: bslib sizes the battery from it."
                 )
+        return capacity_in_kilowatt_hour, inverter_power_in_watt
 
     @staticmethod
     def maximum_charging_power_in_watt(

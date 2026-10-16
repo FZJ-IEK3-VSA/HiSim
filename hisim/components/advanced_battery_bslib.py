@@ -257,8 +257,9 @@ class Battery(PhysicsComponent):
 
     #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged battery. A run
     #: that starts on an empty battery cannot discharge on its first night and one that starts full cannot store
-    #: its first day's PV surplus; half charged, the battery can do either from the first step. The energy it holds
-    #: at the start is not counted as a loss: the losses subtract the change of the stored energy.
+    #: its first day's PV surplus; half charged, the battery can do either from the first step. Neither
+    #: the "Battery losses" KPI nor the battery's OPEX counts the energy it holds at the start as a loss: both subtract
+    #: the change of the stored energy from the charged minus the discharged energy.
     INITIAL_STATE_OF_CHARGE: ClassVar[float] = 0.5
 
     # Inputs

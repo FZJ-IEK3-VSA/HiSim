@@ -224,9 +224,9 @@ class SimulationParameters:
 
         Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
         say -- is not decided here, but by the component that owns the source. The contract fixes the
-        window's shape, not that its dates are served: until the profiles follow the start date
-        (hisim-9g2.4 and the later steps of the mid-year epic), a window that starts after 1 January
-        is read from 1 January, as :meth:`one_week_july` explains.
+        window's shape, not that its dates are served: the weather and its readers deliver the window
+        (hisim-9g2.4), while the other profiles read a window that starts after 1 January from
+        1 January until the later steps of the mid-year epic, as :meth:`one_week_july` explains.
 
         Args:
             start_date: The first moment of the run.
@@ -542,9 +542,10 @@ class SimulationParameters:
         the weather's irradiance on a clock of its own. The mid-year-start epic
         (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
 
-        The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
-        use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is
-        done. Until then it belongs in nothing that reports physics.
+        The set is kept for the parity rig (``scripts/p3_parity_runs.py``), which has fenced its July
+        window (``scripts/p3_parity_matrix.py``) until the epic is done, and for the tests of the window
+        itself; the mid-year oracle (``scripts/midyear_oracle.py``) builds its windows on its own. Until
+        the epic is done the set belongs in nothing that reports physics.
 
         Args:
             year: Calendar year the week is taken from.

@@ -140,6 +140,27 @@ def test_an_open_valve_pumps_the_design_flow() -> None:
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("position", HeatDistribution.POSITIONS_PUMPING_THE_DESIGN_FLOW)
+def test_a_circuit_that_pumps_its_own_design_flow_refuses_a_design_flow_of_zero(
+    position: PositionHotWaterStorageInSystemSetup,
+) -> None:
+    """A design flow of 0 kg/s, for example a tiny one rounded to two decimals, is refused when the system is built.
+
+    Such a circuit would move no water at any valve state, so the run would deliver no heat to the building without a
+    word.
+    """
+    config = heat_distribution_system.HeatDistributionConfig(
+        component_id=ComponentID(name="HeatDistributionSystem"),
+        water_mass_flow_rate_in_kg_per_second=0.0,
+        position_hot_water_storage_in_system=position,
+        absolute_conditioned_floor_area_in_m2=HdsRig.FLOOR_AREA_IN_M2,
+        heating_system=heat_distribution_system.HeatDistributionSystemType.FLOORHEATING,
+    )
+    with pytest.raises(ValueError, match="water_mass_flow_rate_in_kg_per_second is 0.0 kg/s"):
+        HeatDistribution(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900))
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(("valve_state", "stops"), [(0, True), (1, False), (-1, False)])
 def test_only_a_shut_valve_stops_the_pump(valve_state: float, stops: bool) -> None:
     """The pump stands for the valve state 0 only."""

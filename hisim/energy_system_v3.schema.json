@@ -5458,7 +5458,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "coordinates": {},
                   "azimuth": {
                     "type": "number"
                   },

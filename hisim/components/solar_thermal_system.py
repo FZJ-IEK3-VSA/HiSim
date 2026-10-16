@@ -3,7 +3,7 @@
 import math
 from typing import ClassVar, List, Optional, Tuple
 import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
@@ -15,7 +15,6 @@ from hisim.component import (
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
-    Coordinates,
     OpexCostDataClass,
     SingleTimeStepValues,
 )
@@ -29,10 +28,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim import hydronics, loadtypes, log
-from hisim.caching import CacheClient, CacheKey
-from hisim.components import solar_thermal_sun_position
-from hisim.components.solar_thermal_sun_position import SunPositionInputs, produce_sun_position
+from hisim import hydronics, loadtypes
 from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -366,9 +362,10 @@ class SolarThermalSystemConfig(ConfigBase):
     """Configuration of the solar thermal system: a collector field preheating the hot water storage.
 
     A collector is described by three things: the efficiency curve it converts irradiance with
-    (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``)
-    together with the place that plane stands in (``coordinates``, which fix the sun's path over
-    it), and how much of it there is (``area_m2``). Only the last is sized against the building:
+    (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``),
+    and how much of it there is (``area_m2``). It names no location of its own: it stands at the
+    weather's location, and the weather publishes the sun over it with the irradiance. Only the area
+    is sized against the building:
     the curve and the plane describe the product an installer picks, the area describes how much
     of that product the dwellings need.
 
@@ -389,12 +386,6 @@ class SolarThermalSystemConfig(ConfigBase):
     COLLECTOR_AREA_IN_M2_PER_APARTMENT: ClassVar[float] = 4.0
 
     component_id: ComponentID
-
-    #: Where the collector stands, which together with the instant is the whole of the sun's
-    #: position over it. Aachen.
-    coordinates: Coordinates = field(
-        default_factory=lambda: Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
-    )
 
     #: Compass direction the collector plane faces, in degrees clockwise from north; 180 is south.
     azimuth: float = 180.0
@@ -511,8 +502,8 @@ class SolarThermalSystemConfig(ConfigBase):
         """A Solar Keymark flat-plate collector over Aachen, facing south at 30 degrees.
 
         The field defaults are the whole installation: the efficiency curve fitted to the typical
-        flat-plate curve, a south-facing plane inclined 30 degrees, the Aachen coordinates and a
-        new solar pump. The collector area is the one thing the preset does not state, because it
+        flat-plate curve, a south-facing plane inclined 30 degrees and a new solar pump. The collector
+        area is the one thing the preset does not state, because it
         follows from the building: it stays ``AUTO`` and ``.resolve(context)`` turns it into four
         square metres per dwelling.
 
@@ -634,16 +625,10 @@ class SolarThermalSystem(PhysicsComponent):
             minimum_mass_flow_in_kg_per_hour_per_m2=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
             maximum_mass_flow_in_kg_per_hour_per_m2=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
         )
-        # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
-        # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
-        self.solar_position: pd.DataFrame = pd.DataFrame()
-        # The same two columns as plain arrays, for the per-timestep lookup in i_simulate.
-        self.apparent_zenith: np.ndarray = np.empty(0)
-        self.solar_azimuth: np.ndarray = np.empty(0)
         # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
-        # the weather it came from. It depends on the weather and the sun alone, not on the storage,
-        # so the convergence iterations of one timestep share one pvlib call.
-        self.plane_of_array_key: Optional[Tuple[int, float, float]] = None
+        # the weather it came from: its irradiance and its sun. It depends on the weather alone, not
+        # on the storage, so the convergence iterations of one timestep share one pvlib call.
+        self.plane_of_array_key: Optional[Tuple[int, float, float, float, float]] = None
         self.plane_of_array_irradiance_w_m2: np.float64 = np.float64(0)
 
         # Add inputs
@@ -1108,62 +1093,15 @@ class SolarThermalSystem(PhysicsComponent):
         """Doublechecks."""
         pass
 
-    def sun_position_inputs(self) -> SunPositionInputs:
-        """Build the DTO the sun-position producer is a pure function of: the coordinates and the run's instants.
-
-        Returns:
-            SunPositionInputs: the producer's single argument.
-        """
-        parameters = self.my_simulation_parameters
-        return SunPositionInputs(
-            latitude_in_degrees=float(self.config.coordinates.latitude_in_degrees),
-            longitude_in_degrees=float(self.config.coordinates.longitude_in_degrees),
-            window_start=parameters.start_date.isoformat(),
-            seconds_per_timestep=parameters.seconds_per_timestep,
-            timesteps=parameters.timesteps,
-        )
-
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation by working out where the sun will be.
+        """Forget the plane-of-array irradiance of an earlier run, so the first step computes its own.
 
-        Only the sun's position is precomputed, and only it is cached. The collector calculation has
-        three stages and just the first qualifies: the solar position depends on the timestamps and
-        the coordinates, which are the whole of the producer's key; the plane-of-array irradiance
-        depends on the weather, which arrives through wired inputs; and the collector efficiency
-        depends on the storage's inlet temperature, which is the simulation's own state feeding back.
-
-        This component used to cache the output of all three. That value could not be keyed by
-        anything -- it was a function of a trajectory the run had not taken yet -- so any hit
-        replayed one system's storage behaviour into another's. See roadmap/pylpg_flakiness.md F8.
-        The sun's position is produced by :func:`hisim.components.solar_thermal_sun_position.produce_sun_position`
-        and filed under that producer's key, which fingerprints its code and pvlib's version as well.
+        Nothing is precomputed. The sun's position over the collector comes from the weather, at every timestep,
+        through the ``ApparentZenith`` and ``Azimuth`` inputs: the weather has looked the run's window up in its own
+        year (:mod:`hisim.window_offset`), so its sun and its irradiance stand on one clock. The collector used to
+        work out a sun of its own from the run's start date read as UTC, which in a January run stood an hour off the
+        weather's and in a July run paired a July sun with January irradiance.
         """
-        calculation_inputs = self.sun_position_inputs()
-        key = CacheKey.for_producer(SunPositionInputs.ARTIFACT_KIND, solar_thermal_sun_position, calculation_inputs)
-        entry = CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_locations())
-
-        if entry.exists:
-            log.information(f"Get solar position from cache: {entry.path}")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the same
-            # run. pandas' default CSV reader uses a fast, inexact float parser, and it loses the
-            # last bit of roughly a sixth of the values here whatever precision they were written
-            # with -- measured: 317 of 2000 with the default write format, 358 with "%.17g", 542
-            # with "%.20g", and zero with this argument. The loss is in the reader, not in the
-            # digits on disk, which is worth knowing because the obvious remedies make it worse.
-            cached = pd.read_csv(entry.path, sep=",", decimal=".", float_precision="round_trip")
-            # No length check here on purpose: the key determines the contents, so a mismatched
-            # length means the file is corrupt, and it is left to raise rather than warned about.
-            self.solar_position = cached.set_index(calculation_inputs.timestamps())
-        else:
-            log.information(f"Solar position cache miss: computing it and filing it at {entry.path}")
-            self.solar_position = produce_sun_position(calculation_inputs)
-            with entry.writing() as temporary_cache_filepath:
-                # The default float format already writes a shortest round-trip representation;
-                # forcing more digits does not help, because what loses precision is the read. See
-                # the note beside the read above.
-                self.solar_position.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
-        self.apparent_zenith = self.solar_position["apparent_zenith"].to_numpy(dtype=np.float64)
-        self.solar_azimuth = self.solar_position["azimuth"].to_numpy(dtype=np.float64)
         self.plane_of_array_key = None
 
     #: The electricity of the solar pump while it runs, in W, for a current high-efficiency circulator.
@@ -1306,25 +1244,33 @@ class SolarThermalSystem(PhysicsComponent):
         global_horizontal_irradiance_w_m2 = stsv.get_input_value(self.ghi_channel)
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
         ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
+        apparent_zenith_in_degrees = stsv.get_input_value(self.apparent_zenith_channel)
+        solar_azimuth_in_degrees = stsv.get_input_value(self.azimuth_channel)
         temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
         inlet_temperature_at_start_of_step_in_celsius = stsv.get_input_value(
             self.inlet_temperature_at_start_of_step_input_channel
         )
         # The collector is calculated every timestep, from this timestep's weather and this
-        # timestep's storage temperature. Only the sun's position comes from the precomputation, and
-        # the two stages below are the body of oemof.thermal's flat_plate_precalc with its first
-        # stage lifted out -- see i_prepare_simulation for why that stage and no other.
+        # timestep's storage temperature, and with the weather's sun. The two stages below are the body
+        # of oemof.thermal's flat_plate_precalc without its first stage, the sun's position, which the
+        # weather publishes -- see i_prepare_simulation.
         # Some more info on the equation:
         # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
         # The irradiance on the collector plane needs the weather and the sun only, so it is worked
         # out once per timestep and shared by the timestep's convergence iterations.
-        plane_of_array_key = (timestep, global_horizontal_irradiance_w_m2, diffuse_horizontal_irradiance_w_m2)
+        plane_of_array_key = (
+            timestep,
+            global_horizontal_irradiance_w_m2,
+            diffuse_horizontal_irradiance_w_m2,
+            apparent_zenith_in_degrees,
+            solar_azimuth_in_degrees,
+        )
         if plane_of_array_key != self.plane_of_array_key:
             self.plane_of_array_irradiance_w_m2 = plane_of_array_irradiance_w_m2(
                 surface_tilt=self.config.tilt,
                 surface_azimuth=self.config.azimuth,
-                apparent_zenith=self.apparent_zenith[timestep],
-                solar_azimuth=self.solar_azimuth[timestep],
+                apparent_zenith=apparent_zenith_in_degrees,
+                solar_azimuth=solar_azimuth_in_degrees,
                 global_horizontal_irradiance_w_m2=global_horizontal_irradiance_w_m2,
                 diffuse_horizontal_irradiance_w_m2=diffuse_horizontal_irradiance_w_m2,
             )

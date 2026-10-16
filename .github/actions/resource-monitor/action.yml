@@ -101,6 +101,9 @@ runs:
 
     - name: Upload the measurement
       if: inputs.mode == 'report' && inputs.upload == 'true'
+      # The upload talks to GitHub's artifact storage, and a network error there (a DNS failure on a
+      # runner, say) must not turn the measured job red: the measurement is a side product.
+      continue-on-error: true
       uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.names.outputs.artifact }}

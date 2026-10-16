@@ -6,11 +6,17 @@ HiSim simulations. The accompanying :class:`CSVLoaderConfig` dataclass
 collects the file path, column index, separator, multiplier, and other
 parameters needed to read a profile and feed it into a simulation as a
 single output channel.
+
+A file with a time column serves any window of the year it covers: the loader
+looks the run's ``start_date`` up among the column's labels
+(:class:`hisim.window_offset.WindowOffset`) and reads the window's rows. A file
+without one can only serve a run that starts on 1 January, because its first row
+is the only row whose date is known.
 """
 
 import warnings
 from pathlib import Path
-from typing import ClassVar, List
+from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
@@ -21,6 +27,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
+from hisim.window_offset import WindowOffset
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
 from hisim.economics.facts import CostRelevance
 
@@ -45,6 +52,16 @@ class CSVLoaderConfig(ConfigBase):
 
     The reading itself happens in :class:`CSVLoader`, once, when the component is built; this
     class only says which numbers to read.
+
+    **The time column.** ``time_column`` names the column that holds each row's time label, so
+    the loader can find the run's window in the file. A label is an ISO 8601 date and time without
+    a UTC offset, such as ``2021-07-01 00:00:00`` or ``2021-07-01T00:00``, and it is read in the
+    run's standard time, the clock ``start_date`` is read in: no daylight saving, so the labels
+    run on an even grid across the whole year, with no skipped or repeated hour. This is how the
+    weather resolves its window too (:class:`hisim.window_offset.WindowOffset`). The rows must lie
+    at the run's resolution: a minutely file serves a 60 s run, not a 900 s one. Without a time
+    column, the file's first row is read as 1 January 00:00, so only a run that starts on 1 January
+    can use it; any other start is refused.
     """
 
     MAIN_CLASS = "hisim.components.csvloader.CSVLoader"
@@ -68,6 +85,10 @@ class CSVLoaderConfig(ConfigBase):
     multiplier: float = 1.0
     #: Description text of the output channel.
     output_description: str = "Values from CSV"
+    #: Zero-based index of the column holding each row's time label, an ISO 8601 date and time
+    #: without a UTC offset in the run's standard time; ``None`` for a file without one, which can
+    #: only serve a run that starts on 1 January.
+    time_column: Optional[int] = None
 
     @constructor(note="one column of one CSV file under the HiSim inputs directory")
     @classmethod
@@ -83,6 +104,7 @@ class CSVLoaderConfig(ConfigBase):
         decimal: str = ".",
         multiplier: float = 1.0,
         output_description: str = "Values from CSV",
+        time_column: Optional[int] = None,
     ) -> "CSVLoaderConfig":
         """Builds the configuration of one profile column of one CSV file.
 
@@ -108,6 +130,8 @@ class CSVLoaderConfig(ConfigBase):
             decimal: Decimal separator the file uses; a full stop by default.
             multiplier: Factor applied to every value; 1.0 leaves the profile as written.
             output_description: Description of the output channel.
+            time_column: Zero-based index of the column holding each row's time label, or
+                ``None`` for a file without one; see the class docstring for the label format.
 
         Returns:
             A fresh configuration of that column; nothing about it is shared with any other
@@ -124,6 +148,7 @@ class CSVLoaderConfig(ConfigBase):
             decimal=decimal,
             multiplier=multiplier,
             output_description=output_description,
+            time_column=time_column,
         )
 
 
@@ -284,16 +309,95 @@ class CSVLoader(cp.DataSourceComponent):
                 f"which is fewer than the {self.my_simulation_parameters.timesteps} "
                 "simulation timesteps."
             )
-
-        self.column_values_in_loaded_unit: np.ndarray = dfcolumn.to_numpy(dtype=float)
+        all_values_in_loaded_unit = dfcolumn.to_numpy(dtype=float)
+        if self.csvconfig.time_column is None:
+            self._refuse_a_window_after_the_first_of_january()
+            window_offset = 0
+            self.column_values_in_loaded_unit: np.ndarray = all_values_in_loaded_unit
+        else:
+            window_offset = WindowOffset.resolve(
+                labels=self._time_labels(loaded_dataframe),
+                window_start=self.my_simulation_parameters.start_date,
+                timesteps=self.my_simulation_parameters.timesteps,
+                seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+                source=f"the CSV file '{self.csvconfig.csv_filename}' of {self.component_name}",
+            )
+            self.column_values_in_loaded_unit = all_values_in_loaded_unit[
+                window_offset:window_offset + self.my_simulation_parameters.timesteps
+            ]
         if not np.all(np.isfinite(self.column_values_in_loaded_unit)):
-            bad_rows = np.where(~np.isfinite(self.column_values_in_loaded_unit))[0]
+            bad_rows = window_offset + np.where(~np.isfinite(self.column_values_in_loaded_unit))[0]
             raise ValueError(
                 f"CSV '{self.csvconfig.csv_filename}' column "
                 f"'{self.column_name}' contains non-finite values "
                 f"(NaN/inf) at rows {bad_rows[:10].tolist()}"
             )
         self.values: List[float] = []
+
+    def _refuse_a_window_after_the_first_of_january(self) -> None:
+        """Refuse a run that does not start on 1 January, for a file without a time column.
+
+        Without a time column the loader knows the date of no row, so it reads the first row as
+        1 January 00:00 and timestep ``t`` as row ``t``. A run from 1 July would then read January's
+        values under July's labels, without any sign of it. Example: the minutely wind profile of
+        ``electrolyzer_with_renewables`` without its time column serves a run from 1 January 2021,
+        and a run from 1 July 2021 is refused here.
+
+        Raises:
+            ValueError: If the run's ``start_date`` is not 1 January.
+        """
+        start_date = self.my_simulation_parameters.start_date
+        if (start_date.month, start_date.day) != (1, 1):
+            raise ValueError(
+                f"{self.component_name} reads the CSV file '{self.csvconfig.csv_filename}' without a time column, "
+                f"so it can only serve a run that starts on 1 January, and this run starts on {start_date}. "
+                "Name the column that holds each row's time label as time_column (an ISO 8601 date and time "
+                "without a UTC offset, in standard time), so the loader can find the window in the file."
+            )
+
+    def _time_labels(self, dataframe: pd.DataFrame) -> pd.DatetimeIndex:
+        """Read the time column of the file as the labels the run's window is looked up in.
+
+        A label is an ISO 8601 date and time without a UTC offset, read in the run's standard time.
+        Example: ``2021-07-01 00:00:00`` is the label of the row a run from 1 July 2021 reads at its
+        timestep 0.
+
+        Args:
+            dataframe: The file's rows, as read.
+
+        Returns:
+            One label per row, without time zone.
+
+        Raises:
+            ValueError: If the time column is not a column of the file or is the value column, if a
+                label is not an ISO 8601 date and time, or if the labels carry a UTC offset.
+        """
+        time_column = self.csvconfig.time_column
+        filename = self.csvconfig.csv_filename
+        if time_column is None or not 0 <= time_column < len(dataframe.columns):
+            raise ValueError(
+                f"The time column {time_column} of {self.component_name} is not a column of the CSV file "
+                f"'{filename}', which has {len(dataframe.columns)} columns."
+            )
+        if time_column == self.csvconfig.column:
+            raise ValueError(
+                f"{self.component_name} names column {time_column} of the CSV file '{filename}' as both its time "
+                "column and its value column."
+            )
+        try:
+            labels = pd.DatetimeIndex(pd.to_datetime(dataframe.iloc[:, time_column], format="ISO8601"))
+        except (ValueError, TypeError) as error:
+            raise ValueError(
+                f"The time column {time_column} of the CSV file '{filename}' of {self.component_name} holds a "
+                f"label that is not an ISO 8601 date and time, such as 2021-07-01 00:00:00: {error}"
+            ) from error
+        if labels.tz is not None:
+            raise ValueError(
+                f"The time labels of the CSV file '{filename}' of {self.component_name} carry the UTC offset "
+                f"{labels.tz}. The loader reads labels without an offset, in the run's standard time; write "
+                "them without the offset, converted to standard time."
+            )
+        return labels
 
     @property
     def column(self) -> np.ndarray:

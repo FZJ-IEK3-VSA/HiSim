@@ -218,9 +218,15 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
 
         Returns:
             dict: the one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+
+        Raises:
+            ValueError: If the power is not finite or is below 1 W
+                (:meth:`MoreAdvancedHeatPumpHPLib.refuse_an_impossible_thermal_power`), so no buffer is sized from it.
         """
         del ctx
-        return {"maximal_thermal_power_in_watt": concrete(config.set_thermal_output_power_in_watt)}
+        return {
+            "maximal_thermal_power_in_watt": MoreAdvancedHeatPumpHPLib.refuse_an_impossible_thermal_power(config)
+        }
 
     #: Sizing facts this config contributes: its resolved thermal output power, under the name
     #: the heating-generator family shares, so a buffer vessel sizes from a heat pump exactly
@@ -338,7 +344,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Loads the parameters of the specified heat pump.
 
         Raises:
-            ValueError: If the set thermal output power is not a finite power above 0 W
+            ValueError: If the set thermal output power is not a finite power of at least 1 W
                 (:meth:`refuse_an_impossible_thermal_power`), if the nominal secondary mass flow is negative or not
                 finite, or if it is unset or 0 in a setup whose water pump runs at that fixed flow (hot-water storage
                 in series or no storage).
@@ -1029,14 +1035,21 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
         return connections
 
+    #: The smallest set thermal output power a configuration may state. hplib is given the power in whole watts
+    #: (``p_th_set`` is truncated), so a power below 1 W would reach its fit as 0 W.
+    MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT: ClassVar[float] = 1.0
+
     @staticmethod
     def refuse_an_impossible_thermal_power(config: MoreAdvancedHeatPumpHPLibConfig) -> float:
-        """Return the machine's set thermal output power in W, refusing one that is not finite or not above 0 W.
+        """Return the machine's set thermal output power in W, refusing one that is not finite or below 1 W.
 
         The power is ``p_th_set`` of hplib's curve fit, and the buffer vessel beside the machine is sized from it.
         Its sizing law gives the building's heating load, but a power stated in a configuration replaces the law,
-        so nothing else checks it. For example, 8000.0 is returned unchanged; 0, -8000 and NaN are refused, since
-        hplib would scale its fit to them and the buffer would get a volume of 0 l, a negative volume or NaN.
+        so nothing else checks it. For example, 8000.0 is returned unchanged; 0, 0.5, -8000 and NaN are refused,
+        since hplib would scale its fit to 0 W or less and the buffer would get a volume of 0 l, a negative volume
+        or NaN. hplib takes the power in whole watts, so the smallest power accepted is
+        :attr:`MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT`. The heat pump calls this when it is built, and its
+        sizing facts call it before the buffer is sized from the power.
 
         There is no upper bound. hplib's device database spans 2.4 to 69.9 kW of rated thermal power, but its
         generic fit scales linearly with the stated power, so that range is not a limit of the model, and a heat
@@ -1046,17 +1059,18 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             config: The heat pump's configuration, with its power resolved.
 
         Returns:
-            float: The set thermal output power in W.
+            float: The set thermal output power in W, unchanged.
 
         Raises:
-            ValueError: If the power is not finite or is at or below 0 W.
+            ValueError: If the power is not finite or is below 1 W.
         """
         thermal_power_in_watt = float(concrete(config.set_thermal_output_power_in_watt))
-        if not (math.isfinite(thermal_power_in_watt) and thermal_power_in_watt > 0.0):
+        minimal_power_in_watt = MoreAdvancedHeatPumpHPLib.MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT
+        if not (math.isfinite(thermal_power_in_watt) and thermal_power_in_watt >= minimal_power_in_watt):
             raise ValueError(
                 f"{config.component_id.name}: the heat pump's set_thermal_output_power_in_watt must be a finite "
-                f"power above 0 W, got {thermal_power_in_watt!r} W: hplib's fit and the buffer beside the machine "
-                "are sized from it."
+                f"power of at least {minimal_power_in_watt:g} W, got {thermal_power_in_watt!r} W: hplib's fit takes "
+                "it in whole watts, and the buffer beside the machine is sized from it."
             )
         return thermal_power_in_watt
 

@@ -3,7 +3,7 @@
 import math
 from typing import ClassVar, List, Optional, Tuple
 import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
@@ -15,7 +15,6 @@ from hisim.component import (
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
-    Coordinates,
     OpexCostDataClass,
     SingleTimeStepValues,
 )
@@ -364,8 +363,9 @@ class SolarThermalSystemConfig(ConfigBase):
 
     A collector is described by three things: the efficiency curve it converts irradiance with
     (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``),
-    and how much of it there is (``area_m2``). Where it stands is the weather's location: the
-    weather publishes the sun over it with the irradiance. Only the last is sized against the building:
+    and how much of it there is (``area_m2``). It names no location of its own: it stands at the
+    weather's location, and the weather publishes the sun over it with the irradiance. Only the area
+    is sized against the building:
     the curve and the plane describe the product an installer picks, the area describes how much
     of that product the dwellings need.
 
@@ -386,13 +386,6 @@ class SolarThermalSystemConfig(ConfigBase):
     COLLECTOR_AREA_IN_M2_PER_APARTMENT: ClassVar[float] = 4.0
 
     component_id: ComponentID
-
-    #: Where the collector stands. Not read since hisim-9g2.7: the sun over the collector is the weather's, at
-    #: the weather's location. Whether the field leaves the energy-system format is the owner's decision
-    #: (hisim-9g2.13); until then a file that sets it is accepted and the value has no effect.
-    coordinates: Coordinates = field(
-        default_factory=lambda: Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
-    )
 
     #: Compass direction the collector plane faces, in degrees clockwise from north; 180 is south.
     azimuth: float = 180.0

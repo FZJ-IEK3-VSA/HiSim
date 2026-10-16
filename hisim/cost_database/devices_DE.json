@@ -2237,11 +2237,11 @@
       "valid_from_year": 2026,
       "specific_investment": {
         "value": {
-          "min": 2000,
-          "best_estimate": 3000,
-          "max": 4500
+          "min": 1334,
+          "best_estimate": 2668,
+          "max": 4002
         },
-        "per_unit": null
+        "per_unit": "m2"
       },
       "scaling_exponent": null,
       "fixed_installation_cost_in_euro": 0,
@@ -2255,8 +2255,8 @@
       "fixed_operation_cost_in_euro_per_year": 0,
       "service_life_in_years": 35,
       "embodied_co2": {
-        "value": 120.0,
-        "per_unit": null
+        "value": 43.0,
+        "per_unit": "m2"
       },
       "vat_rate": 0.19,
       "price_basis": "AS_LEGACY",
@@ -2264,9 +2264,21 @@
       "anyway_threshold_years_override": 5.0,
       "legacy_flat_subsidy_share": 0.15,
       "source_ids": [
+        "src_iwu_2015_hinz_component_costs",
+        "src_destatis_61261_0002_construction_price_index",
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+      "notes": "Priced per m2 of door (renovisorissues #74). Price: IWU (Hinz 2015) measured 1433 EUR/m2 gross for new front doors in single-family houses (n = 170, the whole entrance incl. removal, intercom and letterboxes), at Q1 2015 prices. Brought to 2026 with the Destatis construction price index 61261-0002, residential buildings, Tischlerarbeiten (joinery), incl. VAT, 2021 = 100: February 2015 80.3, August 2026 149.5 (latest published quarter), factor 1.8618, so 2668 EUR/m2. IWU states no spread for doors, so the band is -50 %/+50 % around it, the relative width of the IE contract row (500-1500 around 1000). Embodied CO2: the earlier AI estimate of 120 kg per door over IWU's mean front-door area of 2.79 m2 (single-family houses, n = 170). Service life, maintenance and the remaining fields: AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT, like every DE row: IWU's figure is gross at 19 % VAT, the rate of 2026 too, so it enters unconverted. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a.",
+      "field_sources": {
+        "specific_investment": [
+          "src_iwu_2015_hinz_component_costs",
+          "src_destatis_61261_0002_construction_price_index"
+        ],
+        "embodied_co2": [
+          "src_ai_estimates",
+          "src_iwu_2015_hinz_component_costs"
+        ]
+      }
     },
     {
       "component_type": "AIR_SEALING",
@@ -2709,11 +2721,11 @@
       "valid_from_year": 2035,
       "specific_investment": {
         "value": {
-          "min": 2300,
-          "best_estimate": 3400,
-          "max": 5100
+          "min": 1534,
+          "best_estimate": 3024,
+          "max": 4535
         },
-        "per_unit": null
+        "per_unit": "m2"
       },
       "scaling_exponent": null,
       "fixed_installation_cost_in_euro": 0,
@@ -2727,8 +2739,8 @@
       "fixed_operation_cost_in_euro_per_year": 0,
       "service_life_in_years": 35,
       "embodied_co2": {
-        "value": 120.0,
-        "per_unit": null
+        "value": 43.0,
+        "per_unit": "m2"
       },
       "vat_rate": 0.19,
       "price_basis": "AS_LEGACY",
@@ -2736,9 +2748,22 @@
       "anyway_threshold_years_override": 5.0,
       "legacy_flat_subsidy_share": 0.15,
       "source_ids": [
+        "src_iwu_2015_hinz_component_costs",
+        "src_destatis_61261_0002_construction_price_index",
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+      "notes": "Priced per m2 of door (renovisorissues #74). Price: the 2026 row (IWU 2015 indexed to August 2026, see there) carried forward by the earlier per-door AI estimate's own 2026-2035 escalation, point by point and from the unrounded 2026 values 1333.96 / 2667.91 / 4001.87 (1433 x 149.5/80.3 x 0.5, 1, 1.5): min x 2300/2000, best x 3400/3000, max x 5100/4500; the rounded 4002 would give 4536. Embodied CO2: the earlier AI estimate of 120 kg per door over IWU's mean front-door area of 2.79 m2 (single-family houses, n = 170). Service life, maintenance and the remaining fields: AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT, like every DE row: IWU's figure is gross at 19 % VAT, the rate of 2026 too, so it enters unconverted. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a.",
+      "field_sources": {
+        "specific_investment": [
+          "src_iwu_2015_hinz_component_costs",
+          "src_destatis_61261_0002_construction_price_index",
+          "src_ai_estimates"
+        ],
+        "embodied_co2": [
+          "src_ai_estimates",
+          "src_iwu_2015_hinz_component_costs"
+        ]
+      }
     },
     {
       "component_type": "AIR_SEALING",

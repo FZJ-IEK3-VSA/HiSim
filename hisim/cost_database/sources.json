@@ -620,6 +620,33 @@
       "retrieved": "2026-08-12",
       "kind": "EXPERT_ESTIMATE",
       "notes": "Authored, not retrieved: the component prices (markup 1.7, grid fee 9.4, taxes/levies 5.1 ct/kWh, standing charge 140 EUR/a, feed-in 8.1 ct/kWh) are order-of-magnitude estimates modelled on typical 2024 DE dynamic tariffs, and the spot series is the deterministic synthetic reference profile (spec Q16) - real EPEX series are not shipped for licensing reasons. Backs cost_database/tariffs/DE_DYNAMIC_SYNTHETIC_2024.json only; replace with a cited real contract before any published result."
+    },
+    {
+      "id": "src_iwu_2015_hinz_component_costs",
+      "citation": "Hinz, E. (2015): Kosten energierelevanter Bau- und Anlagenteile bei der energetischen Modernisierung von Altbauten. Endbericht, Institut Wohnen und Umwelt (IWU), Darmstadt, for the BMUB",
+      "url": "https://www.iwu.de/fileadmin/publikationen/handlungslogiken/2015_IWU_Hinz_Kosten-energierelevanter-Bau-und-Anlagenteile-bei-der-energetischen-Modernisierung-von-Altbauten.pdf",
+      "publication_year": 2015,
+      "retrieved": "2026-10-14",
+      "kind": "LITERATURE",
+      "notes": "Section 2.4 (Haustueren): new front doors cost 1433 EUR per m2 of door on average in single-family houses (n = 170 cost statements), at a mean area of 2.79 m2 per door, and 1222 EUR/m2 at 3.65 m2 in multi-family houses (n = 53). Gross prices incl. VAT at the Q1 2015 price level, full costs of the entrance area incl. removal, disposal, intercoms and letterboxes. HiSim prices the German door from the 1433 EUR/m2 (indexed to 2026 with Destatis 61261-0002) and uses the 2.79 m2 per door to convert the per-door embodied CO2 estimate to per m2 of door."
+    },
+    {
+      "id": "src_renovisor_contract_measure_costs_36af54a",
+      "citation": "RenoVisor API contract, materials.yaml, measure_costs IE, 'Window and Door Upgrades' / 'Energy-Efficient Doors' (door_replacement): 500-1500 EUR/m2, commit 36af54a (2026-10-13)",
+      "url": "https://github.com/climatemedia/renovisor-api-contract/blob/36af54a86308bf59f75752930061d602ad0efba1/materials.yaml",
+      "publication_year": 2026,
+      "retrieved": "2026-10-14",
+      "kind": "PROJECT_DATA",
+      "notes": "The project partners' Irish cost band, the same numbers the frontend copies into a request's measures[i].cost block. The row states min and max only; HiSim's best estimate is the midpoint, as the RenoVisor translator prices a band."
+    },
+    {
+      "id": "src_destatis_61261_0002_construction_price_index",
+      "citation": "Statistisches Bundesamt (Destatis), GENESIS-Online table 61261-0002: Baupreisindizes, Deutschland, Berichtsmonat im Quartal, Gebaeudearten, Bauarbeiten (Hochbau); series Wohngebaeude, Tischlerarbeiten, Indizes einschliesslich Umsatzsteuer, 2021 = 100",
+      "url": "https://www-genesis.destatis.de/datenbank/online/statistic/61261/table/61261-0002",
+      "publication_year": 2026,
+      "retrieved": "2026-10-14",
+      "kind": "MARKET_SURVEY",
+      "notes": "Official German construction price index (table last changed 2026-10-09). Joinery (DIN 18355: wooden and plastic doors and windows) is the nearest finishing-works component to front doors; the table has no doors-and-windows series. February 2015 = 80.3 (Q1 2015, IWU's price level), August 2026 = 149.5 (latest published quarter), factor 1.8618. For comparison: Bauleistungen am Bauwerk 78.3 -> 141.7 (factor 1.8097), Metallbauarbeiten 77.3 -> 142.5 (factor 1.8435). The index with and without VAT is identical over this span (19 % throughout)."
     }
   ]
 }

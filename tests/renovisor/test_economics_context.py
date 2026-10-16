@@ -1806,14 +1806,16 @@ class TestTheRegisterSaysWhereEachYearCameFrom:
         assert asset_from_json(stored).installation_year_origin is None
 
 
-@pytest.mark.base
-class TestTheReferenceRenewsTheFabric:
-    """hisim-ryw1 (renovisorissues #59): every kept envelope element is renewed at the end of its life.
+class FabricPlan:
+    """The mockup with an area for each of its five elements, priced as a two-stage plan.
 
-    Owner decision of 2026-09-27. The mockup, with an area for each of its five elements, priced as
-    a two-stage plan -- the house as it is, then the facade insulated -- against the shipped Irish
-    cost database: the reference keeps and renews all five elements from their installation years,
-    and the plan's insulation names the facade it takes over.
+    Stage 0 is the house as it is, stage 1 the house after the measures a test class chooses, and
+    both are priced against the shipped Irish cost database. The test classes that price such a
+    plan inherit from this class: :class:`TestTheReferenceRenewsTheFabric` insulates the facade
+    (hisim-ryw1), :class:`TestTheDoorIsPricedPerSquareMetre` replaces the door (renovisorissues
+    #74). It holds what they share: the areas, the stated installation years, the price basis
+    year, the request document, the stages, the parameters and the priced document. So each test
+    class states only its own measure.
     """
 
     #: One area per element, so each has a register row (the mockup itself states only the facade's).
@@ -1858,41 +1860,77 @@ class TestTheReferenceRenewsTheFabric:
         )
         return Stage(inputs=inputs, from_year=0, label=f"stage {index}", measures=measures)
 
+    @classmethod
+    def _parameters(cls) -> Any:
+        """Irish parameters at :attr:`BASIS_YEAR`, with no CO2 price and no subsidies."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.parameters import EconomicParameters
+
+        return EconomicParameters(
+            country="IE", price_basis_year=cls.BASIS_YEAR, co2_price_scenario="none", apply_subsidies=False
+        )
+
+    @classmethod
+    def _priced_document(cls, database: Any, stages: Any, reference: Any, changed: Any) -> Dict[str, Any]:
+        """The two stages priced end to end from the brownfield perspective, as a validated document.
+
+        Args:
+            database: The cost database the plan is priced against.
+            stages: The reference stage and the changed stage (see :meth:`_stage`).
+            reference: The reference stage's built context.
+            changed: The changed stage's built context; its subjects and replacements are the
+                plan's.
+
+        Returns:
+            The staged document as JSON, after :meth:`StagedDocument.validate` accepted it.
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.staged import StagedEvaluator
+        from hisim.economics.staged_document import StagedDocument
+        from tests.economics.synthetic_stages import brownfield_perspective
+
+        parameters = cls._parameters()
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(list(stages), parameters, perspective)
+        document = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids=changed.subjects,
+            # Merged over both stages' reports, as ``StagedCli.read_mapping`` merges them.
+            unpriced_subjects=[*reference.unpriced_subjects, *changed.unpriced_subjects],
+            subject_notes={**reference.subject_notes, **changed.subject_notes},
+            replaces_subjects=changed.replaces_subjects,
+        ).to_json()
+        StagedDocument.validate(document)
+        return document
+
+
+@pytest.mark.base
+class TestTheReferenceRenewsTheFabric(FabricPlan):
+    """hisim-ryw1 (renovisorissues #59): every kept envelope element is renewed at the end of its life.
+
+    Owner decision of 2026-09-27. The plan of :class:`FabricPlan` with the facade insulated in
+    stage 1: the reference keeps and renews all five elements from their installation years, and
+    the plan's insulation names the facade it takes over.
+    """
+
     @pytest.fixture(name="plan", scope="class")
     def fixture_plan(self) -> Any:
         """The two built contexts, the stages made of them and the priced plan's document."""
         # pylint: disable=import-outside-toplevel
         from hisim.economics.database import CostDatabase
-        from hisim.economics.parameters import EconomicParameters
-        from hisim.economics.staged import StagedEvaluator
-        from hisim.economics.staged_document import StagedDocument
-        from tests.economics.synthetic_stages import brownfield_perspective
 
         config = _building(**self.AREAS)
         reference = _built(self._document(with_insulation=False), config)
         insulated = _built(self._document(with_insulation=True), config)
         stages = [self._stage(reference, 0, ()), self._stage(insulated, 1, ("external_insulation",))]
-        parameters = EconomicParameters(
-            country="IE", price_basis_year=self.BASIS_YEAR, co2_price_scenario="none", apply_subsidies=False
-        )
-        perspective = brownfield_perspective()
         database = CostDatabase(None)
-        result = StagedEvaluator(database).evaluate(stages, parameters, perspective)
-        document = StagedDocument(
-            result,
-            parameters,
-            perspective,
-            measure_ids=insulated.subjects,
-            # Merged over both stages' reports, as ``StagedCli.read_mapping`` merges them.
-            unpriced_subjects=[*reference.unpriced_subjects, *insulated.unpriced_subjects],
-            subject_notes={**reference.subject_notes, **insulated.subject_notes},
-            replaces_subjects=insulated.replaces_subjects,
-        ).to_json()
-        StagedDocument.validate(document)
+        document = self._priced_document(database, stages, reference, insulated)
         return {"stages": stages, "insulated": insulated, "document": document, "database": database}
 
     def test_every_kept_element_is_a_subject_of_its_register_class(self) -> None:
-        """Five subjects, each of its element's register class, sized in m² -- the door per door."""
+        """Five subjects, each of its element's register class, sized in m² of the element, the door too."""
         built = _built(self._document(with_insulation=False), _building(**self.AREAS))
         facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
 
@@ -1908,7 +1946,7 @@ class TestTheReferenceRenewsTheFabric:
         assert built.subject_notes["envelope_roof"] == EconomicContextBuilder.KEPT_ELEMENT_UNPRICED_NOTE
         assert facts["envelope_facade"].size == 140.0
         assert facts["envelope_facade"].size_unit is Units.SQUARE_METER
-        assert (facts["envelope_door"].size, facts["envelope_door"].size_unit) == (1.0, Units.ANY)
+        assert (facts["envelope_door"].size, facts["envelope_door"].size_unit) == (2.7, Units.SQUARE_METER)
 
     def test_an_element_a_measure_replaces_has_no_subject_of_its_own(self, plan) -> None:
         """The insulated facade is the measure's subject now, not a renewal of the old one."""
@@ -1993,3 +2031,149 @@ class TestTheReferenceRenewsTheFabric:
             door, self.BASIS_YEAR, EconomicParameters(country="IE")
         )
         assert origin is LifeOrigin.ENGINE_FALLBACK
+
+
+@pytest.mark.base
+class TestTheDoorIsPricedPerSquareMetre(FabricPlan):
+    """renovisorissues #74: a ``door_replacement`` measure passes the cost check and is priced per m².
+
+    The measure's subject, the existing door's register row and the kept door's renewal subject
+    are all sized in square metres of door, so the cost database's door entries must price per
+    square metre too. Before the fix they priced per door, and the engine's pre-run check refused
+    every plan with a door, with or without a cost block on the measure. The plan is the one of
+    :class:`FabricPlan` with the door replaced in stage 1.
+    """
+
+    #: A request's price band for the door, in euro per square metre of door. It differs from the
+    #: database's Irish band (500-1500 EUR/m2 in 2026), so the priced case shows that the request's
+    #: block prices the door, not the database entry.
+    DOOR_COST_BLOCK: Dict[str, Any] = {
+        "min_in_euro_per_m2": 600.0,
+        "max_in_euro_per_m2": 1000.0,
+        "source": "a test band, unlike the cost database's",
+    }
+
+    #: The database's embodied CO2 of a door: 120 kg per door over IWU's mean front-door area of
+    #: 2.79 m2, in kilograms per square metre of door.
+    DOOR_EMBODIED_CO2_IN_KG_PER_M2: float = 43.0
+
+    #: The countries the cost database ships device data for, and the years its entries start.
+    COUNTRIES: Tuple[str, ...] = ("IE", "DE")
+    ENTRY_YEARS: Tuple[int, ...] = (2026, 2035)
+
+    @classmethod
+    def _door_document(cls, with_cost_block: bool) -> Dict[str, Any]:
+        """The mockup with the door replaced as its only measure, optionally priced by a band.
+
+        Args:
+            with_cost_block: Whether the measure carries :attr:`DOOR_COST_BLOCK`.
+
+        Returns:
+            The request document.
+        """
+        document = _mockup()
+        door: Dict[str, Any] = {
+            "id": "door_replacement",
+            "options": {"glazing_panes": 0, "frame_material": "composite"},
+        }
+        if with_cost_block:
+            door["cost"] = dict(cls.DOOR_COST_BLOCK)
+        document["measures"] = [door]
+        return document
+
+    @classmethod
+    def _stages(cls, with_cost_block: bool) -> Any:
+        """The house as it is, then the door replaced, as the two stages the engine evaluates.
+
+        Args:
+            with_cost_block: Whether the door measure carries a price band.
+
+        Returns:
+            ``(reference stage, door stage, the reference's built context, the door stage's
+            built context)``.
+        """
+        config = _building(**cls.AREAS)
+        reference = _built(cls._document(with_insulation=False), config)
+        replaced = _built(cls._door_document(with_cost_block), config)
+        return (
+            cls._stage(reference, 0, ()),
+            cls._stage(replaced, 1, ("door_replacement",)),
+            reference,
+            replaced,
+        )
+
+    def test_every_envelope_class_is_priced_per_square_metre_in_both_countries(self) -> None:
+        """Every class an element or a layer is filed under prices and emits per m², in IE and DE, 2026 and 2035.
+
+        The translator declares every envelope subject and register row in square metres, so an
+        entry in any other unit is a run the pre-run check refuses.
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.database import CostDatabase
+
+        database = CostDatabase(None)
+        classes = sorted(
+            {*EnvelopeAssets.BY_ELEMENT.values(), *EnvelopeAssets.BY_PLACEMENT.values()}, key=lambda item: item.name
+        )
+        for asset_class in classes:
+            for country in self.COUNTRIES:
+                for year in self.ENTRY_YEARS:
+                    entry = database.get_device_entry(asset_class, year, country)
+                    where = f"{asset_class.name} {country} {year}"
+                    assert entry.size_unit is Units.SQUARE_METER, where
+                    assert entry.embodied_co2_per_unit == "m2", where
+
+    @pytest.mark.parametrize("with_cost_block", [False, True], ids=["no_cost_block", "cost_block"])
+    def test_both_stages_pass_the_cost_check(self, with_cost_block: bool) -> None:
+        """The reference (the door kept) and the door stage resolve without a problem.
+
+        This is the check that failed the production runs with "declared size_unit 'm2' does not
+        match the database entry's per_unit (None)".
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.database import CostDatabase
+        from hisim.economics.evaluator import EconomicEvaluator
+
+        reference, door_stage, _reference_context, replaced = self._stages(with_cost_block)
+        facts = {entry.subject: entry.facts for entry in replaced.context.extra_cost_facts}["door_replacement"]
+        assert (facts.size, facts.size_unit) == (self.AREAS["door_area_in_m2"], Units.SQUARE_METER)
+        evaluator = EconomicEvaluator(CostDatabase(None), self._parameters())
+        assert not evaluator.resolve_check(reference.inputs)
+        assert not evaluator.resolve_check(door_stage.inputs)
+
+    @pytest.mark.parametrize("with_cost_block", [False, True], ids=["no_cost_block", "cost_block"])
+    def test_the_door_is_priced_by_its_band_over_its_area(self, with_cost_block: bool) -> None:
+        """With a band the door costs band x its area in year 0; without one it is unpriced at zero.
+
+        Either way the plan prices end to end, the document validates, the replaced door's
+        service life is the cost database's, and its embodied CO2 is the database's per-m² figure
+        times the area. The kept elements carry no embodied CO2 (see
+        :meth:`TestTheReferenceRenewsTheFabric.test_a_renewal_inside_the_horizon_adds_no_embodied_co2`),
+        so the plan's embodied CO2 is the door's alone. The unpriced door books it too: the
+        translator sets no carbon override on any envelope measure without a cost block (whether
+        it should is the open question hisim-hq4z).
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.database import CostDatabase
+
+        reference, door_stage, reference_context, replaced = self._stages(with_cost_block)
+        database = CostDatabase(None)
+        document = self._priced_document(database, [reference, door_stage], reference_context, replaced)
+        row = {item["subject"]: item for item in document["plan"]["by_subject"]}["door_replacement"]
+        area_in_m2 = self.AREAS["door_area_in_m2"]
+        if with_cost_block:
+            minimum = self.DOOR_COST_BLOCK["min_in_euro_per_m2"] * area_in_m2
+            maximum = self.DOOR_COST_BLOCK["max_in_euro_per_m2"] * area_in_m2
+            expected = {"min": minimum, "best": (minimum + maximum) / 2.0, "max": maximum}
+        else:
+            expected = {"min": 0.0, "best": 0.0, "max": 0.0}
+        assert row["investment_in_euro"] == pytest.approx(expected)
+        assert row["unpriced"] is not with_cost_block
+        assert (row["service_life_years"], row["service_life_origin"]) == (35.0, "cost_database")
+        assert replaced.replaces_subjects["door_replacement"] == ["envelope_door"]
+        entry = database.get_device_entry(ComponentType.EXTERIOR_DOOR, self.BASIS_YEAR, "IE")
+        assert entry.embodied_co2_value == self.DOOR_EMBODIED_CO2_IN_KG_PER_M2
+        door_co2_in_kg = self.DOOR_EMBODIED_CO2_IN_KG_PER_M2 * area_in_m2
+        assert document["plan"]["co2"]["embodied_in_kg"] == pytest.approx(
+            {"min": door_co2_in_kg, "best": door_co2_in_kg, "max": door_co2_in_kg}
+        )

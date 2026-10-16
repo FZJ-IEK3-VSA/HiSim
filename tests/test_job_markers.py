@@ -1,17 +1,22 @@
 """The collection fails when a test carries no job marker of the testing guide's table, or more than one.
 
 ``tests/job_markers.py`` checks the rule of ``system_docs/testing.md`` §2 for every collected test, and
-``tests/conftest.py`` registers the check. These tests drive the check with stand-in tests -- a node id and
-a list of markers, which is all the check reads of a ``pytest.Item`` -- and a stand-in session, so they
-need no second pytest run. They also pin that the conftest registers the check, that its list of job
-markers is the guide's table, that ``pytest.ini`` declares no marker that is neither a job nor a group
-marker, and that the jobs of ``.github/workflows/tests.yml`` run the markers the table gives them.
+``tests/conftest.py`` registers the check. Most tests drive the check with stand-in tests -- a node id and
+a list of markers, which is all the check reads of a ``pytest.Item`` -- and a stand-in session. One runs a
+real pytest on a throwaway repository, so pytest's own deselection and hook order are covered too. The
+rest pin that the conftest registers the check, that its list of job markers is the guide's table, that
+``pytest.ini`` declares no marker that is neither a job nor a group marker, and that the jobs of
+``.github/workflows/tests.yml`` run the markers the table gives them.
 """
 
 from __future__ import annotations
 
 import configparser
+import os
 import re
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Dict, Iterator, List, Set, Tuple
@@ -207,3 +212,66 @@ class TestTheWorkflow:
         """A job running a marker outside the list would run tests the check counts as unmarked, and tests that
         'pytest (others)' runs as well."""
         assert Workflow.dedicated_markers() <= Workflow.excluded_by_others()
+
+
+class ThrowawayRepository:
+    """A repository under ``tmp_path`` with the check's module, a conftest registering only the check, and tests."""
+
+    #: The conftest: the check alone, without the HiSim conftest's fixtures and guards.
+    CONFTEST: ClassVar[str] = (
+        "from tests.job_markers import JobMarkerCheck\n\n\n"
+        "def pytest_configure(config):\n"
+        "    config.pluginmanager.register(JobMarkerCheck(), JobMarkerCheck.PLUGIN_NAME)\n"
+    )
+    #: The two job markers the tests use.
+    PYTEST_INI: ClassVar[str] = "[pytest]\ntestpaths = tests\nmarkers =\n    base: b\n    extendedbase: e\n"
+    #: One test with one job marker, one with none and one with two.
+    MODULE: ClassVar[str] = (
+        "import pytest\n\n\n"
+        "@pytest.mark.base\ndef test_kept():\n    pass\n\n\n"
+        "def test_unmarked():\n    pass\n\n\n"
+        "@pytest.mark.base\n@pytest.mark.extendedbase\ndef test_two():\n    pass\n"
+    )
+
+    @classmethod
+    def collect(cls, root: Path, *arguments: str) -> subprocess.CompletedProcess:
+        """Build the repository under ``root`` and run ``pytest --collect-only`` with ``arguments`` there.
+
+        Args:
+            root: An empty directory, ``tmp_path``.
+            arguments: Further pytest arguments, for example ``-m base``.
+
+        Returns:
+            The finished pytest process, its output captured as text.
+        """
+        (root / "tests").mkdir()
+        shutil.copy(Path(__file__).resolve().parent / "job_markers.py", root / "tests" / "job_markers.py")
+        (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
+        (root / "tests" / "conftest.py").write_text(cls.CONFTEST, encoding="utf-8")
+        (root / "tests" / "test_probe.py").write_text(cls.MODULE, encoding="utf-8")
+        (root / "pytest.ini").write_text(cls.PYTEST_INI, encoding="utf-8")
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
+        environment.pop("PYTHONPATH", None)
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", *arguments],
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+
+class TestARealRun:
+    """A real pytest run on a throwaway repository fails its collection, naming the offending tests."""
+
+    def test_pytest_minus_m_base_fails_on_the_tests_it_deselects(self, tmp_path: Path) -> None:
+        """The stand-in tests above call the hooks by hand; this covers pytest's own -m deselection reaching the
+        check, so a 'pytest -m base' that dropped an unmarked test without a word would fail here."""
+        completed = ThrowawayRepository.collect(tmp_path, "-m", "base")
+
+        output = completed.stdout + completed.stderr
+        assert completed.returncode == pytest.ExitCode.USAGE_ERROR, output
+        assert "tests/test_probe.py::test_unmarked carries no job marker" in output, output
+        assert "tests/test_probe.py::test_two carries 2 job markers: 'base', 'extendedbase'" in output, output
+        assert "test_kept" not in output, output

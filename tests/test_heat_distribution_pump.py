@@ -7,34 +7,34 @@ the valve shut the circuit now moves no water and returns its inlet unchanged.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Dict
+from typing import ClassVar, Mapping
 
 import pytest
 
-from hisim import component as cp
-from hisim import loadtypes as lt
 from hisim.components import heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistribution, PositionHotWaterStorageInSystemSetup
 from hisim.config import ComponentID
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
+from tests.part_load_rigs import AllInputsRig
 
 
 @dataclass(frozen=True)
 class HdsStep:
 
-    """The inputs of one heat-distribution step and the outputs it published."""
+    """The outputs one heat-distribution step published, by field name."""
 
-    #: Every output of the step, by its field name.
-    outputs: Dict[str, float]
+    #: Every output of the step, by its field name; read-only.
+    outputs: Mapping[str, float]
 
 
 class HdsRig:
 
     """A heat distribution system on fake inputs, simulated for single steps.
 
-    The rig wires the four inputs a buffered system reads (the controller's valve state, the supply temperature, the
-    building's theoretical demand and the indoor temperature) to fake outputs and runs ``i_simulate`` once per call.
+    The rig wires the four inputs a circuit that pumps its own design flow reads (the controller's valve state, the
+    supply temperature, the building's theoretical demand and the indoor temperature) to fake outputs, through
+    :class:`tests.part_load_rigs.AllInputsRig`, and runs ``i_simulate`` once per call. It serves both such positions:
+    behind a buffer (``PARALLEL``) and at a district-heating substation without a pump (``NO_STORAGE_MASS_FLOW_FIX``).
     """
 
     #: The design flow of the rig's circuit, in kg/s.
@@ -60,22 +60,7 @@ class HdsRig:
         self.hds = HeatDistribution(
             config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep)
         )
-        self.sources = {
-            name: cp.ComponentOutput(f"Fake{name}", name, load_type, unit, component_id=ComponentID(f"Fake{name}"))
-            for name, load_type, unit in (
-                ("State", lt.LoadTypes.ANY, lt.Units.ANY),
-                ("SupplyTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-                ("Demand", lt.LoadTypes.HEATING, lt.Units.WATT),
-                ("Room", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-            )
-        }
-        self.hds.state_channel.source_output = self.sources["State"]
-        self.hds.water_temperature_input_channel.source_output = self.sources["SupplyTemperature"]
-        self.hds.theoretical_thermal_building_demand_channel.source_output = self.sources["Demand"]
-        self.hds.residence_temperature_input_channel.source_output = self.sources["Room"]
-        everything = list(self.sources.values()) + [self.hds]
-        self.stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs(everything))
-        fft.add_global_index_of_components(everything)
+        self.stsv, self.fakes = AllInputsRig.build(self.hds)
 
     def step(
         self, *, valve_state: float, supply_in_celsius: float, demand_in_watt: float, room_in_celsius: float
@@ -92,37 +77,31 @@ class HdsRig:
             The published outputs.
         """
         values = {
-            "State": valve_state,
-            "SupplyTemperature": supply_in_celsius,
-            "Demand": demand_in_watt,
-            "Room": room_in_celsius,
+            HeatDistribution.State: valve_state,
+            HeatDistribution.WaterTemperatureInput: supply_in_celsius,
+            HeatDistribution.TheoreticalThermalBuildingDemand: demand_in_watt,
+            HeatDistribution.ResidenceTemperatureIndoorAir: room_in_celsius,
         }
-        for name, value in values.items():
-            self.stsv.values[self.sources[name].global_index] = value
         self.hds.i_restore_state()
-        self.hds.i_simulate(0, self.stsv, False)
+        outputs = AllInputsRig.step(self.hds, self.stsv, self.fakes, values)
         self.hds.i_save_state()
-        return HdsStep(
-            outputs={output.field_name: self.stsv.values[output.global_index] for output in self.hds.outputs}
-        )
+        return HdsStep(outputs=outputs)
 
 
 @pytest.mark.base
-@pytest.mark.parametrize(
-    "position",
-    [PositionHotWaterStorageInSystemSetup.PARALLEL, PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX],
-)
+@pytest.mark.parametrize("position", HeatDistribution.POSITIONS_PUMPING_THE_DESIGN_FLOW)
+@pytest.mark.parametrize("demand_in_watt", [0.0, 3000.0])
 def test_a_shut_valve_stops_the_pump_and_the_circuit_exchanges_nothing(
-    position: PositionHotWaterStorageInSystemSetup,
+    position: PositionHotWaterStorageInSystemSetup, demand_in_watt: float
 ) -> None:
-    """With the valve shut no water moves and the circuit returns its inlet unchanged, at any demand and supply.
+    """With the valve shut no water moves and the circuit returns its inlet unchanged, with or without a demand.
 
-    Two steps run with the valve shut, so the second publishes the first's values too: the circuit's outputs lag one
-    step, which is unchanged here.
+    A demand with a shut valve is, for example, a step outside the heating season. Two steps run with the valve shut,
+    so the second publishes the first's values too: the circuit's outputs lag one step, which is unchanged here.
     """
     rig = HdsRig(position)
     for _ in range(2):
-        step = rig.step(valve_state=0, supply_in_celsius=35.0, demand_in_watt=0.0, room_in_celsius=20.0)
+        step = rig.step(valve_state=0, supply_in_celsius=35.0, demand_in_watt=demand_in_watt, room_in_celsius=20.0)
     assert step.outputs[HeatDistribution.WaterMassFlowHDS] == 0.0
     assert step.outputs[HeatDistribution.ThermalPowerDelivered] == 0.0
     assert step.outputs[HeatDistribution.WaterTemperatureOutput] == 35.0
@@ -130,13 +109,35 @@ def test_a_shut_valve_stops_the_pump_and_the_circuit_exchanges_nothing(
 
 
 @pytest.mark.base
-def test_an_open_valve_pumps_the_design_flow() -> None:
-    """With the valve open for heating the circuit pumps its design flow and, a step later, delivers the demand."""
-    rig = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL)
-    rig.step(valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0)
-    step = rig.step(valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0)
+@pytest.mark.parametrize("position", HeatDistribution.POSITIONS_PUMPING_THE_DESIGN_FLOW)
+@pytest.mark.parametrize(
+    ("valve_state", "supply_in_celsius", "demand_in_watt", "room_in_celsius"),
+    [(1, 35.0, 3000.0, 20.0), (-1, 16.0, -2000.0, 26.0)],
+    ids=["heating", "cooling"],
+)
+def test_an_open_valve_pumps_the_design_flow(
+    position: PositionHotWaterStorageInSystemSetup,
+    valve_state: float,
+    supply_in_celsius: float,
+    demand_in_watt: float,
+    room_in_celsius: float,
+) -> None:
+    """With the valve open, for heating or cooling, the circuit pumps its design flow and delivers the demand.
+
+    The delivered heat is read on the second step, since the outputs lag one step. For cooling it is negative: 2000 W
+    taken out of a room at 26 °C by water supplied at 16 °C.
+    """
+    rig = HdsRig(position)
+    inputs = {
+        "valve_state": valve_state,
+        "supply_in_celsius": supply_in_celsius,
+        "demand_in_watt": demand_in_watt,
+        "room_in_celsius": room_in_celsius,
+    }
+    rig.step(**inputs)
+    step = rig.step(**inputs)
     assert step.outputs[HeatDistribution.WaterMassFlowHDS] == HdsRig.DESIGN_MASS_FLOW_IN_KG_PER_SECOND
-    assert step.outputs[HeatDistribution.ThermalPowerDelivered] == pytest.approx(3000.0)
+    assert step.outputs[HeatDistribution.ThermalPowerDelivered] == pytest.approx(demand_in_watt)
 
 
 @pytest.mark.base

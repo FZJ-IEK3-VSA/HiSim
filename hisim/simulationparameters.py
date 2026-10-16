@@ -540,7 +540,9 @@ class SimulationParameters:
         year-long profile by the timestep number, so timestep 0 is read as the 1st of January
         whatever this start date says, and a solar-thermal collector pairs its own sun position with
         the weather's irradiance on a clock of its own. The mid-year-start epic
-        (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
+        (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time; until then a run
+        that starts after 1 January logs a warning naming those of them it contains
+        (``hisim/january_readers.py``).
 
         The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
         use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is

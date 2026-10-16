@@ -130,5 +130,6 @@ tests:
       # has more surface
   expect:
     - {kpi: Total WoodChips consumption (energy), member: Boiler, min: 105, max: 145}
-      # 125.9 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 201.1 kWh
-      # before the boiler's pump had a largest flow (hisim-4g9.63)
+      # 123.8 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 125.9 kWh
+      # before the burner kept its minimum firing time and pause (hisim-75mt), 201.1 kWh before the boiler's pump had
+      # a largest flow (hisim-4g9.63)

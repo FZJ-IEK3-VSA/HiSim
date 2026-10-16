@@ -13,7 +13,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 0.10901427076987466
+    "value": 0.11814073615125935
   },
   "BUI1.Battery.Battery losses": {
     "building": "BUI1",
@@ -21,7 +21,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 0.04363549660779589
+    "value": 0.044786989964588964
   },
   "BUI1.CHP.Electrical energy produced (CHP1)": {
     "building": "BUI1",
@@ -449,7 +449,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 63.20072145527057
+    "value": 63.199478386252096
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -465,7 +465,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 63.20072145527057
+    "value": 63.199478386252096
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -481,7 +481,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 10.345936303697492
+    "value": 10.355062769078875
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -497,7 +497,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 27.961990009993222
+    "value": 27.98665613264561
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -513,7 +513,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 17.672179419566397
+    "value": 17.68742069358606
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -521,7 +521,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 58.5436354966078
+    "value": 58.54478698996459
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",

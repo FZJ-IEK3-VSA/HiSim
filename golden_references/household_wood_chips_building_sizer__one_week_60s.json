@@ -5,7 +5,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 54.41936333177765
+    "value": 54.41663306539234
   },
   "BUI1.Battery.Battery discharging energy": {
     "building": "BUI1",
@@ -13,7 +13,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 34.77901276204158
+    "value": 44.167440248081476
   },
   "BUI1.Battery.Battery losses": {
     "building": "BUI1",
@@ -21,7 +21,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 16.558624288526158
+    "value": 18.302466536100546
   },
   "BUI1.Building.Building heating load (Building)": {
     "building": "BUI1",
@@ -254,7 +254,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 9.958785
+    "value": 7.137090000000001
   },
   "BUI1.Costs.Costs of grid gas for simulated period": {
     "building": "BUI1",
@@ -270,7 +270,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 15.42
+    "value": 15.48
   },
   "BUI1.Costs.Energy grid costs for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 25.378785
+    "value": 22.61709
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 85.708785
+    "value": 82.94709
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 85.708785
+    "value": 82.94709
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -397,7 +397,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kg",
-    "value": 14.7846
+    "value": 10.9347
   },
   "BUI1.Electricity Meter.Max power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.21461942478117743
+    "value": 0.15873592784046375
   },
   "BUI1.Electricity Meter.Mean power to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -457,7 +457,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.06931600638173503
+    "value": 0.0693322579673619
   },
   "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -502,7 +502,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "Euro",
-    "value": 9.958785
+    "value": 7.137090000000001
   },
   "BUI1.Electricity Meter.Total energy from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 36.056063363237804
+    "value": 26.667635877197906
   },
   "BUI1.Electricity Meter.Total energy to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -532,7 +532,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 11.645089072131485
+    "value": 11.647819338516797
   },
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -564,7 +564,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 14.7846
+    "value": 10.9347
   },
   "BUI1.Emissions.CO2 footprint of grid gas for simulated period": {
     "building": "BUI1",
@@ -580,7 +580,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 21.79
+    "value": 21.88
   },
   "BUI1.Emissions.Total CO2 emissions for simulated period": {
     "building": "BUI1",
@@ -588,7 +588,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 43.0546
+    "value": 39.2947
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -604,7 +604,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 43.0546
+    "value": 39.2947
   },
   "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_4 (L2EMSElectricityController)": {
     "building": "BUI1",
@@ -664,7 +664,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kg",
-    "value": 21.79
+    "value": 21.88
   },
   "BUI1.Fuel Meter.OPEX - Energy costs (FuelMeter)": {
     "building": "BUI1",
@@ -679,7 +679,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "EUR",
-    "value": 15.42
+    "value": 15.48
   },
   "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)": {
     "building": "BUI1",
@@ -709,7 +709,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kWh",
-    "value": 696.14
+    "value": 699.17
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -717,7 +717,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 11.701821642714846
+    "value": 11.717590541696383
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -733,7 +733,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 732.1960633632378
+    "value": 725.8376358771978
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -749,7 +749,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 79.66502120590707
+    "value": 78.34574318514824
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -765,7 +765,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 79.66502120590707
+    "value": 78.34574318514824
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -773,7 +773,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 34.84555984555985
+    "value": 25.356125356125357
   },
   "BUI1.General.Self-consumption of electricity": {
     "building": "BUI1",
@@ -781,7 +781,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 51.121679364423315
+    "value": 60.497068217866975
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -789,7 +789,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 85.8847405186285
+    "value": 85.88143110482812
   },
   "BUI1.General.Self-consumption rate of electricity": {
     "building": "BUI1",
@@ -797,7 +797,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 61.96567195687675
+    "value": 73.32977965802058
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -805,7 +805,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 65.15444015444015
+    "value": 74.64387464387464
   },
   "BUI1.General.Self-sufficiency rate of electricity": {
     "building": "BUI1",
@@ -813,7 +813,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 49.36496570482867
+    "value": 57.45076084910787
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -821,7 +821,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 103.55862428852616
+    "value": 105.30246653610055
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",
@@ -837,7 +837,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 8.44
+    "value": 9.77
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -860,7 +860,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 41.924012439565885
+    "value": 41.83308388474014
   },
   "BUI1.Heat Distribution System.Max return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -875,7 +875,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 40.85853764114561
+    "value": 41.616278108006355
   },
   "BUI1.Heat Distribution System.Max temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -905,7 +905,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 33.90138665192345
+    "value": 33.9910264353941
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -920,7 +920,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 31.115052733909835
+    "value": 31.204410579181133
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -935,7 +935,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 2.786333918013614
+    "value": 2.7866158562129617
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1085,7 +1085,7 @@
     },
     "tag": "Storage For Space Heating Hot Water",
     "unit": "kWh",
-    "value": 15.4
+    "value": 15.5
   },
   "BUI1.Wood Chip Boiler.CAPEX - CO2 Footprint (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1130,7 +1130,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kWh",
-    "value": 77.7
+    "value": 80.8
   },
   "BUI1.Wood Chip Boiler.Energy WoodChips consumption for space heating (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1160,7 +1160,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kg",
-    "value": 21.787930000000003
+    "value": 21.88496
   },
   "BUI1.Wood Chip Boiler.OPEX - Fuel costs (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1175,7 +1175,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "EUR",
-    "value": 15.4176
+    "value": 15.494400000000002
   },
   "BUI1.Wood Chip Boiler.OPEX - Maintenance costs (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kWh",
-    "value": 70.0
+    "value": 72.7
   },
   "BUI1.Wood Chip Boiler.Thermal energy delivered for space heating (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1235,7 +1235,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kg",
-    "value": 22.237930000000002
+    "value": 22.33496
   },
   "BUI1.Wood Chip Boiler.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1250,7 +1250,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "EUR",
-    "value": 46.1876
+    "value": 46.2644
   },
   "BUI1.Wood Chip Boiler.Total WoodChips consumption (energy) (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1265,7 +1265,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kWh",
-    "value": 696.1
+    "value": 699.1999999999999
   },
   "BUI1.Wood Chip Boiler.Total WoodChips consumption (mass) (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1280,7 +1280,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kg",
-    "value": 160.6
+    "value": 161.4
   },
   "BUI1.Wood Chip Boiler.Total WoodChips consumption (volume) (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1295,7 +1295,7 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "l",
-    "value": 599.4
+    "value": 602.1
   },
   "BUI1.Wood Chip Boiler.Total thermal energy delivered (ConventionalWoodChipBoiler)": {
     "building": "BUI1",
@@ -1310,6 +1310,6 @@
     },
     "tag": "Wood Chip Boiler",
     "unit": "kWh",
-    "value": 626.5
+    "value": 629.2
   }
 }

@@ -18,9 +18,11 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   suffixes (`_w`, `_c`) consistently keeps them, for example `hisim/hydronics.py`, whose module docstring lists
   its suffixes; short suffixes are not introduced elsewhere. A dimensionless quantity says so in its name
   (`part_load_ratio`, `share_of_roof`).
-  Exception: a KPI's name (`KpiEntry.name`, e.g. "Unmet DHW heat demand") is a display label shown next to its
-  mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor, the webtool and
-  the golden references, so they are not renamed for this rule.
+  Exception: a KPI's name (`KpiEntry.name`, e.g. "Grid injection of electricity", unit kWh) is a display label
+  shown next to its mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor,
+  the webtool and the golden references, so they are not renamed for this rule; renaming them would break the
+  goldens and the RenoVisor side (owner decision, Noah, 2026-10-16). A KPI that is renamed for another reason
+  states that reason in its own bead, as hisim-h2ib.7 does for "Unmet DHW heat demand".
 - Every component follows `system_docs/component_design_principles.md`: it is one of the component kinds (data
   source, physics, L1 controller, L2 controller, meter), inherits that kind's base class from `hisim/component.py`
   (`DataSourceComponent`, `PhysicsComponent`, `L1ControllerComponent`, `L2ControllerComponent`, `MeterComponent`)

@@ -88,7 +88,8 @@ Rules:
   in passing.
 - **A KPI name is a display label beside its mandatory `unit` field** (AGENTS.md, "Guidelines for coding"). The
   KPI "Unmet DHW heat demand" (`hisim/components/simple_water_storage.py`) is to be renamed, as one pull request
-  under §5 (owner, 2026-10-15; bead hisim-h2ib.7).
+  under §5 (owner, 2026-10-15; bead hisim-h2ib.7), and that pull request states its own reason. Every other KPI
+  name keeps the exception, because renaming it breaks the goldens and the RenoVisor side (owner, 2026-10-16).
 - **The committed schemas follow the code.** A change to the format regenerates
   `hisim/energy_system_v3.schema.json` and `hisim/assembly_v4.schema.json` with `hisim energy-system schema`;
   `tests/test_energy_system_schema.py` and `tests/assemblies/test_assembly_format.py` fail otherwise. A change under which existing

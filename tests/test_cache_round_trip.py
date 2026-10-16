@@ -38,8 +38,8 @@ class CacheReaders:
         ("hisim/components/building/building.py", "Building solar gains cache hit"),
         ("hisim/components/weather/weather.py", "weather_series = pd.read_csv("),
         ("hisim/components/loadprofilegenerator_utsp_connector.py", "dataframe = pd.read_csv("),
-        ("hisim/components/solar_thermal_system.py", "Get solar position from cache."),
-        ("hisim/components/generic_car.py", "Generic car data is taken from cache."),
+        ("hisim/components/solar_thermal_system.py", "Get solar position from cache"),
+        ("hisim/components/generic_car.py", "Generic car data is taken from cache"),
     )
 
     EXACT = 'float_precision="round_trip"'

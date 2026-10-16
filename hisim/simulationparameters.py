@@ -603,9 +603,9 @@ class SimulationParameters:
         """Gets a unique key from a simulation parameter class.
 
         A part-load threshold other than the default is part of the key, spelled with ``:g`` (``900`` for 900 and
-        900.0 alike). Note: the legacy input caches (``utils.get_cache_file``: the load-profile connector, the car,
-        the collector's sun positions) append this key as well, so a run with a non-default threshold misses those
-        caches and recomputes them, although none of them depends on the threshold. That costs time, not accuracy.
+        900.0 alike). Note: the legacy input cache that still keys through ``utils.get_cache_file``, the
+        load-profile connector's, appends this key as well, so a run with a non-default threshold misses that cache
+        and recomputes it, although it does not depend on the threshold. That costs time, not accuracy.
         """
         return "###".join(
             str(value) for value in (

@@ -1123,7 +1123,7 @@ class GenericBoiler(PhysicsComponent):
             minimal_lift_at_maximal_power_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,
         )
         self.burner_times = BurnerTimes.of_fuel(self.energy_carrier)
-        if self.burner_times.minimum_firing_time_in_seconds > 0 and self.minimal_thermal_power_in_watt <= 0:
+        if self.minimal_thermal_power_in_watt <= 0 < self.burner_times.minimum_firing_time_in_seconds:
             # a held burner burns at least its minimal power; at 0 W it carries no heat and its pump no flow
             raise ValueError(
                 f"{self.component_name}: a {self.energy_carrier.value} burner keeps a minimum firing time and burns "

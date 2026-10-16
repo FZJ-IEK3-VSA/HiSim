@@ -9,7 +9,8 @@ single output channel.
 
 A file with a time column serves any window of the year it covers: the loader
 looks the run's ``start_date`` up among the column's labels
-(:class:`hisim.window_offset.WindowOffset`) and reads the window's rows. A file
+(:class:`hisim.window_offset.WindowOffset`) and reads the window's rows, averaging
+the rows inside each timestep when the file is finer than the run. A file
 without one can only serve a run that starts on 1 January, because its first row
 is the only row whose date is known.
 """
@@ -58,10 +59,18 @@ class CSVLoaderConfig(ConfigBase):
     a UTC offset, such as ``2021-07-01 00:00:00`` or ``2021-07-01T00:00``, and it is read in the
     run's standard time, the clock ``start_date`` is read in: no daylight saving, so the labels
     run on an even grid across the whole year, with no skipped or repeated hour. This is how the
-    weather resolves its window too (:class:`hisim.window_offset.WindowOffset`). The rows must lie
-    at the run's resolution: a minutely file serves a 60 s run, not a 900 s one. Without a time
-    column, the file's first row is read as 1 January 00:00, so only a run that starts on 1 January
-    can use it; any other start is refused.
+    weather resolves its window too (:class:`hisim.window_offset.WindowOffset`).
+
+    The rows may be finer than the run: then each timestep reads the mean of the rows inside it.
+    Example: a minutely file in a 900 s run gives each timestep the mean of its 15 one-minute rows,
+    which keeps the energy of a power column such as kW (a column of energy per row would need the
+    sum instead, so such a file has to be written at the run's resolution). A file coarser than
+    the run, or one whose row step does not divide the run's step evenly (a 600 s file in a 900 s
+    run), is refused: no row can be split into timesteps without inventing values.
+
+    Without a time column, the file's first row is read as 1 January 00:00 and row ``t`` at
+    timestep ``t``, whatever the file's resolution, so only a run that starts on 1 January can use
+    it; any other start is refused.
     """
 
     MAIN_CLASS = "hisim.components.csvloader.CSVLoader"
@@ -310,27 +319,37 @@ class CSVLoader(cp.DataSourceComponent):
                 "simulation timesteps."
             )
         all_values_in_loaded_unit = dfcolumn.to_numpy(dtype=float)
+        timesteps = self.my_simulation_parameters.timesteps
         if self.csvconfig.time_column is None:
             self._refuse_a_window_after_the_first_of_january()
             window_offset = 0
-            self.column_values_in_loaded_unit: np.ndarray = all_values_in_loaded_unit
+            rows_per_timestep = 1
+            rows_read_in_loaded_unit = all_values_in_loaded_unit
         else:
+            labels = self._time_labels(loaded_dataframe)
+            rows_per_timestep = self._rows_per_timestep(labels)
             window_offset = WindowOffset.resolve(
-                labels=self._time_labels(loaded_dataframe),
+                labels=labels,
                 window_start=self.my_simulation_parameters.start_date,
-                timesteps=self.my_simulation_parameters.timesteps,
-                seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+                timesteps=timesteps * rows_per_timestep,
+                seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep // rows_per_timestep,
                 source=f"the CSV file '{self.csvconfig.csv_filename}' of {self.component_name}",
             )
-            self.column_values_in_loaded_unit = all_values_in_loaded_unit[
-                window_offset:window_offset + self.my_simulation_parameters.timesteps
+            rows_read_in_loaded_unit = all_values_in_loaded_unit[
+                window_offset:window_offset + timesteps * rows_per_timestep
             ]
-        if not np.all(np.isfinite(self.column_values_in_loaded_unit)):
-            bad_rows = window_offset + np.where(~np.isfinite(self.column_values_in_loaded_unit))[0]
+        if not np.all(np.isfinite(rows_read_in_loaded_unit)):
+            bad_rows = window_offset + np.where(~np.isfinite(rows_read_in_loaded_unit))[0]
             raise ValueError(
                 f"CSV '{self.csvconfig.csv_filename}' column "
                 f"'{self.column_name}' contains non-finite values "
                 f"(NaN/inf) at rows {bad_rows[:10].tolist()}"
+            )
+        if rows_per_timestep == 1:
+            self.column_values_in_loaded_unit: np.ndarray = rows_read_in_loaded_unit
+        else:
+            self.column_values_in_loaded_unit = rows_read_in_loaded_unit.reshape(timesteps, rows_per_timestep).mean(
+                axis=1
             )
         self.values: List[float] = []
 
@@ -354,6 +373,51 @@ class CSVLoader(cp.DataSourceComponent):
                 "Name the column that holds each row's time label as time_column (an ISO 8601 date and time "
                 "without a UTC offset, in standard time), so the loader can find the window in the file."
             )
+
+    def _rows_per_timestep(self, labels: pd.DatetimeIndex) -> int:
+        """Return how many rows of the file one timestep of the run averages.
+
+        The row step is the distance of the first two labels. Example: a minutely file in a 900 s
+        run averages 15 rows per timestep, and a minutely file in a 60 s run reads one. Whether the
+        rows keep that step across the run's window is checked by :meth:`WindowOffset.resolve`.
+
+        Args:
+            labels: The file's time labels, one per row.
+
+        Returns:
+            The number of rows per timestep, at least 1.
+
+        Raises:
+            ValueError: If the file has fewer than two rows, if its row step is not a positive whole
+                number of seconds, if it is coarser than the run's step, or if it does not divide the
+                run's step evenly.
+        """
+        filename = self.csvconfig.csv_filename
+        if len(labels) < 2:
+            raise ValueError(
+                f"The CSV file '{filename}' of {self.component_name} has {len(labels)} time label(s), so the "
+                "step of its rows is not known."
+            )
+        row_step = labels[1] - labels[0]
+        timestep = pd.Timedelta(seconds=self.my_simulation_parameters.seconds_per_timestep)
+        if row_step <= pd.Timedelta(0) or row_step % pd.Timedelta(seconds=1) != pd.Timedelta(0):
+            raise ValueError(
+                f"The rows of the CSV file '{filename}' of {self.component_name} are {row_step} apart, which is "
+                "not a positive whole number of seconds."
+            )
+        if row_step > timestep:
+            raise ValueError(
+                f"The rows of the CSV file '{filename}' of {self.component_name} are {row_step} apart, coarser "
+                f"than the run's timestep of {timestep}. A row cannot be split into timesteps; write the file "
+                "at the run's resolution or finer."
+            )
+        if timestep % row_step != pd.Timedelta(0):
+            raise ValueError(
+                f"The rows of the CSV file '{filename}' of {self.component_name} are {row_step} apart, which "
+                f"does not divide the run's timestep of {timestep} evenly, so a timestep cannot average whole "
+                "rows."
+            )
+        return int(timestep // row_step)
 
     def _time_labels(self, dataframe: pd.DataFrame) -> pd.DatetimeIndex:
         """Read the time column of the file as the labels the run's window is looked up in.

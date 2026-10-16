@@ -638,41 +638,52 @@ class Battery(PhysicsComponent):
 
         The lost electricity is what was charged minus what was discharged minus the increase of the stored energy over
         the run (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so energy the battery still holds at
-        the end, or held already at the start, is not booked as a loss. Charged, discharged and stored energy are each
-        rounded to 0.1 kWh.
+        the end, or held already at the start, is not booked as a loss. The three energies enter unrounded, the same
+        sums the KPI "Battery losses" uses, and only the loss is rounded, to 0.01 kWh, the resolution of the OPEX
+        table. Rounding each term first could put the loss up to 0.15 kWh off the KPI, and below zero for a battery
+        that barely cycles.
+
+        The charged and the discharged energy are also stored on the config, rounded to 0.1 kWh, as
+        ``charge_in_kwh`` and ``discharge_in_kwh``; :meth:`get_battery_aging_information` counts the charge cycles from
+        them.
 
         Raises:
             ValueError: If ``all_outputs`` holds no stored-energy output of this battery, which would book the energy
                 it holds at the end as lost.
         """
         stored_energy_increase_in_kwh: Optional[float] = None
+        charged_energy_in_kwh = 0.0
+        discharged_energy_in_kwh = 0.0
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and output.component_name == self.component_name:
                 if InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag:
-                    stored_energy_increase_in_kwh = round(postprocessing_results.iloc[:, index].sum() / 1e3, 1)
+                    stored_energy_increase_in_kwh = float(postprocessing_results.iloc[:, index].sum()) / 1e3
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
-                    self.battery_config.charge_in_kwh = round(
+                    charged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(lower=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     )
-                    self.battery_config.discharge_in_kwh = round(
+                    discharged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     ) * (-1)
+                    self.battery_config.charge_in_kwh = round(charged_energy_in_kwh, 1)
+                    self.battery_config.discharge_in_kwh = round(discharged_energy_in_kwh, 1)
         if stored_energy_increase_in_kwh is None:
             raise ValueError(
                 f"The outputs passed to the OPEX of battery {self.component_name} hold no output flagged "
                 f"{InandOutputType.STORED_ENERGY_INCREASE.name}, so its losses cannot subtract the change of its "
                 "stored energy."
             )
-        battery_losses_in_kwh = KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
-            charged_energy_in_kilowatt_hour=self.battery_config.charge_in_kwh,
-            discharged_energy_in_kilowatt_hour=self.battery_config.discharge_in_kwh,
-            stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kwh,
+        battery_losses_in_kwh = round(
+            KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=charged_energy_in_kwh,
+                discharged_energy_in_kilowatt_hour=discharged_energy_in_kwh,
+                stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kwh,
+            ),
+            2,
         )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(

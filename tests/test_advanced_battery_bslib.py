@@ -574,3 +574,27 @@ class TestStoredEnergyAndLosses:
         frame_without_increase = frame.drop(columns=frame.columns[increase_column])
         with pytest.raises(ValueError, match="STORED_ENERGY_INCREASE"):
             battery.get_cost_opex(all_outputs=outputs_without_increase, postprocessing_results=frame_without_increase)
+
+    @pytest.mark.base
+    def test_a_battery_that_barely_cycles_books_its_small_loss_and_the_opex_equals_the_kpi(self) -> None:
+        """Catches the OPEX losses rounding each energy before subtracting, which books a negative loss.
+
+        Six minutes of charging at 1.4 kW from half full, then four minutes of discharging at 1 kW: about 0.14 kWh
+        charged, 0.067 kWh discharged and 0.051 kWh more stored, a loss of about 0.02 kWh. Rounding the three terms to
+        0.1 kWh first gives 0.1 - 0.1 - 0.1 = -0.1 kWh, a negative consumption, cost and CO2. The OPEX loss must be the
+        KPI "Battery losses" rounded to the OPEX table's 0.01 kWh, and above zero.
+        """
+        battery, outputs, frame = self.run_steps([1400.0] * 6 + [-1000.0] * 4, state_of_charge_at_start=0.5)
+        preparation = self.bare_kpi_preparation(battery)
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=battery.component_id.building_label
+        )
+        _, _, kpi_losses_in_kilowatt_hour = preparation.compute_battery_kpis(result_dataframe=filtered)
+        opex = battery.get_cost_opex(all_outputs=outputs, postprocessing_results=frame)
+        assert 0.01 < kpi_losses_in_kilowatt_hour < 0.05  # the scenario must stay a nearly idle battery
+        assert opex.total_consumption_in_kwh == round(kpi_losses_in_kilowatt_hour, 2)
+        assert opex.opex_energy_cost_in_euro > 0.0
+        assert opex.co2_footprint_in_kg > 0.0
+        # The config keeps the energies rounded to 0.1 kWh for the aging count.
+        assert battery.battery_config.charge_in_kwh == pytest.approx(0.1)
+        assert battery.battery_config.discharge_in_kwh == pytest.approx(0.1)

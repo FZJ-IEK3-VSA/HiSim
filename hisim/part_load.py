@@ -2,23 +2,38 @@
 
 Above a step-length threshold (``SimulationParameters.part_load_above_seconds``, 600 s by default) a device that its
 controller has switched on does not have to run the whole step: it runs only the fraction of the step, the part-load
-ratio, that brings its store to the controller's target temperature by the end of the step. At and below the
-threshold every device runs whole steps, so a fine-step run is the reference without any adaptation.
+ratio, that brings its store to the controller's target temperature by the end of the step (a circuit that draws
+from a store, the largest fraction that keeps the store at or above a floor). At and below the threshold every device
+runs whole steps, so a fine-step run is the reference without any adaptation.
 
-The module holds five pieces, none of which knows a particular component:
+The module holds five pieces, none of which knows a particular component. Which rule a controller uses depends on the
+kind of store its device charges or draws from:
 
-* :class:`PartLoadRule` is the pure rule for a store that publishes its end-of-step temperature only: from the ratio
-  the device ran with and the store's temperatures at the start and at the end of the step it returns the ratio for
-  the next pass. It remembers nothing; the simulator's passes iterate it like any other component's law.
+* a step-mean store, the hot-water cylinder (:class:`hisim.hydronics.MixedNode`), uses :class:`PartLoadRule` and
+  :class:`PartLoadControl` (decision 11 of ``roadmap/hydronic_part_load_spec.md``): the boiler's hot-water charge and
+  the solar collector's pump;
+* a start-of-step store, the space-heating buffer (:class:`hisim.hydronics.StartOfStepNode`), uses
+  :class:`StartOfStepPartLoadRule` and :class:`StartOfStepPartLoadControl` (decision 21): the boiler's and the heat
+  pump's space-heating charge and the heat distribution system's circuit. The two rules read different inputs; a
+  start-of-step store publishes its end temperature without each circuit, which makes its rules exact.
+
+The pieces:
+
+* :class:`PartLoadRule` is the pure rule for a step-mean store: from the ratio the device ran with and the store's
+  temperatures at the start and at the end of the step it returns the ratio for the next pass. It remembers nothing;
+  the simulator's passes iterate it like any other component's law.
 * :class:`PartLoadControl` is the part of an L1 controller that reads the store's end-of-step temperature and the
   ratio its device reports, applies :class:`PartLoadRule` and publishes the ratio and the target it aims at.
+* :class:`StartOfStepPartLoadRule` holds the exact rules for a start-of-step store: the ratio of a generator that
+  ends the store at its target (``raising_ratio``) and the largest ratio of a distribution circuit that keeps the
+  store at or above a floor (``lowering_ratio``). Each lands in one pass once the store's other circuits' ratios
+  stand; the circuit ends of one store read each other's ratios of the pass before and settle together within a few
+  passes.
+* :class:`StartOfStepPartLoadControl` is the part of an L1 controller that reads a start-of-step store's end
+  temperature, its end temperature without the device's circuit and the ratio the device reports, applies one of
+  those rules and publishes the ratio (and, for a generator, the target).
 * :class:`PartLoadCommand` is the part of a device that reads the ratio its controller commands and reports the
-  ratio it ran with.
-* :class:`StartOfStepPartLoadRule` holds the exact rules for a start-of-step store, which also publishes its end
-  temperature without each circuit: the raising ratio of a generator and the lowering ratio of a distribution
-  circuit. They are pure functions as well.
-* :class:`StartOfStepPartLoadControl` is the part of an L1 controller that applies :class:`StartOfStepPartLoadRule`
-  to a start-of-step store and publishes the ratio, and for a generator the target.
+  ratio it ran with; devices on either kind of store use it.
 
 Terms:
 

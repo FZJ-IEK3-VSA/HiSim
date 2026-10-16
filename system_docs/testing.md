@@ -58,6 +58,11 @@ Rules:
   every marker of `pytest.ini` a job marker or one of the two group markers (`JobMarkers.GROUP_NAMES`), and keeps
   the `marker:` of each `tests.yml` job, and the markers `pytest (others)` excludes, in step with the table's CI
   job column. So a new job marker goes into the table, `pytest.ini`, that list and `tests.yml` together.
+  Under pytest-xdist (`-n`, which most `tests.yml` jobs use) a collection guard's refusal loses its message: the
+  worker that raised it dies, and the run ends with `INTERNALERROR> RuntimeError: Unexpectedly no active workers
+  available` (exit 3) without naming a test. This holds for this hook and for the assemblies and probe guards
+  (`AssemblyTier`, `ProbeTier`). That error during collection means a guard refused; run the same selection
+  without `-n` to see which tests and why (owner decision 2026-10-16, hisim-x7dq).
 - **`system_setups` is only for the Python setup files.** A test that runs an energy-system file, a twin or a rig
   of a few components is `extendedbase` or `extendedbase2`. Some older modules carry `system_setups` for other
   runs (for example `tests/test_water_storage_temperature_check.py`, which runs an energy-system file, and

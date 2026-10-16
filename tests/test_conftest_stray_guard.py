@@ -157,17 +157,20 @@ def test_overlapping_modules_names_only_other_workers_that_overlap() -> None:
     assert _overlapping_modules(own, others) == ["tests/test_b.py (worker gw1)", "tests/test_d.py (worker gw3)"]
 
 
+#: Each module carries the job marker ``base``: the conftest's job-marker check (``tests/job_markers.py``)
+#: refuses a collection with an unmarked test before the guard could run.
 _SELFTEST_MODULES = {
-    "test_clean.py": "def test_nothing():\n    pass\n",
+    "test_clean.py": "import pytest\n\npytestmark = pytest.mark.base\n\ndef test_nothing():\n    pass\n",
     "test_dirty.py": (
-        "from pathlib import Path\n\n"
+        "from pathlib import Path\n\nimport pytest\n\npytestmark = pytest.mark.base\n\n"
         "def test_first():\n    pass\n\n"
         "def test_second():\n"
         "    (Path(__file__).resolve().parent.parent / 'stray_selftest.txt').write_text('x')\n"
     ),
     "test_result_dir.py": (
-        "from pathlib import Path\n"
+        "from pathlib import Path\n\nimport pytest\n\n"
         "from hisim.result_path_provider import ResultPathProviderSingleton\n\n"
+        "pytestmark = pytest.mark.base\n\n"
         "def test_writes_into_result_dir():\n"
         "    results = Path(__file__).resolve().parent.parent / 'selftest_results'\n"
         "    ResultPathProviderSingleton().base_path = results\n"
@@ -184,15 +187,16 @@ def test_guard_fails_the_dirty_module_only(tmp_path: Path) -> None:
     """The real guard, run on a throwaway repository: the dirty module fails by name, the others pass.
 
     The conftest is copied into a fresh git repository under ``tmp_path`` (its ``REPO_ROOT`` follows
-    ``__file__``), so the stray file never touches this checkout; ``tests/ci_split.py``, which the
-    conftest imports as ``tests.ci_split``, is copied beside it.
+    ``__file__``), so the stray file never touches this checkout; ``tests/ci_split.py`` and
+    ``tests/job_markers.py``, which the conftest imports from ``tests``, are copied beside it.
     """
     repo = tmp_path / "repo"
     (repo / "tests").mkdir(parents=True)
     shutil.copy(REPO_ROOT / "tests" / "conftest.py", repo / "tests" / "conftest.py")
     shutil.copy(REPO_ROOT / "tests" / "ci_split.py", repo / "tests" / "ci_split.py")
+    shutil.copy(REPO_ROOT / "tests" / "job_markers.py", repo / "tests" / "job_markers.py")
     (repo / "tests" / "__init__.py").write_text("")
-    (repo / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
+    (repo / "pytest.ini").write_text("[pytest]\ntestpaths = tests\nmarkers =\n    base: the selftest's job marker\n")
     for name, source in _SELFTEST_MODULES.items():
         (repo / "tests" / name).write_text(source)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)

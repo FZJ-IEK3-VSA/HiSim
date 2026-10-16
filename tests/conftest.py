@@ -29,6 +29,7 @@ import pytest
 from hisim.caching import CacheSettings
 from hisim.result_path_provider import ResultPathProviderSingleton
 from tests import ci_split
+from tests.job_markers import JobMarkerCheck
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 
@@ -325,8 +326,14 @@ def _record_result_dir(request: pytest.FixtureRequest) -> Iterator[None]:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Registers the hooks of the CI split (``tests/ci_split.py``): module groups under loadgroup, durations, plan."""
+    """Registers the hooks of the CI split and of the job-marker check.
+
+    The CI split (``tests/ci_split.py``) groups modules under loadgroup and writes durations and plan. The
+    job-marker check (``tests/job_markers.py``) fails the collection when a test carries no job marker of
+    ``system_docs/testing.md`` §2, or more than one.
+    """
     config.pluginmanager.register(ci_split.CiSplitPlugin(config), "hisim_ci_split")
+    config.pluginmanager.register(JobMarkerCheck(), JobMarkerCheck.PLUGIN_NAME)
 
 
 @pytest.hookimpl(trylast=True)

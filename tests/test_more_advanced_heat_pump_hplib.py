@@ -13,7 +13,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 
 # Heat pump configuration constants
 CO2_FOOTPRINT_COEFFICIENT: float = 165.84  # kg CO2 per kW thermal power over lifetime
@@ -35,6 +35,58 @@ def _eight_kilowatt_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     return config
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("thermal_power_in_watt", [0.0, 0.5, -8000.0, float("nan"), float("inf")])
+def test_a_thermal_power_that_is_not_finite_or_below_1_watt_is_refused_when_the_heat_pump_is_built(
+    thermal_power_in_watt: float,
+) -> None:
+    """Catches a stated power that builds: hplib would scale its fit to it and the buffer would follow it.
+
+    A power stated in the configuration replaces the heating-load law, so the heat pump checks it when it is built.
+    Without the check, 0 and -8000 W give the buffer beside the machine a volume of 0 l or a negative volume, NaN
+    gives it NaN, and 0.5 W reaches hplib's fit as 0 W, because hplib takes the power in whole watts.
+    """
+    config = _eight_kilowatt_heat_pump_config()
+    config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    with pytest.raises(
+        ValueError,
+        match=rf"MoreAdvancedHeatPumpHPLib: the heat pump's set_thermal_output_power_in_watt must be a finite power "
+        rf"of at least 1 W, got {thermal_power_in_watt!r} W",
+    ):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("thermal_power_in_watt", [0.0, 0.5, -8000.0, float("nan")])
+def test_a_thermal_power_that_is_not_finite_or_below_1_watt_is_refused_before_the_buffer_is_sized_from_it(
+    thermal_power_in_watt: float,
+) -> None:
+    """Catches a sizing fact that hands an impossible power to the buffer vessel beside the machine.
+
+    The buffer's volume law reads the heat pump's power during sizing, before any component is built, so a
+    sizing-only path such as ``hisim energy-system facts`` would otherwise report a volume of 0 l or less.
+    """
+    config = _eight_kilowatt_heat_pump_config()
+    config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    with pytest.raises(ValueError, match="must be a finite power of at least 1 W"):
+        MoreAdvancedHeatPumpHPLibConfig.sizing_facts(config, SizingContext())
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("thermal_power_in_watt", "set_power_in_watt"), [(8000.0, 8000), (1.0, 1)])
+def test_a_heat_pump_is_built_at_its_stated_power(thermal_power_in_watt: float, set_power_in_watt: int) -> None:
+    """Catches a guard that refuses a valid power or changes it: the power is passed to hplib's fit as stated.
+
+    1 W is the smallest power accepted, so a bound moved above it fails here.
+    """
+    config = _eight_kilowatt_heat_pump_config()
+    config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    heat_pump = MoreAdvancedHeatPumpHPLib(
+        config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+    )
+    assert heat_pump.p_th_set == set_power_in_watt
 
 
 @pytest.mark.base

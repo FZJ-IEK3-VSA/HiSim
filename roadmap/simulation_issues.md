@@ -1,6 +1,7 @@
 # HiSim simulation — suggested fixes and improvements
 
 Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+The three items without a bead id are fixed (checked 2026-10-14): 1, the door (a TABULA row without a door area gets an estimated door, `hisim/components/building/information.py`); 3, the thermal bridging default (no longer written back into the TABULA data); 16, the module config (`read_in_configs` raises for a config that was given but cannot be read).
 
 Collected 2026-07-05 while building the RenoVisor translator (`hisim/renovisor/`). Each item is
 self-contained so it can be reviewed, implemented and tested one by one. Items 1–3 are bugs

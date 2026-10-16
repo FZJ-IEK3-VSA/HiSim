@@ -4,6 +4,8 @@
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems — it models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, hydrogen systems, and more. A simulation is a set of components wired together, iterated over every time step until each step's outputs converge, followed by post-processing (KPIs, plots, CSV/JSON/PDF reports). The top-level layout is: `hisim/` (the package — simulator core, the `Component` model, `components/`, `postprocessing/`, input data under `hisim/inputs/`); `system_setups/` (one `setup_function(sim, sim_params)` per `.py` file — the imperative input — plus the shared `.simulation.json` parameter files); `energy_systems/` (the declarative input: `*.energy_system.yaml`, one recorded twin per setup, plus `*.simulation.yaml`); `tests/` (pytest suite, organized by marker); and `hisim/hisim_main.py` (the CLI entrypoint that runs either).
 
+Where each document belongs -- the root, the binding guidelines in `system_docs/`, the specs and plans in `roadmap/` -- is `system_docs/documentation_map.md`.
+
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
 - No test should leave any calculation artefact in any other directory
@@ -18,20 +20,24 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   suffixes (`_w`, `_c`) consistently keeps them, for example `hisim/hydronics.py`, whose module docstring lists
   its suffixes; short suffixes are not introduced elsewhere. A dimensionless quantity says so in its name
   (`part_load_ratio`, `share_of_roof`).
-  Exception: a KPI's name (`KpiEntry.name`, e.g. "Unmet DHW heat demand") is a display label shown next to its
-  mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor, the webtool and
-  the golden references, so they are not renamed for this rule.
+  Exception: a KPI's name (`KpiEntry.name`, e.g. "Grid injection of electricity", unit kWh) is a display label
+  shown next to its mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor,
+  the webtool and the golden references, so they are not renamed for this rule; renaming them would break the
+  goldens and the RenoVisor side (owner decision, Noah, 2026-10-16). A KPI that is renamed for another reason
+  states that reason in its own bead, as hisim-h2ib.7 does for "Unmet DHW heat demand".
 - Every component follows `system_docs/component_design_principles.md`: it is one of the component kinds (data
   source, physics, L1 controller, L2 controller, meter), inherits that kind's base class from `hisim/component.py`
   (`DataSourceComponent`, `PhysicsComponent`, `L1ControllerComponent`, `L2ControllerComponent`, `MeterComponent`)
   and keeps to that kind's role, and other components see it only as a black box through its port quantities.
   Check a new component and every review against it.
+- Every component models physics as `system_docs/modelling_guide.md` says: sender and receiver book the same energy at a port and every energy-moving component closes its balance, signs are stated, 60 s is the reference for every coarse-step model, physics clamps only at a real device limit and fails otherwise, every default parameter cites its source.
 - Code is designed and written as `system_docs/coding_style.md` says: business logic in pure, unit-tested functions;
   Clean Code, SOLID, YAGNI and DRY; the code rules (small units, typed data, explicit state, fail fast, ratchets
   in CI) and design patterns; controllers as testable state machines; class-scoped constants; a purpose sentence
   in every docstring; no `print` outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and
   PR descriptions in its form.
-- Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
+- A change that moves simulation results, or renames an output, KPI, config field or the energy-system format, is made as `system_docs/results_and_interfaces.md` says: KPI deltas in the PR description, goldens blessed only through `golden-update.yml`, refactoring commits free of result changes, a heads-up to the RenoVisor side for a renamed public name.
+- Tests are written as `system_docs/testing.md` says: one job marker per test, the runtime budget of `base`, a regression test that fails without its fix, explicit configuration over monkeypatching.
 
 ## Pull requests and merging
 
@@ -45,6 +51,12 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 - Delete the merged PR's head branch from the merge screen's own button, immediately. GitHub then retargets the child PR to `main`. Deleting the branch later, from the branches page, closes the child PR instead — it cannot be reopened, and a new PR has to be created.
 - Review fixes land as new commits on the PR branch, never by amending a pushed commit. A fix commit on a parent is what makes the child's rebase necessary.
 - Test only what changed: the targeted pytest files, and the CI lint invocations on the changed files. Never the full suite in a fix loop.
+
+## Specs and decisions
+
+- Work that spans several pull requests, changes a model, or changes a public interface in a way one pull request cannot finish starts with a spec in `roadmap/`, written from `roadmap/templates/spec_template.md` and agreed with the owner before the first pull request.
+- A spec holds the design, the numbered and dated owner decisions D1..Dn and a bead table; every todo is a bead, never a list in the spec.
+- A decision is amended under its own number with a dated `*Amendment (owner, YYYY-MM-DD):*` line, never rewritten, in the pull request that acts on it, together with the spec's status line and bead table.
 
 ## Test commands
 
@@ -62,7 +74,8 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Test markers
 
-Markers are defined in `pytest.ini`:
+Markers are defined in `pytest.ini`. `system_docs/testing.md` says which marker a test carries, the runtime budget of `base`
+and what a test must prove.
 
 - `base` — unit-scale tests that must pass in any case: no full simulation of a system setup, a few seconds at most. **Run these.**
 - `extendedbase`, `extendedbase2` — the full-simulation tests; CI splits each over several jobs (`tests/ci_split.py`), `extendedbase2` serially for memory. Slow. Avoid.

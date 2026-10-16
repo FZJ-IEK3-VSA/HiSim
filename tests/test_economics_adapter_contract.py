@@ -670,7 +670,7 @@ def test_every_component_class_declares_cost_relevance(scan):
     )
     assert not undeclared, (
         f"{len(undeclared)} component class(es) declare no cost_relevance of their own, so a "
-        "lifecycle-cost run containing any of them aborts (cost_spec.md §9.2). Add exactly one of "
+        "lifecycle-cost run containing any of them aborts (roadmap/cost_spec.md §9.2). Add exactly one of "
         "`cost_relevance = CostRelevance.PRICED` (a device the cost model should price — including "
         "hardware that has no database row yet, which must fail loudly rather than be priced at "
         "zero), `CostRelevance.METER` (a component sitting at a carrier boundary) or "

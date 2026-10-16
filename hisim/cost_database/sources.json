@@ -560,12 +560,12 @@
     },
     {
       "id": "src_expert_engine_defaults",
-      "citation": "HiSim cost engine default table (cost_spec.md, engine defaults)",
+      "citation": "HiSim cost engine default table (roadmap/cost_spec.md, engine defaults)",
       "url": null,
       "publication_year": 2026,
       "retrieved": "2026-07-07",
       "kind": "EXPERT_ESTIMATE",
-      "notes": "Escalation defaults and CO2 price corridor estimates pending team review (cost_module_issues.md Q2)."
+      "notes": "Escalation defaults and CO2 price corridor estimates pending team review (roadmap/cost_module_issues.md Q2)."
     },
     {
       "id": "src_nehs_ets2",
@@ -574,7 +574,7 @@
       "publication_year": 2024,
       "retrieved": "2026-07-07",
       "kind": "STATUTE",
-      "notes": "2024-2026 statutory; 2027+ EXPERT_ESTIMATE corridor, see cost_module_issues.md Q2."
+      "notes": "2024-2026 statutory; 2027+ EXPERT_ESTIMATE corridor, see roadmap/cost_module_issues.md Q2."
     },
     {
       "id": "src_bgb_559",
@@ -583,7 +583,7 @@
       "publication_year": 2024,
       "retrieved": "2026-07-07",
       "kind": "STATUTE",
-      "notes": "Levy rates and caps as of 2024; legal review pending (cost_module_issues.md #10)."
+      "notes": "Levy rates and caps as of 2024; legal review pending (roadmap/cost_module_issues.md #10)."
     },
     {
       "id": "src_co2kostaufg",

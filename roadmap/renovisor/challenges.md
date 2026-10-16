@@ -394,7 +394,7 @@ Facts the code surfaced that were not visible from the documents. Each names who
 
 **Owner's clarification.** `openapi.yaml` v0.3 is an older draft written before the energy-system
 redesign, against the config object the redesign deletes. It is to be revised and rewritten, not
-aligned in place. The v1 translator's implicit contract (`scripts/hisim_spec.md`) had the right
+aligned in place. The v1 translator's implicit contract (`roadmap/renovisor/hisim_input_spec_v1.md`) had the right
 philosophy — *the user's raw answers are the input; HiSim derives U-values, materials, climate and
 load profiles* — and the UI has since added fields for requirements that appeared, which v0.3
 reflects. Grants, schedule and financing **are** HiSim's: grants go to the subsidy engine,

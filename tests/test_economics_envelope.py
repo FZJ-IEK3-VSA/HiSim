@@ -1,4 +1,4 @@
-"""Tests for building-envelope measures in the lifecycle cost engine (cost_spec.md Q7).
+"""Tests for building-envelope measures in the lifecycle cost engine (roadmap/cost_spec.md Q7).
 
 **Surface.** Everything that makes insulation, windows, doors, air sealing and ventilation
 ordinary cost subjects: the thirteen envelope `ComponentType`s in the device data, the three

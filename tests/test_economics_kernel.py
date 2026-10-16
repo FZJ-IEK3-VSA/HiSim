@@ -1,4 +1,4 @@
-"""Unit tests for the shared kernel of the lifecycle cost engine (cost_spec.md §3).
+"""Unit tests for the shared kernel of the lifecycle cost engine (roadmap/cost_spec.md §3).
 
 The kernel is the part of ``hisim.economics`` that has no cost data and no evaluator behind
 it: uncertainty bands, the cash-flow timeline, the provenance ledger and the fact types the

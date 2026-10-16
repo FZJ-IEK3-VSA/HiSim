@@ -1,5 +1,5 @@
 {
-  "comment": "User-facing eligibility questionnaire catalog (cost_spec.md §5.7). Localized question texts are legally sensitive and need review (spec Q31); languages shipped in v1: de + en.",
+  "comment": "User-facing eligibility questionnaire catalog (roadmap/cost_spec.md §5.7). Localized question texts are legally sensitive and need review (spec Q31); languages shipped in v1: de + en.",
   "questions": [
     {
       "field": "applicant.actor",

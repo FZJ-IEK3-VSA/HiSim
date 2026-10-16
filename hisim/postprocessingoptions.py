@@ -47,7 +47,7 @@ class PostProcessingOptions(IntEnum):
     EXPORT_TO_PKL = 24
     EXPORT_MONTHLY_RESULTS = 26
     EXPORT_RESULTS_IN_ONE_FILE = 27
-    # Runs the parallel lifecycle cost engine (cost_spec.md). Opt-in and side-effect free:
+    # Runs the parallel lifecycle cost engine (roadmap/cost_spec.md). Opt-in and side-effect free:
     # only writes new files; all legacy outputs stay identical.
     COMPUTE_LIFECYCLE_COSTS = 28
     # Additionally writes the human-readable lifecycle reports: cost_summary.md,

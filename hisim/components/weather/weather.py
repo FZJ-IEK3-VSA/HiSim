@@ -116,8 +116,8 @@ class Weather(DataSourceComponent):
     # period, one value per timestep -- into the per-simulation repository
     # (``self.simulation_repository``). They live here, on the writer, so that the readers -- the PV
     # system and the solar gains of the Building -- import the name instead of repeating a string
-    # literal that could drift away from the writer's. For a run that does not start on 1 January the
-    # values are still January's; see run_window_of.
+    # literal that could drift away from the writer's. Each series starts at the run's start, also for
+    # a run that does not start on 1 January; see run_window_of.
     RUN_WINDOW_TEMPERATURE_OUTSIDE: str = "weather_run_window_temperature_outside_in_celsius"
     RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE: str = (
         "weather_run_window_diffuse_horizontal_irradiance_in_watt_per_square_meter"

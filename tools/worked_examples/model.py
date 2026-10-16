@@ -36,7 +36,7 @@ class MetadataKeys:
     three. Keeping the key names in one place is what lets a reader of any of those modules find
     the authoritative list.
 
-    `spec_section` names a subsection of **`cost_spec.md`**, the domain specification — not of
+    `spec_section` names a subsection of **`roadmap/cost_spec.md`**, the domain specification — not of
     `roadmap/cost-spec-v2.md`, whose §3 describes this library itself. The two documents both have
     a §3.2 and a §3.6 with different meanings, so the distinction matters when a reviewer follows
     the field to find the rule an example pins down.

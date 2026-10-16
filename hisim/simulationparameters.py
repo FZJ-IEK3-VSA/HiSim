@@ -161,10 +161,10 @@ class SimulationParameters:
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
-        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # Parameters of the parallel lifecycle cost engine (roadmap/cost_spec.md §3.2). Deliberately a
         # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
         # byte-identical during the parallel phase; set via set_economic_parameters() or the
-        # RenoVisor request (see cost_module_issues.md #5).
+        # RenoVisor request (see roadmap/cost_module_issues.md #5).
         self.economic_parameters: Optional[Any] = None
         # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
         # envelope measures, tenancy data and scenario sets a system setup declares for the
@@ -224,9 +224,9 @@ class SimulationParameters:
 
         Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
         say -- is not decided here, but by the component that owns the source. The contract fixes the
-        window's shape, not that its dates are served: until the profiles follow the start date
-        (hisim-9g2.4 and the later steps of the mid-year epic), a window that starts after 1 January
-        is read from 1 January, as :meth:`one_week_july` explains.
+        window's shape, not that its dates are served: the weather and its readers deliver the window
+        (hisim-9g2.4), while the other profiles read a window that starts after 1 January from
+        1 January until the later steps of the mid-year epic, as :meth:`one_week_july` explains.
 
         Args:
             start_date: The first moment of the run.
@@ -372,7 +372,7 @@ class SimulationParameters:
         self.lifecycle_costs_required = True
 
     def set_economic_parameters(self, economic_parameters: Any) -> None:
-        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).
+        """Attaches EconomicParameters for the lifecycle cost engine (roadmap/cost_spec.md §3.2).
 
         The economy-wide assumptions of a run — country, price basis year, horizon, discount and
         escalation rates, subsidy catalog path — travel with the simulation parameters because
@@ -390,7 +390,7 @@ class SimulationParameters:
         self.economic_parameters = economic_parameters
 
     def set_economic_context(self, economic_context: Any) -> None:
-        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6).
+        """Attaches an EconomicContext for the lifecycle cost engine (roadmap/cost_spec.md §4-§6).
 
         The counterpart to the parameters above: not the economy, but *this* decision situation —
         what already stands in the building, who applies for which subsidy, which non-simulated
@@ -542,9 +542,10 @@ class SimulationParameters:
         the weather's irradiance on a clock of its own. The mid-year-start epic
         (``roadmap/midyear_start_epic.md``) fixes them one pull request at a time.
 
-        The set is kept, and only the parity rig and the mid-year oracle (``scripts/midyear_oracle.py``)
-        use it: the rig has fenced its July window (``scripts/p3_parity_matrix.py``) until the epic is
-        done. Until then it belongs in nothing that reports physics.
+        The set is kept for the parity rig (``scripts/p3_parity_runs.py``), which has fenced its July
+        window (``scripts/p3_parity_matrix.py``) until the epic is done, and for the tests of the window
+        itself; the mid-year oracle (``scripts/midyear_oracle.py``) builds its windows on its own. Until
+        the epic is done the set belongs in nothing that reports physics.
 
         Args:
             year: Calendar year the week is taken from.

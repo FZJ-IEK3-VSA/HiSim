@@ -14,6 +14,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —
   proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
 
+- **Documents go where `system_docs/documentation_map.md` says**: the root's only documents are README, AGENTS,
+  CLAUDE, CONTRIBUTING and HISTORY, beside what packaging, licensing and the tools need; binding guidelines are in
+  `system_docs/`, specs and plans in `roadmap/`.
+
 ## Project Overview
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems. It models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, and more. Each simulation consists of components wired together, iterated over all time steps until convergence per step.
@@ -93,7 +97,9 @@ them, so the layering is visible at every call site.
 ### Component model (`hisim/component.py`)
 The rules every component follows -- the component kinds (data source, physics, L1 and L2 controller, meter),
 black boxes that talk only through port quantities, who decides what -- are in
-`system_docs/component_design_principles.md`.
+`system_docs/component_design_principles.md`. How a component models physics -- the same energy at both ends of
+a port, stated signs, 60 s as the reference, clamp or fail at a limit, a source for every parameter -- is
+`system_docs/modelling_guide.md`.
 
 Every device is a `Component` subclass, through the one kind base class it inherits (`PhysicsComponent`, `L1ControllerComponent`, ...; see "Adding a new component"). Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`

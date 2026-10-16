@@ -249,7 +249,7 @@ class Battery(PhysicsComponent):
     (1) Energy Management System
     """
 
-    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 
     #: The seconds in an hour, which convert between energy in Wh and power over a step in s.
@@ -534,7 +534,7 @@ class Battery(PhysicsComponent):
         """Returns investment cost, CO2 emissions and lifetime."""
 
         # Note for the parity harness: the legacy computation below scales the kWh capacity by
-        # 1e-3 (latent unit bug, cost_module_issues.md #20a); get_cost_facts() declares the
+        # 1e-3 (latent unit bug, roadmap/cost_module_issues.md #20a); get_cost_facts() declares the
         # physically correct size, so the parity report shows an explained battery delta.
         component_type = ComponentType.BATTERY
         kpi_tag = KpiTagEnumClass.BATTERY
@@ -572,7 +572,7 @@ class Battery(PhysicsComponent):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the battery as one priced subject: a `BATTERY` entry of the cost database, sized
         by its **capacity in kWh** — the unit batteries are quoted in (EUR/kWh), and the

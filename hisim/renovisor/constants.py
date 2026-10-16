@@ -327,7 +327,7 @@ class AnywayShareByPlacement:
     Every share here is an estimate and none of them is measured.
     """
 
-    # Source: cost_module_issues.md #12, which records that the anyway shares are rough and asks
+    # Source: roadmap/cost_module_issues.md #12, which records that the anyway shares are rough and asks
     # for a reviewed table. These three are the shares the RenoVisor translator writes; they are
     # estimates of the like-for-like share of a first-time envelope improvement, not measurements
     # and not taken from any price list. TO BE REVIEWED.

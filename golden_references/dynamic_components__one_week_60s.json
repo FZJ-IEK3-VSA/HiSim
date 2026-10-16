@@ -21,7 +21,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 0.2911941817200143
+    "value": 0.04363549660779589
   },
   "BUI1.CHP.Electrical energy produced (CHP1)": {
     "building": "BUI1",
@@ -449,7 +449,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 62.934595078363685
+    "value": 63.20072145527057
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -465,7 +465,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 62.934595078363685
+    "value": 63.20072145527057
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -513,7 +513,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 17.59776518864174
+    "value": 17.672179419566397
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -521,7 +521,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 58.791194181720016
+    "value": 58.5436354966078
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",

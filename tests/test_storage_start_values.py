@@ -19,6 +19,9 @@ import pytest
 from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import example_storage
+from hisim.components import generic_boiler
+from hisim.components import generic_district_heating
+from hisim.components import generic_electric_heating
 from hisim.components import generic_electrolyzer_and_h2_storage
 from hisim.components import more_advanced_heat_pump_hplib
 from hisim.components import simple_water_storage
@@ -32,11 +35,59 @@ class StartValues:
 
     #: A PV peak power to size the house battery against, in W; any positive value builds a battery.
     PV_PEAK_POWER_IN_WATT = 10_000.0
+    #: The largest and the smallest heat output to size the boiler's controller against, in W; any positive pair
+    #: builds a controller.
+    MAXIMAL_THERMAL_POWER_IN_WATT = 10_000.0
+    MINIMAL_THERMAL_POWER_IN_WATT = 1_000.0
 
     @staticmethod
     def parameters() -> SimulationParameters:
         """Return one day at a 60 s resolution, enough to build every storage."""
         return SimulationParameters.one_day_only(2021, 60)
+
+    @staticmethod
+    def warm_water_aims_in_celsius() -> dict[str, float]:
+        """Return the warm-water aim of each controller that charges the hot-water tank to 60 °C, in °C, by name.
+
+        The aim is where each controller stops charging the tank: the heat pump's is a field of its hot-water
+        configuration, the boiler's, the district heating's and the electric heating's are set when the controller
+        is built, so those three are built here from their presets. For example, the boiler's controller aims at
+        60 °C.
+
+        Returns:
+            The aim of the boiler's, the district heating's, the electric heating's and the heat pump's controller,
+            in °C, keyed by the controller's name.
+        """
+        parameters = StartValues.parameters()
+        boiler_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating("BoilerController").resolve(
+            SizingContext(
+                maximal_thermal_power_in_watt=StartValues.MAXIMAL_THERMAL_POWER_IN_WATT,
+                minimal_thermal_power_in_watt=StartValues.MINIMAL_THERMAL_POWER_IN_WATT,
+            )
+        )
+        boiler_controller = generic_boiler.GenericBoilerController(
+            my_simulation_parameters=parameters, config=boiler_config
+        )
+        district_heating_config = generic_district_heating.DistrictHeatingControllerConfig.preset_standard(
+            "DistrictHeatingController"
+        )
+        district_heating_controller = generic_district_heating.DistrictHeatingController(
+            my_simulation_parameters=parameters, config=district_heating_config
+        )
+        electric_heating_config = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard(
+            "ElectricHeatingController"
+        )
+        electric_heating_controller = generic_electric_heating.ElectricHeatingController(
+            my_simulation_parameters=parameters, config=electric_heating_config
+        )
+        return {
+            "boiler": boiler_controller.warm_water_temperature_aim_in_celsius,
+            "district heating": district_heating_controller.warm_water_temperature_aim_in_celsius,
+            "electric heating": electric_heating_controller.warm_water_temperature_aim_in_celsius,
+            "heat pump": (
+                more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.t_max_dhw_storage_in_celsius
+            ),
+        }
 
 
 @pytest.mark.base
@@ -107,17 +158,24 @@ def test_a_hydrogen_tank_whose_floor_lies_above_its_capacity_is_refused() -> Non
 
 @pytest.mark.base
 def test_the_hot_water_tank_starts_half_way_between_the_tap_temperature_and_the_warm_water_aim() -> None:
-    """The hot-water tank starts at 50 °C: half way from the 40 °C tap temperature to the 60 °C warm-water aim."""
+    """The hot-water tank starts at 50 °C: half way from the 40 °C tap temperature to the 60 °C warm-water aim.
+
+    The aim is read from each of the four controllers the tank's start comment names, so a controller whose aim moves
+    away from 60 °C fails this test instead of leaving the comment and the midpoint silently wrong.
+    """
     tank_class = simple_water_storage.SimpleDHWStorage
     tap_temperature_in_celsius = (
         HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.temperature_difference_hot
     )
-    # The warm-water aim, read where it is configured: the heat pump's hot-water controller.
-    warm_water_aim_in_celsius = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.t_max_dhw_storage_in_celsius
-    )
+    warm_water_aims_in_celsius = StartValues.warm_water_aims_in_celsius()
     assert tap_temperature_in_celsius == 40
-    assert warm_water_aim_in_celsius == 60.0
+    assert warm_water_aims_in_celsius == {
+        "boiler": 60.0,
+        "district heating": 60.0,
+        "electric heating": 60.0,
+        "heat pump": 60.0,
+    }
+    warm_water_aim_in_celsius = warm_water_aims_in_celsius["heat pump"]
     assert tank_class.INITIAL_TEMPERATURE_IN_CELSIUS == 50.0
     assert tank_class.INITIAL_TEMPERATURE_IN_CELSIUS == pytest.approx(
         (tap_temperature_in_celsius + warm_water_aim_in_celsius) / 2, abs=1e-12

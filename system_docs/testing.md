@@ -25,9 +25,10 @@ touches.
 ## 2. Markers: which one a test carries
 
 Every marker is declared in `pytest.ini`, and `--strict-markers` refuses an undeclared one. Each job of
-`.github/workflows/tests.yml`, the CI of every pull request, runs one marker, so the marker decides where and how
-often a test runs. `.gitlab-ci.yml` runs the same markers on demand only, one job per marker and none split, and
-has no `renovisor_probes` job: its `pytest-others` takes those tests.
+`.github/workflows/tests.yml`, the CI of every pull request, runs one job marker, except the catch-all
+`pytest (others)`, which runs every test that carries none of the other jobs' markers. So the marker decides where
+and how often a test runs. `.gitlab-ci.yml` runs the same markers on demand only, one job per marker and none
+split, and has no `renovisor_probes` job: its `pytest-others` takes those tests.
 
 | Marker | What belongs there | CI job |
 |---|---|---|
@@ -50,11 +51,18 @@ module's hand-computed examples, inside `base`) and `xdist_group` (pytest-xdist'
 Rules:
 
 - **A test carries exactly one job marker of the table.** A test with none runs only in the catch-all
-  `pytest (others)` job and is missed by `pytest -m base`; a test with two runs in two jobs. A hook enforces it:
+  `pytest (others)` job and is missed by `pytest -m base`; a test with two can run in two jobs. A hook enforces it:
   `tests/job_markers.py`, registered by `tests/conftest.py`, fails the collection of every run, `-m base`
   included, naming each test that carries none or more than one, after `tests/assemblies/conftest.py` has added
-  its marker. Its list `JobMarkers.NAMES` is this table; `tests/test_job_markers.py` keeps the two equal, so a
-  new job marker goes into the table, `pytest.ini` and that list together.
+  its marker. Its list `JobMarkers.NAMES` is this table; `tests/test_job_markers.py` keeps the two equal, keeps
+  every marker of `pytest.ini` a job marker or one of the two group markers (`JobMarkers.GROUP_NAMES`), and keeps
+  the `marker:` of each `tests.yml` job, and the markers `pytest (others)` excludes, in step with the table's CI
+  job column. So a new job marker goes into the table, `pytest.ini`, that list and `tests.yml` together.
+  Under pytest-xdist (`-n`, which most `tests.yml` jobs use) a collection guard's refusal loses its message: the
+  worker that raised it dies, and the run ends with `INTERNALERROR> RuntimeError: Unexpectedly no active workers
+  available` (exit 3) without naming a test. This holds for this hook and for the assemblies and probe guards
+  (`AssemblyTier`, `ProbeTier`). That error during collection means a guard refused; run the same selection
+  without `-n` to see which tests and why (owner decision 2026-10-16, hisim-x7dq).
 - **`system_setups` is only for the Python setup files.** A test that runs an energy-system file, a twin or a rig
   of a few components is `extendedbase` or `extendedbase2`. Some older modules carry `system_setups` for other
   runs (for example `tests/test_water_storage_temperature_check.py`, which runs an energy-system file, and

@@ -1,20 +1,28 @@
 """The collection fails when a test carries no job marker of the testing guide's table, or more than one.
 
 ``tests/job_markers.py`` checks the rule of ``system_docs/testing.md`` §2 for every collected test, and
-``tests/conftest.py`` registers the check. These tests drive the check with stand-in tests -- a node id and
-a list of markers, which is all the check reads of a ``pytest.Item`` -- and a stand-in session, so they
-need no second pytest run. They also pin that the conftest registers the check, and that its list of job
-markers is the guide's table and is declared in ``pytest.ini``.
+``tests/conftest.py`` registers the check. Most tests drive the check with stand-in tests -- a node id and
+a list of markers, which is all the check reads of a ``pytest.Item`` -- and a stand-in session. One runs a
+real pytest on a throwaway repository, so pytest's own deselection and hook order are covered too. The
+rest pin that the conftest registers the check, that its list of job markers is the guide's table, that
+``pytest.ini`` declares no marker that is neither a job nor a group marker, and that the jobs of
+``.github/workflows/tests.yml`` run the markers the table gives them.
 """
 
 from __future__ import annotations
 
+import configparser
+import os
 import re
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, List
+from typing import ClassVar, Dict, Iterator, List, Set, Tuple
 
 import pytest
+import yaml
 
 from tests.job_markers import JobMarkerCheck, JobMarkers
 
@@ -41,24 +49,68 @@ class StandInSession:
 
 
 class Guide:
-    """Reads the job markers the table of ``system_docs/testing.md`` §2 lists."""
+    """Reads the rows of the marker table of ``system_docs/testing.md`` §2: their markers and their CI job."""
 
     #: The testing guide.
-    PATH: Path = Path(__file__).resolve().parent.parent / "system_docs" / "testing.md"
+    PATH: ClassVar[Path] = Path(__file__).resolve().parent.parent / "system_docs" / "testing.md"
     #: The header line of the marker table.
-    TABLE_HEADER: str = "| Marker | What belongs there | CI job |"
+    TABLE_HEADER: ClassVar[str] = "| Marker | What belongs there | CI job |"
+    #: How the CI job column of a row run by the catch-all job begins.
+    OTHERS_JOB: ClassVar[str] = "`pytest (others)`"
 
     @classmethod
-    def table_markers(cls) -> set:
-        """Return every backticked marker in the first column of the table's rows."""
+    def rows(cls) -> List[Tuple[Set[str], str]]:
+        """Return each row of the table as the backticked markers of its first column and its CI job column.
+
+        Example: ``[({"base"}, "`pytest (base)`, 4 workers"), ...]``.
+        """
         lines = cls.PATH.read_text(encoding="utf-8").splitlines()
         start = lines.index(cls.TABLE_HEADER) + 2
-        names = set()
+        rows: List[Tuple[Set[str], str]] = []
         for line in lines[start:]:
             if not line.startswith("|"):
                 break
-            names.update(re.findall(r"`([a-z_0-9]+)`", line.split("|")[1]))
-        return names
+            cells = line.split("|")
+            rows.append((set(re.findall(r"`([a-z_0-9]+)`", cells[1])), cells[3].strip()))
+        return rows
+
+    @classmethod
+    def table_markers(cls) -> Set[str]:
+        """Return every marker of the table, ``{"base", "extendedbase", ...}``."""
+        return {name for markers, _ in cls.rows() for name in markers}
+
+    @classmethod
+    def markers_of_others(cls) -> Set[str]:
+        """Return the markers whose CI job is the catch-all ``pytest (others)``, ``{"mpc", "hpcharness", ...}``."""
+        return {name for markers, job in cls.rows() if job.startswith(cls.OTHERS_JOB) for name in markers}
+
+
+class Workflow:
+    """Reads the ``marker:`` of every job in the matrix of ``.github/workflows/tests.yml``."""
+
+    #: The workflow of the CI of every pull request.
+    PATH: ClassVar[Path] = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "tests.yml"
+    #: The ``name:`` of the catch-all job, whose marker is a ``not ... and not ...`` expression.
+    OTHERS: ClassVar[str] = "others"
+
+    @classmethod
+    def markers_by_job(cls) -> Dict[str, str]:
+        """Return the marker expression of each matrix entry by its name, ``{"base": "base", ...}``.
+
+        A split marker has several entries of one name, all with the same marker.
+        """
+        workflow = yaml.safe_load(cls.PATH.read_text(encoding="utf-8"))
+        return {entry["name"]: entry["marker"] for entry in workflow["jobs"]["pytest"]["strategy"]["matrix"]["include"]}
+
+    @classmethod
+    def dedicated_markers(cls) -> Set[str]:
+        """Return the marker of every job but the catch-all, ``{"base", "extendedbase", ...}``."""
+        return {marker for name, marker in cls.markers_by_job().items() if name != cls.OTHERS}
+
+    @classmethod
+    def excluded_by_others(cls) -> Set[str]:
+        """Return the markers the catch-all job's ``not X and not Y`` expression leaves out, ``{"base", ...}``."""
+        return set(re.findall(r"\bnot ([a-z_0-9]+)", cls.markers_by_job()[cls.OTHERS]))
 
 
 class TestTheRule:
@@ -126,14 +178,100 @@ class TestTheHook:
 
 
 class TestTheList:
-    """The check's job markers are the guide's table, and each is declared in pytest.ini."""
+    """The check's job markers are the guide's table, and pytest.ini declares them and the group markers only."""
 
     def test_the_list_is_the_guides_table(self) -> None:
-        """A marker added to the table but not here would be refused on every test that carries it, and vice versa."""
+        """A marker in the table but not here would refuse every test that carries it as unmarked; one here but
+        not in the table would be accepted by the check while the guide does not name it. Either fails here."""
         assert JobMarkers.NAMES == Guide.table_markers()
 
-    def test_every_job_marker_is_declared(self, request: pytest.FixtureRequest) -> None:
-        """A name here that pytest.ini does not declare would be refused by --strict-markers on its first use."""
-        declared = {line.split(":", 1)[0].split("(", 1)[0].strip() for line in request.config.getini("markers")}
+    def test_every_declared_marker_is_a_job_or_a_group_marker(self, request: pytest.FixtureRequest) -> None:
+        """A job marker pytest.ini does not declare would be refused by --strict-markers on its first use; a
+        declared marker in neither list would pass beside a job marker uncounted, as if it were a group marker.
 
-        assert JobMarkers.NAMES <= declared
+        pytest.ini is read itself: ``config.getini("markers")`` also holds the markers of pytest and its plugins.
+        """
+        ini = configparser.ConfigParser(interpolation=None)
+        assert request.config.inipath is not None, "this run reads no pytest.ini"
+        ini.read(request.config.inipath, encoding="utf-8")
+        lines = ini["pytest"]["markers"].strip().splitlines()
+        declared = {line.split(":", 1)[0].split("(", 1)[0].strip() for line in lines}
+
+        assert declared == JobMarkers.NAMES | JobMarkers.GROUP_NAMES
+
+
+class TestTheWorkflow:
+    """The jobs of tests.yml run the job markers the table gives them, and the catch-all job none of the others."""
+
+    def test_pytest_others_excludes_each_job_marker_that_the_table_gives_another_job(self) -> None:
+        """A job marker that 'pytest (others)' does not exclude runs its tests twice, in its own job and there;
+        excluding a marker the table gives to 'pytest (others)' would leave its tests out of CI."""
+        assert Workflow.excluded_by_others() == JobMarkers.NAMES - Guide.markers_of_others()
+
+    def test_every_other_job_runs_a_job_marker_that_pytest_others_excludes(self) -> None:
+        """A job running a marker outside the list would run tests the check counts as unmarked, and tests that
+        'pytest (others)' runs as well."""
+        assert Workflow.dedicated_markers() <= Workflow.excluded_by_others()
+
+
+class ThrowawayRepository:
+    """A repository under ``tmp_path`` with the check's module, a conftest registering only the check, and tests."""
+
+    #: The conftest: the check alone, without the HiSim conftest's fixtures and guards.
+    CONFTEST: ClassVar[str] = (
+        "from tests.job_markers import JobMarkerCheck\n\n\n"
+        "def pytest_configure(config):\n"
+        "    config.pluginmanager.register(JobMarkerCheck(), JobMarkerCheck.PLUGIN_NAME)\n"
+    )
+    #: The two job markers the tests use.
+    PYTEST_INI: ClassVar[str] = "[pytest]\ntestpaths = tests\nmarkers =\n    base: b\n    extendedbase: e\n"
+    #: One test with one job marker, one with none and one with two.
+    MODULE: ClassVar[str] = (
+        "import pytest\n\n\n"
+        "@pytest.mark.base\ndef test_kept():\n    pass\n\n\n"
+        "def test_unmarked():\n    pass\n\n\n"
+        "@pytest.mark.base\n@pytest.mark.extendedbase\ndef test_two():\n    pass\n"
+    )
+
+    @classmethod
+    def collect(cls, root: Path, *arguments: str) -> subprocess.CompletedProcess:
+        """Build the repository under ``root`` and run ``pytest --collect-only`` with ``arguments`` there.
+
+        Args:
+            root: An empty directory, ``tmp_path``.
+            arguments: Further pytest arguments, for example ``-m base``.
+
+        Returns:
+            The finished pytest process, its output captured as text.
+        """
+        (root / "tests").mkdir()
+        shutil.copy(Path(__file__).resolve().parent / "job_markers.py", root / "tests" / "job_markers.py")
+        (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
+        (root / "tests" / "conftest.py").write_text(cls.CONFTEST, encoding="utf-8")
+        (root / "tests" / "test_probe.py").write_text(cls.MODULE, encoding="utf-8")
+        (root / "pytest.ini").write_text(cls.PYTEST_INI, encoding="utf-8")
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
+        environment.pop("PYTHONPATH", None)
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", *arguments],
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+
+class TestARealRun:
+    """A real pytest run on a throwaway repository fails its collection, naming the offending tests."""
+
+    def test_pytest_minus_m_base_fails_on_the_tests_it_deselects(self, tmp_path: Path) -> None:
+        """The stand-in tests above call the hooks by hand; this covers pytest's own -m deselection reaching the
+        check, so a 'pytest -m base' that dropped an unmarked test without a word would fail here."""
+        completed = ThrowawayRepository.collect(tmp_path, "-m", "base")
+
+        output = completed.stdout + completed.stderr
+        assert completed.returncode == pytest.ExitCode.USAGE_ERROR, output
+        assert "tests/test_probe.py::test_unmarked carries no job marker" in output, output
+        assert "tests/test_probe.py::test_two carries 2 job markers: 'base', 'extendedbase'" in output, output
+        assert "test_kept" not in output, output

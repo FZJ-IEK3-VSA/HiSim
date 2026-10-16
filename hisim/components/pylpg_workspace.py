@@ -86,7 +86,7 @@ class LocalLpgCalculationFailedError(RuntimeError):
 class GeneratorRun:
     """What one run of the LoadProfileGenerator binary returned: its exit code and everything it printed.
 
-    Example: ``GeneratorRun(return_code=134, output="Unhandled exception. ... database is locked\n...")``
+    Example: ``GeneratorRun(return_code=134, output="Unhandled exception. ... database is locked ...")``
     for a run that died on a locked sqlite database before it wrote its log file.
 
     The output is kept because the binary does not always write its log file before it dies: when it

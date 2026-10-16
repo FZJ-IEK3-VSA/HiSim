@@ -294,13 +294,19 @@ def test_the_produced_profile_is_hourly_and_in_utc() -> None:
         ({"seconds_per_timestep": 30, "timesteps": 5760}, "whole multiple"),
         ({"seconds_per_timestep": 90, "timesteps": 1920}, "whole multiple"),
         ({"timesteps": 24}, "do not span"),
+        ({"lpg_time_resolution": "00:05:00", "seconds_per_timestep": 900, "timesteps": 192}, "one value per 60 s"),
     ],
-    ids=["sub-minute-timestep", "timestep-not-a-whole-number-of-minutes", "timesteps-not-covering-the-days"],
+    ids=[
+        "sub-minute-timestep",
+        "timestep-not-a-whole-number-of-minutes",
+        "timesteps-not-covering-the-days",
+        "profile-not-minutely",
+    ],
 )
 def test_a_run_the_producer_cannot_cut_a_profile_for_is_refused_when_the_inputs_are_built(
     overrides: Dict[str, Any], refusal: str
 ) -> None:
-    """A timestep shorter than or not a multiple of the profile's minute, or a span the timesteps miss, is refused.
+    """A timestep shorter than or not a multiple of the profile's minute, a missed span or a coarser profile is refused.
 
     Catches: such a run reaching the producer, where it fails as a pandas length error that names
     neither the car nor the cause.

@@ -82,6 +82,9 @@ class CarProfileInputs:
     #: :func:`produce_car_profile` does not read it.
     profile_content_hash: str
 
+    #: The one resolution the producer reads, in seconds: it stamps the profile minute by minute.
+    PROFILE_RESOLUTION_IN_SECONDS: ClassVar[int] = 60
+
     #: The resolution of the minute profile as the LoadProfileGenerator states it, ``"HH:MM:SS"``.
     lpg_time_resolution: str
 
@@ -143,18 +146,26 @@ class CarProfileInputs:
     def __post_init__(self) -> None:
         """Refuse a run the producer cannot cut a profile for, before the cache is looked up.
 
-        Two things have to hold. The run's timestep must be a whole multiple of the profile's
-        resolution, because a timestep aggregates whole minutes: at 30 s per timestep there is no
-        minute to aggregate. And the run's timesteps must cover exactly its span in days, because the
-        producer cuts the minute profile by the one and returns one row per the other. Example: 48
-        timesteps of 3600 s span 2 days; 48 timesteps over 3 days are refused. Without this check both
-        mistakes surface as a pandas length error inside the producer.
+        Three things have to hold. The profile must have one value per minute
+        (:attr:`PROFILE_RESOLUTION_IN_SECONDS`), because the producer stamps it minute by minute: a
+        profile of one value per 5 minutes would get a time column five times its length. The run's
+        timestep must be a whole multiple of the profile's resolution, because a timestep aggregates
+        whole minutes: at 30 s per timestep there is no minute to aggregate. And the run's timesteps
+        must cover exactly its span in days, because the producer cuts the minute profile by the one
+        and returns one row per the other. Example: 48 timesteps of 3600 s span 2 days; 48 timesteps
+        over 3 days are refused. Without this check each mistake surfaces as a pandas length error
+        inside the producer.
 
         Raises:
-            ValueError: if the timestep is not a whole multiple of the profile's resolution, or the
-                timesteps do not cover the span in days.
+            ValueError: if the profile is not one value per minute, the timestep is not a whole
+                multiple of the profile's resolution, or the timesteps do not cover the span in days.
         """
         profile_seconds = self.profile_resolution_in_seconds()
+        if profile_seconds != self.PROFILE_RESOLUTION_IN_SECONDS:
+            raise ValueError(
+                f"The car's driving profile is read one value per {self.PROFILE_RESOLUTION_IN_SECONDS} s, "
+                f"but the LoadProfileGenerator states a resolution of {self.lpg_time_resolution}."
+            )
         if self.seconds_per_timestep < profile_seconds or self.seconds_per_timestep % profile_seconds:
             raise ValueError(
                 f"The car's driving profile has one value per {profile_seconds} s, so the run's timestep "

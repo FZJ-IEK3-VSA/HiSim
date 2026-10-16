@@ -255,7 +255,9 @@ git push                # Push to remote
 - Findings between the RenoVisor packages (contract owner, HiSim, backend, frontend) are GitLab
   issues at https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues. Each issue carries
   one `to:<owner>` label per addressee and one `from:<owner>`, the owners being `contract-owner`,
-  `hisim`, `renovisorbackend` and `RenoSFHFrontend`, plus exactly one kind out of `bug`, `request`,
+  `hisim`, `renovisorbackend`, `RenoSFHFrontend`, `openstack-deploy` (the deployment host),
+  `packagegenerator-owner` (the package generator) and `github_runners` (the self-hosted GitHub Actions runners
+  of HiSim's CI), as the project's README lists them, plus exactly one kind out of `bug`, `request`,
   `question`, `decision`, `heads-up` (GitLab labels, not the `br` Types listed below). The
   convention itself is that project's README.md; `/home/renovisorissues/readme.md` on the agent
   host says how an agent reaches the project and its token. The shared `specs/todos.md` was retired

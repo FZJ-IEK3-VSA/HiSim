@@ -5,7 +5,8 @@ D1–D8 in §10); ready for staged implementation (§9.5). Replaces PR #864. Bea
 hisim-4g9.22, hisim-9uoo.12, hisim-9uoo.15, hisim-9uoo.17, hisim-6ehm; renovisorissues #76. **Stage D couples the
 space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler and heat-pump
 chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12). A chain without a buffer
-(district heating) keeps whole steps.**
+(district heating) keeps whole steps. Stage D closes with the buffer chain; the chain without a buffer is split out
+to bead hisim-pnw7 (owner, 2026-10-16; §12).**
 
 All `file:line` citations are against `origin/main` at fca81ba0. Code on the #864 branch (`fix/storage-energy`)
 is cited by name only.
@@ -705,6 +706,9 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   iteration histogram test. Done when: buffer and HDS close per step, district heating's bill equals pipe-water `ΔU`
   plus delivered heat (hisim-9uoo.12 closed), no step at `force_convergence` at 900 s in the boiler, heat-pump and
   district-heating twins, goldens re-blessed.
+  *Amended (owner, Noah, 2026-10-16):* stage D closes with the buffer chain. The half without a buffer -- the
+  pipe-water node, D25 (who pumps a circuit without a buffer) and district heating's bill (hisim-9uoo.12) -- is split
+  out to bead hisim-pnw7, with the parts of the done-when that concern it.
 - **E. Energy balance.** Scope: `HydronicPort` on every circuit in #870/#871's check. Done when: the balance
   report closes for every twin, stratification-path storages flagged, no result changes.
 - **F. Cooling.** Scope: cooling into a buffer, heat-pump cooling and brine-pump electricity to the meter, the
@@ -831,13 +835,14 @@ converges.
 (the boiler's space-heating limit) becomes the boiler's space-heating part load with the heating curve's supply
 temperature as its target. S4 (the distribution system's room clamp on the building's start-of-step indoor
 temperature) and S5 (zero flow with the valve shut) stand. S6 (comfort: give the rest of a hot-water part-load step to
-space heating), S8 (0.5 % forced steps at 900 s for the boiler twins), S9 (heat within 1 % at 900 s and 3600 s
-against 60 s, fuel and electricity reported) and S10 (D25 without a buffer) stand as recommended; S6 is the comfort
-remainder of the part-load mode. S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part
-load; the owner accepted that for stage D (hisim-fxix.26, filed with pull request 8). S9 is not met everywhere either
-(the second table below): the delivered heat is within 1 % at 900 s in all four twins, but not at 3600 s (gas
-−1.01 %, heat pump −1.99 %, heat pump + solar thermal −1.15 %), and the booked heat misses 1 % in the pellet twin
-(−1.31 %, −1.72 %), in the heat-pump twin (−1.08 %, −2.34 %) and with solar thermal at 3600 s (−1.09 %).
+space heating), S8 (0.5 % forced steps at 900 s for the boiler twins) and S10 (D25 without a buffer, to be built under
+hisim-pnw7) stand as recommended; S6 is the comfort remainder of the part-load mode. S9 (heat within 1 % at 900 s and
+3600 s against 60 s, fuel and electricity reported) is amended (owner, 2026-10-16; the decisions after the review,
+below). S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part load; the owner accepted
+that for stage D (hisim-fxix.26, filed with pull request 8). S9 as first written is not met everywhere either (the
+second table below): the delivered heat is within 1 % at 900 s in all four twins, but not at 3600 s (gas −1.01 %, heat
+pump −1.99 %, heat pump + solar thermal −1.15 %), and the booked heat misses 1 % in the pellet twin (−1.31 %,
+−1.72 %), in the heat-pump twin (−1.08 %, −2.34 %) and with solar thermal at 3600 s (−1.09 %).
 
 **As built and measured** (full year 2021, predefined occupancy; 60 s is the reference every coarse step is compared
 with). Item n is pull request n of stage D, stacked on #1000 and on this spec: 1 #1007, 2 #1008, 3 #1009, 4 #1010,
@@ -902,7 +907,8 @@ previous step's heat and temperatures (see Open).
 The threshold is `SimulationParameters.part_load_above_seconds`, 600 s by default. Whole steps into a start-of-step
 buffer are measured at 60 s, not at 600 s. A run whose step length is at or below its threshold runs whole steps, so a
 threshold raised above the default gives a coarse step item 5's behaviour, and the heat pump's before the third
-decision: the gas twin's year at 3600 s aborts and the heat pump overshoots its buffer.
+decision: the gas twin's year at 3600 s aborts and the heat pump overshoots its buffer. Such a system is refused when
+it is built (owner, 2026-10-16; the decisions after the review, below).
 
 **Third decision (owner, 2026-10-15): the heat pump's space heating runs the mode too.** With whole steps the heat pump
 overshot a start-of-step buffer, and the heat-pump assemblies failed: sample s007 reached 93.3 °C. (A 50 l buffer in the
@@ -950,9 +956,11 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 
 **Decided with it (owner, 2026-10-15):**
 
-- *The gas fuel at coarse steps.* The heat is asserted (booked and delivered) and the balance closes; the fuel is
-  recorded against 60 s. Built so far is the per-step half: `tests/test_space_heating_buffer_twins.py` asserts that the
-  buffer closes and that both ends of each circuit book the same heat; no test yet asserts the heat against 60 s. The
+- *The gas fuel at coarse steps.* The heat is asserted and the balance closes; the fuel is recorded against 60 s.
+  Which heat is asserted against 60 s is narrowed by the amended S9 (owner, 2026-10-16, below): the delivered heat at
+  900 s. Built on this stack is the per-step half: `tests/test_space_heating_buffer_twins.py` asserts that the buffer
+  closes and that both ends of each circuit book the same heat; the assertion against 60 s comes with the close-out
+  PR. The
   gas twin's fuel gap (−9.31 % at 900 s, −19.36 % at 3600 s, while its booked heat is +0.02 % and −0.66 % and its
   delivered heat −0.13 % and −1.01 %) comes from the boiler's efficiency law, which rises with burner power, so a
   fraction of the step at full power burns less fuel than modulating low all step. It is not a coupling error. The law
@@ -971,20 +979,39 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 **Against the first done-when of §9.5 D** (and hisim-fxix.5's):
 
 - *The buffer and the distribution system close per step:* met behind a buffer
-  (`tests/test_space_heating_buffer_twins.py`, every file with a buffer, a January day at 900 s); without a buffer not
-  built (Open).
-- *District heating's bill (hisim-9uoo.12):* not built (Open).
+  (`tests/test_space_heating_buffer_twins.py`, every file with a buffer, a January day at 900 s); without a buffer
+  split out to hisim-pnw7 (owner, 2026-10-16).
+- *District heating's bill (hisim-9uoo.12):* split out to hisim-pnw7 (owner, 2026-10-16).
 - *No step at `force_convergence` at 900 s:* not met. The owner accepted the gas twin's forced steps (hisim-fxix.25)
   and the heat-pump twins' (hisim-fxix.26); the district-heating twin forces none.
 - *Heat-pump comfort at 900 s (hisim-6ehm):* 23.0 degree-hours against 16.3 at 60 s (gas 36.8 against 9.5); open.
 - *Goldens re-blessed, the change announced on renovisorissues (D8):* still to do. Pull requests 1, 4, 5, 7 and 8 name
   the golden references they move, to be re-blessed with the golden-update workflow; none records an announcement yet.
 
+**Decided after the review of #1006 (owner, Noah, 2026-10-16):**
+
+- *Stage D closes with the buffer chain.* The chain without a buffer (district heating, `gas_boiler_household`) is
+  split out of stage D into bead hisim-pnw7: the pipe-water node of §4.6 as a start-of-step node, S10's flow
+  ownership (D25: the distribution system learns from the circuit who pumps, and its position enum
+  `PositionHotWaterStorageInSystemSetup` goes) and district heating's bill (hisim-9uoo.12). The district-heating twin
+  forces no steps and its results did not move in stage D, so this half does not block stage D's merge.
+- *S9 amended: stage D asserts the delivered heat within 1 % of the 60 s run at 900 s*, RenoVisor's step length, for
+  the four twins with a buffer: gas, pellets, heat pump, and heat pump + solar thermal (−0.13, −0.09, −0.70 and
+  −0.66 % in the table above). Everything else is recorded, not asserted: the booked heat, the fuel or electricity,
+  and every value at 3600 s. The 3600 s gaps (delivered heat −1.01 % gas, −1.99 % heat pump, −1.15 % heat pump +
+  solar thermal) are the same underheating as the comfort at coarse steps and are tracked with it in hisim-6ehm. The
+  test comes with the close-out PR of stage D, over a window like the hot-water chain's resolution test, not a full
+  year.
+- *A start-of-step buffer refuses whole steps above 600 s.* A system with a start-of-step buffer refuses, when it is
+  built, a step length above 600 s together with a part-load threshold
+  (`SimulationParameters.part_load_above_seconds`) at or above the step: that run would give whole steps into the
+  buffer where the part-load mode is needed, which is the behaviour of item 5 (the gas twin's year at 3600 s aborts,
+  the heat pump overshoots). The message names the threshold. A lowered threshold and a system without a buffer are
+  unaffected. The close-out PR implements the refusal and measures whole steps into a start-of-step buffer at 600 s
+  (gas and heat-pump twins), to back the 600 s default.
+
 **Open:**
 
-- *The chain without a buffer* (district heating, `gas_boiler_household`): the pipe-water node of §4.6, S10's flow
-  ownership (D25: the distribution system learns from the circuit who pumps, and its position enum goes) and district
-  heating's bill (hisim-9uoo.12) are in the first scope of §9.5 D, and this stack does not build them. No owner
-  decision yet says whether they stay in stage D.
 - *Comfort at coarse steps* (hisim-6ehm): degree-hours at 3600 s are 192.8 (gas), 109.3 (heat pump) and 93.7 (heat
-  pump + solar thermal), against the stack top's 2.7, 4.2 and 3.6.
+  pump + solar thermal), against the stack top's 2.7, 4.2 and 3.6. The 3600 s gaps of the delivered heat against
+  60 s (amended S9, above) are tracked there too.

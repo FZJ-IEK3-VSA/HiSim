@@ -403,8 +403,9 @@ class EntryConfigWriter:
         than silence, because a pinned line in a twin is a statement about the fleet's conversion
         state and a reader has to be able to tell which of them they are looking at: a fact has no
         provider in this system yet, a fact read from one provider has more than one, or a fact read
-        from every provider was summed over fewer of them than the system holds. The last outcome --
-        the field is left to the preset -- produces no line and therefore no sentence.
+        from every provider was summed over another number of values than the system has providers of
+        it: fewer, where the setup chose some of the arrays, or more, from a hand-built context. The
+        last outcome -- the field is left to the preset -- produces no line and therefore no sentence.
 
         Example: a battery whose capacity law is ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``, beside
         the arrays ``PVSouth`` and ``PVWest``, which a setup resolved with both peak powers, is left

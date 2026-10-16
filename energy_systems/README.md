@@ -231,8 +231,8 @@ proceeds. One rarer pin names its own reason: a fact several components in the s
 the file would be ambiguous and a twin writes no `sizing_sources`. A law that sums its fact over
 every provider, the battery's `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`, is not ambiguous beside
 several arrays — the file sums all of them — so it is left to its preset when the setup summed every
-array, and pinned with `# pinned: … is summed over 1 of the 2 values …` when the setup sized the
-battery to some of them only.
+array, and pinned with `# pinned: pv_peak_power_in_watt: the law summed 1 value(s), 2 components
+declare it (…)` when the setup sized the battery to some of them only.
 
 A field whose *preset* pinned a law of its own — the pellet boiler's minimal power, a twelfth of
 its maximum instead of the class default of zero — needs no pin. Leaving the line out is exactly

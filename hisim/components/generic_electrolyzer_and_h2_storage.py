@@ -498,12 +498,31 @@ class HydrogenStorageSimulation:
         energy_to_discharge: float,
         loss_factor: float,
     ):
-        """Initialize the class.
+        """Hold the tank's fill between its floor and its capacity, with its charge and discharge limits.
 
-        The storage has a minimum and maximum storage level and a current fill status
-        The fill status must be between the min and max capacity
-        A maximum charging and discharging rate restrict these processes.
+        The tank has a floor (``min_capacity``), a capacity (``max_capacity``) and a current fill, and a maximum
+        charging and discharging rate restrict how fast the fill changes. For example, the 500 kg preset tank with an
+        empty floor starts with a fill of 250 kg. The start fill must lie between the floor and the capacity: a tank
+        that started outside its own range would report a fill it was never built to hold.
+
+        Args:
+            fill: The hydrogen in the tank before the first step, in kg.
+            max_capacity: The hydrogen the tank holds when it is full, in kg.
+            min_capacity: The hydrogen that always stays in the tank, in kg.
+            max_charging_rate: The most hydrogen the tank takes in per second, in kg/s.
+            max_discharging_rate: The most hydrogen the tank releases per second, in kg/s.
+            energy_to_charge: The electricity spent compressing a kilogram into the tank, in kWh/kg.
+            energy_to_discharge: The electricity spent releasing a kilogram from the tank, in kWh/kg.
+            loss_factor: The share of the stored hydrogen lost per day, in percent.
+
+        Raises:
+            ValueError: If the start fill lies outside the floor and the capacity.
         """
+        if not min_capacity <= fill <= max_capacity:
+            raise ValueError(
+                f"The hydrogen tank's start fill, {fill} kg, lies outside its floor, min_capacity = {min_capacity} kg, "
+                f"and its capacity, max_capacity = {max_capacity} kg."
+            )
         self.fill = fill
         self.max_capacity = max_capacity
         self.min_capacity = min_capacity

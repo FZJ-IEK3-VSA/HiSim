@@ -79,6 +79,24 @@ def test_the_hydrogen_tank_starts_half_full() -> None:
 
 
 @pytest.mark.base
+def test_a_hydrogen_tank_started_outside_its_floor_and_capacity_is_refused() -> None:
+    """Catches the tank's simulation accepting a start fill above its capacity or below its floor without a word."""
+    tank_class = generic_electrolyzer_and_h2_storage.HydrogenStorageSimulation
+    limits = {
+        "max_charging_rate": 2.0 / 3600,
+        "max_discharging_rate": 2.0 / 3600,
+        "energy_to_charge": 0.0,
+        "energy_to_discharge": 0.0,
+        "loss_factor": 0.0,
+    }
+    with pytest.raises(ValueError, match="outside"):
+        tank_class(fill=600.0, max_capacity=500.0, min_capacity=0.0, **limits)
+    with pytest.raises(ValueError, match="outside"):
+        tank_class(fill=50.0, max_capacity=500.0, min_capacity=100.0, **limits)
+    assert tank_class(fill=100.0, max_capacity=500.0, min_capacity=100.0, **limits).fill == 100.0
+
+
+@pytest.mark.base
 def test_a_hydrogen_tank_whose_floor_lies_above_its_capacity_is_refused() -> None:
     """Catches a tank built with min_capacity above max_capacity silently starting outside its own range."""
     with pytest.raises(ValueError, match="floor"):

@@ -1,4 +1,4 @@
-"""Cost-fact contract, shipped data files, and database resolution (cost_spec.md §3.4-§3.5, §9).
+"""Cost-fact contract, shipped data files, and database resolution (roadmap/cost_spec.md §3.4-§3.5, §9).
 
 First of the three data/integration test files (split per the PR-3 review's 500-line rule):
 the cost-fact contract of the adopted components, shipped data-file sanity, resolved device

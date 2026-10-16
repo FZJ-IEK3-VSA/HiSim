@@ -1,7 +1,7 @@
 """Worked lifecycle-cost example: heat-pump retrofit of a German single-family house.
 
 Runs the `household_heatpump_building_sizer` system setup for a full year and evaluates the
-FULL lifecycle cost perspective bundle (cost_spec.md §7.1) on top of it:
+FULL lifecycle cost perspective bundle (roadmap/cost_spec.md §7.1) on top of it:
 
 * brownfield gross/net, operating, owner_monthly (financed), landlord, tenant, macroeconomic
   — enabled by the existing-asset register below (old gas boiler + old envelope elements);

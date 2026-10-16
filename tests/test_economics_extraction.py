@@ -512,7 +512,7 @@ class TestFactsExtraction:
         assert one_day.simulation_year == 2024
         full_year = build_evaluation_inputs([], [], pd.DataFrame(), _SimulationParameters(days=365))
         assert full_year.simulated_period_fraction == pytest.approx(1.0)
-        # Longer runs are clamped to the first simulated year (cost_module_issues.md #15).
+        # Longer runs are clamped to the first simulated year (roadmap/cost_module_issues.md #15).
         two_years = build_evaluation_inputs([], [], pd.DataFrame(), _SimulationParameters(days=730))
         assert two_years.simulated_period_fraction == pytest.approx(1.0)
 

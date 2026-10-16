@@ -222,7 +222,7 @@ def _parse_metadata(rows: Sequence[Tuple[int, List[object]]]) -> Dict[str, str]:
     """Reads the metadata block and validates §3.2 completeness plus the §3.8 review triple.
 
     Metadata is what makes an example reviewable rather than merely runnable: `spec_section` says
-    which rule of **`cost_spec.md`** it pins down (that document, not `roadmap/cost-spec-v2.md`,
+    which rule of **`roadmap/cost_spec.md`** it pins down (that document, not `roadmap/cost-spec-v2.md`,
     whose §3 describes this library — both have a §3.2 and a §3.6 with different meanings),
     `computed_by` says who or which tool produced the numbers, and `description` states the
     derivation in words. All four mandatory fields therefore have to be present before anything is

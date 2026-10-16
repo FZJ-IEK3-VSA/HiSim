@@ -336,7 +336,7 @@ def _degenerate_note(matrix: EvaluationMatrix) -> str:
     return (
         f"All cost inputs resolved to exact values, so every min/best_estimate/max band is degenerate and "
         f"no uncertainty whiskers appear. Price basis year {basis} uses the 1:1-migrated legacy "
-        f"data, which deliberately carries no bands (parity phase, cost_spec.md §10.1). Banded "
+        f"data, which deliberately carries no bands (parity phase, roadmap/cost_spec.md §10.1). Banded "
         f"data ships for 2026 and 2035 — set EconomicParameters.price_basis_year accordingly, "
         f"or add bands to the {basis} entries as a data PR."
     )
@@ -383,7 +383,7 @@ def build_cost_summary_markdown(
         f"Simulation year {reference.simulation_year}, country {params.country}, "
         f"horizon {params.observation_period_in_years} a, interest {params.interest_rate:.1%}, "
         f"price basis {params.price_basis_year}. "
-        f"Monetary values as `best_estimate [min | max]` (cost_spec.md §3.9)."
+        f"Monetary values as `best_estimate [min | max]` (roadmap/cost_spec.md §3.9)."
     )
     lines.append("")
     if all_bands_degenerate(matrix):

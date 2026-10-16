@@ -114,7 +114,7 @@ class Range:
 
     Every euro figure in the payload is one of these, because the cost engine computes every
     number in three worlds at once and publishing only the middle one would throw away the part
-    that says how much the middle one is worth (cost_spec §3.9). The slot names are HiSim's --
+    that says how much the middle one is worth (roadmap/cost_spec.md §3.9). The slot names are HiSim's --
     ``low``, ``best_estimate``, ``high`` -- per decision C3; the cost engine spells the same three
     ``min``, ``best_estimate``, ``max`` internally, and :meth:`from_uncertain_value` is the one
     place that translation happens::

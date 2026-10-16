@@ -2,7 +2,7 @@
 
 How a change that alters simulation results is made, and which names other systems read, so that renaming them
 is a planned change and not an accident. It applies to people and agents alike, and reviews check it. The test
-rules are in `TESTING.md`, the commit and PR form in `coding_style.md` §9 and §10.
+rules are in `testing.md`, the commit and PR form in `coding_style.md` §9 and §10.
 
 ## 1. What counts as a result change
 
@@ -35,7 +35,7 @@ rules are in `TESTING.md`, the commit and PR form in `coding_style.md` §9 and �
    maximum"). The workflow re-runs every pair in the CI container and opens a bless PR into that branch. Review
    its per-KPI diff against the deltas the PR description announced, then merge it into the branch, so the
    result change and its goldens reach `main` together. Why: a golden written on another machine differs in the
-   last bits and fails the check (`golden_ref_spec.md` §7).
+   last bits and fails the check (`roadmap/golden_ref_spec.md` §7).
    - Never commit a golden written by a local run. `scripts/golden_update.py` may run locally to inspect what a
      bless would write, with `--golden-dir` pointing at a scratch directory: by default it writes into the
      committed `golden_references/`. Nothing it writes is committed.
@@ -52,7 +52,7 @@ rules are in `TESTING.md`, the commit and PR form in `coding_style.md` §9 and �
 
 - **Two KPI values are equal when `math.isclose(got, ref, rel_tol=1e-9, abs_tol=1e-12)` holds**, the absolute
   tolerance in the KPI's own unit. The values live in `hisim/postprocessing/kpi_computation/tolerances.py`, which
-  every golden comparer reads; the reasoning is `golden_ref_spec.md` §7 (decision of hisim-b3b.6). The assembly
+  every golden comparer reads; the reasoning is `roadmap/golden_ref_spec.md` §7 (decision of hisim-b3b.6). The assembly
   harness's monotone check reads only the relative tolerance there and keeps its own absolute floor
   (`MONOTONE_ABS_FLOOR` in `hisim/energy_system/assemblies/testing/checks.py`).
 - **Why so tight.** On one machine HiSim is byte-exact run to run, so the relative tolerance only absorbs

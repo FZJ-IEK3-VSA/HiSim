@@ -53,7 +53,7 @@ column A         column B                    column C            column D
 
 Every input and expected row carries a workbook-scoped defined name on its column-B cell, so
 formulas read `=principal_in_euro*interest_rate` instead of `=B4*B5`. The `spec_section` metadata
-row names a subsection of **`cost_spec.md`** — the domain specification — and not of
+row names a subsection of **`roadmap/cost_spec.md`** — the domain specification — and not of
 `roadmap/cost-spec-v2.md`, which describes this library; both documents have a §3.2 and a §3.6
 whose meanings differ, so the field would otherwise be ambiguous.
 

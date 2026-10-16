@@ -1,4 +1,4 @@
-"""Engine tests: slot arithmetic, brownfield resolution and diagnostics (cost_spec.md §3-§4).
+"""Engine tests: slot arithmetic, brownfield resolution and diagnostics (roadmap/cost_spec.md §3-§4).
 
 First of the three engine test files (split per the PR-3 review's 500-line rule; the
 fixtures each file needs travel with it). This one covers the evaluation core: band

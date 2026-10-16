@@ -1,5 +1,5 @@
 {
-  "comment": "User-facing eligibility questionnaire catalog for Ireland (cost_spec.md §5.7). AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED: the questions were written from the SEAI page texts together with hisim/subsidy_catalog/IE.json and neither the wording nor the legal reading behind it has been verified by a person. Languages shipped in v1: de + en (spec Q31).",
+  "comment": "User-facing eligibility questionnaire catalog for Ireland (roadmap/cost_spec.md §5.7). AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED: the questions were written from the SEAI page texts together with hisim/subsidy_catalog/IE.json and neither the wording nor the legal reading behind it has been verified by a person. Languages shipped in v1: de + en (spec Q31).",
   "questions": [
     {
       "field": "applicant.actor",

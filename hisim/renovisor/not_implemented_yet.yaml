@@ -13,7 +13,7 @@
 #
 #   tracked:    the bead that would let the entry be deleted -- one id (`hisim-4g9.6`) or a list
 #               of them when one entry covers several features. A document that motivated the
-#               entry (challenges.md D-D, simulation_issues.md) goes in a comment, not here.
+#               entry (challenges.md D-D, roadmap/simulation_issues.md) goes in a comment, not here.
 #   deliberate: the reason, in one sentence for reviewers, why HiSim is not meant to act on the
 #               item: a leaf the model rightly reads elsewhere, or that no simulation or
 #               lifecycle figure takes. It is not published; the note is.
@@ -190,7 +190,7 @@
 
 # --- Ventilation ------------------------------------------------------------------------------
 
-# simulation_issues.md item 8 is hisim-4g9.6: an infiltration rate (n50) and heat recovery on Building.
+# roadmap/simulation_issues.md item 8 is hisim-4g9.6: an infiltration rate (n50) and heat recovery on Building.
 
 - path: house.ventilation.type_of_system
   except: [natural]

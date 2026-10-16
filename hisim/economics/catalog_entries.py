@@ -120,7 +120,7 @@ class DeviceEntry:
     legacy_flat_subsidy_share: float = 0.0
     # -------------------------------------------------------------- end of the migration field
     # "AS_LEGACY" marks entries migrated 1:1 from configuration.py whose VAT status is
-    # undocumented; the FINANCIAL gross-up is a no-op for them (see cost_module_issues.md).
+    # undocumented; the FINANCIAL gross-up is a no-op for them (see roadmap/cost_module_issues.md).
     price_basis: str = "NET"
     notes: Optional[str] = None
     data_file: str = ""

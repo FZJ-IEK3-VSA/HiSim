@@ -361,7 +361,7 @@ class ComponentType(str, enum.Enum):
     HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
-    # Building envelope measures (lifecycle cost engine, cost_spec.md Q7). These are cost
+    # Building envelope measures (lifecycle cost engine, roadmap/cost_spec.md Q7). These are cost
     # subjects sized in m2 of the respective envelope element, the door in m2 of door
     # (VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
     # The taxonomy follows the renovation measure database, element by element: external wall,

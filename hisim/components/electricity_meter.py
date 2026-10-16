@@ -75,7 +75,7 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
     It calculates the electricity production and consumption dynamically for all components.
     """
 
-    # Lifecycle cost engine declaration (cost_spec.md §9.2): energy is billed at this
+    # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2): energy is billed at this
     # carrier boundary; the meter hardware itself is additionally priced via get_cost_facts().
     cost_relevance = CostRelevance.METER
 
@@ -707,7 +707,7 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         return opex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts of the meter hardware for the lifecycle cost engine (cost_spec.md §3.3).
+        """Cost facts of the meter hardware for the lifecycle cost engine (roadmap/cost_spec.md §3.3).
 
         A meter is `METER`-relevant for *energy*, but it is also a physical device that had to be
         bought, so it declares facts like any other priced subject. It has no meaningful capacity,
@@ -745,7 +745,7 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> EnergyFlowFacts:
-        """Carrier flows at the grid boundary for the lifecycle cost engine (cost_spec.md §3.4).
+        """Carrier flows at the grid boundary for the lifecycle cost engine (roadmap/cost_spec.md §3.4).
 
         Integrates the two directions of the grid connection over the whole simulated period:
         `ElectricityFromGrid` becomes the energy bought, `ElectricityToGrid` the energy sold.

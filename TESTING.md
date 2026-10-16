@@ -16,7 +16,7 @@ Before a change counts as done, on the files it touches:
 3. **The golden gate**, when the change can move simulation results: `python scripts/golden_check.py` on the
    affected pairs (`--pairs setup:param`). A golden reference is never regenerated locally; it is blessed only
    through the CI workflow `golden-update.yml`. A change that moves results says so in its PR description, with
-   the KPI deltas.
+   the KPI deltas (`system_docs/results_and_interfaces.md`).
 
 The full suite (`pytest` without `-m`) is for CI. Locally, the slow markers run only for the test files a change
 touches.

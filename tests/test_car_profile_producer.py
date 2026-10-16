@@ -173,6 +173,7 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
         "seconds_per_timestep": 3600,
         "timesteps": 48,
         "duration_in_days": 2,
+        "window_start": "2021-01-01T00:00:00",
         **fields,
     }
     return CarProfileInputs(**arguments)
@@ -241,7 +242,7 @@ def test_an_edit_to_the_producer_or_the_conversion_misses_the_cache(
 
 @pytest.mark.base
 def test_the_profile_enters_the_key_by_its_hash() -> None:
-    """The same profile is one key; a profile differing in one minute, or another span, is another.
+    """The same profile is one key; a profile differing in one minute, another span or another window is another.
 
     Catches: the profile left out of the key (two households sharing an entry) or the payload itself in
     the key (a key of half a million numbers).
@@ -262,6 +263,8 @@ def test_the_profile_enters_the_key_by_its_hash() -> None:
     assert "car_location" not in CanonicalJson.dumps(base)
     one_day = dataclasses.replace(base, timesteps=24, duration_in_days=1)
     assert CanonicalJson.dumps(one_day) != CanonicalJson.dumps(base)
+    july = dataclasses.replace(base, window_start="2021-07-01T00:00:00")
+    assert CanonicalJson.dumps(july) != CanonicalJson.dumps(base)
 
 
 @pytest.mark.base

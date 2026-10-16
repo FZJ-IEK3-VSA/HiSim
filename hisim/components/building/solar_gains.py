@@ -115,7 +115,8 @@ class WindowGeometry:
 class SolarGainsInputs:
     """Everything :func:`produce_solar_gains` depends on, and nothing else.
 
-    Key material: the weather artifact key, the simulated span and the windows. Payload, excluded
+    Key material: the weather artifact key, the run's window (its start and number of timesteps) and
+    the windows of the building. Payload, excluded
     from the key: the six weather series themselves, which the artifact key already identifies
     (:class:`hisim.caching.keys.KeyMaterial`). Every payload field pairs with the one key field that
     says what it is, which is the invariant spec §3.1 asks of a chained producer.
@@ -140,6 +141,13 @@ class SolarGainsInputs:
     #: year of minutes. A one-week run and a one-year run of the same building therefore deliberately
     #: do not share an entry -- the cheaper of the two would have to pay for the longer one.
     timesteps: int
+
+    #: The run's first instant, ISO 8601 without a time zone, for example ``"2021-07-01T00:00:00"``.
+    #: The weather publishes its series over the run's window, which starts there, so a January week
+    #: and a July week of the same building under the same weather compute different gains and must
+    #: not share an entry. The weather artifact key cannot tell them apart: it names the weather's
+    #: whole year.
+    window_start: str
 
     #: The building's windows. Order matters only in that the gains are summed in it.
     windows: Tuple[WindowGeometry, ...]

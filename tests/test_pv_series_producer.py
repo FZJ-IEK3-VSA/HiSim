@@ -142,7 +142,6 @@ def weather_inputs(**overrides: Any) -> WeatherSeriesInputs:
         "seconds_per_timestep": 900,
         "latitude_in_degrees": 50.78,
         "longitude_in_degrees": 6.09,
-        "duration_in_days": None,
         "source_path": "/home/somebody/HiSim/hisim/inputs/weather/aachen_center",
     }
     baseline.update(overrides)
@@ -172,6 +171,7 @@ def calculation_inputs(**overrides: Any) -> PvSeriesInputs:
         "tilt_in_degrees": 30.0,
         "azimuth_in_degrees": 180.0,
         "number_of_timesteps": 96,
+        "window_start": "2021-01-01T00:00:00",
         "module_database_path": "/home/somebody/HiSim/hisim/inputs/photovoltaic/cec_modules.csv",
         "inverter_database_path": "/home/somebody/HiSim/hisim/inputs/photovoltaic/cec_inverters.csv",
         "weather_series": PvWeatherSeries.of(
@@ -332,6 +332,9 @@ def test_what_changes_the_series_changes_the_key() -> None:
         calculation_inputs(inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE)
     )
     assert digest_of(baseline) != digest_of(calculation_inputs(number_of_timesteps=10080))
+    # A July week reads other weather values than a January week of the same length under the same
+    # weather artifact key, which names the weather's whole year.
+    assert digest_of(baseline) != digest_of(calculation_inputs(window_start="2021-07-01T00:00:00"))
 
 
 @pytest.mark.base

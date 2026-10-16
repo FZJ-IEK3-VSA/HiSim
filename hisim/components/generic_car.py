@@ -517,7 +517,8 @@ class Car(cp.PhysicsComponent):
         """Build the DTO the car-profile producer is a pure function of.
 
         The published minute profile enters as payload, identified in the key by its hash; the run
-        enters as its year, timestep, number of timesteps and span in days. Nothing the car keeps to
+        enters as its year, timestep, number of timesteps, span in days and first instant
+        (``window_start``). Nothing the car keeps to
         itself -- its name, fuel, consumption or costs -- is part of the calculation, so none of it is
         part of the key.
 
@@ -540,6 +541,7 @@ class Car(cp.PhysicsComponent):
             seconds_per_timestep=parameters.seconds_per_timestep,
             timesteps=parameters.timesteps,
             duration_in_days=(parameters.end_date - parameters.start_date).days,
+            window_start=parameters.start_date.isoformat(),
             car_location=car_location,
             driven_distance_per_minute_in_meters=driven_distance_per_minute_in_meters,
         )

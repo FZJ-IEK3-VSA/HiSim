@@ -52,7 +52,8 @@ __status__ = "development"
 class CarProfileInputs:
     """Everything :func:`produce_car_profile` depends on, plus the hash that names the profile in the key.
 
-    Key material: the hash of the minute profile, its resolution, and the run's year, span and timestep.
+    Key material: the hash of the minute profile, its resolution, and the run's year, window, span and
+    timestep.
     Payload, excluded from the key by :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`: the two minute
     series themselves, which the hash identifies.
     """
@@ -95,6 +96,14 @@ class CarProfileInputs:
 
     #: The simulated span in whole days. The profile is cut to this many days before the conversion.
     duration_in_days: int
+
+    #: The run's first instant, ISO 8601 without a time zone, for example ``"2021-07-01T00:00:00"``.
+    #: Key material only: :func:`produce_car_profile` does not read it yet and cuts every profile from
+    #: 1 January, as the car always has. It is in the key because the car is a window-sensitive
+    #: producer (owner decision 2 of 2026-10-14 in ``roadmap/midyear_start_epic.md``), so an entry
+    #: belongs to one window from now on and none filed for January is served to a July run once the
+    #: car follows the window (hisim-9g2.6).
+    window_start: str
 
     #: Where the car is in each minute of the profile, as the LoadProfileGenerator names it. Payload.
     car_location: Tuple[Optional[str], ...] = field(metadata=KeyMaterial.PAYLOAD)

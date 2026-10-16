@@ -69,12 +69,45 @@ always come from its wired inputs — its own solar cache is dead code, see the 
 collector already follows `start_date`), and the whole occupancy/car chain is fixed inside the LPG
 connector, which is the profile owner for both.
 
+## Owner decisions of 2026-10-14 (PR2, hisim-9g2.4)
+
+Three points below were settled when PR2 was implemented, because the text above and below them
+contradicted itself or had been overtaken by the cache-service work:
+
+1. **The clock is standard time.** `start_date` is read in the delivered frame's *standard* time
+   (UTC+1 all year for a Berlin frame, UTC for a UTC frame), not in German wall-clock time. The
+   results index is an even grid from `start_date` without daylight saving, so a full-year run
+   labels row 260 640 of a minutely Berlin frame "1 July 00:00"; with the wall-clock reading a July
+   window would be one hour off the full-year run's July labels and the oracle could never be exact.
+   On the delivered Aachen frame (padded to midnight) 1 July is therefore row **260 640**; the
+   wall-clock row is 260 580. On a frame still anchored at 00:30 the numbers of trap 1 become
+   260 610 (standard time, correct), 260 550 (wall clock) and 260 640 (counted from the first row
+   as if it were midnight). `hisim/window_offset.py` holds the lookup; `tests/test_window_offset.py`
+   pins all of these.
+2. **Caches: producer keys, no epoch.** Weather, PV and the building's solar gains were already
+   producers whose key fingerprints their code (cache-service work after this plan was written); the
+   solar-thermal sun position and the car profile followed (hisim-hi1.4). The manual
+   `CacheEpoch` below is dropped: a producer's key moves when its code does. What a key cannot see
+   by itself -- that two runs read different windows of the same weather year -- is carried as the
+   `window_start` field of every window-sensitive producer's inputs (PV, building solar gains, solar
+   thermal, car). The weather's own key stays window-free: it produces the whole year, which is the
+   point of B′. The LoadProfileGenerator connector still keys legacy-style; PR3 must make its key
+   follow the conversion it rewrites.
+3. **The building solar-gain cache is kept.** It was dead when this plan was written; #735 made it a
+   live producer. It is keyed on the window start instead of deleted.
+
+The oracle perturbs the numeric `initial_*` configuration fields for its self-calibration, compares
+a fixed set (weather, occupancy, the building's solar gains) exactly whatever the calibration says,
+and lists the components whose state no `initial_*` field sets as false alarms.
+
 ## The two traps that decide success (write their tests before the code)
 
-1. **The offset must never be arithmetic.** The Berlin-anchored weather sources index elapsed
-   instants: for 1 July 2021, the correct row is **260 550**; naive minutes from the series' own
+1. **The offset must never be arithmetic.** (The clock was decided on 2026-10-14 as standard time;
+   see the owner decisions above for what the numbers below became.) The Berlin-anchored weather sources index elapsed
+   instants: for 1 July 2021, the wall-clock row is 260 550; naive minutes from the series' own
    start give 260 610 (the March DST hour), naive minutes from Jan 1 give 260 640 (DST plus the
-   source's 00:30 anchor). The error is *energy-neutral over whole days* — no aggregate or KPI
+   source's 00:30 anchor). Under the decided standard-time clock, 260 610 is the correct row of
+   a frame anchored at 00:30, and 260 640 that of the delivered frame padded to midnight. The error is *energy-neutral over whole days* — no aggregate or KPI
    test can ever catch it — and only a per-timestep phase test against wall-clock labels can. Pin
    the three numbers, and pin a December window too (where the DST correction is zero again).
    The LPG frame, by contrast, is gapless naive local time (uniform 1-minute diffs across all

@@ -52,6 +52,7 @@ import pvlib
 
 from hisim.caching.keys import KeyMaterial
 from hisim.simulation_day import SimulationDay
+from hisim.window_offset import WindowOffset
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -280,6 +281,10 @@ class WeatherSeriesInputs:
     The path is the payload that pairs with :attr:`source_content_hash` -- the producer needs it to open
     the file, the key must not contain it -- and is excluded from the key by
     :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`.
+
+    The run's window is not a field. The frame covers the source's whole year whatever the run's start
+    and end are, and the component takes the run's window out of it, so every window of a station at
+    one resolution shares one entry.
     """
 
     #: Which reader understands the file, and therefore which columns and resampling path apply.
@@ -302,68 +307,9 @@ class WeatherSeriesInputs:
     #: Longitude of the station in degrees, from the data file's own header. Used for the sun position.
     longitude_in_degrees: float
 
-    #: The length of the simulated span in whole days, for the one data source whose raw frame is
-    #: sized by it (``DWD_15MIN``, whose reader builds exactly ``24 * 4 * days`` rows). ``None`` for
-    #: every other source, whose frame covers the full year whatever the run's start and end are --
-    #: which is why a one-week run and a one-year run of the same station now share one entry.
-    duration_in_days: Optional[int]
-
     #: Where the file is on this machine. Payload, not key material: it differs between a checkout, a
     #: container and the cluster while naming the same bytes, which :attr:`source_content_hash` covers.
     source_path: str = field(metadata=KeyMaterial.PAYLOAD)
-
-    #: The sources whose raw frame is sized by the simulated span rather than by the year alone.
-    DURATION_DEPENDENT_SOURCES: ClassVar[FrozenSet[WeatherDataSourceEnum]] = frozenset(
-        {WeatherDataSourceEnum.DWD_15MIN}
-    )
-
-    def __post_init__(self) -> None:
-        """Refuse inputs whose span does not match what the data source's reader reads.
-
-        The field is key material for every source, but only the readers of
-        :attr:`DURATION_DEPENDENT_SOURCES` size their frame by it. Both ways of getting that wrong are
-        silent: an unset span for a source that needs it computes a shorter frame than the run (or
-        stops far downstream), and a set span for a source that ignores it files the same series under
-        one key per horizon, so a one-week run never reuses the full year's entry. Neither is visible
-        in the result, which is why it is refused here, where the DTO is built.
-
-        Raises:
-            ValueError: if ``duration_in_days`` is unset for a source whose reader is sized by it, or
-                set for one whose reader is not.
-        """
-        sized_by_the_span = self.data_source in self.DURATION_DEPENDENT_SOURCES
-        if sized_by_the_span and self.duration_in_days is None:
-            raise ValueError(
-                f"The weather data source {self.data_source.value} sizes its raw frame by the simulated "
-                "span, but duration_in_days is not set in the calculation inputs."
-            )
-        if not sized_by_the_span and self.duration_in_days is not None:
-            raise ValueError(
-                f"The weather data source {self.data_source.value} produces the whole year whatever the "
-                f"run's span, but duration_in_days is set to {self.duration_in_days} in the calculation "
-                "inputs. It is key material, so a value no reader reads would file the same series under "
-                "one key per horizon; leave it at None for this source."
-            )
-
-    def required_duration_in_days(self) -> int:
-        """Return :attr:`duration_in_days` for a source whose reader is sized by it.
-
-        :meth:`__post_init__` has already refused an unset span for such a source, so this narrows the
-        optional field rather than checking it a second time.
-
-        Returns:
-            int: the simulated span in whole days.
-
-        Raises:
-            ValueError: if the field is unset although this data source's reader is sized by it, which
-                the invariant above makes unreachable.
-        """
-        if self.duration_in_days is None:
-            raise ValueError(
-                f"The weather data source {self.data_source.value} sizes its raw frame by the simulated "
-                "span, but duration_in_days is not set in the calculation inputs."
-            )
-        return self.duration_in_days
 
 
 #: The raw columns every reader provides and the producer carries forward to one-minute resolution.
@@ -397,6 +343,17 @@ PRODUCED_COLUMNS: Tuple[str, ...] = (
 )
 
 
+class ProducedFrame:
+    """What the produced frame carries besides its columns: the name of its index.
+
+    The index is each row's label in the source's standard time (:func:`timestep_labels`). It is also
+    the first column of the cached CSV, under this name, so a cache hit gets the same labels back.
+    """
+
+    #: The name of the produced frame's index and of the cached CSV's first column.
+    INDEX_NAME: ClassVar[str] = "standard_time"
+
+
 def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     """Produce the full-year weather frame the component simulates from.
 
@@ -410,7 +367,8 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: one row per timestep of the simulated year, with the columns of
-            :data:`PRODUCED_COLUMNS`.
+            :data:`PRODUCED_COLUMNS`, indexed by each row's label in the source's standard time
+            (:func:`timestep_labels`). The labels are what a run's window is looked up in.
     """
     raw_data = read_source_data(inputs)
     # todo: check if this should indeed be daily resample or if another time frequency would be needed.
@@ -427,6 +385,7 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     columns["azimuth"] = solar_position["azimuth"]
     columns["apparent_zenith"] = solar_position["apparent_zenith"]
     per_timestep = aggregate_to_timestep(columns, inputs.seconds_per_timestep)
+    labels = timestep_labels(one_minute["DNI"], inputs.seconds_per_timestep)
     temperature_list = per_timestep["T"]
     daily_average = calculate_daily_average_outside_temperature(
         temperature_list=temperature_list, seconds_per_timestep=inputs.seconds_per_timestep
@@ -444,7 +403,7 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         per_timestep["DNIextra"],
         daily_average,
     ]
-    return pd.DataFrame(np.transpose(series), columns=list(PRODUCED_COLUMNS))
+    return pd.DataFrame(np.transpose(series), columns=list(PRODUCED_COLUMNS), index=labels)
 
 
 def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
@@ -453,8 +412,7 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     Based on the tsib project @[tsib-kotzur] (Check header)
 
     Args:
-        inputs: the calculation's inputs; supplies the path, the year and, where a reader needs it,
-            the simulated span.
+        inputs: the calculation's inputs; supplies the path and the year.
 
     Returns:
         pd.DataFrame: the raw frame, indexed by time at the file's own resolution.
@@ -472,7 +430,7 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     if inputs.data_source == WeatherDataSourceEnum.DWD_10MIN:
         return read_dwd_10min_data(filepath, inputs.year)
     if inputs.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        return read_dwd_15min_data(filepath, inputs.year, inputs.required_duration_in_days())
+        return read_dwd_15min_data(filepath, inputs.year)
     if inputs.data_source == WeatherDataSourceEnum.ERA5:
         return read_era5_data(filepath, inputs.year)
     raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
@@ -523,8 +481,39 @@ def aggregate_to_timestep(columns: Mapping[str, pd.Series], seconds_per_timestep
     return aggregated
 
 
+def timestep_labels(one_minute_series: pd.Series, seconds_per_timestep: int) -> pd.DatetimeIndex:
+    """Return the label of every row of the produced frame, in the source's standard time.
+
+    The rows are those :func:`aggregate_to_timestep` makes: the one-minute series itself at a timestep
+    of 60 s, and its resampling bins otherwise. Each label is the start of its row, without time zone,
+    in the standard time of the zone the source's index carries (:meth:`WindowOffset.standard_time_labels`).
+    Example: the hourly rows of an Aachen test reference year are labelled 2021-01-01 00:00, 01:00, ...
+    and the row of 1 July 01:00 summer time is labelled 2021-07-01 00:00.
+
+    Args:
+        one_minute_series: one of the one-minute series, all of which share one index.
+        seconds_per_timestep: the simulation's timestep.
+
+    Returns:
+        pd.DatetimeIndex: one label per produced row, named ``standard_time``.
+    """
+    if seconds_per_timestep != 60:
+        index = one_minute_series.resample(str(seconds_per_timestep) + "s").mean().index
+    else:
+        index = one_minute_series.index
+    labels = WindowOffset.standard_time_labels(pd.DatetimeIndex(index))
+    return labels.set_names(ProducedFrame.INDEX_NAME)
+
+
 def interpolate(pd_database: Any, year: int) -> Any:
     """Interpolates a time series to one minute, padding the year's first and last hour.
+
+    The hourly sources label each hour at its middle, 00:30 to 23:30. A zero is prepended at midnight,
+    and the last sample is repeated at the end of the hour it stands for -- 29 minutes after it, which
+    for a source that covers the year is the year's last minute, 23:59. The end padding never reaches
+    past that hour: a source of 365 days laid onto a leap year ends on 30 December, and padding it to
+    31 December would invent a day of weather the source does not have. Such a source ends on
+    30 December, and a window that needs 31 December is refused when it is looked up.
 
     Args:
         pd_database: the hourly series.
@@ -537,10 +526,9 @@ def interpolate(pd_database: Any, year: int) -> Any:
         [0.0],
         index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
     )
-    lastday = pd.Series(
-        pd_database.iloc[-1],
-        index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")],
-    )
+    end_of_year = pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")
+    end_of_last_hour = pd_database.index[-1] + pd.Timedelta(minutes=29)
+    lastday = pd.Series(pd_database.iloc[-1], index=[min(end_of_year, end_of_last_hour)])
     pd_database = pd.concat([pd_database, firstday, lastday])
     pd_database = pd_database.sort_index()
     return pd_database.resample("1min").asfreq().interpolate(method="linear")
@@ -816,15 +804,19 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.DataFrame:
+def read_dwd_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of DWD data in 15 min resolution.
 
     https://github.com/earthobservations/wetterdienst/tree/main
 
+    The index has one quarter hour per row of the file, from 1 January 00:00 UTC of the simulated year,
+    like the other readers lay their file onto the year by position. It used to have one per quarter
+    hour of the run instead, so any run whose span was not the file's raised a length mismatch, and
+    no window could be sliced out of the frame.
+
     Args:
         filepath: the data file, whose second row carries the station coordinates.
         year: the simulated year.
-        duration_in_days: the simulated span in whole days; this reader alone sizes its frame by it.
 
     Returns:
         pd.DataFrame: the quarter-hourly raw frame.
@@ -835,12 +827,7 @@ def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.D
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
 
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00",
-        periods=24 * 4 * int(duration_in_days),
-        freq="900s",
-        tz="UTC",
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=len(data), freq="900s", tz="UTC")
 
     data = data.rename(
         columns={

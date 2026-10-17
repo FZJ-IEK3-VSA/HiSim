@@ -424,7 +424,7 @@ class L1CHPController(cp.L1ControllerComponent):
             cp.ComponentConnection(
                 L1CHPController.HotWaterStorageTemperature,
                 boiler_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                component_class.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections

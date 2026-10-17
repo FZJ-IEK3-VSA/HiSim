@@ -318,7 +318,7 @@ class HeatDistribution(cp.PhysicsComponent):
             cp.ComponentConnection(
                 HeatDistribution.ResidenceTemperatureIndoorAir,
                 building_classname,
-                Building.TemperatureIndoorAir,
+                Building.TemperatureIndoorAirAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -476,27 +476,23 @@ class HeatDistribution(cp.PhysicsComponent):
                 raise ValueError("unknown hds controller mode")
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
-        stsv.set_output_value(
-            self.water_temperature_inlet_channel,
-            self.state.water_input_temperature_in_celsius,
-            # water_temperature_input_in_celsius
-        )
-        stsv.set_output_value(
-            self.water_temperature_outlet_channel,
-            self.state.water_output_temperature_in_celsius,
-            # water_temperature_output_in_celsius,
-        )
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            # behind a buffer the circuit's heat is this step's, from the supply the buffer publishes in this pass
+            published = HeatDistributionSystemState(
+                water_output_temperature_in_celsius=water_temperature_output_in_celsius,
+                water_input_temperature_in_celsius=water_temperature_input_in_celsius,
+                thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
+            )
+        else:
+            # without a buffer the outputs still lag one step
+            published = self.state
+        stsv.set_output_value(self.water_temperature_inlet_channel, published.water_input_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_outlet_channel, published.water_output_temperature_in_celsius)
         stsv.set_output_value(
             self.water_temperature_difference_channel,
-            #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
-            self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
+            published.water_input_temperature_in_celsius - published.water_output_temperature_in_celsius,
         )
-
-        stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt,
-            # thermal_power_delivered_in_watt,
-        )
+        stsv.set_output_value(self.thermal_power_delivered_channel, published.thermal_power_delivered_in_watt)
         stsv.set_output_value(
             self.water_mass_flow_channel,
             water_mass_flow_rate_in_kg_per_second,

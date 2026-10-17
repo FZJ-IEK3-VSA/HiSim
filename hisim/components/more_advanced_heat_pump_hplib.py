@@ -2820,7 +2820,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
-                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections

@@ -604,6 +604,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
+    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on.
+    WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
+    #: The buffer's temperature at the end of the step, the next step's start temperature.
+    WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
 
     # make some more outputs for testing simple storage
 
@@ -736,6 +740,24 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
+        )
+
+        self.water_temperature_at_start_of_step_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureAtStartOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The buffer's temperature at the start of the step, T0, the end temperature of the step before. "
+                "Generator controllers decide on it, since it does not change while the step iterates."
+            ),
+        )
+        self.water_temperature_at_end_of_step_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureAtEndOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description="The buffer's temperature at the end of the step, T_end: the next step's T0.",
         )
 
         self.thermal_energy_in_storage_channel: ComponentOutput = self.add_output(
@@ -947,7 +969,27 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             water_temperature_from_secondary_heat_generator_in_celsius = 0
             water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = 0
 
-        # Calculations ------------------------------------------------------------------------------------------------------
+        if self.heat_exchanger_is_present:
+            self.simulate_mixed_node(
+                stsv,
+                inflows=(
+                    hydronics.Inflow(
+                        water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+                        water_temperature_from_heat_generator_in_celsius,
+                    ),
+                    hydronics.Inflow(
+                        water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second,
+                        water_temperature_from_secondary_heat_generator_in_celsius,
+                    ),
+                    hydronics.Inflow(
+                        water_mass_flow_rate_from_hds_in_kg_per_second,
+                        water_temperature_from_heat_distribution_system_in_celsius,
+                    ),
+                ),
+            )
+            return
+
+        # Calculations (stratification path, without the heat exchanger) ---------------------------------------------------
 
         # calc water masses
         # ------------------------------
@@ -1173,6 +1215,69 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             - self.state.temperature_loss_in_celsius_per_timestep
         )
 
+    def simulate_mixed_node(self, stsv: SingleTimeStepValues, inflows: Tuple[hydronics.Inflow, ...]) -> None:
+        """Integrate the fully mixed buffer over the step and publish its step mean to every circuit.
+
+        The buffer is one :class:`hisim.hydronics.MixedNode`: from its start temperature ``T0`` and the three streams
+        entering it (the primary and secondary generators' supplies and the distribution system's return), it computes
+        the step mean ``T̄`` and the end temperature ``T_end`` in closed form. ``T̄`` is published as the return to
+        both generators and as the supply to the distribution system, so each circuit's heat, ``m c (T_in - T̄) dt``,
+        is the same number at both ends once the iteration has converged; ``T0`` is published for the controllers.
+        The heats and the loss close the balance ``sum of circuits - loss = C (T_end - T0)`` on every step.
+
+        Args:
+            stsv: The step's values, read and written.
+            inflows: The primary generator's supply, the secondary generator's supply and the distribution system's
+                return, in this order.
+        """
+        start_temperature_in_celsius = self.state.mean_water_temperature_in_celsius
+        dt_in_seconds = self.seconds_per_timestep
+        node = hydronics.MixedNode.step(
+            t0_c=start_temperature_in_celsius,
+            inflows=inflows,
+            ua_w_per_k=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2,
+            t_amb_c=self.ambient_temperature_in_celsius,
+            dt_s=dt_in_seconds,
+            heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
+        )
+        heat_primary_in_joule, heat_secondary_in_joule, heat_from_distribution_in_joule = node.heat_in_j_per_inflow
+        joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
+            stsv.set_output_value(self.water_temperature_heat_distribution_system_output_channel, node.t_mean_c)
+        stsv.set_output_value(self.water_temperature_heat_generator_output_channel, node.t_mean_c)
+        stsv.set_output_value(self.water_temperature_secondary_heat_generator_output_channel, node.t_mean_c)
+        stsv.set_output_value(self.water_temperature_mean_channel, start_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_at_start_of_step_channel, start_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_at_end_of_step_channel, node.t_end_c)
+        stsv.set_output_value(
+            self.thermal_energy_in_storage_channel,
+            self.heat_capacity_in_joule_per_kelvin * node.t_end_c / joules_per_watt_hour,
+        )
+        stsv.set_output_value(self.thermal_energy_from_heat_generator_channel, heat_primary_in_joule / joules_per_watt_hour)
+        stsv.set_output_value(
+            self.thermal_energy_from_secondary_heat_generator_channel, heat_secondary_in_joule / joules_per_watt_hour
+        )
+        stsv.set_output_value(
+            self.thermal_energy_input_heat_distribution_system_channel,
+            heat_from_distribution_in_joule / joules_per_watt_hour,
+        )
+        stsv.set_output_value(
+            self.thermal_energy_increase_in_storage_channel,
+            self.heat_capacity_in_joule_per_kelvin
+            * (node.t_end_c - start_temperature_in_celsius)
+            / joules_per_watt_hour,
+        )
+        stsv.set_output_value(self.stand_by_heat_loss_channel, node.loss_j / dt_in_seconds)
+        stsv.set_output_value(self.thermal_power_heat_distribution_channel, -heat_from_distribution_in_joule / dt_in_seconds)
+        stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
+        stsv.set_output_value(
+            self.thermal_power_from_secondary_heat_generator_channel, heat_secondary_in_joule / dt_in_seconds
+        )
+        self.mean_water_temperature_in_water_storage_in_celsius = node.t_end_c
+        self.state.heat_loss_in_watt = node.loss_j / dt_in_seconds
+        self.state.temperature_loss_in_celsius_per_timestep = node.loss_j / self.heat_capacity_in_joule_per_kelvin
+        self.state.mean_water_temperature_in_celsius = node.t_end_c
+
     def build(self, heat_exchanger_is_present: bool) -> None:
         """Build function.
 
@@ -1201,6 +1306,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
             storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
         )
+        self.heat_capacity_in_joule_per_kelvin = self.water_mass_in_storage_in_kg * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
 
         # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located
         self.ambient_temperature_in_celsius = 20.0

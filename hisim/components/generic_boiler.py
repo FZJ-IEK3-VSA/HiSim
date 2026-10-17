@@ -2091,7 +2091,7 @@ class GenericBoilerController(L1ControllerComponent):
             ComponentConnection(
                 GenericBoilerController.WaterTemperatureInputFromWaterStorage,
                 storage_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections

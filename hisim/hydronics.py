@@ -12,11 +12,16 @@ a circuit's energy with :func:`circuit_heat_kwh`, and ``hisim/energy_port.py`` i
 ``hisim/component.py``, the base of every component, which must not import the component package built on it.
 The module imports nothing from HiSim.
 
-Every function refuses what it cannot compute with a :class:`HydronicsError` subclass, which is a ``ValueError``:
-a negative mass flow, a negative loss coefficient, a heat capacity or a timestep that is not positive, a value that
-is not finite (NaN or infinite), a valve whose warm temperature is not above its cold one. A result that overflows
-to an infinity or a NaN from finite arguments (a heat ``m c dT dt`` beyond the float range, say) is refused with
-:class:`NonFiniteValueError` naming the quantity, never returned. Nothing is clipped.
+The functions refuse, with a :class:`HydronicsError` subclass (a ``ValueError``), the values that would give a
+wrong but finite result: a negative mass flow, a negative hot-water demand, a valve whose warm temperature is not
+above its cold one, a negative relaxation exponent. A node's constants (its loss coefficient, its heat capacity and
+the step length) are checked once, when the component that owns the node is built
+(:meth:`MixedNode.check_constants`), not on every step. Nothing is clipped.
+
+The functions do not check that their values are finite. They run on every pass of every time step, and a NaN or
+an infinity passes through their arithmetic into the outputs that publish the result; the simulator's check of
+every result column after the run (:mod:`hisim.postprocessing.finite_results`) then names the column and its first
+bad step.
 
 Names keep this module's short unit suffixes: ``_w`` (W), ``_c`` (°C), ``_j`` (J), ``_kwh`` (kWh), ``_s`` (s),
 ``_kg_per_s`` (kg/s), ``_w_per_k`` (W/K), ``_j_per_k`` (J/K).
@@ -69,7 +74,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Iterable, Sequence, Tuple, TypeVar
+from typing import Callable, ClassVar, Iterable, NamedTuple, Tuple, TypeVar
 
 
 class UnitConversion:
@@ -120,14 +125,6 @@ class HydronicsError(ValueError):
 
     The base of every refusal of this module. It is a ``ValueError``, so a caller that validates its input by
     catching ``ValueError`` catches these too.
-    """
-
-
-class NonFiniteValueError(HydronicsError):
-
-    """A temperature, flow, coefficient or duration is NaN or infinite, or a result overflowed the float range.
-
-    The message names the argument or the computed quantity, so the value that broke the step can be found.
     """
 
 
@@ -199,81 +196,6 @@ class FixedPointNotFoundError(HydronicsError):
     """
 
 
-def _finite(name: str, value: float) -> float:
-    """Return ``value`` as a float, refused when it is NaN or infinite.
-
-    Every argument of this module passes through here, so a ``Decimal`` or a NumPy scalar becomes a plain float
-    before any arithmetic.
-
-    Raises:
-        NonFiniteValueError: If ``value`` is NaN or infinite; the message names it ``name``.
-    """
-    number = float(value)
-    if not math.isfinite(number):
-        raise NonFiniteValueError(f"{name} must be finite, got {value!r}.")
-    return number
-
-
-def _mass_flow(name: str, value: float) -> float:
-    """Return a finite mass flow in kg/s as a float, refused when it is negative.
-
-    Raises:
-        NonFiniteValueError: If ``value`` is NaN or infinite.
-        NegativeMassFlowError: If ``value`` is negative; the message names it ``name``.
-    """
-    number = _finite(name, value)
-    if number < 0.0:
-        raise NegativeMassFlowError(f"{name} must be >= 0 kg/s, got {number!r}.")
-    return number
-
-
-def _finite_result(name: str, value: float) -> float:
-    """Return a computed ``value`` unchanged, refused when the arithmetic overflowed to an infinity or a NaN.
-
-    The arguments of every computation are checked to be finite first, so a non-finite result can only come from
-    an overflow, which the message says.
-
-    Raises:
-        NonFiniteValueError: If ``value`` is NaN or infinite; the message names the quantity ``name``.
-    """
-    if not math.isfinite(value):
-        raise NonFiniteValueError(
-            f"{name} is not finite ({value!r}): the arguments are finite but the result overflows the float range."
-        )
-    return value
-
-
-def _finite_sum(name: str, values: Sequence[float]) -> float:
-    """Return the exactly rounded sum of ``values`` (:func:`math.fsum`), refused when it is not finite.
-
-    ``math.fsum`` rounds once, at the end, so the sum does not depend on the order of the values or on the Python
-    version, whose plain ``sum`` changed its rounding in 3.12.
-
-    Raises:
-        NonFiniteValueError: If the sum, or a partial sum on the way, overflows the float range.
-    """
-    try:
-        total = math.fsum(values)
-    except (OverflowError, ValueError) as error:
-        raise NonFiniteValueError(
-            f"{name} is not finite: the arguments are finite but the sum overflows the float range ({error})."
-        ) from error
-    return _finite_result(name, total)
-
-
-def _timestep(name: str, value: float) -> float:
-    """Return a finite step duration in s as a float, refused when it is not positive.
-
-    Raises:
-        NonFiniteValueError: If ``value`` is NaN or infinite.
-        NonPositiveTimestepError: If ``value`` is zero or negative; the message names it ``name``.
-    """
-    number = _finite(name, value)
-    if number <= 0.0:
-        raise NonPositiveTimestepError(f"{name} must be > 0 s, got {number!r}.")
-    return number
-
-
 def relaxation_mean_factor(a: float) -> float:
     """Return ``phi(a) = (1 - e^(-a)) / a``, the share of a node's start deviation left in its step mean.
 
@@ -290,10 +212,8 @@ def relaxation_mean_factor(a: float) -> float:
         The factor ``phi``, dimensionless, in (0, 1].
 
     Raises:
-        NonFiniteValueError: If ``a`` is NaN or infinite.
-        HydronicsError: If ``a`` is negative.
+        HydronicsError: If ``a`` is negative; a NaN passes through as a NaN factor.
     """
-    a = _finite("a", a)
     if a < 0.0:
         raise HydronicsError(f"The relaxation exponent a = k dt must be >= 0, got {a!r}.")
     if a < MixedNode.SMALL_A_THRESHOLD:
@@ -319,15 +239,11 @@ def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c:
         The heat flow, in W.
 
     Raises:
-        NonFiniteValueError: If any argument is NaN or infinite, or the power overflows the float range.
         NegativeMassFlowError: If the mass flow is negative.
     """
-    mass_flow = _mass_flow("mass_flow_kg_per_s", mass_flow_kg_per_s)
-    t_supply = _finite("t_supply_c", t_supply_c)
-    t_return = _finite("t_return_c", t_return_c)
-    lift = _finite_result("The circuit's lift t_supply_c - t_return_c", t_supply - t_return)
-    power_w = mass_flow * Water.SPECIFIC_HEAT_J_PER_KG_K * lift
-    return _finite_result("The circuit power m c (T_sup - T_ret)", power_w)
+    if mass_flow_kg_per_s < 0.0:
+        raise NegativeMassFlowError(f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow_kg_per_s!r}.")
+    return mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K * (t_supply_c - t_return_c)
 
 
 def circuit_heat_j(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:
@@ -346,13 +262,13 @@ def circuit_heat_j(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: 
         The heat, in J.
 
     Raises:
-        NonFiniteValueError: If any argument is NaN or infinite, or the heat overflows the float range.
         NegativeMassFlowError: If the mass flow is negative.
         NonPositiveTimestepError: If ``dt_s`` is not positive.
     """
-    dt = _timestep("dt_s", dt_s)
+    if dt_s <= 0.0:
+        raise NonPositiveTimestepError(f"dt_s must be > 0 s, got {dt_s!r}.")
     power_w = circuit_power_w(mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c)
-    return _finite_result("The circuit heat m c (T_sup - T_ret) dt", power_w * dt)
+    return power_w * dt_s
 
 
 def circuit_heat_kwh(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:
@@ -371,7 +287,6 @@ def circuit_heat_kwh(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c
         The heat, in kWh.
 
     Raises:
-        NonFiniteValueError: If any argument is NaN or infinite, or the heat overflows the float range.
         NegativeMassFlowError: If the mass flow is negative.
         NonPositiveTimestepError: If ``dt_s`` is not positive.
     """
@@ -450,7 +365,8 @@ def throttled_supply_temperature_c(*, unthrottled_supply_c: float, return_c: flo
     supply exceeds the limit, the supply stops at the limit, or at the return if the return is already hotter, so
     a throttled generator never cools its circuit; the flow stays as the generator pumps it, so the circuit then
     carries ``m c (T_sup - T_ret)``. For example, with an 80 °C limit a 72 °C return and a 10 K lift give 80 °C, a
-    85 °C return gives 85 °C, and a 60 °C return gives 70 °C.
+    85 °C return gives 85 °C, and a 60 °C return gives 70 °C. An unthrottled supply that is NaN is returned as it is,
+    so that it reaches the supply output and the check of the results after the run names it.
 
     Args:
         unthrottled_supply_c: The supply the generator's own law gives, in °C.
@@ -459,16 +375,10 @@ def throttled_supply_temperature_c(*, unthrottled_supply_c: float, return_c: flo
 
     Returns:
         The supply temperature the circuit carries, in °C.
-
-    Raises:
-        NonFiniteValueError: If any argument is NaN or infinite.
     """
-    unthrottled = _finite("unthrottled_supply_c", unthrottled_supply_c)
-    return_temperature = _finite("return_c", return_c)
-    limit = _finite("supply_limit_c", supply_limit_c)
-    if unthrottled <= limit:
-        return unthrottled
-    return max(limit, return_temperature)
+    if not unthrottled_supply_c > supply_limit_c:
+        return unthrottled_supply_c
+    return max(supply_limit_c, return_c)
 
 
 def capped_hot_water_supply_temperature_c(
@@ -496,50 +406,35 @@ def capped_hot_water_supply_temperature_c(
         The supply temperature the hot-water circuit carries, in °C.
 
     Raises:
-        NonFiniteValueError: If any argument is NaN or infinite.
         SetTemperatureAboveMaximumError: If ``set_supply_c`` lies above ``maximal_supply_c``, so that a charge
             towards it never ends.
     """
-    maximal_supply = _finite("maximal_supply_c", maximal_supply_c)
-    set_supply = _finite("set_supply_c", set_supply_c)
-    if set_supply > maximal_supply:
+    if set_supply_c > maximal_supply_c:
         raise SetTemperatureAboveMaximumError(
-            f"The hot-water set temperature {set_supply!r} °C lies above the generator's maximum supply temperature "
-            f"{maximal_supply!r} °C, so a charge towards it never ends; lower the controller's set temperature or "
+            f"The hot-water set temperature {set_supply_c!r} °C lies above the generator's maximum supply temperature "
+            f"{maximal_supply_c!r} °C, so a charge towards it never ends; lower the controller's set temperature or "
             "raise the generator's maximum."
         )
-    limit = min(maximal_supply, set_supply)
+    limit = min(maximal_supply_c, set_supply_c)
     return throttled_supply_temperature_c(
         unthrottled_supply_c=unthrottled_supply_c, return_c=return_c, supply_limit_c=limit
     )
 
 
-@dataclass(frozen=True)
-class Inflow:
+class Inflow(NamedTuple):
 
     """One water stream entering a node at a constant temperature for the step.
 
-    The supply of a charging circuit, the return of a distribution circuit, or the cold refill of a tap. Both
-    fields are stored as the ``float`` of what was passed, as every function of this module takes its arguments:
-    a ``Decimal`` or a NumPy scalar becomes a plain float, so the step arithmetic never meets another type.
+    The supply of a charging circuit, the return of a distribution circuit, or the cold refill of a tap. For
+    example, ``Inflow(0.2, 70.0)`` is 0.2 kg/s of water at 70 °C. A tank builds several of these on every pass of
+    every step, so the type is a named tuple, which is cheap to build, and it checks nothing itself:
+    :meth:`MixedNode.step` refuses a negative mass flow.
     """
 
     #: The stream's mass flow, in kg/s, at least 0.
     mass_flow_kg_per_s: float
     #: The stream's temperature, in °C.
     temperature_c: float
-
-    def __post_init__(self) -> None:
-        """Refuse a negative or non-finite mass flow and a non-finite temperature, and store both as floats.
-
-        Raises:
-            NegativeMassFlowError: If the mass flow is negative.
-            NonFiniteValueError: If the mass flow or the temperature is NaN or infinite.
-        """
-        object.__setattr__(
-            self, "mass_flow_kg_per_s", _mass_flow("Inflow.mass_flow_kg_per_s", self.mass_flow_kg_per_s)
-        )
-        object.__setattr__(self, "temperature_c", _finite("Inflow.temperature_c", self.temperature_c))
 
 
 @dataclass(frozen=True)
@@ -629,6 +524,32 @@ class MixedNode:
     SMALL_A_THRESHOLD: ClassVar[float] = 1e-4
 
     @staticmethod
+    def check_constants(*, ua_w_per_k: float, dt_s: float, heat_capacity_j_per_k: float) -> None:
+        """Refuse a node's loss coefficient, step length or heat capacity that :meth:`step` cannot integrate with.
+
+        The three values are constant over a run, so the component that owns a node calls this once, when it is
+        built, and :meth:`step` does not check them on every pass. For example, a 250 l tank with
+        ``ua_w_per_k=0.83``, ``dt_s=900.0`` and ``heat_capacity_j_per_k=1.04e6`` passes; a tank of no volume, whose
+        heat capacity is 0, is refused. A NaN fails each comparison and is refused as well.
+
+        Args:
+            ua_w_per_k: The loss coefficient, in W/K, at least 0.
+            dt_s: The step duration, in s, above 0.
+            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K, above 0.
+
+        Raises:
+            NegativeHeatLossCoefficientError: If ``ua_w_per_k`` is negative or NaN.
+            NonPositiveTimestepError: If ``dt_s`` is not positive or is NaN.
+            NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive or is NaN.
+        """
+        if not ua_w_per_k >= 0.0:
+            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua_w_per_k!r}.")
+        if not dt_s > 0.0:
+            raise NonPositiveTimestepError(f"dt_s must be > 0 s, got {dt_s!r}.")
+        if not heat_capacity_j_per_k > 0.0:
+            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {heat_capacity_j_per_k!r}.")
+
+    @staticmethod
     def step(
         *,
         t0_c: float,
@@ -644,61 +565,45 @@ class MixedNode:
         node's temperature. For example, 248 kg of water at 50 °C charged with 0.2 kg/s at 70 °C for 900 s, with
         no loss, ends at 60.3 °C with a step mean of 55.8 °C.
 
+        The loss coefficient, the step duration and the heat capacity are not checked here: they are constant over a
+        run, and the component that owns the node checks them once with :meth:`check_constants`. Nor are the values
+        checked to be finite; a NaN passes through into the result.
+
         Args:
             t0_c: The node's temperature at the start of the step, in °C.
             inflows: Every stream entering the node; read once, so any iterable will do.
-            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K.
+            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K, at least 0.
             t_amb_c: The temperature the node loses heat to, in °C.
-            dt_s: The step duration, in s.
-            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K.
+            dt_s: The step duration, in s, above 0.
+            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K, above 0.
 
         Returns:
             The end temperature, the step mean, the heat of each inflow and the loss.
 
         Raises:
-            NonFiniteValueError: If any value is NaN or infinite, or a result overflows the float range.
-            NegativeHeatLossCoefficientError: If ``ua_w_per_k`` is negative.
-            NonPositiveTimestepError: If ``dt_s`` is not positive.
-            NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive.
-            HydronicsError: If an inflow is not an :class:`Inflow`.
+            NegativeMassFlowError: If an inflow's mass flow is negative.
         """
-        t0 = _finite("t0_c", t0_c)
-        ua = _finite("ua_w_per_k", ua_w_per_k)
-        if ua < 0.0:
-            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua!r}.")
-        t_amb = _finite("t_amb_c", t_amb_c)
-        dt = _timestep("dt_s", dt_s)
-        capacity = _finite("heat_capacity_j_per_k", heat_capacity_j_per_k)
-        if capacity <= 0.0:
-            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {capacity!r}.")
         inflows = tuple(inflows)
+        conductances = []
         for inflow in inflows:
-            if not isinstance(inflow, Inflow):
-                raise HydronicsError(f"A node's inflows must be Inflow instances, got {inflow!r}.")
-
-        conductances = [
-            _finite_result(
-                f"The conductance m c of inflow {i}", inflow.mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K
-            )
-            for i, inflow in enumerate(inflows)
-        ]
-        total_conductance = _finite_sum("The node's total conductance sum_i m_i c + UA", conductances + [ua])
+            if inflow.mass_flow_kg_per_s < 0.0:
+                raise NegativeMassFlowError(
+                    f"An inflow's mass_flow_kg_per_s must be >= 0 kg/s, got {inflow.mass_flow_kg_per_s!r}."
+                )
+            conductances.append(inflow.mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K)
+        total_conductance = math.fsum(conductances + [ua_w_per_k])
         if total_conductance > 0.0:
-            weighted = [g * inflow.temperature_c for g, inflow in zip(conductances, inflows)] + [ua * t_amb]
-            numerator = _finite_sum("The node's equilibrium numerator sum_i m_i c T_i + UA T_amb", weighted)
-            t_inf = _finite_result("The node's equilibrium temperature T_inf", numerator / total_conductance)
-            a = _finite_result("The node's relaxation exponent a = k dt", total_conductance * dt / capacity)
+            weighted = [g * inflow.temperature_c for g, inflow in zip(conductances, inflows)] + [ua_w_per_k * t_amb_c]
+            t_inf = math.fsum(weighted) / total_conductance
+            a = total_conductance * dt_s / heat_capacity_j_per_k
         else:
-            t_inf = t0
+            t_inf = t0_c
             a = 0.0
         phi = relaxation_mean_factor(a)
-        t_mean = _finite_result("The node's step mean T_mean", t_inf + (t0 - t_inf) * phi)
-        t_end = _finite_result("The node's end temperature T_end", t0 + (t_inf - t0) * (a * phi))
-        heat_in = tuple(
-            _finite_result(f"The heat of inflow {i}", g * (inflow.temperature_c - t_mean) * dt)
-            for i, (g, inflow) in enumerate(zip(conductances, inflows))
-        )
-        loss = _finite_result("The node's loss UA (T_mean - T_amb) dt", ua * (t_mean - t_amb) * dt)
+        t_mean = t_inf + (t0_c - t_inf) * phi
+        t_end = t0_c + (t_inf - t0_c) * (a * phi)
+        heat_in = tuple(g * (inflow.temperature_c - t_mean) * dt_s for g, inflow in zip(conductances, inflows))
+        loss = ua_w_per_k * (t_mean - t_amb_c) * dt_s
         return NodeStep(t_end_c=t_end, t_mean_c=t_mean, heat_in_j_per_inflow=heat_in, loss_j=loss)
 
 
@@ -743,28 +648,21 @@ def mixing_valve_draw(*, t_tank_c: float, t_warm_c: float, t_cold_c: float, dema
         The hot water let out and the unmet fraction.
 
     Raises:
-        NonFiniteValueError: If any argument is NaN or infinite, or a result overflows the float range.
         ValveTemperatureOrderError: If ``t_warm_c <= t_cold_c``.
         NegativeDemandError: If ``demand_kg_per_s`` is negative.
     """
-    t_tank = _finite("t_tank_c", t_tank_c)
-    t_warm = _finite("t_warm_c", t_warm_c)
-    t_cold = _finite("t_cold_c", t_cold_c)
-    demand = _finite("demand_kg_per_s", demand_kg_per_s)
-    if t_warm <= t_cold:
+    if t_warm_c <= t_cold_c:
         raise ValveTemperatureOrderError(
-            f"A mixing valve's warm temperature must be above its cold one, got t_warm_c={t_warm!r}, "
-            f"t_cold_c={t_cold!r}."
+            f"A mixing valve's warm temperature must be above its cold one, got t_warm_c={t_warm_c!r}, "
+            f"t_cold_c={t_cold_c!r}."
         )
-    if demand < 0.0:
-        raise NegativeDemandError(f"demand_kg_per_s must be >= 0, got {demand!r}.")
-    span = _finite_result("The valve's span t_warm_c - t_cold_c", t_warm - t_cold)
-    if t_tank > t_warm:
-        lift = _finite_result("The tank's lift over the mains t_tank_c - t_cold_c", t_tank - t_cold)
-        hot_water = _finite_result("The valve's hot-water draw m_hot", demand * span / lift)
-        return ValveDraw(hot_water_kg_per_s=hot_water, unmet_fraction=0.0)
-    if t_tank > t_cold:
-        return ValveDraw(hot_water_kg_per_s=demand, unmet_fraction=(t_warm - t_tank) / span)
+    if demand_kg_per_s < 0.0:
+        raise NegativeDemandError(f"demand_kg_per_s must be >= 0, got {demand_kg_per_s!r}.")
+    span = t_warm_c - t_cold_c
+    if t_tank_c > t_warm_c:
+        return ValveDraw(hot_water_kg_per_s=demand_kg_per_s * span / (t_tank_c - t_cold_c), unmet_fraction=0.0)
+    if t_tank_c > t_cold_c:
+        return ValveDraw(hot_water_kg_per_s=demand_kg_per_s, unmet_fraction=(t_warm_c - t_tank_c) / span)
     return ValveDraw(hot_water_kg_per_s=0.0, unmet_fraction=1.0)
 
 

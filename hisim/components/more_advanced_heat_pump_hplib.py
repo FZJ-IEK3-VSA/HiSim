@@ -1176,8 +1176,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         Raises:
             ValueError: If ``cop`` is 0 or less, which would book infinite or negative electricity.
-            NonFiniteValueError: If an argument is NaN or infinite, or the power overflows the float range, as
-                :func:`hisim.hydronics.circuit_power_w` raises it.
             NegativeMassFlowError: If ``mass_flow_in_kg_per_second`` is negative, as
                 :func:`hisim.hydronics.circuit_power_w` raises it.
         """

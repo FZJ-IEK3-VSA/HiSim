@@ -682,8 +682,10 @@ degree-hours 73.1 / 109.3; gas −0.18 / −1.01 %, fuel −18.76 / −19.36 %, 
 - **Comfort at 3600 s** (hisim-6ehm): 109–193 degree-hours against 11–16 at 60 s.
 - **hisim-fxix.1** (open: "A stratified water storage of N mixed layers replaces the dt/3600 mixing factor of
   `heat_exchanger_is_present=False`") stays: the hybrid leaves the stratification path as it is, and no recorded
-  file uses it. **hisim-pnw7**, named by the owner, is not in the committed beads files of main or the stack top
-  and is not described here. **hisim-fxix.17** (open: "The memoryless part-load rule alternates where the draw
+  file uses it. **hisim-pnw7** (open, P3: "Hydronic chain without a buffer: the pipe water as a start-of-step
+  node, D25's flow ownership and district heating's bill") stays: chains without a buffer (district heating,
+  `gas_boiler_household`) are outside the hybrid, which concerns the buffer only; their pipe-water node is decided
+  there. **hisim-fxix.17** (open: "The memoryless part-load rule alternates where the draw
   takes more than the rise the step still needs") remains for the collector's circuit on the buffer in S (§5.7).
 - **Forced steps.** M2 forces 49–70 % of the steps at 600 s (information only, owner rule); at 60 s it forces
   fewer than main (heat pump 3921 against 5346 under M5's 60 s run, which equals M2 there).

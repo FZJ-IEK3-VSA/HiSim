@@ -5,6 +5,7 @@ It iterates over all components in each timestep until convergence and loops ove
 import os
 import datetime
 import enum
+import math
 from dataclasses import dataclass
 from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
 import time
@@ -175,6 +176,12 @@ class Simulator:
         cp.MeterComponent,
     )
 
+    #: How many passes one time step may take per 60 s of step length before the simulator gives up on it. It is
+    #: also the smallest limit: steps of 60 s and shorter get 100 passes, a 900 s step 1500, a 3600 s step 6000.
+    #: A loop whose error shrinks by a fixed factor per pass needs a number of passes that grows about linearly with
+    #: the step length, because a store is turned over more often in a longer step and contracts more slowly.
+    MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH: ClassVar[int] = 100
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -202,11 +209,17 @@ class Simulator:
         # debugging. Enabled by the Python entry point to mirror the JSON path.
         self._force_log_connections: bool = force_log_connections
         self._simulation_parameters: SimulationParameters
+        #: The most passes one time step may take (:meth:`maximum_passes_for_step_length`). It is set from the step
+        #: length whenever the simulation parameters are set, so the convergence loop only compares against it.
+        self.maximum_passes_per_timestep: int = self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH
         if my_simulation_parameters is not None:
             if self._force_log_connections:
                 my_simulation_parameters.log_connections = True
             self._simulation_parameters = my_simulation_parameters
             log.logger.logging_level = self._simulation_parameters.logging_level
+            self.maximum_passes_per_timestep = self.maximum_passes_for_step_length(
+                self._simulation_parameters.seconds_per_timestep
+            )
         self.register_run_locations()
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
@@ -285,7 +298,30 @@ class Simulator:
             if self._force_log_connections:
                 self._simulation_parameters.log_connections = True
             log.logger.logging_level = self._simulation_parameters.logging_level
+            self.maximum_passes_per_timestep = self.maximum_passes_for_step_length(
+                self._simulation_parameters.seconds_per_timestep
+            )
             self.register_run_locations()
+
+    @classmethod
+    def maximum_passes_for_step_length(cls, seconds_per_timestep: int) -> int:
+        """Return the most passes one time step of the given length may take before the run aborts.
+
+        The limit is ``MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH`` passes per 60 s of step length, rounded up, and never
+        less than that constant: 100 passes at 60 s and below, 102 at 61 s, 1500 at 900 s and 6000 at 3600 s.
+
+        A loop whose error shrinks by a factor per pass needs a number of passes that grows about linearly with the
+        step length, so a fixed limit aborts coarse steps that would converge. The limit is computed once, when the
+        simulation parameters are set, so the convergence loop does no extra work per pass.
+
+        Args:
+            seconds_per_timestep: The step length in seconds.
+
+        Returns:
+            The pass limit for one time step.
+        """
+        passes_for_step_length = math.ceil(cls.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH * seconds_per_timestep / 60)
+        return max(cls.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH, passes_for_step_length)
 
     def get_simulation_parameters(self) -> SimulationParameters:
         """Returns the simulation parameters for exporting them to JSON.
@@ -402,6 +438,11 @@ class Simulator:
         ``previous_stsv`` is the vector the previous step converged to (all zeros at step 0), so
         the first pass reads the previous step's value from every output computed later in the
         order. It is cloned before the first write and is never changed here.
+
+        Raises:
+            ValueError: If no output is defined, or if the step has not converged after more than
+                ``maximum_passes_per_timestep`` passes (:meth:`maximum_passes_for_step_length`). The message names
+                the step, the step length, the limit and every output that still changed on the last pass.
         """
 
         # Save states of all components
@@ -446,9 +487,14 @@ class Simulator:
                     filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
-            if iterative_tries > 100:
+            if iterative_tries > self.maximum_passes_per_timestep:
                 list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                raise ValueError(f"More than 100 tries in time step {timestep}\n{list_of_changed_values}")
+                raise ValueError(
+                    f"More than {self.maximum_passes_per_timestep} passes in time step {timestep} "
+                    f"({self._simulation_parameters.seconds_per_timestep} s steps; the limit is "
+                    f"{self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes per 60 s of step length)\n"
+                    f"{list_of_changed_values}"
+                )
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -808,6 +854,9 @@ class Simulator:
         last_step: int = 0
         starttime = datetime.datetime.now()
         total_iteration_tries_since_last_msg = 0
+        # The end-of-run summary of the pass counts: updated once per step, nothing per pass.
+        steps_above_minimum_pass_limit = 0
+        largest_pass_count = 0
 
         # All outputs start at zero for the first step only; every later step starts from the
         # values the step before it converged to (the warm start below).
@@ -829,6 +878,9 @@ class Simulator:
 
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
+            largest_pass_count = max(largest_pass_count, iteration_tries)
+            if iteration_tries > self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH:
+                steps_above_minimum_pass_limit += 1
 
             # Appends
             all_result_lines.append(resulting_stsv.values)
@@ -847,6 +899,7 @@ class Simulator:
                 )
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
+        self.log_pass_count_summary(steps_above_minimum_pass_limit, largest_pass_count)
         # The loop is done; what follows, up to the finished flag, is postprocessing.
         self._notify_progress(ProgressEvent.LOOP_END, self._simulation_parameters.timesteps, 0.0)
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
@@ -867,6 +920,32 @@ class Simulator:
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")
+
+    def log_pass_count_summary(self, steps_above_minimum_pass_limit: int, largest_pass_count: int) -> None:
+        """Log one line on how many passes the time steps of the run needed.
+
+        The line names the number of steps that needed more than ``MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH`` passes,
+        the largest pass count of any step and the run's pass limit, for example "Pass counts: 3 of 96 time steps
+        needed more than 100 passes; the largest pass count was 414 (the limit is 1500 passes at 900 s steps)." It
+        is a warning when any step needed more than 100 passes, and information otherwise.
+
+        The limit grows with the step length, so a coarse run can converge on steps that a 60 s run would abort;
+        the line shows how close the run came to its limit and how often it needed more than a 60 s step may take.
+
+        Args:
+            steps_above_minimum_pass_limit: The number of time steps that needed more than 100 passes.
+            largest_pass_count: The largest number of passes any time step needed.
+        """
+        message = (
+            f"Pass counts: {steps_above_minimum_pass_limit} of {self._simulation_parameters.timesteps} time steps "
+            f"needed more than {self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes; the largest pass count was "
+            f"{largest_pass_count} (the limit is {self.maximum_passes_per_timestep} passes at "
+            f"{self._simulation_parameters.seconds_per_timestep} s steps)."
+        )
+        if steps_above_minimum_pass_limit > 0:
+            log.warning(message)
+        else:
+            log.information(message)
 
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):

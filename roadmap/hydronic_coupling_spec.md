@@ -1015,3 +1015,7 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 - *Comfort at coarse steps* (hisim-6ehm): degree-hours at 3600 s are 192.8 (gas), 109.3 (heat pump) and 93.7 (heat
   pump + solar thermal), against the stack top's 2.7, 4.2 and 3.6. The 3600 s gaps of the delivered heat against
   60 s (amended S9, above) are tracked there too.
+
+**Amended (owner, 2026-10-17):** the buffer runs the start-of-step node of this section only above
+`part_load_above_seconds` (600 s); at or below it, it is an iterated `MixedNode`. The hybrid, its shared port
+interface and its implementation plan are in `roadmap/sh_buffer_hybrid_spec.md`.

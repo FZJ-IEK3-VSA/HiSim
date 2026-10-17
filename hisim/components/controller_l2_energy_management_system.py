@@ -776,7 +776,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         current_component_type: lt.ComponentType,
         current_input: cp.ComponentInput,
         current_output: cp.ComponentOutput,
-        holds_offer: bool = False,
     ) -> float:
         """Calculates available surplus electricity.
 
@@ -799,17 +798,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         would send it the surplus minus that remainder, and its charging would alternate between the passes of a
         step.
 
-        Under forced convergence the offer to the battery and the car is held: their signal keeps the value of the
-        last unforced pass, while the surplus left after them is still computed from what they really draw. The
-        signals of the other consumers only book their grid share, so they follow the realized draws in every pass.
-
         Args:
             available_surplus_electricity_in_watt: The surplus left before this participant, in W.
             stsv: The step values the participant's consumption is read from and its signal written to.
             current_component_type: The participant's component type.
             current_input: The input measuring the participant's consumption.
             current_output: The participant's signal output.
-            holds_offer: Whether the pass is forced, so a battery or a car keeps the offer of the last unforced pass.
 
         Returns:
             The surplus left after this participant, in W.
@@ -821,8 +815,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         # so both get the surplus offered to them (negative: the deficit the battery may cover); what they really
         # draw is subtracted. Below its set point the car charges at full station power whatever it is offered.
         if current_component_type in (lt.ComponentType.BATTERY, lt.ComponentType.CAR_BATTERY):
-            if not holds_offer:
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
@@ -1068,7 +1061,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
-        holds_offers: bool = False,
     ) -> SurplusAfterParticipants:
         """Hand the surplus to the participants by rank, send each its signal and return what is left.
 
@@ -1082,8 +1074,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             inputs_sorted: The participants' inputs, ranked.
             component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
             outputs_sorted: The participants' signal outputs, in the order of ``inputs_sorted``.
-            holds_offers: Whether the pass is forced, so the battery and the car keep the offers of the last unforced
-                pass (:meth:`control_electricity_component_iterative`).
 
         Returns:
             The grid balance and the surplus after the battery.
@@ -1113,7 +1103,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 current_component_type=single_component_type_sorted,
                 current_input=single_input_sorted,
                 current_output=single_output_sorted,
-                holds_offer=holds_offers,
             )
             if single_component_type_sorted == lt.ComponentType.BATTERY:
                 limit_inputs = self.battery_charging_limit_inputs[cast(str, single_input_sorted.src_object_name)]
@@ -1135,13 +1124,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Distribute the surplus, publish the grid balance, and decide the set-temperature raise.
 
-        Every pass books the realized values: the grid balance, the total consumption, the district pass-through and
-        the consumers' grid shares. The control decisions are taken only in an unforced pass: the set-temperature
-        raise with its three modifiers, and the offers to the battery and the car. Under ``force_convergence`` they
-        keep the values of the last unforced pass, and the end-of-step state keeps that pass's decision
-        (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first forced
-        pass sees -2,000 W because the raised heat pump draws more, the modifiers stay raised and the battery keeps
-        the offer of the last unforced pass, while the grid balance shows the -2,000 W.
+        Every pass distributes the surplus from the realized values: the offers to the battery and the car, the grid
+        balance, the total consumption, the district pass-through and the consumers' grid shares. The set-temperature
+        raise, the manager's one on/off decision, is taken only in an unforced pass: under ``force_convergence`` its
+        three modifiers keep the values of the last unforced pass, and the end-of-step state keeps that pass's
+        decision (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first
+        forced pass sees -2,000 W because the raised heat pump draws more, the modifiers stay raised while the grid
+        balance shows the -2,000 W and the battery is offered the surplus of this pass.
+
+        The offers are not held: the battery's power follows the surplus continuously within its limits, so it has no
+        edge to flip across, and holding its offer would let it charge from the grid on a surplus that is gone. Its
+        own decisions belong in a battery controller of its own.
 
         Why: the raise moves the surplus it is decided on. Where no raise decision is consistent with its own
         effect, re-deciding on every pass flips the raise until the simulator gives up.
@@ -1190,7 +1183,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
-                holds_offers=force_convergence,
             )
             available_surplus_electricity_in_watt = surplus_after_participants.grid_balance_in_watt
             if not force_convergence:

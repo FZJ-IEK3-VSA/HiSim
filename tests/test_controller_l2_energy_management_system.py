@@ -1302,7 +1302,7 @@ class TestSurplusHysteresis:
 
 
 class TestHoldUnderForcedConvergence:
-    """The energy manager keeps its control decisions under forced convergence and keeps booking realized values.
+    """The energy manager keeps its set-temperature raise under forced convergence and keeps booking realized values.
 
     The house has PV, a space-heating heat pump at weight 2, a hot-water heat pump at weight 3, a car at weight 5 and
     a battery at weight 6. An unforced pass with a surplus raises the set temperatures; a forced pass after it sees
@@ -1438,11 +1438,13 @@ class TestHoldUnderForcedConvergence:
         return house
 
     @pytest.mark.base
-    def test_a_forced_pass_keeps_the_raise_and_the_offers_of_the_last_unforced_pass(self) -> None:
-        """Catches the manager re-deciding under forced convergence, where its decisions flip until the step aborts.
+    def test_a_forced_pass_keeps_the_raise_and_offers_this_pass_s_surplus(self) -> None:
+        """Catches the manager re-deciding its raise under forced convergence, or holding the battery's offer.
 
-        The forced pass sees a deficit, on which an unforced pass would end the raise and offer the car and the
-        battery a negative surplus. The three modifiers and both offers keep the values of the unforced pass.
+        The forced pass sees a deficit, on which an unforced pass would end the raise. The three modifiers keep the
+        values of the unforced pass. The car and the battery are offered the surplus of the forced pass itself: 500 W
+        of PV less 2,000 W of heat pumps leave the car -1,500 W, and its 1,000 W leave the battery -2,500 W. A held
+        offer of 3,000 W would let the battery charge from the grid on a surplus that is gone.
         """
         house = self.raised_then_forced_into_a_deficit()
         manager = house.manager
@@ -1457,8 +1459,8 @@ class TestHoldUnderForcedConvergence:
             manager.domestic_hot_water_storage_temperature_offset_value
         )
         assert manager.building_indoor_temperature_offset_in_kelvin != 0.0
-        assert house.value(house.car_offer) == pytest.approx(3000.0)
-        assert house.value(house.battery_offer) == pytest.approx(3000.0)
+        assert house.value(house.car_offer) == pytest.approx(-1500.0)
+        assert house.value(house.battery_offer) == pytest.approx(-2500.0)
 
     @pytest.mark.base
     def test_a_forced_pass_books_the_realized_values(self) -> None:

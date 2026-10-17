@@ -72,8 +72,11 @@ def test_the_balance_closes_on_every_step_whatever_the_step_length() -> None:
 
 
 def test_every_circuit_is_booked_on_the_start_temperature() -> None:
-    """Each inflow brings ``m c (T_i - T0) dt``, the loss is ``UA (T0 - T_amb) dt``: both ends book from one triple."""
-    for t0, inflows, ua, t_amb, dt, capacity, drawn_w in StartNodeSweep.cases()[:500]:
+    """Each inflow brings ``m c (T_i - T0) dt``, the loss is ``UA (T0 - T_amb) dt``: both ends book from one triple.
+
+    Every twelfth case is checked, 500 in all, so each of the three step lengths contributes about 167.
+    """
+    for t0, inflows, ua, t_amb, dt, capacity, drawn_w in StartNodeSweep.cases()[::12]:
         step = StartOfStepNode.step(
             t0_c=t0, inflows=inflows, ua_w_per_k=ua, t_amb_c=t_amb, dt_s=dt, heat_capacity_j_per_k=capacity,
             heat_drawn_w=drawn_w,

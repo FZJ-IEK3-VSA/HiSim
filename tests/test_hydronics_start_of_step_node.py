@@ -119,6 +119,27 @@ def test_a_short_step_agrees_with_the_mixed_node() -> None:
     assert abs(long_start.t_end_c - long_mixed.t_end_c) > 1.0
 
 
+def test_a_negative_draw_puts_heat_into_the_node() -> None:
+    """A draw of -1 kW for 900 s warms a node of 1 MJ/K without flow or loss by 0.9 K, as a positive one cools it.
+
+    The draw is signed like a circuit's heat, so the emitters of a cooling distribution system can hand the rooms' heat
+    to the pipe water through it.
+    """
+    arguments: Dict[str, Any] = {
+        "t0_c": 18.0,
+        "inflows": [],
+        "ua_w_per_k": 0.0,
+        "t_amb_c": 20.0,
+        "dt_s": 900.0,
+        "heat_capacity_j_per_k": 1e6,
+    }
+    warmed = StartOfStepNode.step(heat_drawn_w=-1000.0, **arguments)
+    cooled = StartOfStepNode.step(heat_drawn_w=1000.0, **arguments)
+    assert warmed.heat_drawn_j == -9e5
+    assert warmed.t_end_c == pytest.approx(18.9)
+    assert cooled.t_end_c == pytest.approx(17.1)
+
+
 def test_a_node_without_flow_loss_or_draw_keeps_its_temperature() -> None:
     """No flow, no loss and no draw leave the node where it started, with zero heats."""
     step = StartOfStepNode.step(

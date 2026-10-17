@@ -142,6 +142,13 @@ class HeatDistribution(cp.PhysicsComponent):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     WaterMassFlowHDS = "WaterMassFlowHDS"
 
+    #: The positions in which the heat distribution system pumps its own design flow, because the component at the
+    #: other end of its circuit (a buffer, or a district-heating substation without a pump) moves no water itself.
+    POSITIONS_PUMPING_THE_DESIGN_FLOW: ClassVar[Tuple[PositionHotWaterStorageInSystemSetup, ...]] = (
+        PositionHotWaterStorageInSystemSetup.PARALLEL,
+        PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
+    )
+
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
@@ -178,6 +185,11 @@ class HeatDistribution(cp.PhysicsComponent):
         self.position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             self.heat_distribution_system_config.position_hot_water_storage_in_system
         )
+        #: Whether the circuit pumps its own design flow; otherwise it reads the flow of its heat generator.
+        self.pumps_its_design_flow: bool = (
+            self.position_hot_water_storage_in_system in self.POSITIONS_PUMPING_THE_DESIGN_FLOW
+        )
+        self.refuse_a_design_flow_that_moves_no_water()
 
         self.build()
 
@@ -218,10 +230,7 @@ class HeatDistribution(cp.PhysicsComponent):
         )
 
         self.water_mass_flow_rate_hp_in_kg_per_second_channel: Optional[cp.ComponentInput] = None
-        if self.position_hot_water_storage_in_system in (
-            PositionHotWaterStorageInSystemSetup.SERIES,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
-        ):
+        if not self.pumps_its_design_flow:
             # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel = self.add_input(
                 self.component_name,
@@ -393,7 +402,14 @@ class HeatDistribution(cp.PhysicsComponent):
         return self.heat_distribution_system_config.get_string_dict()
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat distribution system."""
+        """Simulate the heat distribution system.
+
+        Where the system pumps its own design flow (a buffer in front of it, or a district-heating substation without
+        a pump), the pump stops while the controller's valve is shut: the circuit then moves no water, carries no heat
+        and returns its inlet temperature unchanged (:meth:`pump_stopped_by_the_valve`). Before, it went on pumping the
+        design flow with the valve shut and returned the inlet cooled by a hundredth of its difference to the room,
+        so the buffer booked heat into a circuit that delivered none to the building.
+        """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
         state_controller = stsv.get_input_value(self.state_channel)
@@ -402,10 +418,10 @@ class HeatDistribution(cp.PhysicsComponent):
         )
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        if self.position_hot_water_storage_in_system in (
-            PositionHotWaterStorageInSystemSetup.PARALLEL,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
-        ):
+        pump_stands = self.pumps_its_design_flow and self.pump_stopped_by_the_valve(state_controller)
+        if pump_stands:
+            water_mass_flow_rate_in_kg_per_second = 0.0
+        elif self.pumps_its_design_flow:
             water_mass_flow_rate_in_kg_per_second = (
                 self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )
@@ -420,7 +436,12 @@ class HeatDistribution(cp.PhysicsComponent):
                 self.water_mass_flow_rate_hp_in_kg_per_second_channel
             )
 
-        if water_mass_flow_rate_in_kg_per_second == 0:
+        if pump_stands:
+            # the valve is shut and the pump stands: no water moves, no heat is exchanged
+            water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_output_in_celsius = water_temperature_input_in_celsius
+            thermal_power_delivered_in_watt = 0.0
+        elif water_mass_flow_rate_in_kg_per_second == 0:
             # important for heating system without buffer storage
             (
                 water_temperature_input_in_celsius,
@@ -485,6 +506,43 @@ class HeatDistribution(cp.PhysicsComponent):
         self.state.water_output_temperature_in_celsius = water_temperature_output_in_celsius
         self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
         self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
+
+    @staticmethod
+    def pump_stopped_by_the_valve(valve_state: float) -> bool:
+        """Return whether the controller's valve state stops the circuit's own pump.
+
+        The heat distribution controller publishes 1 for a valve open for heating, -1 for one open for cooling and
+        0 for a shut valve (also outside the heating season). A pump that moves the design flow stands while the
+        valve is shut. For example, 0 stops the pump and 1 and -1 keep it running.
+
+        Args:
+            valve_state: The controller's ``State`` output.
+
+        Returns:
+            True if the valve is shut.
+        """
+        return valve_state == 0
+
+    def refuse_a_design_flow_that_moves_no_water(self) -> None:
+        """Refuse a circuit that pumps its own design flow when that flow is not above 0 kg/s.
+
+        Where the system pumps its own design flow (``PARALLEL`` or ``NO_STORAGE_MASS_FLOW_FIX``), that flow is the
+        only water it moves, so a design flow of 0 kg/s would deliver no heat to the building at any valve state. For
+        example, a design flow sized from a very small heating load and rounded to two decimals, 0.0049 kg/s, becomes
+        0.0 kg/s and is refused here. Where the heat generator moves the water, the design flow is not used and is not
+        checked.
+
+        Raises:
+            ValueError: If the system pumps its own design flow and the flow is not above 0 kg/s.
+        """
+        design_flow_in_kg_per_second = self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
+        if self.pumps_its_design_flow and design_flow_in_kg_per_second <= 0:
+            raise ValueError(
+                f"{self.component_name}: water_mass_flow_rate_in_kg_per_second is {design_flow_in_kg_per_second} "
+                f"kg/s, but at position {self.position_hot_water_storage_in_system.value} the heat distribution "
+                "system pumps this design flow itself, so it must be above 0 kg/s; a circuit without flow delivers "
+                "no heat to the building."
+            )
 
     def determine_water_temperature_input_output_effective_thermal_power_without_mass_flow(
         self,

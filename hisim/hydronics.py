@@ -543,6 +543,78 @@ class Inflow:
 
 
 @dataclass(frozen=True)
+class _NodeArguments:
+
+    """The checked arguments of one node step, shared by :meth:`MixedNode.step` and :meth:`StartOfStepNode.step`.
+
+    Both nodes take the same start temperature, inflows, loss coefficient, ambient temperature, step duration and
+    heat capacity, and refuse the same faults. :meth:`checked` is the one place that refuses them, so the two nodes
+    cannot drift apart in what they accept. For example, ``_NodeArguments.checked(t0_c=40, inflows=[], ua_w_per_k=2,
+    t_amb_c=20, dt_s=900, heat_capacity_j_per_k=1e6)`` holds the same values as floats and an empty tuple.
+    """
+
+    #: The node's temperature at the start of the step, in °C.
+    t0_c: float
+    #: Every stream entering the node, in the order given.
+    inflows: Tuple[Inflow, ...]
+    #: The loss coefficient to ``t_amb_c``, in W/K, at least 0.
+    ua_w_per_k: float
+    #: The temperature the node loses heat to, in °C.
+    t_amb_c: float
+    #: The step duration, in s, above 0.
+    dt_s: float
+    #: The node's heat capacity ``C = M c``, in J/K, above 0.
+    heat_capacity_j_per_k: float
+
+    @staticmethod
+    def checked(
+        *,
+        t0_c: float,
+        inflows: Iterable[Inflow],
+        ua_w_per_k: float,
+        t_amb_c: float,
+        dt_s: float,
+        heat_capacity_j_per_k: float,
+    ) -> "_NodeArguments":
+        """Return a node step's arguments as floats and a tuple of inflows, refused when a node cannot take them.
+
+        Args:
+            t0_c: The node's temperature at the start of the step, in °C.
+            inflows: Every stream entering the node; read once, so any iterable will do.
+            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K.
+            t_amb_c: The temperature the node loses heat to, in °C.
+            dt_s: The step duration, in s.
+            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K.
+
+        Returns:
+            The checked arguments.
+
+        Raises:
+            NonFiniteValueError: If any value is NaN or infinite.
+            NegativeHeatLossCoefficientError: If ``ua_w_per_k`` is negative.
+            NonPositiveTimestepError: If ``dt_s`` is not positive.
+            NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive.
+            HydronicsError: If an inflow is not an :class:`Inflow`.
+        """
+        t0 = _finite("t0_c", t0_c)
+        ua = _finite("ua_w_per_k", ua_w_per_k)
+        if ua < 0.0:
+            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua!r}.")
+        t_amb = _finite("t_amb_c", t_amb_c)
+        dt = _timestep("dt_s", dt_s)
+        capacity = _finite("heat_capacity_j_per_k", heat_capacity_j_per_k)
+        if capacity <= 0.0:
+            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {capacity!r}.")
+        checked_inflows = tuple(inflows)
+        for inflow in checked_inflows:
+            if not isinstance(inflow, Inflow):
+                raise HydronicsError(f"A node's inflows must be Inflow instances, got {inflow!r}.")
+        return _NodeArguments(
+            t0_c=t0, inflows=checked_inflows, ua_w_per_k=ua, t_amb_c=t_amb, dt_s=dt, heat_capacity_j_per_k=capacity
+        )
+
+
+@dataclass(frozen=True)
 class NodeStep:
 
     """The result of one step of a fully mixed node.
@@ -662,19 +734,16 @@ class MixedNode:
             NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive.
             HydronicsError: If an inflow is not an :class:`Inflow`.
         """
-        t0 = _finite("t0_c", t0_c)
-        ua = _finite("ua_w_per_k", ua_w_per_k)
-        if ua < 0.0:
-            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua!r}.")
-        t_amb = _finite("t_amb_c", t_amb_c)
-        dt = _timestep("dt_s", dt_s)
-        capacity = _finite("heat_capacity_j_per_k", heat_capacity_j_per_k)
-        if capacity <= 0.0:
-            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {capacity!r}.")
-        inflows = tuple(inflows)
-        for inflow in inflows:
-            if not isinstance(inflow, Inflow):
-                raise HydronicsError(f"A node's inflows must be Inflow instances, got {inflow!r}.")
+        arguments = _NodeArguments.checked(
+            t0_c=t0_c,
+            inflows=inflows,
+            ua_w_per_k=ua_w_per_k,
+            t_amb_c=t_amb_c,
+            dt_s=dt_s,
+            heat_capacity_j_per_k=heat_capacity_j_per_k,
+        )
+        t0, inflows, ua = arguments.t0_c, arguments.inflows, arguments.ua_w_per_k
+        t_amb, dt, capacity = arguments.t_amb_c, arguments.dt_s, arguments.heat_capacity_j_per_k
 
         conductances = [
             _finite_result(
@@ -775,26 +844,22 @@ class StartOfStepNode:
             NonPositiveHeatCapacityError: If ``heat_capacity_j_per_k`` is not positive.
             HydronicsError: If an inflow is not an :class:`Inflow`.
         """
-        t0 = _finite("t0_c", t0_c)
-        ua = _finite("ua_w_per_k", ua_w_per_k)
-        if ua < 0.0:
-            raise NegativeHeatLossCoefficientError(f"ua_w_per_k must be >= 0 W/K, got {ua!r}.")
-        t_amb = _finite("t_amb_c", t_amb_c)
-        dt = _timestep("dt_s", dt_s)
-        capacity = _finite("heat_capacity_j_per_k", heat_capacity_j_per_k)
-        if capacity <= 0.0:
-            raise NonPositiveHeatCapacityError(f"heat_capacity_j_per_k must be > 0 J/K, got {capacity!r}.")
+        arguments = _NodeArguments.checked(
+            t0_c=t0_c,
+            inflows=inflows,
+            ua_w_per_k=ua_w_per_k,
+            t_amb_c=t_amb_c,
+            dt_s=dt_s,
+            heat_capacity_j_per_k=heat_capacity_j_per_k,
+        )
+        t0, ua, t_amb = arguments.t0_c, arguments.ua_w_per_k, arguments.t_amb_c
+        dt, capacity = arguments.dt_s, arguments.heat_capacity_j_per_k
         drawn_w = _finite("heat_drawn_w", heat_drawn_w)
-        inflows = tuple(inflows)
-        for inflow in inflows:
-            if not isinstance(inflow, Inflow):
-                raise HydronicsError(f"A node's inflows must be Inflow instances, got {inflow!r}.")
         heat_in = tuple(
-            _finite_result(
-                f"The heat of inflow {i}",
-                inflow.mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K * (inflow.temperature_c - t0) * dt,
+            circuit_heat_j(
+                mass_flow_kg_per_s=inflow.mass_flow_kg_per_s, t_supply_c=inflow.temperature_c, t_return_c=t0, dt_s=dt
             )
-            for i, inflow in enumerate(inflows)
+            for inflow in arguments.inflows
         )
         loss = _finite_result("The node's loss UA (T0 - T_amb) dt", ua * (t0 - t_amb) * dt)
         drawn = _finite_result("The heat drawn from the node", drawn_w * dt)

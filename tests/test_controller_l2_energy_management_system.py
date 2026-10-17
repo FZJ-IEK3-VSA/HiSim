@@ -7,7 +7,7 @@ Investigate total consumption, total grid consumption and grid injection.
 import os
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, cast
+from typing import ClassVar, List, Optional, Tuple, cast
 import pytest
 import numpy as np
 import pandas as pd
@@ -1299,6 +1299,200 @@ class TestSurplusHysteresis:
             return list(stsv.values)
 
         assert outputs_after([(9000.0, 1500.0), (0.0, -800.0), (2600.0, 0.0)]) == outputs_after([])
+
+
+class TestHoldUnderForcedConvergence:
+    """The energy manager keeps its control decisions under forced convergence and keeps booking realized values.
+
+    The house has PV, a space-heating heat pump at weight 2, a hot-water heat pump at weight 3, a car at weight 5 and
+    a battery at weight 6. An unforced pass with a surplus raises the set temperatures; a forced pass after it sees
+    a deficit, because the participants draw more.
+    """
+
+    #: The PV production of the unforced pass, in W: 3,000 W left after the two heat pumps' 1,000 W each.
+    UNFORCED_PV_PRODUCTION_IN_WATT: ClassVar[float] = 5000.0
+    #: The PV production of the forced pass, in W: 1,500 W short of the two heat pumps' draw.
+    FORCED_PV_PRODUCTION_IN_WATT: ClassVar[float] = 500.0
+
+    @dataclass
+    class House:
+        """A manager wired to its participants, the step values, and the outputs a test reads or sets."""
+
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+        stsv: cp.SingleTimeStepValues
+        pv: cp.ComponentOutput
+        space_heating_draw: cp.ComponentOutput
+        hot_water_draw: cp.ComponentOutput
+        car_draw: cp.ComponentOutput
+        battery_power: cp.ComponentOutput
+        space_heating_signal: cp.ComponentOutput
+        hot_water_signal: cp.ComponentOutput
+        car_offer: cp.ComponentOutput
+        battery_offer: cp.ComponentOutput
+
+        def value(self, output: cp.ComponentOutput) -> float:
+            """Return an output's value in the step values."""
+            return self.stsv.values[output.global_index]
+
+        def one_pass(
+            self, *, pv_production_in_watt: float, car_draw_in_watt: float, battery_power_in_watt: float, forced: bool
+        ) -> None:
+            """Run one pass, as the simulator does: restore, then simulate with these participant values.
+
+            Args:
+                pv_production_in_watt: The PV production, in W.
+                car_draw_in_watt: The car's realized charging power, in W.
+                battery_power_in_watt: The battery's realized power, in W; negative while it discharges.
+                forced: Whether the simulator forces the step to converge.
+            """
+            self.stsv.set_output_value(self.pv, pv_production_in_watt)
+            self.stsv.set_output_value(self.car_draw, car_draw_in_watt)
+            self.stsv.set_output_value(self.battery_power, battery_power_in_watt)
+            self.manager.i_restore_state()
+            self.manager.i_simulate(0, self.stsv, forced)
+
+    @staticmethod
+    def steered_participant(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        name: str,
+        component_type: lt.ComponentType,
+        weight: int,
+    ) -> Tuple[cp.ComponentOutput, cp.ComponentOutput]:
+        """Wire a participant's draw to the manager and grow the manager's signal output for it.
+
+        Returns:
+            The participant's draw output and the manager's signal output to it.
+        """
+        draw = _wire_measured_participant(manager, name, component_type, weight)
+        signal = manager.add_component_output(
+            source_output_name=f"SignalTo{name}_",
+            source_tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_weight=weight,
+            output_description=f"The manager's signal to {name}.",
+        )
+        return draw, signal
+
+    def house(self) -> "TestHoldUnderForcedConvergence.House":
+        """Build the house, index every output as the simulator would, and set the draws and battery limits.
+
+        Each heat pump draws 1,000 W; the battery takes up to 1,500 W and nothing below 200 W.
+
+        Returns:
+            The house, its start-of-step state saved.
+        """
+        manager, outputs = TestSurplusHysteresis.manager_with_pv_and_heat_pump_outputs()
+        space_heating_draw, space_heating_signal = self.steered_participant(
+            manager, "SpaceHeatingHeatPump", lt.ComponentType.HEAT_PUMP_BUILDING, 2
+        )
+        car_draw, car_offer = self.steered_participant(manager, "Car", lt.ComponentType.CAR_BATTERY, 5)
+        TestSurplusHysteresis.wire_battery(manager, outputs)
+        all_outputs = [*outputs.all(), space_heating_draw, car_draw, *manager.outputs]
+        for index, output in enumerate(all_outputs):
+            output.global_index = index
+        stsv = cp.SingleTimeStepValues(len(all_outputs))
+        stsv.set_output_value(outputs.heat_pump, 1000.0)
+        stsv.set_output_value(space_heating_draw, 1000.0)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_maximum_charging_power), 1500.0)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_minimum_charging_power), 200.0)
+        signals = {output.field_name: output for output in manager.outputs}
+        manager.i_save_state()
+        return self.House(
+            manager=manager,
+            stsv=stsv,
+            pv=outputs.pv,
+            space_heating_draw=space_heating_draw,
+            hot_water_draw=outputs.heat_pump,
+            car_draw=car_draw,
+            battery_power=cast(cp.ComponentOutput, outputs.battery),
+            space_heating_signal=space_heating_signal,
+            hot_water_signal=signals["ElectricityToOrFromGridOfDHWHeatPump_3"],
+            car_offer=car_offer,
+            battery_offer=signals["LoadingPowerInputForBattery_6"],
+        )
+
+    def raised_then_forced_into_a_deficit(self) -> "TestHoldUnderForcedConvergence.House":
+        """Run an unforced pass with a surplus and then a forced pass with a deficit.
+
+        The unforced pass leaves 3,000 W after the heat pumps: the car, drawing nothing, is offered 3,000 W, the
+        battery 3,000 W, and its share of 1,500 W leaves 1,500 W, so the set temperatures are raised. In the forced
+        pass the PV produces 500 W, the car draws 1,000 W and the battery discharges 200 W.
+
+        Returns:
+            The house after the forced pass.
+        """
+        house = self.house()
+        house.one_pass(
+            pv_production_in_watt=self.UNFORCED_PV_PRODUCTION_IN_WATT,
+            car_draw_in_watt=0.0,
+            battery_power_in_watt=0.0,
+            forced=False,
+        )
+        house.one_pass(
+            pv_production_in_watt=self.FORCED_PV_PRODUCTION_IN_WATT,
+            car_draw_in_watt=1000.0,
+            battery_power_in_watt=-200.0,
+            forced=True,
+        )
+        return house
+
+    @pytest.mark.base
+    def test_a_forced_pass_keeps_the_raise_and_the_offers_of_the_last_unforced_pass(self) -> None:
+        """Catches the manager re-deciding under forced convergence, where its decisions flip until the step aborts.
+
+        The forced pass sees a deficit, on which an unforced pass would end the raise and offer the car and the
+        battery a negative surplus. The three modifiers and both offers keep the values of the unforced pass.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+
+        assert house.value(manager.building_indoor_temperature_modifier) == (
+            manager.building_indoor_temperature_offset_in_kelvin
+        )
+        assert house.value(manager.space_heating_water_storage_temperature_modifier) == (
+            manager.space_heating_water_storage_temperature_offset_value
+        )
+        assert house.value(manager.domestic_hot_water_storage_temperature_modifier) == (
+            manager.domestic_hot_water_storage_temperature_offset_value
+        )
+        assert manager.building_indoor_temperature_offset_in_kelvin != 0.0
+        assert house.value(house.car_offer) == pytest.approx(3000.0)
+        assert house.value(house.battery_offer) == pytest.approx(3000.0)
+
+    @pytest.mark.base
+    def test_a_forced_pass_books_the_realized_values(self) -> None:
+        """Catches the bookkeeping frozen with the decisions, which would put a wrong balance into the KPIs.
+
+        In the forced pass 500 W of PV meet 2,000 W of heat pumps and 1,000 W of car, and the battery covers 200 W:
+        the grid supplies 2,300 W. The total consumption sums the realized powers of the steered participants, the
+        battery's -200 W included, to 2,800 W, and the heat pumps' signals book their grid shares, 500 W and 1,000 W.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+
+        assert house.value(manager.total_electricity_to_or_from_grid) == pytest.approx(-2300.0)
+        assert house.value(manager.total_electricity_consumption_channel) == pytest.approx(2800.0)
+        assert house.value(house.space_heating_signal) == pytest.approx(-500.0)
+        assert house.value(house.hot_water_signal) == pytest.approx(-1000.0)
+
+    @pytest.mark.base
+    def test_the_step_after_a_forced_step_starts_from_the_held_decision(self) -> None:
+        """Catches a saved state that differs from the decision the held outputs show.
+
+        The step started without a raise, its last unforced pass raised, and the forced pass held the raise. The
+        saved state is the raise, so a pass of the next step with a surplus inside the hysteresis band keeps it.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+        manager.i_save_state()
+
+        held_decision = controller_l2_energy_management_system.EMSState(set_temperatures_are_raised=True)
+        assert manager.previous_state == held_decision
+        house.one_pass(pv_production_in_watt=2000.0, car_draw_in_watt=0.0, battery_power_in_watt=0.0, forced=False)
+        assert house.value(manager.domestic_hot_water_storage_temperature_modifier) == (
+            manager.domestic_hot_water_storage_temperature_offset_value
+        )
 
 
 @pytest.mark.base

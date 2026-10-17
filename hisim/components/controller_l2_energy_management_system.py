@@ -94,9 +94,14 @@ class EMSState:
     The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
     storage while generated electricity is left over after the battery has charged. Close to zero surplus it keeps the
     decision of the step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision
-    is the one value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes
-    the decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
-    the next step's start.
+    is the one value the manager carries from step to step.
+
+    The manager keeps two of them. ``previous_state`` is the start of the step: a pass reads only it, and no pass
+    changes it. ``state`` is the end of the step: every unforced pass overwrites it with its decision, a forced pass
+    leaves it alone, and ``i_restore_state`` does not reset it. ``i_save_state`` makes it the next step's start. So the
+    step ends with the decision of its last unforced pass, which is the decision the held outputs of a forced pass
+    show. For example, if the last unforced pass raises the set temperatures, the modifiers stay raised through
+    the forced passes and the next step starts from a raise, whatever surplus the forced passes see.
     """
 
     #: Whether the set temperatures are raised, in the step this state ends.
@@ -745,12 +750,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """Save the state the step ends with, the decision of the converged pass, as the next step's start."""
+        """Make the decision the step ends with, that of its last unforced pass, the next step's start."""
         self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restore the state the step started with. The decision of the previous step is read from the saved state."""
-        self.state = dataclasses.replace(self.previous_state)
+        """Restore nothing: a pass reads only the start-of-step state, which no pass changes.
+
+        The end-of-step state is not reset either. An unforced pass overwrites it; under forced convergence the
+        manager holds its decision, so the step ends with the decision of its last unforced pass, the one its held
+        set-temperature modifiers show (:class:`EMSState`).
+        """
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -767,6 +776,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         current_component_type: lt.ComponentType,
         current_input: cp.ComponentInput,
         current_output: cp.ComponentOutput,
+        holds_offer: bool = False,
     ) -> float:
         """Calculates available surplus electricity.
 
@@ -789,12 +799,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         would send it the surplus minus that remainder, and its charging would alternate between the passes of a
         step.
 
+        Under forced convergence the offer to the battery and the car is held: their signal keeps the value of the
+        last unforced pass, while the surplus left after them is still computed from what they really draw. The
+        signals of the other consumers only book their grid share, so they follow the realized draws in every pass.
+
         Args:
             available_surplus_electricity_in_watt: The surplus left before this participant, in W.
             stsv: The step values the participant's consumption is read from and its signal written to.
             current_component_type: The participant's component type.
             current_input: The input measuring the participant's consumption.
             current_output: The participant's signal output.
+            holds_offer: Whether the pass is forced, so a battery or a car keeps the offer of the last unforced pass.
 
         Returns:
             The surplus left after this participant, in W.
@@ -806,7 +821,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         # so both get the surplus offered to them (negative: the deficit the battery may cover); what they really
         # draw is subtracted. Below its set point the car charges at full station power whatever it is offered.
         if current_component_type in (lt.ComponentType.BATTERY, lt.ComponentType.CAR_BATTERY):
-            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            if not holds_offer:
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
@@ -1052,6 +1068,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
+        holds_offers: bool = False,
     ) -> SurplusAfterParticipants:
         """Hand the surplus to the participants by rank, send each its signal and return what is left.
 
@@ -1065,6 +1082,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             inputs_sorted: The participants' inputs, ranked.
             component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
             outputs_sorted: The participants' signal outputs, in the order of ``inputs_sorted``.
+            holds_offers: Whether the pass is forced, so the battery and the car keep the offers of the last unforced
+                pass (:meth:`control_electricity_component_iterative`).
 
         Returns:
             The grid balance and the surplus after the battery.
@@ -1094,6 +1113,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 current_component_type=single_component_type_sorted,
                 current_input=single_input_sorted,
                 current_output=single_output_sorted,
+                holds_offer=holds_offers,
             )
             if single_component_type_sorted == lt.ComponentType.BATTERY:
                 limit_inputs = self.battery_charging_limit_inputs[cast(str, single_input_sorted.src_object_name)]
@@ -1113,7 +1133,24 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates iteration of surplus controller."""
+        """Distribute the surplus, publish the grid balance, and decide the set-temperature raise.
+
+        Every pass books the realized values: the grid balance, the total consumption, the district pass-through and
+        the consumers' grid shares. The control decisions are taken only in an unforced pass: the set-temperature
+        raise with its three modifiers, and the offers to the battery and the car. Under ``force_convergence`` they
+        keep the values of the last unforced pass, and the end-of-step state keeps that pass's decision
+        (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first forced
+        pass sees -2,000 W because the raised heat pump draws more, the modifiers stay raised and the battery keeps
+        the offer of the last unforced pass, while the grid balance shows the -2,000 W.
+
+        Why: the raise moves the surplus it is decided on. Where no raise decision is consistent with its own
+        effect, re-deciding on every pass flips the raise until the simulator gives up.
+
+        Args:
+            timestep: The index of the step.
+            stsv: The step values the inputs are read from and the outputs written to.
+            force_convergence: Whether the simulator forces the step to converge, so the manager holds its decisions.
+        """
         if timestep == 0:
             (
                 self.inputs_sorted,
@@ -1153,19 +1190,21 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
+                holds_offers=force_convergence,
             )
             available_surplus_electricity_in_watt = surplus_after_participants.grid_balance_in_watt
-            set_temperatures_are_raised = self.raises_set_temperatures(
-                surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
-                raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
-            )
-            self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
-            self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
-                set_temperatures_are_raised=set_temperatures_are_raised,
-                stsv=stsv,
-                inputs_sorted=self.inputs_sorted,
-                component_types_sorted=self.component_types_sorted,
-            )
+            if not force_convergence:
+                set_temperatures_are_raised = self.raises_set_temperatures(
+                    surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
+                    raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
+                )
+                self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
+                self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+                    set_temperatures_are_raised=set_temperatures_are_raised,
+                    stsv=stsv,
+                    inputs_sorted=self.inputs_sorted,
+                    component_types_sorted=self.component_types_sorted,
+                )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(

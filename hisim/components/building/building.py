@@ -80,17 +80,22 @@ class BuildingState:
 
     def __init__(
         self,
+        *,
         thermal_mass_temperature_in_celsius: float,
         thermal_capacitance_in_joule_per_kelvin: float,
         indoor_air_temperature_in_celsius: float,
     ) -> None:
         """Construct all the neccessary attributes for the BuildingState object.
 
+        The two temperatures are the values the state carries from one step into the next. At the start of a step
+        they are the values the previous step ended at (on the first step the configured initial temperature);
+        ``Building.i_simulate`` replaces them with this step's values, which the next step then starts from.
+
         Args:
-            thermal_mass_temperature_in_celsius: The thermal mass temperature at the start of the step, in °C.
+            thermal_mass_temperature_in_celsius: The thermal mass temperature the state carries into the next step,
+                in °C.
             thermal_capacitance_in_joule_per_kelvin: The thermal mass's heat capacity, in J/K.
-            indoor_air_temperature_in_celsius: The indoor air temperature at the end of the previous step, which is
-                the start of this one, in °C.
+            indoor_air_temperature_in_celsius: The indoor air temperature the state carries into the next step, in °C.
         """
         # this is labeled as t_m in the paper [1] (** Check header)
         self.thermal_mass_temperature_in_celsius: float = thermal_mass_temperature_in_celsius
@@ -110,9 +115,9 @@ class BuildingState:
     ) -> "BuildingState":
         """Copy the Building State."""
         return BuildingState(
-            self.thermal_mass_temperature_in_celsius,
-            self.thermal_capacitance_in_joule_per_kelvin,
-            self.indoor_air_temperature_in_celsius,
+            thermal_mass_temperature_in_celsius=self.thermal_mass_temperature_in_celsius,
+            thermal_capacitance_in_joule_per_kelvin=self.thermal_capacitance_in_joule_per_kelvin,
+            indoor_air_temperature_in_celsius=self.indoor_air_temperature_in_celsius,
         )
 
 
@@ -171,6 +176,7 @@ class Building(cp.PhysicsComponent):
     TemperatureIndoorAir = "TemperatureIndoorAir"
     #: The indoor air temperature at the start of the step, the value the previous step converged to: a sensor
     #: value no pass of the step moves, for components that decide on the room temperature within the step.
+    #: On the first step it is the configured initial indoor temperature.
     TemperatureIndoorAirAtStartOfStepInCelsius = "TemperatureIndoorAirAtStartOfStepInCelsius"
     TotalThermalPowerToResidence = "TotalThermalPowerToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
@@ -371,7 +377,11 @@ class Building(cp.PhysicsComponent):
             self.TemperatureIndoorAir,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-            output_description=f"here a description for {self.TemperatureIndoorAir} will follow.",
+            output_description=(
+                "The indoor air temperature of this step, computed from the heat delivered in the same pass, so it "
+                "moves while the step iterates. A component that decides on the room temperature within the step "
+                f"reads {self.TemperatureIndoorAirAtStartOfStepInCelsius} instead."
+            ),
         )
         self.indoor_air_temperature_at_start_of_step_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -380,7 +390,8 @@ class Building(cp.PhysicsComponent):
             lt.Units.CELSIUS,
             output_description=(
                 "The indoor air temperature at the start of the step: the value the previous step converged to, "
-                "constant while the step iterates."
+                "the configured initial indoor temperature on the first step. The building publishes the same value "
+                "in every pass of the step."
             ),
         )
         self.total_thermal_power_to_residence_channel: cp.ComponentOutput = self.add_output(
@@ -667,6 +678,7 @@ class Building(cp.PhysicsComponent):
             )
 
         previous_thermal_mass_temperature_in_celsius = self.state.thermal_mass_temperature_in_celsius
+        indoor_air_temperature_at_start_of_step_in_celsius = self.state.indoor_air_temperature_in_celsius
 
         # Performs calculations
         solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
@@ -765,7 +777,7 @@ class Building(cp.PhysicsComponent):
         )
         stsv.set_output_value(
             self.indoor_air_temperature_at_start_of_step_channel,
-            self.state.indoor_air_temperature_in_celsius,
+            indoor_air_temperature_at_start_of_step_in_celsius,
         )
         self.state.indoor_air_temperature_in_celsius = indoor_air_temperature_in_celsius
 

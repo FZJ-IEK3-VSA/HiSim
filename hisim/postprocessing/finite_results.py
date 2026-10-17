@@ -104,7 +104,7 @@ class FiniteResultsCheck:
         with np.errstate(over="ignore", invalid="ignore"):
             suspects = np.flatnonzero(~np.isfinite(values.sum(axis=0)))
         found: List[NonFiniteColumn] = []
-        for column in suspects:
+        for column in suspects.tolist():
             output = all_outputs[column]
             if output.may_be_non_finite:
                 continue

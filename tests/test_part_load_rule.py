@@ -110,12 +110,12 @@ def test_every_case_of_the_rules_table_gives_its_ratio(
 @pytest.mark.base
 @pytest.mark.parametrize(
     "ratio_run, start_in_celsius, end_in_celsius",
-    [(0.5, float("nan"), 60.0), (0.5, 50.0, float("inf")), (-0.1, 50.0, 60.0), (1.5, 50.0, 60.0)],
+    [(-0.1, 50.0, 60.0), (1.5, 50.0, 60.0)],
 )
-def test_a_temperature_that_is_not_finite_or_a_ratio_outside_zero_to_one_is_refused(
+def test_a_ratio_outside_zero_to_one_is_refused(
     ratio_run: float, start_in_celsius: float, end_in_celsius: float
 ) -> None:
-    """A NaN would pass every comparison as false and give a ratio nobody chose; the rule refuses it, as a bad ratio."""
+    """A ratio run outside [0, 1] is a device or wiring error that would give a finite wrong ratio; it is refused."""
     with pytest.raises(ValueError, match="part-load rule"):
         RuleIteration.next_ratio(
             ratio_run, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0

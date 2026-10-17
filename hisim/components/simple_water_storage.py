@@ -1343,6 +1343,23 @@ class DhwTankProperties:
     #: The step length, in s.
     seconds_per_timestep: float
 
+    def __post_init__(self) -> None:
+        """Refuse a heat capacity, loss coefficient or step length that the tank's node step cannot integrate with.
+
+        The node step (:meth:`hisim.hydronics.MixedNode.step`) runs on every pass and does not check these values,
+        which are constant over the run, so they are checked here, once, when the tank is built.
+
+        Raises:
+            NegativeHeatLossCoefficientError: If the loss coefficient is negative.
+            NonPositiveTimestepError: If the step length is not positive.
+            NonPositiveHeatCapacityError: If the heat capacity is not positive.
+        """
+        hydronics.MixedNode.check_constants(
+            ua_w_per_k=self.loss_coefficient_in_watt_per_kelvin,
+            dt_s=self.seconds_per_timestep,
+            heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
+        )
+
 
 @dataclass(frozen=True)
 class DhwTankState:

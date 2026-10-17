@@ -29,6 +29,10 @@ Execution flow
 --------------
 :meth:`PostProcessor.run` executes the enabled steps in a fixed order:
 
+0. **Finite results** -- in every run, before anything reads the result table: every column must hold
+   only finite values unless its output declares ``may_be_non_finite``, and the run fails with
+   :class:`~hisim.postprocessing.finite_results.NonFiniteResultsError` naming every column that does not
+   (:mod:`hisim.postprocessing.finite_results`).
 1. **Plots** -- line, carpet, single-day, and (for near-year-long runs) monthly bar charts
    are generated and collected as report image entries.
 2. **Exports** -- the result ``DataFrame`` is written to CSV and/or Pickle.
@@ -68,6 +72,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
+from hisim.postprocessing.finite_results import FiniteResultsCheck
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -276,6 +281,8 @@ class PostProcessor:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
                 ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+            NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
+                does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
                 balance does not close or the two sides of a transfer disagree (a ``ValueError``).
         """
@@ -290,6 +297,9 @@ class PostProcessor:
         report: Optional[reportgenerator.ReportGenerator] = None
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
+        # Every result column must be finite unless its output declares otherwise; checked once, before anything
+        # reads the table, since the components do not check it on every pass.
+        FiniteResultsCheck.require_finite(ppdt.results, ppdt.all_outputs)
         # Collected first, from the result table as the simulator left it; concluded last (below)
         energy_balance = self.check_energy_balance(ppdt)
 

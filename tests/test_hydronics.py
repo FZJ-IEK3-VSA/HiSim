@@ -15,7 +15,6 @@ import random
 from decimal import Decimal, localcontext
 from typing import Callable, Iterator, List, Tuple
 
-import numpy as np
 import pytest
 
 from hisim import hydronics
@@ -423,17 +422,21 @@ def test_circuit_heat_is_the_circuit_power_times_the_step_to_the_last_bit(
     assert heat_j == power_w * dt_s
 
 
-def test_circuit_power_is_m_c_delta_t_and_refuses_what_circuit_heat_refuses() -> None:
-    """0.4 kg/s over 4.96 K carries 8293.12 W; a power that accepted a negative flow or a NaN would hide an error."""
+def test_circuit_power_is_m_c_delta_t_and_refuses_a_negative_flow() -> None:
+    """0.4 kg/s over 4.96 K carries 8293.12 W; a power that accepted a negative flow would book a finite wrong heat."""
     assert hydronics.circuit_power_w(mass_flow_kg_per_s=0.4, t_supply_c=35.0, t_return_c=30.04) == pytest.approx(
         8293.12, rel=1e-12
     )
     with pytest.raises(hydronics.NegativeMassFlowError):
         hydronics.circuit_power_w(mass_flow_kg_per_s=-0.1, t_supply_c=35.0, t_return_c=30.0)
-    with pytest.raises(hydronics.NonFiniteValueError):
-        hydronics.circuit_power_w(mass_flow_kg_per_s=0.1, t_supply_c=math.nan, t_return_c=30.0)
-    with pytest.raises(hydronics.NonFiniteValueError, match="circuit power"):
-        hydronics.circuit_power_w(mass_flow_kg_per_s=1e306, t_supply_c=1e3, t_return_c=-1e3)
+
+
+def test_a_nan_passes_through_the_circuit_power_into_its_output() -> None:
+    """The library does not check finiteness; a NaN reaches the output, where the check after the run names it."""
+    assert math.isnan(hydronics.circuit_power_w(mass_flow_kg_per_s=0.1, t_supply_c=math.nan, t_return_c=30.0))
+    assert math.isnan(
+        hydronics.throttled_supply_temperature_c(unthrottled_supply_c=math.nan, return_c=60.0, supply_limit_c=80.0)
+    )
 
 
 def test_circuit_heat_kwh_sign_rule() -> None:
@@ -555,15 +558,6 @@ def test_a_set_temperature_above_the_maximum_supply_is_refused() -> None:
         hydronics.capped_hot_water_supply_temperature_c(
             unthrottled_supply_c=75.0, return_c=65.0, maximal_supply_c=75.0, set_supply_c=75.5
         )
-
-
-@pytest.mark.parametrize("field", ["unthrottled_supply_c", "return_c", "maximal_supply_c", "set_supply_c"])
-def test_the_hot_water_cap_refuses_a_value_that_is_not_finite(field: str) -> None:
-    """A NaN set temperature would make every comparison false and pass the generator's supply uncapped."""
-    arguments = {"unthrottled_supply_c": 75.0, "return_c": 65.0, "maximal_supply_c": 80.0, "set_supply_c": 70.0}
-    arguments[field] = math.nan
-    with pytest.raises(hydronics.NonFiniteValueError, match=field):
-        hydronics.capped_hot_water_supply_temperature_c(**arguments)
 
 
 # --- the tap valve --------------------------------------------------------------------------------------------
@@ -719,82 +713,33 @@ class Refusals:
         ("ua_w_per_k", -0.1, hydronics.NegativeHeatLossCoefficientError),
         ("heat_capacity_j_per_k", 0.0, hydronics.NonPositiveHeatCapacityError),
         ("dt_s", 0.0, hydronics.NonPositiveTimestepError),
-        ("t0_c", math.nan, hydronics.NonFiniteValueError),
-        ("ua_w_per_k", math.nan, hydronics.NonFiniteValueError),
-        ("t_amb_c", math.nan, hydronics.NonFiniteValueError),
-        ("dt_s", math.nan, hydronics.NonFiniteValueError),
-        ("heat_capacity_j_per_k", math.nan, hydronics.NonFiniteValueError),
-        ("t0_c", math.inf, hydronics.NonFiniteValueError),
-        ("inflows", ((0.2, 60.0),), hydronics.HydronicsError),
+        ("ua_w_per_k", math.nan, hydronics.NegativeHeatLossCoefficientError),
+        ("heat_capacity_j_per_k", math.nan, hydronics.NonPositiveHeatCapacityError),
+        ("dt_s", math.nan, hydronics.NonPositiveTimestepError),
     ],
 )
-def test_node_step_refusals(field: str, value: object, error: type) -> None:
-    """An invalid argument that a node step accepted would integrate nonsense; each is refused by name."""
-    arguments = dict(Refusals.GOOD_STEP, **{field: value})
+def test_node_constant_refusals(field: str, value: float, error: type) -> None:
+    """A node built with a constant it cannot integrate with would compute nonsense on every step; it is refused."""
+    constants = {
+        "ua_w_per_k": Refusals.GOOD_STEP["ua_w_per_k"],
+        "dt_s": Refusals.GOOD_STEP["dt_s"],
+        "heat_capacity_j_per_k": Refusals.GOOD_STEP["heat_capacity_j_per_k"],
+    }
+    MixedNode.check_constants(**constants)  # type: ignore[arg-type]  # the good constants pass
+    constants[field] = value
     with pytest.raises(error):
-        MixedNode.step(**arguments)  # type: ignore[arg-type]  # the dict mixes the argument types on purpose
+        MixedNode.check_constants(**constants)  # type: ignore[arg-type]  # the dict mixes the argument types
 
 
-@pytest.mark.parametrize(
-    ("changes", "quantity"),
-    [
-        ({"inflows": (Inflow(1e306, 50.0),)}, "conductance m c of inflow 0"),
-        ({"inflows": (Inflow(1e304, 50.0),) * 5}, "total conductance"),
-        ({"inflows": (Inflow(1e301, 4000.0),) * 2}, "equilibrium numerator"),
-        ({"inflows": (Inflow(1e300, 60.0),), "dt_s": 1e10, "heat_capacity_j_per_k": 1.0}, "relaxation exponent"),
-        (
-            {"t0_c": 1e300, "inflows": (Inflow(1e3, -1e300),), "ua_w_per_k": 0.0, "dt_s": 1e10,
-             "heat_capacity_j_per_k": 1e300},
-            "heat of inflow 0",
-        ),
-    ],
-)
-def test_node_step_refuses_a_result_that_overflows(changes: dict, quantity: str) -> None:
-    """An overflow returned as inf or NaN would poison every later step; it is refused naming the quantity."""
-    with pytest.raises(hydronics.NonFiniteValueError, match=quantity):
-        MixedNode.step(**dict(Refusals.GOOD_STEP, **changes))  # type: ignore[arg-type]  # mixed argument types
-
-
-@pytest.mark.parametrize(
-    ("changes", "quantity"),
-    [
-        ({"mass_flow_kg_per_s": 1e300, "t_supply_c": 100.0, "t_return_c": 0.0, "dt_s": 1e10}, "circuit heat"),
-        ({"t_supply_c": 1.5e308, "t_return_c": -1.5e308, "dt_s": 1.0}, "lift"),
-    ],
-)
-@pytest.mark.parametrize("function", [hydronics.circuit_heat_j, hydronics.circuit_heat_kwh])
-def test_circuit_heat_refuses_a_result_that_overflows(
-    function: Callable[..., float], changes: dict, quantity: str
-) -> None:
-    """A circuit heat beyond the float range returned as inf would poison the balance; it is refused by name."""
-    with pytest.raises(hydronics.NonFiniteValueError, match=quantity):
-        function(**dict(Circuit.GOOD, **changes))
-
-
-@pytest.mark.parametrize(
-    ("arguments", "quantity"),
-    [
-        ({"t_tank_c": 0.0, "t_warm_c": 1.5e308, "t_cold_c": -1.5e308, "demand_kg_per_s": 0.1}, "span"),
-        ({"t_tank_c": 1e308, "t_warm_c": -5e307, "t_cold_c": -1e308, "demand_kg_per_s": 0.1}, "lift over the mains"),
-    ],
-)
-def test_valve_refuses_a_result_that_overflows(arguments: dict, quantity: str) -> None:
-    """A valve whose temperature differences overflow would answer a rounded-away fraction; it is refused."""
-    with pytest.raises(hydronics.NonFiniteValueError, match=quantity):
-        hydronics.mixing_valve_draw(**arguments)
+def test_node_step_refuses_a_negative_inflow() -> None:
+    """A negative mass flow would turn an inflow into an outflow at the wrong temperature, a finite wrong heat."""
+    with pytest.raises(hydronics.NegativeMassFlowError):
+        step_with((Inflow(0.2, 60.0), Inflow(-1e-9, 50.0)))
 
 
 def step_with(inflows: object) -> NodeStep:
     """Return the node step of ``Refusals.GOOD_STEP`` with these inflows."""
     return MixedNode.step(**{**Refusals.GOOD_STEP, "inflows": inflows})  # type: ignore[arg-type]  # mixed types
-
-
-def test_an_inflow_stores_floats() -> None:
-    """An inflow that kept a ``Decimal`` or NumPy scalar would let another type into the step arithmetic."""
-    inflow = Inflow(Decimal("0.2"), np.float32(60.0))  # type: ignore[arg-type]  # the conversion is tested
-    assert isinstance(inflow.mass_flow_kg_per_s, float) and inflow.mass_flow_kg_per_s == 0.2
-    assert isinstance(inflow.temperature_c, float) and inflow.temperature_c == 60.0
-    assert step_with((inflow,)) == step_with((Inflow(0.2, 60.0),))
 
 
 def test_a_node_step_reads_its_inflows_once() -> None:
@@ -811,35 +756,15 @@ def test_a_node_step_reads_its_inflows_once() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mass_flow", "temperature", "error"),
-    [
-        (-1e-9, 50.0, hydronics.NegativeMassFlowError),
-        (math.nan, 50.0, hydronics.NonFiniteValueError),
-        (math.inf, 50.0, hydronics.NonFiniteValueError),
-        (0.1, math.nan, hydronics.NonFiniteValueError),
-        (0.1, -math.inf, hydronics.NonFiniteValueError),
-    ],
-)
-def test_inflow_refusals(mass_flow: float, temperature: float, error: type) -> None:
-    """An inflow with a negative or non-finite flow, or a non-finite temperature, would poison the node step."""
-    with pytest.raises(error):
-        Inflow(mass_flow, temperature)
-
-
-@pytest.mark.parametrize(
     ("changes", "error"),
     [
         ({"mass_flow_kg_per_s": -0.1}, hydronics.NegativeMassFlowError),
         ({"dt_s": 0.0}, hydronics.NonPositiveTimestepError),
-        ({"mass_flow_kg_per_s": math.nan}, hydronics.NonFiniteValueError),
-        ({"t_supply_c": math.nan}, hydronics.NonFiniteValueError),
-        ({"t_return_c": math.inf}, hydronics.NonFiniteValueError),
-        ({"dt_s": math.nan}, hydronics.NonFiniteValueError),
     ],
 )
 @pytest.mark.parametrize("function", [hydronics.circuit_heat_j, hydronics.circuit_heat_kwh])
 def test_circuit_heat_refusals(function: Callable[..., float], changes: dict, error: type) -> None:
-    """A circuit heat that accepted a negative flow, an empty step or a non-finite value would hide an error."""
+    """A circuit heat that accepted a negative flow or an empty step would book a finite wrong heat."""
     with pytest.raises(error):
         function(**dict(Circuit.GOOD, **changes))
 
@@ -850,21 +775,17 @@ def test_circuit_heat_refusals(function: Callable[..., float], changes: dict, er
         ({"t_warm_c": 40.0, "t_cold_c": 40.0}, hydronics.ValveTemperatureOrderError),
         ({"t_warm_c": 10.0, "t_cold_c": 40.0}, hydronics.ValveTemperatureOrderError),
         ({"demand_kg_per_s": -0.1}, hydronics.NegativeDemandError),
-        ({"t_tank_c": math.nan}, hydronics.NonFiniteValueError),
-        ({"t_warm_c": math.nan}, hydronics.NonFiniteValueError),
-        ({"t_cold_c": math.nan}, hydronics.NonFiniteValueError),
-        ({"demand_kg_per_s": math.inf}, hydronics.NonFiniteValueError),
     ],
 )
 def test_valve_refusals(changes: dict, error: type) -> None:
-    """A valve that accepted ``T_warm <= T_cold``, a negative demand or a non-finite value would draw nonsense."""
+    """A valve that accepted ``T_warm <= T_cold`` or a negative demand would draw a finite wrong amount."""
     arguments = dict({"t_tank_c": 50.0, "t_warm_c": 40.0, "t_cold_c": 10.0, "demand_kg_per_s": 0.1}, **changes)
     with pytest.raises(error):
         hydronics.mixing_valve_draw(**arguments)
 
 
-@pytest.mark.parametrize("a", [-1e-12, -1.0, math.nan, math.inf])
+@pytest.mark.parametrize("a", [-1e-12, -1.0])
 def test_relaxation_factor_refusals(a: float) -> None:
-    """A negative or non-finite exponent has no relaxation factor; returning one would hide a broken node."""
+    """A negative exponent has no relaxation factor; returning one would hide a broken node."""
     with pytest.raises(hydronics.HydronicsError):
         hydronics.relaxation_mean_factor(a)

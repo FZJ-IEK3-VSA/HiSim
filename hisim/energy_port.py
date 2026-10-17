@@ -261,8 +261,8 @@ class HydronicPort:
             The heat, in kWh; negative for a cooling circuit.
 
         Raises:
-            HydronicsError: If the flow is negative or not finite, a temperature is not finite or the step is not
-                positive, as :func:`hisim.hydronics.circuit_heat_kwh` raises it.
+            HydronicsError: If the flow is negative or the step is not positive, as
+                :func:`hisim.hydronics.circuit_heat_kwh` raises it.
         """
         return hydronics.circuit_heat_kwh(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,

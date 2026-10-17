@@ -57,6 +57,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         *,
         component_id: cfg.ComponentID,
         display_config: Optional[cfg.DisplayConfig] = None,
+        may_be_non_finite: bool = False,
     ):
         """Defines a component output.
 
@@ -86,6 +87,11 @@ class ComponentOutput:  # noqa: too-few-public-methods
         :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` exactly as the
         component names it itself. ``None`` only on an output built by hand, outside a component.
 
+        ``may_be_non_finite`` declares that the output may hold NaN or infinite values, for example a quantity that
+        is undefined while a device stands still. Every other output must be finite in every step: after the run,
+        :class:`~hisim.postprocessing.finite_results.FiniteResultsCheck` fails a run whose result table holds a NaN
+        or an infinity in a column that does not declare it.
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
@@ -110,6 +116,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
         self.display_config: Optional[cfg.DisplayConfig] = display_config
+        self.may_be_non_finite: bool = may_be_non_finite
 
     @property
     def building_label(self) -> str:
@@ -418,8 +425,15 @@ class Component:
         postprocessing_flag: Optional[List[Any]] = None,
         energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
+        *,
+        may_be_non_finite: bool = False,
     ) -> ComponentOutput:
-        """Adds an output definition; ``energy_port`` declares its role in the energy balance."""
+        """Adds an output definition; ``energy_port`` declares its role in the energy balance.
+
+        ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
+        after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
+        infinity in any other.
+        """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
@@ -433,6 +447,7 @@ class Component:
             output_description,
             component_id=self.config.component_id,
             display_config=self.my_display_config,
+            may_be_non_finite=may_be_non_finite,
         )
         self.outputs.append(outp)
         return outp

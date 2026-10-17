@@ -4,8 +4,6 @@ No component declares a hydronic port yet; these tests pin that a port refuses n
 describe a circuit, and that its heat is the hydronics library's and refuses what the library refuses.
 """
 
-import math
-
 import pytest
 
 from hisim import hydronics
@@ -38,14 +36,13 @@ def test_the_heat_is_the_library_s_circuit_heat() -> None:
     ("mass_flow_in_kg_per_second", "supply_temperature_in_celsius", "seconds_per_timestep", "error"),
     [
         (-0.1, 60.0, 900.0, hydronics.NegativeMassFlowError),
-        (0.1, math.nan, 900.0, hydronics.NonFiniteValueError),
         (0.1, 60.0, 0.0, hydronics.NonPositiveTimestepError),
     ],
 )
 def test_the_heat_refuses_what_the_library_refuses(
     mass_flow_in_kg_per_second: float, supply_temperature_in_celsius: float, seconds_per_timestep: float, error: type
 ) -> None:
-    """A port that booked a negative flow, a NaN temperature or an empty step would hide the caller's error."""
+    """A port that booked a negative flow or an empty step would hide the caller's error."""
     with pytest.raises(error):
         HydronicPort.heat_in_kilowatt_hour(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,

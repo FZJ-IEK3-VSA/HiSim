@@ -1,6 +1,7 @@
 """Contains all the chart classes."""
 
 import datetime
+from dataclasses import dataclass
 import enum
 import gc
 import math
@@ -19,6 +20,24 @@ from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.simulationparameters import FigureFormat
 
 mpl.rcParams["agg.path.chunksize"] = 10000
+
+
+@dataclass(frozen=True)
+class CarpetXAxis:
+    """The x axis of a carpet: tick marks where its periods begin and end, and each period's name between them.
+
+    For example, a full year from 1 January has ``boundaries`` 0, 31, 59, ..., 365, ``label_positions`` 15.5,
+    45.0, ..., 349.5, ``labels`` "Jan" to "Dec" and the title "Month of the year".
+    """
+
+    #: The columns where a month (or a day) begins, and the window's end, as tick-mark positions.
+    boundaries: List[float]
+    #: Where each period's name is drawn, in the middle of the columns it covers.
+    label_positions: List[float]
+    #: The periods' names, one per label position.
+    labels: List[str]
+    #: The title of the x axis.
+    title: str
 
 
 class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
@@ -52,43 +71,63 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     #: At most this many day ticks on the x axis of a window shorter than :attr:`DAYS_FOR_MONTH_TICKS`.
     MAXIMUM_DAY_TICKS: ClassVar[int] = 7
 
-    @classmethod
-    def x_axis_ticks(
-        cls, window_start: datetime.datetime, number_of_days: int
-    ) -> Tuple[List[float], List[str], str]:
-        """Return where the x axis of a carpet over a run's window is labelled, with what, and its title.
+    #: The share of the figure's width the colour bar takes, and its gap to the carpet; matplotlib's defaults
+    #: (0.15 and 0.05) left the carpet about a fifth narrower than the line chart of the same output.
+    COLOUR_BAR_FRACTION: ClassVar[float] = 0.05
+    COLOUR_BAR_PAD: ClassVar[float] = 0.02
 
-        Column ``i`` of the carpet is the ``i``-th day of the window, counted from ``window_start``,
-        and spans ``i`` to ``i + 1`` on the x axis. A window of at least
-        :attr:`DAYS_FOR_MONTH_TICKS` days is labelled with the month names, each in the column of the
-        15th of its month; a shorter one with the dates of up to :attr:`MAXIMUM_DAY_TICKS` of its
-        days. Example: a full year from 1 January puts "JAN" at 14.5 and "DEC" at 348.5; the week
-        from 1 July 2021 puts "01 Jul" at 0.5 and "07 Jul" at 6.5. The labels come from the window's
-        own dates, so a window that starts in July is not labelled as if it started in January.
+    @classmethod
+    def x_axis_ticks(cls, window_start: datetime.datetime, number_of_days: int) -> "CarpetXAxis":
+        """Return the x axis of a carpet over a run's window: where its periods start and end, their names, its title.
+
+        Column ``i`` of the carpet is the ``i``-th day of the window, counted from ``window_start``, and spans
+        ``i`` to ``i + 1`` on the x axis. A window of at least :attr:`DAYS_FOR_MONTH_TICKS` days is divided into
+        months: a tick mark at the first column of every month and at the window's end, and the month's name
+        centred between its two marks. A month the window covers only in part is named in the middle of the part
+        it covers. A shorter window is divided into days the same way, with the dates of up to
+        :attr:`MAXIMUM_DAY_TICKS` of its days. Example: a full year from 1 January has marks at 0, 31, 59, ...,
+        334 and 365, and "Jan" at 15.5 and "Dec" at 349.5; the week from 1 July 2021 has marks at 0 to 7 and
+        "01 Jul" at 0.5. The names come from the window's own dates, so a window that starts in July is not
+        named as if it started in January.
+
+        A name between two marks says which columns belong to it; a mark in the middle of a month, as the axis
+        had before, left the reader to guess where one month ends and the next begins.
 
         Args:
             window_start: The first moment of the run, at midnight.
             number_of_days: The number of days, and carpet columns, in the window.
 
         Returns:
-            The tick positions, their labels and the title of the x axis.
+            The x axis.
         """
         first_day = window_start.date()
         if number_of_days >= cls.DAYS_FOR_MONTH_TICKS:
-            positions: List[float] = []
-            labels: List[str] = []
-            for month_index, label in enumerate(cls.months_abbrev_uppercase):
-                column = (datetime.date(first_day.year, month_index + 1, 15) - first_day).days
-                if 0 <= column < number_of_days:
-                    positions.append(column + 0.5)
-                    labels.append(label)
-            return positions, labels, "Month of the year"
+            boundaries = [0]
+            month = datetime.date(first_day.year, first_day.month, 1)
+            while True:
+                month = datetime.date(month.year + month.month // 12, month.month % 12 + 1, 1)
+                column = (month - first_day).days
+                if column >= number_of_days:
+                    break
+                boundaries.append(column)
+            boundaries.append(number_of_days)
+            names = [
+                cls.months_abbrev_uppercase[cls.date_of_day(window_start, start).month - 1].title()
+                for start in boundaries[:-1]
+            ]
+            return CarpetXAxis(
+                boundaries=[float(boundary) for boundary in boundaries],
+                label_positions=[(start + end) / 2 for start, end in zip(boundaries, boundaries[1:])],
+                labels=names,
+                title="Month of the year",
+            )
         step_in_days = max(1, math.ceil(number_of_days / cls.MAXIMUM_DAY_TICKS))
         columns = range(0, number_of_days, step_in_days)
-        return (
-            [column + 0.5 for column in columns],
-            [cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
-            "Day",
+        return CarpetXAxis(
+            boundaries=[float(column) for column in range(0, number_of_days + 1)],
+            label_positions=[column + 0.5 for column in columns],
+            labels=[cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
+            title="Day",
         )
 
     @staticmethod
@@ -97,10 +136,11 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         The carpet has one row per timestep of the day, ``timesteps_per_day`` rows from 0 at the bottom
         to ``timesteps_per_day`` at the top, and the bottom row is the day's last timestep. The axis is
-        labelled every six hours, 24 at the bottom and 0 at the top, at the positions those hours have on
+        labelled every three hours, 24 at the bottom and 0 at the top, at the positions those hours have on
         it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example: hourly data puts "18" at 6.0;
         two-hour steps put it at 3.0; four-hour steps put "6" at 4.5, inside the row of 04:00 to 08:00,
-        because that is where 06:00 lies.
+        because that is where 06:00 lies. Nine labels fit the axis at the tick font size; every six hours
+        left most of its height empty.
 
         Every step that divides a day gets a carpet, up to one row per day at 24 h: the rows are fewer
         but each still covers the hours it simulated, and the columns still show one day after the
@@ -112,10 +152,10 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         Returns:
             The tick positions, bottom to top, and their labels.
         """
-        quarters = range(0, 5)
+        eighths = range(0, 9)
         return (
-            [timesteps_per_day * quarter / 4 for quarter in quarters],
-            [str(24 - 6 * quarter) for quarter in quarters],
+            [timesteps_per_day * eighth / 8 for eighth in eighths],
+            [str(24 - 3 * eighth) for eighth in eighths],
         )
 
     def plot(
@@ -165,7 +205,12 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         color_map = mpl.colormaps.get_cmap(mycolors)
 
         plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
-        plt.colorbar(plot).set_label(self.axis_label(self.units), fontsize=self.fontsize_label)
+        # A slim colour bar without a frame, with tick-size numbers, so the carpet keeps most of the figure's width.
+        colour_bar = plt.colorbar(plot, fraction=self.COLOUR_BAR_FRACTION, pad=self.COLOUR_BAR_PAD)
+        for spine in colour_bar.ax.spines.values():
+            spine.set_visible(False)
+        colour_bar.set_label(self.axis_label(self.units), fontsize=self.fontsize_label)
+        colour_bar.ax.tick_params(labelsize=self.fontsize_ticks)
 
         # The ticks used to be placed per whole hour of rows, which is 0 rows for a step above one hour and
         # made np.arange divide by zero; they are placed on the day's own time axis now.
@@ -173,18 +218,17 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         axis.set_yticks(y_ticks)
         axis.set_yticklabels(y_tick_labels)
 
-        x_ticks, x_tick_labels, x_axis_title = self.x_axis_ticks(window_start, xdims)
-        axis.set_xticks(x_ticks)
-        axis.set_xticklabels(x_tick_labels)
-
-        # optimizing fonts
-        fig.autofmt_xdate(rotation=45)
-        # setting axis of the plot
+        # Tick marks where the months (or days) begin and end, their names centred between the marks.
+        x_axis = self.x_axis_ticks(window_start, xdims)
+        axis.set_xticks(x_axis.boundaries)
+        axis.set_xticklabels([])
+        axis.set_xticks(x_axis.label_positions, minor=True)
+        axis.set_xticklabels(x_axis.labels, minor=True, fontsize=self.fontsize_ticks)
+        axis.tick_params(axis="x", which="minor", length=0)
+        axis.tick_params(axis="y", labelsize=self.fontsize_ticks)
         axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
-        axis.set_xlabel(x_axis_title, fontsize=self.fontsize_label)
+        axis.set_xlabel(x_axis.title, fontsize=self.fontsize_label)
         plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
-        plt.xticks(fontsize=self.fontsize_ticks)
-        plt.yticks(fontsize=self.fontsize_ticks)
         plt.tight_layout()
         log.trace("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath2)

@@ -52,13 +52,13 @@ def test_carpet_plot_returns_none_on_invalid_data() -> None:
 @pytest.mark.parametrize(
     ("window_start", "number_of_days", "expected_first", "expected_last", "expected_title"),
     [
-        # A full year from 1 January: twelve months, each in the column of its 15th.
-        (datetime.datetime(2021, 1, 1), 365, (14.5, "JAN"), (348.5, "DEC"), "Month of the year"),
+        # A full year from 1 January: a mark at every first of the month and at the end, each name centred.
+        (datetime.datetime(2021, 1, 1), 365, (15.5, "Jan"), (349.5, "Dec"), "Month of the year"),
         # A leap year has one more day before March, and every month is still found.
-        (datetime.datetime(2020, 1, 1), 366, (14.5, "JAN"), (349.5, "DEC"), "Month of the year"),
-        # Three summer months: the labels follow the window's own dates, not January's.
-        (datetime.datetime(2021, 6, 1), 92, (14.5, "JUN"), (75.5, "AUG"), "Month of the year"),
-        # A week in July is labelled by its dates.
+        (datetime.datetime(2020, 1, 1), 366, (15.5, "Jan"), (350.5, "Dec"), "Month of the year"),
+        # Three summer months: the names follow the window's own dates, not January's.
+        (datetime.datetime(2021, 6, 1), 92, (15.0, "Jun"), (76.5, "Aug"), "Month of the year"),
+        # A week in July is named by its dates.
         (datetime.datetime(2021, 7, 1), 7, (0.5, "01 Jul"), (6.5, "07 Jul"), "Day"),
     ],
 )
@@ -70,31 +70,53 @@ def test_carpet_x_axis_is_labelled_from_the_window_dates(
     expected_title: str,
 ) -> None:
     """The carpet's x axis names the run's own months or days, wherever in the year the run starts."""
-    positions, labels, title = Carpet.x_axis_ticks(window_start, number_of_days)
-    assert (positions[0], labels[0]) == expected_first
-    assert (positions[-1], labels[-1]) == expected_last
-    assert title == expected_title
+    x_axis = Carpet.x_axis_ticks(window_start, number_of_days)
+    assert (x_axis.label_positions[0], x_axis.labels[0]) == expected_first
+    assert (x_axis.label_positions[-1], x_axis.labels[-1]) == expected_last
+    assert x_axis.title == expected_title
+
+
+def test_carpet_month_marks_lie_at_the_month_boundaries_and_names_between_them() -> None:
+    """The marks sit where a month begins and at the window's end; each name lies halfway between two marks.
+
+    The axis used to put one mark in the column of each month's 15th, so a reader could not see where one
+    month ended and the next began.
+    """
+    x_axis = Carpet.x_axis_ticks(datetime.datetime(2021, 1, 1), 365)
+    assert x_axis.boundaries == [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+    assert len(x_axis.labels) == len(x_axis.boundaries) - 1 == 12
+    for start, end, position in zip(x_axis.boundaries, x_axis.boundaries[1:], x_axis.label_positions):
+        assert position == (start + end) / 2
+
+
+def test_a_window_that_starts_mid_month_names_its_partial_month_in_the_middle_of_what_it_covers() -> None:
+    """A run from 20 March over 40 days covers 12 days of March and 28 of April: "Mar" at 6, "Apr" at 26."""
+    x_axis = Carpet.x_axis_ticks(datetime.datetime(2021, 3, 20), 40)
+    assert x_axis.boundaries == [0, 12, 40]
+    assert x_axis.label_positions == [6.0, 26.0]
+    assert x_axis.labels == ["Mar", "Apr"]
 
 
 def test_carpet_x_axis_of_a_long_short_window_keeps_at_most_seven_day_ticks() -> None:
-    """Twenty days get a tick every third day, so the labels stay readable."""
-    positions, labels, _ = Carpet.x_axis_ticks(datetime.datetime(2021, 7, 1), 20)
-    assert len(positions) <= Carpet.MAXIMUM_DAY_TICKS
-    assert labels[:2] == ["01 Jul", "04 Jul"]
+    """Twenty days get a name every third day, so the labels stay readable; every day still has its marks."""
+    x_axis = Carpet.x_axis_ticks(datetime.datetime(2021, 7, 1), 20)
+    assert len(x_axis.labels) <= Carpet.MAXIMUM_DAY_TICKS
+    assert x_axis.labels[:2] == ["01 Jul", "04 Jul"]
+    assert x_axis.boundaries == [float(day) for day in range(21)]
 
 
 @pytest.mark.parametrize("timesteps_per_day", [1440, 96, 24])
-def test_carpet_y_ticks_of_steps_up_to_an_hour_are_the_whole_hours_they_always_were(timesteps_per_day: int) -> None:
-    """Up to an hour per step, the ticks sit every six hours of rows, 24 at the bottom, as before."""
+def test_carpet_y_ticks_of_steps_up_to_an_hour_are_every_three_whole_hours(timesteps_per_day: int) -> None:
+    """Up to an hour per step, the ticks sit every three hours of rows, 24 at the bottom."""
     rows_per_hour = timesteps_per_day // 24
     positions, labels = Carpet.y_axis_ticks(timesteps_per_day)
-    assert positions == [float(hour * rows_per_hour) for hour in (0, 6, 12, 18, 24)]
-    assert labels == ["24", "18", "12", "6", "0"]
+    assert positions == [float(hour * rows_per_hour) for hour in range(0, 25, 3)]
+    assert labels == ["24", "21", "18", "15", "12", "9", "6", "3", "0"]
 
 
 def test_carpet_y_ticks_of_four_hour_steps_lie_at_their_hours() -> None:
     """Six rows a day: 18:00 and 06:00 fall inside the rows that hold them."""
-    assert Carpet.y_axis_ticks(6)[0] == [0.0, 1.5, 3.0, 4.5, 6.0]
+    assert Carpet.y_axis_ticks(6)[0] == [0.0, 0.75, 1.5, 2.25, 3.0, 3.75, 4.5, 5.25, 6.0]
 
 
 @pytest.mark.parametrize("hours_per_step", [2, 3, 4, 6, 8, 12, 24])

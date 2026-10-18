@@ -16,10 +16,10 @@ on 2026-10-16 (review of the stage-D spec, finding M-B, option a) what stage D i
 its KPI "Thermal output energy of heat distribution system" with the same KPI of the twin's committed full-year
 golden, ``golden_references/<twin>__full_year_60s.json``, which the golden gate already keeps equal to a 60 s run of
 the same setup. Both are run as committed, with the local LoadProfileGenerator's occupancy, and the KPI counts the
-steps in which the distribution system heats. So the test holds stage D to 60 s once stage D's goldens are re-blessed
-(golden-update workflow). Until then the goldens are the stage-D base's 60 s values; measured on 2026-10-16, the four
-900 s years lie within 1 % of those too: gas −0.19 %, pellets −0.04 %, heat pump −0.74 %, heat pump with solar
-thermal −0.84 % (``SpaceHeatingResolutionRuns.MEASURED_AGAINST_PRE_STAGE_D_GOLDENS``).
+steps in which the distribution system heats. The goldens are stage D's 60 s values, blessed with stage D's pull
+requests 5 to 8 (#1011), so the test holds stage D at 900 s to stage D at 60 s; measured on 2026-10-18, the four 900 s
+years lie within 1 % of them: gas −0.16 %, pellets −0.04 %, heat pump −0.42 %, heat pump with solar thermal +0.16 %
+(``SpaceHeatingResolutionRuns.MEASURED_AGAINST_STAGE_D_60_S_GOLDENS``).
 
 The comparison needs the year, not a window: the delivered heat at a coarse step drifts with the buffer's charge and
 the room's comfort over the heating season, and a month would hide a shortfall the year shows. Each test runs one twin
@@ -73,13 +73,14 @@ class SpaceHeatingResolutionRuns:
     #: model against the 60 s reference, which the owner kept for stage D on 2026-10-16.
     DELIVERED_HEAT_RELATIVE_TOLERANCE: float = 0.01
 
-    #: Measured 2026-10-16 on stage D's close-out, a record and not asserted: the 900 s KPI, kWh, and its relative
-    #: deviation (a fraction) from the goldens committed before stage D's re-bless (the stage-D base's 60 s values).
-    MEASURED_AGAINST_PRE_STAGE_D_GOLDENS: ClassVar[Dict[str, Tuple[float, float]]] = {
-        "household_gas_building_sizer": (10749.5, -0.0019),
+    #: Measured 2026-10-18 on stage D's close-out, a record and not asserted: the 900 s KPI, kWh, and its relative
+    #: deviation (a fraction) from the goldens blessed with stage D at 60 s (#1011): gas 10766.4, pellets 10778.4,
+    #: heat pump 11465.8, heat pump with solar thermal 11465.7 kWh.
+    MEASURED_AGAINST_STAGE_D_60_S_GOLDENS: ClassVar[Dict[str, Tuple[float, float]]] = {
+        "household_gas_building_sizer": (10749.5, -0.0016),
         "household_pellets_building_sizer": (10774.0, -0.0004),
-        "household_heatpump_building_sizer": (11382.2, -0.0074),
-        "household_heatpump_solar_thermal_building_sizer": (11353.8, -0.0084),
+        "household_heatpump_building_sizer": (11417.5, -0.0042),
+        "household_heatpump_solar_thermal_building_sizer": (11484.4, +0.0016),
     }
 
     @classmethod

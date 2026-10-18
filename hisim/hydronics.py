@@ -59,8 +59,21 @@ Taylor remainder below the threshold is at most ``a^4/120 < 8.4e-19``, under a f
 
 The heat each inflow brings is ``m_i c (T_i - T_mean) dt`` and the loss ``UA (T_mean - T_amb) dt``; their
 difference is ``C (T_end - T0)`` exactly, and ``T_mean`` and ``T_end`` never leave the range of ``T0``, the inflow
-temperatures and ``T_amb``. A node therefore publishes ``T_mean`` as the return of the circuits it receives: the
-heat a circuit brings, derived from its flow, its supply and that return, is then the heat the node integrated.
+temperatures and ``T_amb``. A mixed node therefore publishes ``T_mean`` as the return of the circuits it receives:
+the heat a circuit brings, derived from its flow, its supply and that return, is then the heat the node integrated.
+
+The start-of-step node
+----------------------
+
+A start-of-step node (:meth:`StartOfStepNode.step`) is also fully mixed, but it books every circuit on its
+temperature at the start of the step, ``T0``, instead of on its step mean. It publishes ``T0`` as the return of the
+circuits that charge it and as the supply of the circuits it feeds, so each inflow brings ``m_i c (T_i - T0) dt``
+(:func:`circuit_heat_j` with ``T0`` as the return), the loss is ``UA (T0 - T_amb) dt``, and a heat ``Q_drawn`` taken
+out directly, not by a stream, is subtracted. The node ends the step at
+``T_end = T0 + (sum_i m_i c (T_i - T0) dt - UA (T0 - T_amb) dt - Q_drawn) / C``. Nothing it publishes moves while a
+step iterates, so its circuits need no fixed-point solve. Unlike the mixed node, its end temperature can leave the
+range of ``T0``, the inflow temperatures and ``T_amb`` over a long step; whoever runs a circuit into it limits the
+circuit to a fraction of the step.
 
 The tap valve
 -------------
@@ -605,6 +618,100 @@ class MixedNode:
         heat_in = tuple(g * (inflow.temperature_c - t_mean) * dt_s for g, inflow in zip(conductances, inflows))
         loss = ua_w_per_k * (t_mean - t_amb_c) * dt_s
         return NodeStep(t_end_c=t_end, t_mean_c=t_mean, heat_in_j_per_inflow=heat_in, loss_j=loss)
+
+
+@dataclass(frozen=True)
+class StartOfStepNodeStep:
+
+    """The result of one step of a node whose circuits are booked on its start temperature.
+
+    ``heat_in_j_per_inflow[i]`` is ``m_i c (T_i - T0) dt``, in the order of the inflows; ``loss_j`` is
+    ``UA (T0 - T_amb) dt``; ``heat_drawn_j`` is the heat taken out directly; and
+    ``sum(heat_in_j_per_inflow) - loss_j - heat_drawn_j`` equals ``C (t_end_c - T0)`` to float precision.
+    """
+
+    #: The node's temperature at the end of the step, its start temperature for the next step, in °C.
+    t_end_c: float
+    #: The heat each inflow brought over the step, in J, in the order of the inflows.
+    heat_in_j_per_inflow: Tuple[float, ...]
+    #: The heat the node lost to its surroundings over the step, in J.
+    loss_j: float
+    #: The heat taken out of the node directly over the step, in J; negative when heat was put in.
+    heat_drawn_j: float
+
+
+class StartOfStepNode:
+
+    """A water node whose every circuit is booked on the node's temperature at the start of the step.
+
+    The node publishes its start temperature ``T0`` as the return of the circuits that charge it and as the supply of
+    the circuits it feeds. Every circuit end then derives its heat from ``T0``: a stream entering at ``T_i`` with flow
+    ``m_i`` brings ``m_i c (T_i - T0) dt`` (:func:`circuit_heat_j`, which the node calls too), and the node loses
+    ``UA (T0 - T_amb) dt``. The node adds up these heats and ends the step at
+    ``T_end = T0 + (sum of heats - loss - heat drawn) / C``. Nothing the node publishes changes while a step
+    iterates, so the circuits do not iterate against the node; the balance closes on every step whatever the step
+    length.
+
+    The price is that the node does not see its own temperature change inside the step: a circuit holding a lift
+    keeps bringing the same heat however far the node has risen, so a long step can carry the node past a target or,
+    with a large draw, below the temperature of every stream entering it and of its surroundings. The node neither
+    clips nor refuses such an end temperature: whoever runs a circuit limits it to the fraction of the step that keeps
+    the node within its own aim.
+
+    Example: 170 kg of water at 40 °C, charged for 900 s with 0.3 kg/s at 45 °C and losing 3.6 W/K to a 20 °C room,
+    gains 5.643 MJ and loses 64.8 kJ, and ends at 47.85 °C.
+    """
+
+    @staticmethod
+    def step(
+        *,
+        t0_c: float,
+        inflows: Iterable[Inflow],
+        ua_w_per_k: float,
+        t_amb_c: float,
+        dt_s: float,
+        heat_capacity_j_per_k: float,
+        heat_drawn_w: float = 0.0,
+    ) -> StartOfStepNodeStep:
+        """Return the end temperature, the inflow heats, the loss and the heat drawn of one start-of-step node step.
+
+        The loss coefficient, the step duration and the heat capacity are constant over a run; the component that
+        owns the node checks them once with :meth:`MixedNode.check_constants`, as for a mixed node. Nor are the values
+        checked to be finite; a NaN passes through into the result, where the check of the results after the run
+        names it.
+
+        Args:
+            t0_c: The node's temperature at the start of the step, in °C.
+            inflows: Every stream entering the node; read once, so any iterable will do.
+            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K, at least 0.
+            t_amb_c: The temperature the node loses heat to, in °C.
+            dt_s: The step duration, in s, above 0.
+            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K, above 0.
+            heat_drawn_w: Heat taken out of the node directly, not by a stream, in W; for example what the emitters
+                of a distribution system without a buffer hand to the rooms from the pipe water. It is signed like a
+                circuit's heat and the loss: a negative value puts heat into the node, such as the room heat that the
+                emitters of a cooling distribution system hand to the pipe water.
+
+        Returns:
+            The end temperature, the heat of each inflow, the loss and the heat drawn.
+
+        Raises:
+            NegativeMassFlowError: If an inflow's mass flow is negative.
+            NonPositiveTimestepError: If ``dt_s`` is not positive and the node has an inflow.
+        """
+        heat_in = tuple(
+            circuit_heat_j(
+                mass_flow_kg_per_s=inflow.mass_flow_kg_per_s,
+                t_supply_c=inflow.temperature_c,
+                t_return_c=t0_c,
+                dt_s=dt_s,
+            )
+            for inflow in inflows
+        )
+        loss = ua_w_per_k * (t0_c - t_amb_c) * dt_s
+        drawn = heat_drawn_w * dt_s
+        t_end = t0_c + math.fsum(heat_in + (-loss, -drawn)) / heat_capacity_j_per_k
+        return StartOfStepNodeStep(t_end_c=t_end, heat_in_j_per_inflow=heat_in, loss_j=loss, heat_drawn_j=drawn)
 
 
 @dataclass(frozen=True)

@@ -124,7 +124,11 @@ class ParameterConstraint(BaseModel):
 
     @property
     def text(self) -> str:
-        """How messages and ``describe`` write the constraint: ``all_or_none_of [a, b]``."""
+        """The constraint in one line, ``all_or_none_of [a, b]``.
+
+        It is the spelling the import check's and the sampler's messages use for a constraint;
+        ``describe`` lists the constraints with a colon after the kind, ``all_or_none_of: [a, b]``.
+        """
         return f"{self.kind.value} [{', '.join(self.names)}]"
 
 

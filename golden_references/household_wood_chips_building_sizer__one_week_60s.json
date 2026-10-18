@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 3.1510793974121045e-12
+    "value": 1.407850369616881e-09
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",

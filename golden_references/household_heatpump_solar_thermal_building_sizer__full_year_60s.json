@@ -5,7 +5,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 3474.3149069126584
+    "value": 3478.758802268142
   },
   "BUI1.Battery.Battery discharging energy": {
     "building": "BUI1",
@@ -13,7 +13,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 2646.626561831786
+    "value": 2649.4634198080826
   },
   "BUI1.Battery.Battery losses": {
     "building": "BUI1",
@@ -21,7 +21,7 @@
     "source": null,
     "tag": "Battery",
     "unit": "kWh",
-    "value": 838.8209753241297
+    "value": 840.428012729443
   },
   "BUI1.Building.Building heating load (Building)": {
     "building": "BUI1",
@@ -81,7 +81,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 16.086523356063125
+    "value": 16.284443988760618
   },
   "BUI1.Building.Internal energy gains (Building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 17.47484468957368
+    "value": 17.474844715389636
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 277.4538622835282
+    "value": 277.4528705366637
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 102.45675010507874
+    "value": 103.18128292990048
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -231,7 +231,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -1571.6573496122242
+    "value": -1571.6618544243202
   },
   "BUI1.Building.Theoretical heating demand (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 12184.934102775234
+    "value": 12183.87597176437
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -254,7 +254,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -931.6884820000002
+    "value": -931.57915
   },
   "BUI1.Costs.Costs of grid gas for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -931.6884820000002
+    "value": -931.57915
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1654.0515179999995
+    "value": 1654.1608499999998
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 983.1815179999996
+    "value": 983.2908499999999
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -397,7 +397,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kg",
-    "value": 729.5293999999999
+    "value": 729.4433
   },
   "BUI1.Electricity Meter.Max power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.2031207795469627
+    "value": 0.20309719776383317
   },
   "BUI1.Electricity Meter.Mean power to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -457,7 +457,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 2.2230411331229747
+    "value": 2.2227795201345386
   },
   "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -502,7 +502,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "Euro",
-    "value": -931.6884820000002
+    "value": -931.57915
   },
   "BUI1.Electricity Meter.Total energy from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 1779.338028831393
+    "value": 1779.1314524111788
   },
   "BUI1.Electricity Meter.Total energy to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -532,7 +532,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 19473.840326157257
+    "value": 19471.548596378558
   },
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -564,7 +564,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 729.5293999999999
+    "value": 729.4433
   },
   "BUI1.Emissions.CO2 footprint of grid gas for simulated period": {
     "building": "BUI1",
@@ -588,7 +588,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 1133.2794
+    "value": 1133.1933
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -604,7 +604,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 1061.5893999999998
+    "value": 1061.5033
   },
   "BUI1.Energy Management System.Domestic hot water heat pump electricity from grid (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -619,7 +619,7 @@
     },
     "tag": "Energy Management System",
     "unit": "kWh",
-    "value": 474.7467124262976
+    "value": 475.98870330133775
   },
   "BUI1.Energy Management System.Domestic hot water solar thermal system electricity from grid (SolarThermalSystem)": {
     "building": "BUI1",
@@ -634,7 +634,7 @@
     },
     "tag": "Energy Management System",
     "unit": "kWh",
-    "value": 0.2608744707836846
+    "value": 0.2628744707836846
   },
   "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_7 (L2EMSElectricityController)": {
     "building": "BUI1",
@@ -739,7 +739,7 @@
     },
     "tag": "Energy Management System",
     "unit": "kWh",
-    "value": 1516.07977935077
+    "value": 1517.466069957966
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -747,7 +747,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 19476.418776273127
+    "value": 19474.138461545623
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -763,7 +763,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 1779.338028831393
+    "value": 1779.1314524111788
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -779,7 +779,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 304.9001869833298
+    "value": 304.82580708992947
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -795,7 +795,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 304.9001869833298
+    "value": 304.82580708992947
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -803,7 +803,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 20.60543595326053
+    "value": 20.598110498772748
   },
   "BUI1.General.Self-consumption of electricity": {
     "building": "BUI1",
@@ -811,7 +811,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 6024.423308399246
+    "value": 6025.096585821227
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -819,7 +819,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 26.035131791946913
+    "value": 26.04383616089577
   },
   "BUI1.General.Self-consumption rate of electricity": {
     "building": "BUI1",
@@ -827,7 +827,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 22.881756683439033
+    "value": 22.884313902505752
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -835,7 +835,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 79.39456404673948
+    "value": 79.40188950122726
   },
   "BUI1.General.Self-sufficiency rate of electricity": {
     "building": "BUI1",
@@ -843,7 +843,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 69.76651891287618
+    "value": 69.75729455030609
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -851,7 +851,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 8635.12097532413
+    "value": 8637.228012729443
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",
@@ -867,7 +867,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 79.39
+    "value": 79.4
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -935,7 +935,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 26.328133511929845
+    "value": 26.28980853121285
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -950,7 +950,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 25.17172104539042
+    "value": 25.133765405733925
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -965,7 +965,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 1.1564124665394213
+    "value": 1.15604312547892
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -980,7 +980,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 18.23044103664888
+    "value": 18.184200832182803
   },
   "BUI1.Heat Distribution System.Min return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -995,7 +995,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 17.47484468957368
+    "value": 17.474844715389636
   },
   "BUI1.Heat Distribution System.Min temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1025,7 +1025,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 11469.387032029586
+    "value": 11465.743949580306
   },
   "BUI1.Heat Pump For Domestic Hot Water.DHW heat pump total electricity consumption (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Pump For Domestic Hot Water",
     "unit": "kWh",
-    "value": 613.5924886749538
+    "value": 614.9484789250697
   },
   "BUI1.Heat Pump For Domestic Hot Water.Heating output energy of DHW heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1055,7 +1055,7 @@
     },
     "tag": "Heat Pump For Domestic Hot Water",
     "unit": "kWh",
-    "value": 2058.0432188179807
+    "value": 2059.275755367417
   },
   "BUI1.Heat Pump For Space Heating.Cooling hours of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1115,7 +1115,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "kWh",
-    "value": 2506.758959484323
+    "value": 2505.8762518798503
   },
   "BUI1.Heat Pump For Space Heating.Heating hours of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1130,7 +1130,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "h",
-    "value": 2211.7166666666667
+    "value": 2210.4333333333334
   },
   "BUI1.Heat Pump For Space Heating.Heating output energy of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1145,7 +1145,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "kWh",
-    "value": 11775.435547701041
+    "value": 11769.704241368072
   },
   "BUI1.Heat Pump For Space Heating.Max flow temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 27.343839371899403
+    "value": 27.304667739736438
   },
   "BUI1.Heat Pump For Space Heating.Mean return temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1220,7 +1220,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 26.328133511929845
+    "value": 26.28980853121285
   },
   "BUI1.Heat Pump For Space Heating.Mean temperature difference of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1235,7 +1235,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 1.0157058599695585
+    "value": 1.0148592085235921
   },
   "BUI1.Heat Pump For Space Heating.Min flow temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1250,7 +1250,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 18.243006051485946
+    "value": 18.20546899329945
   },
   "BUI1.Heat Pump For Space Heating.Min return temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1265,7 +1265,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 18.23044103664888
+    "value": 18.184200832182803
   },
   "BUI1.Heat Pump For Space Heating.Min temperature difference of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1325,7 +1325,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "-",
-    "value": 4.6974742039511534
+    "value": 4.69684176644346
   },
   "BUI1.Heat Pump For Space Heating.Total electrical input energy of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1340,7 +1340,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "kWh",
-    "value": 2506.758959484323
+    "value": 2505.8762518798503
   },
   "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
     "building": "BUI1",
@@ -1490,7 +1490,7 @@
     },
     "tag": "Solar Thermal",
     "unit": "kWh",
-    "value": 1238.3
+    "value": 1239.5
   },
   "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SolarThermalSystem)": {
     "building": "BUI1",
@@ -1550,7 +1550,7 @@
     },
     "tag": "Solar Thermal",
     "unit": "kWh",
-    "value": 1238.3
+    "value": 1239.5
   },
   "BUI1.Storage For Domestic Hot Water.Standby heat loss of DHW storage (DHWStorage)": {
     "building": "BUI1",
@@ -1565,7 +1565,7 @@
     },
     "tag": "Storage For Domestic Hot Water",
     "unit": "kWh",
-    "value": 264.8
+    "value": 265.0
   },
   "BUI1.Storage For Domestic Hot Water.Unmet DHW heat demand (DHWStorage)": {
     "building": "BUI1",
@@ -1580,7 +1580,7 @@
     },
     "tag": "Storage For Domestic Hot Water",
     "unit": "kWh",
-    "value": 15.4
+    "value": 13.0
   },
   "BUI1.Storage For Space Heating Hot Water.Standby heat loss of Hot water storage (SimpleHotWaterStorage)": {
     "building": "BUI1",
@@ -1595,6 +1595,6 @@
     },
     "tag": "Storage For Space Heating Hot Water",
     "unit": "kWh",
-    "value": 343.6
+    "value": 341.5
   }
 }

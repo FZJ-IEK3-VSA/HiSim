@@ -591,8 +591,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     With its heat exchanger (the default) the buffer is a start-of-step node (:class:`hisim.hydronics.StartOfStepNode`):
     it publishes the temperature it starts the step at as the return to its generators
     (``WaterTemperatureToHeatGenerator``, ``WaterTemperatureToSecondaryHeatGenerator``), as the supply to the heat
-    distribution system (``WaterTemperatureToHeatDistribution``) and as ``WaterMeanTemperatureInStorage``. The
-    generators' controllers read ``WaterTemperatureToHeatGenerator``. Every circuit's heat is ``m c`` times the
+    distribution system (``WaterTemperatureToHeatDistribution``), as ``WaterMeanTemperatureInStorage`` and as
+    ``WaterTemperatureAtStartOfStepInCelsius``. The generators' controllers read
+    ``WaterTemperatureAtStartOfStepInCelsius``, a value no pass of the step moves, so their on/off decision cannot
+    cycle with the circuit temperatures. Every circuit's heat is ``m c`` times the
     difference between the stream that enters and that start temperature, the standby loss is taken at it too, and
     the buffer ends the step at its start temperature plus the net heat over its heat capacity. So the heat a generator
     books is the heat the buffer receives, the heat the distribution system delivers is the heat the buffer gives, and
@@ -641,6 +643,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
+    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on.
+    WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
     #: The buffer's temperature at the end of the step, the next step's start temperature.
     WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
     #: The buffer's end temperature had the primary generator's circuit brought nothing in this step.
@@ -795,6 +799,16 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
         )
 
+        self.water_temperature_at_start_of_step_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureAtStartOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The buffer's temperature at the start of the step, the end temperature of the step before. The "
+                "generators' controllers decide on it, since it does not change while the step iterates."
+            ),
+        )
         self.water_temperature_at_end_of_step_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureAtEndOfStepInCelsius,
@@ -1086,17 +1100,17 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     def simulate_start_of_step_node(self, stsv: SingleTimeStepValues) -> None:
         """Book every circuit on the buffer's start temperature and end the step at the start plus the net heat.
 
-        The buffer publishes its start temperature ``T0`` as the return to both generators and as the supply to the
-        heat distribution system, so a generator's heat is ``m c (T_sup - T0)``, the distribution's
-        ``m c (T0 - T_ret)``, and the buffer, a :class:`hisim.hydronics.StartOfStepNode`, ends at
-        ``T0 + (heats - loss) / C`` with the standby loss ``UA (T0 - 20 °C)``. Every output is computed from the same
-        node step, so the buffer's balance closes on every step, and none of the temperatures it publishes changes
-        while the step iterates. It also publishes its end temperature, and per circuit its end temperature without
-        that circuit, ``T_end`` less the circuit's heat over ``C``: a generator's or the distribution system's
-        controller sets the fraction of a coarse step its device runs from these
-        (:class:`hisim.part_load.StartOfStepPartLoadRule`). For example, a 170 kg buffer at 40 °C that a boiler
-        charges with 0.3 kg/s at 45 °C while the distribution returns 0.27 kg/s at 35 °C over 900 s, losing
-        3.58 W/K, ends at 40.70 °C.
+        The buffer publishes its start temperature ``T0`` as the return to both generators, as the supply to the
+        heat distribution system and as the sensor its generators' controllers read, so a generator's heat is
+        ``m c (T_sup - T0)``, the distribution's ``m c (T0 - T_ret)``, and the buffer, a
+        :class:`hisim.hydronics.StartOfStepNode`, ends at ``T0 + (heats - loss) / C`` with the standby loss
+        ``UA (T0 - 20 °C)``. Every output is computed from the same node step, so the buffer's balance closes on every
+        step, and none of the temperatures it publishes changes while the step iterates. It also publishes its end
+        temperature, and per circuit its end temperature without that circuit, ``T_end`` less the circuit's heat over
+        ``C``: a generator's or the distribution system's controller sets the fraction of a coarse step its device
+        runs from these (:class:`hisim.part_load.StartOfStepPartLoadRule`). For example, a 170 kg buffer at 40 °C
+        that a boiler charges with 0.3 kg/s at 45 °C while the distribution returns 0.27 kg/s at 35 °C over 900 s,
+        losing 3.58 W/K, ends at 40.70 °C.
 
         Args:
             stsv: The step's values.
@@ -1118,6 +1132,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.water_temperature_heat_generator_output_channel,
             self.water_temperature_secondary_heat_generator_output_channel,
             self.water_temperature_mean_channel,
+            self.water_temperature_at_start_of_step_channel,
         ):
             stsv.set_output_value(channel, start_temperature_in_celsius)
         stsv.set_output_value(self.water_temperature_at_end_of_step_channel, node.t_end_c)
@@ -1421,10 +1436,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.mean_water_temperature_in_water_storage_in_celsius
             - self.state.temperature_loss_in_celsius_per_timestep
         )
-        # the mixing law has no circuit-wise end temperatures; it publishes its end temperature for all of them
-        for channel in (self.water_temperature_at_end_of_step_channel,) + (
-            self.water_temperature_at_end_of_step_without_circuit_channels
-        ):
+        # the mixing law has no circuit-wise end temperatures and no start-of-step sensor of its own; it publishes its
+        # end temperature for all of them
+        for channel in (
+            self.water_temperature_at_start_of_step_channel,
+            self.water_temperature_at_end_of_step_channel,
+        ) + self.water_temperature_at_end_of_step_without_circuit_channels:
             stsv.set_output_value(channel, self.state.mean_water_temperature_in_celsius)
 
     def build(self, heat_exchanger_is_present: bool) -> None:

@@ -44,13 +44,14 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.economics.facts import CostRelevance
 
 
-class StartOfStepBufferWholeStepError(ValueError):
+class MixedNodeStepTooLongError(ValueError):
     """A run that would iterate the space-heating buffer as a mixed node over steps longer than it can take.
 
     Raised by :class:`SimpleHotWaterStorage` when it is built, so a step length above
     :attr:`SimpleHotWaterStorage.LONGEST_MIXED_NODE_STEP_IN_SECONDS` together with a part-load threshold at or above
-    that step is refused before anything runs (:meth:`SimpleHotWaterStorage.check_mixed_node_step_is_safe`). The name
-    is the stage D one: such a run gives every circuit of the buffer whole steps.
+    that step is refused before anything runs (:meth:`SimpleHotWaterStorage.check_mixed_node_step_is_safe`). For
+    example, 900 s steps with ``part_load_above_seconds = 900`` would iterate the buffer over 900 s steps, where it
+    contracts by about 0.7 per pass and overcharges; they are refused.
     """
 
 
@@ -1038,13 +1039,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             part_load_above_seconds: The run's part-load threshold, s.
 
         Raises:
-            StartOfStepBufferWholeStepError: If the step is longer than :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` and
+            MixedNodeStepTooLongError: If the step is longer than :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` and
                 not longer than the threshold.
         """
         longest_in_seconds = cls.LONGEST_MIXED_NODE_STEP_IN_SECONDS
         if seconds_per_timestep <= longest_in_seconds or seconds_per_timestep > part_load_above_seconds:
             return
-        raise StartOfStepBufferWholeStepError(
+        raise MixedNodeStepTooLongError(
             f"The space-heating buffer {buffer_name!r} cannot run {seconds_per_timestep:g} s steps with "
             f"part_load_above_seconds = {part_load_above_seconds:g} s. At and below the threshold the buffer iterates "
             f"as a mixed node and every circuit runs whole steps; above {longest_in_seconds:g} s the mixed node "

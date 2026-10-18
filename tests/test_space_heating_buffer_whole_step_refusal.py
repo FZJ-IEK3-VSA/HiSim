@@ -27,7 +27,7 @@ from hisim.calculation_scope import CalculationScope
 from hisim.components.simple_water_storage import (
     SimpleHotWaterStorage,
     SimpleHotWaterStorageConfig,
-    StartOfStepBufferWholeStepError,
+    MixedNodeStepTooLongError,
 )
 from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
@@ -105,7 +105,7 @@ def test_a_buffer_refuses_900_s_steps_with_a_threshold_at_or_above_the_step(part
 
     Fails if the buffer is built anyway, or if its error does not name the step, the threshold and the reason.
     """
-    with pytest.raises(StartOfStepBufferWholeStepError) as refusal:
+    with pytest.raises(MixedNodeStepTooLongError) as refusal:
         BufferBuild.buffer(900, part_load_above_seconds=part_load_above_seconds)
     message = str(refusal.value)
     assert f"900 s steps with part_load_above_seconds = {part_load_above_seconds} s" in message

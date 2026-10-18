@@ -1017,5 +1017,5 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
   60 s (amended S9, above) are tracked there too.
 
 **Amended (owner, 2026-10-17):** the buffer runs the start-of-step node of this section only above
-`part_load_above_seconds` (600 s); at or below it, it is an iterated `MixedNode`. The hybrid, its shared port
-interface and its implementation plan are in `roadmap/sh_buffer_hybrid_spec.md`.
+`part_load_above_seconds` (600 s); at or below it, it is an iterated `MixedNode`. The two-mode buffer, its shared
+port interface and its implementation plan are in `roadmap/two_mode_buffer_spec.md`.

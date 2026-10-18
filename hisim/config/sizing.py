@@ -478,7 +478,9 @@ class SizedTogether:
     Sizing then refuses a configuration that states some members of a group and leaves others to
     their laws: either every member is stated, or every member is ``AUTO``. The check runs in
     :func:`resolve_config` and when the fact engine registers the configuration, so an energy-system
-    file, an assembly and a Python setup are refused alike, before any law is evaluated.
+    file and a Python setup that sizes through the kernel are refused alike, before any law is
+    evaluated. An assembly import of the battery is refused earlier, by the assembly's own
+    ``all_or_none_of`` (``EF-77``).
     """
 
     #: The class attribute a configuration class lists its groups in.

@@ -150,8 +150,10 @@ stated together or not at all: each has its own law from the photovoltaic power,
 alone would be built with the power the array gives, a C-rate nobody chose. A battery that states
 one of them and leaves the other `AUTO` is refused at sizing, `EF-4J`, naming both fields and the
 value stated: "state both or neither". The class declares the pair in `BatteryConfig.SIZED_TOGETHER`,
-and the sizing kernel refuses it for a file, an assembly and a Python setup alike. Leaving both
-lines out keeps the automatic sizing. `tests/test_energy_system_explicit_sizes.py` checks all of
+and the sizing kernel refuses it for a file and for a Python setup that sizes through it
+(`config.resolve`, `resolve_all`) alike. An import of the `storage/battery` assembly stating only
+one of `capacity_in_kwh` and `power_in_watt` is refused before sizing, by its `all_or_none_of`
+(`EF-77`, see the assemblies section below). Leaving both lines out keeps the automatic sizing. `tests/test_energy_system_explicit_sizes.py` checks all of
 this on the recorded grouped heat-pump twin. The RenoVisor translator always writes both battery
 fields: a request that states only the capacity gets a power of 500 W per kWh, a C-rate of 0.5, the
 rule the measure catalogue states for an unset power.

@@ -148,8 +148,10 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             log.error("Carpet plot can only deal with data containing entire days")
             return None
 
-        # The same unit as the line and single-day charts of this output show: a carpet of a power of
-        # 1.2 kW used to stay in W, and one of 2 000 kWh used to read "kkWh".
+        # The same unit rule as the line and single-day charts of this output: a carpet of a power of
+        # 1.2 kW used to stay in W, and one of 2 000 kWh used to read "kkWh". The unit itself can
+        # differ, since each chart scales its own values: a low first day can be drawn in W while
+        # the line chart of the whole run is in kW.
         reshaped_data_in_self_units, self.units = self.rescale_y_axis(
             y_values=reshaped_data_in_self_units, units=self.declared_units
         )

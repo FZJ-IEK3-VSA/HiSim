@@ -319,18 +319,7 @@ class Chart:  # noqa: too-few-public-methods
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output)
         matches = [m.group(0) for m in matches]  # type: ignore
 
-        passed_hash_delimiter = False
-        chart_property = ""
-        chart_object = ""
         for single_match in matches:
-            if passed_hash_delimiter:
-                chart_property = f"{chart_property}{single_match}"
-            else:
-                chart_object = f"{chart_object}{single_match}"
-
-            if single_match.find("#"):  # type: ignore
-                passed_hash_delimiter = True
-
             if len(self.title) == 0:
                 self.title = str(single_match)
 
@@ -343,7 +332,6 @@ class Chart:  # noqa: too-few-public-methods
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = str(Path(self.directory_path) / self.component_name / self.output_type)
         self.object_name = " "
-        self.property = chart_property
         if output2 is not None:
             self.output2 = output2
             self.filename = f"{self.type.lower()}_double{self.figure_format.value}"
@@ -379,7 +367,7 @@ class Chart:  # noqa: too-few-public-methods
         ``([1.5], "kW")``.
 
         Args:
-            y_values: Array-like numeric values in ``units``.
+            y_values: The values in ``units``, a numpy array or a pandas Series.
             units: The declared unit of the values, as the string of its ``Units`` member.
 
         Returns:
@@ -408,7 +396,7 @@ class Chart:  # noqa: too-few-public-methods
         ``WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius`` has no space to break
         at and runs off both edges of the figure. A line is broken at spaces, underscores and the
         word boundaries of camel case, and its words are kept as they are written, so the name can
-        still be searched for. Example: with a limit of 20 characters,
+        still be searched for. Example: with a limit of 22 characters,
         ``"ThermalPowerFromSecondaryHeatGenerator"`` becomes
         ``"ThermalPowerFrom\nSecondaryHeatGenerator"``.
 

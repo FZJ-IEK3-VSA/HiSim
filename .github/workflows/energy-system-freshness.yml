@@ -84,7 +84,6 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-          scope: ${{ github.workflow }}
       - name: Re-record every setup and compare with the committed twins
         # bash by name: this step once fell back to sh in this container and died on the
         # bash-only PIPESTATUS ("Bad substitution"), yet bash is installed here -- the
@@ -118,13 +117,14 @@ jobs:
           name: energy-system-drift
           path: energy_system_drift.txt
           if-no-files-found: ignore
-      # Kept even when the job failed; see the action for why that is safe.
+      # This job's additions merged into the most recent shared entry and saved there, in this job:
+      # it is the workflow's only user of the cache, so it needs no merge job. Kept even when the
+      # job failed; see the action for why that is safe.
       - name: Save the HiSim inputs cache
         if: always()
         uses: ./.github/actions/hisim-cache
         with:
           mode: save
-          scope: ${{ github.workflow }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage

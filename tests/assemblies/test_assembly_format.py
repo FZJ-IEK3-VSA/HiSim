@@ -98,6 +98,42 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
 
 
 @pytest.mark.assemblies
+def test_a_constraint_is_read_with_its_kind() -> None:
+    """Catches the constraint list losing its kinds: both are read, in written order, each with its parameters."""
+    text = MINIMAL + "constraints: [{all_or_none_of: [a, b]}, {exactly_one_of: [c, d]}]\n"
+    model, _lines = AssemblyReader.read_text(text, "test/minimal.assembly.yaml")
+    jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+    assert [constraint.text for constraint in model.constraints] == ["all_or_none_of [a, b]", "exactly_one_of [c, d]"]
+    assert model.all_or_none_of == (("a", "b"),) and model.exactly_one_of == (("c", "d"),)
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        ("{all_or_none_of: [a, b], exactly_one_of: [c, d]}", "exactly one of the keys"),
+        ("{all_or_none_of: [a]}", "two or more parameters"),
+        ("{all_or_none_of: a}", "two or more parameters"),
+        ("{all_or_none_of: [a, a]}", "each named once"),
+        ("{exactly_one_of: [a, b, a]}", "each named once"),
+    ],
+)
+def test_a_malformed_all_or_none_of_is_refused(block: str, expected: str) -> None:
+    """Catches one item carrying two constraints, or a constraint naming fewer than two parameters or one twice.
+
+    ``[a, a]`` would be an all_or_none_of that never fires: its one member is always all stated or none.
+
+    The reader refuses each, and the schema an editor validates against does too.
+    """
+    text = MINIMAL + f"constraints: [{block}]\n"
+    with pytest.raises(EnergySystemFormatError) as refusal:
+        read_assembly(text)
+    assert expected in str(refusal.value)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+
+
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("construct", "text"),
     [

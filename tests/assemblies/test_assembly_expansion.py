@@ -421,6 +421,42 @@ def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameter
         assert name in message, f"{name!r} is not in: {message}"
 
 
+def battery(parameters: str) -> str:
+    """A house of a weather station, a real PV array at a stated power and a real battery with the given parameters."""
+    return site(Real.WEATHER) + imports(Real.PV, f"battery: {{assembly: storage/battery, parameters: {parameters}}}")
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("parameters", "stated", "unstated"),
+    [
+        ("{capacity_in_kwh: 10}", "capacity_in_kwh = 10 is stated", "power_in_watt is not"),
+        ("{power_in_watt: 5000}", "power_in_watt = 5000 is stated", "capacity_in_kwh is not"),
+        ("{capacity_in_kwh: 10, power_in_watt: AUTO}", "capacity_in_kwh = 10 is stated", "power_in_watt is not"),
+    ],
+)
+def test_a_battery_import_stating_one_size_is_refused(parameters: str, stated: str, unstated: str) -> None:
+    """Catches an all_or_none_of stated in part reaching the battery, whose sizing would refuse it later (D31)."""
+    with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
+        expand_text(battery(parameters))
+    message = str(refusal.value)
+    for name in ("all_or_none_of [capacity_in_kwh, power_in_watt]", stated, unstated, "state both or neither"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.assemblies
+def test_a_battery_import_stating_both_sizes_or_neither_expands() -> None:
+    """Regression: both sizes stated write both lines; neither stated leaves both fields to their laws."""
+    flat, record = expand_text(battery("{capacity_in_kwh: 10, power_in_watt: 5000}"))
+    assert flat.components["battery-Battery"].config == {
+        "custom_battery_capacity_generic_in_kilowatt_hour": 10,
+        "custom_pv_inverter_power_generic_in_watt": 5000,
+    }
+    assert record.instance("battery").parameters_resolved["power_in_watt"] == 5000
+    flat, _record = expand_text(battery("{}"))
+    assert flat.components["battery-Battery"].config == {}
+
+
 @pytest.mark.assemblies
 def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
     """Catches an import writing ``none`` for a variant's selector crashing on an assertion."""

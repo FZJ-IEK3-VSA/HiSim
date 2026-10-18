@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "assembly_v4.schema.json",
   "title": "HiSim assembly, schema version 4 (lean v1)",
-  "description": "A fragment of an energy system in a file of its own (assemblies_spec.md \u00a713.1): members, parameters, exactly_one_of constraints, internal variants, an interface of ports and its test contract.",
+  "description": "A fragment of an energy system in a file of its own (assemblies_spec.md \u00a713.1): members, parameters, exactly_one_of and all_or_none_of constraints, internal variants, an interface of ports and its test contract.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -766,13 +766,21 @@
     "constraint": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "exactly_one_of"
-      ],
+      "minProperties": 1,
+      "maxProperties": 1,
       "properties": {
         "exactly_one_of": {
           "type": "array",
           "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "all_or_none_of": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/name"
           }

@@ -161,7 +161,36 @@ def test_a_value_of_an_enum_that_selects_nothing_of_its_own_is_refused(tmp_path:
                 + "  high: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: h.}\n",
             )
             + "constraints: [{exactly_one_of: [low, volume_in_liter]}, {exactly_one_of: [volume_in_liter, high]}]\n",
-            ("'volume_in_liter' is named by the exactly_one_of constraints 0 and 1",),
+            ("'volume_in_liter' is named by the constraints 0 and 1",),
+        ),
+        (BASE + "constraints: [{all_or_none_of: [volume_in_liter, power]}]\n", ("all_or_none_of names power",)),
+        (
+            BASE.replace(
+                PARAMETER,
+                PARAMETER
+                + "  low: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: l.}\n",
+            )
+            + "constraints: [{all_or_none_of: [volume_in_liter, low]}]\n",
+            ("the defaults violate it: volume_in_liter = 150 is stated but low is not; state both or neither",),
+        ),
+        (
+            BASE.replace(
+                PARAMETER,
+                PARAMETER
+                + "  low: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: l.}\n"
+                + "  label: {type: string, default: AUTO, description: l.}\n",
+            )
+            + "constraints: [{all_or_none_of: [low, label]}]\n",
+            ("'label' has no value that states it",),
+        ),
+        (
+            BASE.replace(
+                PARAMETER,
+                PARAMETER
+                + "  low: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: l.}\n",
+            )
+            + "constraints: [{exactly_one_of: [low, volume_in_liter]}, {all_or_none_of: [volume_in_liter, low]}]\n",
+            ("'volume_in_liter' is named by the constraints 0 and 1", "'low' is named by the constraints 0 and 1"),
         ),
         (BASE.replace("{$param: volume_in_liter}", "{$param: volume}"), ("'volume', which is no parameter",)),
         (

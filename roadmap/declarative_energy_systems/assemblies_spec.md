@@ -269,7 +269,12 @@ the assembly is loaded and against the resolved values per import; a parameter a
 unstated (`0` is stated). The defaults state exactly one member, so an import writing none passes; **stating one member
 unstates the others' defaults** (decided, owner, 2026-10-07, D27): when the import states one member, the others
 resolve to `none` whatever their defaults; a member written as `none` (or `AUTO`/`false`) is an explicit
-unstatement, not a stated member; an import stating two members is refused (`EF-77`). Not in
+unstatement, not a stated member; an import stating two members is refused (`EF-77`). **`{all_or_none_of: […]}`**
+(decided, owner, 2026-10-15, D31) states every member or none: the defaults must, and an import stating some members
+and leaving others unstated is refused (`EF-77`), nothing being filled in for it; every member needs a value that
+states it (a stated default, a range or a stated allowed value). The battery's `capacity_in_kwh` and `power_in_watt`
+are the first pair. A constraint of either kind names two or more parameters, none twice (`[a, a]` is refused when the
+file is read). Not in
 v1 (D26): `{at_most_one_of: […]}` and `{requires: {tilt_in_degree: [azimuth_in_degree]}}`; an assembly expresses them
 as an enum parameter selecting a variant. **Internal
 variants partition their selector:** the `when:` lists must cover every allowed value of the selecting parameter exactly
@@ -777,7 +782,11 @@ integers, which the library check holds, and every value the harness gives it is
 every `values` parameter and every
 internal variant a stratified discrete dimension, and a constraint with alternatives (`exactly_one_of`; the library
 check refuses a parameter named by two) splits the box
-into one hypercube per branch, so no sample is thrown away for violating a constraint. Sample size and seed are the
+into one hypercube per branch, so no sample is thrown away for violating a constraint. An `all_or_none_of` (D31)
+splits nothing: a value stating one member states the others at their companion value (a stated default, else the
+middle of the range, else the first stated allowed value), the hypercube states every member, and a monotone sweep of
+one member from a base leaving the constraint unstated holds the others at their companion values; the unstated
+state is the defaults' sample. Sample size and seed are the
 harness's, not the assembly's; the size is recorded with the run, and it is an upper bound for a branch whose
 dimensions are all discrete, where two points drawing the same values are one sample.
 
@@ -1096,7 +1105,7 @@ recommended pieces, with this section as its spec. Every cut feature may return 
 it, which is a better test of need than a mockup.
 
 **Kept in v1:** assembly files with components, parameters (unit, description, default, `range`), `exactly_one_of`
-constraints, the test contract (§9.4) and the full library check; import once or as named instances; expansion to one
+constraints (and `all_or_none_of`, added by D31), the test contract (§9.4) and the full library check; import once or as named instances; expansion to one
 flat file with `ComponentID.path` and hyphenated addresses, site entries first then imports, each in file order; need
 ports by partner class with `bind:`, `optional-bind:`, `none:`, `required_when` and `active_when`; wires and provided
 outputs; internal variants `selected_by`; circuit ports; carrier needs and providers with the meter feeds; fact ports
@@ -1278,6 +1287,19 @@ All by the owner on 2026-10-03.
   follows the meter class's law from the file's one `energy_carrier` provider, as in the twins, and a second provider
   of any value is refused at sizing (§5.1); pinning is cut from v1 (§13.1) and returns with the first file that has
   two providers.
+
+- **D31 — `all_or_none_of`, for sizes a component states together (owner, 2026-10-15):** from the review of PR #978
+  (R4/R9). A battery that states only one of its capacity and inverter power is refused ("state both or neither"):
+  each field has its own law from the PV peak power, so a capacity stated alone kept the PV-derived power, a C-rate
+  nobody chose, while the RenoVisor translator derives the power from the capacity at 0.5 C. The class declares the
+  pair (`BatteryConfig.SIZED_TOGETHER`) and the sizing kernel refuses a configuration stating it in part, `EF-4J`,
+  for every route. The battery assembly's two parameters both default to `AUTO`, and the PR-tier samples set one at a
+  time, so the refusal broke its contract tests; D26 cut `at_most_one_of` and `requires` until an assembly needs them,
+  and this is that need for the narrower rule: an assembly may declare `{all_or_none_of: [capacity_in_kwh,
+  power_in_watt]}`, which the import check enforces (`EF-77`) and the sampler respects (§2.6, §9.4). Rejected: an
+  enum parameter selecting a variant (D26's substitute), which would duplicate the battery member to switch two
+  fields between `AUTO` and a value; letting a stated capacity drive the power's law (0.5 C), which changes results
+  of files that state one size and needs a law reading a sibling field.
 
 ### 14.2 Open
 

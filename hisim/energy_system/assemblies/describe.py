@@ -49,9 +49,9 @@ class AssemblyDescription:
         for name, declaration in model.parameters.items():
             cls._line(name, cls._parameter(declaration), out)
         print("\nconstraints", file=out)
-        for names in model.exactly_one_of:
-            print(f"  exactly_one_of: [{', '.join(names)}]", file=out)
-        if not model.exactly_one_of:
+        for constraint in model.constraints:
+            print(f"  {constraint.kind.value}: [{', '.join(constraint.names)}]", file=out)
+        if not model.constraints:
             print("  none", file=out)
         print("\nmembers", file=out)
         for name, member in model.components.items():

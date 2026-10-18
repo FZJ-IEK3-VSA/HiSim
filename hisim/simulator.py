@@ -25,7 +25,6 @@ from hisim.economics.facts import (
     UnpriceableComponentError,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.january_readers import JanuaryReaders
 from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import OutputAggregation
@@ -714,22 +713,6 @@ class Simulator:
         if parameters.result_directory:
             CalculationDirectories.register_result_directory(parameters.result_directory)
 
-    def warn_of_january_readers(self) -> None:
-        """Log a warning when the run starts after 1 January and some of its components still read January.
-
-        The weather, the PV system and the building's solar gains read the run's window since hisim-9g2.4,
-        but the classes :class:`hisim.january_readers.JanuaryReaders` lists do not yet. A run with one of
-        them and a window after 1 January finishes and looks normal while it mixes two seasons, so the
-        warning names the ones this run contains, with the bead that fixes each. It changes no result.
-        Nothing is logged for a run from 1 January or for one without such components.
-        """
-        text = JanuaryReaders.warning_text(
-            self._simulation_parameters.start_date,
-            [type(wrapped_component.my_component) for wrapped_component in self.wrapped_components],
-        )
-        if text is not None:
-            log.warning(text)
-
     def check_cost_declarations(self) -> None:
         """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
 
@@ -836,7 +819,6 @@ class Simulator:
             f"components were defined. They have a total of {len(self.all_outputs)} outputs."
         )
         all_result_lines = []
-        self.warn_of_january_readers()
         log.information(f"Starting simulation for year {self._simulation_parameters.year}")
         log.information(f"Starting simulation for {self._simulation_parameters.timesteps} timesteps")
         lastmessage = datetime.datetime.now()

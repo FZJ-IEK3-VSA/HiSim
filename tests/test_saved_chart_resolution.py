@@ -38,7 +38,6 @@ def _arguments(tmp_path: Path) -> Dict[str, Any]:
         "component_name": "PVSystem",
         "units": "W",
         "directory_path": str(tmp_path),
-        "time_correction_factor_in_hours": 1.0,
         "output_description": "electricity output",
         "figure_format": FigureFormat.PNG,
         "path_checker": lambda **_: None,
@@ -69,6 +68,7 @@ def _draw_single_day(tmp_path: Path) -> str:
         **_arguments(tmp_path),
         data_with_units=pd.Series(np.linspace(0.0, 2500.0, 48), index=TWO_DAYS_HOURLY),
         window_start=JANUARY_FIRST,
+        seconds_per_timestep=3600,
         day_in_window=0,
     )
     chart.plot(close=True)

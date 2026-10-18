@@ -254,11 +254,12 @@ class SystemChart:
         and unit, with the ``°C`` unit replaced by its HTML entity
         (``&#8451;``). When ``with_results`` is set, the cumulative result
         value for the connected output is appended to the label, annotated
-        with its own derived unit and the aggregation kind (``mean`` or
-        ``sum``) so that the number is not mistaken for the input field's
-        instantaneous value: a mean keeps the source output's unit, while a
-        sum is a cumulative total (e.g. ``"kWh per timestep"`` sums to
-        ``"kWh"``).
+        with its own derived unit and the output's declared aggregation
+        (``mean``, ``sum`` or ``last``; an output declared ``none`` gets no
+        value) so that the number is not mistaken for the input field's
+        instantaneous value: a mean or a last value keeps the source output's
+        unit, while a sum is a cumulative total (e.g. ``"kWh per timestep"``
+        sums to ``"kWh"``).
 
         Args:
             with_labels: If True, edges carry the constructed label text;

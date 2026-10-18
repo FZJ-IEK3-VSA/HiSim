@@ -243,6 +243,8 @@ def test_get_std_results_follows_the_declared_aggregation(seconds_per_timestep: 
     assert monthly["Mode [-]"].isna().all() and len(monthly["Mode [-]"]) == len(df.resample("ME").size())
     assert daily["Mode [-]"].isna().all()
     assert np.isnan(cumulative["Mode [-]"].iloc[0])
+    # A run with only the network charts calls get_run_totals on its own: the same declared values.
+    pd.testing.assert_frame_equal(Simulator.get_run_totals(df, outputs), cumulative)
     assert list(monthly.columns) == list(df.columns)
     if seconds_per_timestep == 3600:
         # On an hourly grid nothing is aggregated, so the hourly frame is the time series itself.

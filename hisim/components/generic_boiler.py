@@ -1217,16 +1217,20 @@ class GenericBoiler(PhysicsComponent):
         """Fire the circuit the controller asks for, within the burner's minimum times, and publish both circuits.
 
         The controller sends a control signal, an operating mode and a lift. In space-heating or hot-water mode with
-        a positive lift the boiler fires that mode's circuit (:meth:`commanded_firing`); the other circuit idles. Off,
-        or without a lift, the controller asks for no fire. The burner then burns as asked, unless its minimum times
-        (:class:`BurnerTimes`) hold it: a burner lit for less than its minimum firing time burns on, at the commanded
-        power and at least its minimal power, and sends that heat to the space-heating circuit, the buffer an on/off
-        burner charges, at the pump's largest flow for the whole step (:meth:`whole_step_firing` with a lift of 0 K).
-        For example, a pellet burner whose controller switched to off burns at its minimal power, a twelfth of its
-        maximal one, and one whose controller still names space heating with the buffer above its set temperature burns
-        at full power. A burner out for less than its minimum pause stays out. Out, no circuit moves water and no fuel
-        is burnt. The decision reads only this step's inputs and the burner's state committed at the end of the previous
-        step, so every pass of a step decides the same way on the same inputs.
+        a positive lift the boiler fires that mode's circuit (:meth:`commanded_firing`). In space-heating mode the
+        hot-water circuit idles. In hot-water mode the rest of the step may fire the space-heating circuit as well,
+        when the controller commands it a space-heating ratio, signal and lift (:meth:`space_heating_remainder_firing`);
+        otherwise the space-heating circuit idles. Off, or without a lift, the controller asks for no fire.
+
+        The burner then burns as asked, unless its minimum times (:class:`BurnerTimes`) hold it: a burner lit for less
+        than its minimum firing time burns on, at the commanded power and at least its minimal power, and sends that
+        heat to the space-heating circuit, the buffer an on/off burner charges, at the pump's largest flow for the whole
+        step (:meth:`whole_step_firing` with a lift of 0 K). For example, a pellet burner whose controller switched to
+        off burns at its minimal power, a twelfth of its maximal one, and one whose controller still names space heating
+        with the buffer above its set temperature burns at full power. A burner out for less than its minimum pause
+        stays out. Out, no circuit moves water and no fuel is burnt. The decision reads only this step's inputs and the
+        burner's state committed at the end of the previous step, so every pass of a step decides the same way on the
+        same inputs.
 
         The burner counts as lit in a step when it burns fuel (:attr:`BurnerState.is_lit`). A held burner whose
         space-heating return is already at the maximal flow temperature carries no heat, so it burns no fuel: it
@@ -1515,13 +1519,6 @@ class GenericBoiler(PhysicsComponent):
         for channel in (circuit.thermal_power, circuit.thermal_energy, circuit.fuel_energy, circuit.mass_flow):
             stsv.set_output_value(channel, 0.0)
         stsv.set_output_value(circuit.supply_temperature, stsv.get_input_value(circuit.return_temperature))
-
-    def publish_idle_boiler(self, stsv: SingleTimeStepValues) -> None:
-        """Publish a boiler that does not fire: both circuits idle, no fuel power and no combustion loss."""
-        self.publish_idle_circuit(stsv, self.space_heating_circuit)
-        self.publish_idle_circuit(stsv, self.hot_water_circuit)
-        stsv.set_output_value(self.total_fuel_input_power_channel, 0.0)
-        stsv.set_output_value(self.combustion_heat_loss_channel, 0.0)
 
     @staticmethod
     def part_loaded_firing(
@@ -2388,8 +2385,9 @@ class GenericBoilerController(L1ControllerComponent):
     ) -> None:
         """Decide the boiler's mode and power on the stores' start temperatures, and its hot-water part-load ratio.
 
-        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio: it
-        becomes the ratio the boiler reports it ran with, so the charge stops changing.
+        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratios above
+        the threshold (the space-heating one only with the buffer wired): each becomes the ratio the boiler reports it
+        ran with, so the charge stops changing. At and below the threshold the ratios keep their last values too.
         """
 
         if force_convergence:

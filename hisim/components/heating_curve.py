@@ -382,15 +382,7 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
 
         Returns:
             Whether the day is in the heating season.
-
-        Raises:
-            ValueError: If the day's mean outside temperature is NaN or infinite.
         """
-        if not math.isfinite(daily_average_outside_temperature_in_celsius):
-            raise ValueError(
-                "The day's mean outside temperature must be a finite temperature in °C, got "
-                f"{daily_average_outside_temperature_in_celsius!r}."
-            )
         return daily_average_outside_temperature_in_celsius <= heating_threshold_in_celsius
 
     @staticmethod

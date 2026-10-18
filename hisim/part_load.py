@@ -30,7 +30,6 @@ Terms:
   on the next step, as a fine-step run does.
 """
 
-import math
 from typing import ClassVar
 
 from hisim import loadtypes as lt
@@ -118,11 +117,8 @@ class PartLoadRule:
             The part-load ratio to publish, from 0 to 1.
 
         Raises:
-            ValueError: If a temperature is not finite or the ratio run lies outside [0, 1].
+            ValueError: If the ratio run lies outside [0, 1] or is NaN.
         """
-        cls.check_finite("start_temperature_in_celsius", start_temperature_in_celsius)
-        cls.check_finite("end_temperature_in_celsius", end_temperature_in_celsius)
-        cls.check_finite("target_temperature_in_celsius", target_temperature_in_celsius)
         cls.validated_ratio(ratio_run, "The part-load rule's ratio run")
         if start_temperature_in_celsius >= target_temperature_in_celsius:
             return 0.0
@@ -136,23 +132,6 @@ class PartLoadRule:
             return 1.0
         needed_in_kelvin = cls.aim_temperature_in_celsius(target_temperature_in_celsius) - start_temperature_in_celsius
         return min(1.0, max(0.0, ratio_run * needed_in_kelvin / rise_in_kelvin))
-
-    @staticmethod
-    def check_finite(name: str, value: float) -> None:
-        """Refuse a temperature that is NaN or infinite, naming it.
-
-        A NaN would pass every comparison of the rule as false and give a ratio nobody chose, so it is refused at the
-        rule's boundary.
-
-        Args:
-            name: The argument's name, for the message.
-            value: Its value.
-
-        Raises:
-            ValueError: If the value is not finite.
-        """
-        if not math.isfinite(value):
-            raise ValueError(f"The part-load rule needs a finite {name}, not {value}.")
 
     @staticmethod
     def validated_ratio(value: float, name: str) -> float:

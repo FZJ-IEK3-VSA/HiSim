@@ -111,7 +111,7 @@ def test_carpet_y_ticks_of_steps_up_to_an_hour_are_every_three_whole_hours(times
     rows_per_hour = timesteps_per_day // 24
     positions, labels = Carpet.y_axis_ticks(timesteps_per_day)
     assert positions == [float(hour * rows_per_hour) for hour in range(0, 25, 3)]
-    assert labels == ["24", "21", "18", "15", "12", "9", "6", "3", "0"]
+    assert labels == ["24:00", "21:00", "18:00", "15:00", "12:00", "09:00", "06:00", "03:00", "00:00"]
 
 
 def test_carpet_y_ticks_of_four_hour_steps_lie_at_their_hours() -> None:

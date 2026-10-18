@@ -136,11 +136,13 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         The carpet has one row per timestep of the day, ``timesteps_per_day`` rows from 0 at the bottom
         to ``timesteps_per_day`` at the top, and the bottom row is the day's last timestep. The axis is
-        labelled every three hours, 24 at the bottom and 0 at the top, at the positions those hours have on
-        it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example: hourly data puts "18" at 6.0;
-        two-hour steps put it at 3.0; four-hour steps put "6" at 4.5, inside the row of 04:00 to 08:00,
-        because that is where 06:00 lies. Nine labels fit the axis at the tick font size; every six hours
-        left most of its height empty.
+        labelled with clock times every three hours, "24:00" at the bottom and "00:00" at the top, at the
+        positions those times have on it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example:
+        hourly data puts "18:00" at 6.0; two-hour steps put it at 3.0; four-hour steps put "06:00" at 4.5,
+        inside the row of 04:00 to 08:00, because that is where 06:00 lies. Nine labels fit the axis at the
+        tick font size; every six hours left most of its height empty. Clock times say what the axis is, so
+        it needs no title; the bottom reads "24:00" rather than "00:00" because it is the end of the day the
+        column shows, not the start of the next.
 
         Every step that divides a day gets a carpet, up to one row per day at 24 h: the rows are fewer
         but each still covers the hours it simulated, and the columns still show one day after the
@@ -155,7 +157,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         eighths = range(0, 9)
         return (
             [timesteps_per_day * eighth / 8 for eighth in eighths],
-            [str(24 - 3 * eighth) for eighth in eighths],
+            [f"{24 - 3 * eighth:02d}:00" for eighth in eighths],
         )
 
     def plot(
@@ -226,7 +228,6 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         axis.set_xticklabels(x_axis.labels, minor=True, fontsize=self.fontsize_ticks)
         axis.tick_params(axis="x", which="minor", length=0)
         axis.tick_params(axis="y", labelsize=self.fontsize_ticks)
-        axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
         axis.set_xlabel(x_axis.title, fontsize=self.fontsize_label)
         plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
         plt.tight_layout()

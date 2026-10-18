@@ -2,8 +2,8 @@
 
 An output declares how its time steps are combined into monthly values and a run total
 (:class:`hisim.loadtypes.OutputAggregation`); one that declares nothing follows its unit, as all
-outputs did before. Outputs declared ``NONE`` and outputs constant over the run get no charts,
-and the report lists the constant ones once (:class:`hisim.postprocessing.chart_selection.ChartSelection`).
+outputs did before. Outputs declared ``NONE`` and outputs constant over the run get no charts, and the report
+lists each of them once, with the reason (:class:`hisim.postprocessing.chart_selection.ChartSelection`).
 The resampling itself is tested in ``test_simulator_get_std_results.py``, the bar chart's axis
 label in ``test_charts.py``.
 """

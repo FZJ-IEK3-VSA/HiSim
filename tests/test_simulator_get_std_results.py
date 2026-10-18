@@ -1,8 +1,10 @@
 """Tests for :meth:`hisim.simulator.Simulator.get_std_results`.
 
 ``get_std_results`` resamples the per-timestep results DataFrame into monthly,
-daily, hourly, and cumulative aggregations, using mean aggregation for units in
-``OutputAggregation.units_averaged_by_default()`` and sum aggregation for everything else.
+daily, hourly, and cumulative aggregations by each output's declared aggregation
+(:class:`hisim.loadtypes.OutputAggregation`: sum, mean, last value, or NaN for ``NONE``).
+An output that declares none follows its unit: mean for the units in
+``OutputAggregation.units_averaged_by_default()``, sum for everything else.
 
 These tests drive the method directly with a lightweight stub (no full
 simulation) and assert that the bulk-resample-by-group implementation produces

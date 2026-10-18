@@ -31,8 +31,8 @@ class OutputWithoutCharts:
     """An output of the run that gets no charts, and the value it kept if it was constant.
 
     Examples: ``OutputWithoutCharts("Battery", "MinimumChargingPowerInWatt", "W", -10000.0)`` is
-    constant; ``OutputWithoutCharts("Weather", "Azimuth", "°", None)`` changes but declares no
-    aggregate.
+    constant; ``OutputWithoutCharts("Weather", "Azimuth", "Degrees", None)`` changes but declares no
+    aggregate. The unit is the value of the output's :class:`~hisim.loadtypes.Units` member.
     """
 
     component_name: str

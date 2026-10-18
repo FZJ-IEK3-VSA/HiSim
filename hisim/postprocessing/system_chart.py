@@ -124,7 +124,7 @@ class SystemChart:
                 "filename": f"System_with_Edge_labels_and_results{fig_format}",
                 "caption": (
                     "System chart: every connection labelled with its output, input and unit, "
-                    "and the output's sum, mean or final value over the run."
+                    "and the output's sum, mean or final value over the run where it has one."
                 ),
                 "with_results": True,
             },

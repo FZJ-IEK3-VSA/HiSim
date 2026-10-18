@@ -2255,11 +2255,13 @@ class GenericBoilerController(L1ControllerComponent):
 
         connections = []
         storage_classname = SimpleHotWaterStorage.get_classname()
+        # the sensor is the buffer's start-of-step temperature, which no pass of the step moves, so the on/off
+        # decision cannot cycle with the temperatures the buffer publishes to its circuits
         connections.append(
             ComponentConnection(
                 GenericBoilerController.WaterTemperatureInputFromWaterStorage,
                 storage_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         connections.append(

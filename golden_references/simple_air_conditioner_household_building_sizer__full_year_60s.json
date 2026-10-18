@@ -336,7 +336,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2.697463426376129
+    "value": 2.7006643613662304
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",

@@ -1221,12 +1221,12 @@ class GenericBoiler(PhysicsComponent):
         or without a lift, the controller asks for no fire. The burner then burns as asked, unless its minimum times
         (:class:`BurnerTimes`) hold it: a burner lit for less than its minimum firing time burns on, at the commanded
         power and at least its minimal power, and sends that heat to the space-heating circuit, the buffer an on/off
-        burner charges, at the pump's largest flow for the whole step (:meth:`whole_step_firing` with a lift of 0 K). For example, a pellet
-        burner whose controller switched to off burns at its minimal power, a twelfth of its maximal one, and one whose
-        controller still names space heating with the buffer above its set temperature burns at full power. A burner
-        out for less than its minimum pause stays out. Out, no circuit moves water and no fuel is burnt. The decision
-        reads only this step's inputs and the burner's state committed at the end of the previous step, so every pass
-        of a step decides the same way on the same inputs.
+        burner charges, at the pump's largest flow for the whole step (:meth:`whole_step_firing` with a lift of 0 K).
+        For example, a pellet burner whose controller switched to off burns at its minimal power, a twelfth of its
+        maximal one, and one whose controller still names space heating with the buffer above its set temperature burns
+        at full power. A burner out for less than its minimum pause stays out. Out, no circuit moves water and no fuel
+        is burnt. The decision reads only this step's inputs and the burner's state committed at the end of the previous
+        step, so every pass of a step decides the same way on the same inputs.
 
         The burner counts as lit in a step when it burns fuel (:attr:`BurnerState.is_lit`). A held burner whose
         space-heating return is already at the maximal flow temperature carries no heat, so it burns no fuel: it

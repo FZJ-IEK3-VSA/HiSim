@@ -862,6 +862,7 @@ class BurnerSequence:
         preset: Callable[[str], generic_boiler.GenericBoilerConfig],
         seconds_per_timestep: int,
         commands: List[Tuple[float, float, float]],
+        space_heating_ratios: Optional[List[float]] = None,
     ) -> Tuple[Any, List[float], List[float], List[float]]:
         """Step a fresh boiler of ``preset`` through ``commands``; return it, its fuel power, buffer heat and hot water.
 
@@ -869,6 +870,8 @@ class BurnerSequence:
             preset: The boiler's preset, resolved to :attr:`MAXIMAL_POWER_IN_WATT`.
             seconds_per_timestep: The step length, in s.
             commands: Per step, the control signal, the operating mode's value and the lift in K.
+            space_heating_ratios: Per step, the space-heating part-load ratio the controller commands; 1, the whole
+                step, in every step if not given.
 
         Returns:
             The boiler, and per step its fuel power, its space-heating heat and its hot-water heat, each in W.
@@ -904,6 +907,7 @@ class BurnerSequence:
         fuel_power_in_watt: List[float] = []
         space_heating_heat_in_watt: List[float] = []
         hot_water_heat_in_watt: List[float] = []
+        ratios = space_heating_ratios if space_heating_ratios is not None else [1.0] * len(commands)
         for timestep, (control_signal, operating_mode, lift_in_kelvin) in enumerate(commands):
             boiler.i_save_state()
             passes = []
@@ -919,7 +923,7 @@ class BurnerSequence:
                         cls.HOT_WATER_RETURN_IN_CELSIUS,
                         70.0,
                         1.0,
-                        1.0,
+                        ratios[timestep],
                         0.0,
                         0.0,
                     ),
@@ -1003,6 +1007,25 @@ def test_a_burner_held_lit_after_its_controller_switched_off_burns_at_its_minima
     # at its minimal power the burner runs at its minimal efficiency
     assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
     assert hot_water_heat_in_watt[1] == 0.0
+
+
+@pytest.mark.base
+def test_a_held_burner_burns_its_whole_step_although_its_controller_commands_no_space_heating_part_load() -> None:
+    """A burner held lit is not part-loaded: it burns the whole step even when the commanded ratio is 0.
+
+    At 900 s a pellet burner that fired one step and whose controller then switched off may receive a space-heating
+    part-load ratio of 0 above 600 s. If the held firing applied that ratio, the burner would burn nothing, go out and
+    break its 30-minute minimum firing time. It burns the second step in full, at least at its minimal power, and
+    reports a space-heating ratio run of 1.
+    """
+    commands = [BurnerSequence.ASK_TO_BURN, BurnerSequence.ASK_TO_STOP]
+    boiler, fuel_power_in_watt, space_heating_heat_in_watt, _ = BurnerSequence.fuel_burnt_per_step(
+        generic_boiler.GenericBoilerConfig.preset_pellets, 900, commands, space_heating_ratios=[1.0, 0.0]
+    )
+    minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
+    assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
+    assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
+    assert boiler.burner_state.is_lit
 
 
 @pytest.mark.base

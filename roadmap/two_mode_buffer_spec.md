@@ -8,18 +8,19 @@ is marked **measured** (from the files under `/home/noah/hisim/loop-design/` and
 node, §6 convergence, §9.5 staging, §12 stage D as decided) and `roadmap/hydronic_part_load_spec.md` (decisions
 1–22, §9 thresholds).
 
-**Terms.** *Buffer*: `SimpleHotWaterStorage` with its heat exchanger, the space-heating store between the
-generator and the heat distribution system in every recorded twin. *Generator*: boiler, heat pump, CHP or
-district-heating substation charging the buffer; the solar collector is the *secondary generator*. *Distribution*:
-`HeatDistribution`, the circuit that takes heat from the buffer to the building's emitters. *Step*: one time step of
-length `dt_s`. *Pass*: one evaluation of every component within a step; the simulator repeats passes until no output
-moves by more than 1e-4 (`hisim/simulator.py:424–504` on main). *Forced pass*: a pass after the 11th, with
-`force_convergence` set, in which controllers hold their decision (`simulator.py:488–489`). *T0*: the buffer's
-temperature at the start of the step, in °C. *T̄* (`T_mean`): the mean of its temperature over the step, in °C.
-*T_end*: its temperature at the end of the step, the next step's T0. *Booked heat*: what the generator's circuit
-carries, `m c (T_sup − T_ret)`. *Delivered heat*: the distribution's `ThermalPowerDelivered` to the building.
-*Turnover `a`*: `Σ(m c) dt / C`, how many times the step's circuit flows would exchange the buffer's water, with
-`C = M c` the buffer's heat capacity. *θ*: the contraction of the iterated node per pass, `1 − (1 − e^(−a))/a`.
+**Terms.** *Buffer*: `SimpleHotWaterStorage` with its heat exchanger, the space-heating store between the generator and
+the heat distribution system in every recorded twin. *Generator*: boiler, heat pump, CHP or district-heating substation
+charging the buffer; the solar collector is the *secondary generator*. *Distribution*: `HeatDistribution`, the circuit
+that takes heat from the buffer to the building's emitters. *Step*: one time step of length `dt_s`. *Pass*: one
+evaluation of every component within a step; the simulator repeats passes until no output moves by more than 1e-4
+(`hisim/simulator.py:424–504` on main). *Forced pass*: a pass after the 11th, with `force_convergence` set, in which
+controllers hold their decision (`simulator.py:488–489`). $T_0$: the buffer's temperature at the start of the step, in
+°C. $\bar{T}$ (`T_mean`): the mean of its temperature over the step, in °C. $T_{\mathrm{end}}$: its temperature at the
+end of the step, the next step's $T_0$. *Booked heat*: what the generator's circuit carries,
+$\dot{m}\,c\,(T_{\mathrm{sup}} - T_{\mathrm{ret}})$. *Delivered heat*: the distribution's `ThermalPowerDelivered` to the
+building. *Turnover $a$*: $\sum(\dot{m}\,c)\,\Delta t / C$, how many times the step's circuit flows would exchange the
+buffer's water, with $C = M c$ the buffer's heat capacity. $\theta$: the contraction of the iterated node per pass,
+$1 - (1 - e^{-a})/a$.
 
 **Measurement labels** (the files under `/home/noah/hisim/loop-design/` use them, so the spec keeps them where it
 cites a measurement): S = start-of-step buffer as measured on stageD-9-close-out; M2 = iterated buffer (draft
@@ -36,9 +37,9 @@ The buffer runs one of two models, chosen once per run from the step length agai
 `SimulationParameters.part_load_above_seconds` (default 600 s, `hisim/simulationparameters.py:288` on main):
 
 - **Steps at or below the threshold (iterated buffer).** The buffer is one `hydronics.MixedNode`, iterated with its
-  circuits within the step. It publishes its step mean T̄ to the generators as their return and to the distribution as
-  its supply, and T0 to the controllers. The distribution books this step's heat (same-step return). Every circuit runs
-  whole steps; no fractions. This is variant "M2" of the measurements: draft commit `38f755ee` on
+  circuits within the step. It publishes its step mean $\bar{T}$ to the generators as their return and to the
+  distribution as its supply, and $T_0$ to the controllers. The distribution books this step's heat (same-step return).
+  Every circuit runs whole steps; no fractions. This is variant "M2" of the measurements: draft commit `38f755ee` on
   `origin/sh-buffer-mixed-node`, plus the energy manager's raise hold under `force_convergence` (PR #1048) and the
   window margin (commit `351e4854`, PR #1010).
 - **Steps above the threshold (start-of-step buffer).** Stage D's start-of-step buffer: `hydronics.StartOfStepNode` (PR
@@ -49,7 +50,7 @@ The buffer runs one of two models, chosen once per run from the step length agai
 Both models publish the same ports (§4), so generators, controllers and the distribution do not depend on which
 one runs.
 
-Why a two-mode buffer and not one model: the iterated buffer converges only while `a` is small (§2) and is the more
+Why a two-mode buffer and not one model: the iterated buffer converges only while $a$ is small (§2) and is the more
 faithful model while it does, because it sees the buffer move within the step; the start-of-step buffer converges at any
 step length but needs the part-load fractions to stay on target, and the fractions have their own cost and residual
 error. 600 s is where the iterated buffer's cost is still bounded (measured maximum 35 passes of a 1000-pass budget) and
@@ -72,7 +73,7 @@ grouped RenoVisor twins one at a time ("uncontended", `sh_buffer_m5_2026-10-17.m
 | Delivered / SH electricity at 3600 s (HP) | −1.09 % / +34.4 % | −1.99 % / −5.91 % | aborts at the 100-pass limit; with a 1000-pass limit −0.96 % / **+17.45 %** (`M2k1000`, max 121 passes) | = start-of-step |
 | Convergence, 60 s | finishes; HP 5346 forced steps, max 19 passes | finishes; HP 5174 forced, max 19 | finishes with #1048; HP max 21, gas max 11 (**measured**); without #1048 the HP twin aborts on 22 May (two-point cycle through the energy manager) | = M2 |
 | Convergence, 600 s | finishes, max 19–21 | finishes, HP max 29, gas max 12 | finishes, HP max 31, gas max 35, 49–70 % of steps forced | = M2 |
-| Convergence, 3600 s | finishes, HP max 85 | finishes, HP max 84, gas 26 | aborts (θ = 0.82–0.91 per pass, §2) | = start-of-step |
+| Convergence, 3600 s | finishes, HP max 85 | finishes, HP max 84, gas 26 | aborts ($\theta$ = 0.82–0.91 per pass, §2) | = start-of-step |
 | Loop time 60 s, gas / HP (contended) | 146 / 272 s | 176 / 300 s | 227 / 382 s | 227 / 382 s (= M2) |
 | Loop time 900 s, gas / HP (uncontended, grouped twins) | 9.0 / 20.8 s | 14.4 / 28.7 s (1.60× / 1.38× main) | ≈ 55 / 55 s (sizer twins, contended; M4 uncontended 61.9 / 58.0 s) | 14.4 / 28.7 s (= start-of-step) |
 | Maintenance | one buffer path with a known leak | one node, two rules, three controllers with part-load parts | one node, no fractions; cannot run 3600 s | two node paths in one component (about 60 lines more than the start-of-step buffer), one shared publishing routine; the rules of the start-of-step buffer unchanged |
@@ -95,9 +96,9 @@ same-step coupling: the degree-hours fall from 16.3 to 11.2 in the heat-pump twi
   `MaximalThermalPowerInWatt`, `HeatCapacityInJoulePerKelvin`), and still left gas at 3600 s 27 % of fraction steps off
   target. The start-of-step buffer reaches the same accuracy at a fifth of the cost.
 - **The generators' full-load-heat outputs** (M5): only the dropped rule needed them.
-- **The scaled forcing threshold** `max(10, ceil(dt / 60 s))` ("main+T"): no effect at or below 600 s (it stays 10
-  there), and above 600 s the start-of-step buffer runs, whose fractions settle in one pass. It changed main's KPIs by ≤
-  0.13 % and is at most a separate small PR.
+- **The scaled forcing threshold** $\max(10, \lceil \Delta t / 60\,\mathrm{s} \rceil)$ ("main+T"): no effect at or below
+  600 s (it stays 10 there), and above 600 s the start-of-step buffer runs, whose fractions settle in one pass. It
+  changed main's KPIs by ≤ 0.13 % and is at most a separate small PR.
 - **Convergence accelerations** (`convergence_acceleration_2026-10-17.md`): per-unit tolerances rejected by the owner;
   the extrapolated warm start gave no gain and moved results; the inner iteration was 2.7–3.1× slower; an
   operating-point lookup was measured and not worth it.
@@ -110,7 +111,7 @@ same-step coupling: the degree-hours fall from 16.3 to 11.2 in the heat-pump twi
 |---|---|---|
 | #1007 | merged | the distribution's pump stands while its valve is shut |
 | #1008 | merged | the building publishes `TemperatureIndoorAirAtStartOfStepInCelsius`; the distribution's room clamp reads it in both modes |
-| #1050 | merged | pass limit `max(100, ceil(100 · dt / 60 s))`: 100 at 60 s, 500 at 300 s, 1000 at 600 s (`simulator.py:183, 323–324`) |
+| #1050 | merged | pass limit $\max(100, \lceil 100 \cdot \Delta t / 60\,\mathrm{s} \rceil)$: 100 at 60 s, 500 at 300 s, 1000 at 600 s (`simulator.py:183, 323–324`) |
 | #1048 | **open**, base main | the energy manager holds its set-temperature raise under `force_convergence`. **Hard prerequisite of the iterated buffer**: without it the heat-pump twin at 60 s aborts on 22 May (`sh_buffer_models_2026-10-17.md`, cause 2) |
 | #1051 | **open**, base main | non-finite check once after the run instead of per call; a speed-up of every pass (finite checks were ~11 % of M5's profile). Not a prerequisite |
 | #1009 … #1035 | **open**, stacked on main | the start-of-step buffer, including the window margin #1010 that the iterated buffer needs for the gas twin at 300 / 600 s (cause 1) |
@@ -119,11 +120,11 @@ same-step coupling: the degree-hours fall from 16.3 to 11.2 in the heat-pump twi
 
 ## 2. Why each regime: the convergence analysis
 
-### 2.1 The mixed node contracts by θ per pass
+### 2.1 The mixed node contracts by $\theta$ per pass
 
-With the iterated buffer the generator reads the buffer's T̄ and supplies `T̄ + lift`; the distribution reads T̄ and
-returns `T̄ − drop`; the buffer reads both and computes a new T̄ (`MixedNode.step`, `hisim/hydronics.py:632–703` on
-main):
+With the iterated buffer the generator reads the buffer's $\bar{T}$ and supplies $\bar{T} + \mathrm{lift}$; the
+distribution reads $\bar{T}$ and returns $\bar{T} - \mathrm{drop}$; the buffer reads both and computes a new $\bar{T}$
+(`MixedNode.step`, `hisim/hydronics.py:632–703` on main):
 
 ```python
 # hisim/hydronics.py:688-697 (origin/main), inside MixedNode.step
@@ -134,18 +135,36 @@ t_mean = t_inf + (t0 - t_inf) * phi
 t_end = t0 + (t_inf - t0) * (a * phi)          # = t_inf + (t0 - t_inf) e^(-a)
 ```
 
-`t_inf` is almost exactly the T̄ the circuits read (plus a constant: the lift and drop weighted by the flows), so
-the new T̄ depends on the old one with the factor `1 − φ(a) = θ`. One pass shrinks the error by θ; the passes to
-go from an initial error `e0` to the tolerance `tol` are
+In symbols, with the circuit conductances $\dot{m}_i c$ and the loss conductance $UA$:
 
-`passes ≈ ln(e0 / tol) / ln(1 / θ)`, with `θ = 1 − (1 − e^(−a)) / a`, `a = Σ(m c) dt / C`.
+$$
+C\,\frac{dT}{dt} = \sum_i \dot{m}_i c\,(T_i - T) + UA\,(T_{\mathrm{amb}} - T), \qquad
+T_\infty = \frac{\sum_i \dot{m}_i c\,T_i + UA\,T_{\mathrm{amb}}}{\sum_i \dot{m}_i c + UA}, \qquad
+a = \frac{\bigl(\sum_i \dot{m}_i c + UA\bigr)\,\Delta t}{C},
+$$
 
-For `e0 = 1 K` and `tol = 1e-4 K`, `ln(e0 / tol) = 9.2`. Watt outputs make it worse: the buffer's
-`ThermalPowerFromHeatGenerator` is `m c (T_sup − T̄)`, about 1250 W/K times the temperature error, and the
-simulator's 1e-4 is absolute, so a watt column needs the temperature to about 1e-7 K, three more decades
-(`ln(1e-7) / ln(1e-4) ≈ 1.75× the passes`).
+$$
+\varphi(a) = \frac{1 - e^{-a}}{a}, \qquad
+\bar{T} = T_\infty + (T_0 - T_\infty)\,\varphi(a), \qquad
+T_{\mathrm{end}} = T_\infty + (T_0 - T_\infty)\,e^{-a}.
+$$
 
-### 2.2 `a` and θ per twin and step length (measured medians over steps with generator flow)
+`t_inf` is almost exactly the $\bar{T}$ the circuits read (plus a constant: the lift and drop weighted by the flows), so
+the new $\bar{T}$ depends on the old one with the factor $1 - \varphi(a) = \theta$. One pass shrinks the error by
+$\theta$; the passes to go from an initial error $e_0$ to the tolerance $\mathrm{tol}$ are
+
+$$
+\text{passes} \approx \frac{\ln(e_0 / \mathrm{tol})}{\ln(1 / \theta)}, \qquad
+\theta = 1 - \frac{1 - e^{-a}}{a}, \qquad
+a = \frac{\sum(\dot{m}\,c)\,\Delta t}{C}.
+$$
+
+For $e_0 = 1\,\mathrm{K}$ and $\mathrm{tol} = 10^{-4}\,\mathrm{K}$, $\ln(e_0 / \mathrm{tol}) = 9.2$. Watt outputs make
+it worse: the buffer's `ThermalPowerFromHeatGenerator` is $\dot{m}\,c\,(T_{\mathrm{sup}} - \bar{T})$, about 1250 W/K
+times the temperature error, and the simulator's 1e-4 is absolute, so a watt column needs the temperature to about 1e-7
+K, three more decades ($\ln(10^{-7}) / \ln(10^{-4}) \approx 1.75\times$ the passes).
+
+### 2.2 $a$ and $\theta$ per twin and step length (measured medians over steps with generator flow)
 
 From `sh_buffer_models_2026-10-17.md`; passes predicted for 1 K → 1e-4 K, and measured as mean / maximum per step
 over the year (M2 where it ran a year; gas at 300 / 600 / 1800 s is Mw = M + window margin, which equals M2 for the
@@ -153,13 +172,13 @@ gas twin).
 
 | Twin (buffer mass) | 60 s | 300 s | 600 s | 900 s | 1800 s | 3600 s |
 |---|---|---|---|---|---|---|
-| gas (170 kg): `a` / θ | 0.19 / 0.09 | 0.98 / 0.36 | 1.97 / 0.56 | 2.91 / 0.68 | 5.84 / 0.83 | ≈ 11.7 / 0.91 |
+| gas (170 kg): $a$ / $\theta$ | 0.19 / 0.09 | 0.98 / 0.36 | 1.97 / 0.56 | 2.91 / 0.68 | 5.84 / 0.83 | ≈ 11.7 / 0.91 |
 | predicted passes | 3.8 | 9.0 | 15.9 | 23.9 | 49 | 98 |
 | **measured** mean / max | 6.2 / 11 | 10.4 / 21 | 16.0 / 35 | 23.3 / 51 | 38.9 / 99 | **abort** (100-pass limit; contraction 0.907 per pass measured) |
-| heat pump (386 kg): `a` / θ | 0.09 / 0.04 | 0.44 / 0.19 | 0.86 / 0.33 | 1.36 / 0.45 | 2.87 / 0.67 | ≈ 5.5 / 0.82 |
+| heat pump (386 kg): $a$ / $\theta$ | 0.09 / 0.04 | 0.44 / 0.19 | 0.86 / 0.33 | 1.36 / 0.45 | 2.87 / 0.67 | ≈ 5.5 / 0.82 |
 | predicted passes | 2.9 | 5.5 | 8.3 | 11.5 | 23 | 46 |
 | **measured** mean / max | 5.7 / 21 | 8.1 / 26 | 10.5 / 31 | 12.8 / 37 | 20.0 / 59 | **abort** at 100; 35.7 / 121 with a 1000-pass limit |
-| heat pump 70 % (270 kg): `a` / θ | 0.10 / 0.05 | 0.54 / 0.23 | 1.04 / 0.38 | 1.56 / 0.49 | 3.17 / 0.70 | ≈ 6.3 / 0.84 |
+| heat pump 70 % (270 kg): $a$ / $\theta$ | 0.10 / 0.05 | 0.54 / 0.23 | 1.04 / 0.38 | 1.56 / 0.49 | 3.17 / 0.70 | ≈ 6.3 / 0.84 |
 | **measured** mean / max | 6.0 / 21 | 8.7 / 25 | 11.7 / 31 | 14.8 / 39 | 24.3 / 67 | **abort** at 100 |
 
 The means follow the prediction within a few passes (the mean includes the many idle steps and the steps the
@@ -171,53 +190,53 @@ hot-water cylinder dominates); the maxima are 2–3× the prediction, the watt c
   since #1050 is 1000 passes at 600 s (`Simulator.maximum_passes_for_step_length`, `simulator.py:323–324`). At 60 s
   the maxima are 11 and 21 against a budget of 100. The mean passes at 600 s are 16.0 / 10.5 / 11.7, which is
   1.4–3.5× the start-of-step buffer's 4.6 / 5.3 / 5.4; this is the loop-time ratio of §1.2.
-- **The abort causes are gone with #1048 and #1010, measured.** The four abort causes of `sh_buffer_models` were
-  the window flip (fixed by the 0.01 K margin, #1010), the energy manager's raise cycle closed through T̄ (fixed by
-  the raise hold, #1048), the building at its set temperature and the heat pump against the energy manager's
-  dispatch (both also energy-manager cycles at the PV-surplus boundary: "Mwin" without #1048 aborts on the same
-  steps as M, M2 does not). M2 finished every year from 60 to 1800 s in all three twins.
-- **The step-mean bias is small, computed (§3.1).** In the owner's example system the node's T̄ sits 0.006 K above
-  the exact time mean at 60 s and 0.54 K at 600 s; at 900 s it is 1.1 K and at 1800 s 3.2 K. It is the price of
-  publishing one return temperature for the whole step to a generator that would, in reality, track the buffer
-  moment by moment. At or below 600 s it is below the controllers' hysteresis (±5 K) and the heat pump's COP
-  resolution.
+- **The abort causes are gone with #1048 and #1010, measured.** The four abort causes of `sh_buffer_models` were the
+  window flip (fixed by the 0.01 K margin, #1010), the energy manager's raise cycle closed through $\bar{T}$ (fixed by
+  the raise hold, #1048), the building at its set temperature and the heat pump against the energy manager's dispatch
+  (both also energy-manager cycles at the PV-surplus boundary: "Mwin" without #1048 aborts on the same steps as M, M2
+  does not). M2 finished every year from 60 to 1800 s in all three twins.
+- **The step-mean bias is small, computed (§3.1).** In the owner's example system the node's $\bar{T}$ sits 0.006 K
+  above the exact time mean at 60 s and 0.54 K at 600 s; at 900 s it is 1.1 K and at 1800 s 3.2 K. It is the price of
+  publishing one return temperature for the whole step to a generator that would, in reality, track the buffer moment by
+  moment. At or below 600 s it is below the controllers' hysteresis (±5 K) and the heat pump's COP resolution.
 - **Whole steps have not yet begun to overcharge.** M2's SH electricity against its 60 s is −0.83 % at 300 s and
   −1.32 % at 600 s, then **+3.18 %** at 900 s and **+14.06 %** at 1800 s (heat pump): a controller that decides on
-  T0 lets the heat pump run the whole step past its target once a step carries several kelvin. At 600 s one whole
-  step moves the HP twin's buffer by at most about 3 K (7.8 kW · 600 s / 1.61 MJ/K).
+  $T_0$ lets the heat pump run the whole step past its target once a step carries several kelvin. At 600 s one whole
+  step moves the HP twin's buffer by at most about 3 K ($7.8\,\mathrm{kW} \cdot 600\,\mathrm{s} / 1.61\,\mathrm{MJ/K}$).
 
 ### 2.4 Why the start-of-step buffer above
 
-- θ ≥ 0.68 at 900 s in the gas twin and ≥ 0.82 at 3600 s everywhere: 24–130 predicted passes, with the watt decades 2–3×
-  that. Measured: M2 aborts at 3600 s at the 100-pass limit in all three twins from the slow, monotone contraction alone
-  (factor 0.854 / 0.876 / 0.907 per pass; held regimes are not involved: "M3" aborts on the same steps). With a
-  1000-pass budget it converges (max 121 passes) but is wrong: +17.45 % SH electricity.
+- $\theta \geq 0.68$ at 900 s in the gas twin and $\geq 0.82$ at 3600 s everywhere: 24–130 predicted passes, with the
+  watt decades 2–3× that. Measured: M2 aborts at 3600 s at the 100-pass limit in all three twins from the slow, monotone
+  contraction alone (factor 0.854 / 0.876 / 0.907 per pass; held regimes are not involved: "M3" aborts on the same
+  steps). With a 1000-pass budget it converges (max 121 passes) but is wrong: +17.45 % SH electricity.
 - The start-of-step buffer's node publishes nothing that moves within the step (`StartOfStepNode.step`,
   `hisim/hydronics.py:807 ff.` on `origin/stageD-3-start-node`): "Nothing the node publishes changes while a step
   iterates, so the circuits do not iterate against the node". Its fractions solve a line and land in one pass (§3.2).
   Measured at 900 s: 5.0 / 5.9 mean passes, loop 14.4 / 28.7 s uncontended, heat within 1 % of 60 s.
-- RenoVisor runs at 900 s (`a` = 2.9 / 1.4 / 1.6 for the three twins), so RenoVisor runs the start-of-step buffer in
+- RenoVisor runs at 900 s ($a$ = 2.9 / 1.4 / 1.6 for the three twins), so RenoVisor runs the start-of-step buffer in
   every twin, as the stage D measurements and its 900 s-vs-60 s assertion (#1035) already cover.
 
 ---
 
 ## 3. Calculation flows, step by step
 
-The owner's example system throughout: a 200 kg buffer, `c = 4180 J/(kg K)`, so `C = 836 000 J/K`; `T0 = 35 °C`;
-a heat pump with 0.3 kg/s holding a 10 K lift (it supplies the return it reads plus 10 K); floor heating with
-0.5 kg/s holding a 4 K drop (it returns the supply it reads minus 4 K); `UA = 2 W/K` to a 20 °C room. The circuit
-conductances are `0.3 · 4180 = 1254 W/K` and `0.5 · 4180 = 2090 W/K`; `G = 1254 + 2090 + 2 = 3346 W/K`. The net
-power into the buffer while both hold their differences is `1254 · 10 − 2090 · 4 = 4180 W` less the standby loss.
-All numbers below are **computed with the real functions** (`MixedNode.step` and `relaxation_mean_factor` from
-`hisim/hydronics.py` on main, `StartOfStepNode.step` from `origin/stageD-3-start-node`,
-`StartOfStepPartLoadRule` from `origin/stageD-9-close-out`), not simulated.
+The owner's example system throughout: a 200 kg buffer, $c = 4180\,\mathrm{J/(kg\,K)}$, so $C = 836\,000\,\mathrm{J/K}$;
+$T_0 = 35\,^{\circ}\mathrm{C}$; a heat pump with 0.3 kg/s holding a 10 K lift (it supplies the return it reads plus 10
+K); floor heating with 0.5 kg/s holding a 4 K drop (it returns the supply it reads minus 4 K); $UA = 2\,\mathrm{W/K}$ to
+a 20 °C room. The circuit conductances are $0.3 \cdot 4180 = 1254\,\mathrm{W/K}$ and
+$0.5 \cdot 4180 = 2090\,\mathrm{W/K}$; $G = 1254 + 2090 + 2 = 3346\,\mathrm{W/K}$. The net power into the buffer while
+both hold their differences is $1254 \cdot 10 - 2090 \cdot 4 = 4180\,\mathrm{W}$ less the standby loss. All numbers
+below are **computed with the real functions** (`MixedNode.step` and `relaxation_mean_factor` from `hisim/hydronics.py`
+on main, `StartOfStepNode.step` from `origin/stageD-3-start-node`, `StartOfStepPartLoadRule` from
+`origin/stageD-9-close-out`), not simulated.
 
-For this system: `a = 3346 · dt / 836 000`:
+For this system: $a = 3346 \cdot \Delta t / 836\,000$:
 
 | `dt_s` | 60 | 300 | 600 | 900 | 1800 | 3600 |
 |---|---|---|---|---|---|---|
-| `a` | 0.240 | 1.20 | 2.40 | 3.60 | 7.20 | 14.4 |
-| θ | 0.111 | 0.418 | 0.621 | 0.730 | 0.861 | 0.931 |
+| $a$ | 0.240 | 1.20 | 2.40 | 3.60 | 7.20 | 14.4 |
+| $\theta$ | 0.111 | 0.418 | 0.621 | 0.730 | 0.861 | 0.931 |
 | passes 1 K → 1e-4 K | 4.2 | 10.6 | 19.4 | 29.3 | 61.7 | 128 |
 
 ### 3.1 The iterated buffer at a short step: pass by pass
@@ -227,24 +246,26 @@ For this system: `a = 3346 · dt / 836 000`:
 converged values (`simulator.py:438–440`: "the first pass reads the previous step's value from every output
 computed later in the order").
 
-1. *Controllers* (boiler's, heat pump's space-heating, CHP's) read the buffer's T0 port, which does not move
+1. *Controllers* (boiler's, heat pump's space-heating, CHP's) read the buffer's $T_0$ port, which does not move
    within the step, and decide on/off against their hysteresis (as on main, D4 of the coupling spec). The
    distribution controller reads the building's demand and sets the valve.
-2. *Generator* reads its return port (T̄ in this mode), supplies `T̄ + lift` at its flow, books
-   `m c (T_sup − T̄)`, electricity `heat / COP(T_sup)` for a heat pump, fuel from the burner law for a boiler.
-3. *Distribution* reads its supply port (T̄), takes the building's demand at its flow, returns `T̄ − drop` clamped
-   at the room's start-of-step temperature, and books `m c (T̄ − T_ret)` **in this step** (the same-step booking
-   of `38f755ee`, `heat_distribution_system.py` hunk at line 476: "behind a buffer the circuit's heat is this
-   step's, from the supply the buffer publishes in this pass").
-4. *Buffer* reads the two supplies and flows and the distribution's return and computes `MixedNode.step` from T0;
-   publishes T̄ on the return and supply ports, T0 on the sensor port, T_end, the circuit heats and the loss
-   (`simulate_mixed_node`, `38f755ee`, `simple_water_storage.py` hunk at line 1215).
+2. *Generator* reads its return port ($\bar{T}$ in this mode), supplies $\bar{T} + \mathrm{lift}$ at its flow, books
+   $\dot{m}\,c\,(T_{\mathrm{sup}} - \bar{T})$, electricity $\mathrm{heat} / \mathrm{COP}(T_{\mathrm{sup}})$ for a heat
+   pump, fuel from the burner law for a boiler.
+3. *Distribution* reads its supply port ($\bar{T}$), takes the building's demand at its flow, returns
+   $\bar{T} - \mathrm{drop}$ clamped at the room's start-of-step temperature, and books
+   $\dot{m}\,c\,(\bar{T} - T_{\mathrm{ret}})$ **in this step** (the same-step booking of `38f755ee`,
+   `heat_distribution_system.py` hunk at line 476: "behind a buffer the circuit's heat is this step's, from the supply
+   the buffer publishes in this pass").
+4. *Buffer* reads the two supplies and flows and the distribution's return and computes `MixedNode.step` from $T_0$;
+   publishes $\bar{T}$ on the return and supply ports, $T_0$ on the sensor port, $T_{\mathrm{end}}$, the circuit heats
+   and the loss (`simulate_mixed_node`, `38f755ee`, `simple_water_storage.py` hunk at line 1215).
 5. *Building* reads the distribution's heat of this step.
 6. The simulator compares every output with the previous pass; if any moved by more than 1e-4, another pass.
 
-**60 s (`a = 0.240`, θ = 0.111), starting from the guess T̄ = T0 = 35 °C:**
+**60 s ($a = 0.240$, $\theta = 0.111$), starting from the guess $\bar{T} = T_0 = 35\,^{\circ}\mathrm{C}$:**
 
-| pass | T̄ read | generator supplies | distribution returns | node T̄ | node T_end | Q_gen, kJ | Q_dist, kJ | loss, kJ |
+| pass | $\bar{T}$ read | generator supplies | distribution returns | node $\bar{T}$ | node $T_{\mathrm{end}}$ | $Q_{\mathrm{gen}}$, kJ | $Q_{\mathrm{dist}}$, kJ | loss, kJ |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 35.00000 | 45.00000 | 31.00000 | 35.13769 | 35.26478 | 742.04 | −518.87 | 1.817 |
 | 2 | 35.13769 | 45.13769 | 31.13769 | 35.15296 | 35.29416 | 751.25 | −503.52 | 1.818 |
@@ -252,15 +273,21 @@ computed later in the order").
 | 4 | 35.15466 | 45.15466 | 31.15466 | 35.15484 | 35.29778 | 752.39 | −501.62 | 1.819 |
 | 5 | 35.15484 | 45.15484 | 31.15484 | 35.15486 | 35.29782 | 752.40 | −501.60 | 1.819 |
 
-The error shrinks by 0.1108, 0.1097 per pass (θ = 0.111 predicted); five passes reach 1e-4 K. At the fixed
-point the generator's heat is `1254 · 10 · 60 = 752.4 kJ` and the distribution's `−2090 · 4 · 60 = −501.6 kJ`
-exactly: a circuit holding its difference books the same heat whatever T̄ is, and T̄ only decides at which
-temperature the heat pump's COP is evaluated and which supply the floor heating sees. The balance:
-`752.40 − 501.60 − 1.82 = 248.98 kJ = 836 000 · (35.29782 − 35.0)` closes to the last digit.
+The error shrinks by 0.1108, 0.1097 per pass ($\theta = 0.111$ predicted); five passes reach 1e-4 K. At the fixed point
+the generator's heat is $1254 \cdot 10 \cdot 60 = 752.4\,\mathrm{kJ}$ and the distribution's
+$-2090 \cdot 4 \cdot 60 = -501.6\,\mathrm{kJ}$ exactly: a circuit holding its difference books the same heat whatever
+$\bar{T}$ is, and $\bar{T}$ only decides at which temperature the heat pump's COP is evaluated and which supply the
+floor heating sees. The balance
 
-**600 s (`a = 2.40`, θ = 0.621), same start:**
+$$
+752.40 - 501.60 - 1.82 = 248.98\,\mathrm{kJ} = 836\,000 \cdot (35.29782 - 35.0)
+$$
 
-| pass | T̄ read | node T̄ | node T_end | Q_gen, kJ | Q_dist, kJ |
+closes to the last digit.
+
+**600 s ($a = 2.40$, $\theta = 0.621$), same start:**
+
+| pass | $\bar{T}$ read | node $\bar{T}$ | node $T_{\mathrm{end}}$ | $Q_{\mathrm{gen}}$, kJ | $Q_{\mathrm{dist}}$, kJ |
 |---|---|---|---|---|---|
 | 1 | 35.00000 | 35.77060 | 36.12793 | 6944.2 | −5982.3 |
 | 2 | 35.77060 | 36.24909 | 36.82830 | 7164.0 | −5616.0 |
@@ -269,17 +296,18 @@ temperature the heat pump's COP is evaluated and which supply the floor heating 
 | 19 | 37.03250 | 37.03264 | 37.97520 | 7523.9 | −5016.2 |
 | 20 | 37.03264 | 37.03273 | 37.97533 | 7523.9 | −5016.1 |
 
-Contraction 0.6209, 0.6209, 0.6208 per pass (θ = 0.621); 20 passes to 1e-4 K, which is why the simulator's forcing after
-10 passes is routine with the iterated buffer at 600 s (49–70 % of steps forced, measured) and harmless: the controllers
-hold, the physics keeps contracting.
+Contraction 0.6209, 0.6209, 0.6208 per pass ($\theta = 0.621$); 20 passes to 1e-4 K, which is why the simulator's
+forcing after 10 passes is routine with the iterated buffer at 600 s (49–70 % of steps forced, measured) and harmless:
+the controllers hold, the physics keeps contracting.
 
 **The step-mean bias.** A real heat pump holding a 10 K lift would track the buffer's rising temperature moment by
-moment, so the buffer would warm along a straight line (constant net power 4180 W less the loss) and its time mean
-would be `(T0 + T_end) / 2` to within the loss. The node instead takes the inflow temperatures as constant over
-the step (`T̄ + 10`, `T̄ − 4`) and relaxes exponentially towards `T∞ ≈ T̄ + 1.25 K`, front-loading the rise.
-T_end agrees (the net power is the same), T̄ does not:
+moment, so the buffer would warm along a straight line (constant net power 4180 W less the loss) and its time mean would
+be $(T_0 + T_{\mathrm{end}}) / 2$ to within the loss. The node instead takes the inflow temperatures as constant over
+the step ($\bar{T} + 10$, $\bar{T} - 4$) and relaxes exponentially towards
+$T_\infty \approx \bar{T} + 1.25\,\mathrm{K}$, front-loading the rise. $T_{\mathrm{end}}$ agrees (the net power is the
+same), $\bar{T}$ does not:
 
-| `dt_s` | node T̄ | exact time mean | bias of T̄ | node T_end | exact T_end |
+| `dt_s` | node $\bar{T}$ | exact time mean | bias of $\bar{T}$ | node $T_{\mathrm{end}}$ | exact $T_{\mathrm{end}}$ |
 |---|---|---|---|---|---|
 | 60 | 35.1549 | 35.1489 | +0.006 K | 35.2978 | 35.2978 |
 | 300 | 35.8898 | 35.7444 | +0.145 K | 36.4886 | 36.4887 |
@@ -287,19 +315,21 @@ T_end agrees (the net power is the same), T̄ does not:
 | 900 | 38.3472 | 37.2322 | +1.115 K | 39.4605 | 39.4617 |
 | 1800 | 42.6733 | 39.4613 | +3.212 K | 43.9024 | 43.9100 |
 
-The bias grows with `a²` while `a` is small and is the temperature at which the iterated buffer evaluates the heat
+The bias grows with $a^2$ while $a$ is small and is the temperature at which the iterated buffer evaluates the heat
 pump's outlet (COP) and the floor heating's supply. At 60 s it is nothing; at 600 s half a kelvin, about 1 % of a heat
 pump's COP; at 1800 s three kelvin. This, together with whole steps past the controller's target, is M2's measured
 overcharge from 900 s on (§2.3), and the second reason the threshold is not above 600 s.
 
 ### 3.2 The start-of-step buffer at 900 s: the start-of-step booking, the raising fraction, the floor fraction
 
-**Who reads and publishes what.** The controllers read T0 (with the start-of-step buffer the return and supply ports
-carry T0 too). The generator supplies `T0 + lift` and books `m c lift` on the ratio its controller commands; the
-distribution returns `T0 − drop` and books `m c drop` on its ratio; the buffer computes `StartOfStepNode.step` and
-publishes T0 on the circuit ports, T_end, and T_end without each circuit; the two part-load controls read T_end,
-T_end-without and the ratio run and publish the next ratio. Nothing the buffer publishes depends on what it reads except
-T_end and the T_end-without values, and the rules read those linearly, so the ratios land in one pass.
+**Who reads and publishes what.** The controllers read $T_0$ (with the start-of-step buffer the return and supply ports
+carry $T_0$ too). The generator supplies $T_0 + \mathrm{lift}$ and books $\dot{m}\,c\,\mathrm{lift}$ on the ratio its
+controller commands; the distribution returns $T_0 - \mathrm{drop}$ and books $\dot{m}\,c\,\mathrm{drop}$ on its ratio;
+the buffer computes `StartOfStepNode.step` and publishes $T_0$ on the circuit ports, $T_{\mathrm{end}}$, and
+$T_{\mathrm{end}}$ without each circuit; the two part-load controls read $T_{\mathrm{end}}$, $T_{\mathrm{end}}$-without
+and the ratio run and publish the next ratio. Nothing the buffer publishes depends on what it reads except
+$T_{\mathrm{end}}$ and the $T_{\mathrm{end}}$-without values, and the rules read those linearly, so the ratios land in
+one pass.
 
 ```python
 # hisim/hydronics.py (origin/stageD-3-start-node), StartOfStepNode.step, the arithmetic
@@ -319,11 +349,25 @@ for channel, heat_in_joule in zip(
     stsv.set_output_value(channel, node.t_end_c - heat_in_joule / self.heat_capacity_in_joule_per_kelvin)
 ```
 
+In symbols, with $Q_i = \dot{m}_i c\,(T_i - T_0)\,\Delta t$ the heat each circuit brings and $T_{\mathrm{end}}^{\neg i}$
+the end temperature without circuit $i$:
+
+$$
+T_{\mathrm{end}} = T_0 + \frac{\sum_i Q_i - UA\,(T_0 - T_{\mathrm{amb}})\,\Delta t - Q_{\mathrm{drawn}}}{C}, \qquad
+T_{\mathrm{end}}^{\neg i} = T_{\mathrm{end}} - \frac{Q_i}{C}.
+$$
+
 **Pass 1, both ratios 1 (what the previous step left, or the first guess):** the heat pump brings
-`1254 · 10 · 900 = 11.286 MJ`, the floor takes `2090 · 4 · 900 = 7.524 MJ`, the loss is `2 · 15 · 900 = 27 kJ`.
-`T_end = 35 + (11.286 − 7.524 − 0.027) MJ / 836 kJ/K = 39.4677 °C`.
-`T_end without the heat pump = 39.4677 − 11.286 MJ / C = 25.9677 °C`;
-`T_end without the floor = 39.4677 + 7.524 MJ / C = 48.4677 °C`.
+$1254 \cdot 10 \cdot 900 = 11.286\,\mathrm{MJ}$, the floor takes $2090 \cdot 4 \cdot 900 = 7.524\,\mathrm{MJ}$, the loss
+is $2 \cdot 15 \cdot 900 = 27\,\mathrm{kJ}$.
+
+$$
+\begin{aligned}
+T_{\mathrm{end}} &= 35 + (11.286 - 7.524 - 0.027)\,\mathrm{MJ} / 836\,\mathrm{kJ/K} = 39.4677\,^{\circ}\mathrm{C} \\
+T_{\mathrm{end}} \text{ without the heat pump} &= 39.4677 - 11.286\,\mathrm{MJ} / C = 25.9677\,^{\circ}\mathrm{C} \\
+T_{\mathrm{end}} \text{ without the floor} &= 39.4677 + 7.524\,\mathrm{MJ} / C = 48.4677\,^{\circ}\mathrm{C}
+\end{aligned}
+$$
 
 **The heat pump's raising fraction.** Its controller's target is the heating curve's supply temperature, say
 38 °C (plus the energy manager's raise, 0 here); the aim is the target plus half the 0.05 K band, 38.025 °C
@@ -343,33 +387,41 @@ needed_in_kelvin = aim - end_temperature_without_circuit_in_celsius
 return min(1.0, max(0.0, ratio_run * needed_in_kelvin / rise_in_kelvin))
 ```
 
-`r = 1 · (38.025 − 25.9677) / (39.4677 − 25.9677) = 12.057 / 13.5 = 0.8931`.
+Outside the band, with $r_{\mathrm{run}}$ the ratio run and $T_{\mathrm{aim}}$ the aim:
 
-**The floor's lowering fraction** (`part_load.py:510–551`): the floor is the room's start-of-step temperature,
-20 °C. `T_end without the floor = 48.4677 > 20`, the fall is `48.4677 − 39.4677 = 9.0 K`, the allowed fall
-`48.4677 − 20 = 28.47 K`: `r = min(1, 1 · 28.47 / 9.0) = 1`. The floor heating runs the whole step.
+$$
+r = \min\Bigl(1, \max\bigl(0, r_{\mathrm{run}}\,\frac{T_{\mathrm{aim}} - T_{\mathrm{end}}^{\neg i}}{T_{\mathrm{end}} - T_{\mathrm{end}}^{\neg i}}\bigr)\Bigr), \qquad
+r = 1 \cdot \frac{38.025 - 25.9677}{39.4677 - 25.9677} = \frac{12.057}{13.5} = 0.8931.
+$$
 
-**Pass 2, ratios 0.8931 and 1:** the heat pump runs `0.8931 · 0.3 = 0.2679 kg/s` averaged flow at its full-load
-outlet 45 °C (`part_loaded_space_heating`, `more_advanced_heat_pump_hplib.py:1429–1465` on stageD-9: "the
-averaged flow, the full-load flow times the ratio, at the full-load outlet temperature; the thermal and electrical
-power follow from that flow at the step's COP"), so `Q_gen = 0.8931 · 11.286 = 10.080 MJ`.
-`T_end = 35 + (10.080 − 7.524 − 0.027) / 0.836 = 38.0250 °C`: the aim, to four decimals.
-`T_end without the heat pump` is still 25.9677 (it does not depend on the heat pump's ratio), `T_end without the
-floor` is 47.0250. Both rules return their inputs unchanged (inside the band; whole step allowed). Converged in
-two passes. The heat pump's electricity for the step is `10.080 MJ / COP(45 °C outlet)`, and the brine pump draws
-0.8931 of its power.
+**The floor's lowering fraction** (`part_load.py:510–551`): the floor is the room's start-of-step temperature, 20 °C.
+$T_{\mathrm{end}}$ without the floor $= 48.4677 > 20$, the fall is $48.4677 - 39.4677 = 9.0\,\mathrm{K}$, the allowed
+fall $48.4677 - 20 = 28.47\,\mathrm{K}$: $r = \min(1, 1 \cdot 28.47 / 9.0) = 1$. The floor heating runs the whole step.
 
-**Why the fraction is needed at all (3600 s, whole step):** `T_end = 35 + (45.144 − 30.096 − 0.108) / 0.836 =
-52.871 °C`, 15 K past the target; `T_end without the heat pump = −1.129 °C`, `without the floor = 88.871 °C` (this
-is why #1013 bounds the "without" outputs at −300 to 300 °C). The rule gives `r = (38.025 + 1.129) / (52.871 +
-1.129) = 0.7251`: the heat pump runs 2610 s of the hour at 0.2175 kg/s averaged, and the buffer ends at the aim.
+**Pass 2, ratios 0.8931 and 1:** the heat pump runs $0.8931 \cdot 0.3 = 0.2679\,\mathrm{kg/s}$ averaged flow at its
+full-load outlet 45 °C (`part_loaded_space_heating`, `more_advanced_heat_pump_hplib.py:1429–1465` on stageD-9: "the
+averaged flow, the full-load flow times the ratio, at the full-load outlet temperature; the thermal and electrical power
+follow from that flow at the step's COP"), so $Q_{\mathrm{gen}} = 0.8931 \cdot 11.286 = 10.080\,\mathrm{MJ}$.
+$T_{\mathrm{end}} = 35 + (10.080 - 7.524 - 0.027) / 0.836 = 38.0250\,^{\circ}\mathrm{C}$: the aim, to four decimals.
+$T_{\mathrm{end}}$ without the heat pump is still 25.9677 (it does not depend on the heat pump's ratio),
+$T_{\mathrm{end}}$ without the floor is 47.0250. Both rules return their inputs unchanged (inside the band; whole step
+allowed). Converged in two passes. The heat pump's electricity for the step is
+$10.080\,\mathrm{MJ} / \mathrm{COP}(45\,^{\circ}\mathrm{C}\text{ outlet})$, and the brine pump draws 0.8931 of its
+power.
 
-**The floor at work (a cold buffer, 900 s):** `T0 = 22 °C`, no generator, the floor takes `7.524 MJ` →
-`T_end = 22 − 9.0 = 12.996 °C`, `T_end without the floor = 21.996 °C` (the loss alone). Floor 20 °C: `r =
-(21.996 − 20) / (21.996 − 12.996) = 0.2217`: the floor heating runs 200 s of the step and the buffer ends at
-20.0 °C, not 13. The distribution controller applies this in forced passes too
-(`heat_distribution_system.py:1185–1203` on stageD-9: "the floor is a limit of the water, not a decision that
-could cycle").
+**Why the fraction is needed at all (3600 s, whole step):**
+$T_{\mathrm{end}} = 35 + (45.144 - 30.096 - 0.108) / 0.836 = 52.871\,^{\circ}\mathrm{C}$, 15 K past the target;
+$T_{\mathrm{end}}$ without the heat pump $= -1.129\,^{\circ}\mathrm{C}$, without the floor
+$= 88.871\,^{\circ}\mathrm{C}$ (this is why #1013 bounds the "without" outputs at −300 to 300 °C). The rule gives
+$r = (38.025 + 1.129) / (52.871 + 1.129) = 0.7251$: the heat pump runs 2610 s of the hour at 0.2175 kg/s averaged, and
+the buffer ends at the aim.
+
+**The floor at work (a cold buffer, 900 s):** $T_0 = 22\,^{\circ}\mathrm{C}$, no generator, the floor takes
+$7.524\,\mathrm{MJ}$ → $T_{\mathrm{end}} = 22 - 9.0 = 12.996\,^{\circ}\mathrm{C}$, $T_{\mathrm{end}}$ without the floor
+$= 21.996\,^{\circ}\mathrm{C}$ (the loss alone). Floor 20 °C: $r = (21.996 - 20) / (21.996 - 12.996) = 0.2217$: the
+floor heating runs 200 s of the step and the buffer ends at 20.0 °C, not 13. The distribution controller applies this in
+forced passes too (`heat_distribution_system.py:1185–1203` on stageD-9: "the floor is a limit of the water, not a
+decision that could cycle").
 
 ### 3.3 At the threshold, and how a run picks its mode
 
@@ -381,17 +433,17 @@ answer and dispatches in `i_simulate`; the part-load controls already key on the
 controller.my_simulation_parameters.runs_part_load()`), so above the threshold they set fractions and at or below
 it exactly 1 (`runs_fractions`, `part_load.py:660–662`).
 
-**What a 600 s step looks like against a 601 s step** (the example system, `T0 = 35 °C`, target 38 °C; both
-columns computed with the real functions):
+**What a 600 s step looks like against a 601 s step** (the example system, $T_0 = 35\,^{\circ}\mathrm{C}$, target 38 °C;
+both columns computed with the real functions):
 
 | | 600 s, iterated | 601 s, start-of-step |
 |---|---|---|
-| return the heat pump reads | 37.033 °C (T̄) | 35.0 °C (T0) |
+| return the heat pump reads | 37.033 °C ($\bar{T}$) | 35.0 °C ($T_0$) |
 | heat pump outlet | 47.03 °C | 45.0 °C |
-| ratio | 1 (whole step; no fractions with the iterated buffer) | raising rule: whole step would end at 37.9834 °C, below the 38 °C target, so `r = min(1, (38.025 − 28.9684) / (37.9834 − 28.9684)) = 1` |
-| booked heat | 7523.9 kJ (= 1254 · 10 · 600) | 7536.5 kJ (= 1254 · 10 · 601) |
+| ratio | 1 (whole step; no fractions with the iterated buffer) | raising rule: whole step would end at 37.9834 °C, below the 38 °C target, so $r = \min(1, (38.025 - 28.9684) / (37.9834 - 28.9684)) = 1$ |
+| booked heat | 7523.9 kJ ($= 1254 \cdot 10 \cdot 600$) | 7536.5 kJ ($= 1254 \cdot 10 \cdot 601$) |
 | distribution's heat | −5016.1 kJ | −5024.4 kJ |
-| buffer T_end | 37.9753 °C | 37.9834 °C |
+| buffer $T_{\mathrm{end}}$ | 37.9753 °C | 37.9834 °C |
 | passes to converge | 20 | 1 (nothing the buffer publishes moves) |
 
 The heats and the end temperature agree to the step's extra second; the two columns differ by 2 K in the return
@@ -415,33 +467,35 @@ wrong (+17.45 % SH electricity), so the refusal is about correctness, not only c
 
 | Output | iterated (≤ threshold) | start-of-step (> threshold) | Readers | Status |
 |---|---|---|---|---|
-| `WaterTemperatureToHeatGenerator` | T̄, the step mean | T0 | the generator (boiler `generic_boiler.py:1080`, heat pump `more_advanced_heat_pump_hplib.py:1014`, and any other generator wired to a buffer), as the return of its space-heating circuit; it books `m c (T_sup − T_read)` | exists on main; value changes per mode |
-| `WaterTemperatureToSecondaryHeatGenerator` | T̄ | T0 | the solar collector (`solar_thermal_system.py`) as its return | exists on main |
-| `WaterTemperatureToHeatDistribution` | T̄ | T0 | `HeatDistribution` as its supply; it returns supply − drop, clamped at the room's start-of-step temperature, and books `m c (T_read − T_ret)` in this step | exists on main |
-| **`WaterTemperatureAtStartOfStepInCelsius`** | T0 | T0 | the generator controllers' sensor: `GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerSpaceHeating`, `L1CHPController`; they decide on/off, mode and target against it with their hysteresis | **new in the two-mode buffer** (from `38f755ee`); the start-of-step buffer's controllers read `WaterTemperatureToHeatGenerator`, which happens to be T0 there; the two-mode buffer gives the sensor its own port so the controllers read T0 in both modes |
-| `WaterMeanTemperatureInStorage` | T0 | T0 | KPIs, plots; no controller after the rewiring | exists on main; both drafts publish T0 on it (the name predates the node; it is the step's state variable) |
-| `WaterTemperatureAtEndOfStepInCelsius` | T_end from `MixedNode.step` | T_end from `StartOfStepNode.step` | the part-load controls (boiler's, heat pump's, distribution's), which act on it only above the threshold | exists on stageD-6 and in `38f755ee` |
-| `WaterTemperatureAtEndOfStepWithout{HeatGenerator, SecondaryHeatGenerator, HeatDistribution}InCelsius` | the end temperature of a second `MixedNode.step` from T0 without that inflow (exact for the mixed node; **not** linear in a ratio) — see open question Q2 for the cheaper alternative | `T_end − Q_i / C`, exactly linear in the circuit's ratio | the same part-load controls, above the threshold only | exists on stageD-6; the heating assemblies bound them at −300 to 300 °C |
-| `ThermalPowerFromHeatGenerator`, `ThermalPowerFromSecondaryHeatGenerator`, W | `Q_i / dt` with `Q_i = m_i c (T_i − T̄) dt` | `Q_i / dt` with `Q_i = m_i c (T_i − T0) dt` | the energy balance (the buffer's side of the generator's port), KPIs | exist on main; in both modes they equal what the generator books, at the fixed point with the iterated buffer and in every pass with the start-of-step buffer |
-| `ThermalPowerConsumptionHeatDistribution`, W | `−Q_dist / dt` | same | the energy balance, KPIs | exists on main |
+| `WaterTemperatureToHeatGenerator` | $\bar{T}$, the step mean | $T_0$ | the generator (boiler `generic_boiler.py:1080`, heat pump `more_advanced_heat_pump_hplib.py:1014`, and any other generator wired to a buffer), as the return of its space-heating circuit; it books $\dot{m}\,c\,(T_{\mathrm{sup}} - T_{\mathrm{read}})$ | exists on main; value changes per mode |
+| `WaterTemperatureToSecondaryHeatGenerator` | $\bar{T}$ | $T_0$ | the solar collector (`solar_thermal_system.py`) as its return | exists on main |
+| `WaterTemperatureToHeatDistribution` | $\bar{T}$ | $T_0$ | `HeatDistribution` as its supply; it returns supply − drop, clamped at the room's start-of-step temperature, and books $\dot{m}\,c\,(T_{\mathrm{read}} - T_{\mathrm{ret}})$ in this step | exists on main |
+| **`WaterTemperatureAtStartOfStepInCelsius`** | $T_0$ | $T_0$ | the generator controllers' sensor: `GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerSpaceHeating`, `L1CHPController`; they decide on/off, mode and target against it with their hysteresis | **new in the two-mode buffer** (from `38f755ee`); the start-of-step buffer's controllers read `WaterTemperatureToHeatGenerator`, which happens to be $T_0$ there; the two-mode buffer gives the sensor its own port so the controllers read $T_0$ in both modes |
+| `WaterMeanTemperatureInStorage` | $T_0$ | $T_0$ | KPIs, plots; no controller after the rewiring | exists on main; both drafts publish $T_0$ on it (the name predates the node; it is the step's state variable) |
+| `WaterTemperatureAtEndOfStepInCelsius` | $T_{\mathrm{end}}$ from `MixedNode.step` | $T_{\mathrm{end}}$ from `StartOfStepNode.step` | the part-load controls (boiler's, heat pump's, distribution's), which act on it only above the threshold | exists on stageD-6 and in `38f755ee` |
+| `WaterTemperatureAtEndOfStepWithout{HeatGenerator, SecondaryHeatGenerator, HeatDistribution}InCelsius` | the end temperature of a second `MixedNode.step` from $T_0$ without that inflow (exact for the mixed node; **not** linear in a ratio) — see open question Q2 for the cheaper alternative | $T_{\mathrm{end}} - Q_i / C$, exactly linear in the circuit's ratio | the same part-load controls, above the threshold only | exists on stageD-6; the heating assemblies bound them at −300 to 300 °C |
+| `ThermalPowerFromHeatGenerator`, `ThermalPowerFromSecondaryHeatGenerator`, W | $Q_i / \Delta t$ with $Q_i = \dot{m}_i c\,(T_i - \bar{T})\,\Delta t$ | $Q_i / \Delta t$ with $Q_i = \dot{m}_i c\,(T_i - T_0)\,\Delta t$ | the energy balance (the buffer's side of the generator's port), KPIs | exist on main; in both modes they equal what the generator books, at the fixed point with the iterated buffer and in every pass with the start-of-step buffer |
+| `ThermalPowerConsumptionHeatDistribution`, W | $-Q_{\mathrm{dist}} / \Delta t$ | same | the energy balance, KPIs | exists on main |
 | `ThermalEnergyFromHeatGenerator`, `…FromSecondaryHeatGenerator`, `…InputHeatDistributionSystem`, `ThermalEnergyIncreaseInStorage`, `ThermalEnergyInStorage`, Wh | from the same node step | same | KPIs | exist on main |
-| `StandByHeatLoss`, W | `UA (T̄ − T_amb)` | `UA (T0 − T_amb)` | KPIs, the energy balance | exists on main |
+| `StandByHeatLoss`, W | $UA\,(\bar{T} - T_{\mathrm{amb}})$ | $UA\,(T_0 - T_{\mathrm{amb}})$ | KPIs, the energy balance | exists on main |
 
 What the readers must and must not assume:
 
 - A **generator** reads its return port and books the heat its water carries. It never asks which model runs. Its
   part-load command (`PartLoadCommand`, `part_load.py:357–434`) reads a ratio that is 1 with the iterated buffer and the
   controller's fraction with the start-of-step buffer, and it reports the ratio it ran. Unchanged from stageD-7/8.
-- A **controller** reads the sensor port (T0) and decides as on main. Its `StartOfStepPartLoadControl` reads T_end and
-  T_end-without and publishes 1 with the iterated buffer (`runs_fractions()` is False) and the rule's ratio with the
-  start-of-step buffer. Unchanged from stageD-7/8 except the sensor's source output.
+- A **controller** reads the sensor port ($T_0$) and decides as on main. Its `StartOfStepPartLoadControl` reads
+  $T_{\mathrm{end}}$ and $T_{\mathrm{end}}$-without and publishes 1 with the iterated buffer (`runs_fractions()` is
+  False) and the rule's ratio with the start-of-step buffer. Unchanged from stageD-7/8 except the sensor's source
+  output.
 - The **distribution** reads its supply port and the room's start-of-step temperature, books in the same step in both
   modes (identical code in `38f755ee` and stageD-5), and runs its controller's ratio (1 with the iterated buffer).
 - The **buffer** is the only component that knows the mode.
 
-Both ends of every circuit agree: with the start-of-step buffer in every pass (both compute from T0), with the iterated
-buffer at the fixed point (the generator's `m c (T_sup − T̄)` and the buffer's `m c (T_sup − T̄)` use the same T̄ once
-it has converged; the closure test of §7.1 checks this on the converged step).
+Both ends of every circuit agree: with the start-of-step buffer in every pass (both compute from $T_0$), with the
+iterated buffer at the fixed point (the generator's $\dot{m}\,c\,(T_{\mathrm{sup}} - \bar{T})$ and the buffer's
+$\dot{m}\,c\,(T_{\mathrm{sup}} - \bar{T})$ use the same $\bar{T}$ once it has converged; the closure test of §7.1 checks
+this on the converged step).
 
 ### 4.2 Selection mechanism
 
@@ -530,18 +584,18 @@ def publish_node_step(self, stsv, *, start_c, circuit_temperature_c, t_end_c, he
     ... the heats, energies, loss and state exactly as stageD-9 lines 1121-1150 ...
 ```
 
-2. **Add the output `WaterTemperatureAtStartOfStepInCelsius`** (from `38f755ee`), published as T0 in both paths and as
-   the end temperature on the stratification path (its convention for the stage D outputs).
+2. **Add the output `WaterTemperatureAtStartOfStepInCelsius`** (from `38f755ee`), published as $T_0$ in both paths and
+   as the end temperature on the stratification path (its convention for the stage D outputs).
 3. **The "without" outputs with the iterated buffer** (open question Q2): the recommended form is three further
-   `MixedNode.step` calls from T0 with that inflow's flow set to 0, publishing each `t_end_c`. With the start-of-step
+   `MixedNode.step` calls from $T_0$ with that inflow's flow set to 0, publishing each `t_end_c`. With the start-of-step
    buffer unchanged.
 4. **Rename `LONGEST_WHOLE_STEP_IN_SECONDS` to `LONGEST_MIXED_NODE_STEP_IN_SECONDS`** (value 600.0) and reword
    `check_whole_steps_are_safe` to `check_mixed_node_step_is_safe`; the arithmetic stays (`seconds_per_timestep <= 600
    or seconds_per_timestep > part_load_above_seconds` passes). The message says: the buffer iterates as a mixed node up
-   to the threshold; above 600 s its contraction per pass is θ ≥ 0.6 and whole steps overcharge it (measured +3.2 % SH
-   electricity at 900 s, +17.5 % at 3600 s), so lower the threshold below the step or run steps of at most 600 s.
-   `StartOfStepBufferWholeStepError` keeps its name (EF-33 in the energy-system reports) or is renamed with it; owner's
-   call, Q3.
+   to the threshold; above 600 s its contraction per pass is $\theta \geq 0.6$ and whole steps overcharge it (measured
+   +3.2 % SH electricity at 900 s, +17.5 % at 3600 s), so lower the threshold below the step or run steps of at most 600
+   s. `StartOfStepBufferWholeStepError` keeps its name (EF-33 in the energy-system reports) or is renamed with it;
+   owner's call, Q3.
 5. **Docstrings**: the class docstring says which model runs when and what each port means in each (the table of §4.1 in
    prose).
 
@@ -571,7 +625,7 @@ hisim-fxix.14) and has no part-load command.
 
 ### 5.3 Heat pump, `more_advanced_heat_pump_hplib.py`
 
-No change against stageD-9 in the heat pump itself: it reads its return port (T̄ or T0), runs
+No change against stageD-9 in the heat pump itself: it reads its return port ($\bar{T}$ or $T_0$), runs
 `part_loaded_space_heating` with the commanded ratio (1 with the iterated buffer returns the full-load step unchanged,
 `more_advanced_heat_pump_hplib.py:1449–1450`: `if part_load_ratio >= 1.0: return full_load`), books `circuit_power_w(m,
 T_out, T_return)` (line 1172) and electricity from the COP.
@@ -581,10 +635,10 @@ T_out, T_return)` (line 1172) and electricity from the COP.
 `SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius` (the `38f755ee` hunk at line 2820). Its
 `publish_raising` (stageD-8) and `publish_held` stay; with the iterated buffer they publish 1 and hold nothing.
 
-Why the sensor must be T0 with the iterated buffer: a controller deciding on T̄ reads a value that moves with its own
-decision within the step (the heat pump on → T̄ up → the controller off), the two-point cycle the coupling spec's §6
-warns of and `sh_buffer_models` measured as causes 2–4 through the energy manager. Draft `38f755ee` already moved the
-three controllers to T0 for this reason.
+Why the sensor must be $T_0$ with the iterated buffer: a controller deciding on $\bar{T}$ reads a value that moves with
+its own decision within the step (the heat pump on → $\bar{T}$ up → the controller off), the two-point cycle the
+coupling spec's §6 warns of and `sh_buffer_models` measured as causes 2–4 through the energy manager. Draft `38f755ee`
+already moved the three controllers to $T_0$ for this reason.
 
 ### 5.4 Boiler, `generic_boiler.py`
 
@@ -620,10 +674,10 @@ line 424).
 
 ### 5.7 Solar collector as secondary generator, `solar_thermal_system.py`
 
-No change. It reads `WaterTemperatureToSecondaryHeatGenerator` as its return (T̄ with the iterated buffer, T0 with the
-start-of-step buffer). Above the threshold its collector part load uses the memoryless `PartLoadRule` of decision 11
-against the buffer, which takes T0 as the end temperature at ratio 0 and can alternate under a draw (the hisim-fxix.17
-case); that is stage D's state today and unchanged here (§6.2).
+No change. It reads `WaterTemperatureToSecondaryHeatGenerator` as its return ($\bar{T}$ with the iterated buffer, $T_0$
+with the start-of-step buffer). Above the threshold its collector part load uses the memoryless `PartLoadRule` of
+decision 11 against the buffer, which takes $T_0$ as the end temperature at ratio 0 and can alternate under a draw (the
+hisim-fxix.17 case); that is stage D's state today and unchanged here (§6.2).
 
 ### 5.8 `hisim/part_load.py`
 
@@ -723,10 +777,10 @@ buffer unchanged.
 
 | Test | What it checks | Where | Marker, cost |
 |---|---|---|---|
-| closure per step, both paths | `Σ Q_i − loss = C (T_end − T0)` to 1e-6 of the step's largest term, on every 900 s step of a January day in the 29 files with a buffer (exists, stageD-5) **and** on every 60 s step of the same day in the four twins (new, iterated buffer) | `tests/test_space_heating_buffer_twins.py` | `extendedbase2`; the 60 s day adds 1440 steps × ≈ 6 passes × 84 µs ≈ 0.7 s loop per twin plus the build |
-| both ends agree | the generator's booked power equals the buffer's `ThermalPowerFromHeatGenerator`, the distribution's delivered power equals `−ThermalPowerConsumptionHeatDistribution`, on the converged step: with the start-of-step buffer every pass, with the iterated buffer at the fixed point (tolerance 1e-4 · m c, the simulator's own) | same file | same |
-| pass-by-pass unit test of the iterated buffer | the example of §3.1: five passes at 60 s to 1e-4 K, contraction 0.111 ± 0.01; 20 passes at 600 s, contraction 0.621 ± 0.01; the fixed-point heats 752.40 / −501.60 kJ; T_end 35.29782 °C | new `tests/test_space_heating_buffer_mixed_node.py` | `base`, < 1 s |
-| the threshold switch | a buffer built at 600 s publishes T̄ on the circuit ports and T0 on the sensor; at 601 s it publishes T0 on all; `runs_part_load()` decides; with `part_load_above_seconds = 300`, a 600 s buffer runs the start-of-step buffer | same new file | `base` |
+| closure per step, both paths | $\sum Q_i - \mathrm{loss} = C\,(T_{\mathrm{end}} - T_0)$ to 1e-6 of the step's largest term, on every 900 s step of a January day in the 29 files with a buffer (exists, stageD-5) **and** on every 60 s step of the same day in the four twins (new, iterated buffer) | `tests/test_space_heating_buffer_twins.py` | `extendedbase2`; the 60 s day adds 1440 steps × ≈ 6 passes × 84 µs ≈ 0.7 s loop per twin plus the build |
+| both ends agree | the generator's booked power equals the buffer's `ThermalPowerFromHeatGenerator`, the distribution's delivered power equals `−ThermalPowerConsumptionHeatDistribution`, on the converged step: with the start-of-step buffer every pass, with the iterated buffer at the fixed point (tolerance $10^{-4} \cdot \dot{m}\,c$, the simulator's own) | same file | same |
+| pass-by-pass unit test of the iterated buffer | the example of §3.1: five passes at 60 s to 1e-4 K, contraction 0.111 ± 0.01; 20 passes at 600 s, contraction 0.621 ± 0.01; the fixed-point heats 752.40 / −501.60 kJ; $T_{\mathrm{end}}$ 35.29782 °C | new `tests/test_space_heating_buffer_mixed_node.py` | `base`, < 1 s |
+| the threshold switch | a buffer built at 600 s publishes $\bar{T}$ on the circuit ports and $T_0$ on the sensor; at 601 s it publishes $T_0$ on all; `runs_part_load()` decides; with `part_load_above_seconds = 300`, a 600 s buffer runs the start-of-step buffer | same new file | `base` |
 | the refusal | 900 s with threshold 900 or 1800 refused; 900 and 3600 s with the default accepted; 60 and 600 s with any threshold from 0 to 3600 accepted; never a buffer without its exchanger (exists, #1035; messages re-asserted) | `tests/test_space_heating_buffer_whole_step_refusal.py` | `base`, ≈ 1 s |
 | part-load controls inert with the iterated buffer | at 600 s every `PartLoadRatio*` output is exactly 1 while the device runs and 0 while it is off, in forced passes too | `tests/test_start_of_step_part_load.py`, `tests/test_heat_pump_space_heating_part_load.py` (extend) | `base` |
 | convergence without abort, iterated buffer | the four twins finish the full year 2021 at 60 s (the golden gate's own runs are this test), and at 300 and 600 s one January week and one July week each with the largest pass count recorded and asserted below 50 (measured maxima 26–35) | new `tests/test_space_heating_time_resolution.py` cases, or the nightly tier | `system_setups`; a week at 300 s ≈ 2000 steps |
@@ -760,11 +814,11 @@ Order, each small, stacked (AGENTS.md: a new PR targets the stack top):
 0. **Prerequisites merge first.** #1048 (energy manager's raise hold; the iterated buffer aborts without it) and then
    the stage D stack in order, #1009 → #1010 → #1011 → #1013 → #1014 → #1012 → #1035, rebasing only the bottom onto main
    after each merge. #1051 is independent and may merge any time.
-1. **T1 — the sensor port.** `SimpleHotWaterStorage` publishes `WaterTemperatureAtStartOfStepInCelsius` (T0 on the
+1. **T1 — the sensor port.** `SimpleHotWaterStorage` publishes `WaterTemperatureAtStartOfStepInCelsius` ($T_0$ on the
    start-of-step path, the end temperature on the stratification path); the three controllers' default connection for
-   their sensor moves to it. No result change with the start-of-step buffer (the value is T0 either way); recorded files
-   expected unchanged. About 40 lines plus a `base` test. Base: `stageD-9-close-out` (or, if the owner prefers, folded
-   into #1013, the ports PR — open question Q4).
+   their sensor moves to it. No result change with the start-of-step buffer (the value is $T_0$ either way); recorded
+   files expected unchanged. About 40 lines plus a `base` test. Base: `stageD-9-close-out` (or, if the owner prefers,
+   folded into #1013, the ports PR — open question Q4).
 2. **T2 — the mixed-node path.** `simulate_mixed_node` (from `38f755ee`), the shared publishing routine, the dispatch on
    `runs_part_load()`, the "without" outputs with the iterated buffer (per Q2), the refusal renamed and reworded, the
    `base` tests of §7.1 (pass by pass, threshold switch, inert controls) and the 60 s closure day. **Results change at ≤
@@ -785,20 +839,20 @@ Each with options and a recommendation; none needs the code to decide.
 
 **Q1. Which port do the generator controllers read?** The controllers need the buffer temperature at the start of the
 step, a value no pass moves, so that their on/off decision cannot cycle with the iterated buffer. (a) *A new output
-`WaterTemperatureAtStartOfStepInCelsius`*, T0 in both modes, named for what it is; the three controllers' default
+`WaterTemperatureAtStartOfStepInCelsius`*, $T_0$ in both modes, named for what it is; the three controllers' default
 connection moves to it (draft `38f755ee` did this). (b) *Reuse `WaterMeanTemperatureInStorage`*, which both drafts
-already fill with T0; no new output, but the name says "mean" and a reader cannot tell from it that the value is the
+already fill with $T_0$; no new output, but the name says "mean" and a reader cannot tell from it that the value is the
 start-of-step state. (c) *Leave the controllers on `WaterTemperatureToHeatGenerator`* as the start-of-step buffer has
-them; with the iterated buffer they would then decide on T̄, which moves within the step. **Recommendation: (a).** One
-output, one meaning, and the reason is visible at the controller.
+them; with the iterated buffer they would then decide on $\bar{T}$, which moves within the step. **Recommendation:
+(a).** One output, one meaning, and the reason is visible at the controller.
 
 **Q2. What do the three "end temperature without a circuit" outputs carry with the iterated buffer?** Above the
 threshold the part-load rules read them; at or below it nobody acts on them, but the ports exist in both modes. (a)
-*Exact for the mixed node*: three more `MixedNode.step` calls per pass, each from T0 without one inflow; the port means
-the same thing in both modes ("the end temperature had this circuit brought nothing"). Expected cost: the node step is
-about 5 % of a pass (`MixedNode.step` was 21 % of M5's cumulative time with four calls per pass), so three more calls
-add roughly 10–15 % per pass at ≤ 600 s — expected, to be measured on T2. (b) *Publish T_end* on all three with the
-iterated buffer, the stratification path's convention; free, but the port's meaning depends on the mode.
+*Exact for the mixed node*: three more `MixedNode.step` calls per pass, each from $T_0$ without one inflow; the port
+means the same thing in both modes ("the end temperature had this circuit brought nothing"). Expected cost: the node
+step is about 5 % of a pass (`MixedNode.step` was 21 % of M5's cumulative time with four calls per pass), so three more
+calls add roughly 10–15 % per pass at ≤ 600 s — expected, to be measured on T2. (b) *Publish $T_{\mathrm{end}}$* on all
+three with the iterated buffer, the stratification path's convention; free, but the port's meaning depends on the mode.
 **Recommendation: (a), with (b) as the fallback if the measured cost on T2 exceeds 10 % of the 60 s loop time.** The
 interface is the point of the two-mode buffer; a port whose meaning changes with the mode is a hidden mode switch.
 
@@ -825,14 +879,14 @@ whole-step overshoot, closure), which is why it is the reference.
 **Q6. Threshold default.** (a) *600 s* (the owner's decision): at 600 s the iterated buffer's maximum is 35 passes of
 1000, mean 16.0 / 10.5 / 11.7; the iterated buffer beats the start-of-step buffer on heat and comfort there (heat pump
 −0.53 % against −0.62 % delivered, 21.3 against 28.0 degree-hours), and the step-mean bias is 0.5 K in the example. (b)
-*300 s* (`a ≈ 1`, the agent's earlier suggestion): cheaper at 600 s (start-of-step buffer: 36 s against 66 s loop, heat
-pump) but the start-of-step buffer at 600 s is −2.12 % SH electricity against M2's −1.32 %. No recorded workflow runs
-300 or 600 s. **Recommendation: (a)**, as decided; the parameter exists for anyone who needs (b).
+*300 s* ($a \approx 1$, the agent's earlier suggestion): cheaper at 600 s (start-of-step buffer: 36 s against 66 s loop,
+heat pump) but the start-of-step buffer at 600 s is −2.12 % SH electricity against M2's −1.32 %. No recorded workflow
+runs 300 or 600 s. **Recommendation: (a)**, as decided; the parameter exists for anyone who needs (b).
 
 **Q7. Forced steps with the iterated buffer at 300–600 s** are 49–70 % of all steps (start-of-step buffer: 1–10 %),
-because 10 passes are fewer than θ needs and the controllers are then held while the physics finishes. (a) *Record, do
-not assert* (the owner's rule of 2026-10-17: forced steps are information only). (b) *Assert a ceiling* at 600 s.
-**Recommendation: (a).**
+because 10 passes are fewer than $\theta$ needs and the controllers are then held while the physics finishes. (a)
+*Record, do not assert* (the owner's rule of 2026-10-17: forced steps are information only). (b) *Assert a ceiling* at
+600 s. **Recommendation: (a).**
 
 **Q8. Merge order of #1048.** The iterated buffer needs it; the stage D stack does not. (a) *#1048 first*, then rebase
 #1009 onto main and merge the stack, then T1–T3. (b) *Stack first*, #1048 after, T1–T3 after both. **Recommendation:

@@ -348,9 +348,8 @@ def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_sh
 
     Every Python pair of the three horizons is blessed exactly once, each full-year pair in a job of
     its own running only it (``jobs`` 1), the January week pairs in four shards and the July week
-    pairs, every setup's but electrolyzer_with_renewables', in four shards of their own. Catches a
-    pair the bless would no longer regenerate, which would leave its golden stale without anyone
-    noticing.
+    pairs in four shards of their own. Catches a pair the bless would no longer regenerate, which
+    would leave its golden stale without anyone noticing.
     """
     config = json.loads(REAL_CONFIG.read_text())
     cells = build_shards(config, 4, one_pair_per_job=frozenset({"year"}))["include"]
@@ -359,10 +358,10 @@ def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_sh
     july_week = [cell for cell in cells if cell["horizon"] == "july_week"]
     assert len(year) == 23 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
-    assert len(july_week) == 4 and sum(cell["count"] for cell in july_week) == 22
+    assert len(july_week) == 4 and sum(cell["count"] for cell in july_week) == 23
     emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
     assert emitted == sorted((p["setup"], p["param"]) for p in build_matrix(config)["include"])
-    assert len(emitted) == 68
+    assert len(emitted) == 69
 
 
 def test_one_pair_per_job_gives_each_pair_of_the_horizon_a_cell_first_and_shards_the_rest() -> None:

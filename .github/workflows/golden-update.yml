@@ -12,7 +12,7 @@
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
 #
 # A bless regenerates the goldens of golden_config.json's entries, every pair in all three horizons:
-# 23 January-week, 22 July-week and 23 full-year pairs. The entries are the Python setups and the
+# 23 January-week, 23 July-week and 23 full-year pairs. The entries are the Python setups and the
 # energy-system file gas_boiler_household. The YAML twins and the composed files have no goldens of
 # their own; the gates hold them to the Python setup's.
 #

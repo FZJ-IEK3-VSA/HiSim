@@ -415,7 +415,9 @@ class HeatDistribution(cp.PhysicsComponent):
         Behind a buffer (``PARALLEL``) the circuit publishes this step's heat and temperatures: the buffer sends its
         start-of-step temperature as the supply, the circuit returns it less what the building takes, and both ends
         book ``m c (T_sup - T_ret)`` from the same values. Without a buffer the outputs still lag one step. The
-        return never falls below the room temperature the building reports at the start of the step.
+        return is clamped at the room temperature the building reports at the start of the step: while heating it does
+        not fall below it, while cooling it does not rise above it. A supply on the wrong side of that temperature, for
+        example 16 °C while heating a room at 20 °C, returns unchanged and delivers no heat.
         """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------

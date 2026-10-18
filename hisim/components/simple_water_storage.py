@@ -582,17 +582,18 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     With its heat exchanger (the default) the buffer is a start-of-step node (:class:`hisim.hydronics.StartOfStepNode`):
     it publishes the temperature it starts the step at as the return to its generators
     (``WaterTemperatureToHeatGenerator``, ``WaterTemperatureToSecondaryHeatGenerator``), as the supply to the heat
-    distribution system (``WaterTemperatureToHeatDistribution``) and as ``WaterMeanTemperatureInStorage``, the value its
-    generators' controllers decide on. Every circuit's heat is ``m c`` times the difference between the stream that
-    enters and that start temperature, the standby loss is taken at it too, and the buffer ends the step at its start
-    temperature plus the net heat over its heat capacity. So the heat a generator books is the heat the buffer receives,
-    the heat the distribution system delivers is the heat the buffer gives, and the balance closes on every step at any
-    step length. For example, 170 kg at 40 °C charged by 5.6 kW while the distribution takes 5.6 kW stay at 40 °C,
-    less the loss.
+    distribution system (``WaterTemperatureToHeatDistribution``) and as ``WaterMeanTemperatureInStorage``. The
+    generators' controllers read ``WaterTemperatureToHeatGenerator``. Every circuit's heat is ``m c`` times the
+    difference between the stream that enters and that start temperature, the standby loss is taken at it too, and
+    the buffer ends the step at its start temperature plus the net heat over its heat capacity. So the heat a generator
+    books is the heat the buffer receives, the heat the distribution system delivers is the heat the buffer gives, and
+    the balance closes on every step at any step length. For example, 170 kg at 40 °C charged by 5.6 kW while the
+    distribution takes 5.6 kW stay at 40 °C, less the loss.
 
-    Because nothing it publishes changes while the step iterates, the buffer adds no iteration to the step. It does not
-    see its own temperature change within the step either: a generator holding a lift keeps bringing its heat however
-    far the buffer has risen, and the distribution keeps taking the building's demand however far it has fallen.
+    Because none of the temperatures it publishes changes while the step iterates, the buffer adds no iteration to the
+    step; its heat outputs follow each pass's inflows. It does not see its own temperature change within the step
+    either: a generator holding a lift keeps bringing its heat however far the buffer has risen, and the distribution
+    keeps taking the building's demand however far it has fallen.
     Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`).
     """
 
@@ -978,9 +979,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         heat distribution system, so a generator's heat is ``m c (T_sup - T0)``, the distribution's
         ``m c (T0 - T_ret)``, and the buffer, a :class:`hisim.hydronics.StartOfStepNode`, ends at
         ``T0 + (heats - loss) / C`` with the standby loss ``UA (T0 - 20 °C)``. Every output is computed from the same
-        node step, so the buffer's balance closes on every step, and nothing it publishes changes while the step
-        iterates. For example, a 170 kg buffer at 40 °C that a boiler charges with 0.3 kg/s at 45 °C while the
-        distribution returns 0.27 kg/s at 35 °C over 900 s, losing 3.58 W/K, ends at 40.70 °C.
+        node step, so the buffer's balance closes on every step, and none of the temperatures it publishes changes
+        while the step iterates. For example, a 170 kg buffer at 40 °C that a boiler charges with 0.3 kg/s at 45 °C
+        while the distribution returns 0.27 kg/s at 35 °C over 900 s, losing 3.58 W/K, ends at 40.70 °C.
 
         Args:
             stsv: The step's values.

@@ -114,10 +114,14 @@ def test_a_constraint_is_read_with_its_kind() -> None:
         ("{all_or_none_of: [a, b], exactly_one_of: [c, d]}", "exactly one of the keys"),
         ("{all_or_none_of: [a]}", "two or more parameters"),
         ("{all_or_none_of: a}", "two or more parameters"),
+        ("{all_or_none_of: [a, a]}", "each named once"),
+        ("{exactly_one_of: [a, b, a]}", "each named once"),
     ],
 )
 def test_a_malformed_all_or_none_of_is_refused(block: str, expected: str) -> None:
-    """Catches one item carrying two constraints, or an all_or_none_of naming fewer than two parameters.
+    """Catches one item carrying two constraints, or a constraint naming fewer than two parameters or one twice.
+
+    ``[a, a]`` would be an all_or_none_of that never fires: its one member is always all stated or none.
 
     The reader refuses each, and the schema an editor validates against does too.
     """

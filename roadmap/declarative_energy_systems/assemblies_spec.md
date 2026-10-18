@@ -273,7 +273,8 @@ unstatement, not a stated member; an import stating two members is refused (`EF-
 (decided, owner, 2026-10-15, D31) states every member or none: the defaults must, and an import stating some members
 and leaving others unstated is refused (`EF-77`), nothing being filled in for it; every member needs a value that
 states it (a stated default, a range or a stated allowed value). The battery's `capacity_in_kwh` and `power_in_watt`
-are the first pair. Not in
+are the first pair. A constraint of either kind names two or more parameters, none twice (`[a, a]` is refused when the
+file is read). Not in
 v1 (D26): `{at_most_one_of: […]}` and `{requires: {tilt_in_degree: [azimuth_in_degree]}}`; an assembly expresses them
 as an enum parameter selecting a variant. **Internal
 variants partition their selector:** the `when:` lists must cover every allowed value of the selecting parameter exactly

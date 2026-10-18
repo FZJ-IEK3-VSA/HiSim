@@ -141,6 +141,9 @@ class AssemblyReader:
     def constraints(cls, raw: Any, location: str) -> Tuple[ParameterConstraint, ...]:
         """Reads the constraint list: each item one ``exactly_one_of`` or ``all_or_none_of`` (D31).
 
+        Each names two or more parameters, none twice: ``{all_or_none_of: [a, a]}`` is refused, since
+        its one member would always count as all stated or none and the constraint would never fire.
+
         ``at_most_one_of`` and ``requires`` are cut (D26); an item naming one is refused as a cut construct.
         """
         if raw is None:
@@ -158,8 +161,10 @@ class AssemblyReader:
                     item_location, block, f"one constraint, a mapping with exactly one of the keys {', '.join(kinds)}"
                 )
             key, names = next(iter(block.items()))
-            if not isinstance(names, list) or len(names) < 2:
-                raise RawDocument.malformed(f"{item_location}.{key}", names, "a list of two or more parameters")
+            if not isinstance(names, list) or len(names) < 2 or len(set(map(str, names))) != len(names):
+                raise RawDocument.malformed(
+                    f"{item_location}.{key}", names, "a list of two or more parameters, each named once"
+                )
             constraints.append(
                 ParameterConstraint(
                     kind=ConstraintKind(key),

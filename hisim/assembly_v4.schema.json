@@ -772,6 +772,7 @@
         "exactly_one_of": {
           "type": "array",
           "minItems": 2,
+          "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/name"
           }
@@ -779,6 +780,7 @@
         "all_or_none_of": {
           "type": "array",
           "minItems": 2,
+          "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/name"
           }

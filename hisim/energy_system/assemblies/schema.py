@@ -137,7 +137,7 @@ class AssemblySchemaBuilder:
                 "minProperties": 1,
                 "maxProperties": 1,
                 "properties": {
-                    kind.value: {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/name"}}
+                    kind.value: {"type": "array", "minItems": 2, "uniqueItems": True, "items": {"$ref": "#/$defs/name"}}
                     for kind in ConstraintKind
                 },
             },

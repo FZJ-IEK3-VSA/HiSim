@@ -18,8 +18,8 @@ from hisim.components.building.building import Building
         (25.5, 18.0, True),
         (25.0, 18.0, False),
         (25.0 + 1e-12, 18.0, False),
-        (25.0 + Building.WINDOW_OPENING_MARGIN_IN_KELVIN / 2.0, 18.0, False),
-        (25.0 + 2.0 * Building.WINDOW_OPENING_MARGIN_IN_KELVIN, 18.0, True),
+        (25.005, 18.0, False),
+        (25.02, 18.0, True),
         (25.5, 26.0, False),
         (24.0, 18.0, False),
     ],
@@ -27,7 +27,11 @@ from hisim.components.building.building import Building
 def test_the_windows_open_only_clearly_above_the_cooling_set_temperature(
     indoor_in_celsius: float, outside_in_celsius: float, expected: bool
 ) -> None:
-    """With a 22 °C initial and a 25 °C cooling set temperature: aired above 25.01 °C with a cooler outside only."""
+    """With a 22 °C initial and a 25 °C cooling set temperature: aired above 25.01 °C with a cooler outside only.
+
+    The rows near 25 °C are absolute temperatures, not multiples of the margin, so a margin shrunk toward the
+    simulator's convergence tolerance of 1e-4 K, which would let float noise flip the windows again, fails the test.
+    """
     assert (
         Building.occupants_open_the_windows(
             initial_temperature_in_celsius=22.0,

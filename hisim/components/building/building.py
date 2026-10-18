@@ -851,13 +851,14 @@ class Building(cp.PhysicsComponent):
         indoor_air_temperature_in_celsius: float,
         outside_temperature_in_celsius: float,
     ) -> bool:
-        """Return whether the occupants air the room by opening the windows in this step.
+        """Return whether the room's temperatures make the occupants air it by opening the windows in this step.
 
         They do when the room is more than :attr:`WINDOW_OPENING_MARGIN_IN_KELVIN` above the cooling set temperature,
         the outside is cooler than the room, and the cooling set temperature lies above the initial temperature the
         aired room falls back to. For example, with a 22 °C initial and a 25 °C cooling set temperature, a room at
         25.5 °C with 18 °C outside is aired, a room at exactly 25.0 °C (where a distribution system cooling it in the
-        same step leaves it) is not.
+        same step leaves it) is not. The method decides on the temperatures only: a building whose configuration does
+        not enable opening windows never airs, and :meth:`i_simulate` checks that before it asks.
 
         Args:
             initial_temperature_in_celsius: The building's initial indoor temperature, which an aired room falls back
@@ -867,7 +868,7 @@ class Building(cp.PhysicsComponent):
             outside_temperature_in_celsius: The outside temperature, in °C.
 
         Returns:
-            True if the windows open.
+            True if the windows open, provided the configuration enables opening them.
         """
         return (
             initial_temperature_in_celsius

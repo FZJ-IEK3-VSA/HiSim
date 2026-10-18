@@ -390,7 +390,7 @@ class Chart:  # noqa: too-few-public-methods
 
     @classmethod
     def wrap_title(cls, title: str, suffix: str = "") -> str:
-        """Break every line of a title that is longer than :attr:`MAXIMUM_TITLE_CHARACTERS`.
+        r"""Break every line of a title that is longer than :attr:`MAXIMUM_TITLE_CHARACTERS`.
 
         Output names are written in camel case without spaces, so a long one such as
         ``WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius`` has no space to break

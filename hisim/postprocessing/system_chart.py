@@ -74,40 +74,57 @@ class SystemChart:
         without edge labels (with and without class names), with edge labels,
         and with edge labels plus cumulative result values. Each successfully
         generated chart is appended to the returned list; failed charts are
-        skipped.
+        skipped. The variant with result values reads the sums and means over
+        the run from ``results_cumulative``, which the simulator computes
+        whenever ``MAKE_NETWORK_CHARTS`` is set.
 
         Returns:
             A list of :class:`SystemChartEntry` objects, one per successfully
             generated chart variant.
+
+        Raises:
+            ValueError: When ``results_cumulative`` is None, which no run with
+                ``MAKE_NETWORK_CHARTS`` produces; the result variant could not
+                be labelled.
         """
-        fig_format = self.ppdt.simulation_parameters.figure_format
+        fig_format = self.ppdt.simulation_parameters.figure_format.value
         chart_specs: list[_ChartSpec] = [
             {
                 "with_labels": False,
                 "with_class_names": True,
                 "filename": f"System_no_Edge_with_class_labels{fig_format}",
-                "caption": "System Chart of all components",
+                "caption": "System chart: every component with its class.",
             },
             {
                 "with_labels": False,
                 "with_class_names": False,
                 "filename": f"System_no_Edge_labels{fig_format}",
-                "caption": "System Chart of all components and all outputs.",
+                "caption": "System chart: every component and its connections.",
             },
             {
                 "with_labels": True,
                 "with_class_names": False,
                 "filename": f"System_with_Edge_labels{fig_format}",
-                "caption": "System Chart with labels on all edges.",
+                "caption": "System chart: every connection labelled with its output, input and unit.",
             },
             {
                 "with_labels": True,
                 "with_class_names": False,
                 "filename": f"System_with_Edge_labels_and_results{fig_format}",
-                "caption": "System Chart with labels and cumulative result values on all edges.",
+                "caption": (
+                    "System chart: every connection labelled with its output, input and unit, "
+                    "and the output's sum or mean over the run."
+                ),
                 "with_results": True,
             },
         ]
+        if self.ppdt.results_cumulative is None:
+            # Checked here, so that the result variant does not fail inside Graphviz's guarded call and get
+            # logged as if Graphviz were missing.
+            raise ValueError(
+                "The network charts need the sums and means over the run (results_cumulative), which the "
+                "simulator computes whenever MAKE_NETWORK_CHARTS is set; this data transfer object has none."
+            )
         files: List[SystemChartEntry] = []
         for spec in chart_specs:
             entry = self.make_graphviz_chart(**spec)
@@ -159,7 +176,8 @@ class SystemChart:
             self.render_png(graph, fullpath)
         except Exception as exc:  # noqa
             log.error(
-                f"Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: {exc}"
+                f"Failed to generate network chart {filename}. Probably Graphviz is missing on your system. "
+                f"The python error was: {type(exc).__name__}: {exc}"
             )
             system_chart_entry = None
         return system_chart_entry

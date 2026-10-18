@@ -280,7 +280,9 @@ class PostProcessor:
         Raises:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
-                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``;
+                and if ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while ``MAKE_NETWORK_CHARTS``
+                is not, because no network chart would have been drawn.
             NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
                 does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
@@ -408,6 +410,12 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing network charts to report.")
             start = timer()
+            if PostProcessingOptions.MAKE_NETWORK_CHARTS not in ppdt.post_processing_options:
+                # Without it no chart was attempted, and the chapter would blame a missing Graphviz.
+                raise ValueError(
+                    "WRITE_NETWORK_CHARTS_TO_REPORT needs MAKE_NETWORK_CHARTS, which draws the charts it writes. "
+                    "Set MAKE_NETWORK_CHARTS as well."
+                )
             if report is not None:
                 self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             else:
@@ -661,7 +669,16 @@ class PostProcessor:
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Exports the results to a CSV file."""
+        """Exports the results to CSV: one file per output, or all outputs in one file.
+
+        With ``EXPORT_RESULTS_IN_ONE_FILE`` every output goes into ``all_results.csv`` and, with
+        ``EXPORT_MONTHLY_RESULTS``, their monthly values into ``all_results_monthly.csv``; without it
+        each output gets its own file, and with ``EXPORT_MONTHLY_RESULTS`` its own ``*_monthly.csv``.
+        A monthly value is the month's mean or sum, by the output's unit (``Simulator.get_std_results``).
+
+        Args:
+            ppdt: The finished run.
+        """
 
         if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
             csvfilename = os.path.join(
@@ -670,6 +687,14 @@ class PostProcessor:
             )
             csvfilename = self.shorten_path(csvfilename)
             ppdt.results.to_csv(csvfilename, sep=",", decimal=".")
+            if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                # The monthly values in one file too: this branch used to write none, so the option did
+                # nothing beside EXPORT_RESULTS_IN_ONE_FILE.
+                assert ppdt.results_monthly is not None
+                monthly_csvfilename = self.shorten_path(
+                    os.path.join(ppdt.simulation_parameters.result_directory, "all_results_monthly.csv")
+                )
+                ppdt.results_monthly.to_csv(monthly_csvfilename, sep=",", decimal=".")
         else:
             for column in ppdt.results:
                 csvfilename = os.path.join(
@@ -820,9 +845,7 @@ class PostProcessor:
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
-                    report.write_with_center_alignment(
-                        ["Fig." + str(self.figure_counter) + ": " + entry.component_name + " " + entry.output_type]
-                    )
+                    report.write_with_center_alignment([self.figure_caption(self.figure_counter, entry)])
                     report.add_spacer()
                     self.figure_counter = self.figure_counter + 1
             report.page_break()
@@ -848,6 +871,36 @@ class PostProcessor:
 
         report.close()
 
+    #: What each chart class draws, by the first part of its file name (``Chart.type`` in lower case),
+    #: for the figure captions of the report: the charts of one output differ only in this.
+    CHART_KINDS_BY_FILE_PREFIX: Dict[str, str] = {
+        "line": "line chart over the run",
+        "carpet": "carpet plot by day and time of day",
+        "days": "single day",
+        "bar": "monthly bar chart",
+    }
+
+    @classmethod
+    def figure_caption(cls, figure_number: int, entry: ReportImageEntry) -> str:
+        """Return the report caption of one output chart, naming what kind of chart it is.
+
+        The line chart, the carpet plot, the single-day plot and the monthly bar chart of an output
+        all show the same component and output, so the caption adds the kind of chart, read from
+        the file name the chart class gives it. Example: ``Fig. 4: PVSystem ElectricityOutput,
+        monthly bar chart``. A file name with no known prefix gets no kind.
+
+        Args:
+            figure_number: The running number of the figure in the report.
+            entry: The chart's report entry.
+
+        Returns:
+            The caption.
+        """
+        caption = f"Fig. {figure_number}: {entry.component_name} {entry.output_type}"
+        prefix = os.path.basename(entry.file_path).split("_", 1)[0].split(".", 1)[0]
+        kind = cls.CHART_KINDS_BY_FILE_PREFIX.get(prefix)
+        return caption if kind is None else f"{caption}, {kind}"
+
     def write_all_outputs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
@@ -869,14 +922,29 @@ class PostProcessor:
         report: reportgenerator.ReportGenerator,
         system_chart_entries: List[SystemChartEntry],
     ) -> None:
-        """Write network charts to report."""
+        """Write the network charts of the run into the report, as one chapter with a caption per chart.
+
+        Example: a run with Graphviz installed gets a chapter "System Network Charts" with four
+        figures, each fitted to the page. The caller makes sure ``MAKE_NETWORK_CHARTS`` was set, so an
+        empty list means Graphviz drew no chart, and the chapter says so instead of staying blank.
+
+        Args:
+            ppdt: The run's post-processing data; its result directory holds the chart files.
+            report: The open report generator the chapter is added to.
+            system_chart_entries: The charts ``MAKE_NETWORK_CHARTS`` drew, with their captions.
+        """
         report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + ". System Network Charts"])
+        if not system_chart_entries:
+            # Said in the report itself, since the reason (Graphviz missing) is otherwise only in the log
+            report.write_with_normal_alignment(
+                ["No network chart could be drawn in this run; the log says why (usually Graphviz is not installed)."]
+            )
         for entry in system_chart_entries:
-            report.write_figures_to_report_with_size_four_six(
+            report.write_figure_fitted_to_page(
                 os.path.join(ppdt.simulation_parameters.result_directory, entry.file_path)
             )
-            report.write_with_center_alignment(["Fig." + str(self.figure_counter) + ": " + entry.caption])
+            report.write_with_center_alignment([f"Fig. {self.figure_counter}: {entry.caption}"])
             self.figure_counter = self.figure_counter + 1
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
@@ -905,7 +973,7 @@ class PostProcessor:
                     report=report,
                     table_as_list_of_list=kpi_table,
                     headline=". KPIs",
-                    comment=["Here a comment on calculation of numbers will follow"],
+                    comment=[],
                 )
             else:
                 raise ValueError("report is None but should be a ReportGenerator object.")
@@ -944,7 +1012,7 @@ class PostProcessor:
                         "\n",
                         "Comments:",
                         "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
-                        "Emissions are fuel emissions emitted during simulad period.",
+                        "Emissions are fuel emissions emitted during the simulated period.",
                         "Consumption for Diesel_Car in l, for EV in kWh.",
                     ],
                 )

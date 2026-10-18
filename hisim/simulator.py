@@ -953,8 +953,10 @@ class Simulator:
 
         Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
         simulation start/end dates and timestep size, and optionally computes monthly, daily,
-        hourly, and cumulative aggregations. Returns a PostProcessingDataTransfer object
-        containing all results and metadata.
+        hourly, and cumulative aggregations: all four for the monthly and scenario-evaluation
+        options, only the cumulative one (the sums and means over the run) for
+        ``MAKE_NETWORK_CHARTS``. Returns a PostProcessingDataTransfer object containing all
+        results and metadata.
 
         Args:
             all_result_lines: List of result arrays, one per timestep.
@@ -999,10 +1001,19 @@ class Simulator:
                 results_merged_hourly,
             ) = self.get_std_results(self.results_data_frame)
         else:
-            results_merged_cumulative = None
             results_merged_monthly = None
             results_merged_daily = None
             results_merged_hourly = None
+            if (
+                postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS
+                in self._simulation_parameters.post_processing_options
+            ):
+                # The network chart with results labels each connection with its output's sum or mean
+                # over the run; only these totals are computed, not the resampled frames.
+                log.information("Computing the sums and means over the run for the network charts")
+                results_merged_cumulative = self.get_run_totals(self.results_data_frame, self.all_outputs)
+            else:
+                results_merged_cumulative = None
 
         # A run nobody named is named after the module it ran: an empty scenario column is a
         # row no scenario evaluation can tell apart from the next unnamed run's.
@@ -1084,6 +1095,8 @@ class Simulator:
 
         Computes monthly, daily, hourly, and cumulative aggregations, using mean
         aggregation for units in UNITS_USING_MEAN_AGGREGATION and sum otherwise.
+        The cumulative frame comes from :meth:`get_run_totals`, which a run with only
+        ``MAKE_NETWORK_CHARTS`` calls on its own.
 
         Args:
             results_data_frame: DataFrame with raw per-timestep simulation results.
@@ -1135,17 +1148,6 @@ class Simulator:
             hourly_mean = mean_df
             hourly_sum = sum_df
 
-        # Cumulative scalars (``.mean()``/``.sum()``) are cheap column-wise
-        # reductions; keep them per-column to preserve the previous scalar
-        # aggregation (and dict-keyed column order) exactly.
-        cumulative_data: Dict[Any, Any] = {}
-        for i, column_name in enumerate(results_data_frame.columns):
-            col_data = results_data_frame.iloc[:, i]
-            if self.all_outputs[i].unit in units_mean:
-                cumulative_data[column_name] = col_data.mean()
-            else:
-                cumulative_data[column_name] = col_data.sum()
-
         # Recombine the mean/sum groups in the original column order. After the
         # concat the columns sit in [mean_indices..., sum_indices...] order, so
         # map every original index back to its concatenated position and select
@@ -1163,7 +1165,7 @@ class Simulator:
         results_merged_monthly = _combine_in_order(monthly_mean, monthly_sum)
         results_merged_daily = _combine_in_order(daily_mean, daily_sum)
         results_merged_hourly = _combine_in_order(hourly_mean, hourly_sum)
-        results_merged_cumulative = pd.DataFrame([cumulative_data])
+        results_merged_cumulative = Simulator.get_run_totals(results_data_frame, self.all_outputs)
 
         return (
             results_merged_cumulative,
@@ -1171,6 +1173,36 @@ class Simulator:
             results_merged_daily,
             results_merged_hourly,
         )
+
+    @staticmethod
+    def get_run_totals(results_data_frame: pd.DataFrame, all_outputs: List[cp.ComponentOutput]) -> pd.DataFrame:
+        """Reduce every result column to one value over the whole run: its mean or its sum.
+
+        A column whose unit is in ``UNITS_USING_MEAN_AGGREGATION`` (a rate or a state, such as W or
+        °C) gets its mean, every other column (an amount, such as kWh or kg) its sum. Example: a
+        heat pump's electricity in kWh per timestep sums to the kWh of the run, its flow temperature
+        in °C gives the mean temperature. The network chart with results labels each connection with
+        this value, and the scenario evaluation exports it; :meth:`get_std_results` returns it as its
+        first frame. It is one reduction per column (15 ms for a year at 15 minutes with 158
+        outputs), so a run that needs only the totals does not pay for the hourly, daily and
+        monthly resamples.
+
+        Args:
+            results_data_frame: The per-timestep results, one column per output.
+            all_outputs: The outputs in the order of the columns; their units choose mean or sum.
+
+        Returns:
+            A one-row DataFrame with the columns of ``results_data_frame``, in the same order.
+        """
+        # Kept per column to preserve the scalar aggregation (and dict-keyed column order) exactly.
+        cumulative_data: Dict[Any, Any] = {}
+        for i, column_name in enumerate(results_data_frame.columns):
+            col_data = results_data_frame.iloc[:, i]
+            if all_outputs[i].unit in UNITS_USING_MEAN_AGGREGATION:
+                cumulative_data[column_name] = col_data.mean()
+            else:
+                cumulative_data[column_name] = col_data.sum()
+        return pd.DataFrame([cumulative_data])
 
     def connect_everything_automatically(
         self,

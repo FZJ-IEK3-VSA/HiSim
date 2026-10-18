@@ -5,15 +5,20 @@ controller has switched on does not have to run the whole step: it runs only the
 ratio, that brings its store to the controller's target temperature by the end of the step. At and below the
 threshold every device runs whole steps, so a fine-step run is the reference without any adaptation.
 
-The module holds three pieces, none of which knows a particular component:
+The module holds five pieces, none of which knows a particular component:
 
-* :class:`PartLoadRule` is the pure rule: from the ratio the device ran with and the store's temperatures at the
-  start and at the end of the step it returns the ratio for the next pass. It remembers nothing; the simulator's
-  passes iterate it like any other component's law.
+* :class:`PartLoadRule` is the pure rule for a store that publishes its end-of-step temperature only: from the ratio
+  the device ran with and the store's temperatures at the start and at the end of the step it returns the ratio for
+  the next pass. It remembers nothing; the simulator's passes iterate it like any other component's law.
 * :class:`PartLoadControl` is the part of an L1 controller that reads the store's end-of-step temperature and the
-  ratio its device reports, applies the rule and publishes the ratio and the target it aims at.
+  ratio its device reports, applies :class:`PartLoadRule` and publishes the ratio and the target it aims at.
 * :class:`PartLoadCommand` is the part of a device that reads the ratio its controller commands and reports the
   ratio it ran with.
+* :class:`StartOfStepPartLoadRule` holds the exact rules for a start-of-step store, which also publishes its end
+  temperature without each circuit: the raising ratio of a generator and the lowering ratio of a distribution
+  circuit. They are pure functions as well.
+* :class:`StartOfStepPartLoadControl` is the part of an L1 controller that applies :class:`StartOfStepPartLoadRule`
+  to a start-of-step store and publishes the ratio, and for a generator the target.
 
 Terms:
 
@@ -519,9 +524,12 @@ class StartOfStepPartLoadControl:
     * 0 while the device does not run;
     * exactly 1 at and below the part-load threshold while it runs, and 1 when no store is wired to the inputs (a
       device feeding a consumer without a store in between runs whole steps);
-    * above the threshold, the ratio of :meth:`StartOfStepPartLoadRule.raising_ratio` or
-      :meth:`StartOfStepPartLoadRule.lowering_ratio`, at most the budget the controller allows;
-    * under ``force_convergence``, above the threshold, the ratio the device reports it ran (:meth:`publish_held`).
+    * above the threshold, for a device that raises the store, the ratio of
+      :meth:`StartOfStepPartLoadRule.raising_ratio`, at most the budget the controller allows
+      (:meth:`publish_raising`); for a device that lowers it, the ratio of
+      :meth:`StartOfStepPartLoadRule.lowering_ratio`, which has no budget (:meth:`publish_lowering`);
+    * under ``force_convergence``, above the threshold with a store wired, the ratio the device reports it ran;
+      otherwise the ratio of the last unforced pass (:meth:`publish_held`).
 
     The inputs are optional, since a controller may run its device without a store. The part keeps no state.
     """

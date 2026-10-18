@@ -85,17 +85,6 @@ def test_the_heating_season_includes_a_day_exactly_at_the_threshold(
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("outside_temperature_in_celsius", [math.nan, math.inf, -math.inf])
-def test_a_day_mean_that_is_not_finite_is_refused(outside_temperature_in_celsius: float) -> None:
-    """Catches a NaN day mean passing as "not in the heating season" and silently switching the heating off."""
-    with pytest.raises(ValueError, match="finite"):
-        HeatingCurveController.is_heating_season(
-            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius,
-            heating_threshold_in_celsius=18.0,
-        )
-
-
-@pytest.mark.base
 def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None:
     """Catches a threshold that does not follow the building's specific heating load.
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum, unique
-import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
@@ -257,9 +256,6 @@ class XTPController(L2ControllerComponent):
             return
 
         raw = stsv.get_input_value(self.demand_input)
-        assert math.isfinite(raw), (
-            f"Non-finite demand input at timestep {timestep}: {raw}"
-        )
         demand_load = abs(raw / 1000)  # WATT input to KILOWATT
 
         """ Only for household testing

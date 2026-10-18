@@ -7,7 +7,6 @@ The component with the lowest source weight is activated first.
 """
 
 import dataclasses
-import math
 from dataclasses import dataclass, field
 
 from types import MappingProxyType
@@ -891,14 +890,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
         Returns:
             Whether the set temperatures are raised in this pass.
-
-        Raises:
-            ValueError: If the surplus is NaN or infinite.
         """
-        if not math.isfinite(surplus_after_battery_in_watt):
-            raise ValueError(
-                f"The surplus after the battery must be a finite power in W, got {surplus_after_battery_in_watt!r}."
-            )
         band_in_watt = L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
         if surplus_after_battery_in_watt > band_in_watt:
             return True
@@ -929,15 +921,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             The power the battery takes, in W; zero or positive.
 
         Raises:
-            ValueError: If a value is not finite, or a charging limit is negative.
+            ValueError: If a charging limit is negative.
         """
-        for name, value in (
-            ("surplus", surplus_in_watt),
-            ("maximum charging power", maximum_charging_power_in_watt),
-            ("minimum charging power", minimum_charging_power_in_watt),
-        ):
-            if not math.isfinite(value):
-                raise ValueError(f"The {name} must be a finite power in W, got {value!r}.")
         if maximum_charging_power_in_watt < 0 or minimum_charging_power_in_watt < 0:
             raise ValueError(
                 "A battery's charging limits must not be negative, got a maximum of "

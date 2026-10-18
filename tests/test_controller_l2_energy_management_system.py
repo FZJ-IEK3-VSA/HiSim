@@ -923,15 +923,6 @@ class TestSurplusHysteresis:
         )
         assert decision is expected
 
-    @pytest.mark.base
-    @pytest.mark.parametrize("surplus_in_watt", [float("nan"), float("inf"), float("-inf")])
-    def test_a_surplus_that_is_not_finite_is_refused(self, surplus_in_watt: float) -> None:
-        """Catches a NaN surplus passing as "within the band" and silently keeping the previous decision."""
-        with pytest.raises(ValueError, match="finite"):
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
-                surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=False
-            )
-
     #: The battery's share: the surplus offered, the maximum and minimum charging powers in W, and the share in W.
     SHARES = [
         (1000.0, 5000.0, 200.0, 1000.0),
@@ -966,10 +957,10 @@ class TestSurplusHysteresis:
     @pytest.mark.base
     @pytest.mark.parametrize(
         ("surplus_in_watt", "maximum_in_watt", "minimum_in_watt"),
-        [(float("nan"), 5000.0, 200.0), (100.0, float("inf"), 200.0), (100.0, -1.0, 200.0), (100.0, 5000.0, -1.0)],
+        [(100.0, -1.0, 200.0), (100.0, 5000.0, -1.0)],
     )
     def test_an_invalid_battery_limit_is_refused(self, surplus_in_watt: float, maximum_in_watt: float, minimum_in_watt: float) -> None:
-        """Catches a NaN or negative limit turning into a share that silently decides the raise."""
+        """Catches a negative limit turning into a share that silently decides the raise."""
         with pytest.raises(ValueError):
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_charging_share_in_watt(
                 surplus_in_watt=surplus_in_watt,

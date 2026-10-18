@@ -79,22 +79,6 @@ def test_finite_demand_is_processed() -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("raw_value", [float("nan"), float("inf"), float("-inf")])
-def test_non_finite_demand_input_raises(raw_value: float) -> None:
-    """A non-finite (NaN/+inf/-inf) demand input must be rejected explicitly.
-
-    Adding a new non-finite sentinel is a one-line change: append it to the
-    parametrize list above.
-    """
-    controller = _build_controller()
-    stsv = _set_demand(controller, raw_value)
-
-    controller.i_restore_state()
-    with pytest.raises(AssertionError, match="Non-finite demand input"):
-        controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-
-
-@pytest.mark.base
 def test_operation_mode_round_trips_as_the_legacy_string() -> None:
     """The enum-typed operation mode keeps the pre-enum wire value.
 

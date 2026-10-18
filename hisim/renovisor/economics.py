@@ -1230,11 +1230,14 @@ class EconomicContextBuilder:
         "TABULA row's area scaled to the conditioned floor area"
     )
 
-    #: What the build refuses with when a priced envelope subject's element has no area at all.
+    #: What the build refuses with when an envelope measure's element has no area at all, priced
+    #: or not (owner decision of 2026-10-18, hisim-nrg3): the house has none of the element, so a
+    #: measure on it is a wrong request, not something to book at a made-up size.
     ELEMENT_AREA_MESSAGE: ClassVar[str] = (
-        "the envelope measure '{measure_id}' carries a price per square metre, but its element "
-        "'{element}' has no area: the request states none and the Building's TABULA row gives it "
-        "an area of zero. Pricing it at no area would publish a price for nothing."
+        "the envelope measure '{measure_id}' acts on the element '{element}', but the house has "
+        "none of it: the request states no area for it (house.building.{element}.area_in_m2) and "
+        "the Building's TABULA row gives it an area of zero. A measure on an element the house "
+        "does not have is a wrong request: drop the measure, or state the element's area."
     )
 
     #: The note a stated applicant role carries.
@@ -1792,9 +1795,9 @@ class EconomicContextBuilder:
         simulates it: the request's own when stated, the TABULA row's scaled one when not
         (:meth:`_element_area`). A measure without a price is still added — a measure the plan
         carries out must appear in the economics — with the ``unpriced`` flag, an investment of
-        zero and an embodied CO2 of zero (:meth:`_envelope_subject`); a priced measure over an
-        element of no area fails the translation, because pricing per square metre without a
-        square metre is not a smaller answer, it is a wrong one.
+        zero and an embodied CO2 of zero (:meth:`_envelope_subject`). A measure over an element
+        of no area fails the translation, priced or not (hisim-nrg3): the house has none of the
+        element, so the measure is a wrong request, not a subject of some made-up size.
         """
         facts: List[SubjectCostFacts] = []
         for layer in self._applied.layers:
@@ -1946,9 +1949,16 @@ class EconomicContextBuilder:
     ) -> SubjectCostFacts:
         """One envelope measure as a cost subject, with its price or with the absence of one.
 
-        A priced subject is sized with the area the Building simulates (:meth:`_element_area`),
-        and its ``override_source`` says whether the request stated that area or the TABULA row
-        supplied it. A measure without a price stays unpriced whatever its area.
+        Every subject is sized with the area the Building simulates (:meth:`_element_area`), and a
+        priced one's ``override_source`` says whether the request stated that area or the TABULA
+        row supplied it. A measure without a price stays unpriced whatever its area.
+
+        **A measure on an element the house does not have is refused**, priced or not (owner
+        decision of 2026-10-18, hisim-nrg3). Example: a ``window_replacement`` on a TABULA row
+        without windows, with no window area in the request, fails the translation with
+        :attr:`ELEMENT_AREA_MESSAGE`. Such a measure used to be booked over a surrogate 1 m² when
+        it carried no price; that square metre of an element the house lacks was made up, and
+        the rule of the package is to fail loudly.
 
         **An unpriced measure books no embodied CO2** (owner decision of 2026-10-15, hisim-hq4z).
         Its carbon is treated like its money and like a kept element's renewal
@@ -1970,15 +1980,15 @@ class EconomicContextBuilder:
             The measure's cost subject.
 
         Raises:
-            TranslatorError: If the measure is priced and its element has no area at all -- the
+            TranslatorError: If the measure's element has no area at all, priced or not -- the
                 request states none and the Building's own area for it is zero.
         """
         area = self._element_area(element)
+        if area is None:
+            raise TranslatorError(self.ELEMENT_AREA_MESSAGE.format(measure_id=measure_id, element=element.value))
         price = self._measure_price(measure_id)
         result.subjects[measure_id] = measure_id
-        if price is not None and area is None:
-            raise TranslatorError(self.ELEMENT_AREA_MESSAGE.format(measure_id=measure_id, element=element.value))
-        if price is None or area is None:
+        if price is None:
             result.unpriced_subjects.append(measure_id)
             result.subject_notes[measure_id] = self.UNPRICED_NOTE
             unpriced = True
@@ -1995,7 +2005,7 @@ class EconomicContextBuilder:
             subject=measure_id,
             facts=ComponentCostFacts(
                 asset_class=asset_class,
-                size=float(area) if area else 1.0,
+                size=float(area),
                 size_unit=Units.SQUARE_METER,
                 investment_cost_override_in_euro=investment,
                 installation_cost_override_in_euro=UncertainValue.exact(0.0),

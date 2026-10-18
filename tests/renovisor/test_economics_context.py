@@ -538,9 +538,19 @@ class TestTheEnvelopeSubjectsAreSizedAsTheBuildingSimulates:
         assert [layer.measure_id for layer in layers.unresolved()] == ["solid_ground_floor_insulation"]
         assert layers.total_embodied_co2_in_kg() is None
 
-    def test_a_priced_measure_over_an_element_of_no_area_fails_the_translation(self) -> None:
-        """An area that cannot be determined is a translator error, not a silent unpriced subject."""
-        request = Request.parse(_without_element_areas(_mockup()))
+    @pytest.mark.parametrize("priced", [True, False], ids=["priced", "unpriced"])
+    def test_a_measure_over_an_element_of_no_area_fails_the_translation(self, priced: bool) -> None:
+        """hisim-nrg3: a measure on an element the house does not have is refused, priced or not.
+
+        The floor insulation acts on a floor whose area is neither stated nor in the Building (zero).
+        Without its cost block it used to be booked over a surrogate 1 m²; now both fail alike.
+        """
+        document = _without_element_areas(_mockup())
+        if not priced:
+            del next(
+                measure for measure in document["measures"] if measure["id"] == "solid_ground_floor_insulation"
+            )["cost"]
+        request = Request.parse(document)
         builder = EconomicContextBuilder(
             request,
             apply(request, request.measures, Whitelist.load()),
@@ -549,8 +559,12 @@ class TestTheEnvelopeSubjectsAreSizedAsTheBuildingSimulates:
         )
         builder._envelope.information().floor_area_in_m2 = 0.0  # pylint: disable=protected-access
 
-        with pytest.raises(TranslatorError, match="solid_ground_floor_insulation"):
+        with pytest.raises(TranslatorError) as raised:
             builder.build()
+        assert raised.value.message == EconomicContextBuilder.ELEMENT_AREA_MESSAGE.format(
+            measure_id="solid_ground_floor_insulation", element=ThermalElement.FLOOR.value
+        )
+        assert "the house has none of it" in raised.value.message
 
 
 @pytest.mark.base

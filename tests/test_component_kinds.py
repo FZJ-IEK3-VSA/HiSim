@@ -305,10 +305,16 @@ def test_l2_controllers_that_read_one_another_are_placed_as_one_block(
     assert late_readers <= {position for cycle in order.l2_cycles for position in cycle}
 
 
-def test_an_l1_controller_reading_a_later_l2_controller_is_not_an_l2_read() -> None:
-    """Catches the L2 rule counting a read of another kind, which would report a cycle that is not there."""
-    order = Simulator.evaluation_positions((L1ControllerComponent, L2ControllerComponent), [{1}, set()])
-    assert order.positions == (1, 0)
+def test_an_l2_controller_and_an_l1_controller_reading_each_other_form_no_l2_cycle() -> None:
+    """Catches the L2 rule counting a read of another kind, which would report a cycle that is not there.
+
+    The L2 controller at 0 reads the L1 controller at 1, which reads it back, as an L1 controller reads its L2 signal
+    and the L2 controller reads the state the L1 controller reports. The kinds are evaluated one after the other, so
+    the L2 controller goes first and there is no L2 cycle; a rule that counted the L1 read would report the cycle
+    (0, 1).
+    """
+    order = Simulator.evaluation_positions((L2ControllerComponent, L1ControllerComponent), [{1}, {0}])
+    assert order.positions == (0, 1)
     assert not order.l2_cycles
     assert not order.physics_cycles
 

@@ -58,7 +58,8 @@ class ConstraintGraph:
         ``{0: frozenset({1}), 1: frozenset({0}), 2: frozenset({0})}`` gives ``((0, 1),)``.
 
         Args:
-            predecessors: For every position, the positions that must come before it.
+            predecessors: For every position, the positions that must come before it; every one of them is a key, and
+                none is the position itself, since a position listed as its own predecessor would form a group of one.
 
         Returns:
             The groups, ordered by their first position.
@@ -95,7 +96,8 @@ class ConstraintGraph:
         not before it.
 
         Args:
-            predecessors: For every position, the positions that must come before it; every one of them is a key.
+            predecessors: For every position, the positions that must come before it; every one of them is a key, and
+                none is the position itself (:meth:`cycles`).
 
         Returns:
             The positions in evaluation order, and the cycles ordered by their first position.

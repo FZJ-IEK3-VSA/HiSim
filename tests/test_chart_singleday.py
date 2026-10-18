@@ -58,7 +58,7 @@ def test_build_day_slice_first_day_of_january_with_hourly_resolution() -> None:
         data_with_units=data,
         window_start=JANUARY_FIRST,
         day_in_window=0,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=LABEL_MONTHS,
         title="Temperature",
     )
@@ -73,7 +73,7 @@ def test_build_day_slice_names_the_day_of_a_july_run_by_its_july_date() -> None:
         data_with_units=data,
         window_start=JULY_FIRST,
         day_in_window=0,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
@@ -88,7 +88,7 @@ def test_build_day_slice_takes_a_later_day_with_its_rows_and_its_index() -> None
         data_with_units=data,
         window_start=JULY_FIRST,
         day_in_window=2,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
@@ -105,7 +105,7 @@ def test_build_day_slice_ordinal_suffixes() -> None:
     for day_in_window, ordinal in expected.items():
         _, title = ChartSingleDay.build_day_slice(
             data_with_units=data, window_start=JANUARY_FIRST, day_in_window=day_in_window,
-            timesteps_per_day=24, label_months_lowercase=LABEL_MONTHS, title="X")
+            seconds_per_timestep=3600, label_months_lowercase=LABEL_MONTHS, title="X")
         assert title == f"X January {ordinal}"
 
 
@@ -116,7 +116,7 @@ def test_build_day_slice_crosses_into_the_next_month() -> None:
         data_with_units=data,
         window_start=JANUARY_FIRST,
         day_in_window=31,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=LABEL_MONTHS,
         title="Demand",
     )
@@ -130,7 +130,7 @@ def test_build_day_slice_subhourly_resolution() -> None:
         data_with_units=data,
         window_start=JANUARY_FIRST,
         day_in_window=1,
-        timesteps_per_day=96,
+        seconds_per_timestep=900,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
@@ -144,12 +144,53 @@ def test_build_day_slice_with_steps_longer_than_an_hour() -> None:
         data_with_units=_make_series(12 * 3),
         window_start=JANUARY_FIRST,
         day_in_window=1,
-        timesteps_per_day=12,
+        seconds_per_timestep=7200,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
     assert plot_title == "PV January 2nd"
     assert list(data_slice.values) == [float(v) for v in range(12, 24)]
+
+
+def test_build_day_slice_with_a_step_that_does_not_divide_an_hour() -> None:
+    """45-minute steps (2700 s) -> 32 timesteps per day, so day 2 is rows 64 to 95."""
+    data_slice, plot_title = ChartSingleDay.build_day_slice(
+        data_with_units=_make_series(32 * 3),
+        window_start=JANUARY_FIRST,
+        day_in_window=2,
+        seconds_per_timestep=2700,
+        label_months_lowercase=LABEL_MONTHS,
+        title="PV",
+    )
+    assert plot_title == "PV January 3rd"
+    assert list(data_slice.values) == [float(v) for v in range(64, 96)]
+
+
+@pytest.mark.parametrize("seconds_per_timestep", [0, -900])
+def test_build_day_slice_refuses_a_step_that_is_not_positive(seconds_per_timestep: int) -> None:
+    """A step of 0 s or less has no number of timesteps per day."""
+    with pytest.raises(ValueError, match="positive number of seconds"):
+        ChartSingleDay.build_day_slice(
+            data_with_units=_make_series(24 * 7),
+            window_start=JANUARY_FIRST,
+            day_in_window=0,
+            seconds_per_timestep=seconds_per_timestep,
+            label_months_lowercase=LABEL_MONTHS,
+            title="X",
+        )
+
+
+def test_build_day_slice_refuses_a_step_that_does_not_divide_a_day() -> None:
+    """16-hour steps (57 600 s) do not divide a day, so a day of the run is not a whole number of rows."""
+    with pytest.raises(ValueError, match="does not divide"):
+        ChartSingleDay.build_day_slice(
+            data_with_units=_make_series(24 * 7),
+            window_start=JANUARY_FIRST,
+            day_in_window=0,
+            seconds_per_timestep=57600,
+            label_months_lowercase=LABEL_MONTHS,
+            title="X",
+        )
 
 
 def test_build_day_slice_refuses_a_day_the_data_does_not_reach() -> None:
@@ -159,7 +200,7 @@ def test_build_day_slice_refuses_a_day_the_data_does_not_reach() -> None:
             data_with_units=_make_series(24 * 7),
             window_start=JANUARY_FIRST,
             day_in_window=7,
-            timesteps_per_day=24,
+            seconds_per_timestep=3600,
             label_months_lowercase=LABEL_MONTHS,
             title="Short",
         )
@@ -172,7 +213,7 @@ def test_build_day_slice_refuses_a_negative_day() -> None:
             data_with_units=_make_series(24 * 7),
             window_start=JANUARY_FIRST,
             day_in_window=-1,
-            timesteps_per_day=24,
+            seconds_per_timestep=3600,
             label_months_lowercase=LABEL_MONTHS,
             title="Short",
         )
@@ -187,7 +228,7 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
         data_with_units=data,
         window_start=JANUARY_FIRST,
         day_in_window=3,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=LABEL_MONTHS,
         title="T",
     )
@@ -204,11 +245,10 @@ def _chart(tmp_path: Path, data: pd.Series, window_start: datetime.datetime, day
         component_name="House",
         units="C",
         directory_path=str(tmp_path),
-        time_correction_factor_in_hours=1.0,
         output_description="temperature",
         data_with_units=data,
         window_start=window_start,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         day_in_window=day_in_window,
         figure_format=FigureFormat.PNG,
         path_checker=lambda **_: None,
@@ -231,7 +271,7 @@ def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
         data_with_units=data,
         window_start=JANUARY_FIRST,
         day_in_window=31,
-        timesteps_per_day=24,
+        seconds_per_timestep=3600,
         label_months_lowercase=chart.label_months_lowercase,
         title=chart.title,
     )

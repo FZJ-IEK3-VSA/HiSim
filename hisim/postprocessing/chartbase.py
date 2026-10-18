@@ -127,7 +127,6 @@ class Chart:  # noqa: too-few-public-methods
         chart_type,
         units,
         directory_path,
-        time_correction_factor_in_hours,
         *,
         output2=None,
         figure_format=None,
@@ -150,8 +149,6 @@ class Chart:  # noqa: too-few-public-methods
                 ``.value`` attribute or a plain string.
             directory_path: Base results directory under which the chart file
                 and per-component sub-folder are created.
-            time_correction_factor_in_hours: Factor applied to convert between
-                simulation time steps and real time.
             output2: Optional second output identifier; when present the
                 filename is suffixed with ``_double``.
             figure_format: Enum member whose ``.value`` is the file extension
@@ -172,7 +169,6 @@ class Chart:  # noqa: too-few-public-methods
         else:
             self.units = units
             # self.ylabel = units
-        self.time_correction_factor_in_hours = time_correction_factor_in_hours
 
         self.title: str = ""
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output)

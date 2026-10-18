@@ -33,7 +33,6 @@ def test_carpet_plot_returns_none_on_invalid_data() -> None:
             component_name="TestComponent",
             units="kWh",
             directory_path=tmpdir,
-            time_correction_factor_in_hours=3600,
             output_description="Test output description",
             figure_format=FigureFormat.PNG,
         )
@@ -109,7 +108,6 @@ def test_a_carpet_is_drawn_for_every_step_above_an_hour_that_divides_a_day(tmp_p
         component_name="TestComponent",
         units="W",
         directory_path=str(tmp_path),
-        time_correction_factor_in_hours=float(hours_per_step),
         output_description="Test output description",
         figure_format=FigureFormat.PNG,
         path_checker=lambda **_: None,
@@ -154,7 +152,6 @@ def chart_with_injected_checker(tmp_path: Path) -> _ChartFixture:
         chart_type="Line",
         units="kW",
         directory_path=str(tmp_path),
-        time_correction_factor_in_hours=3600,
         figure_format=FigureFormat.PNG,
         path_checker=fake_path_checker,
     )
@@ -212,7 +209,6 @@ def test_chart_constructor_defaults_to_global_path_checker(tmp_path: Path) -> No
         chart_type="Bar",
         units="kWh",
         directory_path=str(tmp_path),
-        time_correction_factor_in_hours=3600,
         figure_format=FigureFormat.PNG,
     )
 

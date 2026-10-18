@@ -10,6 +10,7 @@ import pandas as pd
 
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim.postprocessing.report_image_entries import ReportImageEntry
+from hisim.simulation_day import SimulationDay
 
 
 class ChartSingleDay(Chart, ChartFontsAndSize):
@@ -21,11 +22,10 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         component_name: str,
         units: str,
         directory_path: str,
-        time_correction_factor_in_hours: float,
         output_description: str,
         data_with_units: pd.Series,
         window_start: datetime.datetime,
-        timesteps_per_day: int,
+        seconds_per_timestep: int,
         day_in_window: int = 0,
         output2_with_units: pd.Series | None = None,
         figure_format: str | None = None,
@@ -33,19 +33,23 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
     ) -> None:
         """Initializes a single-day chart.
 
+        The chart takes the run's step length once, in seconds, and finds the rows of a day from it.
+        Example: ``seconds_per_timestep=900`` makes a day 96 rows, so day 1 of the run is rows 96 to
+        191. Nothing is sliced here; an invalid step length is refused when the chart plots.
+
         Args:
             output: The primary output data to plot.
             component_name: Name of the component producing the data.
             units: Units of the output values.
             directory_path: Directory path for saving the chart.
-            time_correction_factor_in_hours: Factor for time step correction.
             output_description: Description of the output.
             data_with_units: Time-series data to visualize; its physical unit
                 is carried separately by the ``units`` argument.
             window_start: The first moment of the run, at midnight; the row ``0`` of
                 ``data_with_units`` belongs to it.
-            timesteps_per_day: The exact number of timesteps in a day of the run,
-                ``SimulationParameters.timesteps_per_day``; a day of the run is that many rows.
+            seconds_per_timestep: The step length of the run in seconds,
+                ``SimulationParameters.seconds_per_timestep``; it divides a day, as the window
+                contract demands, so a day of the run is a whole number of rows.
             day_in_window: Which day of the run to display, counted from 0 for the
                 run's first day (default 0).
             output2_with_units: Optional secondary output data for comparison;
@@ -61,7 +65,6 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 chart_type="days",
                 units=units,
                 directory_path=directory_path,
-                time_correction_factor_in_hours=time_correction_factor_in_hours,
                 output_description=output_description,
                 output2=output2_with_units,
                 figure_format=figure_format,
@@ -74,7 +77,6 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 chart_type="days",
                 units=units,
                 directory_path=directory_path,
-                time_correction_factor_in_hours=time_correction_factor_in_hours,
                 output_description=output_description,
                 figure_format=figure_format,
                 path_checker=path_checker,
@@ -82,7 +84,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
         self.window_start: datetime.datetime = window_start
         self.day_in_window: int = day_in_window
-        self.timesteps_per_day: int = timesteps_per_day
+        self.seconds_per_timestep: int = seconds_per_timestep
         displayed_date = self.date_of_day(window_start, day_in_window)
         self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
@@ -99,7 +101,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         data_with_units: "pd.Series",
         window_start: datetime.datetime,
         day_in_window: int,
-        timesteps_per_day: int,
+        seconds_per_timestep: int,
         label_months_lowercase: List[str],
         title: str,
     ) -> Tuple["pd.Series", str]:
@@ -113,17 +115,20 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
         The rows of ``data_with_units`` are the timesteps of the run, the first one at
         ``window_start``, which is midnight; day ``d`` of the run is therefore the rows from
-        ``d`` times the timesteps per day on. The title names the day by its calendar date.
-        Example: hourly data of a run from 1 July 2021, day 2, gives rows 48 to 71 and the title
-        ``"{title} July 3rd"``.
+        ``d`` times the timesteps per day on. The timesteps per day come from the step length,
+        exactly, through :meth:`SimulationDay.timesteps_per_day`, so a step above an hour (2 h) or
+        one that does not divide an hour (45 min) slices a day correctly too. The title names the
+        day by its calendar date. Example: hourly data (3600 s) of a run from 1 July 2021, day 2,
+        gives rows 48 to 71 and the title ``"{title} July 3rd"``; two-hour steps (7200 s) make a day
+        12 rows, so day 1 is rows 12 to 23.
 
         Args:
             data_with_units: The full time-series to slice; its physical unit
                 is carried separately by the caller (here via ``units``).
             window_start: The first moment of the run, at midnight.
             day_in_window: The day of the run to slice, counted from 0.
-            timesteps_per_day: The exact number of timesteps in a day of the run,
-                ``SimulationParameters.timesteps_per_day``, which the window contract makes whole.
+            seconds_per_timestep: The step length of the run in seconds, positive and dividing
+                the 86 400 s of a day, as the window contract demands.
             label_months_lowercase: The month labels, January first.
             title: The base plot title the date string is appended to.
 
@@ -134,13 +139,15 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
         Raises:
             ValueError: If ``day_in_window`` is negative or names a day the data does not reach,
-                so that the day plotted is always the day the title names, or if
-                ``timesteps_per_day`` is not at least 1.
+                so that the day plotted is always the day the title names; if
+                ``seconds_per_timestep`` is not positive; or if it does not divide a day, so that a
+                day of the run is not a whole number of rows.
         """
         if day_in_window < 0:
             raise ValueError(f"day_in_window counts the days of the run from 0, so it cannot be {day_in_window}.")
-        if timesteps_per_day < 1:
-            raise ValueError(f"A day of the run has at least one timestep, not {timesteps_per_day}.")
+        if seconds_per_timestep <= 0:
+            raise ValueError(f"A timestep lasts a positive number of seconds, not {seconds_per_timestep}.")
+        timesteps_per_day = SimulationDay.timesteps_per_day(seconds_per_timestep)
         firstindex = day_in_window * timesteps_per_day
         lastindex = firstindex + timesteps_per_day
         date = ChartSingleDay.date_of_day(window_start, day_in_window)
@@ -166,7 +173,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """Extract the sub-series for the configured day of the run.
 
         Delegates to :meth:`build_day_slice` using the instance's ``window_start``,
-        ``day_in_window``, ``data_with_units``, ``timesteps_per_day``,
+        ``day_in_window``, ``data_with_units``, ``seconds_per_timestep``,
         ``label_months_lowercase``, and ``title``. As a side effect, sets ``self.plot_title`` to the
         assembled title string returned by ``build_day_slice``.
 
@@ -177,7 +184,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             data_with_units=self.data_with_units,
             window_start=self.window_start,
             day_in_window=self.day_in_window,
-            timesteps_per_day=self.timesteps_per_day,
+            seconds_per_timestep=self.seconds_per_timestep,
             label_months_lowercase=self.label_months_lowercase,
             title=self.title,
         )

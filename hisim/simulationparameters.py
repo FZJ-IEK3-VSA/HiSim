@@ -189,7 +189,8 @@ class SimulationParameters:
     def timesteps_per_day(self) -> int:
         """The exact number of timesteps in each day of the run, which rule 5 of the window contract makes whole.
 
-        Example: 96 at 900 s, 24 at 3600 s. The single-day chart slices a day of the run by it.
+        Example: 96 at 900 s, 24 at 3600 s. The single-day chart finds the same number from
+        ``seconds_per_timestep`` through :meth:`SimulationDay.timesteps_per_day`.
 
         Returns:
             The number of timesteps per day.

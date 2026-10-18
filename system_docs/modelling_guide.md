@@ -30,12 +30,16 @@ controller (#941).
   end temperature without that circuit, and `hisim.part_load.StartOfStepPartLoadRule` sets each fraction exactly from
   them: a generator's so that the store ends at its controller's target (also when the store starts at the target but
   its draw would take it below), the distribution system's so that the store does not end below the room's
-  start-of-step temperature. The space-heating buffer, its boilers and its heat pump do this since hydronic stage D;
-  the heat pump's hot-water charge runs whole steps until its part load (#916). Why: a committed start value does not
+  start-of-step temperature. The space-heating buffer, its boilers and its heat pump do this since hydronic stage D,
+  above the part-load threshold; the heat pump's hot-water charge runs whole steps until its part load (#916). The
+  space-heating buffer is a two-mode buffer (owner, 2026-10-17, `roadmap/two_mode_buffer_spec.md`): it is iterated up
+  to 600 s, start-of-step above. At and below the threshold it is an iterated mixed node that publishes its step mean
+  to its circuits, and every circuit runs whole steps; in both modes its controllers read its start-of-step
+  temperature (`WaterTemperatureAtStartOfStepInCelsius`), so their decision cannot cycle with the step mean. Why: a committed start value does not
   move while the step iterates, so the coupling itself needs no iteration between store and generator; the fractions
   of a store's circuit ends read each other's fractions of the pass before and settle together within a few passes.
-  A start-of-step store refuses whole steps above 600 s: a run with longer steps and a part-load threshold at or above
-  its step is refused when the store is built. Today the hot-water cylinder of stage C (#909) still returns the step
+  The space-heating buffer refuses whole steps above 600 s: a run with longer steps and a part-load threshold at or
+  above its step is refused when the buffer is built. Today the hot-water cylinder of stage C (#909) still returns the step
   mean of its temperature to its generators (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the
   controllers decide on its start-of-step temperature (part-load spec, decision 3; the solar controller reads
   `WaterTemperatureAtStartOfStepInCelsius` since #941). A new store follows the rule above.

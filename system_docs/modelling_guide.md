@@ -25,10 +25,15 @@ controller (#941).
   pass of the step changes. The generator books its flow on it, its outlet the start temperature plus its lift;
   the distribution system books its own, its return the start temperature minus its drop. The store integrates the
   energy of these booked flows exactly over the step ("An exact step" below), so the heat each end books is the heat
-  the store gains or gives. At coarse steps the part-load rule (`hisim/part_load.py`) keeps a generator from
-  charging the store past its controller's target. Why: a committed start value does not move while the step
-  iterates, so the coupling needs no iteration between store and generator. Today the hot-water cylinder of stage
-  C (#909) still returns the step mean of its temperature to its generators
+  the store gains or gives. Above the part-load threshold (600 s) every end of a circuit of a start-of-step store
+  runs only a fraction of the step (owner, 2026-10-15): the store publishes its end temperature and, per circuit, its
+  end temperature without that circuit, and `hisim.part_load.StartOfStepPartLoadRule` sets each fraction exactly from
+  them: a generator's so that the store ends at its controller's target (also when the store starts at the target but
+  its draw would take it below), the distribution system's so that the store does not end below the room's
+  start-of-step temperature. The space-heating buffer, its boilers and its heat pump do this since hydronic stage D;
+  the heat pump's hot-water charge runs whole steps until its part load (#916). Why: a committed start value does not
+  move while the step iterates, so the coupling needs no iteration between store and generator. Today the hot-water
+  cylinder of stage C (#909) still returns the step mean of its temperature to its generators
   (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the controllers decide on its start-of-step
   temperature (part-load spec, decision 3; the solar controller reads `WaterTemperatureAtStartOfStepInCelsius`
   since #941). A new store follows the rule above.

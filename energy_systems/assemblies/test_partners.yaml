@@ -62,7 +62,14 @@ partners:
     component:
       class: hisim.components.heat_distribution_system.HeatDistributionController
       preset: building_derived
-      inputs: [Building, HeatingCurveController]
+      # The distribution's reported fraction and, behind a buffer, the buffer's end temperatures set its fraction.
+      # Both are optional ports: the buffer sits in the subject of a heating assembly, among the partners of a
+      # hot-water or supply assembly and nowhere beside district heating, so the harness writes their verbs per
+      # isolation system (isolation.py, bind_optional_partner_ports).
+      inputs: [Building, HeatingCurveController, {$port: distribution}, {$port: buffer}]
+      ports:
+        distribution: {partner: HeatDistribution, optional: true}
+        buffer: {partner: SimpleHotWaterStorage, optional: true}
   HeatDistributionSystem:
     # The other end of a heating assembly's space_heating circuit: it pumps and owns the return leg.
     serves: {circuit: space_heating, other_end: [SimpleHotWaterStorage]}

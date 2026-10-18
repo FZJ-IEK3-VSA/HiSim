@@ -81,18 +81,12 @@ def given_default_testee(
     """Create and configure default testee."""
     if config_overwrite is None:
         config_overwrite = {}
-    simulationparameters = sim.SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    simulationparameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController").resolve(
         SizingContext(maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000)
     )
-    config.minimum_runtime_in_seconds = config_overwrite.get(
-        "minimum_runtime_in_seconds", 0
-    )
-    config.minimum_resting_time_in_seconds = config_overwrite.get(
-        "minimum_resting_time_in_seconds", 0
-    )
+    config.minimum_runtime_in_seconds = config_overwrite.get("minimum_runtime_in_seconds", 0)
+    config.minimum_resting_time_in_seconds = config_overwrite.get("minimum_resting_time_in_seconds", 0)
     config.with_domestic_hot_water_preparation = config_overwrite.get(
         "with_domestic_hot_water_preparation",
         config.with_domestic_hot_water_preparation,
@@ -243,11 +237,7 @@ def test_controller_presets_reproduce_the_factories_they_replaced(
     ``SizingContext``, the same two numbers the factories took as their first arguments.
     """
     preset = getattr(GenericBoilerControllerConfig, preset_name)("X")
-    config = preset.resolve(
-        SizingContext(
-            maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000
-        )
-    )
+    config = preset.resolve(SizingContext(maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000))
 
     assert config.component_id.name == "X"
     assert config.is_modulating is expected_is_modulating
@@ -293,9 +283,7 @@ def test_solid_fuel_setups_keep_the_timings_of_their_deleted_factories(
     The recorded twin is read rather than the setup because the energy-system freshness gate
     ties the two together, so pinning the twin pins the setup that recorded it.
     """
-    twin_path = (
-        pathlib.Path(__file__).resolve().parents[1] / "energy_systems" / twin_file_name
-    )
+    twin_path = pathlib.Path(__file__).resolve().parents[1] / "energy_systems" / twin_file_name
     twin = yaml.safe_load(twin_path.read_text(encoding="utf-8"))
 
     controller = twin["components"][controller_key]
@@ -354,12 +342,23 @@ def test_a_negative_or_non_finite_minimum_time_is_refused(field_name: str, secon
 
 
 class BoilerStep:
-
     """One step of a 20 kW condensing gas boiler whose inputs read fake outputs, a namespace of helpers."""
 
     #: The order of the fakes: control signal, operating mode, lift, space-heating return, hot-water return, the
-    #: controller's hot-water supply set temperature and its hot-water part-load ratio.
-    INPUT_ORDER = ("control_signal", "operating_mode", "lift", "space_heating_return", "hot_water_return", "set", "ratio")
+    #: controller's hot-water supply set temperature, its hot-water and space-heating part-load ratios, and the
+    #: control signal and lift of a space-heating charge in the rest of a hot-water step.
+    INPUT_ORDER = (
+        "control_signal",
+        "operating_mode",
+        "lift",
+        "space_heating_return",
+        "hot_water_return",
+        "set",
+        "ratio",
+        "space_heating_ratio",
+        "remainder_signal",
+        "remainder_lift",
+    )
 
     #: The hot-water set temperature a step uses unless the test names one, in °C: the 80 °C maximal flow
     #: temperature itself, so that only the maximum limits the supply.
@@ -384,6 +383,9 @@ class BoilerStep:
             (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.supply_temperature_set_for_dhw_in_celsius_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.dhw_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            (boiler.space_heating_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            (boiler.control_signal_for_space_heating_remainder_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
+            (boiler.temperature_delta_for_space_heating_remainder_channel, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
         ]
         fakes = []
         for number, (channel, load_type, unit) in enumerate(channels):
@@ -404,7 +406,12 @@ class BoilerStep:
         part-load ratio 1, the whole step.
         """
         boiler, stsv, fakes = BoilerStep.build()
-        values = {"set": BoilerStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS, "ratio": 1.0, **inputs}
+        values = {
+            "set": BoilerStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
+            "ratio": 1.0,
+            "space_heating_ratio": 1.0,
+            **inputs,
+        }
         for name, fake in zip(BoilerStep.INPUT_ORDER, fakes):
             stsv.set_output_value(fake, values.get(name, 0.0))
         boiler.i_simulate(0, stsv, False)
@@ -424,7 +431,10 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries_from_the_tanks_s
     the heat it books is the heat that water carries, which is its thermal power.
     """
     boiler, output = BoilerStep.run(
-        control_signal=1.0, operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value, lift=20.0, space_heating_return=35.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        space_heating_return=35.0,
         hot_water_return=47.3,
     )
     mass_flow_in_kg_per_second = output(boiler.water_output_mass_flow_dhw_channel)
@@ -468,7 +478,10 @@ def test_a_charge_without_a_lift_does_not_fire(mode: HeatingMode) -> None:
 def test_an_idle_boiler_burns_no_fuel() -> None:
     """An off boiler that reported its minimum burner power as fuel would show fuel burnt while idle."""
     boiler, output = BoilerStep.run(
-        control_signal=0.0, operating_mode=HeatingMode.OFF.value, lift=0.0, space_heating_return=35.0,
+        control_signal=0.0,
+        operating_mode=HeatingMode.OFF.value,
+        lift=0.0,
+        space_heating_return=35.0,
         hot_water_return=50.0,
     )
     assert output(boiler.total_fuel_input_power_channel) == 0.0
@@ -487,7 +500,10 @@ def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what
     not take.
     """
     boiler, output = BoilerStep.run(
-        control_signal=1.0, operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value, lift=30.0, space_heating_return=35.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=30.0,
+        space_heating_return=35.0,
         hot_water_return=70.0,
     )
     mass_flow_in_kg_per_second = output(boiler.water_output_mass_flow_dhw_channel)
@@ -513,8 +529,12 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
     temperature nothing is throttled.
     """
     boiler, output = BoilerStep.run(
-        control_signal=1.0, operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value, lift=20.0, space_heating_return=35.0,
-        hot_water_return=60.0, set=70.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        space_heating_return=35.0,
+        hot_water_return=60.0,
+        set=70.0,
     )
     booked_power_in_watt = output(boiler.thermal_output_power_dhw_channel)
     assert output(boiler.water_output_temperature_dhw_channel) == 70.0
@@ -525,8 +545,12 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
     assert output(boiler.total_fuel_input_power_channel) == pytest.approx(10000.0, rel=1e-12)
 
     _, output = BoilerStep.run(
-        control_signal=1.0, operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value, lift=20.0, space_heating_return=35.0,
-        hot_water_return=45.0, set=70.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        space_heating_return=35.0,
+        hot_water_return=45.0,
+        set=70.0,
     )
     assert output(boiler.water_output_temperature_dhw_channel) == pytest.approx(65.0)
     assert output(boiler.total_fuel_input_power_channel) == pytest.approx(20000.0, rel=1e-12)
@@ -536,8 +560,12 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
 def test_the_space_heating_circuit_is_throttled_at_the_maximal_flow_temperature_only() -> None:
     """A space-heating charge capped at the hot-water set temperature would starve the heating; only 80 °C caps it."""
     boiler, output = BoilerStep.run(
-        control_signal=1.0, operating_mode=HeatingMode.SPACE_HEATING.value, lift=20.0, space_heating_return=65.0,
-        hot_water_return=50.0, set=70.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=20.0,
+        space_heating_return=65.0,
+        hot_water_return=50.0,
+        set=70.0,
     )
     assert output(boiler.water_output_temperature_sh_channel) == 80.0
     assert output(boiler.water_output_mass_flow_dhw_channel) == 0.0
@@ -545,7 +573,6 @@ def test_the_space_heating_circuit_is_throttled_at_the_maximal_flow_temperature_
 
 
 class PumpCase:
-
     """The pump of :class:`BoilerStep`'s boiler, a namespace for the pump tests' expected values."""
 
     #: The largest flow of a 20 kW boiler at 0.9 over the default 5 K: 18000 / (4180 * 5) = 0.861 kg/s.
@@ -594,8 +621,11 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
     """
     mode, space_heating_return_in_celsius, hot_water_return_in_celsius = PumpCase.CIRCUITS[circuit]
     boiler, output = BoilerStep.run(
-        control_signal=control_signal, operating_mode=mode.value, lift=0.01,
-        space_heating_return=space_heating_return_in_celsius, hot_water_return=hot_water_return_in_celsius,
+        control_signal=control_signal,
+        operating_mode=mode.value,
+        lift=0.01,
+        space_heating_return=space_heating_return_in_celsius,
+        hot_water_return=hot_water_return_in_celsius,
     )
     mass_flow_channel, supply_channel, power_channel = PumpCase.outputs_of(boiler, circuit)
     is_space_heating = mode == HeatingMode.SPACE_HEATING
@@ -622,7 +652,10 @@ def test_a_lift_the_pump_carries_is_kept() -> None:
     boiler runs it: the supply is the return plus 3 K, and the flow carries the heat over that lift.
     """
     boiler, output = BoilerStep.run(
-        control_signal=0.5, operating_mode=HeatingMode.SPACE_HEATING.value, lift=3.0, space_heating_return=35.0,
+        control_signal=0.5,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=3.0,
+        space_heating_return=35.0,
         hot_water_return=50.0,
     )
     heat_in_watt = 10000.0 * (0.6 + (10000.0 - 2000.0) * (0.9 - 0.6) / (20000.0 - 2000.0))
@@ -635,7 +668,8 @@ def test_a_lift_the_pump_carries_is_kept() -> None:
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("control_signal", "expected_power_in_watt"), [(0.0, 2000.0), (0.05, 2000.0), (0.1, 2000.0), (0.5, 10000.0), (1.0, 20000.0)]
+    ("control_signal", "expected_power_in_watt"),
+    [(0.0, 2000.0), (0.05, 2000.0), (0.1, 2000.0), (0.5, 10000.0), (1.0, 20000.0)],
 )
 def test_the_burner_never_runs_below_its_minimal_power(control_signal: float, expected_power_in_watt: float) -> None:
     """A burner commanded below its band would burn less than it can modulate down to."""
@@ -736,7 +770,9 @@ def test_a_boiler_with_positive_combustion_efficiencies_is_accepted(eff_th_min: 
 
 @pytest.mark.base
 @pytest.mark.parametrize("maximal_flow_temperature_in_celsius", [0.0, -10.0, float("nan"), float("inf")])
-def test_a_boiler_without_a_finite_positive_maximal_flow_temperature_is_refused(maximal_flow_temperature_in_celsius: float) -> None:
+def test_a_boiler_without_a_finite_positive_maximal_flow_temperature_is_refused(
+    maximal_flow_temperature_in_celsius: float,
+) -> None:
     """A maximum below every return would leave the space heating idle without a message."""
     with pytest.raises(ValueError, match="maximal_flow_temperature_in_celsius"):
         generic_boiler.GenericBoilerConfig(
@@ -788,7 +824,9 @@ def test_a_boiler_without_a_finite_positive_maximal_power_is_refused_when_built(
         generic_boiler.GenericBoilerConfig.preset_hydrogen,
     ],
 )
-def test_every_boiler_preset_passes_the_config_checks(preset: Callable[[str], generic_boiler.GenericBoilerConfig]) -> None:
+def test_every_boiler_preset_passes_the_config_checks(
+    preset: Callable[[str], generic_boiler.GenericBoilerConfig],
+) -> None:
     """A preset that the efficiency or flow-temperature checks refused could not be built at all."""
     config = preset("Boiler")
     assert 0.0 < config.eff_th_min <= config.eff_th_max <= 1.0  # the presets also keep the stricter physical bounds
@@ -796,7 +834,6 @@ def test_every_boiler_preset_passes_the_config_checks(preset: Callable[[str], ge
 
 
 class BurnerSequence:
-
     """A boiler of one fuel on fake inputs, stepped through a sequence of commands the way the simulator steps it.
 
     Every step commits the previous step's state (``i_save_state``), then runs two passes that each start from it
@@ -825,6 +862,7 @@ class BurnerSequence:
         preset: Callable[[str], generic_boiler.GenericBoilerConfig],
         seconds_per_timestep: int,
         commands: List[Tuple[float, float, float]],
+        space_heating_ratios: Optional[List[float]] = None,
     ) -> Tuple[Any, List[float], List[float], List[float]]:
         """Step a fresh boiler of ``preset`` through ``commands``; return it, its fuel power, buffer heat and hot water.
 
@@ -832,6 +870,8 @@ class BurnerSequence:
             preset: The boiler's preset, resolved to :attr:`MAXIMAL_POWER_IN_WATT`.
             seconds_per_timestep: The step length, in s.
             commands: Per step, the control signal, the operating mode's value and the lift in K.
+            space_heating_ratios: Per step, the space-heating part-load ratio the controller commands; 1, the whole
+                step, in every step if not given.
 
         Returns:
             The boiler, and per step its fuel power, its space-heating heat and its hot-water heat, each in W.
@@ -852,6 +892,9 @@ class BurnerSequence:
             (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.supply_temperature_set_for_dhw_in_celsius_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.dhw_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            (boiler.space_heating_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            (boiler.control_signal_for_space_heating_remainder_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
+            (boiler.temperature_delta_for_space_heating_remainder_channel, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
         ]
         fakes = []
         for number, (channel, load_type, unit) in enumerate(channels):
@@ -864,6 +907,7 @@ class BurnerSequence:
         fuel_power_in_watt: List[float] = []
         space_heating_heat_in_watt: List[float] = []
         hot_water_heat_in_watt: List[float] = []
+        ratios = space_heating_ratios if space_heating_ratios is not None else [1.0] * len(commands)
         for timestep, (control_signal, operating_mode, lift_in_kelvin) in enumerate(commands):
             boiler.i_save_state()
             passes = []
@@ -879,6 +923,9 @@ class BurnerSequence:
                         cls.HOT_WATER_RETURN_IN_CELSIUS,
                         70.0,
                         1.0,
+                        ratios[timestep],
+                        0.0,
+                        0.0,
                     ),
                 ):
                     stsv.set_output_value(fake, value)
@@ -952,14 +999,33 @@ def test_a_burner_held_lit_after_its_controller_switched_off_burns_at_its_minima
     goes to the space-heating circuit and no hot water is charged.
     """
     commands = [BurnerSequence.ASK_TO_BURN, BurnerSequence.ASK_TO_STOP]
-    boiler, fuel_power_in_watt, space_heating_heat_in_watt, hot_water_heat_in_watt = (
-        BurnerSequence.fuel_burnt_per_step(generic_boiler.GenericBoilerConfig.preset_pellets, 900, commands)
+    boiler, fuel_power_in_watt, space_heating_heat_in_watt, hot_water_heat_in_watt = BurnerSequence.fuel_burnt_per_step(
+        generic_boiler.GenericBoilerConfig.preset_pellets, 900, commands
     )
     minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
     assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
     # at its minimal power the burner runs at its minimal efficiency
     assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
     assert hot_water_heat_in_watt[1] == 0.0
+
+
+@pytest.mark.base
+def test_a_held_burner_burns_its_whole_step_although_its_controller_commands_no_space_heating_part_load() -> None:
+    """A burner held lit is not part-loaded: it burns the whole step even when the commanded ratio is 0.
+
+    At 900 s a pellet burner that fired one step and whose controller then switched off may receive a space-heating
+    part-load ratio of 0 above 600 s. If the held firing applied that ratio, the burner would burn nothing, go out and
+    break its 30-minute minimum firing time. It burns the second step in full, at least at its minimal power, and
+    reports a space-heating ratio run of 1.
+    """
+    commands = [BurnerSequence.ASK_TO_BURN, BurnerSequence.ASK_TO_STOP]
+    boiler, fuel_power_in_watt, space_heating_heat_in_watt, _ = BurnerSequence.fuel_burnt_per_step(
+        generic_boiler.GenericBoilerConfig.preset_pellets, 900, commands, space_heating_ratios=[1.0, 0.0]
+    )
+    minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
+    assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
+    assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
+    assert boiler.burner_state.is_lit
 
 
 @pytest.mark.base
@@ -1040,3 +1106,94 @@ def test_a_burner_with_a_minimum_firing_time_and_no_minimal_power_is_refused() -
     config = dataclasses.replace(config, minimal_thermal_power_in_watt=0.0)
     with pytest.raises(ValueError, match="minimal_thermal_power_in_watt must be above 0"):
         generic_boiler.GenericBoiler(SimulationParameters.one_day_only(2021, 900), config)
+
+
+@pytest.mark.base
+def test_a_space_heating_charge_at_part_load_carries_the_ratio_of_its_flow_heat_and_fuel() -> None:
+    """A space-heating charge at a quarter of the step pumps, carries and burns a quarter, at the full-load supply.
+
+    20 kW at full signal, a 10 K lift and a 35 °C return: at the ratio 0.25 the boiler publishes a quarter of the
+    whole step's flow at the same supply, a quarter of its heat and fuel, and reports 0.25 for space heating and 0 for
+    hot water.
+    """
+    full_boiler, full = BoilerStep.run(
+        control_signal=1.0, operating_mode=HeatingMode.SPACE_HEATING.value, lift=10.0, space_heating_return=35.0
+    )
+    boiler, part = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=10.0,
+        space_heating_return=35.0,
+        space_heating_ratio=0.25,
+    )
+    assert part(boiler.water_output_temperature_sh_channel) == full(full_boiler.water_output_temperature_sh_channel)
+    for name in (
+        "water_output_mass_flow_sh_channel",
+        "thermal_output_power_sh_channel",
+        "total_fuel_input_power_channel",
+    ):
+        assert part(getattr(boiler, name)) == pytest.approx(0.25 * full(getattr(full_boiler, name)), rel=1e-12), name
+    assert part(boiler.space_heating_part_load_command.ratio_run_channel) == 0.25
+    assert part(boiler.dhw_part_load_command.ratio_run_channel) == 0.0
+
+
+@pytest.mark.base
+def test_the_rest_of_a_hot_water_step_charges_the_buffer_and_both_fuels_add_up() -> None:
+    """A hot-water charge at 0.6 of the step and a space-heating charge at 0.4 fire in one step; their fuels add up.
+
+    The hot-water charge runs as alone; the space-heating charge runs at the remainder's signal and lift, as a
+    space-heating step would at its ratio; the boiler's fuel power is the sum of both, and it reports both ratios.
+    """
+    _, hot_water_alone = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        hot_water_return=45.0,
+        ratio=0.6,
+        space_heating_ratio=0.0,
+    )
+    _, space_heating_alone = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=10.0,
+        space_heating_return=35.0,
+        space_heating_ratio=0.4,
+    )
+    boiler, both = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        hot_water_return=45.0,
+        space_heating_return=35.0,
+        ratio=0.6,
+        space_heating_ratio=0.4,
+        remainder_signal=1.0,
+        remainder_lift=10.0,
+    )
+    assert both(boiler.thermal_output_power_dhw_channel) == pytest.approx(
+        hot_water_alone(boiler.thermal_output_power_dhw_channel)
+    )
+    assert both(boiler.thermal_output_power_sh_channel) == pytest.approx(
+        space_heating_alone(boiler.thermal_output_power_sh_channel)
+    )
+    assert both(boiler.total_fuel_input_power_channel) == pytest.approx(
+        hot_water_alone(boiler.total_fuel_input_power_channel)
+        + space_heating_alone(boiler.total_fuel_input_power_channel)
+    )
+    assert both(boiler.dhw_part_load_command.ratio_run_channel) == 0.6
+    assert both(boiler.space_heating_part_load_command.ratio_run_channel) == 0.4
+
+
+@pytest.mark.base
+def test_a_hot_water_step_without_a_remainder_command_leaves_the_buffer_alone() -> None:
+    """Without the remainder's signal and lift a space-heating ratio in a hot-water step fires nothing."""
+    boiler, output = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.DOMESTIC_HOT_WATER.value,
+        lift=20.0,
+        hot_water_return=45.0,
+        ratio=0.6,
+        space_heating_ratio=0.4,
+    )
+    assert output(boiler.thermal_output_power_sh_channel) == 0.0
+    assert output(boiler.space_heating_part_load_command.ratio_run_channel) == 0.0

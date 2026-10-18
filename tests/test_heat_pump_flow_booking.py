@@ -208,29 +208,39 @@ class SingleStep:
     """One step of a heat pump whose every input is a fake output holding a value."""
 
     @staticmethod
-    def heat_pump(position: PositionHotWaterStorageInSystemSetup) -> MoreAdvancedHeatPumpHPLib:
+    def heat_pump(
+        position: PositionHotWaterStorageInSystemSetup, seconds_per_timestep: int = 60, cycling_mode: bool = False
+    ) -> MoreAdvancedHeatPumpHPLib:
         """A 10 kW generic air/water heat pump with hot-water preparation, running for ten minutes already.
 
         Args:
             position: Where its storage sits: ``PARALLEL`` (hplib's flow) or ``SERIES`` (the nominal flow).
+            seconds_per_timestep: The step length of its simulation, in s; above 600 s it runs part-load ratios.
+            cycling_mode: Whether it keeps a minimum running and idle time, 3600 s each; off by default, so a step
+                runs the mode the inputs command.
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
         config.heating_reference_temperature_in_celsius = -7.0
         config.flow_temperature_in_celsius = 52.0
-        config.cycling_mode = False
+        config.cycling_mode = cycling_mode
+        config.minimum_running_time_in_seconds = 3600
+        config.minimum_idle_time_in_seconds = 3600
         config.minimum_thermal_output_power_in_watt = 1500.0
         config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
         config.with_domestic_hot_water_preparation = True
         config.position_hot_water_storage_in_system = position
         heat_pump = MoreAdvancedHeatPumpHPLib(
-            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep)
         )
         heat_pump.state = MoreAdvancedHeatPumpHPLibState(
             time_on_heating=600,
             time_off=0,
             time_on_cooling=0,
             on_off_previous=1,
+            published_time_on_heating=600,
+            published_time_off=0,
+            published_on_off_previous=1,
             cumulative_thermal_energy_tot_in_watt_hour=0,
             cumulative_thermal_energy_space_heating_in_watt_hour=0,
             cumulative_thermal_energy_dhw_in_watt_hour=0,
@@ -253,13 +263,15 @@ class SingleStep:
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
-        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one.
+        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one, and
+        the space-heating part-load ratio is 1, the whole step, unless ``values`` names one.
 
         Returns:
             Every output of the heat pump by field name.
         """
         values = {
             MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
+            MoreAdvancedHeatPumpHPLib.PartLoadRatioSh: 1.0,
             **values,
         }
         fakes: List[cp.ComponentOutput] = []

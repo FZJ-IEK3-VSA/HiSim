@@ -20,7 +20,6 @@ from tests.part_load_rigs import AllInputsRig
 
 @dataclass(frozen=True)
 class HdsStep:
-
     """The outputs one heat-distribution step published, by field name."""
 
     #: Every output of the step, by its field name; read-only.
@@ -28,7 +27,6 @@ class HdsStep:
 
 
 class HdsRig:
-
     """A heat distribution system on fake inputs, simulated for single steps.
 
     The rig wires the four inputs a circuit that pumps its own design flow reads (the controller's valve state, the
@@ -63,7 +61,13 @@ class HdsRig:
         self.stsv, self.fakes = AllInputsRig.build(self.hds)
 
     def step(
-        self, *, valve_state: float, supply_in_celsius: float, demand_in_watt: float, room_in_celsius: float
+        self,
+        *,
+        valve_state: float,
+        supply_in_celsius: float,
+        demand_in_watt: float,
+        room_in_celsius: float,
+        part_load_ratio: float = 1.0,
     ) -> HdsStep:
         """Run one step from the saved state and save it, as the simulator does at the end of a converged step.
 
@@ -72,6 +76,7 @@ class HdsRig:
             supply_in_celsius: The supply temperature the circuit receives, in °C.
             demand_in_watt: The building's theoretical demand, in W.
             room_in_celsius: The indoor air temperature, in °C.
+            part_load_ratio: The fraction of the step the controller commands, 1 by default.
 
         Returns:
             The published outputs.
@@ -81,6 +86,7 @@ class HdsRig:
             HeatDistribution.WaterTemperatureInput: supply_in_celsius,
             HeatDistribution.TheoreticalThermalBuildingDemand: demand_in_watt,
             HeatDistribution.ResidenceTemperatureIndoorAir: room_in_celsius,
+            HeatDistribution.PartLoadRatio: part_load_ratio,
         }
         self.hds.i_restore_state()
         outputs = AllInputsRig.step(self.hds, self.stsv, self.fakes, values)
@@ -166,3 +172,23 @@ def test_a_circuit_that_pumps_its_own_design_flow_refuses_a_design_flow_of_zero(
 def test_only_a_shut_valve_stops_the_pump(valve_state: float, stops: bool) -> None:
     """The pump stands for the valve state 0 only."""
     assert HeatDistribution.pump_stopped_by_the_valve(valve_state) is stops
+
+
+@pytest.mark.base
+def test_behind_a_buffer_the_circuit_runs_the_commanded_fraction_of_its_flow_and_heat() -> None:
+    """At a ratio of 0.4 the circuit pumps 0.4 of its design flow, delivers 0.4 of the demand and reports 0.4.
+
+    Its return is that of the whole step, so the heat the buffer books, the flow times ``c`` times the drop, is the
+    delivered heat.
+    """
+    rig = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL)
+    whole = rig.step(valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0)
+    part = rig.step(
+        valve_state=1, supply_in_celsius=35.0, demand_in_watt=3000.0, room_in_celsius=20.0, part_load_ratio=0.4
+    )
+    design_flow_in_kg_per_second = HdsRig.DESIGN_MASS_FLOW_IN_KG_PER_SECOND
+    assert part.outputs[HeatDistribution.WaterMassFlowHDS] == pytest.approx(0.4 * design_flow_in_kg_per_second)
+    assert part.outputs[HeatDistribution.ThermalPowerDelivered] == pytest.approx(1200.0)
+    outlet = HeatDistribution.WaterTemperatureOutput
+    assert part.outputs[outlet] == whole.outputs[outlet]
+    assert part.outputs[HeatDistribution.PartLoadRatioRun] == 0.4

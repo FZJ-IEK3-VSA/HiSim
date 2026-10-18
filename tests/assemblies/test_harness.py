@@ -34,6 +34,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
     IsolationRunError,
+    bind_optional_partner_ports,
     brought_by_circuit_end,
     facts_needed,
     facts_of_partners,
@@ -285,6 +286,48 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         assert list(document["components"]) == components, path
         entry = document["imports"][SUBJECT]
         assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == verbs, path
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("member_classes", "partner_classes", "expected"),
+    [
+        ({"Buffer": "SimpleHotWaterStorage"}, {}, SUBJECT),  # a heating assembly's own buffer
+        ({"Cylinder": "SimpleDHWStorage"}, {"Buffer": "SimpleHotWaterStorage"}, "Buffer"),  # a partner's buffer
+        ({"DistrictHeating": "DistrictHeating"}, {}, None),  # no buffer: the port stays unbound
+        ({"Buffer": "SimpleHotWaterStorage"}, {"Other": "SimpleHotWaterStorage"}, None),  # two: no verb
+    ],
+)
+def test_an_optional_partner_port_binds_its_one_candidate_in_the_subject_or_among_the_partners(
+    member_classes: Dict[str, str], partner_classes: Dict[str, str], expected: Optional[str]
+) -> None:
+    """The harness writes ``optional-bind:`` per system: the subject, the one partner, or nothing."""
+    components: Dict[str, Dict[str, Any]] = {
+        "Controller": {
+            "class": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "ports": {"buffer": {"partner": "SimpleHotWaterStorage", "optional": True}},
+        },
+        **{
+            name: {"class": f"hisim.components.simple_water_storage.{class_name}"}
+            for name, class_name in partner_classes.items()
+        },
+    }
+    bind_optional_partner_ports(components, member_classes)
+    assert components["Controller"].get("optional-bind", {}).get("buffer") == expected
+
+
+@pytest.mark.assemblies
+def test_an_optional_partner_port_keeps_a_verb_its_entry_writes() -> None:
+    """A port the registry entry already binds or declines is left as written."""
+    components: Dict[str, Dict[str, Any]] = {
+        "Controller": {
+            "class": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "ports": {"buffer": {"partner": "SimpleHotWaterStorage", "optional": True}},
+            "none": ["buffer"],
+        },
+    }
+    bind_optional_partner_ports(components, {"Buffer": "SimpleHotWaterStorage"})
+    assert "optional-bind" not in components["Controller"]
 
 
 @pytest.mark.assemblies

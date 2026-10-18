@@ -15,7 +15,7 @@ import hashlib
 import importlib
 import math
 from enum import Enum, unique
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
@@ -50,6 +50,7 @@ from hisim.config import (
 from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
+from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.loadtypes import (
     ComponentType,
@@ -72,6 +73,7 @@ from hisim.components.more_advanced_heat_pump_hplib_model import (
     CalculationRequest,
     HeatingCircuitPowers,
     HeatPumpEnergyTotals,
+    HeatPumpModeTrack,
     HeatPumpOperation,
     HeatPumpRunTimers,
     HeatPumpStepConditions,
@@ -270,6 +272,25 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     Model will switch between both states, but priority is on dhw.
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
+
+    A space-heating charge its space-heating controller commands runs the part-load ratio the controller sends
+    (``PartLoadRatioSh``): 1, the whole step, at and below the part-load threshold, and above it the fraction of the
+    step that ends the space-heating buffer at the controller's target. Below 1 the heat pump publishes the averaged
+    flow at its full-load outlet, books ``P_th = m c (T_out - T_ret)`` and ``P_el = P_th / COP`` from that flow, and
+    the ratio of the brine pump's electricity (:meth:`part_loaded_space_heating`). A space-heating step the heat pump
+    keeps running against its controller (its minimum running time) runs the whole step. It reports the ratio it ran
+    with (``PartLoadRatioRunSh``): the commanded ratio, 1 for a step it keeps running on its own, 0 in any other mode.
+    The hot-water side runs whole steps.
+
+    The heat pump keeps two tracks of its mode and run timers. The control track is the mode its controllers command
+    after its minimum running and idle times, and the timers of that mode; only the control track decides what the
+    machine does (:meth:`on_off_after_minimum_times`, the start-up ramp). The published track counts what the machine
+    ran (:meth:`published_mode`): a space-heating step at a ratio of 0 runs nothing and is an off step there, so
+    ``OnOffStateHeatpump`` is 0, ``TimeOff`` grows, ``TimeOnHeating`` restarts and the next charge counts as a new start
+    in ``CounterOnOff`` and ``CounterSwitchToSH`` and in the cycle and heating-time KPIs. The control track stays in
+    space heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum
+    running time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are
+    the same.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -284,8 +305,12 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
+    #: The fraction of the step a space-heating charge runs, commanded by the space-heating controller.
+    PartLoadRatioSh = "PartLoadRatioSh"
 
     # Outputs
+    #: The fraction of the step the space-heating charge ran, reported back to the space-heating controller.
+    PartLoadRatioRunSh = "PartLoadRatioRunSh"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -434,6 +459,9 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             time_off=0,
             time_on_cooling=0,
             on_off_previous=0,
+            published_time_on_heating=0,
+            published_time_off=0,
+            published_on_off_previous=0,
             cumulative_thermal_energy_tot_in_watt_hour=0,
             cumulative_thermal_energy_space_heating_in_watt_hour=0,
             cumulative_thermal_energy_dhw_in_watt_hour=0,
@@ -493,6 +521,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             field_name=self.OnOffSwitchSH,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
+            mandatory=False,
+        )
+
+        self.space_heating_part_load_command = PartLoadCommand(
+            self,
+            input_name=self.PartLoadRatioSh,
+            ratio_run_output_name=self.PartLoadRatioRunSh,
+            device_description="the heat pump's space-heating charge",
             mandatory=False,
         )
 
@@ -958,6 +994,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioSh,
+                hpc_classname,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh,
+            )
+        )
         return connections
 
     def get_default_connections_from_heat_pump_controller_dhw(
@@ -1124,14 +1167,17 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         return lines
 
     def i_save_state(self) -> None:
-        """Save state."""
+        """Keep a copy of the state at the start of a time step, to restore before every pass of that step.
+
+        The state holds both tracks of the mode and run timers, the control track and the published one
+        (:class:`MoreAdvancedHeatPumpHPLibState`), together with the running totals and counters, so every pass of a
+        step starts from the same timers on both tracks and only the converged pass advances them.
+        """
         self.previous_state = self.state.self_copy()
-        # pass
 
     def i_restore_state(self) -> None:
-        """Restore state."""
+        """Restore the state saved at the start of the time step, both tracks of the mode and run timers."""
         self.state = self.previous_state.self_copy()
-        # pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doubelcheck."""
@@ -1357,8 +1403,12 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Run the heat pump in the mode its controllers ask for and publish its circuits, powers and counters.
 
         Reads the controllers' signals and the circuits' return temperatures, applies the minimum running and idle
-        times in cycling mode, computes the step in the resulting mode (:meth:`operation_in_mode`) and publishes it
-        (:meth:`publish_operation`).
+        times in cycling mode on the control track, sets the space-heating part-load ratio it runs
+        (:meth:`space_heating_ratio_run`), computes the step in the control mode (:meth:`operation_in_mode`, scaled by
+        :meth:`part_loaded_space_heating` for space heating), advances both tracks of its run timers, the control
+        track in the control mode and the published track in the mode it ran (:meth:`published_mode`), and publishes
+        the step with the ratio run (:meth:`publish_operation`). For example, at 900 s a space-heating step at a ratio
+        of 0 after 600 s of heating leaves the control track heating for 1500 s and the published track off for 900 s.
 
         Raises:
             ValueError: If the cycling mode lacks its minimum times or the signal is no known mode.
@@ -1392,11 +1442,141 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         elif self.cycling_mode is not False:
             raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
+        ratio_run = self.space_heating_ratio_run(stsv, on_off=on_off, on_off_space_heating=on_off_space_heating)
         operation = self.operation_in_mode(on_off, conditions, timers)
-        timers_after = self.advanced_run_timers(
-            on_off=on_off, timers=timers, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
+        if on_off == 1:
+            operation = self.part_loaded_space_heating(
+                operation,
+                part_load_ratio=ratio_run,
+                return_temperature_in_celsius=conditions.space_heating_return_temperature_in_celsius,
+            )
+        self.space_heating_part_load_command.publish_ratio_run(stsv, ratio_run)
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        published_on_off = self.published_mode(on_off=on_off, ratio_run=ratio_run)
+        published_timers = HeatPumpRunTimers(
+            time_on_heating_in_seconds=self.state.published_time_on_heating,
+            time_on_cooling_in_seconds=self.state.time_on_cooling,
+            time_off_in_seconds=self.state.published_time_off,
         )
-        self.publish_operation(stsv, on_off, conditions, operation, timers_after)
+        self.publish_operation(
+            stsv,
+            conditions,
+            operation,
+            control=HeatPumpModeTrack(
+                on_off=on_off,
+                timers=self.advanced_run_timers(
+                    on_off=on_off, timers=timers, seconds_per_timestep=seconds_per_timestep
+                ),
+            ),
+            published=HeatPumpModeTrack(
+                on_off=published_on_off,
+                timers=self.advanced_run_timers(
+                    on_off=published_on_off, timers=published_timers, seconds_per_timestep=seconds_per_timestep
+                ),
+            ),
+        )
+
+    def space_heating_ratio_run(
+        self, stsv: SingleTimeStepValues, *, on_off: float, on_off_space_heating: float
+    ) -> float:
+        """Return the fraction of the step the space-heating charge runs: the part-load ratio run.
+
+        A space-heating step the controller commands runs the commanded ratio; a space-heating step the heat pump keeps
+        running against its controller (its minimum running time) runs the whole step, 1; a step in any other mode
+        runs 0. For example, a heat pump in space heating whose controller sends 0.4 runs 0.4 of the step.
+
+        Args:
+            stsv: The step's values, to read the commanded ratio from.
+            on_off: The mode the heat pump runs after its minimum times, 1 for space heating.
+            on_off_space_heating: The space-heating controller's signal, 1 for heating.
+
+        Returns:
+            The ratio run, from 0 to 1.
+
+        Raises:
+            ValueError: If the controller sent a ratio outside [0, 1].
+        """
+        if on_off == 1 and on_off_space_heating == 1:
+            return self.space_heating_part_load_command.ratio(stsv)
+        if on_off == 1:
+            return 1.0
+        return 0.0
+
+    @staticmethod
+    def published_mode(*, on_off: float, ratio_run: float) -> float:
+        """Return the mode the heat pump ran in, for its published state, timers, counters and KPIs only.
+
+        Bookkeeping, not control. Above the part-load threshold the space-heating controller stays in heating while
+        the buffer needs no charge and commands a ratio of 0; the heat pump then runs nothing, so the published track
+        counts the step as off: ``OnOffStateHeatpump`` is 0, the published ``TimeOff`` grows, ``TimeOnHeating``
+        restarts, and the next charge counts as a new start. A ratio between 0 and 1 counts as a whole step of heating,
+        since the heat pump did run in it. The control track keeps the mode ``on_off``: the minimum running and idle
+        times and everything else that decides what the machine does read it, so a ratio-0 step neither locks the
+        machine off for its minimum idle time nor ends its minimum running time; a real machine would not stop for
+        an hour because one step needed no charge. At and below the threshold the ratio is 1 whenever the heat pump
+        heats, so both modes are the same there. For example, mode 1 at ratio 0 gives 0, mode 1 at ratio 0.3 gives 1
+        and mode 2 (hot water) at ratio 0 gives 2.
+
+        Args:
+            on_off: The control mode, after the minimum times: 1 space heating, 2 hot water, -1 cooling, 0 off.
+            ratio_run: The space-heating part-load ratio run (:meth:`space_heating_ratio_run`).
+
+        Returns:
+            The published mode.
+        """
+        if on_off == 1 and ratio_run == 0.0:
+            return 0
+        return on_off
+
+    @classmethod
+    def part_loaded_space_heating(
+        cls, full_load: "HeatPumpOperation", *, part_load_ratio: float, return_temperature_in_celsius: float
+    ) -> "HeatPumpOperation":
+        """Return a space-heating step's flow and powers when the heat pump runs a fraction of the step at full load.
+
+        The circuit carries the averaged flow, the full-load flow times the ratio, at the full-load outlet
+        temperature; the thermal and electrical power follow from that flow at the step's COP
+        (:meth:`booked_heating_powers_in_watt`), and the brine pump, which runs only while the compressor does, draws
+        the ratio of its power. A ratio of 1 returns the full-load step unchanged. Example: 0.4 kg/s from 30 to 35 °C at
+        a COP of 4 and a 100 W brine pump, at a ratio of 0.25, give 0.1 kg/s, 2090 W of heat, 522.5 W of electricity
+        and 25 W for the brine pump. At a ratio of 0 the circuit idles as :class:`HeatPumpOperation` documents: nothing
+        flows, nothing is booked, the outlet is the return and the COP is 0. (The heat pump's control mode stays space
+        heating through such a step; only its published track counts it as off, :meth:`published_mode`.)
+
+        Args:
+            full_load: The space-heating step at full load over the whole step.
+            part_load_ratio: The fraction of the step the heat pump runs, from 0 to 1.
+            return_temperature_in_celsius: The circuit's return temperature, the buffer's start temperature, in °C.
+
+        Returns:
+            The space-heating step at that ratio.
+        """
+        if part_load_ratio >= 1.0:
+            return full_load
+        if part_load_ratio <= 0.0:
+            return replace(
+                full_load,
+                mass_flow_space_heating_in_kg_per_second=0.0,
+                thermal_power_space_heating_in_watt=0.0,
+                electrical_power_space_heating_in_watt=0.0,
+                electrical_power_brine_pump_in_watt=0.0,
+                outlet_temperature_space_heating_in_celsius=return_temperature_in_celsius,
+                cop=0.0,
+            )
+        mass_flow_in_kg_per_second = part_load_ratio * full_load.mass_flow_space_heating_in_kg_per_second
+        powers = cls.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=full_load.outlet_temperature_space_heating_in_celsius,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            cop=full_load.cop,
+        )
+        return replace(
+            full_load,
+            mass_flow_space_heating_in_kg_per_second=mass_flow_in_kg_per_second,
+            thermal_power_space_heating_in_watt=powers.thermal_power_in_watt,
+            electrical_power_space_heating_in_watt=powers.electrical_power_in_watt,
+            electrical_power_brine_pump_in_watt=part_load_ratio * full_load.electrical_power_brine_pump_in_watt,
+        )
 
     def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
         """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
@@ -1772,16 +1952,26 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
     @staticmethod
     def switch_counters(*, on_off: float, state: "MoreAdvancedHeatPumpHPLibState") -> "HeatPumpSwitchCounters":
-        """Return the space-heating, hot-water and on/off switch counters after a step.
+        """Return the space-heating, hot-water and on/off switch counters after a step, on the published track.
 
         A counter grows by one when the machine enters its mode in this step: space heating or hot water from any
-        other mode, and on from off. For example, a machine that was off and heats the building in this step counts
-        one more space-heating switch and one more switch on.
+        other mode, and on from off. The counters count what the machine ran, so both the mode of this step and the
+        mode before it are published modes (:meth:`published_mode`): a space-heating charge after a step at ratio 0
+        counts as a new start. For example, a machine that was off and heats the building in this step counts one more
+        space-heating switch and one more switch on.
+
+        Args:
+            on_off: The published mode of this step: 1 space heating, 2 hot water, -1 cooling, 0 off.
+            state: The state before the step, with the counters and the published mode of the step before.
+
+        Returns:
+            The counters after the step.
         """
+        previous = state.published_on_off_previous
         return HeatPumpSwitchCounters(
-            space_heating=state.counter_switch_space_heating + (1 if state.on_off_previous != on_off and on_off == 1 else 0),
-            hot_water=state.counter_switch_dhw + (1 if state.on_off_previous != on_off and on_off == 2 else 0),
-            on_off=state.counter_onoff + (1 if state.on_off_previous == 0 and on_off != 0 else 0),
+            space_heating=state.counter_switch_space_heating + (1 if previous != on_off and on_off == 1 else 0),
+            hot_water=state.counter_switch_dhw + (1 if previous != on_off and on_off == 2 else 0),
+            on_off=state.counter_onoff + (1 if previous == 0 and on_off != 0 else 0),
         )
 
     def publish_primary_side(
@@ -1790,7 +1980,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Publish the brine or water source circuit of a machine with a primary circuit of its own.
 
         The source circuit carries the heat taken from the environment at a fixed 5 K difference; while the machine
-        is off it moves nothing.
+        is off it moves nothing. ``on_off`` is the published mode (:meth:`published_mode`), so a space-heating step at
+        a part-load ratio of 0, which runs nothing, publishes the source circuit idle as well: no flow and 0 K.
 
         Raises:
             ValueError: If the primary fluid's specific heat is not configured.
@@ -1817,22 +2008,33 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     def publish_operation(
         self,
         stsv: SingleTimeStepValues,
-        on_off: float,
         conditions: "HeatPumpStepConditions",
         operation: "HeatPumpOperation",
-        timers: "HeatPumpRunTimers",
+        *,
+        control: "HeatPumpModeTrack",
+        published: "HeatPumpModeTrack",
     ) -> None:
         """Publish the step's circuits, powers, energies, totals and counters, and store them in the state.
 
         The energies and running totals come from :meth:`stepped_energy_totals`, the counters from
-        :meth:`switch_counters`.
+        :meth:`switch_counters`. The on/off state, ``TimeOnHeating``, ``TimeOnCooling``, ``TimeOff``, the counters and
+        the source circuit's flow come from the published track, what the machine ran; the state stores both tracks,
+        and the next step's minimum times read only the control track. For example, at 900 s a space-heating step at
+        ratio 0 publishes state 0 and a growing ``TimeOff`` while the control track keeps heating.
+
+        Args:
+            stsv: The step's values, to publish to.
+            conditions: The temperatures the heat pump read in this step.
+            operation: The step's powers, outlets and flows, at the ratio run.
+            control: The control mode and its timers after the step.
+            published: The published mode and its timers after the step (:meth:`published_mode`).
         """
         totals = self.stepped_energy_totals(
             operation=operation, state=self.state, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
         )
-        counters = self.switch_counters(on_off=on_off, state=self.state)
+        counters = self.switch_counters(on_off=published.on_off, state=self.state)
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
-            self.publish_primary_side(stsv, on_off, conditions, operation)
+            self.publish_primary_side(stsv, published.on_off, conditions, operation)
 
         stsv.set_output_value(self.p_th_space_heating, operation.thermal_power_space_heating_in_watt)
         stsv.set_output_value(self.p_th_tot, operation.total_thermal_power_in_watt)
@@ -1842,13 +2044,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         stsv.set_output_value(self.p_el_tot, operation.total_electrical_power_in_watt)
         stsv.set_output_value(self.cop, operation.cop)
         stsv.set_output_value(self.eer, operation.eer)
-        stsv.set_output_value(self.heatpump_state, on_off)
+        stsv.set_output_value(self.heatpump_state, published.on_off)
         stsv.set_output_value(self.t_in_space_heating, conditions.space_heating_return_temperature_in_celsius)
         stsv.set_output_value(self.t_out_space_heating, operation.outlet_temperature_space_heating_in_celsius)
         stsv.set_output_value(self.m_dot_space_heating, operation.mass_flow_space_heating_in_kg_per_second)
-        stsv.set_output_value(self.time_on_heating, timers.time_on_heating_in_seconds)
-        stsv.set_output_value(self.time_on_cooling, timers.time_on_cooling_in_seconds)
-        stsv.set_output_value(self.time_off, timers.time_off_in_seconds)
+        stsv.set_output_value(self.time_on_heating, published.timers.time_on_heating_in_seconds)
+        stsv.set_output_value(self.time_on_cooling, published.timers.time_on_cooling_in_seconds)
+        stsv.set_output_value(self.time_off, published.timers.time_off_in_seconds)
         stsv.set_output_value(self.thermal_power_from_environment, operation.thermal_power_from_environment_in_watt)
         stsv.set_output_value(
             self.thermal_power_delivered_for_space_heating, max(operation.thermal_power_space_heating_in_watt, 0.0)
@@ -1890,10 +2092,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             stsv.set_output_value(self.counter_switch_dhw_channel, counters.hot_water)
             stsv.set_output_value(self.counter_switch_space_heating_channel, counters.space_heating)
 
-        self.state.time_on_heating = timers.time_on_heating_in_seconds
-        self.state.time_on_cooling = timers.time_on_cooling_in_seconds
-        self.state.time_off = timers.time_off_in_seconds
-        self.state.on_off_previous = on_off
+        self.state.time_on_heating = control.timers.time_on_heating_in_seconds
+        self.state.time_on_cooling = control.timers.time_on_cooling_in_seconds
+        self.state.time_off = control.timers.time_off_in_seconds
+        self.state.on_off_previous = control.on_off
+        self.state.published_time_on_heating = published.timers.time_on_heating_in_seconds
+        self.state.published_time_off = published.timers.time_off_in_seconds
+        self.state.published_on_off_previous = published.on_off
         self.state.cumulative_thermal_energy_tot_in_watt_hour = totals.cumulative_thermal_total_in_watt_hour
         self.state.cumulative_thermal_energy_space_heating_in_watt_hour = totals.cumulative_thermal_space_heating_in_watt_hour
         self.state.cumulative_thermal_energy_dhw_in_watt_hour = totals.cumulative_thermal_hot_water_in_watt_hour
@@ -2536,12 +2741,33 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
 @dataclass
 class MoreAdvancedHeatPumpHPLibState:
-    """MoreAdvancedHeatPumpHPLibState class."""
+    """The heat pump's state between steps: both tracks of its mode and run timers, its running totals and counters.
 
+    The control track (``time_on_heating``, ``time_off``, ``time_on_cooling``, ``on_off_previous``) is the mode the
+    heat pump ran on after its minimum times and how long it has been in it; the minimum running and idle times and
+    the start-up ramp read it. The published track (``published_time_on_heating``, ``published_time_off``,
+    ``published_on_off_previous``) is what the machine ran, where a space-heating step at a part-load ratio of 0 is
+    off (:meth:`MoreAdvancedHeatPumpHPLib.published_mode`); the published on/off state, timers, switch counters and
+    KPIs follow it. The cooling timer is the same on both tracks, since only a space-heating step differs, so it is
+    stored once. For example, at 900 s after a space-heating step at ratio 0 that followed 600 s of heating,
+    ``time_on_heating`` is 1500 and ``on_off_previous`` 1, while ``published_time_off`` is 900,
+    ``published_time_on_heating`` 0 and ``published_on_off_previous`` 0.
+    """
+
+    #: How long the control track has been heating, in s.
     time_on_heating: int
+    #: How long the control track has been off, in s.
     time_off: int
+    #: How long the heat pump has been cooling, in s; the same on both tracks.
     time_on_cooling: int
+    #: The control mode of the step before: 1 space heating, 2 hot water, -1 cooling, 0 off.
     on_off_previous: float
+    #: How long the published track has been heating, in s.
+    published_time_on_heating: int
+    #: How long the published track has been off, in s.
+    published_time_off: int
+    #: The published mode of the step before, as :attr:`on_off_previous`.
+    published_on_off_previous: float
     cumulative_thermal_energy_tot_in_watt_hour: float
     cumulative_thermal_energy_space_heating_in_watt_hour: float
     cumulative_thermal_energy_dhw_in_watt_hour: float
@@ -2557,12 +2783,19 @@ class MoreAdvancedHeatPumpHPLibState:
     def self_copy(
         self,
     ):
-        """Copy the Heat Pump State."""
+        """Return a copy of the state with both tracks of the mode and run timers, the totals and the counters.
+
+        :meth:`MoreAdvancedHeatPumpHPLib.i_save_state` and :meth:`MoreAdvancedHeatPumpHPLib.i_restore_state` use it,
+        so every field, the published track's as well, is copied here.
+        """
         return MoreAdvancedHeatPumpHPLibState(
             self.time_on_heating,
             self.time_off,
             self.time_on_cooling,
             self.on_off_previous,
+            self.published_time_on_heating,
+            self.published_time_off,
+            self.published_on_off_previous,
             self.cumulative_thermal_energy_tot_in_watt_hour,
             self.cumulative_thermal_energy_space_heating_in_watt_hour,
             self.cumulative_thermal_energy_dhw_in_watt_hour,
@@ -2674,12 +2907,34 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     mode : int
         Mode index for operation type for this heat pump
 
+    The controller also owns how much of a step a space-heating charge runs
+    (:class:`hisim.part_load.StartOfStepPartLoadControl`): it switches heating on and off on the buffer's
+    start-of-step temperature as before, and commands the part-load ratio ``PartLoadRatioSh`` with it. At and below the
+    part-load threshold the ratio is 1 whenever the heat pump heats. Above it, with the buffer wired, the ratio is
+    :meth:`hisim.part_load.StartOfStepPartLoadRule.raising_ratio`: the fraction that ends the buffer at its target
+    (``TargetTemperatureShInCelsius``), the heating curve's supply temperature raised by the energy manager's
+    modifier, read from the buffer's end temperature and its end temperature without the heat pump. While the
+    controller heats, a buffer at or above its target that its draw would take below it is charged as well, for the
+    fraction that ends it at the target. The controller stays in heating while it commands a ratio of 0; the heat pump
+    counts such a step as off in its published state and counters, not in its minimum times
+    (:meth:`MoreAdvancedHeatPumpHPLib.published_mode`). Under ``force_convergence``,
+    above the threshold with the buffer wired, the ratio becomes the ratio the heat pump reports it ran with
+    (``PartLoadRatioRunSh``); otherwise it keeps the value of the last unforced pass
+    (:meth:`hisim.part_load.StartOfStepPartLoadControl.publish_held`).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInput = "WaterTemperatureInput"
+    #: The buffer's temperature at the end of the step, which the part-load ratio is set against.
+    WaterTemperatureAtEndOfStepFromWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWaterStorageInCelsius"
+    #: The buffer's temperature at the end of the step without the heat pump's circuit.
+    WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius = (
+        "WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius"
+    )
+    #: The fraction of the step the heat pump's space-heating charge ran, as the heat pump reports it.
+    PartLoadRatioRunSh = "PartLoadRatioRunSh"
     SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
     HeatingSeason = "HeatingSeason"
 
@@ -2689,6 +2944,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
     # Outputs
     State_SH = "State_SH"
+    #: The fraction of the step the space-heating charge runs.
+    PartLoadRatioSh = "PartLoadRatioSh"
+    #: The buffer temperature the space-heating charge aims at.
+    TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
 
     def __init__(
         self,
@@ -2764,6 +3023,18 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             output_description=f"here a description for {self.State_SH} will follow.",
         )
 
+        self.space_heating_part_load = StartOfStepPartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+            end_temperature_without_circuit_input_name=(
+                self.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius
+            ),
+            ratio_run_input_name=self.PartLoadRatioRunSh,
+            ratio_output_name=self.PartLoadRatioSh,
+            device_description="the heat pump's space-heating charge",
+            target_output_name=self.TargetTemperatureShInCelsius,
+        )
+
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
@@ -2771,6 +3042,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
 
     @staticmethod
     def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
@@ -2821,7 +3093,38 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        controller = MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+        buffer = simple_water_storage.SimpleHotWaterStorage
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius,
+            )
+        )
         return connections
+
+    @staticmethod
+    def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
+        """Return the connection of the ratio the heat pump's space-heating charge ran, from the heat pump.
+
+        Returns:
+            The one connection of ``PartLoadRatioRunSh``.
+        """
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioRunSh,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh,
+            )
+        ]
 
     def get_default_connections_from_energy_management_system(
         self,
@@ -2908,10 +3211,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         return self.heatpump_controller_config.get_string_dict()
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat pump comtroller."""
+        """Decide heating, cooling or off on the buffer's start temperature, and the space-heating part-load ratio.
+
+        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio above the
+        threshold with the buffer wired: it becomes the ratio the heat pump reports it ran with, so the charge stops
+        changing. At and below the threshold, or without the buffer, the ratio keeps its last value too.
+        """
 
         if force_convergence:
-            pass
+            self.space_heating_part_load.publish_held(stsv)
         else:
             # Retrieves inputs
 
@@ -2973,6 +3281,33 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 raise ValueError("Advanced HP Lib Controller State unknown.")
 
             stsv.set_output_value(self.state_channel, state)
+            self.space_heating_part_load.publish_raising(
+                stsv,
+                device_runs=state == 1,
+                target_temperature_in_celsius=self.space_heating_target_temperature_in_celsius(
+                    supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+                ),
+            )
+
+    @staticmethod
+    def space_heating_target_temperature_in_celsius(
+        *, supply_temperature_set_in_celsius: float, storage_temperature_modifier_in_kelvin: float
+    ) -> float:
+        """Return the buffer temperature a space-heating charge ends the step at above the part-load threshold, in °C.
+
+        It is the heating curve's supply temperature, raised by the energy manager's modifier, so a buffer the energy
+        manager raises to store surplus electricity as heat is charged to the raised temperature. Example: a 35 °C
+        supply temperature and a 5 K raise give a 40 °C target.
+
+        Args:
+            supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
+            storage_temperature_modifier_in_kelvin: The energy manager's raise of the buffer, in K; 0 without one.
+
+        Returns:
+            The target, in °C.
+        """
+        return supply_temperature_set_in_celsius + storage_temperature_modifier_in_kelvin
 
     def conditions_on_off(
         self,

@@ -10,7 +10,9 @@ import pandas as pd
 import numpy as np
 
 import hisim.component as cp
+from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
 from hisim.components.building import Building
+
 # HeatDistributionSystemType and EmitterDesign live in heating_curve, which this module imports; their old import
 # path through this module stays valid for the setups and tests that use it, but new code imports them from there.
 from hisim.components.heating_curve import EmitterDesign, HeatDistributionSystemType, HeatingCurveController
@@ -134,6 +136,8 @@ class HeatDistribution(cp.PhysicsComponent):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
+    #: The fraction of the step the circuit runs, commanded by the heat distribution controller.
+    PartLoadRatio = "PartLoadRatio"
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -141,6 +145,8 @@ class HeatDistribution(cp.PhysicsComponent):
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
     WaterMassFlowHDS = "WaterMassFlowHDS"
+    #: The fraction of the step the circuit ran, reported back to the controller.
+    PartLoadRatioRun = "PartLoadRatioRun"
 
     #: The positions in which the heat distribution system pumps its own design flow, because the component at the
     #: other end of its circuit (a buffer, or a district-heating substation without a pump) moves no water itself.
@@ -277,6 +283,13 @@ class HeatDistribution(cp.PhysicsComponent):
             output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
         )
 
+        self.part_load_command = PartLoadCommand(
+            self,
+            input_name=self.PartLoadRatio,
+            ratio_run_output_name=self.PartLoadRatioRun,
+            device_description="the heat distribution system's circuit",
+        )
+
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_district_heating())
@@ -297,6 +310,13 @@ class HeatDistribution(cp.PhysicsComponent):
                 HeatDistributionController.State,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.PartLoadRatio,
+                heat_distribution_controller_classname,
+                HeatDistributionController.PartLoadRatio,
+            )
+        )
         return connections
 
     def get_default_connections_from_building(
@@ -314,11 +334,13 @@ class HeatDistribution(cp.PhysicsComponent):
             )
         )
 
+        # the room temperature at the start of the step: a clamp on the same pass's room temperature and the heat
+        # delivered into the room can alternate from pass to pass
         connections.append(
             cp.ComponentConnection(
                 HeatDistribution.ResidenceTemperatureIndoorAir,
                 building_classname,
-                Building.TemperatureIndoorAir,
+                Building.TemperatureIndoorAirAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -409,6 +431,15 @@ class HeatDistribution(cp.PhysicsComponent):
         and returns its inlet temperature unchanged (:meth:`pump_stopped_by_the_valve`). Before, it went on pumping the
         design flow with the valve shut and returned the inlet cooled by a hundredth of its difference to the room,
         so the buffer booked heat into a circuit that delivered none to the building.
+
+        Behind a buffer (``PARALLEL``) the circuit publishes this step's heat and temperatures: the buffer sends its
+        start-of-step temperature as the supply, the circuit returns it less what the building takes, and both ends
+        book ``m c (T_sup - T_ret)`` from the same values. Without a buffer the outputs still lag one step. The
+        return is clamped at the room temperature the building reports at the start of the step: while heating it does
+        not fall below it, while cooling it does not rise above it. A supply on the wrong side of that temperature, for
+        example 16 °C while heating a room at 20 °C, returns unchanged and delivers no heat. Behind a buffer the
+        circuit runs the fraction of the step its controller commands (``PartLoadRatio``): it publishes that fraction
+        of its flow and of its heat, and reports the fraction it ran (``PartLoadRatioRun``).
         """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
@@ -475,28 +506,35 @@ class HeatDistribution(cp.PhysicsComponent):
             else:
                 raise ValueError("unknown hds controller mode")
 
+        ratio_run = 1.0 if water_mass_flow_rate_in_kg_per_second > 0 else 0.0
+        if (
+            self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
+            and water_mass_flow_rate_in_kg_per_second > 0
+        ):
+            # the circuit runs the fraction of the step its controller commands: the averaged flow and its heat
+            ratio_run = self.part_load_command.ratio(stsv)
+            water_mass_flow_rate_in_kg_per_second *= ratio_run
+            thermal_power_delivered_in_watt *= ratio_run
+        self.part_load_command.publish_ratio_run(stsv, ratio_run)
+
         # Set outputs -----------------------------------------------------------------------------------------------------------
-        stsv.set_output_value(
-            self.water_temperature_inlet_channel,
-            self.state.water_input_temperature_in_celsius,
-            # water_temperature_input_in_celsius
-        )
-        stsv.set_output_value(
-            self.water_temperature_outlet_channel,
-            self.state.water_output_temperature_in_celsius,
-            # water_temperature_output_in_celsius,
-        )
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            # behind a buffer the circuit's heat is this step's, booked on the buffer's start temperature
+            published = HeatDistributionSystemState(
+                water_output_temperature_in_celsius=water_temperature_output_in_celsius,
+                water_input_temperature_in_celsius=water_temperature_input_in_celsius,
+                thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
+            )
+        else:
+            # without a buffer the outputs still lag one step
+            published = self.state
+        stsv.set_output_value(self.water_temperature_inlet_channel, published.water_input_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_outlet_channel, published.water_output_temperature_in_celsius)
         stsv.set_output_value(
             self.water_temperature_difference_channel,
-            #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
-            self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
+            published.water_input_temperature_in_celsius - published.water_output_temperature_in_celsius,
         )
-
-        stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt,
-            # thermal_power_delivered_in_watt,
-        )
+        stsv.set_output_value(self.thermal_power_delivered_channel, published.thermal_power_delivered_in_watt)
         stsv.set_output_value(
             self.water_mass_flow_channel,
             water_mass_flow_rate_in_kg_per_second,
@@ -777,7 +815,9 @@ class HeatDistribution(cp.PhysicsComponent):
             mean_temperature_difference_between_flow_and_return_in_celsius,
             max_temperature_difference_between_flow_and_return_in_celsius,
             min_temperature_difference_between_flow_and_return_in_celsius,
-        ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+        ) = KpiHelperClass.compute_mean_max_min_values(
+            list_or_pandas_series=temperature_diff_flow_and_return_in_celsius
+        )
 
         (
             mean_flow_temperature_in_celsius,
@@ -967,6 +1007,13 @@ class HeatDistributionController(cp.L1ControllerComponent):
     valve open for heating passes heat only in the heating season, which the heating curve
     (:class:`hisim.components.heating_curve.HeatingCurveController`) decides. The controller publishes ``State``:
     1 for heating, -1 for cooling, and 0 for a closed valve or for a valve open for heating outside the heating season.
+
+    Behind a space-heating buffer, above the part-load threshold, the controller also sets the fraction of the step the
+    circuit runs while it heats (``PartLoadRatio``): the largest fraction that keeps the buffer's end temperature at or
+    above the room's start-of-step temperature (:meth:`hisim.part_load.StartOfStepPartLoadRule.lowering_ratio`). The
+    buffer is booked on its start temperature and does not see its own fall within the step, so a whole step of the
+    building's demand could draw it far below the room. Without a buffer, at and below the threshold, and while it
+    cools, the circuit runs the whole step.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -974,9 +1021,20 @@ class HeatDistributionController(cp.L1ControllerComponent):
     # Inputs
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     HeatingSeason = "HeatingSeason"
+    #: The room's temperature at the start of the step, the floor the buffer may not end below.
+    TemperatureIndoorAirAtStartOfStepInCelsius = "TemperatureIndoorAirAtStartOfStepInCelsius"
+    #: The buffer's end-of-step temperature, and its end temperature without the distribution circuit.
+    WaterTemperatureAtEndOfStepFromWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWaterStorageInCelsius"
+    WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius = (
+        "WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius"
+    )
+    #: The fraction of the step the circuit ran, as the heat distribution system reports it.
+    PartLoadRatioRun = "PartLoadRatioRun"
 
     # Outputs
     State = "State"
+    #: The fraction of the step the circuit runs.
+    PartLoadRatio = "PartLoadRatio"
 
     @utils.measure_execution_time
     def __init__(
@@ -1011,6 +1069,23 @@ class HeatDistributionController(cp.L1ControllerComponent):
             lt.Units.BINARY,
             True,
         )
+        self.room_temperature_at_start_of_step_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureIndoorAirAtStartOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            False,
+        )
+        self.part_load = StartOfStepPartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+            end_temperature_without_circuit_input_name=(
+                self.WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius
+            ),
+            ratio_run_input_name=self.PartLoadRatioRun,
+            ratio_output_name=self.PartLoadRatio,
+            device_description="the heat distribution system's circuit",
+        )
         # Outputs
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -1029,11 +1104,13 @@ class HeatDistributionController(cp.L1ControllerComponent):
 
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_heating_curve())
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_heat_distribution())
 
     def get_default_connections_from_building(
         self,
     ):
-        """Get building default connections."""
+        """Get building default connections: the theoretical demand and the room's start-of-step temperature."""
 
         connections = []
         building_classname = Building.get_classname()
@@ -1044,7 +1121,52 @@ class HeatDistributionController(cp.L1ControllerComponent):
                 Building.TheoreticalThermalBuildingDemand,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistributionController.TemperatureIndoorAirAtStartOfStepInCelsius,
+                building_classname,
+                Building.TemperatureIndoorAirAtStartOfStepInCelsius,
+            )
+        )
         return connections
+
+    @staticmethod
+    def get_default_connections_from_simple_hot_water_storage() -> List[cp.ComponentConnection]:
+        """Return the connections of the buffer's end temperatures the circuit's fraction is set from.
+
+        Returns:
+            The two connections.
+        """
+        # imported here: the storage module imports this one
+        storage_module = importlib.import_module("hisim.components.simple_water_storage")
+        storage_class = getattr(storage_module, "SimpleHotWaterStorage")
+        return [
+            cp.ComponentConnection(
+                HeatDistributionController.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+                storage_class.get_classname(),
+                storage_class.WaterTemperatureAtEndOfStepInCelsius,
+            ),
+            cp.ComponentConnection(
+                HeatDistributionController.WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius,
+                storage_class.get_classname(),
+                storage_class.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius,
+            ),
+        ]
+
+    @staticmethod
+    def get_default_connections_from_heat_distribution() -> List[cp.ComponentConnection]:
+        """Return the connection of the fraction of the step the circuit reports it ran.
+
+        Returns:
+            The one connection.
+        """
+        return [
+            cp.ComponentConnection(
+                HeatDistributionController.PartLoadRatioRun,
+                HeatDistribution.get_classname(),
+                HeatDistribution.PartLoadRatioRun,
+            )
+        ]
 
     @staticmethod
     def get_default_connections_from_heating_curve() -> List[cp.ComponentConnection]:
@@ -1087,8 +1209,15 @@ class HeatDistributionController(cp.L1ControllerComponent):
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Set the valve from the building's demand and the heating season, and publish its state."""
+        """Set the valve from the building's demand and the heating season, and publish its state and the fraction.
+
+        Under ``force_convergence`` the state keeps the value of the last free pass, and the fraction is still set by
+        the floor rule from that state: the floor is a limit of the water, not a decision that could cycle, and with
+        the other controllers frozen the rule settles in one pass. Holding the fraction the circuit last ran instead
+        let a forced step drain the buffer far below the room.
+        """
         if force_convergence:
+            self.publish_fraction(stsv, int(stsv.values[self.state_channel.global_index]))
             return
         theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
             self.theoretical_thermal_building_demand_channel
@@ -1096,7 +1225,28 @@ class HeatDistributionController(cp.L1ControllerComponent):
         is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
         valve_mode = self.next_valve_mode(self.state.valve_mode, theoretical_thermal_building_demand_in_watt)
         self.end_of_step_state = HeatDistributionControllerState(valve_mode=valve_mode)
-        stsv.set_output_value(self.state_channel, self.valve_state(valve_mode, is_heating_season=is_heating_season))
+        state = self.valve_state(valve_mode, is_heating_season=is_heating_season)
+        stsv.set_output_value(self.state_channel, state)
+        self.publish_fraction(stsv, state)
+
+    def publish_fraction(self, stsv: cp.SingleTimeStepValues, state: int) -> None:
+        """Publish the fraction of the step the circuit runs, for the valve state of this pass.
+
+        Heating (1): the largest fraction that keeps the buffer at or above the room's start-of-step temperature.
+        Cooling (-1): the whole step, since a cooling circuit raises the buffer. Shut (0): nothing.
+
+        Args:
+            stsv: The step's values.
+            state: The valve state: 1 heating, -1 cooling, 0 shut.
+        """
+        if state == -1:
+            stsv.set_output_value(self.part_load.ratio_channel, 1.0)
+            return
+        self.part_load.publish_lowering(
+            stsv,
+            device_runs=state == 1,
+            floor_temperature_in_celsius=stsv.get_input_value(self.room_temperature_at_start_of_step_channel),
+        )
 
     @staticmethod
     def next_valve_mode(

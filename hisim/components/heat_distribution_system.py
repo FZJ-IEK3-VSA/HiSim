@@ -1010,10 +1010,11 @@ class HeatDistributionController(cp.L1ControllerComponent):
 
     Behind a space-heating buffer, above the part-load threshold, the controller also sets the fraction of the step the
     circuit runs while it heats (``PartLoadRatio``): the largest fraction that keeps the buffer's end temperature at or
-    above the room's start-of-step temperature (:meth:`hisim.part_load.StartOfStepPartLoadRule.lowering_ratio`). The
-    buffer is booked on its start temperature and does not see its own fall within the step, so a whole step of the
-    building's demand could draw it far below the room. Without a buffer, at and below the threshold, and while it
-    cools, the circuit runs the whole step.
+    above the room's start-of-step temperature (:meth:`hisim.part_load.StartOfStepPartLoadRule.lowering_ratio`). Above
+    the threshold the buffer is a start-of-step node: it is booked on its start temperature and does not see its own
+    fall within the step, so a whole step of the building's demand could draw it far below the room. Without a
+    buffer, at and below the threshold (where the buffer is an iterated mixed node that sees its own fall), and while
+    it cools, the circuit runs the whole step.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST

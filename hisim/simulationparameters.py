@@ -136,9 +136,10 @@ class SimulationParameters:
                 (:class:`~hisim.components.heat_distribution_system.HeatDistributionController`) and the solar
                 collector's pump (:class:`~hisim.components.solar_thermal_system.SolarThermalSystemController`);
                 every other device, the heat pump's hot-water charge, district heating and the electric heaters among
-                them, runs whole steps at any step length. A start-of-step space-heating buffer relies on the
-                fractions above 600 s, so it refuses a step above 600 s with a threshold at or above that step
-                (:meth:`~hisim.components.simple_water_storage.SimpleHotWaterStorage.check_whole_steps_are_safe`).
+                them, runs whole steps at any step length. The space-heating buffer chooses its model by the same
+                threshold: an iterated mixed node at and below it, a start-of-step node above it, which relies on the
+                fractions. It refuses a step above 600 s with a threshold at or above that step
+                (:meth:`~hisim.components.simple_water_storage.SimpleHotWaterStorage.check_mixed_node_step_is_safe`).
                 ``None`` (the default) means
                 :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
                 :class:`PartLoadThresholdError`.

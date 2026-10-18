@@ -45,11 +45,12 @@ from hisim.economics.facts import CostRelevance
 
 
 class StartOfStepBufferWholeStepError(ValueError):
-    """A run that would give a start-of-step buffer whole steps longer than it can take.
+    """A run that would iterate the space-heating buffer as a mixed node over steps longer than it can take.
 
     Raised by :class:`SimpleHotWaterStorage` when it is built, so a step length above
-    :attr:`SimpleHotWaterStorage.LONGEST_WHOLE_STEP_IN_SECONDS` together with a part-load threshold at or above that
-    step is refused before anything runs (:meth:`SimpleHotWaterStorage.check_whole_steps_are_safe`).
+    :attr:`SimpleHotWaterStorage.LONGEST_MIXED_NODE_STEP_IN_SECONDS` together with a part-load threshold at or above
+    that step is refused before anything runs (:meth:`SimpleHotWaterStorage.check_mixed_node_step_is_safe`). The name
+    is the stage D one: such a run gives every circuit of the buffer whole steps.
     """
 
 
@@ -588,23 +589,33 @@ class SimpleWaterStorage(cp.PhysicsComponent):
 class SimpleHotWaterStorage(SimpleWaterStorage):
     """The space-heating buffer: a node between its heat generators and the heat distribution system.
 
-    With its heat exchanger (the default) the buffer is a start-of-step node (:class:`hisim.hydronics.StartOfStepNode`):
-    it publishes the temperature it starts the step at as the return to its generators
-    (``WaterTemperatureToHeatGenerator``, ``WaterTemperatureToSecondaryHeatGenerator``), as the supply to the heat
-    distribution system (``WaterTemperatureToHeatDistribution``), as ``WaterMeanTemperatureInStorage`` and as
-    ``WaterTemperatureAtStartOfStepInCelsius``. The generators' controllers read
-    ``WaterTemperatureAtStartOfStepInCelsius``, a value no pass of the step moves, so their on/off decision cannot
-    cycle with the circuit temperatures. Every circuit's heat is ``m c`` times the
-    difference between the stream that enters and that start temperature, the standby loss is taken at it too, and
-    the buffer ends the step at its start temperature plus the net heat over its heat capacity. So the heat a generator
-    books is the heat the buffer receives, the heat the distribution system delivers is the heat the buffer gives, and
-    the balance closes on every step at any step length. For example, 170 kg at 40 °C charged by 5.6 kW while the
-    distribution takes 5.6 kW stay at 40 °C, less the loss.
+    With its heat exchanger (the default) the buffer is a two-mode buffer (``roadmap/two_mode_buffer_spec.md``). It
+    chooses its model once, when it is built, from the run's step length against the part-load threshold
+    (``SimulationParameters.part_load_above_seconds``, 600 s by default; :meth:`SimulationParameters.runs_part_load`):
 
-    Because none of the temperatures it publishes changes while the step iterates, the buffer adds no iteration to the
-    step; its heat outputs follow each pass's inflows. It does not see its own temperature change within the step
-    either: a generator holding a lift keeps bringing its heat however far the buffer has risen, and the distribution
-    keeps taking the building's demand however far it has fallen.
+    * At and below the threshold it is an iterated mixed node (:class:`hisim.hydronics.MixedNode`,
+      :meth:`simulate_mixed_node`). From its start temperature ``T0`` and the streams entering it, it computes its step
+      mean ``T_mean`` and its end temperature ``T_end`` in closed form, and publishes ``T_mean`` as the return to its
+      generators (``WaterTemperatureToHeatGenerator``, ``WaterTemperatureToSecondaryHeatGenerator``) and as the supply
+      to the heat distribution system (``WaterTemperatureToHeatDistribution``). The circuits and the buffer iterate
+      within the step until they agree on ``T_mean``, so the buffer sees its own temperature change within the step.
+      Every circuit runs whole steps.
+    * Above the threshold it is a start-of-step node (:class:`hisim.hydronics.StartOfStepNode`,
+      :meth:`simulate_start_of_step_node`): it publishes ``T0`` on the same three ports, every circuit's heat is
+      ``m c`` times the difference between the stream that enters and ``T0``, and the buffer ends the step at ``T0``
+      plus the net heat over its heat capacity. Nothing it publishes moves while the step iterates, and it does not
+      see its own temperature change within the step: its generators and its distribution system run the fraction of
+      the step that keeps it on their targets (:mod:`hisim.part_load`), from its end temperature and its end
+      temperature without each circuit.
+
+    In both modes it publishes ``T0`` as ``WaterMeanTemperatureInStorage`` and as
+    ``WaterTemperatureAtStartOfStepInCelsius``, the sensor its generators' controllers decide on, since no pass moves
+    it. Its heat and energy outputs, its standby loss and its end temperature come from the same node step, so the
+    heat a generator books is the heat the buffer receives, the heat the distribution system delivers is the heat the
+    buffer gives (with the iterated node once the step has converged), and the balance closes on every step. For
+    example, 170 kg at 40 °C charged by 5.6 kW while the distribution takes 5.6 kW stay at 40 °C, less the loss.
+    Generators, controllers and the distribution system never ask which model runs: they read the same ports.
+
     Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`).
     """
 
@@ -617,15 +628,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     #: 70 °C), which the buffer does not know, so no single "half charged" value exists for it.
     INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 35.0
 
-    #: The longest step, s, at which a start-of-step buffer may run whole steps, its generators and its heat
-    #: distribution system each bringing or taking a whole step's heat. Above it they have to run a fraction of the
-    #: step (:mod:`hisim.part_load`, decisions 21 and 22 of ``roadmap/hydronic_part_load_spec.md``), since the buffer
-    #: does not see its own temperature change inside the step. Whole steps were measured safe at 60 s and at 600 s
-    #: (full year 2021, the gas, pellet and heat-pump twins, stage D's close-out); at 3600 s the gas twin's year aborted
-    #: with them, the pellet and heat-pump twins' rooms spent about 290 and 710 degree-hours more than 1 K below their
-    #: set temperature, and a heat-pump assembly overshot its buffer to 93.3 °C (stage D, pull requests 5 and 7, beads
-    #: hisim-6ehm and hisim-fxix.5).
-    LONGEST_WHOLE_STEP_IN_SECONDS: ClassVar[float] = 600.0
+    #: The longest step, s, over which the buffer may iterate as a mixed node with whole steps of every circuit. Its
+    #: contraction per pass is ``theta = 1 - (1 - exp(-a)) / a`` with ``a`` the step's circuit flows times the step
+    #: over its heat capacity: at 600 s up to about 0.6, measured at most 35 passes per step (gas, heat-pump twins,
+    #: 2021); above it the passes grow fast and whole steps overcharge the buffer (heat-pump twin: +3.2 % space-heating
+    #: electricity at 900 s, +17.5 % at 3600 s against 60 s, ``roadmap/two_mode_buffer_spec.md`` §2). Above it the
+    #: buffer must therefore run as a start-of-step node, whose circuits run fractions of the step.
+    LONGEST_MIXED_NODE_STEP_IN_SECONDS: ClassVar[float] = 600.0
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
@@ -648,7 +657,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
     #: The buffer's temperature at the end of the step, the next step's start temperature.
     WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
-    #: The buffer's end temperature had the primary generator's circuit brought nothing in this step.
+    #: The buffer's end temperature had the primary generator's circuit brought nothing in this step. This and the
+    #: next two outputs are meaningful only above the part-load threshold, where the part-load controls read them; at
+    #: and below it the iterated buffer publishes its end temperature on all three (owner decision Q2, 2026-10-18).
     WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius = (
         "WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius"
     )
@@ -700,11 +711,19 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
+        #: Whether the buffer runs as a start-of-step node (steps above the part-load threshold) instead of an
+        #: iterated mixed node; chosen once per run, as the part-load controls choose for themselves.
+        self.runs_start_of_step_node: bool = my_simulation_parameters.runs_part_load()
         if self.heat_exchanger_is_present:
-            self.check_whole_steps_are_safe(
+            self.check_mixed_node_step_is_safe(
                 buffer_name=self.component_name,
                 seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
                 part_load_above_seconds=my_simulation_parameters.part_load_above_seconds,
+            )
+            hydronics.MixedNode.check_constants(
+                ua_w_per_k=self.heat_loss_coefficient_in_watt_per_kelvin,
+                dt_s=self.seconds_per_timestep,
+                heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
             )
 
         self.state: SimpleWaterStorageState = SimpleWaterStorageState(
@@ -829,7 +848,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 output_description=(
                     f"The buffer's end temperature had {circuit} exchanged nothing in this step: the end temperature "
                     "less that circuit's own change. The circuit's controller sets the fraction of a coarse step it "
-                    "runs from it; a hypothetical value, which may lie outside the range of liquid water."
+                    "runs from it; a hypothetical value, which may lie outside the range of liquid water. Meaningful "
+                    "only above the part-load threshold, the only steps at which it is read; at and below it the "
+                    "iterated buffer publishes its end temperature here."
                 ),
             )
             for field_name, circuit in (
@@ -996,17 +1017,17 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         return connections
 
     @classmethod
-    def check_whole_steps_are_safe(
+    def check_mixed_node_step_is_safe(
         cls, *, buffer_name: str, seconds_per_timestep: float, part_load_above_seconds: float
     ) -> None:
-        """Refuse a run that would give this start-of-step buffer whole steps above 600 s.
+        """Refuse a run that would iterate this buffer as a mixed node over steps above 600 s.
 
-        A start-of-step buffer books every circuit on the temperature it starts the step at, so it does not see its
-        own temperature change inside the step. Above :attr:`LONGEST_WHOLE_STEP_IN_SECONDS` its circuit ends must
-        therefore run a fraction of the step, and they do only above the run's part-load threshold
-        (``SimulationParameters.part_load_above_seconds``). A step above 600 s with a threshold at or above that step
-        gives every circuit whole steps, with which a year at 3600 s aborted or left the rooms cold, or a heat pump
-        overshot its buffer, in stage D's measurements.
+        At and below the run's part-load threshold (``SimulationParameters.part_load_above_seconds``) the buffer is an
+        iterated mixed node whose circuits all run whole steps; above it, a start-of-step node whose circuits run
+        fractions of the step. Above :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` the mixed node contracts by 0.6 or more
+        per pass, so a step needs many passes, and whole steps overcharge it: the heat pump's space-heating
+        electricity was +3.2 % at 900 s and +17.5 % at 3600 s against 60 s. A step above 600 s with a threshold at or
+        above that step would give exactly that, so it is refused. The refusal is about the wrong result, not the cost.
 
         Example: 900 s steps with a threshold of 900 s are refused; 900 s with the default 600 s, and 600 s with any
         threshold, are accepted.
@@ -1017,22 +1038,22 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             part_load_above_seconds: The run's part-load threshold, s.
 
         Raises:
-            StartOfStepBufferWholeStepError: If the step is longer than :attr:`LONGEST_WHOLE_STEP_IN_SECONDS` and not
-                longer than the threshold.
+            StartOfStepBufferWholeStepError: If the step is longer than :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` and
+                not longer than the threshold.
         """
-        if seconds_per_timestep <= cls.LONGEST_WHOLE_STEP_IN_SECONDS or seconds_per_timestep > part_load_above_seconds:
+        longest_in_seconds = cls.LONGEST_MIXED_NODE_STEP_IN_SECONDS
+        if seconds_per_timestep <= longest_in_seconds or seconds_per_timestep > part_load_above_seconds:
             return
         raise StartOfStepBufferWholeStepError(
             f"The space-heating buffer {buffer_name!r} cannot run {seconds_per_timestep:g} s steps with "
-            f"part_load_above_seconds = {part_load_above_seconds:g} s. The buffer is a start-of-step node: it does "
-            f"not see its own temperature change inside a step, so above {cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s its "
-            f"generators and its heat distribution system must run a fraction of the step, and they do only for steps "
-            f"longer than part_load_above_seconds. With this threshold every circuit runs whole "
-            f"{seconds_per_timestep:g} s steps, with which a year at 3600 s aborted or left the rooms cold, or a heat "
-            f"pump overshot its buffer, in stage D's measurements. Lower part_load_above_seconds below "
-            f"{seconds_per_timestep:g} s (the default is {SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), "
-            f"or run with steps of at most "
-            f"{cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s."
+            f"part_load_above_seconds = {part_load_above_seconds:g} s. At and below the threshold the buffer iterates "
+            f"as a mixed node and every circuit runs whole steps; above {longest_in_seconds:g} s the mixed node "
+            f"contracts by 0.6 or more per pass and whole steps overcharge it (measured +3.2 % space-heating "
+            f"electricity at 900 s and +17.5 % at 3600 s against 60 s). Above the threshold it is a start-of-step node "
+            f"whose generators and heat distribution system run a fraction of the step. Lower part_load_above_seconds "
+            f"below {seconds_per_timestep:g} s (the default is "
+            f"{SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), or run with steps of at most "
+            f"{longest_in_seconds:g} s."
         )
 
     def i_prepare_simulation(self) -> None:
@@ -1058,17 +1079,20 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the buffer: a start-of-step node with a heat exchanger, the stratification path without one.
+        """Simulate the buffer in the model chosen when it was built.
 
-        With the heat exchanger (the default, :meth:`simulate_start_of_step_node`) every circuit is booked on the
-        buffer's start temperature and the balance closes on every step. Without it the buffer keeps its earlier
-        mass-mixing law and its mixing-factor outlets (:meth:`simulate_stratification_path`), which is not
-        energy-consistent and which no recorded energy system uses.
+        With the heat exchanger the buffer is an iterated mixed node at and below the part-load threshold
+        (:meth:`simulate_mixed_node`) and a start-of-step node above it (:meth:`simulate_start_of_step_node`); its
+        balance closes on every step in both. Without it the buffer keeps its earlier mass-mixing law and its
+        mixing-factor outlets (:meth:`simulate_stratification_path`), which is not energy-consistent and which no
+        recorded energy system uses.
         """
-        if self.heat_exchanger_is_present:
+        if not self.heat_exchanger_is_present:
+            self.simulate_stratification_path(timestep, stsv, force_convergence)
+        elif self.runs_start_of_step_node:
             self.simulate_start_of_step_node(stsv)
         else:
-            self.simulate_stratification_path(timestep, stsv, force_convergence)
+            self.simulate_mixed_node(stsv)
 
     def circuit_inflows(self, stsv: SingleTimeStepValues) -> List[hydronics.Inflow]:
         """Return the three streams entering the buffer: both generators' supplies and the distribution's return.
@@ -1099,6 +1123,46 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         return [primary, secondary, distribution]
 
+    def simulate_mixed_node(self, stsv: SingleTimeStepValues) -> None:
+        """Integrate the fully mixed buffer over the step and publish its step mean to every circuit.
+
+        The buffer is one :class:`hisim.hydronics.MixedNode`: from its start temperature ``T0`` and the three streams
+        entering it (the primary and secondary generators' supplies and the distribution system's return), it computes
+        its step mean ``T_mean`` and its end temperature ``T_end`` in closed form. ``T_mean`` is published as the
+        return to both generators and as the supply to the distribution system, so each circuit's heat,
+        ``m c (T_in - T_mean) dt``, is the same number at both ends once the step's passes have converged; ``T0`` is
+        published for the controllers. The heats and the loss ``UA (T_mean - 20 °C) dt`` close the balance
+        ``sum of circuits - loss = C (T_end - T0)`` on every pass. The three end temperatures without a circuit carry
+        ``T_end``: only the part-load controls read them, and only above the threshold, where this path does not run
+        (owner decision Q2 of ``roadmap/two_mode_buffer_spec.md``).
+
+        For example, 200 kg at 35 °C, a heat pump bringing 0.3 kg/s at 10 K above the step mean and a floor heating
+        returning 0.5 kg/s at 4 K below it, with 2 W/K to a 20 °C room, converge in five passes of a 60 s step to
+        ``T_mean`` = 35.155 °C and ``T_end`` = 35.298 °C; the heat pump brings 752.4 kJ and the floor heating takes
+        501.6 kJ.
+
+        Args:
+            stsv: The step's values, read for the inflows and written with every output.
+        """
+        start_temperature_in_celsius = self.state.mean_water_temperature_in_celsius
+        node = hydronics.MixedNode.step(
+            t0_c=start_temperature_in_celsius,
+            inflows=self.circuit_inflows(stsv),
+            ua_w_per_k=self.heat_loss_coefficient_in_watt_per_kelvin,
+            t_amb_c=self.ambient_temperature_in_celsius,
+            dt_s=self.seconds_per_timestep,
+            heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
+        )
+        self.publish_node_step(
+            stsv,
+            start_temperature_in_celsius=start_temperature_in_celsius,
+            circuit_temperature_in_celsius=node.t_mean_c,
+            end_temperature_in_celsius=node.t_end_c,
+            end_temperatures_without_circuit_in_celsius=(node.t_end_c, node.t_end_c, node.t_end_c),
+            heats_in_joule=node.heat_in_j_per_inflow,
+            loss_in_joule=node.loss_j,
+        )
+
     def simulate_start_of_step_node(self, stsv: SingleTimeStepValues) -> None:
         """Book every circuit on the buffer's start temperature and end the step at the start plus the net heat.
 
@@ -1121,30 +1185,74 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         node = hydronics.StartOfStepNode.step(
             t0_c=start_temperature_in_celsius,
             inflows=self.circuit_inflows(stsv),
-            ua_w_per_k=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2,
+            ua_w_per_k=self.heat_loss_coefficient_in_watt_per_kelvin,
             t_amb_c=self.ambient_temperature_in_celsius,
             dt_s=self.seconds_per_timestep,
             heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
         )
-        heat_primary_in_joule, heat_secondary_in_joule, heat_distribution_in_joule = node.heat_in_j_per_inflow
+        self.publish_node_step(
+            stsv,
+            start_temperature_in_celsius=start_temperature_in_celsius,
+            circuit_temperature_in_celsius=start_temperature_in_celsius,
+            end_temperature_in_celsius=node.t_end_c,
+            end_temperatures_without_circuit_in_celsius=tuple(
+                node.t_end_c - heat_in_joule / self.heat_capacity_in_joule_per_kelvin
+                for heat_in_joule in node.heat_in_j_per_inflow
+            ),
+            heats_in_joule=node.heat_in_j_per_inflow,
+            loss_in_joule=node.loss_j,
+        )
+
+    def publish_node_step(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        start_temperature_in_celsius: float,
+        circuit_temperature_in_celsius: float,
+        end_temperature_in_celsius: float,
+        end_temperatures_without_circuit_in_celsius: Tuple[float, ...],
+        heats_in_joule: Tuple[float, ...],
+        loss_in_joule: float,
+    ) -> None:
+        """Publish one node step of the buffer, in either model, and end the buffer's step at its end temperature.
+
+        Both models publish the same ports; only the temperature on the circuit ports differs: the step mean with the
+        iterated mixed node, the start temperature with the start-of-step node. The start temperature goes to
+        ``WaterMeanTemperatureInStorage`` and to the controllers' sensor, the heats become the per-circuit energies
+        (Wh) and powers (W), the stored heat and its increase follow from the end temperature, and the loss becomes
+        the standby power. For example, 752.4 kJ from the generator over a 60 s step are 209.0 Wh and 12 540 W.
+
+        Args:
+            stsv: The step's values, written.
+            start_temperature_in_celsius: ``T0``, the buffer's temperature at the start of the step, in °C.
+            circuit_temperature_in_celsius: The temperature published as the generators' return and the distribution
+                system's supply, in °C.
+            end_temperature_in_celsius: ``T_end``, the buffer's temperature at the end of the step, in °C.
+            end_temperatures_without_circuit_in_celsius: The end temperature had each circuit exchanged nothing, in
+                °C, in the order primary generator, secondary generator, heat distribution.
+            heats_in_joule: The heat each circuit brought over the step, in J, in the same order; the distribution's
+                is negative while it heats.
+            loss_in_joule: The standby loss over the step, in J.
+        """
+        heat_primary_in_joule, heat_secondary_in_joule, heat_distribution_in_joule = heats_in_joule
         joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         dt_in_seconds = self.seconds_per_timestep
         for channel in (
             self.water_temperature_heat_distribution_system_output_channel,
             self.water_temperature_heat_generator_output_channel,
             self.water_temperature_secondary_heat_generator_output_channel,
-            self.water_temperature_mean_channel,
-            self.water_temperature_at_start_of_step_channel,
         ):
-            stsv.set_output_value(channel, start_temperature_in_celsius)
-        stsv.set_output_value(self.water_temperature_at_end_of_step_channel, node.t_end_c)
-        for channel, heat_in_joule in zip(
-            self.water_temperature_at_end_of_step_without_circuit_channels, node.heat_in_j_per_inflow
+            stsv.set_output_value(channel, circuit_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_mean_channel, start_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_at_start_of_step_channel, start_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_at_end_of_step_channel, end_temperature_in_celsius)
+        for channel, end_without_in_celsius in zip(
+            self.water_temperature_at_end_of_step_without_circuit_channels, end_temperatures_without_circuit_in_celsius
         ):
-            stsv.set_output_value(channel, node.t_end_c - heat_in_joule / self.heat_capacity_in_joule_per_kelvin)
+            stsv.set_output_value(channel, end_without_in_celsius)
         stsv.set_output_value(
             self.thermal_energy_in_storage_channel,
-            self.heat_capacity_in_joule_per_kelvin * node.t_end_c / joules_per_watt_hour,
+            self.heat_capacity_in_joule_per_kelvin * end_temperature_in_celsius / joules_per_watt_hour,
         )
         stsv.set_output_value(
             self.thermal_energy_from_heat_generator_channel, heat_primary_in_joule / joules_per_watt_hour
@@ -1159,19 +1267,19 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         stsv.set_output_value(
             self.thermal_energy_increase_in_storage_channel,
             self.heat_capacity_in_joule_per_kelvin
-            * (node.t_end_c - start_temperature_in_celsius)
+            * (end_temperature_in_celsius - start_temperature_in_celsius)
             / joules_per_watt_hour,
         )
-        stsv.set_output_value(self.stand_by_heat_loss_channel, node.loss_j / dt_in_seconds)
+        stsv.set_output_value(self.stand_by_heat_loss_channel, loss_in_joule / dt_in_seconds)
         stsv.set_output_value(self.thermal_power_heat_distribution_channel, -heat_distribution_in_joule / dt_in_seconds)
         stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
         stsv.set_output_value(
             self.thermal_power_from_secondary_heat_generator_channel, heat_secondary_in_joule / dt_in_seconds
         )
-        self.mean_water_temperature_in_water_storage_in_celsius = node.t_end_c
-        self.state.mean_water_temperature_in_celsius = node.t_end_c
-        self.state.heat_loss_in_watt = node.loss_j / dt_in_seconds
-        self.state.temperature_loss_in_celsius_per_timestep = node.loss_j / self.heat_capacity_in_joule_per_kelvin
+        self.mean_water_temperature_in_water_storage_in_celsius = end_temperature_in_celsius
+        self.state.mean_water_temperature_in_celsius = end_temperature_in_celsius
+        self.state.heat_loss_in_watt = loss_in_joule / dt_in_seconds
+        self.state.temperature_loss_in_celsius_per_timestep = loss_in_joule / self.heat_capacity_in_joule_per_kelvin
 
     def simulate_stratification_path(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate a buffer without a heat exchanger: the earlier mass-mixing law with mixing-factor outlets.
@@ -1477,6 +1585,11 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         #: The buffer's heat capacity ``C = M c``, in J/K: 170 kg of water hold 0.71 MJ/K.
         self.heat_capacity_in_joule_per_kelvin = (
             self.water_mass_in_storage_in_kg * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+        )
+        #: The buffer's standby loss coefficient ``UA`` to its surroundings, in W/K: 2 W/(m² K) over the 3.66 m² of a
+        #: 500 l cylinder are 7.3 W/K.
+        self.heat_loss_coefficient_in_watt_per_kelvin = (
+            self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2
         )
 
         # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located

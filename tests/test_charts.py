@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hisim.postprocessing.charts import Carpet, Line
+from hisim.postprocessing.charts import BarChart, Carpet, Line, MonthlyAggregation
 from hisim.postprocessing.chartbase import AxisUnit, Chart
 from hisim.simulationparameters import FigureFormat
 
@@ -365,3 +365,71 @@ def test_carpet_shows_the_same_unit_as_the_line_chart(  # pylint: disable=redefi
     temperature.plot(xdims=2, data_in_self_units=pd.Series(np.full(48, 2000.0)), window_start=start)
     assert temperature.units == "°C"
     assert saved_figures[-1].colorbar_label == "Temperature [°C]"
+
+
+def _bar_chart(tmp_path: Path, units: str) -> BarChart:
+    """A monthly bar chart of one output, writing into ``tmp_path`` only when it plots."""
+    return BarChart(
+        output="PVSystem # ElectricityOutput",
+        component_name="PVSystem",
+        units=units,
+        directory_path=str(tmp_path),
+        output_description="PV output",
+        figure_format=FigureFormat.PNG,
+        path_checker=lambda **_: None,
+    )
+
+
+def _plot_and_read(chart: BarChart, values: list) -> tuple:
+    """Plot the chart and return its y label and the texts drawn on its axes, read just before saving."""
+    import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
+
+    seen: dict = {}
+    original_savefig = plt.savefig
+
+    def record(*args, **kwargs):
+        seen["label"] = plt.gca().get_ylabel()
+        seen["texts"] = [text.get_text() for text in plt.gca().texts]
+        return original_savefig(*args, **kwargs)
+
+    plt.savefig = record  # type: ignore[assignment]
+    try:
+        chart.plot(pd.Series(values))
+    finally:
+        plt.savefig = original_savefig  # type: ignore[assignment]
+    return seen["label"], seen["texts"]
+
+
+@pytest.mark.parametrize(
+    ("units", "monthly_values", "expected_label"),
+    [
+        # A power is averaged over the month: 4,568 W are a mean of 4.568 kW, not an energy.
+        ("W", [4568.0] * 12, "Power, monthly mean [kW]"),
+        # An energy is summed over the month.
+        ("Wh", [3_288_891.0] * 12, "Energy, monthly sum [MWh]"),
+        # A temperature is averaged.
+        ("°C", [21.0] * 12, "Temperature, monthly mean [°C]"),
+    ],
+)
+def test_the_bar_chart_axis_names_mean_or_sum(
+    tmp_path: Path, units: str, monthly_values: list, expected_label: str
+) -> None:
+    """The y axis says whether a bar is the month's mean or its sum, as the simulator aggregated it."""
+    label, _texts = _plot_and_read(_bar_chart(tmp_path, units), monthly_values)
+    assert label == expected_label
+
+
+def test_the_monthly_aggregation_follows_the_simulator_rule() -> None:
+    """Every unit the simulator averages is drawn as a mean, every other one as a sum."""
+    from hisim import loadtypes as lt  # pylint: disable=import-outside-toplevel
+
+    for unit in lt.Units:
+        expected = MonthlyAggregation.MEAN if unit in lt.UNITS_USING_MEAN_AGGREGATION else MonthlyAggregation.SUM
+        assert MonthlyAggregation.of_unit(unit) == expected
+        assert MonthlyAggregation.of_unit(unit.value) == expected
+
+
+def test_a_bar_chart_of_zeros_says_so(tmp_path: Path) -> None:
+    """An output that is 0 in every month gets a note instead of an empty axis."""
+    _label, texts = _plot_and_read(_bar_chart(tmp_path, "Wh"), [0.0] * 12)
+    assert texts == ["All monthly values are 0"]

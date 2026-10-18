@@ -1,9 +1,10 @@
 """Contains all the chart classes."""
 
 import datetime
+import enum
 import gc
 import math
-from typing import Callable, ClassVar, List, Tuple
+from typing import Any, Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import dates as mdates
@@ -11,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from hisim import log
-from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
+from hisim import loadtypes as lt
+from hisim.postprocessing.chartbase import AxisUnit, Chart, ChartFontsAndSize
 from hisim import utils
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.simulationparameters import FigureFormat
@@ -286,8 +288,42 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         )
 
 
+class MonthlyAggregation(str, enum.Enum):
+    """How the twelve values of a monthly bar chart were formed from the run's time steps.
+
+    The simulator aggregates every output into months by its unit (``Simulator.get_std_results``):
+    a rate or a state such as W, °C or a fraction is averaged over the month, everything else, such
+    as Wh, is summed. The bar chart names which of the two its bars are, since a monthly mean power
+    in kW and a monthly energy in kWh look alike on an axis that names only the unit. Example: PV
+    electricity in W is drawn as "Power, monthly mean [kW]", PV energy in Wh as "Energy, monthly
+    sum [MWh]".
+    """
+
+    MEAN = "mean"
+    SUM = "sum"
+
+    @classmethod
+    def of_unit(cls, unit: Any) -> "MonthlyAggregation":
+        """Return how the simulator aggregates an output of this unit into months.
+
+        Args:
+            unit: The output's unit, a ``loadtypes.Units`` member or its string value.
+
+        Returns:
+            ``MEAN`` for the units in ``loadtypes.UNITS_USING_MEAN_AGGREGATION``, ``SUM`` for all others.
+        """
+        unit_value = unit.value if hasattr(unit, "value") else unit
+        mean_unit_values = {mean_unit.value for mean_unit in lt.UNITS_USING_MEAN_AGGREGATION}
+        return cls.MEAN if unit_value in mean_unit_values else cls.SUM
+
+
 class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
-    """Makes Bar charts."""
+    """Makes the monthly bar chart of one output: twelve bars, January to December.
+
+    The y axis names the quantity and whether a bar is the month's mean or its sum
+    (:class:`MonthlyAggregation`), and an output that is zero in every month is drawn with a note
+    saying so instead of an empty axis.
+    """
 
     original_pv_sol_in_kwh: ClassVar[list[float]] = [
         385.66,
@@ -314,8 +350,21 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
         path_checker: Callable[[str], None] | None = None,
+        aggregation: MonthlyAggregation | None = None,
     ) -> None:
-        """Initializes the classes."""
+        """Initialize the bar chart of one output.
+
+        Args:
+            output: The output's full name, ``"Component # Field"``.
+            component_name: The component the output belongs to.
+            units: The output's unit.
+            directory_path: The result directory.
+            output_description: The output's description, for the report.
+            figure_format: The image format.
+            path_checker: Validates path lengths; the result path provider's check by default.
+            aggregation: Whether the monthly values are means or sums; derived from ``units`` as the
+                simulator does when not given.
+        """
         super().__init__(
             output=output,
             component_name=component_name,
@@ -326,18 +375,33 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             figure_format=figure_format,
             path_checker=path_checker,
         )
-        self.filename = f"monthly_{self.output}{self.figure_format}"
+        self.aggregation: MonthlyAggregation = (
+            aggregation if aggregation is not None else MonthlyAggregation.of_unit(self.declared_units)
+        )
+
+    def y_axis_label(self, shown_units: str) -> str:
+        """Return the y axis title: quantity, aggregation and unit, e.g. ``Energy, monthly sum [MWh]``.
+
+        Args:
+            shown_units: The unit the bars are drawn in, as :meth:`rescale_y_axis` returned it.
+
+        Returns:
+            The label.
+        """
+        quantity = AxisUnit.QUANTITIES.get(self.declared_units, "Value")
+        return f"{quantity}, monthly {self.aggregation.value} [{shown_units}]"
 
     def plot(self, data_in_self_units: pd.Series) -> ReportImageEntry:
         """Plot the bar chart.
 
         Args:
-            data_in_self_units: Physical simulation output to plot, with values
-                expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
-                °C, kg/s). The unit is dynamic and may be rescaled during
-                plotting.
+            data_in_self_units: The twelve monthly values of the output, January to December,
+                expressed in the unit tracked by ``self.units`` (e.g. W, kWh, °C). The unit may be
+                rescaled with an SI prefix while plotting.
+
+        Returns:
+            The report entry of the written image.
         """
-        # Specify the values of blue bars (height)
         self.ensure_output_dir()
 
         # Position of bars on x-axis
@@ -347,21 +411,28 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         width = 0.4
 
         # Rescale values in case they are too high
-        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.declared_units)
 
-        plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.bar(ind, data_in_self_units, width)
-        plt.xticks(
-            ticks=ind,
-            labels=[str(i) for i in self.months_abbrev_uppercase],
-            fontsize=self.fontsize_ticks,
-        )
-
-        plt.yticks(fontsize=self.fontsize_ticks)
-        plt.title(f"{self.title} Monthly", fontsize=self.fontsize_title)
-        plt.grid()
+        _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
+        axis.set_axisbelow(True)
+        axis.grid(axis="y")
+        axis.bar(ind, data_in_self_units, width)
+        axis.set_xticks(ind)
+        axis.set_xticklabels([str(i) for i in self.months_abbrev_uppercase], fontsize=self.fontsize_ticks)
+        axis.tick_params(axis="y", labelsize=self.fontsize_ticks)
+        if not np.any(np.asarray(data_in_self_units, dtype=float)):
+            axis.text(
+                0.5,
+                0.5,
+                "All monthly values are 0",
+                transform=axis.transAxes,
+                ha="center",
+                va="center",
+                fontsize=self.fontsize_label,
+            )
+        axis.set_title(self.wrap_title(self.title), fontsize=self.fontsize_title)
+        axis.set_ylabel(self.y_axis_label(self.units), fontsize=self.fontsize_label)
         plt.tight_layout()
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
 
         plt.savefig(self.filepath2)
         plt.close()

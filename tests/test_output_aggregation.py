@@ -40,8 +40,27 @@ def _output(field_name: str, unit: lt.Units, aggregation: lt.OutputAggregation |
 
 
 def test_the_unit_rule_is_the_rule_of_the_mean_units() -> None:
-    """Every unit averaged by default is averaged and every other one summed, as before."""
-    averaged_units = lt.OutputAggregation.units_averaged_by_default()
+    """Every unit averaged by default is averaged and every other one summed, as before.
+
+    The twelve units are written out, as in ``UNITS_USING_MEAN_AGGREGATION`` before outputs declared
+    their aggregation, so a change to the set, which moves the monthly values and run totals of every
+    output that declares none, fails here.
+    """
+    averaged_units = {
+        lt.Units.CELSIUS,
+        lt.Units.KELVIN,
+        lt.Units.ANY,
+        lt.Units.METER_PER_SECOND,
+        lt.Units.DEGREES,
+        lt.Units.WATT,
+        lt.Units.KILOWATT,
+        lt.Units.WATT_PER_SQUARE_METER,
+        lt.Units.KG_PER_SEC,
+        lt.Units.PERCENT,
+        lt.Units.FRACTION,
+        lt.Units.PASCAL,
+    }
+    assert lt.OutputAggregation.units_averaged_by_default() == averaged_units
     for unit in lt.Units:
         expected = lt.OutputAggregation.MEAN if unit in averaged_units else lt.OutputAggregation.SUM
         assert lt.OutputAggregation.of_unit(unit) == expected

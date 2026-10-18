@@ -34,6 +34,7 @@ lets the `report` CLI render stored files instead of re-running the evaluator.
 
 import datetime
 import os
+from typing import Optional
 
 import pytest
 
@@ -282,14 +283,17 @@ def fixture_rendered() -> RenderedReports:
     return RenderedReports(summary, report, matrix, comparison, reference)
 
 
-def _normalize(text: str) -> str:
+def _normalize(text: str, today: Optional[datetime.date] = None) -> str:
     """The single documented substitution: the generation stamp's date -> `<DATE>` (see the module docstring).
 
     Only the stamp "Generated <today>" is replaced. A source registry row retrieved today shows
     the same date, and replacing every occurrence would write `<DATE>` into that row of a golden
-    regenerated today, so the golden would fail on every later day.
+    regenerated today, so the golden would fail on every later day. ``today`` defaults to the
+    current date; a test that builds its input from a date passes that same date, so a run that
+    crosses midnight between the two reads cannot fail it.
     """
-    return text.replace(f"Generated {datetime.date.today().isoformat()}", "Generated <DATE>")
+    stamp_date = today if today is not None else datetime.date.today()
+    return text.replace(f"Generated {stamp_date.isoformat()}", "Generated <DATE>")
 
 
 def _assert_matches_golden(file_name: str, text: str) -> None:
@@ -645,6 +649,6 @@ class TestGoldenFiles:
         A source registry row retrieved today shows today's date as data. It must stay literal in
         a golden regenerated today, or that golden fails on every later day.
         """
-        today = datetime.date.today().isoformat()
-        rendered = f"<p>Generated {today}.</p><td>{today}</td>"
-        assert _normalize(rendered) == f"<p>Generated <DATE>.</p><td>{today}</td>"
+        today = datetime.date.today()
+        rendered = f"<p>Generated {today.isoformat()}.</p><td>{today.isoformat()}</td>"
+        assert _normalize(rendered, today) == f"<p>Generated <DATE>.</p><td>{today.isoformat()}</td>"

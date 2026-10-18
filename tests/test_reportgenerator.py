@@ -37,8 +37,7 @@ def fixture_figure_path(tmp_path: Path) -> str:
     "method_name",
     [
         "write_figures_to_report",
-        "write_figures_to_report_with_size_four_six",
-        "write_figures_to_report_with_size_seven_four",
+        "write_figure_fitted_to_page",
     ],
 )
 def test_a_drawn_figure_holds_no_decoded_image(tmp_path: Path, figure_path: str, method_name: str) -> None:
@@ -74,10 +73,9 @@ def test_a_report_with_figures_builds(tmp_path: Path, figure_path: str) -> None:
     report = ReportGenerator(dirpath=str(tmp_path))
     report.open()
     report.write_figures_to_report(figure_path)
-    report.write_figures_to_report_with_size_seven_four(figure_path)
     report.close()
     report.open()
-    report.write_figures_to_report_with_size_four_six(figure_path)
+    report.write_figure_fitted_to_page(figure_path)
     report.close()
     content = (tmp_path / "report.pdf").read_bytes()
     assert content.count(b"/Subtype /Image") > figure_free_images
@@ -144,6 +142,6 @@ def test_table_columns_share_the_width_by_what_they_hold_on_one_line() -> None:
 def test_a_fitted_figure_keeps_its_aspect_ratio(tmp_path: Path, figure_path: str) -> None:
     """A 300 x 200 pixel figure in a 150 x 300 point box is drawn at 150 x 100 points, not stretched."""
     report = ReportGenerator(dirpath=str(tmp_path))
-    report.write_figure_fitted_to_page(figure_path, max_width=150, max_height=300)
+    report.write_figure_fitted_to_page(figure_path, max_width_in_points=150, max_height_in_points=300)
     image = report.story[-1]
     assert (image.drawWidth, image.drawHeight) == pytest.approx((150, 100))

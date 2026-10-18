@@ -130,14 +130,9 @@ class ReportGenerator:
 
     def open(self) -> None:
         """Open a file."""
-        self.doc: MyDocTemplate = MyDocTemplate(
-            self.filepath,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=18,
-        )
+        # The margins are MyDocTemplate.MARGIN, set by its one frame; BaseDocTemplate's margin keywords
+        # would not move that frame, so none are passed.
+        self.doc: MyDocTemplate = MyDocTemplate(self.filepath, pagesize=letter)
 
         self.styles: StyleSheet1 = getSampleStyleSheet()
         self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
@@ -301,28 +296,6 @@ class ReportGenerator:
         """
         self._append_figure(file_path, width_in_points=None, height_in_points=None, use_dpi=True)
 
-    def write_figures_to_report_with_size_four_six(self, file_path: str) -> None:
-        """Add a plot to the report, drawn 4 inches wide and 6 inches high.
-
-        Args:
-            file_path: Path of the plot's image file.
-
-        Raises:
-            ValueError: If no file exists at ``file_path``.
-        """
-        self._append_figure(file_path, width_in_points=4 * inch, height_in_points=6 * inch, use_dpi=False)
-
-    def write_figures_to_report_with_size_seven_four(self, file_path: str) -> None:
-        """Add a plot to the report, drawn 7 inches wide and 4 inches high.
-
-        Args:
-            file_path: Path of the plot's image file.
-
-        Raises:
-            ValueError: If no file exists at ``file_path``.
-        """
-        self._append_figure(file_path, width_in_points=7 * inch, height_in_points=4 * inch, use_dpi=False)
-
     def _append_figure(
         self, file_path: str, width_in_points: float | None, height_in_points: float | None, use_dpi: bool
     ) -> None:
@@ -356,9 +329,12 @@ class ReportGenerator:
         self.story.append(image)
 
     def write_figure_fitted_to_page(
-        self, file_path: str, max_width: float = LARGEST_FIGURE_WIDTH, max_height: float = LARGEST_FIGURE_HEIGHT
+        self,
+        file_path: str,
+        max_width_in_points: float = LARGEST_FIGURE_WIDTH,
+        max_height_in_points: float = LARGEST_FIGURE_HEIGHT,
     ) -> None:
-        """Add a figure scaled to fit a box, keeping its aspect ratio; read lazily, as in `write_figures_to_report`.
+        """Add a figure scaled to fit a box, keeping its aspect ratio, through :meth:`_append_figure`.
 
         A figure whose shape is not known in advance, such as a Graphviz network chart, is shrunk or
         enlarged until it touches the box on one side. Example: a 2000 x 1000 pixel chart in a box
@@ -366,8 +342,8 @@ class ReportGenerator:
 
         Args:
             file_path: The image file.
-            max_width: The width of the box, in points; the page's largest figure by default.
-            max_height: The height of the box, in points; the page's largest figure by default.
+            max_width_in_points: The width of the box; the page's largest figure by default.
+            max_height_in_points: The height of the box; the page's largest figure by default.
 
         Raises:
             ValueError: When the file does not exist.
@@ -376,10 +352,13 @@ class ReportGenerator:
         if not path.is_file():
             raise ValueError("no files found")
         width_in_pixels, height_in_pixels = ImageReader(str(path)).getSize()
-        scale = min(max_width / width_in_pixels, max_height / height_in_pixels)
-        image = Image(str(path), width=width_in_pixels * scale, height=height_in_pixels * scale, lazy=2)
-        image.hAlign = "CENTER"
-        self.story.append(image)
+        scale = min(max_width_in_points / width_in_pixels, max_height_in_points / height_in_pixels)
+        self._append_figure(
+            file_path,
+            width_in_points=width_in_pixels * scale,
+            height_in_points=height_in_pixels * scale,
+            use_dpi=False,
+        )
 
     #: Font size of table cells, in points; the header row is set in bold at the same size.
     TABLE_FONT_SIZE: float = 8

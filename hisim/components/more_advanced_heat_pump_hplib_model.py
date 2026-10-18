@@ -585,6 +585,25 @@ class HeatPumpRunTimers:
 
 
 @dataclass(frozen=True)
+class HeatPumpModeTrack:
+    """The heat pump's mode in a step and its run timers after that step, on one of its two tracks.
+
+    The control track holds the mode the heat pump runs on after its minimum running and idle times; its timers feed
+    those minimum times and the start-up ramp, so it decides what the machine does. The published track holds the
+    mode the machine ran, where a space-heating step at a part-load ratio of 0 is off; its mode and timers are what
+    the heat pump publishes as its on/off state, ``TimeOnHeating`` and ``TimeOff``, and what its switch counters and
+    KPIs count. For example, at 900 s a space-heating step at ratio 0 after 600 s of heating is
+    ``HeatPumpModeTrack(1, HeatPumpRunTimers(1500, 0, 0))`` on the control track and
+    ``HeatPumpModeTrack(0, HeatPumpRunTimers(0, 0, 900))`` on the published one.
+    """
+
+    #: The mode: 1 space heating, 2 hot water, -1 cooling, 0 off.
+    on_off: float
+    #: The run timers after the step in that mode, in s.
+    timers: HeatPumpRunTimers
+
+
+@dataclass(frozen=True)
 class HeatPumpSwitchCounters:
 
     """How often the heat pump has entered space heating, hot water and operation, since the run began.

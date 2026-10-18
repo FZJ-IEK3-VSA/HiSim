@@ -121,18 +121,15 @@ def test_the_lowering_ratio_follows_its_table(ratio_run: float, end: float, with
     ("rule", "name"),
     [(StartOfStepPartLoadRule.raising_ratio, "target"), (StartOfStepPartLoadRule.lowering_ratio, "floor")],
 )
-def test_invalid_values_are_refused(rule, name: str) -> None:
-    """A ratio run outside [0, 1] and a non-finite temperature are refused by both rules."""
+def test_a_ratio_run_outside_zero_to_one_is_refused(rule, name: str) -> None:
+    """A ratio run outside [0, 1] is refused by both rules.
+
+    A non-finite temperature is not checked here: the rules run on every pass, and a NaN or infinite value is caught
+    once after the run by the check of the result columns (hisim/postprocessing/finite_results.py).
+    """
     limit = {f"{name}_temperature_in_celsius": 20.0}
     with pytest.raises(ValueError):
         rule(ratio_run=1.5, end_temperature_in_celsius=30.0, end_temperature_without_circuit_in_celsius=25.0, **limit)
-    with pytest.raises(ValueError):
-        rule(
-            ratio_run=1.0,
-            end_temperature_in_celsius=float("nan"),
-            end_temperature_without_circuit_in_celsius=25.0,
-            **limit,
-        )
 
 
 @pytest.mark.parametrize(

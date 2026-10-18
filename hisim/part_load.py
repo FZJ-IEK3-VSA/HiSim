@@ -448,10 +448,9 @@ class StartOfStepPartLoadRule:
             The ratio to publish, from 0 to 1.
 
         Raises:
-            ValueError: If a temperature is not finite or the ratio run lies outside [0, 1].
+            ValueError: If the ratio run lies outside [0, 1].
         """
-        cls.check(ratio_run, end_temperature_in_celsius, end_temperature_without_circuit_in_celsius)
-        PartLoadRule.check_finite("target_temperature_in_celsius", target_temperature_in_celsius)
+        PartLoadRule.validated_ratio(ratio_run, "The start-of-step part-load rule's ratio run")
         if end_temperature_without_circuit_in_celsius >= target_temperature_in_celsius:
             return 0.0
         deviation_in_kelvin = end_temperature_in_celsius - target_temperature_in_celsius
@@ -497,10 +496,9 @@ class StartOfStepPartLoadRule:
             The ratio to publish, from 0 to 1.
 
         Raises:
-            ValueError: If a temperature is not finite or the ratio run lies outside [0, 1].
+            ValueError: If the ratio run lies outside [0, 1].
         """
-        cls.check(ratio_run, end_temperature_in_celsius, end_temperature_without_circuit_in_celsius)
-        PartLoadRule.check_finite("floor_temperature_in_celsius", floor_temperature_in_celsius)
+        PartLoadRule.validated_ratio(ratio_run, "The start-of-step part-load rule's ratio run")
         if end_temperature_without_circuit_in_celsius <= floor_temperature_in_celsius:
             return 0.0
         fall_in_kelvin = end_temperature_without_circuit_in_celsius - end_temperature_in_celsius
@@ -508,26 +506,6 @@ class StartOfStepPartLoadRule:
             return 1.0
         allowed_in_kelvin = end_temperature_without_circuit_in_celsius - floor_temperature_in_celsius
         return min(1.0, max(0.0, ratio_run * allowed_in_kelvin / fall_in_kelvin))
-
-    @staticmethod
-    def check(
-        ratio_run: float, end_temperature_in_celsius: float, end_temperature_without_circuit_in_celsius: float
-    ) -> None:
-        """Refuse a ratio run outside [0, 1] and a non-finite end temperature, naming the value.
-
-        Args:
-            ratio_run: The ratio the circuit reports it ran with.
-            end_temperature_in_celsius: The store's end temperature, in °C.
-            end_temperature_without_circuit_in_celsius: The store's end temperature without the circuit, in °C.
-
-        Raises:
-            ValueError: If one of them is invalid.
-        """
-        PartLoadRule.validated_ratio(ratio_run, "The start-of-step part-load rule's ratio run")
-        PartLoadRule.check_finite("end_temperature_in_celsius", end_temperature_in_celsius)
-        PartLoadRule.check_finite(
-            "end_temperature_without_circuit_in_celsius", end_temperature_without_circuit_in_celsius
-        )
 
 
 class StartOfStepPartLoadControl:

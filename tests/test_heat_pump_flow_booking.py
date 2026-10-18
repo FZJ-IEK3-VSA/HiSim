@@ -208,11 +208,14 @@ class SingleStep:
     """One step of a heat pump whose every input is a fake output holding a value."""
 
     @staticmethod
-    def heat_pump(position: PositionHotWaterStorageInSystemSetup) -> MoreAdvancedHeatPumpHPLib:
+    def heat_pump(
+        position: PositionHotWaterStorageInSystemSetup, seconds_per_timestep: int = 60
+    ) -> MoreAdvancedHeatPumpHPLib:
         """A 10 kW generic air/water heat pump with hot-water preparation, running for ten minutes already.
 
         Args:
             position: Where its storage sits: ``PARALLEL`` (hplib's flow) or ``SERIES`` (the nominal flow).
+            seconds_per_timestep: The step length of its simulation, in s; above 600 s it runs part-load ratios.
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
@@ -224,7 +227,7 @@ class SingleStep:
         config.with_domestic_hot_water_preparation = True
         config.position_hot_water_storage_in_system = position
         heat_pump = MoreAdvancedHeatPumpHPLib(
-            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep)
         )
         heat_pump.state = MoreAdvancedHeatPumpHPLibState(
             time_on_heating=600,

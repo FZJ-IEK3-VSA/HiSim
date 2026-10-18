@@ -2,8 +2,9 @@
 
 The space-heating controller sets the fraction by :meth:`hisim.part_load.StartOfStepPartLoadRule.raising_ratio` from
 the buffer's end temperature and its end temperature without the heat pump; the heat pump runs that fraction at full
-load and reports it back. The tests check the heat pump's scaling of one step, the ratio it reports in each mode, and
-the controller's ratio and target in a free pass, a forced pass, without a buffer and while it does not heat.
+load and reports it back. The tests check the heat pump's scaling of one step, the ratio it reports in each mode, that
+a step at ratio 0 counts as off, and the controller's ratio and target in a free pass, a forced pass, without a buffer
+and while it does not heat.
 """
 
 from typing import ClassVar, Dict, List
@@ -60,7 +61,7 @@ def test_a_part_loaded_step_carries_the_averaged_flow_at_the_full_load_outlet() 
 
 
 def test_a_whole_step_is_unchanged_and_a_ratio_of_zero_books_nothing() -> None:
-    """Ratio 1 returns the full-load step itself; ratio 0 has no flow, no heat and no electricity."""
+    """Ratio 1 returns the full-load step itself; ratio 0 has no flow, no heat, no electricity, outlet = return, COP 0."""
     full_load = full_load_space_heating()
     assert MoreAdvancedHeatPumpHPLib.part_loaded_space_heating(
         full_load, part_load_ratio=1.0, return_temperature_in_celsius=30.0
@@ -71,6 +72,8 @@ def test_a_whole_step_is_unchanged_and_a_ratio_of_zero_books_nothing() -> None:
     assert nothing.mass_flow_space_heating_in_kg_per_second == 0.0
     assert nothing.thermal_power_space_heating_in_watt == 0.0
     assert nothing.total_electrical_power_in_watt == 0.0
+    assert nothing.outlet_temperature_space_heating_in_celsius == 30.0
+    assert nothing.cop == 0.0
 
 
 class HeatPumpStep:
@@ -108,6 +111,42 @@ def test_the_heat_pump_runs_the_commanded_ratio_of_a_space_heating_step_and_repo
     assert half[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] == pytest.approx(
         0.5 * whole[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
     )
+
+
+def test_a_ratio_of_zero_is_off_and_the_next_charge_is_a_new_start() -> None:
+    """At 900 s a space-heating step at ratio 0 publishes the heat pump off; the next charge counts as a new start.
+
+    The heat pump has heated for 600 s. The controller stays in heating and commands 0: the heat pump publishes on/off
+    state 0, its off time grows to 900 s and its heating time restarts at 0, and the space-heating circuit idles at its
+    return with a COP of 0. The next step commands 0.5: the heat pump is on again, heats for 900 s, its off time
+    restarts and the start counter grows by one, so the cycle count of the off time (a non-zero value followed by 0)
+    sees one stop and one start. A step at 0.3 counts as a whole step of heating.
+    """
+    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL, seconds_per_timestep=900)
+    idle = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.0})
+    assert idle[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 0
+    assert idle[MoreAdvancedHeatPumpHPLib.TimeOff] == 900
+    assert idle[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 0
+    assert idle[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == HeatPumpStep.SPACE_HEATING["TemperatureInputSecondarySH"]
+    assert idle[MoreAdvancedHeatPumpHPLib.COP] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 0
+
+    charge = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.5})
+    assert charge[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 1
+    assert charge[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 900
+    assert charge[MoreAdvancedHeatPumpHPLib.TimeOff] == 0
+    assert charge[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 1
+    assert charge[MoreAdvancedHeatPumpHPLib.CounterSwitchToSH] == 1
+    assert charge[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] > 0.0
+
+    fraction = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.3})
+    assert fraction[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 1
+    assert fraction[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 1800
+    assert fraction[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 1
 
 
 def test_a_hot_water_step_runs_whole_and_reports_no_space_heating_ratio() -> None:

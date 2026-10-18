@@ -266,6 +266,12 @@ class StagedDocument:
         "priced by the reader's quote; HiSim holds no price of its own for it"
     )
 
+    #: What that note adds when the subject's embodied CO2 is unknown, booked as zero (an unpriced
+    #: envelope measure, hisim-hq4z): a quote states money, not carbon, so the carbon stays unknown.
+    QUOTED_UNKNOWN_CARBON_NOTE: ClassVar[str] = (
+        "; the quote prices the money only: its embodied CO2 is unknown, not zero, and is left out of every total"
+    )
+
     #: The note of a quoted measure HiSim holds neither a price nor an asset class for.
     QUOTED_PURCHASE_NOTE: ClassVar[str] = (
         "priced by the reader's quote and bought once: HiSim holds no lifetime for it, so it is "
@@ -878,7 +884,9 @@ class StagedDocument:
         """Return one row's `note`: the mapping report's, or what a reader's quote made of the row.
 
         A quote replaces an "unpriced" note; a quoted measure with no asset class says it is bought once; a further
-        subject of a quoted measure says it was bought within the quote.
+        subject of a quoted measure says it was bought within the quote. A quoted subject whose price was unknown and
+        whose embodied CO2 is overridden to zero keeps saying that its carbon is unknown
+        (`QUOTED_UNKNOWN_CARBON_NOTE`): the quote replaces the money, not the carbon.
 
         Args:
             subject: The row's subject.
@@ -894,10 +902,18 @@ class StagedDocument:
         if not main:
             return self.INCLUDED_NOTE.format(measure_id=override.measure_id, stage=override.stage)
         if subject in self._unpriced:
-            has_facts = any(
-                facts.subject == subject for facts in self._result.stages[override.stage].inputs.cost_facts
+            facts = next(
+                (
+                    entry.facts
+                    for entry in self._result.stages[override.stage].inputs.cost_facts
+                    if entry.subject == subject
+                ),
+                None,
             )
-            return self.QUOTED_UNPRICED_NOTE if has_facts else self.QUOTED_PURCHASE_NOTE
+            if facts is None:
+                return self.QUOTED_PURCHASE_NOTE
+            carbon_is_unknown = facts.price_is_unknown and facts.embodied_co2_override_in_kg == 0.0
+            return self.QUOTED_UNPRICED_NOTE + (self.QUOTED_UNKNOWN_CARBON_NOTE if carbon_is_unknown else "")
         return stated
 
     #: The four lifetime and age fields of a row whose subject has no lifetime.

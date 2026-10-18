@@ -20,7 +20,8 @@ Four things go into it, and each answers a question the run cannot:
   it covers. HiSim prices no envelope measure of its own here: the price comes from the request's
   ``cost`` block, written there by the frontend out of the contract's material table, and a
   measure that arrives without one is added to the plan **unpriced** rather than silently left
-  out, so the result says what it does not know. Beside them, every element the package keeps is
+  out, so the result says what it does not know; its embodied CO2 is as unknown as its price and
+  booked as zero, as a kept element's renewal is (hisim-hq4z). Beside them, every element the package keeps is
   a subject of its own, ``envelope_<element>``, which the engine renews like-for-like at the end
   of its service life: the do-nothing reference renews the fabric too (hisim-ryw1). Its renewals
   are unpriced -- no cost band reaches a kept element -- but their years are stated;
@@ -1165,10 +1166,12 @@ class EconomicContextBuilder:
     #: Watt per kilowatt, for the conversion into that attribute's unit.
     WATT_PER_KILOWATT: ClassVar[float] = 1000.0
 
-    #: The note an unpriced envelope subject carries into the mapping report.
+    #: The note an unpriced envelope subject carries into the mapping report. It covers the
+    #: carbon as well as the money: an unpriced measure books no embodied CO2 (hisim-hq4z).
     UNPRICED_NOTE: ClassVar[str] = (
         "no cost block on the measure, so the subject is in the economics with an investment of "
-        "zero and flagged unpriced; HiSim does not estimate envelope prices (decisions Q8/Q9)"
+        "zero and flagged unpriced; HiSim does not estimate envelope prices (decisions Q8/Q9); its "
+        "cost and embodied CO2 are unknown, not zero, and are left out of every total"
     )
 
     #: The note of every kept envelope element's subject (hisim-ryw1).
@@ -1788,9 +1791,10 @@ class EconomicContextBuilder:
         row of its investment build-up. Its size is the element's area as the ``Building``
         simulates it: the request's own when stated, the TABULA row's scaled one when not
         (:meth:`_element_area`). A measure without a price is still added — a measure the plan
-        carries out must appear in the economics — with the ``unpriced`` flag and an investment of
-        zero; a priced measure over an element of no area fails the translation, because pricing
-        per square metre without a square metre is not a smaller answer, it is a wrong one.
+        carries out must appear in the economics — with the ``unpriced`` flag, an investment of
+        zero and an embodied CO2 of zero (:meth:`_envelope_subject`); a priced measure over an
+        element of no area fails the translation, because pricing per square metre without a
+        square metre is not a smaller answer, it is a wrong one.
         """
         facts: List[SubjectCostFacts] = []
         for layer in self._applied.layers:
@@ -1946,6 +1950,25 @@ class EconomicContextBuilder:
         and its ``override_source`` says whether the request stated that area or the TABULA row
         supplied it. A measure without a price stays unpriced whatever its area.
 
+        **An unpriced measure books no embodied CO2** (owner decision of 2026-10-15, hisim-hq4z).
+        Its carbon is treated like its money and like a kept element's renewal
+        (:meth:`_kept_element_facts`): unknown, booked as exactly zero, and named in
+        :attr:`UNPRICED_NOTE` -- never the cost database's per-m² estimate for the class. Example:
+        a ``door_replacement`` without a cost block on 2.7 m² of door books 0 kg, where the
+        database's 43.0 kg/m² would have booked 116.1 kg; the same door with a cost block books
+        the 116.1 kg. A priced measure sets no carbon override, so the engine takes the
+        database's figure over the area.
+
+        Args:
+            measure_id: The catalogue measure, which is also the subject's name.
+            element: The thermal element the measure acts on, for its area.
+            asset_class: The cost class the subject is priced and dated under.
+            result: The result being assembled, for the subject map, the unpriced flags and their
+                notes.
+
+        Returns:
+            The measure's cost subject.
+
         Raises:
             TranslatorError: If the measure is priced and its element has no area at all -- the
                 request states none and the Building's own area for it is zero.
@@ -1981,6 +2004,8 @@ class EconomicContextBuilder:
                     if unpriced
                     else f"the request's measures[{measure_id}].cost block, over {self._area_origin(element)}"
                 ),
+                # Unknown, like the money: never the cost database's estimate (hisim-hq4z).
+                embodied_co2_override_in_kg=0.0 if unpriced else None,
                 # The zero is a placeholder: a fixed-amount grant is not capped at it (#77).
                 price_is_unknown=unpriced,
             ),

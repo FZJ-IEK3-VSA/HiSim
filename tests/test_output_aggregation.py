@@ -20,7 +20,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.config import ComponentID
-from hisim.postprocessing import charts
+from hisim.postprocessing import chart_singleday, charts
 from hisim.postprocessing.chart_selection import ChartSelection, OutputWithoutCharts
 from hisim.postprocessing.postprocessing_main import PostProcessor
 
@@ -134,28 +134,46 @@ class _RecordingChart:
         return self.output
 
 
-def test_the_line_and_bar_charts_draw_only_the_charted_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The constant output and the output declared NONE get neither a line nor a bar chart."""
+def test_every_chart_kind_draws_only_the_charted_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The constant output and the output declared NONE get no line, bar, carpet or single-day chart.
+
+    The single-day charts are drawn twice: by ``PLOT_SINGLE_DAYS`` and by the debugging charts of a
+    one-day run (``PLOT_SPECIAL_TESTING_SINGLE_DAY``).
+    """
     outputs, results = _selection_case()
     selection = ChartSelection.of_results(outputs, results)
     ppdt = SimpleNamespace(
         all_outputs=outputs,
         results=results,
         results_monthly=results.resample("ME").mean(),
-        simulation_parameters=SimpleNamespace(result_directory="unused", figure_format="png"),
+        simulation_parameters=SimpleNamespace(
+            result_directory="unused",
+            figure_format="png",
+            start_date=results.index[0].to_pydatetime(),
+            end_date=results.index[-1].to_pydatetime(),
+            seconds_per_timestep=900,
+        ),
         time_correction_factor_in_hours_per_timestep=0.25,
     )
     for output in outputs:
         output.output_description = "description"
     monkeypatch.setattr(charts, "Line", _RecordingChart)
     monkeypatch.setattr(charts, "BarChart", _RecordingChart)
+    monkeypatch.setattr(charts, "Carpet", _RecordingChart)
+    monkeypatch.setattr(chart_singleday, "ChartSingleDay", _RecordingChart)
     _RecordingChart.drawn = []
     entries: List[Any] = []
+    processor = PostProcessor()
 
-    PostProcessor().make_line_plots(ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
-    PostProcessor().make_monthly_bar_charts(ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
+    processor.make_line_plots(ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
+    processor.make_monthly_bar_charts(ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
+    processor.make_carpet_plots(ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
+    processor.make_single_day_plots(0, ppdt, selection, report_image_entries=entries)  # type: ignore[arg-type]
+    processor.make_special_one_day_debugging_plots(
+        ppdt, selection, report_image_entries=entries  # type: ignore[arg-type]
+    )
 
-    assert _RecordingChart.drawn == ["Comp # Power", "Comp # Missing"] * 2
+    assert _RecordingChart.drawn == ["Comp # Power", "Comp # Missing"] * 5
     assert entries == _RecordingChart.drawn
 
 

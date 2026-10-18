@@ -508,7 +508,7 @@ class PostProcessor:
         ):
             log.information("Making special single day plots for a single day calculation for testing.")
             start = timer()
-            self.make_special_one_day_debugging_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_special_one_day_debugging_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information(
@@ -551,14 +551,24 @@ class PostProcessor:
     def make_special_one_day_debugging_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes special plots for debugging if only a single day was calculated."""
+        """Make the single-day chart of every charted output, for a run of one day at one minute.
+
+        Like the other charts, it leaves out the constant outputs and those declaring ``NONE``
+        (:class:`ChartSelection`); the report lists them.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         # A special-case arm once compared full_name against a hard-coded "Dummy" component
         # that nothing in the repository constructs; the branch could never fire and was
         # removed rather than have its magic string maintained through every rename.
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_days = chart_single_day_class(
                 output=output.full_name,
                 component_name=output.component_name,

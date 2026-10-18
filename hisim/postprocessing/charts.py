@@ -1,21 +1,43 @@
 """Contains all the chart classes."""
 
 import datetime
+from dataclasses import dataclass
+import enum
 import gc
 import math
-from typing import Callable, ClassVar, List, Tuple
+from typing import Any, Callable, ClassVar, List, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import dates as mdates
 import numpy as np
 import pandas as pd
 
 from hisim import log
-from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
+from hisim import loadtypes as lt
+from hisim.postprocessing.chartbase import AxisUnit, Chart, ChartFontsAndSize
 from hisim import utils
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.simulationparameters import FigureFormat
 
 mpl.rcParams["agg.path.chunksize"] = 10000
+
+
+@dataclass(frozen=True)
+class CarpetXAxis:
+    """The x axis of a carpet: tick marks where its periods begin and end, and each period's name between them.
+
+    For example, a full year from 1 January has ``boundaries`` 0, 31, 59, ..., 365, ``label_positions`` 15.5,
+    45.0, ..., 349.5, ``labels`` "Jan" to "Dec" and the title "Month of the year".
+    """
+
+    #: The columns where a month (or a day) begins, and the window's end, as tick-mark positions.
+    boundaries: List[float]
+    #: Where each period's name is drawn, in the middle of the columns it covers.
+    label_positions: List[float]
+    #: The periods' names, one per label position.
+    labels: List[str]
+    #: The title of the x axis.
+    title: str
 
 
 class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
@@ -49,43 +71,64 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     #: At most this many day ticks on the x axis of a window shorter than :attr:`DAYS_FOR_MONTH_TICKS`.
     MAXIMUM_DAY_TICKS: ClassVar[int] = 7
 
-    @classmethod
-    def x_axis_ticks(
-        cls, window_start: datetime.datetime, number_of_days: int
-    ) -> Tuple[List[float], List[str], str]:
-        """Return where the x axis of a carpet over a run's window is labelled, with what, and its title.
+    #: The share of the carpet's original axes width the colour bar takes, and its gap to the carpet, as
+    #: matplotlib's ``colorbar(fraction=, pad=)`` reads them; its defaults (0.15 and 0.05) left the carpet about a
+    #: fifth narrower than the line chart of the same output.
+    COLOUR_BAR_FRACTION: ClassVar[float] = 0.05
+    COLOUR_BAR_PAD: ClassVar[float] = 0.02
 
-        Column ``i`` of the carpet is the ``i``-th day of the window, counted from ``window_start``,
-        and spans ``i`` to ``i + 1`` on the x axis. A window of at least
-        :attr:`DAYS_FOR_MONTH_TICKS` days is labelled with the month names, each in the column of the
-        15th of its month; a shorter one with the dates of up to :attr:`MAXIMUM_DAY_TICKS` of its
-        days. Example: a full year from 1 January puts "JAN" at 14.5 and "DEC" at 348.5; the week
-        from 1 July 2021 puts "01 Jul" at 0.5 and "07 Jul" at 6.5. The labels come from the window's
-        own dates, so a window that starts in July is not labelled as if it started in January.
+    @classmethod
+    def x_axis_ticks(cls, window_start: datetime.datetime, number_of_days: int) -> "CarpetXAxis":
+        """Return the x axis of a carpet over a run's window: where its periods start and end, their names, its title.
+
+        Column ``i`` of the carpet is the ``i``-th day of the window, counted from ``window_start``, and spans
+        ``i`` to ``i + 1`` on the x axis. A window of at least :attr:`DAYS_FOR_MONTH_TICKS` days is divided into
+        months: a tick mark at the first column of every month and at the window's end, and the month's name
+        centred between its two marks. A month the window covers only in part is named in the middle of the part
+        it covers. A shorter window is divided into days the same way, with the dates of up to
+        :attr:`MAXIMUM_DAY_TICKS` of its days. Example: a full year from 1 January has marks at 0, 31, 59, ...,
+        334 and 365, and "Jan" at 15.5 and "Dec" at 349.5; the week from 1 July 2021 has marks at 0 to 7 and
+        "01 Jul" at 0.5. The names come from the window's own dates, so a window that starts in July is not
+        named as if it started in January.
+
+        A name between two marks says which columns belong to it; a mark in the middle of a month, as the axis
+        had before, left the reader to guess where one month ends and the next begins.
 
         Args:
             window_start: The first moment of the run, at midnight.
             number_of_days: The number of days, and carpet columns, in the window.
 
         Returns:
-            The tick positions, their labels and the title of the x axis.
+            The x axis.
         """
         first_day = window_start.date()
         if number_of_days >= cls.DAYS_FOR_MONTH_TICKS:
-            positions: List[float] = []
-            labels: List[str] = []
-            for month_index, label in enumerate(cls.months_abbrev_uppercase):
-                column = (datetime.date(first_day.year, month_index + 1, 15) - first_day).days
-                if 0 <= column < number_of_days:
-                    positions.append(column + 0.5)
-                    labels.append(label)
-            return positions, labels, "Month of the year"
+            boundaries = [0]
+            month = datetime.date(first_day.year, first_day.month, 1)
+            while True:
+                month = datetime.date(month.year + month.month // 12, month.month % 12 + 1, 1)
+                column = (month - first_day).days
+                if column >= number_of_days:
+                    break
+                boundaries.append(column)
+            boundaries.append(number_of_days)
+            names = [
+                cls.months_abbrev_uppercase[cls.date_of_day(window_start, start).month - 1].title()
+                for start in boundaries[:-1]
+            ]
+            return CarpetXAxis(
+                boundaries=[float(boundary) for boundary in boundaries],
+                label_positions=[(start + end) / 2 for start, end in zip(boundaries, boundaries[1:])],
+                labels=names,
+                title="Month of the year",
+            )
         step_in_days = max(1, math.ceil(number_of_days / cls.MAXIMUM_DAY_TICKS))
         columns = range(0, number_of_days, step_in_days)
-        return (
-            [column + 0.5 for column in columns],
-            [cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
-            "Day",
+        return CarpetXAxis(
+            boundaries=[float(column) for column in range(0, number_of_days + 1)],
+            label_positions=[column + 0.5 for column in columns],
+            labels=[cls.date_of_day(window_start, column).strftime("%d %b") for column in columns],
+            title="Day",
         )
 
     @staticmethod
@@ -94,10 +137,13 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         The carpet has one row per timestep of the day, ``timesteps_per_day`` rows from 0 at the bottom
         to ``timesteps_per_day`` at the top, and the bottom row is the day's last timestep. The axis is
-        labelled every six hours, 24 at the bottom and 0 at the top, at the positions those hours have on
-        it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example: hourly data puts "18" at 6.0;
-        two-hour steps put it at 3.0; four-hour steps put "6" at 4.5, inside the row of 04:00 to 08:00,
-        because that is where 06:00 lies.
+        labelled with clock times every three hours, "24:00" at the bottom and "00:00" at the top, at the
+        positions those times have on it: hour ``h`` is at ``timesteps_per_day * (24 - h) / 24``. Example:
+        hourly data puts "18:00" at 6.0; two-hour steps put it at 3.0; four-hour steps put "06:00" at 4.5,
+        inside the row of 04:00 to 08:00, because that is where 06:00 lies. Nine labels fit the axis at the
+        tick font size; every six hours left most of its height empty. Clock times say what the axis is, so
+        it needs no title; the bottom reads "24:00" rather than "00:00" because it is the end of the day the
+        column shows, not the start of the next.
 
         Every step that divides a day gets a carpet, up to one row per day at 24 h: the rows are fewer
         but each still covers the hours it simulated, and the columns still show one day after the
@@ -109,10 +155,10 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         Returns:
             The tick positions, bottom to top, and their labels.
         """
-        quarters = range(0, 5)
+        eighths = range(0, 9)
         return (
-            [timesteps_per_day * quarter / 4 for quarter in quarters],
-            [str(24 - 6 * quarter) for quarter in quarters],
+            [timesteps_per_day * eighth / 8 for eighth in eighths],
+            [f"{24 - 3 * eighth:02d}:00" for eighth in eighths],
         )
 
     def plot(
@@ -145,9 +191,13 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             log.error("Carpet plot can only deal with data containing entire days")
             return None
 
-        if np.max(np.abs(data_in_self_units.values)) > 1.5e3:
-            reshaped_data_in_self_units = reshaped_data_in_self_units * 1e-3
-            self.units = f"k{self.units}"
+        # The same unit rule as the line and single-day charts of this output: a carpet of a power of
+        # 1.2 kW used to stay in W, and one of 2 000 kWh used to read "kkWh". The unit itself can
+        # differ, since each chart scales its own values: a low first day can be drawn in W while
+        # the line chart of the whole run is in kW.
+        reshaped_data_in_self_units, self.units = self.rescale_y_axis(
+            y_values=reshaped_data_in_self_units, units=self.declared_units
+        )
 
         plot_data_in_self_units = np.flip(reshaped_data_in_self_units.transpose(), axis=0)
 
@@ -158,7 +208,12 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         color_map = mpl.colormaps.get_cmap(mycolors)
 
         plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
-        plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
+        # A slim colour bar without a frame, with tick-size numbers, so the carpet keeps most of the figure's width.
+        colour_bar = plt.colorbar(plot, fraction=self.COLOUR_BAR_FRACTION, pad=self.COLOUR_BAR_PAD)
+        for spine in colour_bar.ax.spines.values():
+            spine.set_visible(False)
+        colour_bar.set_label(self.axis_label(self.units), fontsize=self.fontsize_label)
+        colour_bar.ax.tick_params(labelsize=self.fontsize_ticks)
 
         # The ticks used to be placed per whole hour of rows, which is 0 rows for a step above one hour and
         # made np.arange divide by zero; they are placed on the day's own time axis now.
@@ -166,18 +221,16 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         axis.set_yticks(y_ticks)
         axis.set_yticklabels(y_tick_labels)
 
-        x_ticks, x_tick_labels, x_axis_title = self.x_axis_ticks(window_start, xdims)
-        axis.set_xticks(x_ticks)
-        axis.set_xticklabels(x_tick_labels)
-
-        # optimizing fonts
-        fig.autofmt_xdate(rotation=45)
-        # setting axis of the plot
-        axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
-        axis.set_xlabel(x_axis_title, fontsize=self.fontsize_label)
-        plt.title(self.title, fontsize=self.fontsize_title)
-        plt.xticks(fontsize=self.fontsize_ticks)
-        plt.yticks(fontsize=self.fontsize_ticks)
+        # Tick marks where the months (or days) begin and end, their names centred between the marks.
+        x_axis = self.x_axis_ticks(window_start, xdims)
+        axis.set_xticks(x_axis.boundaries)
+        axis.set_xticklabels([])
+        axis.set_xticks(x_axis.label_positions, minor=True)
+        axis.set_xticklabels(x_axis.labels, minor=True, fontsize=self.fontsize_ticks)
+        axis.tick_params(axis="x", which="minor", length=0)
+        axis.tick_params(axis="y", labelsize=self.fontsize_ticks)
+        axis.set_xlabel(x_axis.title, fontsize=self.fontsize_label)
+        plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
         plt.tight_layout()
         log.trace("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath2)
@@ -239,18 +292,26 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         time_index = data_in_self_units.index
-        plt.xticks(fontsize=self.fontsize_ticks, rotation=20)
         plt.yticks(fontsize=self.fontsize_ticks)
 
         # Rescale values in case they are too high
-        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.declared_units)
 
         plt.plot(time_index, data_in_self_units, color="green", linewidth=1.0)
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
+        plt.ylabel(self.axis_label(self.units), fontsize=self.fontsize_label)
         plt.xlabel("Time", fontsize=self.fontsize_label)
         plt.grid()
-        plt.title(self.title, fontsize=self.fontsize_title)
-        axis.set_xlim(xmin=time_index[0])
+        plt.title(self.wrap_title(self.title), fontsize=self.fontsize_title)
+        if isinstance(time_index, pd.DatetimeIndex):
+            # Month names under a year, hours under a date: the concise formatter names each tick once
+            # and puts the year (or the date) beside the axis, where "2021-01" ... "2021-12" overlapped.
+            locator = mdates.AutoDateLocator()
+            axis.xaxis.set_major_locator(locator)
+            axis.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+        plt.xticks(fontsize=self.fontsize_ticks)
+        # Both ends at the data: a margin after the last timestep showed an empty strip and a tick of the next year.
+        if len(time_index) > 1:
+            axis.set_xlim(xmin=time_index[0], xmax=time_index[-1])
         plt.tight_layout()
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
@@ -275,8 +336,43 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         )
 
 
+class MonthlyAggregation(str, enum.Enum):
+    """How the twelve values of a monthly bar chart were formed from the run's time steps.
+
+    The simulator aggregates every output into months by its unit (``Simulator.get_std_results``): the units in
+    ``loadtypes.UNITS_USING_MEAN_AGGREGATION`` (powers, temperatures, mass flows, fractions, percent, pressures,
+    irradiance, wind speed, angles and ANY) are averaged over the month, every other unit is summed. That sums
+    energies such as Wh, but also running counters, 0/1 flags in BINARY and prices, whose monthly sums mean little
+    (bead hisim-o6a.23). The bar chart names which of the two its bars are, since a monthly mean power in kW and a
+    monthly energy in kWh look alike on an axis that names only the unit. Example: PV electricity in W is drawn as
+    "Power, monthly mean [kW]", PV energy in Wh as "Energy, monthly sum [MWh]".
+    """
+
+    MEAN = "mean"
+    SUM = "sum"
+
+    @classmethod
+    def of_unit(cls, unit: Any) -> "MonthlyAggregation":
+        """Return how the simulator aggregates an output of this unit into months.
+
+        Args:
+            unit: The output's unit, a ``loadtypes.Units`` member or its string value.
+
+        Returns:
+            ``MEAN`` for the units in ``loadtypes.UNITS_USING_MEAN_AGGREGATION``, ``SUM`` for all others.
+        """
+        unit_value = unit.value if hasattr(unit, "value") else unit
+        mean_unit_values = {mean_unit.value for mean_unit in lt.UNITS_USING_MEAN_AGGREGATION}
+        return cls.MEAN if unit_value in mean_unit_values else cls.SUM
+
+
 class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
-    """Makes Bar charts."""
+    """Makes the monthly bar chart of one output: twelve bars, January to December.
+
+    The y axis names the quantity and whether a bar is the month's mean or its sum
+    (:class:`MonthlyAggregation`), and an output that is zero in every month is drawn with a note
+    saying so instead of an empty axis.
+    """
 
     original_pv_sol_in_kwh: ClassVar[list[float]] = [
         385.66,
@@ -304,7 +400,17 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         figure_format: FigureFormat,
         path_checker: Callable[[str], None] | None = None,
     ) -> None:
-        """Initializes the classes."""
+        """Initialize the bar chart of one output.
+
+        Args:
+            output: The output's full name, ``"Component # Field"``.
+            component_name: The component the output belongs to.
+            units: The output's unit.
+            directory_path: The result directory.
+            output_description: The output's description, for the report.
+            figure_format: The image format.
+            path_checker: Validates path lengths; the result path provider's check by default.
+        """
         super().__init__(
             output=output,
             component_name=component_name,
@@ -315,18 +421,32 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             figure_format=figure_format,
             path_checker=path_checker,
         )
-        self.filename = f"monthly_{self.output}{self.figure_format}"
+        # Always the simulator's own rule for the unit, so the label cannot claim a mean the simulator did not take.
+        self.aggregation: MonthlyAggregation = MonthlyAggregation.of_unit(self.declared_units)
+
+    def y_axis_label(self, shown_units: str) -> str:
+        """Return the y axis title: quantity, aggregation and unit, e.g. ``Energy, monthly sum [MWh]``.
+
+        Args:
+            shown_units: The unit the bars are drawn in, as :meth:`rescale_y_axis` returned it.
+
+        Returns:
+            The label.
+        """
+        quantity = AxisUnit.QUANTITIES.get(self.declared_units, "Value")
+        return f"{quantity}, monthly {self.aggregation.value} [{shown_units}]"
 
     def plot(self, data_in_self_units: pd.Series) -> ReportImageEntry:
         """Plot the bar chart.
 
         Args:
-            data_in_self_units: Physical simulation output to plot, with values
-                expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
-                °C, kg/s). The unit is dynamic and may be rescaled during
-                plotting.
+            data_in_self_units: The twelve monthly values of the output, January to December,
+                expressed in the unit tracked by ``self.units`` (e.g. W, kWh, °C). The unit may be
+                rescaled with an SI prefix while plotting.
+
+        Returns:
+            The report entry of the written image.
         """
-        # Specify the values of blue bars (height)
         self.ensure_output_dir()
 
         # Position of bars on x-axis
@@ -336,21 +456,28 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         width = 0.4
 
         # Rescale values in case they are too high
-        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.declared_units)
 
-        plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.bar(ind, data_in_self_units, width)
-        plt.xticks(
-            ticks=ind,
-            labels=[str(i) for i in self.months_abbrev_uppercase],
-            fontsize=self.fontsize_ticks,
-        )
-
-        plt.yticks(fontsize=self.fontsize_ticks)
-        plt.title(f"{self.title} Monthly", fontsize=self.fontsize_title)
-        plt.grid()
+        _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
+        axis.set_axisbelow(True)
+        axis.grid(axis="y")
+        axis.bar(ind, data_in_self_units, width)
+        axis.set_xticks(ind)
+        axis.set_xticklabels([str(i) for i in self.months_abbrev_uppercase], fontsize=self.fontsize_ticks)
+        axis.tick_params(axis="y", labelsize=self.fontsize_ticks)
+        if not np.any(np.asarray(data_in_self_units, dtype=float)):
+            axis.text(
+                0.5,
+                0.5,
+                "All monthly values are 0",
+                transform=axis.transAxes,
+                ha="center",
+                va="center",
+                fontsize=self.fontsize_label,
+            )
+        axis.set_title(self.wrap_title(self.title), fontsize=self.fontsize_title)
+        axis.set_ylabel(self.y_axis_label(self.units), fontsize=self.fontsize_label)
         plt.tight_layout()
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
 
         plt.savefig(self.filepath2)
         plt.close()

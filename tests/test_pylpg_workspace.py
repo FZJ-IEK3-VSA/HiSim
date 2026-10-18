@@ -967,8 +967,9 @@ def test_preinstalled_binaries_of_another_release_fall_back_to_the_cache(
     )
     assert executable.is_file()
     assert len(fake_download.paths) == 1
-    (reason,) = PylpgWorkspace._reported_preinstallation_problems  # pylint: disable=protected-access
-    assert "LPG0.0.1" in reason and PylpgWorkspace.lpg_release() in reason
+    reasons = sorted(PylpgWorkspace._reported_preinstallation_problems)  # pylint: disable=protected-access
+    assert len(reasons) == 1
+    assert "LPG0.0.1" in reasons[0] and PylpgWorkspace.lpg_release() in reasons[0]
 
 
 @pytest.mark.base

@@ -39,6 +39,17 @@ def _cumulative_unit_for_sum(unit: Units) -> str:
     return text
 
 
+class GraphvizRenderError(RuntimeError):
+    """Graphviz's ``dot`` ran and failed to render a network chart.
+
+    Raised by :meth:`SystemChart.render_png` when ``dot`` exits with a non-zero code; the message
+    carries what ``dot`` printed on stderr. Example: a graph with a malformed attribute makes ``dot``
+    exit with code 1 and "syntax error in line 3". Why a class of its own: ``make_graphviz_chart``
+    catches exactly this failure and a missing ``dot``, so that any other ``RuntimeError`` (such as a
+    ``NotImplementedError`` or a ``RecursionError`` in the chart code) still reaches the caller.
+    """
+
+
 class _ChartSpecRequired(TypedDict):
     """Required keyword arguments for one :meth:`SystemChart.make_graphviz_chart` variant."""
 
@@ -160,27 +171,31 @@ class SystemChart:
 
         Returns:
             A :class:`SystemChartEntry` for the generated chart, or ``None`` if
-            chart generation failed (e.g., Graphviz is not installed on the
-            system). Failures are logged and swallowed rather than raised.
+            Graphviz could not draw it: ``dot`` is not on ``PATH``
+            (``FileNotFoundError``) or ``dot`` failed (:class:`GraphvizRenderError`).
+            Those two failures are logged and the run goes on without the chart,
+            since Graphviz is an optional system program.
+
+        Raises:
+            Exception: Any other error, from building the graph or from the
+                rendering, reaches the caller unchanged: it is a bug in the chart
+                code, not a missing Graphviz.
         """
-
-        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
-
+        graph = self._build_graph(
+            with_labels=with_labels,
+            with_class_names=with_class_names,
+            with_results=with_results,
+        )
+        fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
         try:
-            graph = self._build_graph(
-                with_labels=with_labels,
-                with_class_names=with_class_names,
-                with_results=with_results,
-            )
-            fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
             self.render_png(graph, fullpath)
-        except Exception as exc:  # noqa
-            log.error(
-                f"Failed to generate network chart {filename}. Probably Graphviz is missing on your system. "
-                f"The python error was: {type(exc).__name__}: {exc}"
-            )
-            system_chart_entry = None
-        return system_chart_entry
+        except FileNotFoundError as exc:
+            log.error(f"Failed to generate network chart {filename}: Graphviz is not installed. {exc}")
+            return None
+        except GraphvizRenderError as exc:
+            log.error(f"Failed to generate network chart {filename}: {exc}")
+            return None
+        return SystemChartEntry(filename, caption)
 
     @staticmethod
     def render_png(graph: pydot.Dot, fullpath: Path) -> None:
@@ -200,7 +215,7 @@ class SystemChart:
 
         Raises:
             FileNotFoundError: When Graphviz's ``dot`` is not on ``PATH``.
-            RuntimeError: When ``dot`` fails; the message carries what it printed on stderr.
+            GraphvizRenderError: When ``dot`` fails; the message carries what it printed on stderr.
         """
         dot_executable = shutil.which("dot")
         if dot_executable is None:
@@ -213,7 +228,7 @@ class SystemChart:
         )
         if completed.returncode != 0:
             stderr = completed.stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(
+            raise GraphvizRenderError(
                 f"Graphviz's dot failed with exit code {completed.returncode} writing '{fullpath}': {stderr}"
             )
 

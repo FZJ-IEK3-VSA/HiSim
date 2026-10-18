@@ -13,8 +13,8 @@ kind of store its device charges or draws from:
   :class:`PartLoadControl` (decision 11 of ``roadmap/hydronic_part_load_spec.md``): the boiler's hot-water charge and
   the solar collector's pump;
 * a start-of-step store, the space-heating buffer (:class:`hisim.hydronics.StartOfStepNode`), uses
-  :class:`StartOfStepPartLoadRule` and :class:`StartOfStepPartLoadControl` (decision 21): the boiler's and the heat
-  pump's space-heating charge and the heat distribution system's circuit. The two rules read different inputs; a
+  :class:`StartOfStepPartLoadRule` and :class:`StartOfStepPartLoadControl` (decisions 21 and 22): the boiler's and the
+  heat pump's space-heating charge and the heat distribution system's circuit. The two rules read different inputs; a
   start-of-step store publishes its end temperature without each circuit, which makes its rules exact.
 
 The pieces:

@@ -4,9 +4,9 @@ The buffer with its heat exchanger is a start-of-step node: it books every circu
 step at, so it does not see its own temperature change inside the step. Above 600 s its generators and its heat
 distribution system therefore run a fraction of the step, and they do so only for steps longer than the run's
 part-load threshold, ``SimulationParameters.part_load_above_seconds``. A step above 600 s with a threshold at or above
-that step would give every circuit whole steps, which drained the gas twin's buffer below 0 °C at 3600 s and overshot
-a heat pump's buffer to 93.3 °C in stage D's measurements. The owner decided on 2026-10-16 that such a run is refused
-when the system is built (review of the stage-D spec, finding M-C).
+that step would give every circuit whole steps, with which the gas twin's year at 3600 s aborted and a heat-pump
+assembly overshot its buffer to 93.3 °C in stage D's measurements. The owner decided on 2026-10-16 that such a run is
+refused when the system is built (review of the stage-D spec, finding M-C).
 
 These tests check the rule on the buffer itself and on recorded twins built at 900 s:
 

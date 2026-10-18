@@ -617,10 +617,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     #: The longest step, s, at which a start-of-step buffer may run whole steps, its generators and its heat
     #: distribution system each bringing or taking a whole step's heat. Above it they have to run a fraction of the
-    #: step (:mod:`hisim.part_load`, decision 21 of ``roadmap/hydronic_part_load_spec.md``), since the buffer does not
-    #: see its own temperature change inside the step. Whole steps were measured safe at 60 s and at 600 s (full year
-    #: 2021, the gas, pellet and heat-pump twins, stage D's close-out); at 3600 s they drained the gas twin's buffer
-    #: below 0 °C, and a heat pump's whole steps overshot its buffer to 93.3 °C (stage D, pull requests 5 and 7).
+    #: step (:mod:`hisim.part_load`, decisions 21 and 22 of ``roadmap/hydronic_part_load_spec.md``), since the buffer
+    #: does not see its own temperature change inside the step. Whole steps were measured safe at 60 s and at 600 s
+    #: (full year 2021, the gas, pellet and heat-pump twins, stage D's close-out); at 3600 s the gas twin's year aborted
+    #: with them, the pellet and heat-pump twins' rooms spent about 290 and 710 degree-hours more than 1 K below their
+    #: set temperature, and a heat-pump assembly overshot its buffer to 93.3 °C (stage D, pull requests 5 and 7, beads
+    #: hisim-6ehm and hisim-fxix.5).
     LONGEST_WHOLE_STEP_IN_SECONDS: ClassVar[float] = 600.0
 
     # Input
@@ -987,7 +989,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         own temperature change inside the step. Above :attr:`LONGEST_WHOLE_STEP_IN_SECONDS` its circuit ends must
         therefore run a fraction of the step, and they do only above the run's part-load threshold
         (``SimulationParameters.part_load_above_seconds``). A step above 600 s with a threshold at or above that step
-        gives every circuit whole steps, which drained a buffer below 0 °C or overshot it in stage D's measurements.
+        gives every circuit whole steps, with which a year at 3600 s aborted or left the rooms cold, or a heat pump
+        overshot its buffer, in stage D's measurements.
 
         Example: 900 s steps with a threshold of 900 s are refused; 900 s with the default 600 s, and 600 s with any
         threshold, are accepted.
@@ -1009,9 +1012,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             f"not see its own temperature change inside a step, so above {cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s its "
             f"generators and its heat distribution system must run a fraction of the step, and they do only for steps "
             f"longer than part_load_above_seconds. With this threshold every circuit runs whole "
-            f"{seconds_per_timestep:g} s steps, which drained a buffer below 0 °C or overshot it in stage D's "
-            f"measurements. Lower part_load_above_seconds below {seconds_per_timestep:g} s (the default is "
-            f"{SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), or run with steps of at most "
+            f"{seconds_per_timestep:g} s steps, with which a year at 3600 s aborted or left the rooms cold, or a heat "
+            f"pump overshot its buffer, in stage D's measurements. Lower part_load_above_seconds below "
+            f"{seconds_per_timestep:g} s (the default is {SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), "
+            f"or run with steps of at most "
             f"{cls.LONGEST_WHOLE_STEP_IN_SECONDS:g} s."
         )
 

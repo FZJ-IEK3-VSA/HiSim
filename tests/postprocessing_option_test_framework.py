@@ -174,6 +174,34 @@ class PostProcessingOptionTestFramework:
             )
         return self._yearly_hourly_case
 
+    def run_exactly(self, options: Sequence[PostProcessingOptions], test_name_prefix: str) -> Path:
+        """Post-process the yearly hourly run with exactly ``options``, adding no prerequisite.
+
+        :meth:`run` adds the options an option needs; a test that checks what happens without
+        one of them calls this instead. Example: ``run_exactly([GENERATE_PDF_REPORT,
+        WRITE_NETWORK_CHARTS_TO_REPORT], "no_network_charts")`` leaves out ``MAKE_NETWORK_CHARTS``.
+
+        Args:
+            options: The post-processing options of the run, as given.
+            test_name_prefix: Prefix of the result directory this run owns.
+
+        Returns:
+            The result directory the post-processing wrote into.
+        """
+        case = self._case_for_option(PostProcessingOptions.PLOT_LINE)
+        run_directory = _result_directory_for_prefix(test_name_prefix)
+        os.makedirs(run_directory, exist_ok=True)
+        simulation_parameters = _clone_simulation_parameters(
+            source=case.ppdt.simulation_parameters,
+            result_directory=run_directory,
+            post_processing_options=list(options),
+        )
+        ppdt = _clone_ppdt(case=case, simulation_parameters=simulation_parameters)
+        log.logger.reset()
+        log.logger.setup(run_directory)
+        postprocessing_main.PostProcessor().run(ppdt=ppdt)
+        return Path(run_directory)
+
     @staticmethod
     def _options_for(option: PostProcessingOptions) -> list[PostProcessingOptions]:
         options = list(DEPENDENCIES_BY_OPTION.get(option, ()))

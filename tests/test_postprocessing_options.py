@@ -204,6 +204,21 @@ def test_postprocessing_option_write_network_charts_to_report(
     )
 
 
+def test_writing_network_charts_without_making_them_is_refused(
+    postprocessing_option_framework: PostProcessingOptionTestFramework,
+) -> None:
+    """WRITE_NETWORK_CHARTS_TO_REPORT without MAKE_NETWORK_CHARTS raises, naming both options.
+
+    No chart was attempted, so the chapter used to say that none could be drawn and blamed a missing
+    Graphviz, with nothing in the log to back it.
+    """
+    with pytest.raises(ValueError, match="WRITE_NETWORK_CHARTS_TO_REPORT needs MAKE_NETWORK_CHARTS"):
+        postprocessing_option_framework.run_exactly(
+            [PostProcessingOptions.GENERATE_PDF_REPORT, PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT],
+            test_name_prefix="network_charts_written_without_being_made",
+        )
+
+
 def test_postprocessing_option_plot_special_testing_single_day(
     postprocessing_option_framework: PostProcessingOptionTestFramework,
 ) -> None:

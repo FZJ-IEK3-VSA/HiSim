@@ -280,7 +280,9 @@ class PostProcessor:
         Raises:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
-                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``;
+                and if ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while ``MAKE_NETWORK_CHARTS``
+                is not, because no network chart would have been drawn.
             NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
                 does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
@@ -408,6 +410,12 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing network charts to report.")
             start = timer()
+            if PostProcessingOptions.MAKE_NETWORK_CHARTS not in ppdt.post_processing_options:
+                # Without it no chart was attempted, and the chapter would blame a missing Graphviz.
+                raise ValueError(
+                    "WRITE_NETWORK_CHARTS_TO_REPORT needs MAKE_NETWORK_CHARTS, which draws the charts it writes. "
+                    "Set MAKE_NETWORK_CHARTS as well."
+                )
             if report is not None:
                 self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             else:
@@ -914,7 +922,17 @@ class PostProcessor:
         report: reportgenerator.ReportGenerator,
         system_chart_entries: List[SystemChartEntry],
     ) -> None:
-        """Write network charts to report."""
+        """Write the network charts of the run into the report, as one chapter with a caption per chart.
+
+        Example: a run with Graphviz installed gets a chapter "System Network Charts" with four
+        figures, each fitted to the page. The caller makes sure ``MAKE_NETWORK_CHARTS`` was set, so an
+        empty list means Graphviz drew no chart, and the chapter says so instead of staying blank.
+
+        Args:
+            ppdt: The run's post-processing data; its result directory holds the chart files.
+            report: The open report generator the chapter is added to.
+            system_chart_entries: The charts ``MAKE_NETWORK_CHARTS`` drew, with their captions.
+        """
         report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + ". System Network Charts"])
         if not system_chart_entries:

@@ -66,7 +66,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 827.8878352012265
+    "value": 827.8992214166813
   },
   "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 31.4624441324475
+    "value": 31.46245836363049
   },
   "BUI1.Building.Minimum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 1271.2940707855291
+    "value": 1271.3019285133885
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 64.801816061658
+    "value": 64.80181574277282
   },
   "BUI1.Building.Theoretical cooling demand (building)": {
     "building": "BUI1",
@@ -231,7 +231,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -1508.8127933282785
+    "value": -1508.8157426054436
   },
   "BUI1.Building.Theoretical heating demand (building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 11043.772346222067
+    "value": 11043.77204423122
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -1025,7 +1025,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 26.958562648869048
+    "value": 26.953659495947853
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 25.84180419555167
+    "value": 25.83690045964159
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1055,7 +1055,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 1.116758453317378
+    "value": 1.1167590363062625
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1100,7 +1100,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": -0.9346756266150962
+    "value": -0.9346755892261527
   },
   "BUI1.Heat Distribution System.Thermal output energy of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1115,7 +1115,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 11041.493288548845
+    "value": 11041.492985071985
   },
   "BUI1.Residents.Residents' total electricity consumption (occupancy)": {
     "building": "BUI1",

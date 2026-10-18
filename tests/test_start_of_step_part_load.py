@@ -133,22 +133,27 @@ def test_a_ratio_run_outside_zero_to_one_is_refused(rule, name: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("start_in_celsius", "drop_in_kelvin", "target_in_celsius", "floor_in_celsius"),
+    ("start_in_celsius", "drop_in_kelvin", "target_in_celsius", "floor_in_celsius", "binding"),
     [
-        (31.0, 5.0, 32.0, 20.0),  # a charge near the target against a draw
-        (33.0, 6.0, 32.0, 20.0),  # a store above its target that the draw would empty: charged as well
-        (23.0, 8.0, 32.0, 20.0),  # a drained store: the generator at full ratio, the draw cut at the floor
-        (40.0, 2.0, 32.0, 20.0),  # a full store with a small draw: no charge, the whole draw
+        (31.0, 5.0, 32.0, 20.0, "aim"),  # a charge near the target against a draw
+        (33.0, 6.0, 32.0, 20.0, "aim"),  # a store above its target that the draw would empty: charged as well
+        (23.0, 14.0, 32.0, 20.0, "floor"),  # a drained store: the generator at full ratio, the draw cut at the floor
+        (40.0, 2.0, 32.0, 20.0, "none"),  # a full store with a small draw: no charge, the whole draw
     ],
 )
 def test_both_rules_together_settle_within_a_few_passes_inside_the_store_s_range(
-    start_in_celsius: float, drop_in_kelvin: float, target_in_celsius: float, floor_in_celsius: float
+    start_in_celsius: float, drop_in_kelvin: float, target_in_celsius: float, floor_in_celsius: float, binding: str
 ) -> None:
     """Iterated as the simulator's passes would, both ratios settle and the store ends between the floor and the aim.
 
     The store's end temperature is linear in each ratio, so each rule is exact given the other's ratio of the pass
-    before; together they settle within a handful of passes, ending the store inside the target band, at the floor, or
-    wherever the whole steps leave it when neither limit binds.
+    before; together they settle within a handful of passes. ``binding`` names the limit the case settles on:
+
+    * ``"aim"``: the generator runs a fraction (0.837 for 31 °C and a 5 K drop) and the store ends at the aim,
+      32.025 °C; the draw runs whole.
+    * ``"floor"``: the generator runs whole and the draw is cut (0.638 for 23 °C and a 14 K drop) so that the store
+      ends at the 20 °C floor.
+    * ``"none"``: the generator does not run and the draw runs whole.
     """
     generator_ratio, distribution_ratio = 1.0, 1.0
     history: List[Tuple[float, float]] = []
@@ -183,3 +188,14 @@ def test_both_rules_together_settle_within_a_few_passes_inside_the_store_s_range
     )
     assert end >= floor_in_celsius - 1e-9
     assert end <= max(start_in_celsius, PartLoadRule.aim_temperature_in_celsius(target_in_celsius)) + 1e-9
+    if binding == "aim":
+        assert 0.0 < generator_ratio < 1.0
+        assert distribution_ratio == 1.0
+        assert end == pytest.approx(PartLoadRule.aim_temperature_in_celsius(target_in_celsius), abs=1e-6)
+    elif binding == "floor":
+        assert generator_ratio == 1.0
+        assert 0.0 < distribution_ratio < 1.0
+        assert end == pytest.approx(floor_in_celsius, abs=1e-6)
+    else:
+        assert generator_ratio == 0.0
+        assert distribution_ratio == 1.0

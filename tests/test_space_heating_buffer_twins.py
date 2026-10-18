@@ -259,8 +259,10 @@ def check_end_temperatures_without_each_circuit(
     secondary_in_watt_hour: np.ndarray,
     distribution_in_watt_hour: np.ndarray,
 ) -> None:
-    """Each "end temperature without this circuit" lies below the end temperature by exactly that circuit's heat over C.
+    """Each "end temperature without this circuit" differs from the end temperature by that circuit's heat over C.
 
+    It lies below the end temperature for a generator, which adds heat, and above it for the distribution, which takes
+    heat out: a buffer that ends at 30 °C after the distribution took 2 K worth of heat would end at 32 °C without it.
     The buffer's heat capacity follows from its published content and end temperature, ``C = 3600 E / T_end``.
     """
     end_in_celsius = BufferTwins.column(

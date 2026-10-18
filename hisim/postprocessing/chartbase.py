@@ -331,7 +331,6 @@ class Chart:  # noqa: too-few-public-methods
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = str(Path(self.directory_path) / self.component_name / self.output_type)
-        self.object_name = " "
         if output2 is not None:
             self.output2 = output2
             self.filename = f"{self.type.lower()}_double{self.figure_format.value}"

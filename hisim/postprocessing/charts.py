@@ -71,8 +71,9 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     #: At most this many day ticks on the x axis of a window shorter than :attr:`DAYS_FOR_MONTH_TICKS`.
     MAXIMUM_DAY_TICKS: ClassVar[int] = 7
 
-    #: The share of the figure's width the colour bar takes, and its gap to the carpet; matplotlib's defaults
-    #: (0.15 and 0.05) left the carpet about a fifth narrower than the line chart of the same output.
+    #: The share of the carpet's original axes width the colour bar takes, and its gap to the carpet, as
+    #: matplotlib's ``colorbar(fraction=, pad=)`` reads them; its defaults (0.15 and 0.05) left the carpet about a
+    #: fifth narrower than the line chart of the same output.
     COLOUR_BAR_FRACTION: ClassVar[float] = 0.05
     COLOUR_BAR_PAD: ClassVar[float] = 0.02
 
@@ -338,12 +339,13 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 class MonthlyAggregation(str, enum.Enum):
     """How the twelve values of a monthly bar chart were formed from the run's time steps.
 
-    The simulator aggregates every output into months by its unit (``Simulator.get_std_results``):
-    a rate or a state such as W, °C or a fraction is averaged over the month, everything else, such
-    as Wh, is summed. The bar chart names which of the two its bars are, since a monthly mean power
-    in kW and a monthly energy in kWh look alike on an axis that names only the unit. Example: PV
-    electricity in W is drawn as "Power, monthly mean [kW]", PV energy in Wh as "Energy, monthly
-    sum [MWh]".
+    The simulator aggregates every output into months by its unit (``Simulator.get_std_results``): the units in
+    ``loadtypes.UNITS_USING_MEAN_AGGREGATION`` (powers, temperatures, mass flows, fractions, percent, pressures,
+    irradiance, wind speed, angles and ANY) are averaged over the month, every other unit is summed. That sums
+    energies such as Wh, but also running counters, 0/1 flags in BINARY and prices, whose monthly sums mean little
+    (bead hisim-o6a.23). The bar chart names which of the two its bars are, since a monthly mean power in kW and a
+    monthly energy in kWh look alike on an axis that names only the unit. Example: PV electricity in W is drawn as
+    "Power, monthly mean [kW]", PV energy in Wh as "Energy, monthly sum [MWh]".
     """
 
     MEAN = "mean"
@@ -397,7 +399,6 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
         path_checker: Callable[[str], None] | None = None,
-        aggregation: MonthlyAggregation | None = None,
     ) -> None:
         """Initialize the bar chart of one output.
 
@@ -409,8 +410,6 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             output_description: The output's description, for the report.
             figure_format: The image format.
             path_checker: Validates path lengths; the result path provider's check by default.
-            aggregation: Whether the monthly values are means or sums; derived from ``units`` as the
-                simulator does when not given.
         """
         super().__init__(
             output=output,
@@ -422,9 +421,8 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             figure_format=figure_format,
             path_checker=path_checker,
         )
-        self.aggregation: MonthlyAggregation = (
-            aggregation if aggregation is not None else MonthlyAggregation.of_unit(self.declared_units)
-        )
+        # Always the simulator's own rule for the unit, so the label cannot claim a mean the simulator did not take.
+        self.aggregation: MonthlyAggregation = MonthlyAggregation.of_unit(self.declared_units)
 
     def y_axis_label(self, shown_units: str) -> str:
         """Return the y axis title: quantity, aggregation and unit, e.g. ``Energy, monthly sum [MWh]``.

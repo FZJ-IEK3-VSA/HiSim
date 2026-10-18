@@ -584,6 +584,42 @@ class TestReportRendering:
         joined = next(record for record in index.values() if record["run_id"] == 1)
         assert joined["peak_memory_bytes"] == 5 * 1024 ** 3, "the one downloaded artifact was not joined"
 
+    def test_the_last_cold_cache_run_is_reported_with_its_failed_jobs(self) -> None:
+        """Catches a failing weekly cold-cache run that the report does not mention.
+
+        The cold run is the only one that exercises the code a warm cache skips, so its outcome is
+        reported on its own: the newest run of its workflow, with the jobs that failed by name. An
+        older run's success must not hide the newer failure, and other workflows do not count.
+        """
+        now = collector.Timestamps.now()
+        path = collector.UsageReport.COLD_CACHE_WORKFLOW_PATH
+
+        def record(run_id: int, job_id: int, hours_ago: int, job_name: str, conclusion: str,
+                   workflow_path: str = path) -> Dict[str, Any]:
+            """One job record of run ``run_id``, created ``hours_ago`` hours before now."""
+            return {"run_id": run_id, "job_id": job_id, "workflow": "weekly cold cache",
+                    "workflow_path": workflow_path, "job_name": job_name, "conclusion": conclusion,
+                    "created_at": collector.Timestamps.format(now - timedelta(hours=hours_ago)),
+                    "wall_seconds": 60.0}
+
+        index = self._index([
+            record(1, 10, 200, "tests / pytest (base)", "success"),
+            record(2, 20, 30, "tests / pytest (base)", "success"),
+            record(2, 21, 30, "tests / pytest (utsp)", "failure"),
+            record(2, 22, 30, "golden-year / golden-year python x", "failure"),
+            record(3, 30, 1, "pytest (base)", "failure", workflow_path=".github/workflows/tests.yml"),
+        ])
+
+        rendered = collector.UsageReport(index, now - timedelta(days=30), now - timedelta(days=3),
+                                         {"requests_made": 1}).render()
+
+        assert "## Last weekly cold-cache run" in rendered
+        assert "Run 2 of " in rendered and "**failure**, 2 of 3 jobs failed" in rendered
+        assert "`golden-year / golden-year python x`, `tests / pytest (utsp)`." in rendered
+        quiet = collector.UsageReport(self._index([]), now - timedelta(days=30), now - timedelta(days=3),
+                                      {"requests_made": 1}).render()
+        assert "No run of the weekly cold-cache workflow finished in the window." in quiet
+
     def test_the_index_round_trips_through_json(self, tmp_path: Path) -> None:
         """Catches an index that cannot be written and read back, which breaks every later night."""
         now = collector.Timestamps.now()

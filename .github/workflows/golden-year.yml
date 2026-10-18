@@ -56,13 +56,21 @@ on:
   # Runnable by hand as well, because the two automatic triggers above only fire for pull
   # requests that target main; a stacked pull request is checked by dispatching this workflow.
   workflow_dispatch:
+  # Called by weekly-cold-cache.yml, the weekly run without any cache; see there.
+  workflow_call:
+    inputs:
+      cold_cache:
+        description: "Skip the inputs-cache restore, so every job computes its inputs from scratch, and leave the save to the caller"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: golden-year-${{ github.ref }}
+  # The weekly cold run (cold_cache) has a group of its own, so it neither waits for nor cancels a push's run.
+  group: golden-year-${{ github.ref }}${{ inputs.cold_cache && '-cold' || '' }}
   # Cancel superseded runs on feature branches, but let every push to main finish.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
@@ -133,6 +141,7 @@ jobs:
       # The weather series and LoadProfileGenerator profiles earlier runs computed: the most recent
       # shared entry, which every job of every workflow restores; see the action.
       - name: Restore the HiSim inputs cache
+        if: ${{ !inputs.cold_cache }}
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
@@ -154,7 +163,9 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: upload-new
-          scope: ${{ matrix.name }}
+          # Prefixed with the workflow: the weekly cold run calls three workflows in one run, and an
+          # artifact name must be unique within it.
+          scope: golden-year-${{ matrix.name }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -204,11 +215,11 @@ jobs:
 
   # One shared inputs-cache entry per run instead of one per job: merges what every golden-year job added
   # into the most recent shared entry and saves it, or nothing when nothing changed; see the action.
-  # Not for a fork's pull request, which saves no cache.
+  # Not for a fork's pull request, which saves no cache, nor for the weekly cold run, whose caller saves.
   inputs-cache:
     name: merge the inputs cache
     needs: [discover, golden-year]
-    if: always() && needs.discover.result != 'skipped' && !github.event.pull_request.head.repo.fork
+    if: always() && needs.discover.result != 'skipped' && !github.event.pull_request.head.repo.fork && !inputs.cold_cache
     # On the self-hosted runners, and in the image of the jobs it merges, whose HISIM_LPG_BINARY_ROOT
     # decides whether the LoadProfileGenerator binaries stay in the cache.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}

@@ -886,6 +886,11 @@ class UsageReport:
     SECONDS_PER_MINUTE = 60.0
     TOP_WORKFLOWS = 20
     TOP_JOBS = 15
+    # The weekly run without any cache (weekly-cold-cache.yml), whose outcome gets a section of
+    # its own: it is the only run that exercises the code a warm cache skips, so its failure is
+    # the one that must not drown in the averages. At most this many failed jobs are named.
+    COLD_CACHE_WORKFLOW_PATH = ".github/workflows/weekly-cold-cache.yml"
+    COLD_CACHE_FAILURES_LISTED = 10
 
     def __init__(self, index: UsageIndex, window_start: datetime, recent_start: datetime,
                  diagnostics: Dict[str, Any]) -> None:
@@ -985,6 +990,7 @@ class UsageReport:
         """Return the full report as markdown."""
         sections = [
             self._render_header(),
+            self._render_cold_cache_run(),
             self._render_duration_regressions(),
             self._render_memory_regressions(),
             self._render_memory_pressure(),
@@ -1009,6 +1015,48 @@ class UsageReport:
             f"- **{total_seconds / self.SECONDS_PER_MINUTE:,.0f} runner-minutes** "
             f"({total_seconds / self.SECONDS_PER_MINUTE / days:,.0f} per day)\n"
         )
+
+    def _render_cold_cache_run(self) -> str:
+        """Return the outcome of the most recent weekly cold-cache run in the window.
+
+        Read from the job records of the index, like everything else here: the run is the newest one
+        of :attr:`COLD_CACHE_WORKFLOW_PATH`, and its outcome is ``failure`` when any of its jobs
+        failed, ``cancelled`` when any was cancelled, ``success`` otherwise. A run still in progress
+        has no records yet, so the previous one is reported until it finishes. Example::
+
+            ## Last weekly cold-cache run
+
+            Run 123 of 2026-10-19T05:00:00Z: **failure**, 2 of 64 jobs failed: `tests / pytest (utsp)`, ...
+        """
+        runs: Dict[Any, List[Dict[str, Any]]] = {}
+        for record in self.index.values():
+            created = Timestamps.parse(record.get("created_at"))
+            if created is None or created < self.window_start:
+                continue
+            if record.get("workflow_path") == self.COLD_CACHE_WORKFLOW_PATH:
+                runs.setdefault(record.get("run_id"), []).append(record)
+        lines = ["\n## Last weekly cold-cache run\n"]
+        if not runs:
+            lines.append("No run of the weekly cold-cache workflow finished in the window.")
+            return "\n".join(lines) + "\n"
+        records = max(runs.values(), key=lambda jobs: str(jobs[0].get("created_at") or ""))
+        conclusions = [record.get("conclusion") for record in records]
+        failed = sorted(str(record.get("job_name", "")) for record in records
+                        if record.get("conclusion") == "failure")
+        if failed:
+            outcome = "failure"
+        elif "cancelled" in conclusions:
+            outcome = "cancelled"
+        else:
+            outcome = "success"
+        line = (f"Run {records[0].get('run_id')} of {records[0].get('created_at')}: **{outcome}**, "
+                f"{len(failed)} of {len(records)} jobs failed")
+        if failed:
+            named = ", ".join(f"`{name}`" for name in failed[:self.COLD_CACHE_FAILURES_LISTED])
+            more = len(failed) - self.COLD_CACHE_FAILURES_LISTED
+            line += ": " + named + (f" and {more} more" if more > 0 else "")
+        lines.append(line + ".")
+        return "\n".join(lines) + "\n"
 
     def _render_duration_regressions(self) -> str:
         """Return the duration regression table, or a line saying there were none."""

@@ -61,7 +61,7 @@ def test_a_part_loaded_step_carries_the_averaged_flow_at_the_full_load_outlet() 
 
 
 def test_a_whole_step_is_unchanged_and_a_ratio_of_zero_books_nothing() -> None:
-    """Ratio 1 returns the full-load step itself; ratio 0 has no flow, no heat, no electricity, outlet = return, COP 0."""
+    """Ratio 1 returns the full-load step itself; ratio 0 has no flow, heat or electricity, outlet = return, COP 0."""
     full_load = full_load_space_heating()
     assert MoreAdvancedHeatPumpHPLib.part_loaded_space_heating(
         full_load, part_load_ratio=1.0, return_temperature_in_celsius=30.0
@@ -131,7 +131,8 @@ def test_a_ratio_of_zero_is_off_and_the_next_charge_is_a_new_start() -> None:
     assert idle[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal] == 0.0
-    assert idle[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == HeatPumpStep.SPACE_HEATING["TemperatureInputSecondarySH"]
+    return_in_celsius = HeatPumpStep.SPACE_HEATING[MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH]
+    assert idle[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == return_in_celsius
     assert idle[MoreAdvancedHeatPumpHPLib.COP] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 0
 

@@ -35,7 +35,6 @@ Terms:
   on the next step, as a fine-step run does.
 """
 
-import math
 from typing import ClassVar, Optional
 
 from hisim import loadtypes as lt

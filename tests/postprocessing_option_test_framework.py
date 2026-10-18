@@ -217,6 +217,7 @@ def _prepare_case(
     test_name_prefix: str,
     scenario_name: str = "",
     description: str = "",
+    post_processing_options: Sequence[PostProcessingOptions] | None = None,
 ) -> PreparedPostProcessingCase:
     """Run one system setup once, so that several option tests can post-process its results.
 
@@ -230,6 +231,10 @@ def _prepare_case(
         scenario_name: The name the run gives itself, as a setup function would set it; the
             simulator falls back to the module file name when it is empty.
         description: The run's one-line description, as the Python entry point would set it.
+        post_processing_options: The options the simulator itself sees, for a test of what the
+            simulator prepares for them; the aggregates are then left as the simulator made them.
+            When None, the run has no options and every aggregate is computed afterwards, so
+            that any option can post-process it.
 
     Returns:
         The finished run and the transfer object over its results.
@@ -239,6 +244,8 @@ def _prepare_case(
         end_date=end_date,
         seconds_per_timestep=seconds_per_timestep,
     )
+    if post_processing_options is not None:
+        simulation_parameters.post_processing_options = list(post_processing_options)
     simulation_parameters.result_directory = _result_directory_for_prefix(test_name_prefix)
 
     simulator = Simulator(
@@ -265,6 +272,8 @@ def _prepare_case(
         all_result_lines.append(single_timestep_values.values.copy())
 
     ppdt = simulator.prepare_post_processing(all_result_lines, start_counter)
+    if post_processing_options is not None:
+        return PreparedPostProcessingCase(simulator=simulator, ppdt=ppdt)
     (
         ppdt.results_cumulative,
         ppdt.results_monthly,

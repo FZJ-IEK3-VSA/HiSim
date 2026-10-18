@@ -74,12 +74,18 @@ class SystemChart:
         without edge labels (with and without class names), with edge labels,
         and with edge labels plus cumulative result values. Each successfully
         generated chart is appended to the returned list; failed charts are
-        skipped, and the variant with result values is left out when the run
-        computed no cumulative results (``results_cumulative`` is None).
+        skipped. The variant with result values reads the sums and means over
+        the run from ``results_cumulative``, which the simulator computes
+        whenever ``MAKE_NETWORK_CHARTS`` is set.
 
         Returns:
             A list of :class:`SystemChartEntry` objects, one per successfully
             generated chart variant.
+
+        Raises:
+            ValueError: When ``results_cumulative`` is None, which no run with
+                ``MAKE_NETWORK_CHARTS`` produces; the result variant could not
+                be labelled.
         """
         fig_format = self.ppdt.simulation_parameters.figure_format.value
         chart_specs: list[_ChartSpec] = [
@@ -112,16 +118,15 @@ class SystemChart:
                 "with_results": True,
             },
         ]
+        if self.ppdt.results_cumulative is None:
+            # Checked here, so that the result variant does not fail inside Graphviz's guarded call and get
+            # logged as if Graphviz were missing.
+            raise ValueError(
+                "The network charts need the sums and means over the run (results_cumulative), which the "
+                "simulator computes whenever MAKE_NETWORK_CHARTS is set; this data transfer object has none."
+            )
         files: List[SystemChartEntry] = []
         for spec in chart_specs:
-            if spec.get("with_results", False) and self.ppdt.results_cumulative is None:
-                # The sums and means over the run are computed only with the monthly or scenario-evaluation
-                # options; without them this variant failed and was logged as if Graphviz were missing.
-                log.information(
-                    f"Network chart {spec['filename']} is left out: the run computed no sums or means over the run "
-                    "(PLOT_MONTHLY_BAR_CHARTS, EXPORT_MONTHLY_RESULTS or PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION)."
-                )
-                continue
             entry = self.make_graphviz_chart(**spec)
             if entry is not None:
                 files.append(entry)

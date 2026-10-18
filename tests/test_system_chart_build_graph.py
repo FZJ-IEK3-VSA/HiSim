@@ -571,15 +571,20 @@ def test_every_chart_variant_is_named_with_the_figure_format_extension(monkeypat
 
 
 @pytest.mark.base
-def test_the_chart_with_results_is_left_out_of_a_run_without_cumulative_results(
+def test_the_charts_refuse_a_run_without_cumulative_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Without cumulative results the result variant is not attempted; it used to fail as "Graphviz is missing"."""
+    """Without the sums and means over the run no chart is attempted, and the error names the option.
+
+    The simulator computes them whenever ``MAKE_NETWORK_CHARTS`` is set, so their absence is a caller's
+    bug. The result variant used to fail inside the guarded Graphviz call and was logged as "Graphviz is
+    missing"; later it was left out quietly.
+    """
     requested: list = []
     chart = _chart_writing_into(Path("unused"))
     chart.ppdt.simulation_parameters = SimpleNamespace(figure_format=FigureFormat.PNG)  # type: ignore[assignment]
     chart.ppdt.results_cumulative = None
     monkeypatch.setattr(chart, "make_graphviz_chart", lambda **spec: requested.append(spec["filename"]))
-    chart.make_chart()
-    assert "System_with_Edge_labels_and_results.png" not in requested
-    assert len(requested) == 3
+    with pytest.raises(ValueError, match="MAKE_NETWORK_CHARTS"):
+        chart.make_chart()
+    assert not requested

@@ -28,7 +28,8 @@ from hisim.result_path_provider import ResultPathProviderSingleton, RunMode
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
-from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework
+from hisim.postprocessing import postprocessing_main
+from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework, _prepare_case
 
 
 pytestmark: pytest.MarkDecorator = pytest.mark.postprocessingoptions
@@ -217,6 +218,35 @@ def test_writing_network_charts_without_making_them_is_refused(
             [PostProcessingOptions.GENERATE_PDF_REPORT, PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT],
             test_name_prefix="network_charts_written_without_being_made",
         )
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz's dot is not installed")
+def test_make_network_charts_alone_draws_the_chart_with_results() -> None:
+    """MAKE_NETWORK_CHARTS alone gives all four charts: the simulator computes the sums and means over the run.
+
+    The fourth chart labels each connection with its output's sum or mean over the run. Those were
+    computed only with a monthly or scenario-evaluation option, so a run with the network charts alone
+    left the chart out. Only the totals are computed for it, not the resampled monthly, daily and hourly
+    frames.
+    """
+    case = _prepare_case(
+        setup_module_name="simple_system_setup_one",
+        start_date=datetime.datetime(2021, 1, 1),
+        end_date=datetime.datetime(2021, 1, 2),
+        seconds_per_timestep=3600,
+        test_name_prefix="network_charts_alone",
+        post_processing_options=[PostProcessingOptions.MAKE_NETWORK_CHARTS],
+    )
+    assert case.ppdt.results_cumulative is not None
+    assert case.ppdt.results_monthly is None
+    postprocessing_main.PostProcessor().run(ppdt=case.ppdt)
+    result_directory = Path(case.ppdt.simulation_parameters.result_directory)
+    assert sorted(path.name for path in result_directory.glob("System_*.png")) == [
+        "System_no_Edge_labels.png",
+        "System_no_Edge_with_class_labels.png",
+        "System_with_Edge_labels.png",
+        "System_with_Edge_labels_and_results.png",
+    ]
 
 
 def test_postprocessing_option_plot_special_testing_single_day(

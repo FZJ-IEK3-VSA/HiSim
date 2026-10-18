@@ -112,7 +112,7 @@ same-step coupling: the degree-hours fall from 16.3 to 11.2 in the heat-pump twi
 | #1007 | merged | the distribution's pump stands while its valve is shut |
 | #1008 | merged | the building publishes `TemperatureIndoorAirAtStartOfStepInCelsius`; the distribution's room clamp reads it in both modes |
 | #1050 | merged | pass limit $\max(100, \lceil 100 \cdot \Delta t / 60\,\mathrm{s} \rceil)$: 100 at 60 s, 500 at 300 s, 1000 at 600 s (`simulator.py:183, 323–324`) |
-| #1048 | **open**, base main | the energy manager holds its set-temperature raise under `force_convergence`. **Hard prerequisite of the iterated buffer**: without it the heat-pump twin at 60 s aborts on 22 May (`sh_buffer_models_2026-10-17.md`, cause 2) |
+| #1048 | merged | the energy manager holds its set-temperature raise under `force_convergence`. **Hard prerequisite of the iterated buffer**: without it the heat-pump twin at 60 s aborts on 22 May (`sh_buffer_models_2026-10-17.md`, cause 2) |
 | #1051 | **open**, base main | non-finite check once after the run instead of per call; a speed-up of every pass (finite checks were ~11 % of M5's profile). Not a prerequisite |
 | #1009 … #1035 | **open**, stacked on main | the start-of-step buffer, including the window margin #1010 that the iterated buffer needs for the gas twin at 300 / 600 s (cause 1) |
 
@@ -473,7 +473,7 @@ wrong (+17.45 % SH electricity), so the refusal is about correctness, not only c
 | **`WaterTemperatureAtStartOfStepInCelsius`** | $T_0$ | $T_0$ | the generator controllers' sensor: `GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerSpaceHeating`, `L1CHPController`; they decide on/off, mode and target against it with their hysteresis | **new in the two-mode buffer** (from `38f755ee`); the start-of-step buffer's controllers read `WaterTemperatureToHeatGenerator`, which happens to be $T_0$ there; the two-mode buffer gives the sensor its own port so the controllers read $T_0$ in both modes |
 | `WaterMeanTemperatureInStorage` | $T_0$ | $T_0$ | KPIs, plots; no controller after the rewiring | exists on main; both drafts publish $T_0$ on it (the name predates the node; it is the step's state variable) |
 | `WaterTemperatureAtEndOfStepInCelsius` | $T_{\mathrm{end}}$ from `MixedNode.step` | $T_{\mathrm{end}}$ from `StartOfStepNode.step` | the part-load controls (boiler's, heat pump's, distribution's), which act on it only above the threshold | exists on stageD-6 and in `38f755ee` |
-| `WaterTemperatureAtEndOfStepWithout{HeatGenerator, SecondaryHeatGenerator, HeatDistribution}InCelsius` | the end temperature of a second `MixedNode.step` from $T_0$ without that inflow (exact for the mixed node; **not** linear in a ratio) — see open question Q2 for the cheaper alternative | $T_{\mathrm{end}} - Q_i / C$, exactly linear in the circuit's ratio | the same part-load controls, above the threshold only | exists on stageD-6; the heating assemblies bound them at −300 to 300 °C |
+| `WaterTemperatureAtEndOfStepWithout{HeatGenerator, SecondaryHeatGenerator, HeatDistribution}InCelsius` | $T_{\mathrm{end}}$ on all three (owner decision Q2, 2026-10-18): nothing reads them at or below the threshold, so they are meaningful only above it, and the docstrings say so | $T_{\mathrm{end}} - Q_i / C$, exactly linear in the circuit's ratio | the same part-load controls, above the threshold only | exists on stageD-6; the heating assemblies bound them at −300 to 300 °C |
 | `ThermalPowerFromHeatGenerator`, `ThermalPowerFromSecondaryHeatGenerator`, W | $Q_i / \Delta t$ with $Q_i = \dot{m}_i c\,(T_i - \bar{T})\,\Delta t$ | $Q_i / \Delta t$ with $Q_i = \dot{m}_i c\,(T_i - T_0)\,\Delta t$ | the energy balance (the buffer's side of the generator's port), KPIs | exist on main; in both modes they equal what the generator books, at the fixed point with the iterated buffer and in every pass with the start-of-step buffer |
 | `ThermalPowerConsumptionHeatDistribution`, W | $-Q_{\mathrm{dist}} / \Delta t$ | same | the energy balance, KPIs | exists on main |
 | `ThermalEnergyFromHeatGenerator`, `…FromSecondaryHeatGenerator`, `…InputHeatDistributionSystem`, `ThermalEnergyIncreaseInStorage`, `ThermalEnergyInStorage`, Wh | from the same node step | same | KPIs | exist on main |
@@ -586,9 +586,9 @@ def publish_node_step(self, stsv, *, start_c, circuit_temperature_c, t_end_c, he
 
 2. **Add the output `WaterTemperatureAtStartOfStepInCelsius`** (from `38f755ee`), published as $T_0$ in both paths and
    as the end temperature on the stratification path (its convention for the stage D outputs).
-3. **The "without" outputs with the iterated buffer** (open question Q2): the recommended form is three further
-   `MixedNode.step` calls from $T_0$ with that inflow's flow set to 0, publishing each `t_end_c`. With the start-of-step
-   buffer unchanged.
+3. **The "without" outputs with the iterated buffer** (decided, Q2): all three carry $T_{\mathrm{end}}$ of the
+   iterated node; their docstrings say they are meaningful only above the threshold, where the part-load controls read
+   them. No extra node steps. With the start-of-step buffer unchanged.
 4. **Rename `LONGEST_WHOLE_STEP_IN_SECONDS` to `LONGEST_MIXED_NODE_STEP_IN_SECONDS`** (value 600.0) and reword
    `check_whole_steps_are_safe` to `check_mixed_node_step_is_safe`; the arithmetic stays (`seconds_per_timestep <= 600
    or seconds_per_timestep > part_load_above_seconds` passes). The message says: the buffer iterates as a mixed node up
@@ -811,16 +811,15 @@ twin). The 900 s goldens, if any, do not move.
 
 Order, each small, stacked (AGENTS.md: a new PR targets the stack top):
 
-0. **Prerequisites merge first.** #1048 (energy manager's raise hold; the iterated buffer aborts without it) and then
-   the stage D stack in order, #1009 → #1010 → #1011 → #1013 → #1014 → #1012 → #1035, rebasing only the bottom onto main
+0. **Prerequisites merge first.** #1048 (energy manager's raise hold; the iterated buffer aborts without it) is merged;
+   then the stage D stack in order, #1009 → #1010 → #1011 → #1013 → #1014 → #1012 → #1035, rebasing only the bottom onto main
    after each merge. #1051 is independent and may merge any time.
 1. **T1 — the sensor port.** `SimpleHotWaterStorage` publishes `WaterTemperatureAtStartOfStepInCelsius` ($T_0$ on the
    start-of-step path, the end temperature on the stratification path); the three controllers' default connection for
    their sensor moves to it. No result change with the start-of-step buffer (the value is $T_0$ either way); recorded
-   files expected unchanged. About 40 lines plus a `base` test. Base: `stageD-9-close-out` (or, if the owner prefers,
-   folded into #1013, the ports PR — open question Q4).
+   files expected unchanged. About 40 lines plus a `base` test. Base: `stageD-9-close-out` (decided, Q4).
 2. **T2 — the mixed-node path.** `simulate_mixed_node` (from `38f755ee`), the shared publishing routine, the dispatch on
-   `runs_part_load()`, the "without" outputs with the iterated buffer (per Q2), the refusal renamed and reworded, the
+   `runs_part_load()`, the "without" outputs carrying $T_{\mathrm{end}}$ with the iterated buffer (Q2), the refusal renamed and reworded, the
    `base` tests of §7.1 (pass by pass, threshold switch, inert controls) and the 60 s closure day. **Results change at ≤
    600 s**; the golden bless is its own commit on this PR. Base: T1.
 3. **T3 — the resolution tests and docs.** The week runs at 300–3600 s with recorded maxima, #1035's assertion
@@ -836,6 +835,22 @@ T1's 40 lines and is re-reviewed once.
 ## 9. Open questions for the owner
 
 Each with options and a recommendation; none needs the code to decide.
+
+**Decided by the owner on 2026-10-18** (interview on this spec):
+
+| Question | Decision |
+|---|---|
+| Q1 sensor port | (a) the new output `WaterTemperatureAtStartOfStepInCelsius`, $T_0$ in both modes |
+| Q2 "without" outputs with the iterated buffer | (b) $T_{\mathrm{end}}$ on all three, documented as meaningful only above the threshold (nothing reads them at or below it), instead of three extra node steps per pass |
+| Q3 refusal of a step above 600 s at or below the threshold | (a) keep, renamed |
+| Q4 where the sensor port lands | (b) T1, a small PR on top of #1035 |
+| Q5 the 60 s reference | (a) the iterated buffer's 60 s run, one golden bless on T2 |
+| Q6 threshold default | (a) 600 s |
+| Q7 forced steps at 300–600 s | (a) recorded, not asserted |
+| Q8 merge order of #1048 | settled: #1048 is merged |
+| Q9 the collector's circuit | (a) leave it under hisim-fxix.17, measure the heat pump + solar thermal twin at 900 s on T3; the exact rule in its own PR only if that shows alternation |
+
+The questions as they were put follow.
 
 **Q1. Which port do the generator controllers read?** The controllers need the buffer temperature at the start of the
 step, a value no pass moves, so that their on/off decision cannot cycle with the iterated buffer. (a) *A new output

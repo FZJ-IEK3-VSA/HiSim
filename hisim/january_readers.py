@@ -71,24 +71,6 @@ class JanuaryReaders:
     #: Remove an entry in the pull request that fixes its class; the last removal deletes this module.
     CLASSES: ClassVar[Tuple[JanuaryReader, ...]] = (
         JanuaryReader(
-            "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
-            "its occupancy, electricity, hot-water and internal-gain profiles from 1 January",
-            "hisim-9g2.6",
-            1031,
-        ),
-        JanuaryReader(
-            "hisim.components.generic_car.Car",
-            "its driving profile and its locations from 1 January",
-            "hisim-9g2.6",
-            1031,
-        ),
-        JanuaryReader(
-            "hisim.components.generic_chp.L1CHPController",
-            "its heating season counted from the run's start as if that were 1 January",
-            "hisim-9g2.6",
-            1031,
-        ),
-        JanuaryReader(
             "hisim.components.solar_thermal_system.SolarThermalSystem",
             "a sun position of its own, on a clock other than that of the weather's irradiance",
             "hisim-9g2.7",

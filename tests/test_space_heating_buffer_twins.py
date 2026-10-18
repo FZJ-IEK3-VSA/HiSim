@@ -15,7 +15,6 @@ Each file is simulated over a January day at 900 s. Every run simulates a whole 
 the car twin replaces its load-profile generator by the shipped predefined profile.
 """
 
-from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, List, Tuple
 
@@ -98,7 +97,6 @@ class BufferTwins:
         ]
 
     @classmethod
-    @lru_cache(maxsize=None)
     def run(cls, name: str, directory: str) -> Tuple[pd.DataFrame, str, str, str, str]:
         """Simulate ``energy_systems/<name>.energy_system.yaml`` over :attr:`WINTER_DAY` at 900 s.
 

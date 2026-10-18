@@ -537,12 +537,58 @@ def test_the_chart_is_rendered_into_the_result_directory_without_a_stray_write(t
 @pytest.mark.base
 def test_a_missing_graphviz_leaves_the_chart_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Without ``dot`` on ``PATH`` the chart is logged as failed and left out, as it always was."""
+    errors: list[str] = []
     monkeypatch.setattr(system_chart.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
     entry = _chart_writing_into(tmp_path).make_graphviz_chart(
         with_labels=False, with_class_names=False, filename="chart.png", caption="chart"
     )
     assert entry is None
     assert not (tmp_path / "chart.png").exists()
+    assert len(errors) == 1
+    assert "chart.png" in errors[0] and "Graphviz is not installed" in errors[0]
+
+
+@pytest.mark.base
+def test_a_failing_dot_leaves_the_chart_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When ``dot`` exits with an error, the chart is logged with what ``dot`` printed and left out."""
+    errors: list[str] = []
+    monkeypatch.setattr(system_chart.shutil, "which", lambda _name: "/usr/bin/dot")
+    monkeypatch.setattr(
+        system_chart.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stderr=b"syntax error in line 3"),
+    )
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
+    entry = _chart_writing_into(tmp_path).make_graphviz_chart(
+        with_labels=False, with_class_names=False, filename="chart.png", caption="chart"
+    )
+    assert entry is None
+    assert len(errors) == 1
+    assert "chart.png" in errors[0] and "syntax error in line 3" in errors[0]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("failing_method", ["_build_graph", "render_png"])
+def test_an_error_in_the_chart_code_reaches_the_caller(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing_method: str
+) -> None:
+    """A bug in the chart code fails the run instead of being logged as a missing Graphviz.
+
+    ``make_graphviz_chart`` caught every exception and logged it as "Probably Graphviz is missing";
+    it now catches only a missing ``dot`` and a failing one.
+    """
+
+    def raise_type_error(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("a bug in the chart code")
+
+    errors: list[str] = []
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
+    chart = _chart_writing_into(tmp_path)
+    monkeypatch.setattr(chart, failing_method, raise_type_error)
+    with pytest.raises(TypeError, match="a bug in the chart code"):
+        chart.make_graphviz_chart(with_labels=False, with_class_names=False, filename="chart.png", caption="chart")
+    assert not errors
 
 
 @pytest.mark.base

@@ -28,9 +28,9 @@ class CacheReaders:
     Listed explicitly rather than discovered, because a new cache reader should have to be added
     here deliberately -- which is the moment to ask whether it parses exactly.
 
-    The list is now all six of them. Four arrived with the argument; the solar thermal collector
-    was rebuilt on its own branch (roadmap/pylpg_flakiness.md F8) and was added once both had
-    landed; the car was simply missed, and had been reading its cache inexactly the whole time.
+    The list is now all five of them. Four arrived with the argument; the car was simply missed, and
+    had been reading its cache inexactly the whole time. The solar thermal collector cached its sun
+    position until it read the sun the weather publishes (hisim-9g2.7), and left the list with it.
     """
 
     SITES: Tuple[Tuple[str, str], ...] = (
@@ -38,7 +38,6 @@ class CacheReaders:
         ("hisim/components/building/building.py", "Building solar gains cache hit"),
         ("hisim/components/weather/weather.py", "weather_series = pd.read_csv("),
         ("hisim/components/loadprofilegenerator_utsp_connector.py", "dataframe = pd.read_csv("),
-        ("hisim/components/solar_thermal_system.py", "Get solar position from cache"),
         ("hisim/components/generic_car.py", "Generic car data is taken from cache"),
     )
 

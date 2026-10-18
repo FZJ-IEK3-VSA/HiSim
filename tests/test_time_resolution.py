@@ -5,7 +5,7 @@ Here we test the cluster household.
 
 import os
 import shutil
-from math import isclose
+from math import isclose, isnan
 from typing import Dict, List, Tuple
 from uuid import uuid4
 import pandas as pd
@@ -41,13 +41,8 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
 
 
 # Multiplicative factor for the order-of-magnitude check on computed
-# (non-invariant) components.  The largest observed max/min ratio across the
-# 15/30/60-min resolutions is ~11 for MoreAdvancedHeatPumpHPLib|Time|TimeOff
-# (11.0 on 2026-10-09, with and without the simulator's warm start).  That
-# quantity is the step sum of a counter, which has a factor of 4 between 15 and
-# 60 min built in -- see values_are_same_order_of_magnitude -- so 15 leaves
-# a factor of about 3.75 for the switching pattern itself, while still catching
-# gross regressions such as a 20x error.
+# (non-invariant) components; see values_are_same_order_of_magnitude for where
+# the value comes from.
 _ORDER_OF_MAGNITUDE_FACTOR: float = 15.0
 
 
@@ -64,25 +59,19 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGN
     absolute values must stay below *factor*; when fewer than two values are
     non-zero the ratio check is skipped because dividing by zero is undefined.
 
-    The default factor of 15 comes from the quantity with the largest ratio,
-    ``MoreAdvancedHeatPumpHPLib|Time|TimeOff`` (~11; 11.0 on 2026-10-09, with
-    and without the simulator's warm start). That output is a counter: the
-    seconds since the heat pump last switched off, which grows by one time step
-    per off step and is 0 while it runs. Its unit is seconds, so the yearly value
-    is the sum over all steps, not the mean. One off period of length ``T``
-    contributes ``dt * (1 + 2 + ... + T/dt) = T * (T + dt) / (2 * dt)``, roughly
-    ``T**2 / (2 * dt)``. Two consequences follow:
-
-    - the same switching pattern gives a value 4 times larger at 15 min than at
-      60 min, from the step size alone;
-    - the value grows with the square of each off period, so a modest change in
-      when the controller switches (which the step size does change) moves it
-      by much more than it moves the energies.
-
-    A factor of 15 therefore leaves about 3.75 for the switching pattern itself
-    on top of the built-in 4, and still catches gross regressions such as a 20x
-    error. The summed stock values (``ThermalEnergyInStorage``,
-    ``Cumulative*``) carry the same built-in factor of 4, and stay near it.
+    The default factor of 15 was set when the yearly value of every output in
+    seconds was its sum over all steps: ``MoreAdvancedHeatPumpHPLib|Time|TimeOff``,
+    the seconds since the heat pump last switched off, summed to a value 4 times
+    larger at 15 min than at 60 min from the step size alone, and reached a ratio
+    of about 11. Since the outputs declare their aggregation
+    (:class:`hisim.loadtypes.OutputAggregation`), such a restarting timer declares
+    ``NONE`` and has no yearly value (the test loop skips it), and running totals
+    (``Cumulative*``, ``LAST``) and stored energies (``ThermalEnergyInStorage``,
+    ``MEAN``) no longer carry the factor of 4. The largest ratio left on
+    2026-10-18 is about 14, for ``DHWStorage|Heating|ThermalEnergyUnmetDHWInWattHour``
+    (22 to 309 Wh of unmet hot water, which depends on when the hot-water
+    controller switches). A factor of 15 still catches gross regressions such as
+    a 20x error.
 
     Known limitations (by design):
 
@@ -224,6 +213,10 @@ def test_cluster_house_for_several_time_resolutions():
     # substring match no longer hits any yearly-result key).
     seen_invariant_yearly_components = set()
     for key, values in result_dict.items():
+        # An output declaring the aggregation NONE (a sun angle, a controller mode) has no run value:
+        # its yearly cell is NaN at every resolution, which is the same result each time.
+        if all(isnan(float(value)) for value in values):
+            continue
         is_invariant = False
         # for these components the outputs must be identical as they are predefined input data
         for component_name in invariant_yearly_component_names:

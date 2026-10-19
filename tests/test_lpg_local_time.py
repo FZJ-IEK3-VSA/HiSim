@@ -203,13 +203,16 @@ class PredefinedOccupancy:
     FILES = utils.HISIMPATH["occupancy"]["CHR01 Couple both at Work"]
 
     @classmethod
-    def build(cls, start: datetime.datetime, days: int, directory: pathlib.Path) -> UtspLpgConnector:
-        """Build the occupancy of the shipped profile for a window at 60 s.
+    def build(
+        cls, start: datetime.datetime, days: int, directory: pathlib.Path, seconds_per_timestep: int = 60
+    ) -> UtspLpgConnector:
+        """Build the occupancy of the shipped profile for a window, at 60 s unless told otherwise.
 
         Args:
             start: the window's start.
             days: the window's length in days.
             directory: where the run writes and caches.
+            seconds_per_timestep: the run's timestep.
 
         Returns:
             UtspLpgConnector: the built occupancy, its series read.
@@ -217,7 +220,7 @@ class PredefinedOccupancy:
         parameters = SimulationParameters(
             start_date=start,
             end_date=start + datetime.timedelta(days=days),
-            seconds_per_timestep=60,
+            seconds_per_timestep=seconds_per_timestep,
             result_directory=str(directory / "results"),
             post_processing_options=[],
             cache_dir_path=str(directory / "cache"),
@@ -246,6 +249,16 @@ def test_the_occupancy_reads_the_profiles_first_minute_at_the_runs_first_timeste
 
     assert len(occupancy.electricity_consumption) == 2 * 1440
     assert occupancy.electricity_consumption == pytest.approx(list(raw[: 2 * 1440]), rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep", [30, 90])
+def test_the_occupancy_refuses_a_timestep_of_no_whole_minutes(
+    tmp_path: pathlib.Path, seconds_per_timestep: int
+) -> None:
+    """Catches a 90 s run reading one profile minute per timestep: 16 hours of the household per day, silently."""
+    with pytest.raises(ValueError, match="whole multiple of a minute"):
+        PredefinedOccupancy.build(datetime.datetime(2021, 1, 1), 1, tmp_path, seconds_per_timestep)
 
 
 @pytest.mark.base

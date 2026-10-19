@@ -1974,6 +1974,14 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
         # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
         simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+        # A timestep averages whole minutes of the profile: at 90 s a timestep would read one minute, and a
+        # day of 960 timesteps 16 hours of the household, without an error.
+        if self.my_simulation_parameters.seconds_per_timestep % lpg_local_time.LpgLocalTime.SECONDS_PER_MINUTE:
+            raise ValueError(
+                f"The LoadProfileGenerator profile of {self.component_name} has one value per minute, so the "
+                "run's timestep must be a whole multiple of a minute; "
+                f"{self.my_simulation_parameters.seconds_per_timestep} s is not."
+            )
         minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
         steps_desired = int(
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)

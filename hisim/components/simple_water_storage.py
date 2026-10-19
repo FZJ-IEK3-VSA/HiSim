@@ -643,7 +643,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
-    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on.
+    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on. A
+    #: buffer without its heat exchanger (the stratification path) publishes its end temperature here instead.
     WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
     #: The buffer's temperature at the end of the step, the next step's start temperature.
     WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
@@ -806,7 +807,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.CELSIUS,
             output_description=(
                 "The buffer's temperature at the start of the step, the end temperature of the step before. The "
-                "generators' controllers decide on it, since it does not change while the step iterates."
+                "generators' controllers decide on it, since it does not change while the step iterates. A buffer "
+                "without its heat exchanger (the stratification path) publishes its end temperature here instead."
             ),
         )
         self.water_temperature_at_end_of_step_channel: ComponentOutput = self.add_output(

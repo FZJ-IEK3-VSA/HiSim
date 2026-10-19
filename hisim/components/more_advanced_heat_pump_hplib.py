@@ -3101,8 +3101,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         """Get simple hot water storage default connections."""
         connections = []
         hws_classname = simple_water_storage.SimpleHotWaterStorage.get_classname()
-        # the sensor is the buffer's start-of-step temperature, which no pass of the step moves, so the on/off
-        # decision cannot cycle with the temperatures the buffer publishes to its circuits
+        # the sensor is the start-of-step temperature of a buffer with its heat exchanger, which no pass of the step
+        # moves, so the on/off decision cannot cycle with the temperatures the buffer publishes to its circuits
         connections.append(
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,

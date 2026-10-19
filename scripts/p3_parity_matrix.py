@@ -11,9 +11,7 @@ driver already fails and names it, so there is nothing for the rig to add.
 
 Deliberately standard-library only, like ``golden_matrix.py``: this runs in the lightweight
 discover job before any dependency is installed, so it cannot import HiSim. The price is that the
-window names appear here as well as in ``p3_parity_runs.py``, and a test asserts the two agree.
-Being the one module of the rig everything else may import, this is also where the window names
-live: the runner and the checker ask :class:`MatrixPaths` rather than keeping a second answer. The
+window names appear here as well as in ``p3_parity_runs.py``, and a test asserts the two agree. The
 July window was fenced out of the rig until the mid-year-start epic (``roadmap/midyear_start_epic.md``)
 made a mid-year start read the window's profiles; both windows run since hisim-9g2.8.
 

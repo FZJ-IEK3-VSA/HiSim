@@ -235,7 +235,7 @@ def build_shards(
 
     solos: list[dict] = []
     include = []
-    for name in HORIZON_FACTORIES:  # day, week, year: a stable cell order
+    for name in HORIZON_FACTORIES:  # the horizons in their listed order: a stable cell order
         members = [p for p in pairs if FACTORY_HORIZONS[params[p["param"]]["factory"]] == name]
         if not members:
             continue

@@ -1099,8 +1099,8 @@ class SolarThermalSystem(PhysicsComponent):
         Nothing is precomputed. The sun's position over the collector comes from the weather, at every timestep,
         through the ``ApparentZenith`` and ``Azimuth`` inputs: the weather has looked the run's window up in its own
         year (:mod:`hisim.window_offset`), so its sun and its irradiance stand on one clock. The collector used to
-        work out a sun of its own from the run's start date read as UTC, which in a January run stood an hour off the
-        weather's and in a July run paired a July sun with January irradiance.
+        work out a sun of its own from the run's start date read as UTC, which stood an hour off the weather's
+        standard-time clock in every run.
         """
         self.plane_of_array_key = None
 

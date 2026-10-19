@@ -11,8 +11,8 @@ A file with a time column serves any window of the year it covers: the loader
 looks the run's ``start_date`` up among the column's labels
 (:class:`hisim.window_offset.WindowOffset`) and reads the window's rows, averaging
 the rows inside each timestep when the file is finer than the run. A file
-without one can only serve a run that starts on 1 January, because its first row
-is the only row whose date is known.
+without one can only serve a run that starts on 1 January: the loader knows the
+date of none of its rows and reads the first as 1 January 00:00.
 """
 
 import warnings
@@ -49,6 +49,7 @@ class CSVLoaderConfig(ConfigBase):
             loadtype=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.KILOWATT,
             column_name="generated_power",
+            time_column=0,
         )
 
     The reading itself happens in :class:`CSVLoader`, once, when the component is built; this

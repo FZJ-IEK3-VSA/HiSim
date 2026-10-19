@@ -1,16 +1,21 @@
 """Every energy-system file with a space-heating buffer closes it on every step, and both ends of its circuits agree.
 
-The buffer (``SimpleHotWaterStorage``) is a start-of-step node: it publishes the temperature it starts the step at as
-the return to its generators and as the supply to the heat distribution system, every circuit's heat is ``m c`` times
-the difference between the entering stream and that temperature, and the buffer ends the step at its start
-temperature plus the net heat over its heat capacity. So on every step:
+The buffer (``SimpleHotWaterStorage``) is a two-mode buffer (``roadmap/two_mode_buffer_spec.md``). Above the
+part-load threshold (600 s) it is a start-of-step node: it publishes the temperature it starts the step at as the
+return to its generators and as the supply to the heat distribution system, every circuit's heat is ``m c`` times the
+difference between the entering stream and that temperature, and the buffer ends the step at its start temperature
+plus the net heat over its heat capacity. At and below the threshold it is an iterated mixed node that publishes its
+step mean instead, and both ends of a circuit agree once the step has converged. So on every step:
 
 * the buffer's balance closes: the generators' heat, less the heat the distribution takes, less the standby loss,
   is the change of its stored heat, to a millionth of the step's largest term;
 * the space heat the boiler or heat pump books is the heat the buffer received from it;
 * the heat the distribution system delivers to the building is the heat the buffer gave to it.
 
-Each file is simulated over a January day at 900 s. Every run simulates a whole energy system and so runs in the
+Each file is simulated over a January day at 900 s (the start-of-step buffer), and the four twins of the golden gate
+with a buffer also at 60 s (the iterated buffer). At 600 s, the threshold, the gas and the heat-pump twins show that
+every part-load ratio is exactly 0 or 1 with the iterated buffer, so the heat pump's two tracks of its mode and the
+boiler's held burner behave as without part load. Every run simulates a whole energy system and so runs in the
 ``extendedbase2`` shard; only the check that every file with a buffer is listed stays in ``base``. Every file except
 the car twin replaces its load-profile generator by the shipped predefined profile.
 """
@@ -64,8 +69,22 @@ class BufferTwins:
     #: A January day of 2021, on which every generator heats its buffer.
     WINTER_DAY: ClassVar[Tuple[str, str]] = ("2021-01-10T00:00:00", "2021-01-11T00:00:00")
 
-    #: The step length of the runs, in s.
+    #: The step length of the runs of every file, in s: the start-of-step buffer.
     SECONDS_PER_TIMESTEP: ClassVar[int] = 900
+
+    #: The step length of the iterated buffer's runs, in s, the golden gate's.
+    ITERATED_SECONDS_PER_TIMESTEP: ClassVar[int] = 60
+
+    #: The twins of the golden gate with a buffer, one per generator kind, run at 60 s as well.
+    ITERATED_TWINS: ClassVar[Tuple[str, ...]] = (
+        "household_gas_building_sizer",
+        "household_pellets_building_sizer",
+        "household_heatpump_building_sizer",
+        "household_heatpump_solar_thermal_building_sizer",
+    )
+
+    #: The step length at the part-load threshold, in s: the longest step of the iterated buffer.
+    THRESHOLD_SECONDS_PER_TIMESTEP: ClassVar[int] = 600
 
     #: Seconds per hour, to turn a power of the step into its energy in Wh.
     SECONDS_PER_HOUR: ClassVar[float] = 3600.0
@@ -100,8 +119,15 @@ class BufferTwins:
         ]
 
     @classmethod
-    def run(cls, name: str, directory: str) -> Tuple[pd.DataFrame, str, str, str, str, str]:
-        """Simulate ``energy_systems/<name>.energy_system.yaml`` over :attr:`WINTER_DAY` at 900 s.
+    def run(
+        cls, name: str, directory: str, seconds_per_timestep: int = SECONDS_PER_TIMESTEP
+    ) -> Tuple[pd.DataFrame, str, str, str, str, str]:
+        """Simulate ``energy_systems/<name>.energy_system.yaml`` over :attr:`WINTER_DAY` at a step length.
+
+        Args:
+            name: The file's name without ``.energy_system.yaml``.
+            directory: The directory to write the files and results into.
+            seconds_per_timestep: The step length, s; 900 s by default.
 
         Returns:
             The result frame, the buffer's component name, the column prefixes ``"<component> - <field>"`` of the space
@@ -124,7 +150,7 @@ class BufferTwins:
                 {
                     "start_date": start,
                     "end_date": end,
-                    "seconds_per_timestep": cls.SECONDS_PER_TIMESTEP,
+                    "seconds_per_timestep": seconds_per_timestep,
                     "country": "DE",
                     "logging_level": 3,
                     "post_processing_options": [],
@@ -181,12 +207,20 @@ class BufferTwins:
         return values
 
 
-def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-    """Run one file and check the buffer's closure and both of its circuits on every step."""
+def check_file(
+    name: str, tmp_path_factory: pytest.TempPathFactory, seconds_per_timestep: int = BufferTwins.SECONDS_PER_TIMESTEP
+) -> None:
+    """Run one file and check the buffer's closure and both of its circuits on every step.
+
+    Above the part-load threshold (the start-of-step buffer) it also checks the end temperatures without each circuit
+    and the distribution's floor; at and below it (the iterated buffer) that the end temperatures without a circuit
+    carry the end temperature, as nothing reads them there.
+    """
     results, buffer, booked_prefix, flow_prefix, distribution, building = BufferTwins.run(
-        name, str(tmp_path_factory.mktemp(name.replace(".", "_")))
+        name, str(tmp_path_factory.mktemp(name.replace(".", "_"))), seconds_per_timestep
     )
-    hours_per_step = BufferTwins.SECONDS_PER_TIMESTEP / BufferTwins.SECONDS_PER_HOUR
+    start_of_step_buffer = seconds_per_timestep > BufferTwins.THRESHOLD_SECONDS_PER_TIMESTEP
+    hours_per_step = seconds_per_timestep / BufferTwins.SECONDS_PER_HOUR
     primary_in_watt_hour = BufferTwins.column(
         results, f"{buffer} - {SimpleHotWaterStorage.ThermalEnergyFromHeatGenerator}"
     )
@@ -216,9 +250,12 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
         np.max(np.abs(residual_in_watt_hour))
     )
 
-    check_end_temperatures_without_each_circuit(
-        results, buffer, primary_in_watt_hour, secondary_in_watt_hour, distribution_in_watt_hour
-    )
+    if start_of_step_buffer:
+        check_end_temperatures_without_each_circuit(
+            results, buffer, primary_in_watt_hour, secondary_in_watt_hour, distribution_in_watt_hour
+        )
+    else:
+        check_end_temperatures_without_each_circuit_carry_the_end_temperature(results, buffer)
 
     booked_in_watt = BufferTwins.column(results, booked_prefix)
     received_in_watt = BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.ThermalPowerFromHeatGenerator}")
@@ -240,6 +277,8 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     )
     assert np.any(delivered_in_watt > 0.0), "the distribution never heated in the window"
 
+    if not start_of_step_buffer:
+        return
     # above the part-load threshold the distribution circuit runs only the fraction that keeps the buffer at or above
     # the room's start-of-step temperature, so a step it heats in never ends the buffer below the room
     end_in_celsius = BufferTwins.column(
@@ -283,6 +322,19 @@ def check_end_temperatures_without_each_circuit(
         assert np.allclose(change_in_watt_hour, heat_in_watt_hour, rtol=1e-9, atol=1e-6), field
 
 
+def check_end_temperatures_without_each_circuit_carry_the_end_temperature(results: pd.DataFrame, buffer: str) -> None:
+    """With the iterated buffer the three end temperatures without a circuit carry the end temperature (decision Q2)."""
+    end_in_celsius = BufferTwins.column(
+        results, f"{buffer} - {SimpleHotWaterStorage.WaterTemperatureAtEndOfStepInCelsius}"
+    )
+    for field in (
+        SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius,
+        SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius,
+        SimpleHotWaterStorage.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius,
+    ):
+        assert np.array_equal(BufferTwins.column(results, f"{buffer} - {field}"), end_in_celsius), field
+
+
 @pytest.mark.base
 def test_every_energy_system_file_with_a_buffer_is_checked() -> None:
     """A new file with a space-heating buffer cannot escape the per-step checks."""
@@ -322,3 +374,59 @@ def test_the_grouped_twins_and_composed_files_close_their_buffer_and_agree_on_bo
 ) -> None:
     """The same checks for the grouped twins RenoVisor translates from and for the composed files."""
     check_file(name, tmp_path_factory)
+
+
+@pytest.mark.extendedbase2
+@pytest.mark.parametrize("name", BufferTwins.ITERATED_TWINS)
+def test_at_60_s_the_twins_close_their_iterated_buffer_and_agree_on_both_circuits(
+    name: str, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The four twins of the golden gate with a buffer at 60 s, where the buffer is an iterated mixed node.
+
+    Fails if a step of the iterated buffer does not close its balance, or if a generator or the distribution system
+    booked a circuit on another temperature than the buffer's converged step mean.
+    """
+    check_file(name, tmp_path_factory, BufferTwins.ITERATED_SECONDS_PER_TIMESTEP)
+
+
+@pytest.mark.extendedbase2
+@pytest.mark.parametrize(
+    "name, device_on_column",
+    [
+        (
+            "household_gas_building_sizer",
+            f"CondensingGasBoiler - {GenericBoiler.WaterOutputMassFlowSh}",
+        ),
+        (
+            "household_heatpump_building_sizer",
+            f"MoreAdvancedHeatPumpHPLib - {MoreAdvancedHeatPumpHPLib.MassFlowOutputSH}",
+        ),
+    ],
+)
+def test_at_the_threshold_every_part_load_ratio_is_0_or_1_and_1_while_the_generator_heats_its_buffer(
+    name: str, device_on_column: str, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """At 600 s every part-load ratio, commanded or run, is exactly 0 or 1, and 1 in every step the generator charges.
+
+    With the iterated buffer the part-load controls publish 1 while their device runs, so a generator never runs a
+    fraction of a step. That is what keeps the heat pump's two tracks of its mode (its control track and the published
+    one, which differ only for a space-heating step at a ratio of 0) and the boiler's held burner (a whole step) exactly
+    as they were without part load. The heat pump's published state is space heating exactly in the steps it runs its
+    space-heating ratio of 1.
+
+    Fails if any ratio column holds a fraction, or if a generator charged its buffer at a ratio other than 1.
+    """
+    results, *_ = BufferTwins.run(name, str(tmp_path_factory.mktemp(name)), BufferTwins.THRESHOLD_SECONDS_PER_TIMESTEP)
+    ratios = [column for column in results.columns if " - PartLoadRatio" in column]
+    assert len(ratios) >= 3, ratios
+    for column in ratios:
+        values = results[column].to_numpy(dtype=float)
+        assert np.all((values == 0.0) | (values == 1.0)), (column, sorted(set(values.tolist()))[:5])
+    generator = device_on_column.split(" - ", 1)[0]
+    ratio_run = BufferTwins.column(results, f"{generator} - PartLoadRatioRunSh")
+    charging = BufferTwins.column(results, device_on_column) > 0.0
+    assert np.any(charging), "the generator never charged the buffer in the window"
+    assert np.all(ratio_run[charging] == 1.0)
+    if generator == "MoreAdvancedHeatPumpHPLib":
+        published_space_heating = BufferTwins.column(results, f"{generator} - OnOffStateHeatpump") == 1.0
+        assert np.array_equal(published_space_heating, ratio_run == 1.0)

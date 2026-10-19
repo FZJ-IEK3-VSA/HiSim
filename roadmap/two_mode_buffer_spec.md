@@ -595,7 +595,7 @@ def publish_node_step(self, stsv, *, start_c, circuit_temperature_c, t_end_c, he
    to the threshold; above 600 s its contraction per pass is $\theta \geq 0.6$ and whole steps overcharge it (measured
    +3.2 % SH electricity at 900 s, +17.5 % at 3600 s), so lower the threshold below the step or run steps of at most 600
    s. `StartOfStepBufferWholeStepError` keeps its name (EF-33 in the energy-system reports) or is renamed with it;
-   owner's call, Q3.
+   owner's call, Q3. Decided 2026-10-18: renamed `MixedNodeStepTooLongError`.
 5. **Docstrings**: the class docstring says which model runs when and what each port means in each (the table of §4.1 in
    prose).
 

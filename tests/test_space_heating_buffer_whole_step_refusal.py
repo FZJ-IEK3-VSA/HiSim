@@ -1,18 +1,19 @@
-"""A start-of-step space-heating buffer refuses whole steps above 600 s when it is built.
+"""The space-heating buffer refuses to iterate as a mixed node over steps above 600 s when it is built.
 
-The buffer with its heat exchanger is a start-of-step node: it books every circuit on the temperature it starts the
-step at, so it does not see its own temperature change inside the step. Above 600 s its generators and its heat
-distribution system therefore run a fraction of the step, and they do so only for steps longer than the run's
-part-load threshold, ``SimulationParameters.part_load_above_seconds``. A step above 600 s with a threshold at or above
-that step would give every circuit whole steps, with which the gas twin's year at 3600 s aborted and a heat-pump
-assembly overshot its buffer to 93.3 °C in stage D's measurements. The owner decided on 2026-10-16 that such a run is
-refused when the system is built (review of the stage-D spec, finding M-C).
+The buffer with its heat exchanger is a two-mode buffer (``roadmap/two_mode_buffer_spec.md``): an iterated mixed node
+at and below the run's part-load threshold, ``SimulationParameters.part_load_above_seconds``, whose circuits all run
+whole steps, and a start-of-step node above it, whose generators and heat distribution system run a fraction of the
+step. A step above 600 s with a threshold at or above that step would iterate the mixed node above its range: it
+contracts by up to about 0.7 per pass there at 900 s and 0.9 at 3600 s, and whole steps overcharge it (heat pump:
++3.2 % space-heating electricity at 900 s, +17.5 % at 3600 s against 60 s). The owner decided on 2026-10-16 that such
+a run is refused when the system is built (review of the stage-D spec, finding M-C), and kept the refusal for the
+two-mode buffer (decision Q3, 2026-10-18) as ``check_mixed_node_step_is_safe``.
 
 These tests check the rule on the buffer itself and on recorded twins built at 900 s:
 
 * refused: 900 s steps with the threshold at 900 s (and above it);
 * accepted: 900 s with the default 600 s threshold, 600 s with any threshold;
-* never refused: a buffer without its heat exchanger (not a start-of-step node), and a system without a
+* never refused: a buffer without its heat exchanger (neither node), and a system without a
   space-heating buffer (the district-heating twin, ``gas_boiler_household``).
 """
 
@@ -26,7 +27,7 @@ from hisim.calculation_scope import CalculationScope
 from hisim.components.simple_water_storage import (
     SimpleHotWaterStorage,
     SimpleHotWaterStorageConfig,
-    StartOfStepBufferWholeStepError,
+    MixedNodeStepTooLongError,
 )
 from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
@@ -50,7 +51,8 @@ class BufferBuild:
 
         Args:
             seconds_per_timestep: The step length, s.
-            heat_exchanger_is_present: Whether the buffer has its heat exchanger, which makes it a start-of-step node.
+            heat_exchanger_is_present: Whether the buffer has its heat exchanger, which makes it the two-mode buffer
+                (a mixed node at and below the threshold, a start-of-step node above it) that the refusal guards.
             **extra: Further arguments of the simulation parameters, such as ``part_load_above_seconds``.
 
         Returns:
@@ -104,10 +106,12 @@ def test_a_buffer_refuses_900_s_steps_with_a_threshold_at_or_above_the_step(part
 
     Fails if the buffer is built anyway, or if its error does not name the step, the threshold and the reason.
     """
-    with pytest.raises(StartOfStepBufferWholeStepError) as refusal:
+    with pytest.raises(MixedNodeStepTooLongError) as refusal:
         BufferBuild.buffer(900, part_load_above_seconds=part_load_above_seconds)
     message = str(refusal.value)
     assert f"900 s steps with part_load_above_seconds = {part_load_above_seconds} s" in message
+    assert "iterates as a mixed node" in message
+    assert "overcharge" in message
     assert "start-of-step node" in message
     assert "fraction of the step" in message
 
@@ -129,19 +133,19 @@ def test_a_buffer_accepts_a_coarse_step_with_the_default_threshold(seconds_per_t
 def test_a_buffer_accepts_any_threshold_at_and_below_600_s(
     seconds_per_timestep: int, part_load_above_seconds: int
 ) -> None:
-    """Whole steps of up to 600 s are safe for a start-of-step buffer, so no threshold is refused there.
+    """Steps of up to 600 s are safe in either model, so no threshold is refused there.
 
     Fails if the refusal compared the threshold with the step alone, without the 600 s bound (600 s with a 900 s
-    threshold runs whole steps, measured safe).
+    threshold iterates the mixed node with whole steps, measured safe: at most 35 passes, 2021).
     """
     BufferBuild.buffer(seconds_per_timestep, part_load_above_seconds=part_load_above_seconds)
 
 
 @pytest.mark.base
 def test_a_buffer_without_its_heat_exchanger_is_never_refused() -> None:
-    """Without its heat exchanger the buffer mixes masses and is no start-of-step node, so the rule does not apply.
+    """Without its heat exchanger the buffer mixes masses and is neither node, so the rule does not apply.
 
-    Fails if the refusal were made for every space-heating buffer instead of the start-of-step one.
+    Fails if the refusal were made for every space-heating buffer instead of the one with its heat exchanger.
     """
     BufferBuild.buffer(900, heat_exchanger_is_present=False, part_load_above_seconds=900)
 
@@ -161,7 +165,7 @@ def test_a_twin_with_a_buffer_is_refused_when_it_is_built(tmp_path: Path) -> Non
 def test_a_system_without_a_space_heating_buffer_is_never_refused(twin: str, tmp_path: Path) -> None:
     """A system without a space-heating buffer builds at 900 s with the threshold at 900 s.
 
-    Fails if the refusal were made by a component other than the start-of-step buffer, such as the distribution
+    Fails if the refusal were made by a component other than the space-heating buffer, such as the distribution
     system or the generators, which also run without a buffer.
     """
     BufferBuild.twin(twin, tmp_path, 900, 900)

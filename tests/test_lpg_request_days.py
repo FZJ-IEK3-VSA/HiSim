@@ -1,13 +1,13 @@
-"""Tests for the days a local LoadProfileGenerator run is asked to simulate.
+"""Tests for the days the LoadProfileGenerator is asked to simulate for a run, and what that request gives.
 
-The occupancy used to name the days day-first (``01-01-2021`` to ``08-01-2021`` for a week), which the
-LoadProfileGenerator reads month-first: a week was simulated from 1 January to 1 August, and the profile of
-the first week differs from the one a request of that week gives, because the generator's household
-behaviour depends on how many days it simulates. ISO 8601 is read as written.
+The generator always simulates the run's whole calendar year, and the run's window is cut from that year (owner
+decision of 2026-10-19): the household it simulates depends on how many days it simulates, so a week asked for on
+its own differs from the same week of the year. The days are named in ISO 8601. The occupancy used to name them
+day-first (``01-01-2021`` to ``08-01-2021`` for a week), which the generator reads month-first: a week was simulated
+from 1 January to 1 August.
 """
 
 import datetime
-import json
 import pathlib
 
 import pytest
@@ -18,7 +18,6 @@ from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
     UtspLpgConnectorConfig,
 )
-from hisim.components.pylpg_workspace import PylpgWorkspace
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"
@@ -52,36 +51,78 @@ def parameters_of(start: datetime.datetime, days: int, directory: pathlib.Path) 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("days", "requested"),
-    [(7, ("2021-01-01", "2021-01-08")), (365, ("2021-01-01", "2022-01-01")), (2, ("2021-01-01", "2021-01-03"))],
+    ("start", "days", "requested"),
+    [
+        (datetime.datetime(2021, 1, 1), 1, ("2021-01-01", "2022-01-01")),
+        (datetime.datetime(2021, 1, 1), 2, ("2021-01-01", "2022-01-01")),
+        (datetime.datetime(2021, 1, 1), 7, ("2021-01-01", "2022-01-01")),
+        (datetime.datetime(2021, 1, 1), 365, ("2021-01-01", "2022-01-01")),
+        (datetime.datetime(2021, 7, 1), 7, ("2021-01-01", "2022-01-01")),
+        (datetime.datetime(2021, 12, 25), 7, ("2021-01-01", "2022-01-01")),
+    ],
 )
-def test_a_local_request_names_its_days_in_iso_8601(days: int, requested: tuple, tmp_path: pathlib.Path) -> None:
-    """Catches a day-first date, which the LoadProfileGenerator reads month-first (8 January as 1 August)."""
-    parameters = parameters_of(datetime.datetime(2021, 1, 1), days, tmp_path)
+def test_a_request_names_the_whole_year_in_iso_8601(
+    start: datetime.datetime, days: int, requested: tuple, tmp_path: pathlib.Path
+) -> None:
+    """Catches a request of the window's own days, and a day-first date (8 January read as 1 August).
 
-    assert UtspLpgConnector.local_lpg_request_days(parameters) == requested
+    A day, a week, a July week, the last week and the whole of 2021 all ask for 1 January 2021 to 1 January 2022,
+    the end day the full-year request always had.
+    """
+    parameters = parameters_of(start, days, tmp_path)
+
+    assert UtspLpgConnector.lpg_request_days(parameters) == requested
+
+
+@pytest.mark.base
+def test_every_window_of_one_year_names_the_same_request_in_the_cache_key(tmp_path: pathlib.Path) -> None:
+    """Catches a cache key that names a window's own request, so equal profiles would sit under other requests.
+
+    A week, a July week and the whole of 2021 name the same request, in both modes the LoadProfileGenerator
+    computes; 2022 names another, and a shipped profile names none.
+    """
+    week = parameters_of(datetime.datetime(2021, 1, 1), 7, tmp_path)
+    july_week = parameters_of(datetime.datetime(2021, 7, 1), 7, tmp_path)
+    year = parameters_of(datetime.datetime(2021, 1, 1), 365, tmp_path)
+    next_year = parameters_of(datetime.datetime(2022, 1, 1), 7, tmp_path)
+
+    for mode in (LpgDataAcquisitionMode.USE_LOCAL_LPG, LpgDataAcquisitionMode.USE_UTSP):
+        material = UtspLpgConnector.request_key_material(mode, week)
+        assert material == ":lpg_request=2021-01-01..2022-01-01"
+        assert UtspLpgConnector.request_key_material(mode, july_week) == material
+        assert UtspLpgConnector.request_key_material(mode, year) == material
+        assert UtspLpgConnector.request_key_material(mode, next_year) == ":lpg_request=2022-01-01..2023-01-01"
+    assert UtspLpgConnector.request_key_material(LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, week) == ""
 
 
 @pytest.mark.utsp
-def test_the_local_generator_simulates_the_requested_days(tmp_path: pathlib.Path) -> None:
-    """Catches a request the local LoadProfileGenerator reads as other days than the ones meant.
+def test_a_week_reads_the_first_week_of_the_year_the_local_generator_simulates(tmp_path: pathlib.Path) -> None:
+    """Catches a short run that gets another household than the same days of a full-year run.
 
-    A run of two days from 1 January asks for 1 to 3 January, the end day included, and gets three days of
-    minutes from 1 January 00:00. The day-first request named the end ``03-01-2021``, which the generator reads
-    as 1 March (a one-day run's ``02-01-2021`` delivered 32 days, to 1 February).
+    A one-week run and a full-year run of CHR01 in 2021 each run the local LoadProfileGenerator for the whole
+    of 2021 (two runs of about two minutes each), and the week's five profiles equal the first 10 080 minutes of
+    the year's. A request of the week alone gave another household: up to 12 kW apart in a minute. The full-year
+    run's 525 600 minutes also show that the request reaches the end of the year.
     """
-    parameters = parameters_of(datetime.datetime(2021, 1, 1), 2, tmp_path)
     config = UtspLpgConnectorConfig.for_household(
         "Occupancy", Households.CHR01_Couple_both_at_Work, data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG
     )
-    occupancy = UtspLpgConnector(my_simulation_parameters=parameters, config=config)
-    try:
-        files = occupancy.get_profiles_from_local_lpg(config.household)
-        high_activity_file = files[4]
-        with open(high_activity_file, encoding="utf-8") as file:
-            high_activity = json.load(file)
-    finally:
-        PylpgWorkspace.release(occupancy.claimed_pylpg_calculation_indices, occupancy.pylpg_work_root())
+    week = UtspLpgConnector(
+        my_simulation_parameters=parameters_of(datetime.datetime(2021, 1, 1), 7, tmp_path), config=config
+    )
+    year = UtspLpgConnector(
+        my_simulation_parameters=parameters_of(datetime.datetime(2021, 1, 1), 365, tmp_path), config=config
+    )
+    minutes_of_the_week = 7 * 1440
 
-    assert high_activity["StartTime"] == "2021-01-01T00:00:00"
-    assert len(high_activity["Values"]) == 3 * 1440
+    assert len(year.electricity_consumption) == 365 * 1440
+    for profile in (
+        "electricity_consumption",
+        "heating_by_devices",
+        "water_consumption",
+        "heating_by_residents",
+        "number_of_residents",
+    ):
+        week_profile = getattr(week, profile)
+        assert len(week_profile) == minutes_of_the_week, profile
+        assert week_profile == getattr(year, profile)[:minutes_of_the_week], profile

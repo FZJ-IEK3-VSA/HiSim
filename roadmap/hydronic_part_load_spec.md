@@ -115,7 +115,11 @@ Owner, 2026-10-15, after stage D made the space-heating buffer a start-of-step s
     with whole steps into the start-of-step buffer). Its space-heating controller sets the exact fraction of
     decision 21 against the heating curve's supply temperature plus the energy manager's raise, charges a buffer at
     its target that its draw would empty, and the distribution's floor applies. Its hot-water part load stays parked
-    under decision 18 (#916).
+    under decision 18 (#916). *Amended by the owner on 2026-10-19 (hisim-fxix.27):* the heat pump's target is the
+    supply temperature plus the raise plus half the space-heating controller's upper offset (2.5 K with the default
+    5 K band), the buffer temperature the on/off controller holds on average at 60 s; at the supply temperature itself
+    the heat pump charged at a cooler outlet than at 60 s and its electricity was 4.3 % low at 900 s. The boiler keeps
+    the heating curve's supply temperature as its target.
 
 Owner, 2026-10-17, with the decisions on its open questions of 2026-10-18 (`roadmap/two_mode_buffer_spec.md`):
 

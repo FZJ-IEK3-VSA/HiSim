@@ -986,6 +986,10 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
   not asserted, like the gas fuel; the P1 bead hisim-hydronics-fxix.27, filed with pull request 8, addresses it once the
   current pull requests are merged.
   RenoVisor runs at 900 s, so a RenoVisor heat pump's electricity is about 3.5 % low against 60 s.
+  *Since 2026-10-19 (hisim-fxix.27, owner decision of that day)* the heat pump's space-heating charge aims half the
+  controller's upper offset (2.5 K) above the supply temperature: full year 2021 against the iterated buffer's 60 s,
+  heat-pump twin SH electricity +0.49 % at 900 s and −2.54 % at 3600 s (before −4.27 % / −7.08 %), delivered −0.33 % /
+  −1.81 %, 12.3 / 121.4 degree-hours (60 s 16.0); with solar thermal +3.09 % / +1.04 % (before −2.07 % / −3.75 %).
 
 **Against the first done-when of §9.5 D** (and hisim-hydronics-fxix.5's):
 

@@ -2962,7 +2962,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     part-load threshold the ratio is 1 whenever the heat pump heats. Above it, with the buffer wired, the ratio is
     :meth:`hisim.part_load.StartOfStepPartLoadRule.raising_ratio`: the fraction that ends the buffer at its target
     (``TargetTemperatureShInCelsius``), the heating curve's supply temperature raised by the energy manager's
-    modifier, read from the buffer's end temperature and its end temperature without the heat pump. While the
+    modifier and by half the upper offset of the hysteresis band (:meth:`space_heating_target_temperature_in_celsius`),
+    read from the buffer's end temperature and its end temperature without the heat pump. While the
     controller heats, a buffer at or above its target that its draw would take below it is charged as well, for the
     fraction that ends it at the target. The controller stays in heating while it commands a ratio of 0; the heat pump
     counts such a step as off in its published state and counters, not in its minimum times
@@ -2997,6 +2998,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     PartLoadRatioSh = "PartLoadRatioSh"
     #: The buffer temperature the space-heating charge aims at.
     TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
+
+    #: The share of the band's upper offset that the space-heating target lies above the supply temperature,
+    #: dimensionless (:meth:`space_heating_target_temperature_in_celsius`). Owner decision of 2026-10-19
+    #: (hisim-fxix.27): half the upper offset, so a charge above the part-load threshold ends the buffer where the
+    #: on/off controller holds it on average at 60 s, and the heat pump charges at the COP of the 60 s run.
+    SHARE_OF_UPPER_OFFSET_IN_TARGET: ClassVar[float] = 0.5
 
     def __init__(
         self,
@@ -3339,27 +3346,48 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 target_temperature_in_celsius=self.space_heating_target_temperature_in_celsius(
                     supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+                    upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
                 ),
             )
 
-    @staticmethod
+    @classmethod
     def space_heating_target_temperature_in_celsius(
-        *, supply_temperature_set_in_celsius: float, storage_temperature_modifier_in_kelvin: float
+        cls,
+        *,
+        supply_temperature_set_in_celsius: float,
+        storage_temperature_modifier_in_kelvin: float,
+        upper_temperature_offset_in_kelvin: float,
     ) -> float:
         """Return the buffer temperature a space-heating charge ends the step at above the part-load threshold, in °C.
 
-        It is the heating curve's supply temperature, raised by the energy manager's modifier, so a buffer the energy
-        manager raises to store surplus electricity as heat is charged to the raised temperature. Example: a 35 °C
-        supply temperature and a 5 K raise give a 40 °C target.
+        It is the heating curve's supply temperature, raised by the energy manager's modifier and by half the upper
+        offset of the controller's hysteresis band (:attr:`SHARE_OF_UPPER_OFFSET_IN_TARGET`). Example: a 35 °C supply
+        temperature, a 5 K raise and the default 5 K upper offset give a 42.5 °C target; without a raise 37.5 °C.
+
+        Why half the upper offset (owner decision of 2026-10-19, hisim-fxix.27): at 60 s the on/off controller lets the
+        buffer swing up to its switch-off point, the supply temperature plus the upper offset, so the heat pump charges
+        at a hotter outlet and a lower COP than a charge that stops at the supply temperature. A target at the supply
+        temperature made the heat pump's space-heating electricity of the heat-pump twin 4.3 % lower at 900 s than at
+        60 s; at half the upper offset it lies within 1 % (measured 2026-10-19). A target at the switch-off point itself
+        is worse, because the buffer then coasts down to the switch-on point for whole steps. The offset comes from the
+        controller's own band, so a configured band moves the target with it. The raise also lifts the buffer the
+        energy manager uses to store surplus electricity as heat.
 
         Args:
             supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
             storage_temperature_modifier_in_kelvin: The energy manager's raise of the buffer, in K; 0 without one.
+            upper_temperature_offset_in_kelvin: How far the buffer may rise above the supply temperature before the
+                on/off controller switches heating off, in K: the configuration's
+                ``upper_temperature_offset_for_state_conditions_in_celsius``.
 
         Returns:
             The target, in °C.
         """
-        return supply_temperature_set_in_celsius + storage_temperature_modifier_in_kelvin
+        return (
+            supply_temperature_set_in_celsius
+            + storage_temperature_modifier_in_kelvin
+            + cls.SHARE_OF_UPPER_OFFSET_IN_TARGET * upper_temperature_offset_in_kelvin
+        )
 
     def conditions_on_off(
         self,

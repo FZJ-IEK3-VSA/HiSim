@@ -40,13 +40,54 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
     return all(isclose(float(value), reference, rel_tol=relative_tolerance, abs_tol=0.1) for value in lst)
 
 
-# Multiplicative factor for the order-of-magnitude check on computed
-# (non-invariant) components; see values_are_same_order_of_magnitude for where
-# the value comes from.
-_ORDER_OF_MAGNITUDE_FACTOR: float = 15.0
+class OrderOfMagnitude:
+    """The limits of the order-of-magnitude check on computed outputs across the three step lengths.
+
+    ``FACTOR`` is the largest max/min ratio of the absolute yearly values the check accepts; where it comes from is
+    in :func:`values_are_same_order_of_magnitude`. ``NEAR_ZERO_FLOOR`` is the absolute value below which a yearly
+    value counts as zero, in the output's own unit: a net sum of large opposite flows ends near zero, and its ratio
+    across step lengths means nothing. Example: the battery's net DC power over the one-day run, -0.20 / 0 / -6.16 W
+    at 15 / 30 / 60 min, has a ratio of 31.5, but only -6.16 W lies above the floor, so there is no ratio to check
+    (hisim-fxix.18). The floor of 1.0 is ten times the absolute tolerance 0.1 of :func:`values_are_similar`.
+    """
+
+    #: The largest accepted max/min ratio of the absolute values, dimensionless.
+    FACTOR: float = 15.0
+    #: The absolute value below which a yearly value counts as zero, in the output's own unit.
+    NEAR_ZERO_FLOOR: float = 1.0
+
+    @classmethod
+    def significant_magnitudes(cls, lst: List) -> List[float]:
+        """Return the absolute values of a list that lie at or above the near-zero floor.
+
+        Example: ``[0.25, 1.8e-8, 9.1e-8]`` (the grid feed-in in W of the one-day run) gives ``[]``, and
+        ``[-0.2, 0.0, -6.16]`` gives ``[6.16]``.
+
+        Args:
+            lst: The yearly values of one output at the three step lengths.
+
+        Returns:
+            The absolute values at or above :attr:`NEAR_ZERO_FLOOR`, in their order.
+        """
+        return [magnitude for value in lst if (magnitude := abs(float(value))) >= cls.NEAR_ZERO_FLOOR]
+
+    @classmethod
+    def observed_ratio(cls, lst: List) -> float:
+        """Return the max/min ratio of the significant magnitudes, or infinity with fewer than two of them.
+
+        Example: ``[1.0, 20.0, 0.0]`` gives 20.0, ``[0.5, 20.0]`` gives infinity.
+
+        Args:
+            lst: The yearly values of one output at the three step lengths.
+
+        Returns:
+            The ratio, dimensionless; only used in the failure message.
+        """
+        magnitudes = cls.significant_magnitudes(lst)
+        return max(magnitudes) / min(magnitudes) if len(magnitudes) >= 2 else float("inf")
 
 
-def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGNITUDE_FACTOR) -> bool:
+def values_are_same_order_of_magnitude(lst: List, factor: float = OrderOfMagnitude.FACTOR) -> bool:
     """Check if values are within a multiplicative *factor* of each other.
 
     This is a looser check than :func:`values_are_similar`, intended for
@@ -55,9 +96,13 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGN
     control decisions.  The check uses absolute values so that quantities which
     can legitimately cross zero (e.g. ``SimpleHotWaterStorage|Heating|
     ThermalEnergyIncreaseInStorage`` going from -521 to +2262) are not flagged
-    as regressions.  When at least two values are non-zero the max/min ratio of
-    absolute values must stay below *factor*; when fewer than two values are
-    non-zero the ratio check is skipped because dividing by zero is undefined.
+    as regressions.  Values below :attr:`OrderOfMagnitude.NEAR_ZERO_FLOOR`
+    (1.0 in the output's own unit) count as zero: a net sum of large opposite
+    flows, such as the battery's net DC power (-0.20 / 0 / -6.16 W) or the
+    grid feed-in (0.25 / 1.8e-8 / 9.1e-8 W) of the one-day run, ends near zero
+    and its ratio means nothing (hisim-fxix.18).  When at least two values lie
+    at or above the floor the max/min ratio of their absolute values must stay
+    below *factor*; with fewer than two the ratio check is skipped.
 
     The default factor of 15 was set when the yearly value of every output in
     seconds was its sum over all steps: ``MoreAdvancedHeatPumpHPLib|Time|TimeOff``,
@@ -81,21 +126,26 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGN
       charging at 60-min resolution), ``ElectricityMeter`` feed-in
       (``ElectricityToGrid`` is non-zero only at 15-min), and
       ``L2EMSElectricityController`` storage temperature modifiers.  When
-      fewer than two values are non-zero the function returns ``True``, so a
+      fewer than two values lie at or above the near-zero floor the function
+      returns ``True``, so a
       future regression that zeroes out a previously non-zero output at one
       resolution would not be caught by this check alone.  Such divergences
       are still *printed* by the test loop (the ``print(key, values, ...)``
       line) and are visible in the test output for manual inspection.
+    - **Outputs whose yearly values all lie below the floor are not checked.**
+      An output that is small in its own unit at every resolution (below 1.0)
+      has no ratio to check; such values are printed by the test loop like the
+      zero-at-one-resolution case.
     - **Sign flips of equal magnitude are not flagged.**  Because absolute
       values are used, a regression that flips a value from +X to -X (same
       magnitude) yields a ratio of 1.0 and passes.  This is the trade-off for
       handling the legitimate zero-crossing case above; a sign-aware check
       would falsely flag ``ThermalEnergyIncreaseInStorage``.
     """
-    abs_vals = [av for v in lst if (av := abs(float(v))) > 1e-12]
-    if len(abs_vals) < 2:
-        return True  # All zero or a single non-zero -- no ratio to check.
-    return max(abs_vals) / min(abs_vals) < factor
+    magnitudes = OrderOfMagnitude.significant_magnitudes(lst)
+    if len(magnitudes) < 2:
+        return True  # All near zero or a single significant value -- no ratio to check.
+    return max(magnitudes) / min(magnitudes) < factor
 
 
 @pytest.mark.base
@@ -136,6 +186,14 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGN
         ([100.0, -100.0], True),
         # Value below near-zero threshold is treated as zero.
         ([1e-13, 1.0], True),
+        # Net sums of large opposite flows below the 1.0 floor count as zero
+        # (hisim-fxix.18): the battery's net DC power and the grid feed-in in W
+        # of the one-day cluster-house run at 15 / 30 / 60 min.
+        ([-0.1955, 0.0, -6.157], True),
+        ([0.25, 1.8e-8, 9.1e-8], True),
+        # At the floor a value counts: 1.0 against 20.0 is a ratio of 20.
+        ([1.0, 20.0], False),
+        ([0.99, 20.0], True),
     ],
 )
 def test_values_are_same_order_of_magnitude(values: List, expected: bool) -> None:
@@ -219,12 +277,10 @@ def test_cluster_house_for_several_time_resolutions():
                 # Computed (non-invariant) components legitimately vary across
                 # time resolutions, but should stay within a multiplicative
                 # factor -- a larger divergence signals a numerical regression.
-                non_zero = [abs(float(v)) for v in values if abs(float(v)) > 1e-12]
-                observed_ratio = max(non_zero) / min(non_zero) if len(non_zero) >= 2 else float("inf")
                 assert values_are_same_order_of_magnitude(lst=values), (
                     f"{key}: {values} differ by more than a factor of "
-                    f"{_ORDER_OF_MAGNITUDE_FACTOR} (observed max/min ratio = "
-                    f"{observed_ratio:.1f}) across time resolutions, indicating "
+                    f"{OrderOfMagnitude.FACTOR} (observed max/min ratio = "
+                    f"{OrderOfMagnitude.observed_ratio(values):.1f}) across time resolutions, indicating "
                     f"a likely regression."
                 )
 
@@ -281,12 +337,10 @@ def test_cluster_house_for_several_time_resolutions():
                 # Computed (non-invariant) components legitimately vary across
                 # time resolutions, but should stay within a multiplicative
                 # factor -- a larger divergence signals a numerical regression.
-                non_zero = [abs(float(v)) for v in values if abs(float(v)) > 1e-12]
-                observed_ratio = max(non_zero) / min(non_zero) if len(non_zero) >= 2 else float("inf")
                 assert values_are_same_order_of_magnitude(lst=values), (
                     f"{key}: {values} differ by more than a factor of "
-                    f"{_ORDER_OF_MAGNITUDE_FACTOR} (observed max/min ratio = "
-                    f"{observed_ratio:.1f}) across time resolutions, indicating "
+                    f"{OrderOfMagnitude.FACTOR} (observed max/min ratio = "
+                    f"{OrderOfMagnitude.observed_ratio(values):.1f}) across time resolutions, indicating "
                     f"a likely regression."
                 )
 

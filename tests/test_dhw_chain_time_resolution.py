@@ -70,19 +70,6 @@ class ResolutionRuns:
     #: Relative tolerance of the heat drawn at the tap, at every compared resolution.
     TAP_HEAT_RELATIVE_TOLERANCE: float = 0.01
 
-    #: The comparisons known to fail, by twin and resolution, with the physical reason. Each is a strict xfail, so
-    #: a comparison that starts to agree fails the test and its entry has to go.
-    KNOWN_DIVERGENCES: ClassVar[Dict[Tuple[str, int], str]] = {
-        ("household_heatpump_solar_thermal_building_sizer", 900): (
-            "hisim-60i6: the heat pump rests 3600 s after it stops. At 60 s its space-heating run ends at 19:00 on"
-            " 13 January, the tank falls below 40 °C at 19:05 and the evening draws until 20:00 go unmet down to"
-            " 27.5 °C; at 900 s the stop and the hot-water request fall into one step and the heat pump switches"
-            " from space heating to hot water without stopping. Unmet hot water over the window: 3.63 kWh at 60 s,"
-            " 1.04 kWh at 900 s, so the tap heat differs by 1.1 %. The draws fall there since the household runs"
-            " on the run's standard-time clock (hisim-9g2.5), an hour later than before."
-        ),
-    }
-
     #: The sums already computed in this test process, by twin and resolution.
     computed: ClassVar[Dict[Tuple[str, int], Dict[str, float]]] = {}
 
@@ -160,12 +147,9 @@ class ResolutionRuns:
 @pytest.mark.parametrize("seconds_per_timestep", [900, 3600])
 @pytest.mark.parametrize("twin", ResolutionRuns.twin_parameters())
 def test_the_hot_water_heat_agrees_across_resolutions(
-    twin: str, seconds_per_timestep: int, tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+    twin: str, seconds_per_timestep: int, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
     """The tap's heat within 1 %, the generators' heat net of the stored heat within the resolution's tolerance."""
-    known_divergence = ResolutionRuns.KNOWN_DIVERGENCES.get((twin, seconds_per_timestep))
-    if known_divergence is not None:
-        request.applymarker(pytest.mark.xfail(strict=True, raises=AssertionError, reason=known_divergence))
     reference = ResolutionRuns.sums(twin, ResolutionRuns.REFERENCE_SECONDS, tmp_path_factory)
     compared = ResolutionRuns.sums(twin, seconds_per_timestep, tmp_path_factory)
     assert compared["tap_heat_in_kilowatt_hour"] == pytest.approx(

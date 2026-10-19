@@ -23,7 +23,6 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
-from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 from tests.part_load_rigs import AllInputsRig, CollectorRig, Parameters, SolarControllerRig
 
@@ -34,7 +33,10 @@ def test_solar_thermal_system() -> None:
 
     Builds a Weather and SolarThermalSystem with a 4 m² collector, drives them with a
     fake binary control signal at a 3rd-of-July noon timestep, and asserts the
-    thermal power output matches the reference value (~3260.38 W).
+    thermal power output matches the reference value (~3253.71 W).
+
+    The sun is the weather's (hisim-9g2.7): at noon of the run's standard-time clock, 13:00 summer time. Before,
+    the collector worked out its own sun at noon UTC, an hour later, and the reference was 3260.38 W.
     """
     # Inputs
     seconds_per_timestep = 60
@@ -76,6 +78,8 @@ def test_solar_thermal_system() -> None:
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
     my_sts.ghi_channel.source_output = my_weather.ghi_output
+    my_sts.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_sts.azimuth_channel.source_output = my_weather.azimuth_output
 
     # Simulate
     fft.add_global_index_of_components([my_weather, my_sts, state_controller])
@@ -86,7 +90,7 @@ def test_solar_thermal_system() -> None:
     log.information(f"heat power output [W]: {stsv.values[my_sts.thermal_power_w_output_channel.global_index]}")
     print(stsv.values)
 
-    assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 3260.3754293283737
+    assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 3253.712286152263
 
 
 @pytest.mark.base
@@ -131,94 +135,31 @@ def test_precalc() -> None:
     assert precalc_data["collectors_heat"].iloc[0] == pytest.approx(0, abs=1e-9)
 
 
-class WhatMayBeCached:
-    """The columns the collector is allowed to remember between runs.
+@pytest.mark.base
+def test_the_collector_reads_the_sun_the_weather_publishes() -> None:
+    """Catches a collector that works out a sun of its own instead of reading the weather's.
 
-    ``flat_plate_precalc`` computes in three stages and only the first can be known before the run:
-    the sun's position follows from the timestamps and the coordinates. The plane-of-array irradiance
-    needs the weather, which arrives through wired inputs, and the collector efficiency needs the
-    storage's inlet temperature, which is the simulation's own state feeding back.
-
-    This component used to cache the output of all three, including ``eta_c`` and
-    ``collectors_heat``. Those are functions of a trajectory the run had not taken yet, so no key
-    could describe them and any hit replayed one system's storage behaviour into another's. Pinning
-    the column list is what stops a later precompute quietly reacquiring that dependency -- the
-    original mistake is easy to make again, because caching more looks like caching better.
+    The collector used to compute the sun from the run's start date read as UTC, an hour off the weather's clock
+    and, in a July run, July's sun over January's irradiance. With the sun's inputs set to 30 degrees from the
+    zenith due south, the irradiance on the plane is the one pvlib gives for that sun, at any timestep.
     """
+    outputs = CollectorRig.charge(seconds_per_timestep=3600, ratio=1.0)
+    area_in_m2 = solar_thermal_system.SolarThermalSystemConfig.COLLECTOR_AREA_IN_M2_PER_APARTMENT
 
-    COLUMNS = ("apparent_zenith", "azimuth")
-
-
-@pytest.mark.base
-def test_only_the_sun_is_cached(tmp_path: Any) -> None:
-    """The cached artefact holds the solar position and nothing downstream of it."""
-    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    simulation_parameters.cache_dir_path = str(tmp_path)
-    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
-    config.area_m2 = 1.5
-    collector = solar_thermal_system.SolarThermalSystem(
-        config=config,
-        my_simulation_parameters=simulation_parameters,
+    assert outputs[solar_thermal_system.SolarThermalSystem.SolarPowerOnCollector] == pytest.approx(
+        area_in_m2
+        * float(
+            solar_thermal_system.plane_of_array_irradiance_w_m2(
+                surface_tilt=30.0,
+                surface_azimuth=180.0,
+                apparent_zenith=30.0,
+                solar_azimuth=180.0,
+                global_horizontal_irradiance_w_m2=800.0,
+                diffuse_horizontal_irradiance_w_m2=100.0,
+            )
+        ),
+        rel=1e-12,
     )
-
-    collector.i_prepare_simulation()
-
-    assert tuple(collector.solar_position.columns) == WhatMayBeCached.COLUMNS, (
-        f"the collector precomputed {tuple(collector.solar_position.columns)}; anything beyond "
-        f"{WhatMayBeCached.COLUMNS} depends on the run and cannot be keyed"
-    )
-    assert len(collector.solar_position) == simulation_parameters.timesteps
-    written = list(tmp_path.glob("*.cache"))
-    assert len(written) == 1, f"expected one cache file, found {written}"
-    assert tuple(pd.read_csv(written[0]).columns) == WhatMayBeCached.COLUMNS
-
-
-@pytest.mark.base
-def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
-    """A cached run and an uncached one must agree bit for bit, so the file keeps full precision.
-
-    The default CSV float format does not round-trip a float64, which is the defect
-    roadmap/pylpg_flakiness.md records for the photovoltaic cache: a cached run and an uncached one
-    are then not the same run. Seventeen significant digits do round-trip, and this asserts it on
-    the values actually written rather than trusting the format string.
-    """
-    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    simulation_parameters.cache_dir_path = str(tmp_path)
-    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
-    config.area_m2 = 1.5
-
-    computed = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
-    computed.i_prepare_simulation()
-    assert len(list(tmp_path.glob("*.cache"))) == 1
-
-    from_cache = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
-    from_cache.i_prepare_simulation()
-    # A key that moved between the two runs would have made the second one recompute and file a second
-    # entry, and the comparison below would then compare two computations instead of a cache read.
-    assert len(list(tmp_path.glob("*.cache"))) == 1
-
-    for column in WhatMayBeCached.COLUMNS:
-        assert list(from_cache.solar_position[column]) == list(computed.solar_position[column]), (
-            f"'{column}' changed on the way through the cache, so a cached run is not the same run"
-        )
-
-
-@pytest.mark.base
-def test_every_timestep_gets_an_instant() -> None:
-    """The timestamps are the cache key's claim about the contents, so they must match the run."""
-    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
-    config.area_m2 = 1.5
-    collector = solar_thermal_system.SolarThermalSystem(
-        config=config,
-        my_simulation_parameters=simulation_parameters,
-    )
-
-    timestamps = collector.sun_position_inputs().timestamps()
-
-    assert len(timestamps) == simulation_parameters.timesteps
-    assert timestamps[0] == simulation_parameters.start_date
-    assert (timestamps[1] - timestamps[0]).total_seconds() == simulation_parameters.seconds_per_timestep
 
 
 @pytest.mark.base
@@ -309,6 +250,8 @@ def test_the_timestep_reads_the_resolved_area() -> None:
         collector.t_out_channel.source_output = my_weather.air_temperature_output
         collector.dhi_channel.source_output = my_weather.dhi_output
         collector.ghi_channel.source_output = my_weather.ghi_output
+        collector.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+        collector.azimuth_channel.source_output = my_weather.azimuth_output
 
     everything = [my_weather, *collectors, state_controller]
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
@@ -457,6 +400,8 @@ def test_the_timestep_output_equals_the_series_path() -> None:
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
     my_sts.ghi_channel.source_output = my_weather.ghi_output
+    my_sts.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_sts.azimuth_channel.source_output = my_weather.azimuth_output
     fft.add_global_index_of_components([my_weather, my_sts, control, inlet])
     stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, control, inlet]))
     stsv.values[control.global_index] = 1
@@ -473,8 +418,8 @@ def test_the_timestep_output_equals_the_series_path() -> None:
                 my_sts.i_simulate(timestep, stsv, False)
                 reference = config.area_m2 * _collector_heat_the_series_way(
                     config,
-                    my_sts.solar_position["apparent_zenith"].iloc[timestep],
-                    my_sts.solar_position["azimuth"].iloc[timestep],
+                    stsv.values[my_weather.apparent_zenith_output.global_index],
+                    stsv.values[my_weather.azimuth_output.global_index],
                     stsv.values[my_weather.ghi_output.global_index],
                     stsv.values[my_weather.dhi_output.global_index],
                     stsv.values[my_weather.air_temperature_output.global_index],
@@ -534,6 +479,8 @@ def test_the_collector_pumps_its_heat_over_the_target_lift_and_its_sensor_reads_
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
     my_sts.ghi_channel.source_output = my_weather.ghi_output
+    my_sts.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_sts.azimuth_channel.source_output = my_weather.azimuth_output
     fft.add_global_index_of_components([my_weather, my_sts, *fakes])
     stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, *fakes]))
     timestep = 183 * 24 + 12

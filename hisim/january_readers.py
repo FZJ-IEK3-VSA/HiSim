@@ -71,12 +71,6 @@ class JanuaryReaders:
     #: Remove an entry in the pull request that fixes its class; the last removal deletes this module.
     CLASSES: ClassVar[Tuple[JanuaryReader, ...]] = (
         JanuaryReader(
-            "hisim.components.solar_thermal_system.SolarThermalSystem",
-            "a sun position of its own, on a clock other than that of the weather's irradiance",
-            "hisim-9g2.7",
-            1032,
-        ),
-        JanuaryReader(
             "hisim.components.csvloader.CSVLoader",
             "its profile from row 0, which is 1 January in a year-long file",
             "hisim-9g2.14",

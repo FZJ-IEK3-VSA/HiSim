@@ -17,7 +17,7 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
-from hisim.components import csvloader, example_component, solar_thermal_system
+from hisim.components import csvloader, example_component
 from hisim.january_readers import JanuaryReader, JanuaryReaders
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -117,7 +117,7 @@ class TestTheRunWarns:
 
 
 class TestTheList:
-    """The list names real classes, matches subclasses, and keeps its order."""
+    """The list names real classes and matches subclasses."""
 
     @pytest.mark.parametrize("reader", JanuaryReaders.CLASSES, ids=lambda reader: reader.class_path)
     def test_every_entry_names_an_existing_class(self, reader: JanuaryReader) -> None:
@@ -135,14 +135,6 @@ class TestTheList:
         assert [reader.class_path for reader in JanuaryReaders.present([OwnLoader, OwnLoader])] == [
             "hisim.components.csvloader.CSVLoader"
         ]
-
-    def test_classes_come_back_in_the_order_of_the_list(self) -> None:
-        """Several readers are reported in the list's order, whatever order the run holds them in."""
-        classes = [csvloader.CSVLoader, solar_thermal_system.SolarThermalSystem]
-
-        names = [reader.class_path.rsplit(".", 1)[-1] for reader in JanuaryReaders.present(classes)]
-
-        assert names == ["SolarThermalSystem", "CSVLoader"]
 
     @pytest.mark.parametrize(
         ("start_date", "expected"),

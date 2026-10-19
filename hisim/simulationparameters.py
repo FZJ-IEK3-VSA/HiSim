@@ -127,11 +127,19 @@ class SimulationParameters:
                 :class:`WeatherYearError`.
             part_load_above_seconds: The step length above which a device its controller has switched on runs
                 only the fraction of the step that brings its store to the controller's target (:mod:`hisim.part_load`).
-                At and below it every device runs whole steps, as before. Two devices read it today: the boiler's
-                hot-water charge (:class:`~hisim.components.generic_boiler.GenericBoilerController`) and the solar
+                At and below it every device runs whole steps, as before. Five circuit ends read it today: the
+                boiler's hot-water charge and its space-heating charge
+                (:class:`~hisim.components.generic_boiler.GenericBoilerController`), the heat pump's space-heating
+                charge (``MoreAdvancedHeatPumpHPLibControllerSpaceHeating`` in
+                :mod:`hisim.components.more_advanced_heat_pump_hplib`),
+                the heat distribution system's circuit
+                (:class:`~hisim.components.heat_distribution_system.HeatDistributionController`) and the solar
                 collector's pump (:class:`~hisim.components.solar_thermal_system.SolarThermalSystemController`);
-                every other device, the heat pumps and the electric heaters among them, runs whole steps at any
-                step length. ``None`` (the default) means
+                every other device, the heat pump's hot-water charge, district heating and the electric heaters among
+                them, runs whole steps at any step length. A start-of-step space-heating buffer relies on the
+                fractions above 600 s, so it refuses a step above 600 s with a threshold at or above that step
+                (:meth:`~hisim.components.simple_water_storage.SimpleHotWaterStorage.check_whole_steps_are_safe`).
+                ``None`` (the default) means
                 :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
                 :class:`PartLoadThresholdError`.
 

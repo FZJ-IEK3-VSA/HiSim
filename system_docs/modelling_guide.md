@@ -32,11 +32,13 @@ controller (#941).
   its draw would take it below), the distribution system's so that the store does not end below the room's
   start-of-step temperature. The space-heating buffer, its boilers and its heat pump do this since hydronic stage D;
   the heat pump's hot-water charge runs whole steps until its part load (#916). Why: a committed start value does not
-  move while the step iterates, so the coupling needs no iteration between store and generator. Today the hot-water
-  cylinder of stage C (#909) still returns the step mean of its temperature to its generators
-  (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the controllers decide on its start-of-step
-  temperature (part-load spec, decision 3; the solar controller reads `WaterTemperatureAtStartOfStepInCelsius`
-  since #941). A new store follows the rule above.
+  move while the step iterates, so the coupling itself needs no iteration between store and generator; the fractions
+  of a store's circuit ends read each other's fractions of the pass before and settle together within a few passes.
+  A start-of-step store refuses whole steps above 600 s: a run with longer steps and a part-load threshold at or above
+  its step is refused when the store is built. Today the hot-water cylinder of stage C (#909) still returns the step
+  mean of its temperature to its generators (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the
+  controllers decide on its start-of-step temperature (part-load spec, decision 3; the solar controller reads
+  `WaterTemperatureAtStartOfStepInCelsius` since #941). A new store follows the rule above.
 - **Power outputs are step means, energy outputs step totals.** A power published for a step is its mean over the
   step, so power times step length is the step's energy (`hisim/energy_port.py` converts it so). A value at the
   start or end of the step is a sensor or a state, and its name says so (`WaterTemperatureAtEndOfStepInCelsius`).

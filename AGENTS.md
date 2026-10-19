@@ -303,4 +303,10 @@ git push                # Push to remote
   original text to be acted on without the source.
 - `br` commands never run git: stage `.beads/issues.jsonl` with the code change that closes or
   creates issues, after `br sync --flush-only`.
+- `.beads/issues.jsonl` stays sorted by bead id in plain string order (`hisim-4g9.10` before
+  `hisim-4g9.9`), the order `br sync --flush-only` writes. A bead added or edited without `br` is
+  inserted at its sorted position, never appended at the end, and an edited bead keeps its line in
+  place. Two branches that each append a bead collide at the end of the file and force a rebase
+  (and a fresh CI run) of every stacked pull request after its parent merges; at sorted positions
+  two random hash ids rarely land next to each other.
 

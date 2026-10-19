@@ -139,9 +139,9 @@ def test_precalc() -> None:
 def test_the_collector_reads_the_sun_the_weather_publishes() -> None:
     """Catches a collector that works out a sun of its own instead of reading the weather's.
 
-    The collector used to compute the sun from the run's start date read as UTC, an hour off the weather's clock
-    and, in a July run, July's sun over January's irradiance. With the sun's inputs set to 30 degrees from the
-    zenith due south, the irradiance on the plane is the one pvlib gives for that sun, at any timestep.
+    The collector used to compute the sun from the run's start date read as UTC, an hour off the weather's clock.
+    With the sun's inputs set to 30 degrees from the zenith due south, the irradiance on the plane is the one pvlib
+    gives for that sun, at any timestep.
     """
     outputs = CollectorRig.charge(seconds_per_timestep=3600, ratio=1.0)
     area_in_m2 = solar_thermal_system.SolarThermalSystemConfig.COLLECTOR_AREA_IN_M2_PER_APARTMENT

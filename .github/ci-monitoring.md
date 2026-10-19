@@ -31,7 +31,7 @@ request waits.
 
 ## Adding the monitor to a new job
 
-Two steps, next to the checkout and at the end, exactly like the `hisim-cache` action:
+Two steps, next to the checkout and at the end:
 
 ```yaml
     - uses: actions/checkout@v6

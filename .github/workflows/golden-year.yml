@@ -130,12 +130,12 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+      # The weather series and LoadProfileGenerator profiles earlier runs computed: the most recent
+      # shared entry, which every job of every workflow restores; see the action.
       - name: Restore the HiSim inputs cache
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-          scope: ${{ github.workflow }}-${{ matrix.name }}
       - name: Golden KPI check (full year, one run)
         run: python scripts/golden_check.py --mode "$MODE" --jobs 1 --pairs "$PAIR"
       - name: Upload deviation report
@@ -147,13 +147,14 @@ jobs:
             results/golden-ref-check*/report.*
             results/golden-ref-check*/_children/*.log
           if-no-files-found: warn
-      # Kept even when the job failed; see the action for why that is safe.
-      - name: Save the HiSim inputs cache
+      # Only the files this job added, for the merge job below. Kept even when the job failed; see
+      # the action for why that is safe.
+      - name: Upload what this job added to the HiSim inputs cache
         if: always()
         uses: ./.github/actions/hisim-cache
         with:
-          mode: save
-          scope: ${{ github.workflow }}-${{ matrix.name }}
+          mode: upload-new
+          scope: ${{ matrix.name }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -200,6 +201,40 @@ jobs:
         with:
           mode: report
           scope: assemblies-nightly
+
+  # One shared inputs-cache entry per run instead of one per job: merges what every golden-year job added
+  # into the most recent shared entry and saves it, or nothing when nothing changed; see the action.
+  # Not for a fork's pull request, which saves no cache.
+  inputs-cache:
+    name: merge the inputs cache
+    needs: [discover, golden-year]
+    if: always() && needs.discover.result != 'skipped' && !github.event.pull_request.head.repo.fork
+    # On the self-hosted runners, and in the image of the jobs it merges, whose HISIM_LPG_BINARY_ROOT
+    # decides whether the LoadProfileGenerator binaries stay in the cache.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+      - name: Merge and save the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: merge-save
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   summary:
     name: golden-year summary

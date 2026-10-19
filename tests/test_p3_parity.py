@@ -396,7 +396,8 @@ def test_the_july_window_reads_july_not_january(tmp_path: Path) -> None:
     """
     published = {}
     for window in ParityWindows.names():
-        parameters = ParityWindows.build(window, tmp_path / window / "results", tmp_path / window / "cache")
+        # One cache for both windows: both cut their week from the same weather year, which is computed once.
+        parameters = ParityWindows.build(window, tmp_path / window / "results", tmp_path / "cache")
         repository = SimRepository()
         weather = Weather(config=WeatherConfig.preset_aachen("Weather"), my_simulation_parameters=parameters)
         weather.set_sim_repo(repository)

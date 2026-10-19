@@ -417,7 +417,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 10541.721851977984
+    "value": 10577.184681234783
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -449,7 +449,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 397.50033522464173
+    "value": 397.513702042716
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -465,7 +465,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 397.50033522464173
+    "value": 397.513702042716
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -481,7 +481,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 1272.8792764376606
+    "value": 1237.525015463967
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -497,7 +497,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 10.767767032430383
+    "value": 10.468691972591335
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -513,7 +513,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 42.80191005011923
+    "value": 41.614485015696445
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -521,7 +521,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 2973.884284479764
+    "value": 2973.7842844797638
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",
@@ -560,7 +560,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 2972.348141185589
+    "value": 2972.24350823275
   },
   "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": {
     "building": "BUI1",

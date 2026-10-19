@@ -320,11 +320,12 @@ class TestTimeColumn:
         )
 
     @staticmethod
-    def config(time_column: int | None) -> CSVLoaderConfig:
+    def config(time_column: int | None, unit: lt.Units = lt.Units.WATT) -> CSVLoaderConfig:
         """Build the configuration of the fixture's value column, with or without its time column.
 
         Args:
             time_column: The index of the time column, or ``None`` for a file read without one.
+            unit: The unit of the value column, W unless told otherwise.
 
         Returns:
             The configuration.
@@ -334,7 +335,7 @@ class TestTimeColumn:
             csv_filename="fake_profile.csv",
             column=1,
             loadtype=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=unit,
             column_name="value",
             time_column=time_column,
         )
@@ -426,6 +427,15 @@ class TestTimeColumn:
         ]
         energy_of_the_rows = float(window_rows.sum() * self.SECONDS_PER_TIMESTEP)
         assert float(loader.column_values_in_loaded_unit.sum() * 900) == pytest.approx(energy_of_the_rows, rel=1e-12)
+
+    @pytest.mark.base
+    def test_a_finer_file_of_an_amount_per_row_is_refused(self) -> None:
+        """Catches a minutely kWh column in a 900 s run read as the mean of its rows, a fifteenth of its energy."""
+        parameters = SimulationParameters.one_week_july(year=self.YEAR, seconds_per_timestep=900)
+
+        with pytest.raises(ValueError, match="an amount per row"):
+            CSVLoader(config=self.config(time_column=0, unit=lt.Units.KWH), my_simulation_parameters=parameters,
+                      dataframe=self.minutely_year())
 
     @pytest.mark.base
     def test_a_file_coarser_than_the_run_is_refused(self) -> None:

@@ -63,8 +63,9 @@ class CSVLoaderConfig(ConfigBase):
 
     The rows may be finer than the run: then each timestep reads the mean of the rows inside it.
     Example: a minutely file in a 900 s run gives each timestep the mean of its 15 one-minute rows,
-    which keeps the energy of a power column such as kW (a column of energy per row would need the
-    sum instead, so such a file has to be written at the run's resolution). A file coarser than
+    which keeps the energy of a power column such as kW. A column of energy per row (a unit that
+    :meth:`hisim.loadtypes.OutputAggregation.of_unit` sums, such as kWh) would need the sum instead,
+    so such a file is refused unless it is written at the run's resolution. A file coarser than
     the run, or one whose row step does not divide the run's step evenly (a 600 s file in a 900 s
     run), is refused: no row can be split into timesteps without inventing values.
 
@@ -348,6 +349,7 @@ class CSVLoader(cp.DataSourceComponent):
         if rows_per_timestep == 1:
             self.column_values_in_loaded_unit: np.ndarray = rows_read_in_loaded_unit
         else:
+            self._refuse_averaging_an_amount(rows_per_timestep)
             self.column_values_in_loaded_unit = rows_read_in_loaded_unit.reshape(timesteps, rows_per_timestep).mean(
                 axis=1
             )
@@ -372,6 +374,28 @@ class CSVLoader(cp.DataSourceComponent):
                 f"so it can only serve a run that starts on 1 January, and this run starts on {start_date}. "
                 "Name the column that holds each row's time label as time_column (an ISO 8601 date and time "
                 "without a UTC offset, in standard time), so the loader can find the window in the file."
+            )
+
+    def _refuse_averaging_an_amount(self, rows_per_timestep: int) -> None:
+        """Refuse to average the rows of a file finer than the run when its unit is an amount per row.
+
+        A timestep reads the mean of its rows, which keeps the energy of a rate such as kW. A column
+        in an amount per row, such as kWh per minute, would need the sum: its mean is the timestep's
+        amount divided by the rows. Example: a minutely kWh column in a 900 s run would give each
+        timestep a fifteenth of its energy, so it is refused; a minutely kW column is averaged.
+
+        Args:
+            rows_per_timestep: How many of the file's rows one timestep reads, more than 1.
+
+        Raises:
+            ValueError: If the column's unit is summed rather than averaged
+                (:meth:`hisim.loadtypes.OutputAggregation.of_unit`).
+        """
+        if lt.OutputAggregation.of_unit(self.csvconfig.unit) != lt.OutputAggregation.MEAN:
+            raise ValueError(
+                f"The CSV file '{self.csvconfig.csv_filename}' of {self.component_name} has {rows_per_timestep} "
+                f"rows per timestep in the unit {self.csvconfig.unit.value}, an amount per row, which a mean "
+                "would shrink by that factor. Write the file at the run's resolution, or as a rate such as kW."
             )
 
     def _rows_per_timestep(self, labels: pd.DatetimeIndex) -> int:

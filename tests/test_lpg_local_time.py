@@ -262,12 +262,45 @@ def test_the_occupancy_refuses_a_timestep_of_no_whole_minutes(
 
 
 @pytest.mark.base
-def test_the_occupancys_cache_key_carries_the_conversions_fingerprint(tmp_path: pathlib.Path) -> None:
+def test_the_occupancys_cache_key_carries_the_conversions_fingerprint(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Catches an occupancy cache entry outliving the conversion that wrote it.
 
     The entry holds the profiles after the conversion, so a key that names only the configuration and the
-    simulation parameters serves the old values after the conversion changes.
+    simulation parameters serves the old values after the conversion changes. An entry the occupancy writes is
+    found again, which holds only if the writer recorded the key material the lookup hashes, fingerprint
+    included; with another fingerprint the same lookup misses. (The shipped profile is never cached, so the
+    entry is written by hand.)
     """
-    material = PredefinedOccupancy.build(datetime.datetime(2021, 1, 1), 1, tmp_path).extra_cache_key_material()
+    occupancy = PredefinedOccupancy.build(datetime.datetime(2021, 1, 1), 1, tmp_path)
+    cache_directory = str(tmp_path / "cache")
+    [[found_before_the_write, path]], _ = occupancy.get_list_of_file_exists_bools_and_cache_file_paths(cache_directory)
+    occupancy.cache_results(
+        cache_filepath=path,
+        effective_household_config=occupancy.utsp_config,
+        number_of_residents=occupancy.number_of_residents,
+        heating_by_residents=occupancy.heating_by_residents,
+        electricity_consumption=occupancy.electricity_consumption,
+        water_consumption=occupancy.water_consumption,
+        heating_by_devices=occupancy.heating_by_devices,
+        flexibility=[],
+        car_states=[],
+        car_locations=[],
+        driving_distances=[],
+    )
+    [[found_after_the_write, _]], _ = occupancy.get_list_of_file_exists_bools_and_cache_file_paths(cache_directory)
 
-    assert material == ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time))
+    assert occupancy.extra_cache_key_material() == ":lpg_local_time=" + Fingerprints.code(
+        ImportClosure.of(lpg_local_time)
+    )
+    assert not found_before_the_write
+    assert found_after_the_write
+
+    monkeypatch.setattr(UtspLpgConnector, "extra_cache_key_material", lambda self: ":lpg_local_time=edited")
+    [[found_after_the_edit, path_after_the_edit]], _ = occupancy.get_list_of_file_exists_bools_and_cache_file_paths(
+        cache_directory
+    )
+
+    assert not found_after_the_edit
+    assert path_after_the_edit != path

@@ -214,8 +214,10 @@ runs:
         key: ${{ steps.key.outputs.restore_key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
 
-    # No artifact at all is the normal case of a run whose jobs found everything in the cache.
+    # No artifact at all is the normal case of a run whose jobs found everything in the cache. A
+    # failed download only loses additions the next run adds again, except under fresh: see below.
     - name: Download the files every job of this run added
+      id: download
       if: steps.key.outputs.writes == 'true' && inputs.mode == 'merge-save'
       continue-on-error: true
       uses: actions/download-artifact@v8
@@ -231,7 +233,15 @@ runs:
         WORK: ${{ steps.key.outputs.work }}
         PREFIX: ${{ steps.key.outputs.prefix }}
         MATCHED: ${{ steps.latest.outputs.cache-matched-key }}
+        FRESH: ${{ inputs.fresh }}
+        DOWNLOAD: ${{ steps.download.outcome }}
       run: |
+        # Under fresh nothing was restored, so what a failed download missed would be missing from
+        # the new most recent entry, not just from this run's additions: save nothing instead.
+        if [ "$FRESH" = "true" ] && [ "$DOWNLOAD" = "failure" ]; then
+          echo "::error::hisim-cache: the additions of this run could not all be downloaded; the fresh cache is not saved."
+          exit 1
+        fi
         mkdir -p hisim/inputs/cache "$WORK"
         archives=0
         while IFS= read -r -d '' archive; do

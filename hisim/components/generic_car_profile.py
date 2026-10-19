@@ -12,8 +12,9 @@ It is a module of its own, like the weather, PV and solar-gains producers, so th
 artifact carries a fingerprint of exactly the code that computes it: the key is
 ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
 (:class:`hisim.caching.keys.CacheKey`), and the code fingerprint covers this module, the LPG time
-conversion it imports and :mod:`hisim.caching.keys`, which it reads its payload marker from, so an edit
-to any of the three makes every cached car profile a miss. The legacy key it
+conversion it imports, :mod:`hisim.window_offset`, which the conversion imports, and
+:mod:`hisim.caching.keys`, which it reads its payload marker from, so an edit to any of the four makes
+every cached car profile a miss. The legacy key it
 replaces hashed the car's configuration and the simulation parameters only, so a changed conversion
 kept serving the profiles the old one had written.
 

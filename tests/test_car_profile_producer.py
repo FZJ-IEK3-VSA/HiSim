@@ -180,7 +180,7 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
 
 @pytest.mark.base
 def test_the_producer_obeys_the_layering_rule() -> None:
-    """The closure is the producer, the LPG time conversion and the key module, and nothing else.
+    """The closure is the producer, the LPG time conversion, its window offset and the key module, and nothing else.
 
     Catches: the producer reaching for ``hisim.utils``, ``Component`` or the simulation parameters,
     which would make it uncallable without HiSim and its key hostage to every edit of those modules.

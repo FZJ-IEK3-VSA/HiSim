@@ -1,7 +1,7 @@
 """Tests for the car-profile producer: its layering, its key, and that an edit to its code misses the cache.
 
 The car's driving profile at the run's resolution used to be cached under the car's configuration and the
-simulation parameters alone, so an edit to the calculation -- the LoadProfileGenerator's conversion to UTC
+simulation parameters alone, so an edit to the calculation -- the LoadProfileGenerator's time conversion
 above all -- kept serving the profiles the old code had written. It is now a producer like the weather:
 its key fingerprints the producer module and the conversion it imports. These tests pin that: the
 closure is exactly those modules, an edit to either moves the key, and a moved key is a miss in a real
@@ -172,7 +172,6 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
         "year": 2021,
         "seconds_per_timestep": 3600,
         "timesteps": 48,
-        "duration_in_days": 2,
         "window_start": "2021-01-01T00:00:00",
         **fields,
     }
@@ -181,7 +180,7 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
 
 @pytest.mark.base
 def test_the_producer_obeys_the_layering_rule() -> None:
-    """The closure is the producer, the LPG time conversion and the key module, and nothing else.
+    """The closure is the producer, the LPG time conversion, its window offset and the key module, and nothing else.
 
     Catches: the producer reaching for ``hisim.utils``, ``Component`` or the simulation parameters,
     which would make it uncallable without HiSim and its key hostage to every edit of those modules.
@@ -193,8 +192,9 @@ def test_the_producer_obeys_the_layering_rule() -> None:
         "hisim.components.generic_car_profile",
         "hisim.components.lpg_local_time",
         "hisim.caching.keys",
+        "hisim.window_offset",
     }
-    assert set(closure.third_party_top_levels) == {"numpy", "pandas", "pytz"}
+    assert set(closure.third_party_top_levels) == {"numpy", "pandas"}
     assert not closure.dynamic_import_sites
 
 
@@ -203,7 +203,7 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     ("module", "old", "new"),
     [
         (ProducerCopy.PRODUCER, "if minutes_per_timestep > 1:", "if minutes_per_timestep > 2:"),
-        (ProducerCopy.CONVERSION, "# delete hour at beginning", "# delete the hour at the beginning"),
+        (ProducerCopy.CONVERSION, "# Each row is localized twice", "# Every row is localized twice"),
     ],
 )
 def test_an_edit_to_the_producer_or_the_conversion_misses_the_cache(
@@ -261,18 +261,19 @@ def test_the_profile_enters_the_key_by_its_hash() -> None:
     assert CanonicalJson.dumps(base) != CanonicalJson.dumps(other_place)
     assert "driven_distance_per_minute_in_meters" not in CanonicalJson.dumps(base)
     assert "car_location" not in CanonicalJson.dumps(base)
-    one_day = dataclasses.replace(base, timesteps=24, duration_in_days=1)
+    one_day = dataclasses.replace(base, timesteps=24)
     assert CanonicalJson.dumps(one_day) != CanonicalJson.dumps(base)
     july = dataclasses.replace(base, window_start="2021-07-01T00:00:00")
     assert CanonicalJson.dumps(july) != CanonicalJson.dumps(base)
 
 
 @pytest.mark.base
-def test_the_produced_profile_is_hourly_and_in_utc() -> None:
-    """The minute profile, converted to UTC, is summed and voted per hour.
+def test_the_produced_profile_is_hourly_and_in_standard_time() -> None:
+    """The minute profile, put onto the run's standard-time clock, is summed and voted per hour.
 
-    The drive from 08:00 to 08:30 local time is 07:00 to 07:30 in UTC, so the hour starting 07:00 UTC
-    carries its 15 km; the car is at the workplace for the most of the hours 08:00 to 15:00 UTC.
+    In January the wall clock is standard time, so the drive from 08:00 to 08:30 is in the hour starting
+    at 08:00, which carries its 15 km, and the car is at the workplace for all of the hours 09:00 to 16:00.
+    Catches the profile being read in UTC, an hour earlier, as it was before hisim-9g2.5.
     """
     produced = produce_car_profile(calculation_inputs())
 
@@ -280,9 +281,10 @@ def test_the_produced_profile_is_hourly_and_in_utc() -> None:
     assert len(produced) == 48
     distances = produced[CarProfileInputs.DISTANCE_COLUMN]
     assert float(distances.sum()) == pytest.approx(15000.0)
-    assert float(distances.iloc[7]) == pytest.approx(15000.0)
+    assert float(distances.iloc[8]) == pytest.approx(15000.0)
     locations = produced[CarProfileInputs.LOCATION_COLUMN]
-    assert list(locations.iloc[8:15]) == [2] * 7
+    assert list(locations.iloc[9:17]) == [2] * 8
+    assert int(locations.iloc[17]) == 1
     assert int(locations.iloc[0]) == 1
     assert isinstance(produced, pd.DataFrame)
 
@@ -293,20 +295,18 @@ def test_the_produced_profile_is_hourly_and_in_utc() -> None:
     [
         ({"seconds_per_timestep": 30, "timesteps": 5760}, "whole multiple"),
         ({"seconds_per_timestep": 90, "timesteps": 1920}, "whole multiple"),
-        ({"timesteps": 24}, "do not span"),
         ({"lpg_time_resolution": "00:05:00", "seconds_per_timestep": 900, "timesteps": 192}, "one value per 60 s"),
     ],
     ids=[
         "sub-minute-timestep",
         "timestep-not-a-whole-number-of-minutes",
-        "timesteps-not-covering-the-days",
         "profile-not-minutely",
     ],
 )
 def test_a_run_the_producer_cannot_cut_a_profile_for_is_refused_when_the_inputs_are_built(
     overrides: Dict[str, Any], refusal: str
 ) -> None:
-    """A timestep shorter than or not a multiple of the profile's minute, a missed span or a coarser profile is refused.
+    """A timestep shorter than or not a multiple of the profile's minute, or a coarser profile, is refused.
 
     Catches: such a run reaching the producer, where it fails as a pandas length error that names
     neither the car nor the cause.

@@ -41,7 +41,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.components import lpg_local_time
-from hisim.caching import atomic_cache_write
+from hisim.caching import Fingerprints, ImportClosure, atomic_cache_write
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
@@ -1285,6 +1285,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
+                    extra_key_material=self.extra_cache_key_material(),
                 )
                 list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
                 list_of_unique_household_configs.append(new_config_object)
@@ -1296,12 +1297,26 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,
+                extra_key_material=self.extra_cache_key_material(),
             )
             list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
             # ustp config is already unique because only 1 household in it
             list_of_unique_household_configs.append(self.utsp_config)
 
         return list_of_file_exists_and_cache_files, list_of_unique_household_configs
+
+    def extra_cache_key_material(self) -> str:
+        """Return what the key of this component's cache entries names beyond the configuration and the run.
+
+        An entry holds the profiles after :mod:`hisim.components.lpg_local_time` put them onto the run's clock
+        and cut out its window, so an entry written by another version of that conversion holds other values
+        under the same configuration and simulation parameters. With the fingerprint of the conversion's code
+        in the key, an edit to it makes every entry a miss instead of serving the old values.
+
+        Returns:
+            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure.
+        """
+        return ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time))
 
     def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(
         self,
@@ -1959,19 +1974,32 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
         # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
         simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+        # A timestep averages whole minutes of the profile: at 90 s a timestep would read one minute, and a
+        # day of 960 timesteps 16 hours of the household, without an error.
+        if self.my_simulation_parameters.seconds_per_timestep % lpg_local_time.LpgLocalTime.SECONDS_PER_MINUTE:
+            raise ValueError(
+                f"The LoadProfileGenerator profile of {self.component_name} has one value per minute, so the "
+                "run's timestep must be a whole multiple of a minute; "
+                f"{self.my_simulation_parameters.seconds_per_timestep} s is not."
+            )
         minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
         steps_desired = int(
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
         )
         steps_desired_in_minutes = steps_desired * minutes_per_timestep
+        # A window that ends in summer ends an hour later on the wall clock the profile is labelled in.
+        minutes_to_read = lpg_local_time.LpgLocalTime.minutes_to_read(steps_desired_in_minutes)
+        minutes_of_activity = min(
+            [minutes_to_read] + [len(activity["Values"]) for activity in occupancy_profile]
+        )
 
         # initialize number of residence and heating by residents
-        heating_by_residents = [0.0] * steps_desired_in_minutes
-        number_of_residents = [0] * steps_desired_in_minutes
+        heating_by_residents = [0.0] * minutes_of_activity
+        number_of_residents = [0] * minutes_of_activity
 
         # compute heat gains and number of persons
         for mode, gain in enumerate(gain_per_person):
-            for timestep in range(steps_desired_in_minutes):
+            for timestep in range(minutes_of_activity):
                 number_of_residents[timestep] += occupancy_profile[mode]["Values"][timestep]
                 heating_by_residents[timestep] = (
                     heating_by_residents[timestep] + gain * occupancy_profile[mode]["Values"][timestep]
@@ -1984,7 +2012,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
@@ -1996,7 +2024,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
@@ -2006,7 +2034,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
@@ -2020,7 +2048,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -2032,7 +2060,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
@@ -2042,33 +2070,32 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-                nrows=steps_desired_in_minutes,
+                nrows=minutes_to_read,
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
-        # put everything in a data frame and convert to utc
-        initial_data = pd.DataFrame(
-            {
-                "Time": pd.date_range(
-                    start=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
-                    + datetime.timedelta(days=simulation_time_span.days)
-                    - datetime.timedelta(seconds=60),
-                    freq="min",
-                )
-            }
-        )
+        # put everything in a data frame, one row per minute of the profile the files have in common
+        minute_columns = {
+            "number_of_residents": number_of_residents,
+            "heating_by_residents": heating_by_residents,
+            "electricity_consumption": electricity_consumption_list,
+            "water_consumption": water_consumption_list,
+            "inner_device_heat_gains": inner_device_heat_gains_list,
+        }
+        minutes_in_common = min(len(values) for values in minute_columns.values())
+        minute_profile = pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
 
-        initial_data["number_of_residents"] = number_of_residents
-        initial_data["heating_by_residents"] = heating_by_residents
-        initial_data["electricity_consumption"] = electricity_consumption_list
-        initial_data["water_consumption"] = water_consumption_list
-        initial_data["inner_device_heat_gains"] = inner_device_heat_gains_list
-
-        initial_data = lpg_local_time.convert_lpg_data_to_utc(
-            data=initial_data, year=self.my_simulation_parameters.year
+        # Put the profile onto the run's standard-time clock and cut out the window. Every mode still reads the
+        # profile as if it started on 1 January and the run did too; hisim-9g2.6 reads the run's own start.
+        new_year = datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
+        initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
+            minute_values=minute_profile,
+            first_label=new_year,
+            window_start=new_year,
+            window_minutes=steps_desired_in_minutes,
+            source=f"The LoadProfileGenerator profile of {self.component_name} ({data_acquisition_mode.name})",
         )
 
         # extract everything from data frame
@@ -2188,7 +2215,8 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
                 with atomic_cache_write(
                     cache_filepath,
-                    utils.build_cache_key_string(effective_household_config, self.my_simulation_parameters),
+                    utils.build_cache_key_string(effective_household_config, self.my_simulation_parameters)
+                    + self.extra_cache_key_material(),
                 ) as temporary_cache_filepath:
                     with open(temporary_cache_filepath, "w", encoding="utf-8") as file:
                         json.dump(cache_content, file)

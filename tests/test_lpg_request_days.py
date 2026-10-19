@@ -95,8 +95,60 @@ def test_every_window_of_one_year_names_the_same_request_in_the_cache_key(tmp_pa
     assert UtspLpgConnector.request_key_material(LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, week) == ""
 
 
+class LocalOccupancy:
+    """Build occupancies of CHR01 whose profiles the local LoadProfileGenerator computes."""
+
+    #: The profiles every occupancy publishes, one value per minute of the run at 60 s.
+    PROFILES = (
+        "electricity_consumption",
+        "heating_by_devices",
+        "water_consumption",
+        "heating_by_residents",
+        "number_of_residents",
+    )
+
+    @classmethod
+    def build(cls, start: datetime.datetime, days: int, directory: pathlib.Path) -> UtspLpgConnector:
+        """Return an occupancy of CHR01 for a run of ``days`` days from ``start``, computed by the local LPG.
+
+        Each call runs the local LoadProfileGenerator for the whole of the run's year, about two minutes.
+
+        Args:
+            start: the run's start.
+            days: the run's length in days.
+            directory: where the run writes and caches.
+
+        Returns:
+            UtspLpgConnector: the occupancy, its profiles read.
+        """
+        config = UtspLpgConnectorConfig.for_household(
+            "Occupancy",
+            Households.CHR01_Couple_both_at_Work,
+            data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG,
+        )
+        occupancy: UtspLpgConnector = UtspLpgConnector(
+            my_simulation_parameters=parameters_of(start, days, directory), config=config
+        )
+        return occupancy
+
+
+@pytest.fixture(name="occupancy_of_2021", scope="module")
+def fixture_occupancy_of_2021(tmp_path_factory: pytest.TempPathFactory) -> UtspLpgConnector:
+    """Return the full-year 2021 occupancy of CHR01 from the local LPG, computed once for the module's tests.
+
+    Args:
+        tmp_path_factory: pytest's factory of temporary directories.
+
+    Returns:
+        UtspLpgConnector: the full-year occupancy.
+    """
+    return LocalOccupancy.build(datetime.datetime(2021, 1, 1), 365, tmp_path_factory.mktemp("year"))
+
+
 @pytest.mark.utsp
-def test_a_week_reads_the_first_week_of_the_year_the_local_generator_simulates(tmp_path: pathlib.Path) -> None:
+def test_a_week_reads_the_first_week_of_the_year_the_local_generator_simulates(
+    occupancy_of_2021: UtspLpgConnector, tmp_path: pathlib.Path
+) -> None:
     """Catches a short run that gets another household than the same days of a full-year run.
 
     A one-week run and a full-year run of CHR01 in 2021 each run the local LoadProfileGenerator for the whole
@@ -104,25 +156,33 @@ def test_a_week_reads_the_first_week_of_the_year_the_local_generator_simulates(t
     the year's. A request of the week alone gave another household: up to 12 kW apart in a minute. The full-year
     run's 525 600 minutes also show that the request reaches the end of the year.
     """
-    config = UtspLpgConnectorConfig.for_household(
-        "Occupancy", Households.CHR01_Couple_both_at_Work, data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG
-    )
-    week = UtspLpgConnector(
-        my_simulation_parameters=parameters_of(datetime.datetime(2021, 1, 1), 7, tmp_path), config=config
-    )
-    year = UtspLpgConnector(
-        my_simulation_parameters=parameters_of(datetime.datetime(2021, 1, 1), 365, tmp_path), config=config
-    )
+    week = LocalOccupancy.build(datetime.datetime(2021, 1, 1), 7, tmp_path)
     minutes_of_the_week = 7 * 1440
 
-    assert len(year.electricity_consumption) == 365 * 1440
-    for profile in (
-        "electricity_consumption",
-        "heating_by_devices",
-        "water_consumption",
-        "heating_by_residents",
-        "number_of_residents",
-    ):
+    assert len(occupancy_of_2021.electricity_consumption) == 365 * 1440
+    for profile in LocalOccupancy.PROFILES:
         week_profile = getattr(week, profile)
         assert len(week_profile) == minutes_of_the_week, profile
-        assert week_profile == getattr(year, profile)[:minutes_of_the_week], profile
+        assert week_profile == getattr(occupancy_of_2021, profile)[:minutes_of_the_week], profile
+
+
+@pytest.mark.utsp
+def test_a_july_week_reads_the_same_days_of_the_year_the_local_generator_simulates(
+    occupancy_of_2021: UtspLpgConnector, tmp_path: pathlib.Path
+) -> None:
+    """Catches a mid-year run that reads other minutes of the year than the full-year run calls its days.
+
+    A week from 1 July 2021 asks the local LoadProfileGenerator for the whole of 2021 and cuts its window from
+    that year, read from the profile's stated start, 1 January. Its five profiles equal the full-year run's
+    minutes from 1 July 00:00 in standard time, minute 260 640 of the year (181 days of 1440 minutes): the full-
+    year run labels its minutes in standard time, so both cut the same slice of one profile.
+    """
+    july_week = LocalOccupancy.build(datetime.datetime(2021, 7, 1), 7, tmp_path)
+    first_minute = 181 * 1440
+    minutes_of_the_week = 7 * 1440
+
+    for profile in LocalOccupancy.PROFILES:
+        july_profile = getattr(july_week, profile)
+        assert len(july_profile) == minutes_of_the_week, profile
+        year_profile = getattr(occupancy_of_2021, profile)
+        assert july_profile == year_profile[first_minute: first_minute + minutes_of_the_week], profile

@@ -54,8 +54,8 @@ __status__ = "development"
 class CarProfileInputs:
     """Everything :func:`produce_car_profile` depends on, plus the hash that names the profile in the key.
 
-    Key material: the hash of the minute profile, its resolution, and the run's year, window and
-    timestep.
+    Key material: the hash of the minute profile, its resolution and first row, and the run's window
+    and timestep.
     Payload, excluded from the key by :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`: the two minute
     series themselves, which the hash identifies.
     """
@@ -90,8 +90,10 @@ class CarProfileInputs:
     #: The resolution of the minute profile as the LoadProfileGenerator states it, ``"HH:MM:SS"``.
     lpg_time_resolution: str
 
-    #: The simulated year. The profile's minutes are labelled in it, with its daylight-saving switches.
-    year: int
+    #: The wall-clock time of the minute profile's first row, ISO 8601 without a time zone, as the
+    #: LoadProfileGenerator states it: the first day it simulated, 1 January of the run's year, as it
+    #: simulates the whole calendar year for every window, for example ``"2021-01-01T00:00:00"``.
+    profile_start: str
 
     #: The simulation's timestep in seconds; the minute profile is aggregated to it.
     seconds_per_timestep: int
@@ -100,11 +102,9 @@ class CarProfileInputs:
     timesteps: int
 
     #: The run's first instant, ISO 8601 without a time zone, for example ``"2021-07-01T00:00:00"``.
-    #: Key material only: :func:`produce_car_profile` does not read it yet and cuts every profile from
-    #: 1 January, as the car always has. It is in the key because the car is a window-sensitive
-    #: producer (owner decision 2 of 2026-10-14 in ``roadmap/midyear_start_epic.md``), so an entry
-    #: belongs to one window from now on and none filed for January is served to a July run once the
-    #: car follows the window (hisim-9g2.6).
+    #: :func:`produce_car_profile` cuts the run's window from the profile from this instant on. The car is a
+    #: window-sensitive producer (owner decision 2 of 2026-10-14 in ``roadmap/midyear_start_epic.md``):
+    #: a profile cut for a July window is not one cut for January, so an entry belongs to one window only.
     window_start: str
 
     #: Where the car is in each minute of the profile, as the LoadProfileGenerator names it. Payload.
@@ -184,9 +184,9 @@ class CarProfileInputs:
 def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
     """Produce the car's location and driven distance per timestep of the run.
 
-    The minute profile is labelled with the wall-clock minutes from 1 January of the simulated year, put
-    onto the run's standard-time clock, cut to the run's window and aggregated to the run's timestep: the
-    distances of a timestep are summed and its location is the most frequent of its minutes.
+    The minute profile is labelled with the wall-clock minutes from its start, put onto the run's
+    standard-time clock, cut to the run's window and aggregated to the run's timestep: the distances of a
+    timestep are summed and its location is the most frequent of its minutes.
 
     Args:
         inputs: the calculation's inputs.
@@ -198,24 +198,20 @@ def produce_car_profile(inputs: CarProfileInputs) -> pd.DataFrame:
     minutes_per_timestep = inputs.seconds_per_timestep // inputs.profile_resolution_in_seconds()
     steps_desired_in_minutes = inputs.timesteps * minutes_per_timestep
 
-    # The minutes of the profile, the car location translated to integers. A window that ends in summer ends an
-    # hour later on the wall clock the profile is labelled in, so that hour is read too where the profile has it.
-    minutes_to_read = lpg_local_time.LpgLocalTime.minutes_to_read(steps_desired_in_minutes)
+    # The minutes of the profile, the car location translated to integers.
     minute_profile = pd.DataFrame(
         {
-            CarProfileInputs.DISTANCE_COLUMN: list(inputs.driven_distance_per_minute_in_meters[:minutes_to_read]),
+            CarProfileInputs.DISTANCE_COLUMN: list(inputs.driven_distance_per_minute_in_meters),
             CarProfileInputs.LOCATION_COLUMN: [
-                CarProfileInputs.LOCATION_NUMBERS[location] for location in inputs.car_location[:minutes_to_read]
+                CarProfileInputs.LOCATION_NUMBERS[location] for location in inputs.car_location
             ],
         }
     )
-    # Put the profile onto the run's standard-time clock and cut out the window. The profile is still read as if
-    # it started on 1 January and the run did too; hisim-9g2.6 reads the run's own start.
-    new_year = dt.datetime(year=inputs.year, month=1, day=1)
+    # Put the profile onto the run's standard-time clock and cut out the run's window.
     initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
         minute_values=minute_profile,
-        first_label=new_year,
-        window_start=new_year,
+        first_label=dt.datetime.fromisoformat(inputs.profile_start),
+        window_start=dt.datetime.fromisoformat(inputs.window_start),
         window_minutes=steps_desired_in_minutes,
         source="the car profile of the LoadProfileGenerator",
     )

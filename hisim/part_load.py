@@ -6,7 +6,7 @@ ratio, that brings its store to the controller's target temperature by the end o
 from a store, the largest fraction that keeps the store at or above a floor). At and below the threshold every device
 runs whole steps, so a fine-step run is the reference without any adaptation. There the space-heating buffer is an
 iterated mixed node (:class:`hisim.hydronics.MixedNode`) that sees its own temperature change within the step, and
-every ratio is 1 (decision 23, ``roadmap/two_mode_buffer_spec.md``).
+every ratio is 1 (decision 23 of ``roadmap/hydronic_part_load_spec.md``).
 
 The module holds five pieces, none of which knows a particular component. Which rule a controller uses depends on the
 kind of store its device charges or draws from:

@@ -44,7 +44,6 @@ import yaml
 from hisim.calculation_scope import CalculationScope
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system, run_energy_system
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
-from hisim.simulator import Simulator
 from scripts.golden_kpis import golden_leaves, load_golden
 
 
@@ -82,10 +81,10 @@ class SpaceHeatingResolutionRuns:
     #: model against the 60 s reference, which the owner kept for stage D on 2026-10-16.
     DELIVERED_HEAT_RELATIVE_TOLERANCE: float = 0.01
 
-    #: Measured 2026-10-18 on the two-mode buffer (T3), a record and not asserted: the 900 s KPI, kWh, and its
-    #: relative deviation (a fraction) from the goldens blessed with the iterated buffer at 60 s (T2): gas 10766.6,
-    #: pellets 10778.4, heat pump 11469.1, heat pump with solar thermal 11466.9 kWh. The 900 s runs are those of the
-    #: start-of-step buffer, which the two-mode buffer leaves bit-equal.
+    #: Measured 2026-10-18 on the two-mode buffer (T3), a record and not asserted: per twin the 900 s KPI, kWh, and
+    #: its relative deviation (a fraction) from the golden blessed with the iterated buffer at 60 s (T2). The goldens
+    #: themselves are gas 10766.6, pellets 10778.4, heat pump 11469.1, heat pump with solar thermal 11466.9 kWh. The
+    #: 900 s runs are those of the start-of-step buffer, which the two-mode buffer leaves bit-equal.
     MEASURED_AGAINST_ITERATED_60_S_GOLDENS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "household_gas_building_sizer": (10749.5, -0.0016),
         "household_pellets_building_sizer": (10774.0, -0.0004),
@@ -340,9 +339,10 @@ def test_the_iterated_buffer_finishes_a_week_at_300_and_600_s_within_50_passes_p
 ) -> None:
     """A January and a July week of each twin with a buffer at 300 and 600 s, where the buffer is an iterated node.
 
-    Fails if a step aborts at the simulator's pass limit or needs 50 passes or more: a contraction slower than the
-    measured one, a two-point cycle through a controller that reads the step mean instead of the start temperature, or
-    a part-load fraction that came back at or below the threshold.
+    Fails if a step aborts at the simulator's pass limit or needs 50 passes or more, as a contraction slower than the
+    measured one would. A controller that reads the step mean instead of the start temperature does not fail it: the
+    forced passes hold its decision (measured: the gas and heat-pump twins rewired so still need at most 32 and 31
+    passes in the January week at 600 s); ``tests/test_space_heating_buffer_sensor_port.py`` checks that wiring.
     """
     steps = SpaceHeatingWeekRuns.run(twin, seconds_per_timestep, week, tmp_path)
     start, end = SpaceHeatingWeekRuns.WEEKS[week]
@@ -358,9 +358,9 @@ def test_the_start_of_step_buffer_finishes_a_january_week_at_900_to_3600_s(
 ) -> None:
     """A January week of the gas and the heat-pump twin at 900, 1800 and 3600 s, the start-of-step buffer.
 
-    Fails if a step aborts at the simulator's pass limit (1500 passes at 900 s, 6000 at 3600 s); the largest pass
-    counts are recorded in :attr:`SpaceHeatingWeekRuns.MEASURED`.
+    Fails if a step aborts at the simulator's pass limit (1500 passes at 900 s, 6000 at 3600 s), which the simulator
+    raises within the run, or if the week ends early; the largest pass counts are recorded in
+    :attr:`SpaceHeatingWeekRuns.MEASURED`, not asserted.
     """
     steps = SpaceHeatingWeekRuns.run(twin, seconds_per_timestep, week, tmp_path)
     assert len(steps) == 7 * 86400 // seconds_per_timestep
-    assert max(passes for passes, _ in steps) <= Simulator.maximum_passes_for_step_length(seconds_per_timestep)

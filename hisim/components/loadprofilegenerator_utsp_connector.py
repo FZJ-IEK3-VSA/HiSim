@@ -1565,8 +1565,10 @@ class UtspLpgConnector(cp.DataSourceComponent):
         days of a full-year run (owner decision of 2026-10-19).
 
         The request starts on 1 January of the run's year and ends on 1 January of the next year, that day
-        included, as the generator simulates its end day. The extra 1 January is the end day the full-year
-        request always had, so a full-year run's request, and its profile, stay as they were. No window needs
+        included, as the generator simulates its end day. The extra 1 January is the end day the local full-year
+        request always had, so a local full-year run's request, and its profile, stay as they were. The UTSP
+        full-year request ended on 31 December before (``2021-01-01..2021-12-31``) and now ends on 1 January of
+        the next year too, so a UTSP full-year profile may differ from an earlier one. No window needs
         it to cover the hour the wall clock runs ahead in summer: a run lies within one calendar year
         (:class:`hisim.simulationparameters.SimulationParameters` refuses one that does not), and its last
         minute, on 31 December at the latest, is on standard time.

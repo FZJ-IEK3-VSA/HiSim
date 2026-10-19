@@ -708,7 +708,7 @@ class ChildRuns:
     #: one household at a time per installation (``PylpgWorkspace.exclusive_generator_access``), so
     #: four local-LPG week pairs started together finished after 156, 304, 462 and 593 s, while the
     #: same pairs take about 20 s with a warm cache (job 118081280128). The last of four children waits
-    #: for four LPG years, about 620 s; 900 s covers that with half as much again for a slower runner.
+    #: for four LPG years, about 620 s; 900 s covers that with 45 % to spare for a slower runner.
     LPG_YEAR_ALLOWANCE_IN_SECONDS = 900.0
 
     #: Whether a timed-out child is killed together with every process it started (POSIX), or alone

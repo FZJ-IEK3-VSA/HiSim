@@ -67,7 +67,7 @@ def test_a_request_names_the_whole_year_in_iso_8601(
     """Catches a request of the window's own days, and a day-first date (8 January read as 1 August).
 
     A day, a week, a July week, the last week and the whole of 2021 all ask for 1 January 2021 to 1 January 2022,
-    the end day the full-year request always had.
+    the end day the local full-year request always had (the UTSP one ended on 31 December).
     """
     parameters = parameters_of(start, days, tmp_path)
 

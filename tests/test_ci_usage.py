@@ -620,6 +620,39 @@ class TestReportRendering:
                                       {"requests_made": 1}).render()
         assert "No run of the weekly cold-cache workflow finished in the window." in quiet
 
+    def test_the_cold_cache_run_counts_latest_attempts_and_timeouts(self) -> None:
+        """Catches a cold-cache outcome read from the wrong jobs.
+
+        A re-run gives the jobs it repeats new ids, so the index keeps the failed first attempt
+        beside the passing second one: only the latest attempt of each job may count. A job that
+        timed out failed, although its conclusion is not ``failure``. Skipped jobs (the called
+        workflows' own merge jobs) did not run and are not counted.
+        """
+        now = collector.Timestamps.now()
+
+        def record(job_id: int, attempt: int, job_name: str, conclusion: str) -> Dict[str, Any]:
+            """One job record of the cold run 7, created two hours before now."""
+            return {"run_id": 7, "job_id": job_id, "run_attempt": attempt, "workflow": "weekly cold cache",
+                    "workflow_path": ".github/workflows/weekly-cold-cache.yml", "job_name": job_name,
+                    "conclusion": conclusion,
+                    "created_at": collector.Timestamps.format(now - timedelta(hours=2)),
+                    "wall_seconds": 60.0}
+
+        def rendered(records: List[Dict[str, Any]]) -> str:
+            """The report over ``records``."""
+            return str(collector.UsageReport(self._index(records), now - timedelta(days=30),
+                                             now - timedelta(days=3), {"requests_made": 1}).render())
+
+        rerun = [
+            record(70, 1, "tests / pytest (utsp)", "failure"),
+            record(80, 2, "tests / pytest (utsp)", "success"),
+            record(71, 1, "tests / pytest (base)", "success"),
+            record(72, 1, "tests / merge the inputs cache", "skipped"),
+        ]
+        assert "Run 7 of " in rendered(rerun) and "**success**, 0 of 2 jobs failed." in rendered(rerun)
+        timed_out = rerun + [record(73, 1, "golden-year / golden-year python x", "timed_out")]
+        assert "**failure**, 1 of 3 jobs failed: `golden-year / golden-year python x`." in rendered(timed_out)
+
     def test_the_index_round_trips_through_json(self, tmp_path: Path) -> None:
         """Catches an index that cannot be written and read back, which breaks every later night."""
         now = collector.Timestamps.now()

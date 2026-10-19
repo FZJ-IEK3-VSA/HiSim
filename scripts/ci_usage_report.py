@@ -891,6 +891,10 @@ class UsageReport:
     # the one that must not drown in the averages. At most this many failed jobs are named.
     COLD_CACHE_WORKFLOW_PATH = ".github/workflows/weekly-cold-cache.yml"
     COLD_CACHE_FAILURES_LISTED = 10
+    # The job conclusions that do not count as a failed job of the cold run: a skipped job did
+    # not run (the called workflows' own merge jobs), a cancelled one makes the run cancelled.
+    # Every other conclusion -- failure, timed_out, action_required, ... -- is a failed job.
+    COLD_CACHE_NOT_FAILED = frozenset({"success", "skipped", "cancelled"})
 
     def __init__(self, index: UsageIndex, window_start: datetime, recent_start: datetime,
                  diagnostics: Dict[str, Any]) -> None:
@@ -1020,43 +1024,64 @@ class UsageReport:
         """Return the outcome of the most recent weekly cold-cache run in the window.
 
         Read from the job records of the index, like everything else here: the run is the newest one
-        of :attr:`COLD_CACHE_WORKFLOW_PATH`, and its outcome is ``failure`` when any of its jobs
-        failed, ``cancelled`` when any was cancelled, ``success`` otherwise. A run still in progress
-        has no records yet, so the previous one is reported until it finishes. Example::
+        of :attr:`COLD_CACHE_WORKFLOW_PATH`, and of each of its jobs only the latest attempt counts,
+        since a re-run gives the jobs it repeats new ids and the earlier attempt's records stay in
+        the index. Skipped jobs did not run and are not counted. The outcome is ``failure`` when any
+        job ended in a conclusion outside :attr:`COLD_CACHE_NOT_FAILED` (``timed_out`` too), else
+        ``cancelled`` when any job was cancelled, else ``success``. A run still in progress has no
+        records yet, since the sweep skips unfinished runs, so the previous one is reported until it
+        finishes. Example::
 
             ## Last weekly cold-cache run
 
             Run 123 of 2026-10-19T05:00:00Z: **failure**, 2 of 64 jobs failed: `tests / pytest (utsp)`, ...
         """
-        runs: Dict[Any, List[Dict[str, Any]]] = {}
+        runs: Dict[Any, Dict[str, Dict[str, Any]]] = {}
         for record in self.index.values():
+            if record.get("workflow_path") != self.COLD_CACHE_WORKFLOW_PATH:
+                continue
             created = Timestamps.parse(record.get("created_at"))
             if created is None or created < self.window_start:
                 continue
-            if record.get("workflow_path") == self.COLD_CACHE_WORKFLOW_PATH:
-                runs.setdefault(record.get("run_id"), []).append(record)
+            jobs = runs.setdefault(record.get("run_id"), {})
+            name = str(record.get("job_name", ""))
+            held = jobs.get(name)
+            if held is None or self._attempt_order(record) > self._attempt_order(held):
+                jobs[name] = record
         lines = ["\n## Last weekly cold-cache run\n"]
         if not runs:
             lines.append("No run of the weekly cold-cache workflow finished in the window.")
             return "\n".join(lines) + "\n"
-        records = max(runs.values(), key=lambda jobs: str(jobs[0].get("created_at") or ""))
-        conclusions = [record.get("conclusion") for record in records]
-        failed = sorted(str(record.get("job_name", "")) for record in records
-                        if record.get("conclusion") == "failure")
+        latest = max(runs.values(), key=lambda jobs: str(next(iter(jobs.values())).get("created_at") or ""))
+        first = next(iter(latest.values()))
+        ran = [record for record in latest.values() if record.get("conclusion") != "skipped"]
+        failed = sorted(str(record.get("job_name", "")) for record in ran
+                        if record.get("conclusion") not in self.COLD_CACHE_NOT_FAILED)
         if failed:
             outcome = "failure"
-        elif "cancelled" in conclusions:
+        elif any(record.get("conclusion") == "cancelled" for record in ran):
             outcome = "cancelled"
         else:
             outcome = "success"
-        line = (f"Run {records[0].get('run_id')} of {records[0].get('created_at')}: **{outcome}**, "
-                f"{len(failed)} of {len(records)} jobs failed")
+        line = (f"Run {first.get('run_id')} of {first.get('created_at')}: **{outcome}**, "
+                f"{len(failed)} of {len(ran)} jobs failed")
         if failed:
             named = ", ".join(f"`{name}`" for name in failed[:self.COLD_CACHE_FAILURES_LISTED])
             more = len(failed) - self.COLD_CACHE_FAILURES_LISTED
             line += ": " + named + (f" and {more} more" if more > 0 else "")
         lines.append(line + ".")
         return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _attempt_order(record: Dict[str, Any]) -> Tuple[int, int]:
+        """Return the order of a job record among the attempts of the same job of one run.
+
+        The later attempt has the higher ``run_attempt``; within one attempt the higher job id is
+        the later job. Missing values count as attempt 1 and job id 0.
+        """
+        attempt = record.get("run_attempt")
+        job_id = record.get("job_id")
+        return (attempt if isinstance(attempt, int) else 1, job_id if isinstance(job_id, int) else 0)
 
     def _render_duration_regressions(self) -> str:
         """Return the duration regression table, or a line saying there were none."""

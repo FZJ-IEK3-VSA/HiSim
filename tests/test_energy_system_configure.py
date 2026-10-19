@@ -246,9 +246,9 @@ class _NestedProbeConfig(ConfigBase):
     """A configuration with one field that holds a nested dataclass, for the codec tests.
 
     The energy-system codec rebuilds a nested mapping through the nested field's own class, both in a
-    complete ``config`` block and in a sparse override. No HiSim configuration holds a nested
-    dataclass since the solar-thermal collector's unread coordinates left the format (hisim-9g2.13),
-    so the rule is pinned on this test-only class rather than left untested.
+    complete ``config`` block and in a sparse override. These tests used the solar-thermal collector's
+    coordinates until that unread field left the format (hisim-9g2.13), so the rule is pinned on this
+    test-only class.
     """
 
     component_id: ComponentID

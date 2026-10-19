@@ -499,7 +499,7 @@ class SolarThermalSystemConfig(ConfigBase):
     @preset
     @classmethod
     def preset_flat_plate(cls, name: str) -> "SolarThermalSystemConfig":
-        """A Solar Keymark flat-plate collector over Aachen, facing south at 30 degrees.
+        """A Solar Keymark flat-plate collector at the weather's location, facing south at 30 degrees.
 
         The field defaults are the whole installation: the efficiency curve fitted to the typical
         flat-plate curve, a south-facing plane inclined 30 degrees and a new solar pump. The collector
@@ -627,7 +627,7 @@ class SolarThermalSystem(PhysicsComponent):
         )
         # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
         # the weather it came from: its irradiance and its sun. It depends on the weather alone, not
-        # on the storage, so the convergence iterations of one timestep share one pvlib call.
+        # on the storage, so the convergence iterations of one timestep share one calculation of it.
         self.plane_of_array_key: Optional[Tuple[int, float, float, float, float]] = None
         self.plane_of_array_irradiance_w_m2: np.float64 = np.float64(0)
 

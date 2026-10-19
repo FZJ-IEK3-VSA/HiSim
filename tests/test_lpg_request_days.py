@@ -67,7 +67,8 @@ def test_the_local_generator_simulates_the_requested_days(tmp_path: pathlib.Path
     """Catches a request the local LoadProfileGenerator reads as other days than the ones meant.
 
     A run of two days from 1 January asks for 1 to 3 January, the end day included, and gets three days of
-    minutes from 1 January 00:00; the day-first request got 32 days, to 1 February.
+    minutes from 1 January 00:00. The day-first request named the end ``03-01-2021``, which the generator reads
+    as 1 March (a one-day run's ``02-01-2021`` delivered 32 days, to 1 February).
     """
     parameters = parameters_of(datetime.datetime(2021, 1, 1), 2, tmp_path)
     config = UtspLpgConnectorConfig.for_household(

@@ -1528,20 +1528,34 @@ class GenericBoiler(PhysicsComponent):
 
         The circuit carries the averaged flow, the full-load flow times the ratio, at the full-load supply
         temperature; its heat is what that flow carries, ``m c (T_sup - T_ret)``, and the fuel is the ratio times the
-        full-load fuel. A ratio of 1 returns the full-load firing unchanged. Example: 0.2 kg/s from 55 to 70 °C with
-        14 kW of fuel at a ratio of 0.25 gives 0.05 kg/s, 3135 W of heat and 3500 W of fuel.
+        full-load fuel. A ratio of 1 returns the full-load firing unchanged. A ratio of 0 returns an idle circuit, as
+        :meth:`hydronics.CircuitStep.idle` and :meth:`publish_idle_circuit` define it: no fuel, no heat, no flow, and
+        the supply at the return. Example: 0.2 kg/s from 55 to 70 °C with 14 kW of fuel at a ratio of 0.25 gives
+        0.05 kg/s at 70 °C, 3135 W of heat and 3500 W of fuel; at a ratio of 0 it gives 0 kg/s at 55 °C.
+
+        Why the supply drops to the return at a ratio of 0: a circuit that moves no water has no supply of its own,
+        and a full-load supply published with no flow reads as a firing burner in the outlet temperature column. The
+        energies do not depend on it, since a store weights a supply by its flow.
 
         Args:
             full_load: The circuit's fuel in W, heat in W, flow in kg/s and supply in °C at full load over the whole
                 step.
             part_load_ratio: The fraction of the step the burner runs, from 0 to 1.
-            return_temperature_in_celsius: The circuit's return temperature, in °C.
+            return_temperature_in_celsius: The circuit's return temperature, in °C; the supply at a ratio of 0.
 
         Returns:
             The circuit's firing at that ratio.
         """
         if part_load_ratio >= 1.0:
             return full_load
+        if part_load_ratio <= 0.0:
+            idle = hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+            return BoilerFiring(
+                fuel_power_in_watt=0.0,
+                thermal_power_in_watt=idle.power_w,
+                mass_flow_in_kg_per_second=idle.mass_flow_kg_per_s,
+                supply_temperature_in_celsius=idle.t_supply_c,
+            )
         mass_flow_in_kg_per_second = part_load_ratio * full_load.mass_flow_in_kg_per_second
         return BoilerFiring(
             fuel_power_in_watt=part_load_ratio * full_load.fuel_power_in_watt,

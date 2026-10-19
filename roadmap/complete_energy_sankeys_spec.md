@@ -473,6 +473,17 @@ construction once its ports exist.
 
 ## 8. Open questions
 
+**Decided by the owner on 2026-10-19 (interview on this spec)** — they override the recommendations below where they differ:
+
+| Question | Decision |
+|---|---|
+| Q-B exemption list | (a) exempt by kind plus a class attribute stating the reason, enforced by a `base` test (no objection) |
+| Q-D where the PV starts | (a) at the sun: irradiance on the modules as a boundary flow, the conversion loss as a loss branch |
+| Q-E window opening | neither option: window opening needs a proper ventilation model with an adjustable air-exchange rate (open windows do not make the indoor air equal the outdoor air without strong wind or fans). Bead hisim-opxv (P2). Until it lands, the Sankey draws no window flow. |
+| Q-F tanks' standby losses | outdoors as modelled today (the tank in an unheated cellar); configurable later, bead hisim-af8m (P3 feature) |
+| Q-G room heat | (a) the new carrier `ROOM_HEAT` |
+
+
 - **Q-B. Where the exemption list lives.** A component is exempt either by kind or by a reason. (a) *Kind plus a
   class attribute*: controllers and meters are exempt by `ComponentKinds.of`; every other component that declares no
   port states `ENERGY_PORTS_EXEMPT_BECAUSE: ClassVar[str]` on its own class, and a `base` test instantiating no run

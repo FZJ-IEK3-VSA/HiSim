@@ -62,6 +62,13 @@ Thresholds live in `RegressionRules` in `scripts/ci_usage_report.py`:
 - **near the limit**: any job reaching ≥ 85% of the runner's RAM (16 GB on `ubuntu-latest`)
 - **holding a runner idle**: ≥ 5 min jobs using < 35% of the runner's cores
 
+Before those, the report states the outcome of the last **weekly cold-cache run**
+(`weekly-cold-cache.yml`, Mondays 05:00 UTC: tests, golden-check and golden-year without the inputs
+cache), with its failed jobs by name. It is the one run that exercises the code a warm cache skips
+(weather download, local LoadProfileGenerator calculation, PV and building series), so its failure
+gets its own line rather than a dent in a median. The cold run's jobs are recorded under its own
+workflow name, `weekly cold cache`, so their cold durations stay out of the warm jobs' baselines.
+
 The last of those is the one that caught the full-year golden gate. `golden-year.yml` used to
 wait for `quality`, `tests` and `golden-check` in an ordinary job that polled the runs API, so
 the wait held a runner: 28 idle minutes in a good run, an hour when it timed out, once per pull

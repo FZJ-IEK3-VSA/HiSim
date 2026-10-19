@@ -31,6 +31,13 @@ description: >
 
   A pull request from a fork only restores: it uploads and saves nothing.
 
+  THE WEEKLY COLD RUN (weekly-cold-cache.yml) calls tests.yml, golden-check.yml and golden-year.yml
+  with cold_cache: true. Their jobs skip the restore, so each computes everything from scratch and
+  uploads all of it; their own merge jobs are skipped, and the caller's merge job saves the union.
+  When all three workflows succeeded it does so with fresh: 'true', not merged into the old entry, so
+  that entry, the most recent one, replaces what the week accumulated; otherwise a share may be
+  incomplete, and it merges the union into the most recent entry like any other run.
+
   What the name of an entry does not cover is the code that computed it. A job that finds its
   weather series and profiles already computed does not exercise the reader or the generator that
   would have computed them, so an edit to those is first exercised by a run whose entries are
@@ -61,6 +68,13 @@ inputs:
       unique within the run.
     required: false
     default: ""
+  fresh:
+    description: >
+      For merge-save and save: 'true' saves only this run's additions, without merging them into the
+      most recent shared entry. The weekly cold run sets it when all of its workflows succeeded, so
+      its complete, freshly computed cache replaces the accumulated one.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -191,15 +205,19 @@ runs:
 
     - name: Restore the most recent shared cache to merge into
       id: latest
-      if: steps.key.outputs.writes == 'true' && (inputs.mode == 'save' || inputs.mode == 'merge-save')
+      if: >-
+        steps.key.outputs.writes == 'true' && inputs.fresh != 'true'
+        && (inputs.mode == 'save' || inputs.mode == 'merge-save')
       uses: actions/cache/restore@v4
       with:
         path: hisim/inputs/cache
         key: ${{ steps.key.outputs.restore_key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
 
-    # No artifact at all is the normal case of a run whose jobs found everything in the cache.
+    # No artifact at all is the normal case of a run whose jobs found everything in the cache. A
+    # failed download only loses additions the next run adds again, except under fresh: see below.
     - name: Download the files every job of this run added
+      id: download
       if: steps.key.outputs.writes == 'true' && inputs.mode == 'merge-save'
       continue-on-error: true
       uses: actions/download-artifact@v8
@@ -215,7 +233,15 @@ runs:
         WORK: ${{ steps.key.outputs.work }}
         PREFIX: ${{ steps.key.outputs.prefix }}
         MATCHED: ${{ steps.latest.outputs.cache-matched-key }}
+        FRESH: ${{ inputs.fresh }}
+        DOWNLOAD: ${{ steps.download.outcome }}
       run: |
+        # Under fresh nothing was restored, so what a failed download missed would be missing from
+        # the new most recent entry, not just from this run's additions: save nothing instead.
+        if [ "$FRESH" = "true" ] && [ "$DOWNLOAD" = "failure" ]; then
+          echo "::error::hisim-cache: the additions of this run could not all be downloaded; the fresh cache is not saved."
+          exit 1
+        fi
         mkdir -p hisim/inputs/cache "$WORK"
         archives=0
         while IFS= read -r -d '' archive; do

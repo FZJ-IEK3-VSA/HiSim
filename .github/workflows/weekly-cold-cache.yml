@@ -1,0 +1,93 @@
+# The weekly run without any cache: tests, golden-check and golden-year from scratch.
+#
+# WHY. Every other run restores the shared inputs cache (.github/actions/hisim-cache), so a job finds
+# its weather series, LoadProfileGenerator household profiles and PV and building series already
+# computed and never runs the code that computes them: the weather download and conversion, the local
+# LoadProfileGenerator calculation, the PV and building series, and the LoadProfileGenerator install
+# when the image lacks the binaries. A change that breaks that code stays green until a cache
+# happens to miss. This run makes the miss happen once a week, on purpose (owner decision 2026-10-18).
+#
+# WHEN. Mondays at 05:00 UTC, two hours after the weekly rebuild of the test image
+# (docker-test-image.yml, 03:00), so it also tests the fresh image; and by hand (Actions > weekly cold
+# cache > Run workflow), e.g. after a change to the input readers.
+#
+# HOW. One caller of the three workflows rather than a schedule in each: they run unchanged as
+# reusable workflows (workflow_call) with cold_cache: true, which skips each job's cache restore and
+# each workflow's own merge job, and this workflow's merge job saves once, over all three. A schedule
+# in each would leave three merges, each saving only its own workflow's share as the newest entry.
+# The other two workflows that use the cache (quality's basic-execution, energy-system freshness)
+# are not called: each is one job that adds what it misses to the new entry on its next run.
+#
+# THE RESULT becomes the new shared cache. Each job uploads everything it computed; the merge job
+# below saves the union as the most recent shared entry, without merging it into the entry the week
+# accumulated (fresh: 'true'), so entries nothing asks for any more are gone. If any of the three
+# workflows did not succeed, its share may be incomplete, and the merge falls back to adding the
+# run's files to the most recent entry instead. The hourly ci-usage report lists the outcome of the
+# last run (scripts/ci_usage_report.py, "Last weekly cold-cache run").
+
+name: weekly cold cache
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: weekly-cold-cache
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      cold_cache: true
+    # The UTSP secrets of the pytest jobs.
+    secrets: inherit
+
+  golden-check:
+    uses: ./.github/workflows/golden-check.yml
+    with:
+      cold_cache: true
+
+  golden-year:
+    uses: ./.github/workflows/golden-year.yml
+    with:
+      cold_cache: true
+
+  # Saves what the three workflows computed as the new shared inputs cache; see the header.
+  cold-inputs-cache:
+    name: save the fresh inputs cache
+    needs: [tests, golden-check, golden-year]
+    if: always()
+    # On the self-hosted runners, and in the image of the jobs it merges, whose HISIM_LPG_BINARY_ROOT
+    # decides whether the LoadProfileGenerator binaries stay in the cache. The runs-on expression is
+    # the one of every other job (see tests.yml); this workflow never runs for a pull request.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+      - name: Save the fresh HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: merge-save
+          fresh: ${{ needs.tests.result == 'success' && needs.golden-check.result == 'success' && needs.golden-year.result == 'success' }}
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

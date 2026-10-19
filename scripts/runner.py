@@ -117,6 +117,61 @@ class SetupConfig:
         """
         return bool(HorizonVocabulary.runs_factory(self.horizons, factory))
 
+    def runs_local_lpg_household(self, repo_root: Path) -> bool:
+        """Whether this setup computes a household with the local LoadProfileGenerator.
+
+        The answer is read from the setup's recorded energy system (:func:`resolve_twin_path`),
+        not from running it: a household is a ``UtspLpgConnector`` entry, and it is computed
+        locally when its configuration, preset and ``config`` block applied, has the data
+        acquisition mode ``USE_LOCAL_LPG``. Example: ``household_gas_building_sizer`` records
+        ``data_acquisition_mode: USE_LOCAL_LPG`` on its ``UTSPConnector`` and is recognised;
+        ``basic_household`` uses its preset's shipped profile (``USE_PREDEFINED_PROFILE``) and is
+        not. Such a setup computes the household's whole calendar year on a cache miss, whatever
+        its run's window (:meth:`ChildRuns.lpg_year_allowance_in_seconds`).
+
+        A setup whose own file does not exist is not recognised: its child fails at once on the
+        missing file (:func:`resolve_setup_path`) and reports that itself.
+
+        Args:
+            repo_root: The repository the setup's path and its recorded energy system lie in.
+
+        Returns:
+            True when at least one household of the setup is computed by the local LPG.
+
+        Raises:
+            FileNotFoundError: if the setup's file exists but its recorded energy system does not.
+            ValueError: if the energy system imports assemblies; their households are only known
+                after the expansion of imports, which this reading does not do.
+        """
+        if not (repo_root / self.path).exists():
+            return False
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.components.loadprofilegenerator_utsp_connector import (
+            LpgDataAcquisitionMode,
+            UtspLpgConnectorConfig,
+        )
+        from hisim.energy_system.classes import validate_classes
+        from hisim.energy_system.configure import EntryConfigurator
+        from hisim.energy_system.groups import expand_groups
+        from hisim.energy_system.loader import load_energy_system
+        from hisim.energy_system.path_resolver import PathResolver
+
+        twin = resolve_twin_path(self, repo_root)
+        model = load_energy_system(twin)
+        if model.imports:
+            raise ValueError(
+                f"{twin} imports assemblies ({', '.join(model.imports)}); the golden runner reads its "
+                "households only from a file without imports, such as a recorded energy system."
+            )
+        expanded, _ = expand_groups(model)
+        resolver = PathResolver.default()
+        for binding in validate_classes(expanded):
+            if issubclass(binding.config_class, UtspLpgConnectorConfig):
+                _, config = EntryConfigurator(binding, resolver, expanded.addresses.get(binding.name)).build()
+                if config.data_acquisition_mode is LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                    return True
+        return False
+
 
 @dataclass
 class ParameterSetConfig:
@@ -645,6 +700,16 @@ class ChildRuns:
     #: The shortest timeout a child gets, in seconds, so a pair recorded at a few seconds still
     #: has time to import HiSim and read its inputs on a busy machine.
     MINIMAL_TIMEOUT_IN_SECONDS = 600.0
+    #: The time added to the timeout of a pair that runs a local LoadProfileGenerator household and
+    #: covers less than a full year, in seconds (owner decision 2026-10-19, "LPG year allowance"): on
+    #: a cache miss such a pair first computes the household's whole calendar year, which its recorded
+    #: time does not contain. Source: CI run 39254406710 of #1030 (job 118081327774, cold household
+    #: cache, four children at once). One LPG year took 130 to 155 s there, but the generator computes
+    #: one household at a time per installation (``PylpgWorkspace.exclusive_generator_access``), so
+    #: four local-LPG week pairs started together finished after 156, 304, 462 and 593 s, while the
+    #: same pairs take about 20 s with a warm cache (job 118081280128). The last of four children waits
+    #: for four LPG years, about 620 s; 900 s covers that with half as much again for a slower runner.
+    LPG_YEAR_ALLOWANCE_IN_SECONDS = 900.0
 
     #: Whether a timed-out child is killed together with every process it started (POSIX), or alone
     #: (Windows, which has no process groups to kill).
@@ -674,23 +739,54 @@ class ChildRuns:
         child.wait()
 
     @classmethod
-    def timeout_in_seconds(cls, setup: SetupConfig, parameter_set: ParameterSetConfig) -> float:
+    def lpg_year_allowance_in_seconds(
+        cls, setup: SetupConfig, parameter_set: ParameterSetConfig, repo_root: Path
+    ) -> float:
+        """Return the time a pair's timeout gets for computing a full LoadProfileGenerator year, in seconds.
+
+        The LoadProfileGenerator always computes a household's whole calendar year, and a run cuts
+        its window from it. A pair that covers less than a full year and runs a local LPG household
+        (:meth:`SetupConfig.runs_local_lpg_household`) therefore needs time on a cache miss that its
+        recorded wall time does not contain, and gets :data:`LPG_YEAR_ALLOWANCE_IN_SECONDS`. A
+        full-year pair gets nothing: its recorded time already contains the LPG year. A pair without
+        a local LPG household gets nothing either. Example: ``household_gas_building_sizer`` gets
+        900 s for its week and nothing for its full year; ``basic_household`` gets nothing.
+
+        Args:
+            setup: The pair's setup.
+            parameter_set: The pair's parameter set.
+            repo_root: The repository the setup's recorded energy system lies in.
+
+        Returns:
+            :data:`LPG_YEAR_ALLOWANCE_IN_SECONDS` or 0.
+        """
+        if HorizonVocabulary.FACTORY_HORIZONS.get(parameter_set.factory) == "year":
+            return 0.0
+        return cls.LPG_YEAR_ALLOWANCE_IN_SECONDS if setup.runs_local_lpg_household(repo_root) else 0.0
+
+    @classmethod
+    def timeout_in_seconds(cls, setup: SetupConfig, parameter_set: ParameterSetConfig, repo_root: Path) -> float:
         """Return how long the child running one pair may run before it is killed, in seconds.
 
         The timeout is :data:`TIMEOUT_TO_RECORDED_SECONDS_RATIO` times the pair's recorded wall
-        time, and at least :data:`MINIMAL_TIMEOUT_IN_SECONDS`. Example: the heat pump with car
-        records 690 s for its full year, so its child is killed after 2070 s; a week recorded at
-        115 s gets the minimum of 600 s.
+        time, at least :data:`MINIMAL_TIMEOUT_IN_SECONDS`, plus the pair's allowance for a full
+        LoadProfileGenerator year (:meth:`lpg_year_allowance_in_seconds`). Example: the heat pump
+        with car records 690 s for its full year, so its child is killed after 2070 s; its week,
+        recorded at 124 s, runs a local LPG household and gets the minimum of 600 s plus 900 s, so
+        1500 s; ``basic_household``'s week, recorded at 17 s, gets the minimum of 600 s.
 
         Args:
             setup: The pair's setup, which carries the recorded wall times.
             parameter_set: The pair's parameter set.
+            repo_root: The repository the setup's recorded energy system lies in.
 
         Returns:
             The timeout in seconds.
         """
         recorded = setup.recorded_seconds(parameter_set.id)
-        return max(cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO * recorded, cls.MINIMAL_TIMEOUT_IN_SECONDS)
+        return max(
+            cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO * recorded, cls.MINIMAL_TIMEOUT_IN_SECONDS
+        ) + cls.lpg_year_allowance_in_seconds(setup, parameter_set, repo_root)
 
     @classmethod
     def command(cls, payload: str) -> list[str]:
@@ -732,7 +828,8 @@ class ChildRuns:
         env = dict(os.environ)
         repo_of_this_file = str(Path(__file__).resolve().parent.parent)
         env["PYTHONPATH"] = os.pathsep.join(p for p in (repo_of_this_file, env.get("PYTHONPATH", "")) if p)
-        timeout_in_seconds = cls.timeout_in_seconds(setup, parameter_set)
+        lpg_year_allowance_in_seconds = cls.lpg_year_allowance_in_seconds(setup, parameter_set, repo_root)
+        timeout_in_seconds = cls.timeout_in_seconds(setup, parameter_set, repo_root)
         started = time.monotonic()
         with log_path.open("w", encoding="utf-8") as log:
             # A session of its own makes the child the leader of a process group that also holds the
@@ -757,10 +854,17 @@ class ChildRuns:
             result.duration_s = duration
             return result
         if returncode is None:
+            allowance = (
+                f", plus {lpg_year_allowance_in_seconds:g} s for computing its household's full "
+                "LoadProfileGenerator year"
+                if lpg_year_allowance_in_seconds
+                else ""
+            )
             how = (
                 f"ran longer than its timeout of {timeout_in_seconds:g} s "
                 f"({cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO:g} times the {setup.recorded_seconds(parameter_set.id):g} s "
-                f"recorded for {setup.id} / {parameter_set.id} in golden_config.json) and was killed"
+                f"recorded for {setup.id} / {parameter_set.id} in golden_config.json, at least "
+                f"{cls.MINIMAL_TIMEOUT_IN_SECONDS:g} s{allowance}) and was killed"
             )
         else:
             code = returncode

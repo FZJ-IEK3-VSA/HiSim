@@ -630,11 +630,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 35.0
 
     #: The longest step, s, over which the buffer may iterate as a mixed node with whole steps of every circuit. Its
-    #: contraction per pass is ``theta = 1 - (1 - exp(-a)) / a`` with ``a`` the step's circuit flows times the step
-    #: over its heat capacity: at 600 s up to about 0.6, measured at most 35 passes per step (gas, heat-pump twins,
-    #: 2021); above it the passes grow fast and whole steps overcharge the buffer (heat-pump twin: +3.2 % space-heating
-    #: electricity at 900 s, +17.5 % at 3600 s against 60 s, ``roadmap/two_mode_buffer_spec.md`` §2). Above it the
-    #: buffer must therefore run as a start-of-step node, whose circuits run fractions of the step.
+    #: contraction per pass is ``theta = 1 - (1 - exp(-a)) / a`` with ``a = (sum of m_i c + UA) dt / C``: the step's
+    #: total conductance (every circuit's mass flow times water's specific heat, plus the standby loss coefficient
+    #: ``UA``) times the step over the heat capacity. At 600 s ``theta`` is up to about 0.6, measured at most 35
+    #: passes per step (gas, heat-pump twins, 2021); above it the passes grow fast and whole steps overcharge the
+    #: buffer (heat-pump twin: +3.2 % space-heating electricity at 900 s, +17.5 % at 3600 s against 60 s,
+    #: ``roadmap/two_mode_buffer_spec.md`` §2). Above it the buffer must therefore run as a start-of-step node, whose
+    #: circuits run fractions of the step.
     LONGEST_MIXED_NODE_STEP_IN_SECONDS: ClassVar[float] = 600.0
 
     # Input
@@ -1025,10 +1027,11 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         At and below the run's part-load threshold (``SimulationParameters.part_load_above_seconds``) the buffer is an
         iterated mixed node whose circuits all run whole steps; above it, a start-of-step node whose circuits run
-        fractions of the step. Above :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` the mixed node contracts by 0.6 or more
-        per pass, so a step needs many passes, and whole steps overcharge it: the heat pump's space-heating
-        electricity was +3.2 % at 900 s and +17.5 % at 3600 s against 60 s. A step above 600 s with a threshold at or
-        above that step would give exactly that, so it is refused. The refusal is about the wrong result, not the cost.
+        fractions of the step. Above :attr:`LONGEST_MIXED_NODE_STEP_IN_SECONDS` the mixed node contracts by up to
+        about 0.7 per pass at 900 s and 0.9 at 3600 s, so a step needs many passes, and whole steps overcharge it: the
+        heat pump's space-heating electricity was +3.2 % at 900 s and +17.5 % at 3600 s against 60 s. A step above
+        600 s with a threshold at or above that step would give exactly that, so it is refused. The refusal is about
+        the wrong result, not the cost.
 
         Example: 900 s steps with a threshold of 900 s are refused; 900 s with the default 600 s, and 600 s with any
         threshold, are accepted.
@@ -1049,8 +1052,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             f"The space-heating buffer {buffer_name!r} cannot run {seconds_per_timestep:g} s steps with "
             f"part_load_above_seconds = {part_load_above_seconds:g} s. At and below the threshold the buffer iterates "
             f"as a mixed node and every circuit runs whole steps; above {longest_in_seconds:g} s the mixed node "
-            f"contracts by 0.6 or more per pass and whole steps overcharge it (measured +3.2 % space-heating "
-            f"electricity at 900 s and +17.5 % at 3600 s against 60 s). Above the threshold it is a start-of-step node "
+            f"contracts by up to about 0.7 per pass at 900 s and 0.9 at 3600 s, and whole steps overcharge it "
+            f"(measured +3.2 % space-heating electricity at 900 s and +17.5 % at 3600 s against 60 s). Above the "
+            f"threshold it is a start-of-step node "
             f"whose generators and heat distribution system run a fraction of the step. Lower part_load_above_seconds "
             f"below {seconds_per_timestep:g} s (the default is "
             f"{SimulationParameters.PART_LOAD_ABOVE_SECONDS_DEFAULT:g} s), or run with steps of at most "

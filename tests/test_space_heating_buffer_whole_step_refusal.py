@@ -4,10 +4,10 @@ The buffer with its heat exchanger is a two-mode buffer (``roadmap/two_mode_buff
 at and below the run's part-load threshold, ``SimulationParameters.part_load_above_seconds``, whose circuits all run
 whole steps, and a start-of-step node above it, whose generators and heat distribution system run a fraction of the
 step. A step above 600 s with a threshold at or above that step would iterate the mixed node above its range: it
-contracts by 0.6 or more per pass there, and whole steps overcharge it (heat pump: +3.2 % space-heating electricity at
-900 s, +17.5 % at 3600 s against 60 s). The owner decided on 2026-10-16 that such a run is refused when the system is
-built (review of the stage-D spec, finding M-C), and kept the refusal for the two-mode buffer (decision Q3,
-2026-10-18) as ``check_mixed_node_step_is_safe``.
+contracts by up to about 0.7 per pass there at 900 s and 0.9 at 3600 s, and whole steps overcharge it (heat pump:
++3.2 % space-heating electricity at 900 s, +17.5 % at 3600 s against 60 s). The owner decided on 2026-10-16 that such
+a run is refused when the system is built (review of the stage-D spec, finding M-C), and kept the refusal for the
+two-mode buffer (decision Q3, 2026-10-18) as ``check_mixed_node_step_is_safe``.
 
 These tests check the rule on the buffer itself and on recorded twins built at 900 s:
 
@@ -51,7 +51,8 @@ class BufferBuild:
 
         Args:
             seconds_per_timestep: The step length, s.
-            heat_exchanger_is_present: Whether the buffer has its heat exchanger, which makes it a start-of-step node.
+            heat_exchanger_is_present: Whether the buffer has its heat exchanger, which makes it the two-mode buffer
+                (a mixed node at and below the threshold, a start-of-step node above it) that the refusal guards.
             **extra: Further arguments of the simulation parameters, such as ``part_load_above_seconds``.
 
         Returns:

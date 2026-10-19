@@ -470,7 +470,7 @@ wrong (+17.45 % SH electricity), so the refusal is about correctness, not only c
 | `WaterTemperatureToHeatGenerator` | $\bar{T}$, the step mean | $T_0$ | the generator (boiler `generic_boiler.py:1080`, heat pump `more_advanced_heat_pump_hplib.py:1014`, and any other generator wired to a buffer), as the return of its space-heating circuit; it books $\dot{m}\,c\,(T_{\mathrm{sup}} - T_{\mathrm{read}})$ | exists on main; value changes per mode |
 | `WaterTemperatureToSecondaryHeatGenerator` | $\bar{T}$ | $T_0$ | the solar collector (`solar_thermal_system.py`) as its return | exists on main |
 | `WaterTemperatureToHeatDistribution` | $\bar{T}$ | $T_0$ | `HeatDistribution` as its supply; it returns supply − drop, clamped at the room's start-of-step temperature, and books $\dot{m}\,c\,(T_{\mathrm{read}} - T_{\mathrm{ret}})$ in this step | exists on main |
-| **`WaterTemperatureAtStartOfStepInCelsius`** | $T_0$ | $T_0$ | the generator controllers' sensor: `GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerSpaceHeating`, `L1CHPController`; they decide on/off, mode and target against it with their hysteresis | **new in the two-mode buffer** (from `38f755ee`); the start-of-step buffer's controllers read `WaterTemperatureToHeatGenerator`, which happens to be $T_0$ there; the two-mode buffer gives the sensor its own port so the controllers read $T_0$ in both modes |
+| **`WaterTemperatureAtStartOfStepInCelsius`** | $T_0$ | $T_0$ | the generator controllers' sensor: `GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerSpaceHeating`, `L1CHPController`; they decide on/off, mode and target against it with their hysteresis | **new in the two-mode buffer** (from `38f755ee`); the start-of-step buffer's controllers read `WaterTemperatureToHeatGenerator`, which happens to be $T_0$ there; the two-mode buffer gives the sensor its own port so the controllers read $T_0$ in both modes; a buffer without its heat exchanger (the stratification path) publishes $T_0$ on it too (owner decision 2026-10-19) |
 | `WaterMeanTemperatureInStorage` | $T_0$ | $T_0$ | KPIs, plots; no controller after the rewiring | exists on main; both drafts publish $T_0$ on it (the name predates the node; it is the step's state variable) |
 | `WaterTemperatureAtEndOfStepInCelsius` | $T_{\mathrm{end}}$ from `MixedNode.step` | $T_{\mathrm{end}}$ from `StartOfStepNode.step` | the part-load controls (boiler's, heat pump's, distribution's), which act on it only above the threshold | exists on stageD-6 and in `38f755ee` |
 | `WaterTemperatureAtEndOfStepWithout{HeatGenerator, SecondaryHeatGenerator, HeatDistribution}InCelsius` | $T_{\mathrm{end}}$ on all three (owner decision Q2, 2026-10-18): nothing reads them at or below the threshold, so they are meaningful only above it, and the docstrings say so | $T_{\mathrm{end}} - Q_i / C$, exactly linear in the circuit's ratio | the same part-load controls, above the threshold only | exists on stageD-6; the heating assemblies bound them at −300 to 300 °C |
@@ -585,7 +585,9 @@ def publish_node_step(self, stsv, *, start_c, circuit_temperature_c, t_end_c, he
 ```
 
 2. **Add the output `WaterTemperatureAtStartOfStepInCelsius`** (from `38f755ee`), published as $T_0$ in both paths and
-   as the end temperature on the stratification path (its convention for the stage D outputs).
+   on the stratification path too, so the port means $T_0$ in every path and the controllers there decide on a value no
+   pass moves (owner decision 2026-10-19, from the review of #1059; T1 had published the end temperature there, the
+   path's convention for the stage D outputs, and T4 changes it; no recorded file uses that path).
 3. **The "without" outputs with the iterated buffer** (decided, Q2): all three carry $T_{\mathrm{end}}$ of the
    iterated node; their docstrings say they are meaningful only above the threshold, where the part-load controls read
    them. No extra node steps. With the start-of-step buffer unchanged.
@@ -815,7 +817,8 @@ Order, each small, stacked (AGENTS.md: a new PR targets the stack top):
    then the stage D stack in order, #1009 → #1010 → #1011 → #1013 → #1014 → #1012 → #1035, rebasing only the bottom onto main
    after each merge. #1051 is independent and may merge any time.
 1. **T1 — the sensor port.** `SimpleHotWaterStorage` publishes `WaterTemperatureAtStartOfStepInCelsius` ($T_0$ on the
-   start-of-step path, the end temperature on the stratification path); the three controllers' default connection for
+   start-of-step path, the end temperature on the stratification path, which T4 turns to $T_0$ by the owner decision of
+   2026-10-19); the three controllers' default connection for
    their sensor moves to it. No result change with the start-of-step buffer (the value is $T_0$ either way); recorded
    files expected unchanged. About 40 lines plus a `base` test. Base: `stageD-9-close-out` (decided, Q4).
 2. **T2 — the mixed-node path.** `simulate_mixed_node` (from `38f755ee`), the shared publishing routine, the dispatch on

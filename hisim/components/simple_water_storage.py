@@ -617,7 +617,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     example, 170 kg at 40 °C charged by 5.6 kW while the distribution takes 5.6 kW stay at 40 °C, less the loss.
     Generators, controllers and the distribution system never ask which model runs: they read the same ports.
 
-    Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`).
+    Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`);
+    it too publishes ``T0`` on ``WaterTemperatureAtStartOfStepInCelsius``.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -655,8 +656,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
-    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on. A
-    #: buffer without its heat exchanger (the stratification path) publishes its end temperature here instead.
+    #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on. It
+    #: is the start temperature in every path, the stratification path included (owner decision 2026-10-19).
     WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
     #: The buffer's temperature at the end of the step, the next step's start temperature.
     WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
@@ -829,8 +830,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.CELSIUS,
             output_description=(
                 "The buffer's temperature at the start of the step, the end temperature of the step before. The "
-                "generators' controllers decide on it, since it does not change while the step iterates. A buffer "
-                "without its heat exchanger (the stratification path) publishes its end temperature here instead."
+                "generators' controllers decide on it, since it does not change while the step iterates, in every "
+                "model of the buffer."
             ),
         )
         self.water_temperature_at_end_of_step_channel: ComponentOutput = self.add_output(
@@ -1294,6 +1295,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         book; it is kept unchanged until a stratified tank replaces it, and no recorded energy system uses it.
         """
         del timestep, force_convergence
+        # the start temperature, which the controllers' sensor carries; the mixing law below moves the state
+        start_temperature_in_celsius = self.state.mean_water_temperature_in_celsius
         # Get inputs --------------------------------------------------------------------------------------------------------
 
         state_controller = stsv.get_input_value(self.state_channel)
@@ -1551,12 +1554,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.mean_water_temperature_in_water_storage_in_celsius
             - self.state.temperature_loss_in_celsius_per_timestep
         )
-        # the mixing law has no circuit-wise end temperatures and no start-of-step sensor of its own; it publishes its
-        # end temperature for all of them
-        for channel in (
-            self.water_temperature_at_start_of_step_channel,
-            self.water_temperature_at_end_of_step_channel,
-        ) + self.water_temperature_at_end_of_step_without_circuit_channels:
+        # the sensor carries the start temperature, as in the other two models, so the controllers decide on a value
+        # no pass moves (owner decision 2026-10-19); the mixing law has no circuit-wise end temperatures, so it
+        # publishes its end temperature for each of them
+        stsv.set_output_value(self.water_temperature_at_start_of_step_channel, start_temperature_in_celsius)
+        for channel in (self.water_temperature_at_end_of_step_channel,) + (
+            self.water_temperature_at_end_of_step_without_circuit_channels
+        ):
             stsv.set_output_value(channel, self.state.mean_water_temperature_in_celsius)
 
     def build(self, heat_exchanger_is_present: bool) -> None:

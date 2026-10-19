@@ -3,14 +3,15 @@
 ``SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius`` is the sensor the generators' controllers (boiler,
 heat pump, CHP) decide on: the buffer's temperature at the start of the step, which no pass of the step moves, so an
 on/off decision cannot cycle with the temperatures the buffer publishes to its circuits. Owner decision Q1 of
-``roadmap/two_mode_buffer_spec.md`` (§4.1, §8 item T1): a new output, ``T0`` in both buffer modes.
+``roadmap/two_mode_buffer_spec.md`` (§4.1, §8 item T1): a new output, ``T0`` in both buffer modes; by the owner
+decision of 2026-10-19 ``T0`` on the stratification path as well, so the port means ``T0`` in every model.
 
 These tests check:
 
 * with its heat exchanger the buffer publishes ``T0`` on the sensor port while its end temperature moves, at 60 s and
   at 900 s, and at 900 s the sensor equals the return it publishes to its generator, as before the port existed;
-* without its heat exchanger (the stratification path) the sensor carries the end temperature, the convention of
-  that path for the stage D outputs;
+* without its heat exchanger (the stratification path) the sensor carries ``T0`` too, while that path's end
+  temperature moves;
 * the boiler's, the heat pump's and the CHP's controllers take their buffer temperature from the sensor port.
 """
 
@@ -94,15 +95,18 @@ def test_above_the_threshold_the_sensor_equals_the_return_to_the_generator() -> 
 
 
 @pytest.mark.base
-def test_without_its_heat_exchanger_the_sensor_carries_the_end_temperature() -> None:
-    """The stratification path has no start-of-step sensor of its own and publishes its end temperature on it.
+def test_without_its_heat_exchanger_the_sensor_carries_the_start_temperature() -> None:
+    """The stratification path publishes its 35 °C start temperature on the sensor too (owner decision 2026-10-19).
 
-    Fails if the stratification path left the sensor unset (0 °C) or published another temperature on it.
+    So the sensor means ``T0`` in every model of the buffer, and the controllers decide on a value no pass moves.
+
+    Fails if the stratification path left the sensor unset (0 °C), or published its end temperature, which the
+    step's mixing lifts above 35 °C, or another temperature on it.
     """
     outputs = SensorRig.step(900, heat_exchanger_is_present=False)
-    end_in_celsius = outputs[SimpleHotWaterStorage.WaterTemperatureAtEndOfStepInCelsius]
-    assert end_in_celsius > 0.0
-    assert outputs[SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius] == end_in_celsius
+    start_in_celsius = SimpleHotWaterStorage.INITIAL_TEMPERATURE_IN_CELSIUS
+    assert outputs[SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius] == start_in_celsius
+    assert outputs[SimpleHotWaterStorage.WaterTemperatureAtEndOfStepInCelsius] > start_in_celsius + 0.1
 
 
 @pytest.mark.base

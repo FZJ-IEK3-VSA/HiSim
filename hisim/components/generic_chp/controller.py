@@ -420,8 +420,8 @@ class L1CHPController(cp.L1ControllerComponent):
         component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
         boiler_classname = component_class.get_classname()
-        # the sensor is the start-of-step temperature of a buffer with its heat exchanger, which no pass of the step
-        # moves, so the on/off decision cannot cycle with the temperatures the buffer publishes to its circuits
+        # the sensor is the buffer's start-of-step temperature, which no pass of the step moves, so the on/off
+        # decision cannot cycle with the temperatures the buffer publishes to its circuits
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.HotWaterStorageTemperature,

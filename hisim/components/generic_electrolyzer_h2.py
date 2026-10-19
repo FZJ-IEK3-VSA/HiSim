@@ -397,6 +397,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             output_description="Total load used for hydrogen production",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         # Set total ramp-up time output
@@ -406,6 +407,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
             output_description="Total ramp-up time",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         # Set total ramp-down time output
@@ -415,6 +417,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
             output_description="Total ramp-down time",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         # Set state output
@@ -424,6 +427,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             output_description="Current state of electrolyzer",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         # current hydrogen output
@@ -441,6 +445,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen produced during simulation time",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # current oxygen output
         self.oxygen_flow_rate: ComponentOutput = self.add_output(
@@ -457,6 +462,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
             output_description="Total oxygen produced during simulation time",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # current water demand
         self.water_flow_rate: ComponentOutput = self.add_output(
@@ -473,6 +479,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.WATER,
             lt.Units.KG,
             output_description="Total water demand during simulation time",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # Current efficiency
         self.current_efficiency_state: ComponentOutput = self.add_output(
@@ -490,6 +497,7 @@ class Electrolyzer(cp.PhysicsComponent):
             lt.LoadTypes.TIME,
             lt.Units.HOURS,
             output_description="Total time the electorlyzer is operating (on)",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # =================================================================================================================================
         # Transfer and storage of states

@@ -300,6 +300,7 @@ class CHP(PhysicsComponent):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for CHP {self.NumberofCycles} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
         self.th_power_channel: ComponentOutput = self.add_output(
             self.component_name,

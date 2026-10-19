@@ -24,7 +24,7 @@ import pytest
 from hisim.calculation_scope import CalculationScope
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.config import ComponentID
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import LoadTypes, OutputAggregation, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing import system_chart
 from hisim.postprocessing.system_chart import SystemChart
@@ -494,6 +494,45 @@ def test_compute_result_annotation_celsius_keeps_literal_degree_sign() -> None:
     chart = _chart_with_results(output, 21.5)
     # The annotation keeps the literal °C; only _format_edge_label replaces it.
     assert chart._compute_result_annotation(output) == ": 21.5 °C (mean)"
+
+
+@pytest.mark.base
+def test_compute_result_annotation_of_a_running_total_keeps_its_unit() -> None:
+    """A running total in Wh declared LAST shows its final value in Wh, tagged ``(last)``, not a sum."""
+    output = ComponentOutput(
+        "Source",
+        "Out",
+        LoadTypes.ANY,
+        Units.WATT_HOUR,
+        component_id=ComponentID("Source"),
+        aggregation=OutputAggregation.LAST,
+    )
+    chart = _chart_with_results(output, 9876.5)
+    assert chart._compute_result_annotation(output) == ": 9876.5 Wh (last)"
+
+
+@pytest.mark.base
+def test_an_output_without_aggregate_gets_no_run_value_on_its_connection() -> None:
+    """An output declared NONE (a controller mode) has no run value, so its edge label carries none."""
+    output = ComponentOutput(
+        "Source",
+        "Out",
+        LoadTypes.ANY,
+        Units.ANY,
+        component_id=ComponentID("Source"),
+        aggregation=OutputAggregation.NONE,
+    )
+    chart = _chart_with_results(output, float("nan"))
+    cinput = _make_input(
+        target_name="Target",
+        field_name="In",
+        unit=Units.ANY,
+        src_object_name="Source",
+        src_field_name="Out",
+        source_output=output,
+    )
+    assert chart._compute_result_annotation(output) is None
+    assert chart._format_edge_label(cinput, with_results=True) == "Out -> In in -"
 
 
 @pytest.mark.base

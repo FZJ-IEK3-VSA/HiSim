@@ -718,7 +718,10 @@ class Building(cp.PhysicsComponent):
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
         )
-        self.state.thermal_mass_temperature_in_celsius = thermal_mass_average_bulk_temperature_in_celsius
+        # The next step starts from the mass's end-of-step temperature T_m,t (ISO 13790 C.4). The step average
+        # (T_m,t-1 + T_m,t) / 2 (C.9) is what this step's surface and air equations use and what the thermal mass
+        # output publishes; carrying the average forward would let the mass keep only half its net heat per step.
+        self.state.thermal_mass_temperature_in_celsius = next_thermal_mass_temperature_in_celsius
 
         # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or initial temperature is reached
         if self.buildingconfig.enable_opening_windows is True and self.occupants_open_the_windows(

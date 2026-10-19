@@ -250,6 +250,8 @@ def test_the_timestep_reads_the_resolved_area() -> None:
         collector.t_out_channel.source_output = my_weather.air_temperature_output
         collector.dhi_channel.source_output = my_weather.dhi_output
         collector.ghi_channel.source_output = my_weather.ghi_output
+        collector.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+        collector.azimuth_channel.source_output = my_weather.azimuth_output
 
     everything = [my_weather, *collectors, state_controller]
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(

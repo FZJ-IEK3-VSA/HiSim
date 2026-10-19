@@ -801,6 +801,17 @@ renovisorissues #76 (stated vs simulated boiler efficiency; §9.4); the D5 strat
 
 ## 12. Stage D as decided: start-of-step coupling (owner, 2026-10-15)
 
+**Since 2026-10-17 this section holds for the space-heating buffer above 600 s only.** The owner decided on a
+two-mode buffer (`roadmap/two_mode_buffer_spec.md`, decision 23 of `roadmap/hydronic_part_load_spec.md`): at and
+below the part-load threshold (600 s) the buffer is an iterated mixed node again, publishing its step mean to its
+circuits while its controllers read its start-of-step temperature; above it the start-of-step coupling below runs
+unchanged. The convergence problem described next arises above 600 s, which is why the threshold sits there.
+Measured on 2026-10-18 (full year 2021, local occupancy), the start-of-step buffer at 900 s against the iterated
+buffer's 60 s goldens: gas delivered −0.16 %, fuel −8.15 %, 43.1 against 9.1 degree-hours; pellets −0.04 %, fuel
+−1.02 %; heat pump delivered −0.45 %, booked −0.90 %, space-heating electricity −3.67 %, 27.9 against 8.8
+degree-hours; heat pump with solar thermal +0.15 %, +0.18 %, −1.95 %, 27.7 against 16.6. The measurements in the
+rest of this section were taken against the start-of-step buffer's own 60 s runs.
+
 **Why not the step-mean node.** The design of §4.4 and §4.6 makes the buffer a node that publishes its step mean `T̄`
 to both its generators and the heat distribution system. Probes on the stack top (design summary of 2026-10-14)
 showed that this does not converge with plain iteration: the buffer sits between a generator that holds a lift and a

@@ -4,7 +4,9 @@ Above a step-length threshold (``SimulationParameters.part_load_above_seconds``,
 controller has switched on does not have to run the whole step: it runs only the fraction of the step, the part-load
 ratio, that brings its store to the controller's target temperature by the end of the step (a circuit that draws
 from a store, the largest fraction that keeps the store at or above a floor). At and below the threshold every device
-runs whole steps, so a fine-step run is the reference without any adaptation.
+runs whole steps, so a fine-step run is the reference without any adaptation. There the space-heating buffer is an
+iterated mixed node (:class:`hisim.hydronics.MixedNode`) that sees its own temperature change within the step, and
+every ratio is 1 (decision 23 of ``roadmap/hydronic_part_load_spec.md``).
 
 The module holds five pieces, none of which knows a particular component. Which rule a controller uses depends on the
 kind of store its device charges or draws from:
@@ -12,7 +14,7 @@ kind of store its device charges or draws from:
 * a step-mean store, the hot-water cylinder (:class:`hisim.hydronics.MixedNode`), uses :class:`PartLoadRule` and
   :class:`PartLoadControl` (decision 11 of ``roadmap/hydronic_part_load_spec.md``): the boiler's hot-water charge and
   the solar collector's pump;
-* a start-of-step store, the space-heating buffer (:class:`hisim.hydronics.StartOfStepNode`), uses
+* a start-of-step store, the space-heating buffer above the threshold (:class:`hisim.hydronics.StartOfStepNode`), uses
   :class:`StartOfStepPartLoadRule` and :class:`StartOfStepPartLoadControl` (decisions 21 and 22): the boiler's and the
   heat pump's space-heating charge and the heat distribution system's circuit. The two rules read different inputs; a
   start-of-step store publishes its end temperature without each circuit, which makes its rules exact.

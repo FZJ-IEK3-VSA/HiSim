@@ -117,8 +117,22 @@ Owner, 2026-10-15, after stage D made the space-heating buffer a start-of-step s
     its target that its draw would empty, and the distribution's floor applies. Its hot-water part load stays parked
     under decision 18 (#916).
 
-This is a hybrid by design: one model whose controllers set a run fraction above the threshold, not two models.
-The cost is a small, documented jump in results at the threshold itself, a step length nobody runs.
+Owner, 2026-10-17, with the decisions on its open questions of 2026-10-18 (`roadmap/two_mode_buffer_spec.md`):
+
+23. **The space-heating buffer is a two-mode buffer.** At and below the threshold (600 s) the buffer is an iterated
+    mixed node (`hydronics.MixedNode`, `SimpleHotWaterStorage.simulate_mixed_node`): it publishes its step mean to its
+    generators and its distribution system, which iterate with it within the step, and every ratio of decisions 21
+    and 22 is 1. Above the threshold the start-of-step buffer of decisions 21 and 22 runs unchanged. The buffer
+    chooses once, when it is built, from `SimulationParameters.runs_part_load()`. In both modes it publishes its
+    start-of-step temperature on `WaterTemperatureAtStartOfStepInCelsius`, the sensor its generators' controllers
+    read, so their decision cannot cycle with the step mean; the three end temperatures without a circuit carry the
+    end temperature with the iterated buffer, since nothing reads them there. A step above 600 s with a threshold at
+    or above it stays refused (`check_mixed_node_step_is_safe`): the mixed node contracts by 0.6 or more per pass
+    there and whole steps overcharge it. The 60 s reference is the iterated buffer's.
+
+For the devices this is a hybrid by design: one model whose controllers set a run fraction above the threshold, not
+two models. The space-heating buffer alone runs two models (decision 23). The cost is a small, documented jump in
+results at the threshold itself, a step length nobody runs.
 
 ## 3. Terms
 

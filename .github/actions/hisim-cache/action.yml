@@ -33,9 +33,10 @@ description: >
 
   THE WEEKLY COLD RUN (weekly-cold-cache.yml) calls tests.yml, golden-check.yml and golden-year.yml
   with cold_cache: true. Their jobs skip the restore, so each computes everything from scratch and
-  uploads all of it; their own merge jobs are skipped, and the caller's merge job saves the union
-  with fresh: 'true', not merged into the old entry. That entry, the most recent one, replaces what
-  the week accumulated.
+  uploads all of it; their own merge jobs are skipped, and the caller's merge job saves the union.
+  When all three workflows succeeded it does so with fresh: 'true', not merged into the old entry, so
+  that entry, the most recent one, replaces what the week accumulated; otherwise a share may be
+  incomplete, and it merges the union into the most recent entry like any other run.
 
   What the name of an entry does not cover is the code that computed it. A job that finds its
   weather series and profiles already computed does not exercise the reader or the generator that

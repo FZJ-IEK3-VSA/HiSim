@@ -148,7 +148,11 @@ deleted whole. Never write to the repository, `hisim/inputs`, the CWD, `~` or `/
 route caches through `hisim.caching`. The one exception under `hisim/inputs` is the default cache
 `hisim/inputs/cache`, used when no cache directory is configured (containers set
 `HISIM_CACHE_DIRECTORIES`); a result directory under `hisim/inputs` is refused. `HISIM_WRITE_GUARD=collect`
-lists all stray writes at the end instead of raising at the first. The static half:
+lists all stray writes at the end instead of raising at the first. The LoadProfileGenerator binaries are
+installed into the cache directory (`<cache>/pylpg/<release>`), unless `HISIM_LPG_BINARY_ROOT` names a
+preinstalled `<root>/<release>/LPG_linux` of the release pylpg downloads (the CI test image sets it to
+`/opt/hisim/pylpg`, built by `Dockerfile.test`); that installation is only read, never written, so it needs
+no entry in the registry. The static half:
 `semgrep --config .semgrep/ --error hisim/` (CI job `semgrep` in `quality.yml`) flags direct file writes
 outside the sanctioned writer modules listed in `.semgrep/file_writes.yml`.
 

@@ -15,7 +15,9 @@ the installed package. The binaries the calculations are copied from live in the
 well (:meth:`PylpgWorkspace.binary_root`, versioned by the LoadProfileGenerator release pylpg
 downloads), and :meth:`PylpgWorkspace.install_binaries_if_missing` installs them there. Nothing in
 HiSim reads or writes the ``pylpg`` package directory any more; an installation an older HiSim left
-there is ignored.
+there is ignored. An image that ships the binaries (the CI test image, ``Dockerfile.test``) names its
+read-only installation in ``HISIM_LPG_BINARY_ROOT``; the calculations then copy them from there and
+nothing is downloaded (:meth:`PylpgWorkspace.preinstalled_binary_root`).
 
 This module owns the index arithmetic and the directory lifecycle instead, so the connector does not
 have to. The default index comes from the process, which removes the shared constant; the directory
@@ -42,7 +44,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 from pylpg import lpg_execution
 
@@ -258,12 +260,68 @@ class PylpgWorkspace:
         cls._release = releases.pop()
         return cls._release
 
+    #: The environment variable naming a preinstalled, read-only LoadProfileGenerator installation:
+    #: a directory holding ``<release>/LPG_linux/simengine2``, the layout of :meth:`binary_root`. The
+    #: CI test image (``Dockerfile.test``) sets it to ``/opt/hisim/pylpg``.
+    PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE: ClassVar[str] = "HISIM_LPG_BINARY_ROOT"
+
+    #: The reasons for not using the preinstalled binaries that were already logged by this process,
+    #: so a run of many households says it once rather than once per household.
+    _reported_preinstallation_problems: ClassVar[Set[str]] = set()
+
+    @classmethod
+    def preinstalled_binary_root(cls) -> Optional[pathlib.Path]:
+        """Returns the preinstalled LoadProfileGenerator installation to use, or ``None`` to use the cache.
+
+        Example: with ``HISIM_LPG_BINARY_ROOT=/opt/hisim/pylpg`` and pylpg downloading ``LPG10.10.0``,
+        this is ``/opt/hisim/pylpg/LPG10.10.0`` when ``/opt/hisim/pylpg/LPG10.10.0/LPG_linux/simengine2``
+        exists.
+
+        The CI test image ships the binaries so that no job has to download them: a job whose cache
+        missed used to fetch the 65 MB zip from loadprofilegenerator.de, and fails when that server
+        refuses the connection. The installation is only read. :meth:`start_executor` copies it into
+        the calculation's own directory, as it copies an installation in the cache directory, so the
+        write guard never has to admit it.
+
+        The release check stays: when the variable names an installation of another release than the
+        one pylpg downloads (an image built before a pylpg upgrade, say), or none at all, the reason is
+        logged once and ``None`` is returned, so the binaries are installed into the cache directory
+        exactly as without the variable.
+
+        Returns:
+            Optional[pathlib.Path]: ``<variable>/<release>``, or ``None`` when the variable is unset or
+            empty, or holds no executable of the release pylpg downloads.
+        """
+        configured = os.environ.get(cls.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, "").strip()
+        if not configured:
+            return None
+        root = pathlib.Path(configured) / cls.lpg_release()
+        executable = root / cls.binary_folder_name() / cls.executable_name()
+        if executable.is_file():
+            return root
+        try:
+            releases = sorted(path.name for path in pathlib.Path(configured).iterdir() if path.is_dir())
+        except OSError:
+            releases = []
+        problem = (
+            f"{cls.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE}={configured} holds no LoadProfileGenerator executable "
+            f"at '{executable}' (releases there: {releases or 'none'}), but pylpg downloads {cls.lpg_release()}. "
+            "The binaries are installed into the cache directory instead. If this is the CI test image, it "
+            "was built for another pylpg and needs a rebuild (workflow 'Docker test image')."
+        )
+        if problem not in cls._reported_preinstallation_problems:
+            cls._reported_preinstallation_problems.add(problem)
+            log.warning(problem)
+        return None
+
     @classmethod
     def binary_root(cls, cache_directory: str) -> pathlib.Path:
-        """Returns the directory the LoadProfileGenerator binaries are installed in, below a cache directory.
+        """Returns the directory the LoadProfileGenerator binaries are taken from.
 
-        ``<cache_directory>/pylpg/<release>``, with ``LPG_linux`` (or ``LPG_win``) below it, the
-        layout ``LPGExecutor.retrieve_lpg_binaries`` extracts into the directory it is given.
+        The preinstalled installation when there is a usable one (:meth:`preinstalled_binary_root`),
+        otherwise ``<cache_directory>/pylpg/<release>``. Either has ``LPG_linux`` (or ``LPG_win``)
+        below it, the layout ``LPGExecutor.retrieve_lpg_binaries`` extracts into the directory it is
+        given.
 
         The binaries used to live in the installed pylpg package, where pylpg puts them. A
         calculation may not write there (``hisim.write_guard``), and a fresh environment -- every CI
@@ -277,8 +335,12 @@ class PylpgWorkspace:
             cache_directory: The calculation's cache write directory.
 
         Returns:
-            pathlib.Path: ``<cache_directory>/pylpg/<release>``.
+            pathlib.Path: The preinstalled ``<HISIM_LPG_BINARY_ROOT>/<release>``, or
+            ``<cache_directory>/pylpg/<release>``.
         """
+        preinstalled = cls.preinstalled_binary_root()
+        if preinstalled is not None:
+            return preinstalled
         return pathlib.Path(cache_directory) / cls.BINARY_DIRECTORY_NAME / cls.lpg_release()
 
     @staticmethod
@@ -286,13 +348,22 @@ class PylpgWorkspace:
         """Returns the folder ``retrieve_lpg_binaries`` extracts into on this platform."""
         return "LPG_win" if sys.platform.startswith("win") else "LPG_linux"
 
+    @staticmethod
+    def executable_name() -> str:
+        """Returns the file name of the LoadProfileGenerator executable on this platform.
+
+        The name is the one ``LPGExecutor.__init__`` expects, restated because the executor exposes it
+        nowhere a caller can reach before constructing one, and constructing one is the very thing
+        :meth:`start_executor` avoids.
+        """
+        return "simengine2.exe" if sys.platform.startswith("win") else "simengine2"
+
     @classmethod
     def binary_path(cls, cache_directory: str) -> pathlib.Path:
-        """Returns the LoadProfileGenerator executable's path below a cache directory.
+        """Returns the path of the LoadProfileGenerator executable the calculations copy.
 
-        The executable's name is the one ``LPGExecutor.__init__`` expects, restated because the
-        executor exposes it nowhere a caller can reach before constructing one, and constructing one
-        is the very thing :meth:`start_executor` avoids.
+        It lies below :meth:`binary_root`: in the preinstalled installation when there is a usable one,
+        otherwise below the cache directory. Its name is :meth:`executable_name`.
 
         Args:
             cache_directory: The calculation's cache write directory.
@@ -300,8 +371,7 @@ class PylpgWorkspace:
         Returns:
             pathlib.Path: ``<binary_root>/LPG_linux/simengine2`` (``LPG_win/simengine2.exe`` on Windows).
         """
-        executable = "simengine2.exe" if sys.platform.startswith("win") else "simengine2"
-        return cls.binary_root(cache_directory) / cls.binary_folder_name() / executable
+        return cls.binary_root(cache_directory) / cls.binary_folder_name() / cls.executable_name()
 
     @classmethod
     def install_binaries_if_missing(cls, cache_directory: str) -> pathlib.Path:
@@ -310,7 +380,8 @@ class PylpgWorkspace:
         The binaries are not shipped with pylpg; pylpg downloads a zip on first use. HiSim installs
         them itself, into :meth:`binary_root`, never into the pylpg package directory, and an
         installation an older HiSim or pylpg itself left in the package directory is neither read
-        nor removed.
+        nor removed. When a preinstalled installation is usable (:meth:`preinstalled_binary_root`),
+        :meth:`binary_path` already names its executable and nothing is installed or downloaded.
 
         The install has to be atomic with respect to every other process, because the check and the
         write are separate steps: several processes starting together in a fresh environment -- four

@@ -28,4 +28,25 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install uv coverage \
     && uv pip install --system -r requirements.txt
 
+# The LoadProfileGenerator binaries, so no CI job downloads the 65 MB zip from
+# loadprofilegenerator.de (a cache miss used to, and failed whenever that server was down).
+# HiSim copies them from here into each calculation's own directory and never writes here
+# (hisim/components/pylpg_workspace.py, PylpgWorkspace.preinstalled_binary_root). The release
+# is pinned, and the build fails unless it is the one the installed pylpg downloads, because
+# HiSim uses only that release and would otherwise silently fall back to downloading it. The
+# download is pylpg's own (LPGExecutor.retrieve_lpg_binaries, with its URL), tried three times.
+ARG LPG_RELEASE=LPG10.10.0
+ENV HISIM_LPG_BINARY_ROOT=/opt/hisim/pylpg
+RUN python -c "import inspect, re, sys; from pylpg import lpg_execution; source = inspect.getsource(lpg_execution.LPGExecutor.retrieve_lpg_binaries); releases = sorted(set(re.findall(r'/(LPG\d+(?:\.\d+)+)_[A-Za-z]+\.zip', source))); sys.exit(0 if releases == ['${LPG_RELEASE}'] else 'Dockerfile.test pins ${LPG_RELEASE}, but pylpg downloads %s: set LPG_RELEASE to it' % releases)" \
+    && for attempt in 1 2 3; do \
+        rm -rf "${HISIM_LPG_BINARY_ROOT}/${LPG_RELEASE}" \
+        && python -c "import pathlib, sys; from pylpg import lpg_execution; lpg_execution.LPGExecutor.retrieve_lpg_binaries(pathlib.Path(sys.argv[1]))" "${HISIM_LPG_BINARY_ROOT}/${LPG_RELEASE}" \
+        && break; \
+        [ "$attempt" = 3 ] && exit 1; \
+        sleep 60; \
+    done \
+    && test -f "${HISIM_LPG_BINARY_ROOT}/${LPG_RELEASE}/LPG_linux/simengine2" \
+    && chmod -R u=rwX,go=rX "${HISIM_LPG_BINARY_ROOT}" \
+    && chmod 755 "${HISIM_LPG_BINARY_ROOT}/${LPG_RELEASE}/LPG_linux/simengine2"
+
 ENV HISIM_TEST_IMAGE=true

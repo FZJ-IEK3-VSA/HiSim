@@ -733,6 +733,16 @@ class _FakeDownload:
         (folder / "profilegenerator.db3").write_bytes(b"db")
 
 
+@pytest.fixture(autouse=True)
+def fixture_no_preinstalled_binaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every test as on a machine without preinstalled binaries, unless the test sets the variable itself.
+
+    The CI test image sets ``HISIM_LPG_BINARY_ROOT``; without this, the tests of the install into the
+    cache directory would find the image's installation instead and test nothing.
+    """
+    monkeypatch.delenv(PylpgWorkspace.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, raising=False)
+
+
 @pytest.fixture(name="fake_download")
 def fixture_fake_download(monkeypatch: pytest.MonkeyPatch) -> _FakeDownload:
     """Replace the download with :class:`_FakeDownload`."""
@@ -861,3 +871,133 @@ def test_the_executor_carries_every_attribute_pylpgs_constructor_sets(
         f"LPGExecutor.__init__ sets {sorted(expected)}, the executor start_executor builds carries "
         f"{sorted(vars(executor))}; update PylpgWorkspace.start_executor"
     )
+
+
+class _PreinstalledTree:
+    """A fake preinstalled LoadProfileGenerator installation, the layout the test image has.
+
+    ``<root>/<release>/LPG_linux/simengine2`` beside a database, as ``Dockerfile.test`` lays it out
+    below ``/opt/hisim/pylpg``. :meth:`snapshot` lists every file with its content, so a test can
+    show that nothing was written into the installation.
+    """
+
+    def __init__(self, root: pathlib.Path, release: str) -> None:
+        """Lay out the installation of *release* below *root*.
+
+        Args:
+            root: what ``HISIM_LPG_BINARY_ROOT`` will name.
+            release: the release directory to create, e.g. ``LPG10.10.0``.
+        """
+        self.root = root
+        folder = root / release / PylpgWorkspace.binary_folder_name()
+        folder.mkdir(parents=True)
+        self.executable = folder / PylpgWorkspace.executable_name()
+        self.executable.write_bytes(b"#!/bin/sh\n")
+        self.executable.chmod(0o755)
+        (folder / "profilegenerator.db3").write_bytes(b"db")
+
+    def snapshot(self) -> List[Any]:
+        """Every path below the root with its bytes (``None`` for a directory), sorted."""
+        return sorted(
+            (str(path), path.read_bytes() if path.is_file() else None) for path in self.root.rglob("*")
+        )
+
+
+def _no_download(path: Any) -> None:
+    """Stands in for ``LPGExecutor.retrieve_lpg_binaries`` where nothing may be downloaded."""
+    raise AssertionError(f"the LoadProfileGenerator binaries were downloaded into '{path}'")
+
+
+@pytest.mark.base
+def test_preinstalled_binaries_are_copied_from_and_nothing_is_downloaded(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With ``HISIM_LPG_BINARY_ROOT`` naming the release pylpg downloads, the calculation copies from there.
+
+    The test image ships the binaries so that a job whose cache missed no longer downloads them from
+    loadprofilegenerator.de. The installation is read only: under the enforcing write guard, with
+    only the cache directory admitted, the executor's copy is made and nothing in the installation
+    changes. The download is replaced by a function that fails the test.
+    """
+    tree = _PreinstalledTree(tmp_path / "opt" / "pylpg", PylpgWorkspace.lpg_release())
+    monkeypatch.setattr(lpg_execution.LPGExecutor, "retrieve_lpg_binaries", staticmethod(_no_download))
+    monkeypatch.setenv(PylpgWorkspace.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, str(tree.root))
+    cache = tmp_path / "cache"
+    before = tree.snapshot()
+    ResultPathProviderSingleton.reset()
+    try:
+        with CalculationScope.open(
+            "lpg", run_directory=tmp_path / "run", cache_directories=[str(cache)], mode=GuardMode.ENFORCE
+        ) as guard:
+            executable = PylpgWorkspace.install_binaries_if_missing(str(cache))
+            index = PylpgWorkspace.calculation_index(454545, 0)
+            PylpgWorkspace.claim(index, PylpgWorkspace.work_root(str(cache)))
+            executor = PylpgWorkspace.start_executor(index, str(cache))
+            copied = pathlib.Path(executor.lpg_simengine_filepath())
+            copied_is_file = copied.is_file()
+            PylpgWorkspace.release([index], PylpgWorkspace.work_root(str(cache)))
+            assert not guard.stray_writes
+    finally:
+        ResultPathProviderSingleton.reset()
+    assert executable == tree.executable
+    assert copied_is_file and copied.is_relative_to(PylpgWorkspace.work_root(str(cache)))
+    assert tree.snapshot() == before, "the preinstalled installation must only be read"
+    assert not (cache / PylpgWorkspace.BINARY_DIRECTORY_NAME).exists(), "nothing may be installed into the cache"
+
+
+@pytest.mark.base
+def test_preinstalled_binaries_of_another_release_fall_back_to_the_cache(
+    tmp_path: pathlib.Path, fake_download: _FakeDownload, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An image built for another pylpg is not used: the binaries are installed into the cache as without it.
+
+    The release in the path is what keeps two releases apart, so an installation of ``LPG0.0.1`` must
+    not be run for a pylpg that downloads another. The reason is logged once per process.
+    """
+    tree = _PreinstalledTree(tmp_path / "opt" / "pylpg", "LPG0.0.1")
+    monkeypatch.setenv(PylpgWorkspace.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, str(tree.root))
+    monkeypatch.setattr(PylpgWorkspace, "_reported_preinstallation_problems", set())
+    cache = tmp_path / "cache"
+
+    assert PylpgWorkspace.preinstalled_binary_root() is None
+    executable = PylpgWorkspace.install_binaries_if_missing(str(cache))
+
+    assert executable == cache / "pylpg" / PylpgWorkspace.lpg_release() / tree.executable.parent.name / (
+        tree.executable.name
+    )
+    assert executable.is_file()
+    assert len(fake_download.paths) == 1
+    reasons = sorted(PylpgWorkspace._reported_preinstallation_problems)  # pylint: disable=protected-access
+    assert len(reasons) == 1
+    assert "LPG0.0.1" in reasons[0] and PylpgWorkspace.lpg_release() in reasons[0]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("value", [None, "", "  "])
+def test_without_the_variable_the_binaries_come_from_the_cache(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, value: Optional[str]
+) -> None:
+    """Unset or empty, ``HISIM_LPG_BINARY_ROOT`` changes nothing: the binaries are below the cache directory."""
+    if value is not None:
+        monkeypatch.setenv(PylpgWorkspace.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, value)
+
+    assert PylpgWorkspace.preinstalled_binary_root() is None
+    assert PylpgWorkspace.binary_root(str(tmp_path)) == tmp_path / "pylpg" / PylpgWorkspace.lpg_release()
+
+
+@pytest.mark.base
+def test_the_test_image_installs_the_release_pylpg_downloads() -> None:
+    """``Dockerfile.test`` pins the release this pylpg downloads, and names the variable HiSim reads.
+
+    The image build checks the pin against the pylpg it installs and fails if they differ; this
+    test fails the pull request that upgrades pylpg already, before the image is rebuilt on main.
+    Without it, CI would quietly fall back to downloading the binaries on every cache miss.
+    """
+    dockerfile = (pathlib.Path(__file__).resolve().parent.parent / "Dockerfile.test").read_text(encoding="utf-8")
+
+    pins = re.findall(r"^ARG LPG_RELEASE=(\S+)$", dockerfile, flags=re.MULTILINE)
+    variable = PylpgWorkspace.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE
+    roots = re.findall(rf"^ENV {variable}=(\S+)$", dockerfile, flags=re.MULTILINE)
+
+    assert pins == [PylpgWorkspace.lpg_release()]
+    assert len(roots) == 1

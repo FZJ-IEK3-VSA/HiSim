@@ -369,6 +369,10 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
     Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
+    #: How a request names its first and last day to the LoadProfileGenerator: ISO 8601, which it reads
+    #: unambiguously. A day-first ``01-07-2021`` is read month-first, as 7 January.
+    LPG_DATE_FORMAT: ClassVar[str] = "%Y-%m-%d"
+
     @classmethod
     def electricity_consumption_of(
         cls,
@@ -649,11 +653,8 @@ class UtspLpgConnector(cp.DataSourceComponent):
             - car locations
             - driving distances
         """
-        # Create an LPG configuration and set the simulation parameters
-        start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
-        # Unlike HiSim the LPG includes the specified end day in the simulation --> subtract one day
-        last_day = self.my_simulation_parameters.end_date - datetime.timedelta(days=1)
-        end_date = last_day.strftime("%Y-%m-%d")
+        # The UTSP is asked for the same days as a local LoadProfileGenerator: the run's whole calendar year.
+        start_date, end_date = self.lpg_request_days(self.my_simulation_parameters)
 
         # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
@@ -1313,10 +1314,46 @@ class UtspLpgConnector(cp.DataSourceComponent):
         under the same configuration and simulation parameters. With the fingerprint of the conversion's code
         in the key, an edit to it makes every entry a miss instead of serving the old values.
 
+        The days the LoadProfileGenerator simulates, locally or on the UTSP, are named too, because its
+        profile of the same days depends on how many days it simulates. They are the run's calendar year
+        (:meth:`lpg_request_days`), so the material is the same for every window of one year: a week and the
+        whole of 2021 both name ``2021-01-01..2022-01-01``. An entry of an earlier request of the window's own
+        days (a week asked for as ``2021-01-01..2021-01-08``, or a UTSP request without this part) is a miss.
+        The entry itself still belongs to one window: the key's simulation part names the run's start, end and
+        resolution (:func:`hisim.utils.build_cache_key_string`), because the entry holds the window's profile.
+
+        Example: ``":lpg_local_time=<fingerprint>:lpg_request=2021-01-01..2022-01-01"`` for a local or UTSP
+        profile of any window in 2021, and ``":lpg_local_time=<fingerprint>"`` for a shipped profile.
+
         Returns:
-            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure.
+            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure, and for a
+                profile the LoadProfileGenerator computes ``":lpg_request="`` and the first and the last day
+                it simulates.
         """
-        return ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time))
+        return ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time)) + self.request_key_material(
+            self.utsp_config.data_acquisition_mode, self.my_simulation_parameters
+        )
+
+    @classmethod
+    def request_key_material(
+        cls, data_acquisition_mode: LpgDataAcquisitionMode, parameters: SimulationParameters
+    ) -> str:
+        """Return the part of the cache key that names the days the LoadProfileGenerator simulates for a run.
+
+        See :meth:`extra_cache_key_material`, which appends it. Example: ``":lpg_request=2021-01-01..2022-01-01"``
+        for a local or UTSP profile of any window in 2021, and an empty string for a shipped profile, which no
+        request computes.
+
+        Args:
+            data_acquisition_mode: where the profile comes from.
+            parameters: the run's simulation parameters.
+
+        Returns:
+            str: ``":lpg_request="`` and the first and the last requested day, or an empty string.
+        """
+        if data_acquisition_mode in (LpgDataAcquisitionMode.USE_LOCAL_LPG, LpgDataAcquisitionMode.USE_UTSP):
+            return ":lpg_request=" + "..".join(cls.lpg_request_days(parameters))
+        return ""
 
     def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(
         self,
@@ -1415,17 +1452,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
                 householdref = household
                 housetype = HouseTypes.HT23_No_Infrastructure_at_all
-                # The profiles are read from 1 January of the simulation year onwards and must cover the
-                # whole simulated time span (see load_result_files_and_transform_to_lists). Deriving the end
-                # date from its year alone would collapse start and end date for any simulation shorter than
-                # a year, so the LPG would return too few time steps.
-                simulated_days = (
-                    self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
-                ).days
-                lpg_start_date = datetime.date(self.my_simulation_parameters.start_date.year, 1, 1)
-                lpg_end_date = lpg_start_date + datetime.timedelta(days=simulated_days)
-                startdate = lpg_start_date.strftime("%d-%m-%Y")
-                enddate = lpg_end_date.strftime("%d-%m-%Y")
+                startdate, enddate = self.lpg_request_days(self.my_simulation_parameters)
                 geographic_location = None
 
                 chargingset = self.utsp_config.charging_station_set
@@ -1525,6 +1552,37 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 )
 
         return str(path_to_result_folder)
+
+    @classmethod
+    def lpg_request_days(cls, parameters: SimulationParameters) -> Tuple[str, str]:
+        """Return the first and the last day the LoadProfileGenerator simulates for a run, as it reads them.
+
+        The same days are asked of a local LoadProfileGenerator and of the UTSP. The generator always simulates
+        the run's whole calendar year, whatever the run's length or start, and the run's window is cut from that
+        year when the profile is read (:meth:`load_result_files_and_transform_to_lists`). The household a
+        generator simulates depends on how many days it simulates, so a week asked for on its own differs from
+        the same week of the year; with the year always asked for, a window gets the same profile as the same
+        days of a full-year run (owner decision of 2026-10-19).
+
+        The request starts on 1 January of the run's year and ends on 1 January of the next year, that day
+        included, as the generator simulates its end day. The extra 1 January is the end day the full-year
+        request always had, so a full-year run's request, and its profile, stay as they were. No window needs
+        it to cover the hour the wall clock runs ahead in summer: a run lies within one calendar year
+        (:class:`hisim.simulationparameters.SimulationParameters` refuses one that does not), and its last
+        minute, on 31 December at the latest, is on standard time.
+
+        Example: a day, a week, a July week and the whole of 2021 are all requested as
+        ``("2021-01-01", "2022-01-01")``. Written day-first, ``08-01-2021`` was read as 1 August.
+
+        Args:
+            parameters: the run's simulation parameters.
+
+        Returns:
+            Tuple[str, str]: the first and the last day, in :attr:`LPG_DATE_FORMAT`.
+        """
+        first_day = datetime.date(parameters.start_date.year, 1, 1)
+        last_day = datetime.date(parameters.start_date.year + 1, 1, 1)
+        return first_day.strftime(cls.LPG_DATE_FORMAT), last_day.strftime(cls.LPG_DATE_FORMAT)
 
     def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str,
     str, str]:
@@ -2087,8 +2145,9 @@ class UtspLpgConnector(cp.DataSourceComponent):
         minutes_in_common = min(len(values) for values in minute_columns.values())
         minute_profile = pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
 
-        # Put the profile onto the run's standard-time clock and cut out the window. Every mode still reads the
-        # profile as if it started on 1 January and the run did too; hisim-9g2.6 reads the run's own start.
+        # Put the profile onto the run's standard-time clock and cut out the window. Every profile starts on
+        # 1 January: a local or UTSP profile is the run's calendar year (lpg_request_days). The window is still
+        # read as if the run started on 1 January too; hisim-9g2.6 reads the run's own start.
         new_year = datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
         initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
             minute_values=minute_profile,

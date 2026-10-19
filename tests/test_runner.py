@@ -541,14 +541,69 @@ def test_a_child_that_dies_is_a_run_error_of_its_pair(tmp_path: Path, monkeypatc
         assert "dying" in result.error
 
 
+WEEK_60S = ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])
+YEAR_60S = ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"])
+
+
 def test_a_child_timeout_is_a_multiple_of_its_recorded_seconds_with_a_minimum() -> None:
     """A full-year pair gets three times its recorded wall time; a short pair gets the minimum."""
-    week = ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])
-    year = ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"])
     setup = SetupConfig("car", "a.py", seconds={"one_week_60s": 124, "full_year_60s": 690})
 
-    assert ChildRuns.timeout_in_seconds(setup, year) == 2070.0
-    assert ChildRuns.timeout_in_seconds(setup, week) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+    assert ChildRuns.timeout_in_seconds(setup, YEAR_60S, REPO_ROOT) == 2070.0
+    assert ChildRuns.timeout_in_seconds(setup, WEEK_60S, REPO_ROOT) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+
+
+def test_a_local_lpg_week_pair_gets_the_lpg_year_allowance_on_top() -> None:
+    """A week with a local LPG household gets max(3 x recorded, minimum) plus the allowance for its LPG year.
+
+    On a cache miss the pair first computes the household's whole calendar year, which its recorded
+    time does not contain; without the allowance CI killed such weeks at 600 s (#1030).
+    """
+    gas = SetupConfig(
+        "household_gas_building_sizer",
+        "system_setups/household_gas_building_sizer.py",
+        seconds={"one_week_60s": 115, "full_year_60s": 397},
+    )
+    solar = SetupConfig(
+        "household_gas_solar_thermal_building_sizer",
+        "system_setups/household_gas_solar_thermal_building_sizer.py",
+        seconds={"one_week_60s": 254, "full_year_60s": 303},
+    )
+
+    assert ChildRuns.timeout_in_seconds(gas, WEEK_60S, REPO_ROOT) == (
+        ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS + ChildRuns.LPG_YEAR_ALLOWANCE_IN_SECONDS
+    )
+    assert ChildRuns.timeout_in_seconds(solar, WEEK_60S, REPO_ROOT) == 762.0 + ChildRuns.LPG_YEAR_ALLOWANCE_IN_SECONDS
+
+
+def test_a_week_without_local_lpg_and_a_local_lpg_full_year_keep_their_limit() -> None:
+    """A household from a shipped profile needs no LPG year, and a full year's recorded time already holds it."""
+    basic = SetupConfig("basic_household", "system_setups/basic_household.py", seconds={"one_week_60s": 17})
+    gas = SetupConfig(
+        "household_gas_building_sizer",
+        "system_setups/household_gas_building_sizer.py",
+        seconds={"one_week_60s": 115, "full_year_60s": 397},
+    )
+
+    assert ChildRuns.timeout_in_seconds(basic, WEEK_60S, REPO_ROOT) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+    assert ChildRuns.timeout_in_seconds(gas, YEAR_60S, REPO_ROOT) == 3 * 397.0
+
+
+def test_every_golden_setup_with_a_local_lpg_household_is_recognised() -> None:
+    """The recorded energy systems name a local LPG household exactly where the setups ask for one.
+
+    The runner reads the household's data source from the recorded twin; a twin that lost the
+    setting, or a setup reading it from somewhere new, would quietly drop the allowance.
+    """
+    recognised = {setup.id for setup in load_config(REAL_CONFIG).setups if setup.runs_local_lpg_household(REPO_ROOT)}
+    asked_for = {
+        setup.id
+        for setup in load_config(REAL_CONFIG).setups
+        if "LpgDataAcquisitionMode.USE_LOCAL_LPG" in (REPO_ROOT / setup.path).read_text(encoding="utf-8")
+    }
+
+    assert recognised == asked_for
+    assert "household_gas_building_sizer" in recognised and "basic_household" not in recognised
 
 
 def test_a_child_that_hangs_is_killed_and_fails_its_pair_by_name(

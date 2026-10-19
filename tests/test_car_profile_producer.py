@@ -169,7 +169,7 @@ def calculation_inputs(**overrides: Any) -> CarProfileInputs:
     )
     arguments: Dict[str, Any] = {
         "profile_content_hash": content_hash,
-        "year": 2021,
+        "profile_start": "2021-01-01T00:00:00",
         "seconds_per_timestep": 3600,
         "timesteps": 48,
         "window_start": "2021-01-01T00:00:00",
@@ -340,3 +340,19 @@ def test_the_location_of_a_timestep_is_its_most_frequent_minute_the_first_on_a_t
     assert generic_car_profile.most_frequent([2, 1, 1, 2]) == 2
     assert generic_car_profile.most_frequent([1, 0, 0, 1, 2]) == 1
     assert generic_car_profile.most_frequent([0]) == 0
+
+
+@pytest.mark.base
+def test_a_july_window_reads_the_profile_from_its_stated_start() -> None:
+    """Catches a car whose July window reads the profile as if it started on 1 January, or at its 00:00.
+
+    A profile that states 1 July 00:00 on the wall clock as its start begins an hour before the window in
+    standard time: the drive at 08:00 summer time falls into the hour starting at 07:00 of the run's clock.
+    """
+    inputs = calculation_inputs(profile_start="2021-07-01T00:00:00", window_start="2021-07-01T00:00:00", timesteps=24)
+
+    produced = produce_car_profile(inputs)
+
+    assert len(produced) == 24
+    assert float(produced[CarProfileInputs.DISTANCE_COLUMN].iloc[7]) == pytest.approx(15000.0)
+    assert list(produced[CarProfileInputs.LOCATION_COLUMN].iloc[8:16]) == [2] * 8

@@ -17,7 +17,7 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
-from hisim.components import csvloader, example_component, generic_chp
+from hisim.components import csvloader, example_component, solar_thermal_system
 from hisim.january_readers import JanuaryReader, JanuaryReaders
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -138,11 +138,11 @@ class TestTheList:
 
     def test_classes_come_back_in_the_order_of_the_list(self) -> None:
         """Several readers are reported in the list's order, whatever order the run holds them in."""
-        classes = [csvloader.CSVLoader, generic_chp.L1CHPController]
+        classes = [csvloader.CSVLoader, solar_thermal_system.SolarThermalSystem]
 
         names = [reader.class_path.rsplit(".", 1)[-1] for reader in JanuaryReaders.present(classes)]
 
-        assert names == ["L1CHPController", "CSVLoader"]
+        assert names == ["SolarThermalSystem", "CSVLoader"]
 
     @pytest.mark.parametrize(
         ("start_date", "expected"),

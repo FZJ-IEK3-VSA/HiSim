@@ -79,6 +79,7 @@ class CarReports:
                     "LoadTypeName": f"Location - {car['car']}",
                     "HouseKey": {"HouseholdName": car["household"]},
                     "TimeResolution": "00:01:00",
+                    "StartTime": "2021-01-01T00:00:00",
                     "Values": ["Home"] * (minutes - 1) + ["Workplace"],
                 }
             )

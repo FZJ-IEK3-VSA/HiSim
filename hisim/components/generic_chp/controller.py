@@ -8,6 +8,7 @@ CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is
 
 # Owned
 import dataclasses
+import datetime
 import importlib
 from dataclasses import dataclass
 from typing import ClassVar, List
@@ -356,6 +357,9 @@ class L1CHPController(cp.L1ControllerComponent):
         self.heating_season_end = (
             config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         )
+        #: How many timesteps of its year lie before the run's first one: the run's timestep ``t`` is timestep
+        #: ``timesteps_of_year_before_window + t`` of the year, in which the heating season is measured.
+        self.timesteps_of_year_before_window = self.timesteps_of_year_before(my_simulation_parameters)
         self.state: L1CHPControllerState = L1CHPControllerState(0, 0, 0, 0)
         self.previous_state: L1CHPControllerState = self.state.clone()
         self.processed_state: L1CHPControllerState = self.state.clone()
@@ -493,13 +497,45 @@ class L1CHPController(cp.L1ControllerComponent):
         stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
 
+    @staticmethod
+    def timesteps_of_year_before(parameters: SimulationParameters) -> int:
+        """Return how many timesteps of its year lie before a run's first timestep.
+
+        Example: a run from 1 July 2021 at 60 s starts 181 days into the year, after 260 640 timesteps; a run
+        from 1 January starts after none.
+
+        Args:
+            parameters: the run's simulation parameters.
+
+        Returns:
+            int: the number of timesteps from 1 January 00:00 of the start's year to the run's start.
+        """
+        new_year = datetime.datetime(parameters.start_date.year, 1, 1)
+        return int((parameters.start_date - new_year).total_seconds()) // parameters.seconds_per_timestep
+
+    def is_outside_heating_season(self, timestep: int) -> bool:
+        """Return whether a timestep of the run lies between the heating season's end and its next begin.
+
+        The season's days are days of the year, so the run's timestep is counted from 1 January. Example: with
+        the season ending on day 150 and beginning on day 270, timestep 0 of a run from 1 July (day 181) lies
+        outside it, and timestep 0 of a run from 1 January inside it.
+
+        Args:
+            timestep: the run's timestep.
+
+        Returns:
+            bool: True between the season's end and its next begin, where only the drain hot water is heated.
+        """
+        timestep_of_year = self.timesteps_of_year_before_window + timestep
+        return self.heating_season_begin > timestep_of_year > self.heating_season_end
+
     def determine_heating_mode(self, timestep: int, t_building: float, t_dhw: float) -> None:
         """Determines if hot water or building should be heated.
 
         The mode in the state is 0 if water heating is considered and 1 if heating is enforced.
         """
         if (
-            self.heating_season_begin > timestep > self.heating_season_end
+            self.is_outside_heating_season(timestep)
             and t_building >= self.config.t_min_heating_in_celsius - 30
         ):
             # only consider water heating in summer
@@ -547,7 +583,7 @@ class L1CHPController(cp.L1ControllerComponent):
             return
         # control according to set temperatures
         if (
-            self.heating_season_begin > timestep > self.heating_season_end
+            self.is_outside_heating_season(timestep)
             and t_building >= self.config.t_min_heating_in_celsius - 30
         ):
             # only consider water heating in summer

@@ -2045,11 +2045,8 @@ class UtspLpgConnector(cp.DataSourceComponent):
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
         )
         steps_desired_in_minutes = steps_desired * minutes_per_timestep
-        # A window that ends in summer ends an hour later on the wall clock the profile is labelled in.
-        minutes_to_read = lpg_local_time.LpgLocalTime.minutes_to_read(steps_desired_in_minutes)
-        minutes_of_activity = min(
-            [minutes_to_read] + [len(activity["Values"]) for activity in occupancy_profile]
-        )
+        # The whole profile is read: the window is cut from it after it is on the run's clock.
+        minutes_of_activity = min(len(activity["Values"]) for activity in occupancy_profile)
 
         # initialize number of residence and heating by residents
         heating_by_residents = [0.0] * minutes_of_activity
@@ -2070,7 +2067,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
@@ -2082,7 +2078,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
@@ -2092,7 +2087,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-                nrows=minutes_to_read,
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
@@ -2106,7 +2100,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
-                nrows=minutes_to_read,
             )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -2118,7 +2111,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-                nrows=minutes_to_read,
             )
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
@@ -2127,8 +2119,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
-                nrows=minutes_to_read,
+                usecols=["Sum [kWh]"],
             )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -2145,14 +2136,13 @@ class UtspLpgConnector(cp.DataSourceComponent):
         minutes_in_common = min(len(values) for values in minute_columns.values())
         minute_profile = pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
 
-        # Put the profile onto the run's standard-time clock and cut out the window. Every profile starts on
-        # 1 January: a local or UTSP profile is the run's calendar year (lpg_request_days). The window is still
-        # read as if the run started on 1 January too; hisim-9g2.6 reads the run's own start.
-        new_year = datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
+        # Put the profile onto the run's standard-time clock and cut out the run's window. The profile starts
+        # where its activity files say it does: on 1 January, for a shipped year laid onto the run's year as the
+        # weather is, and for a local or UTSP profile because it is the run's calendar year (lpg_request_days).
         initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
             minute_values=minute_profile,
-            first_label=new_year,
-            window_start=new_year,
+            first_label=self.first_label_of_profile(occupancy_profile),
+            window_start=self.my_simulation_parameters.start_date,
             window_minutes=steps_desired_in_minutes,
             source=f"The LoadProfileGenerator profile of {self.component_name} ({data_acquisition_mode.name})",
         )
@@ -2195,6 +2185,29 @@ class UtspLpgConnector(cp.DataSourceComponent):
             heating_by_residents,
             number_of_residents,
         )
+
+    def first_label_of_profile(self, activity_profiles: List[Dict[str, Any]]) -> datetime.datetime:
+        """Return the wall-clock minute a household's profile starts at, from the ``StartTime`` its files state.
+
+        All files of a household come from one calculation and start together; the activity files say where.
+        Example: the shipped CHR01 profile states ``2021-01-01T00:00:00``, which a run of 2021 reads as it is.
+
+        Args:
+            activity_profiles: the household's bodily-activity files, as read from their JSON.
+
+        Returns:
+            datetime.datetime: the first row's wall-clock time, laid onto the run's year.
+
+        Raises:
+            ValueError: if the files state different starts, so the household's profile has no one start.
+        """
+        start_times = {profile["StartTime"] for profile in activity_profiles}
+        if len(start_times) != 1:
+            raise ValueError(
+                f"The bodily-activity files of {self.component_name} state different starts, {sorted(start_times)}; "
+                "the files of one household come from one LoadProfileGenerator calculation and start together."
+            )
+        return lpg_local_time.LpgLocalTime.first_label_in_year(start_times.pop(), self.my_simulation_parameters.year)
 
     def cache_results(
         self,

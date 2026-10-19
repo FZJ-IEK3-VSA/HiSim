@@ -891,6 +891,9 @@ class UsageReport:
     # the one that must not drown in the averages. At most this many failed jobs are named.
     COLD_CACHE_WORKFLOW_PATH = ".github/workflows/weekly-cold-cache.yml"
     COLD_CACHE_FAILURES_LISTED = 10
+    # The daily assembly nightly tier (assemblies-nightly.yml), which no pull request runs, so its
+    # failure would otherwise show only on the Actions page. Reported like the cold run.
+    ASSEMBLIES_NIGHTLY_WORKFLOW_PATH = ".github/workflows/assemblies-nightly.yml"
     # The job conclusions that do not count as a failed job of the cold run: a skipped job did
     # not run (the called workflows' own merge jobs), a cancelled one makes the run cancelled.
     # Every other conclusion -- failure, timed_out, action_required, ... -- is a failed job.
@@ -994,7 +997,8 @@ class UsageReport:
         """Return the full report as markdown."""
         sections = [
             self._render_header(),
-            self._render_cold_cache_run(),
+            self._render_last_scheduled_run(self.COLD_CACHE_WORKFLOW_PATH, "weekly cold-cache"),
+            self._render_last_scheduled_run(self.ASSEMBLIES_NIGHTLY_WORKFLOW_PATH, "nightly assemblies"),
             self._render_duration_regressions(),
             self._render_memory_regressions(),
             self._render_memory_pressure(),
@@ -1020,11 +1024,14 @@ class UsageReport:
             f"({total_seconds / self.SECONDS_PER_MINUTE / days:,.0f} per day)\n"
         )
 
-    def _render_cold_cache_run(self) -> str:
-        """Return the outcome of the most recent weekly cold-cache run in the window.
+    def _render_last_scheduled_run(self, workflow_path: str, title: str) -> str:
+        """Return the outcome of the most recent run of a scheduled workflow in the window.
 
-        Read from the job records of the index, like everything else here: the run is the newest one
-        of :attr:`COLD_CACHE_WORKFLOW_PATH`, and of each of its jobs only the latest attempt counts,
+        Used for the weekly cold-cache run (:attr:`COLD_CACHE_WORKFLOW_PATH`, title
+        ``weekly cold-cache``) and the assembly nightly tier (:attr:`ASSEMBLIES_NIGHTLY_WORKFLOW_PATH`,
+        title ``nightly assemblies``): runs no pull request starts, whose failure must not drown in the
+        averages. Read from the job records of the index, like everything else here: the run is the
+        newest one of ``workflow_path``, and of each of its jobs only the latest attempt counts,
         since a re-run gives the jobs it repeats new ids and the earlier attempt's records stay in
         the index. Skipped jobs did not run and are not counted. The outcome is ``failure`` when any
         job ended in a conclusion outside :attr:`COLD_CACHE_NOT_FAILED` (``timed_out`` too), else
@@ -1035,10 +1042,17 @@ class UsageReport:
             ## Last weekly cold-cache run
 
             Run 123 of 2026-10-19T05:00:00Z: **failure**, 2 of 64 jobs failed: `tests / pytest (utsp)`, ...
+
+        Args:
+            workflow_path: The workflow file whose runs count, as the runs API reports it.
+            title: What the heading and the empty-window line call the run.
+
+        Returns:
+            The section as markdown.
         """
         runs: Dict[Any, Dict[str, Dict[str, Any]]] = {}
         for record in self.index.values():
-            if record.get("workflow_path") != self.COLD_CACHE_WORKFLOW_PATH:
+            if record.get("workflow_path") != workflow_path:
                 continue
             created = Timestamps.parse(record.get("created_at"))
             if created is None or created < self.window_start:
@@ -1048,9 +1062,9 @@ class UsageReport:
             held = jobs.get(name)
             if held is None or self._attempt_order(record) > self._attempt_order(held):
                 jobs[name] = record
-        lines = ["\n## Last weekly cold-cache run\n"]
+        lines = [f"\n## Last {title} run\n"]
         if not runs:
-            lines.append("No run of the weekly cold-cache workflow finished in the window.")
+            lines.append(f"No run of the {title} workflow finished in the window.")
             return "\n".join(lines) + "\n"
         latest = max(runs.values(), key=lambda jobs: str(next(iter(jobs.values())).get("created_at") or ""))
         first = next(iter(latest.values()))

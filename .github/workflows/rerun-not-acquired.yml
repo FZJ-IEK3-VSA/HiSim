@@ -42,6 +42,7 @@ on:
       - golden-check
       - golden-year
       - golden-update
+      - assemblies nightly
       - energy-system-freshness
       - path-verification
       - worked-examples

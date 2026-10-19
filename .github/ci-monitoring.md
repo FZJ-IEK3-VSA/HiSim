@@ -68,6 +68,9 @@ cache), with its failed jobs by name. It is the one run that exercises the code 
 (weather download, local LoadProfileGenerator calculation, PV and building series), so its failure
 gets its own line rather than a dent in a median. The cold run's jobs are recorded under its own
 workflow name, `weekly cold cache`, so their cold durations stay out of the warm jobs' baselines.
+The last run of the **assembly nightly tier** (`assemblies-nightly.yml`, daily at 02:00 UTC) gets
+the same line, since no pull request runs it and its failure would otherwise show only on the
+Actions page.
 
 The last of those is the one that caught the full-year golden gate. `golden-year.yml` used to
 wait for `quality`, `tests` and `golden-check` in an ordinary job that polled the runs API, so

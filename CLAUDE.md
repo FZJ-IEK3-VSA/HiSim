@@ -38,7 +38,8 @@ pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
 Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `assemblies` (every test under
-`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job), `renovisor_probes` (the
+`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job), `nightly` (the assembly
+Latin hypercube tier; run daily at 02:00 UTC by `.github/workflows/assemblies-nightly.yml`, not per PR), `renovisor_probes` (the
 tests that read RenoVisor's capability document or translation map; its own CI job, one process, so the
 document is built once)
 

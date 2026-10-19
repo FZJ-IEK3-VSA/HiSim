@@ -1,4 +1,4 @@
-# Tier 2 of the golden-reference gate: the heavy full-year pairs, and the assembly nightly tier.
+# Tier 2 of the golden-reference gate: the heavy full-year pairs.
 #
 # IN PARALLEL WITH THE REST OF CI. This workflow starts on the same push or pull request as
 # quality, tests and golden-check, on the self-hosted runners (see tests.yml), and reports as
@@ -38,13 +38,7 @@
 # child is killed after three times its recorded seconds (at least ten minutes) and fails that
 # pair by name (scripts/runner.py, ChildRuns.timeout_in_seconds).
 
-# THE ASSEMBLY NIGHTLY TIER (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
-# `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
-# seeded Latin hypercube sample of every assembly's parameter box, beside the full-year pairs.
-# The deterministic samples run in the `assemblies` shard of tests.yml. The libraries are the
-# mock one under tests/assemblies/mock_assemblies/library and the real one,
-# energy_systems/assemblies/. A failed check fails the job, named in pytest's summary; opening
-# a bead for it, as for a golden drift, is the owner's manual step today.
+# The assembly nightly tier ran here until 2026-10-19; it runs daily in assemblies-nightly.yml.
 
 name: golden-year
 
@@ -175,44 +169,6 @@ jobs:
           mode: report
           scope: ${{ matrix.name }}
 
-  assemblies-nightly:
-    name: assemblies nightly tier
-    # Needs `discover` only for its fork guard.
-    needs: discover
-    # On the self-hosted runners; see the runs-on comment in tests.yml.
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
-    container:
-      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v7
-      # Wall time, CPU time and peak memory for this job; see the action.
-      - name: Start the resource monitor
-        uses: ./.github/actions/resource-monitor
-        with:
-          mode: start
-          scope: assemblies-nightly
-      - name: Mark workspace as safe for git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Install HiSim package
-        run: uv pip install --system -e .
-      # Every sample is one xdist_group, so loadgroup keeps the checks of one isolation run on
-      # one worker, which makes the run once.
-      - name: Assembly test contracts, nightly tier
-        run: >-
-          python -m pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py
-          --samples 16 --seed 20261003
-      # Kept on failure too: a job killed for running out of memory is the one
-      # whose measurement matters most.
-      - name: Report the resource usage
-        if: always()
-        uses: ./.github/actions/resource-monitor
-        with:
-          mode: report
-          scope: assemblies-nightly
-
   # One shared inputs-cache entry per run instead of one per job: merges what every golden-year job added
   # into the most recent shared entry and saves it, or nothing when nothing changed; see the action.
   # Not for a fork's pull request, which saves no cache, nor for the weekly cold run, whose caller saves.
@@ -249,14 +205,14 @@ jobs:
 
   summary:
     name: golden-year summary
-    needs: [discover, golden-year, assemblies-nightly]
+    needs: [discover, golden-year]
     # Not for a fork's pull request, where the fork guard skipped everything above.
     if: always() && needs.discover.result != 'skipped'
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
       # needs.golden-year.result is 'success' only when every one of its matrix jobs succeeded.
-      - name: Fail if a full-year run or the nightly tier failed or did not run
+      - name: Fail if a full-year run failed or did not run
         run: |
-          echo "discover=${{ needs.discover.result }}  golden-year=${{ needs.golden-year.result }}  assemblies-nightly=${{ needs.assemblies-nightly.result }}"
-          [ "${{ needs.golden-year.result }}" = "success" ] && [ "${{ needs.assemblies-nightly.result }}" = "success" ]
+          echo "discover=${{ needs.discover.result }}  golden-year=${{ needs.golden-year.result }}"
+          [ "${{ needs.golden-year.result }}" = "success" ]

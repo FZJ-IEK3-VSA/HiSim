@@ -653,6 +653,29 @@ class TestReportRendering:
         timed_out = rerun + [record(73, 1, "golden-year / golden-year python x", "timed_out")]
         assert "**failure**, 1 of 3 jobs failed: `golden-year / golden-year python x`." in rendered(timed_out)
 
+    def test_the_last_assemblies_nightly_run_is_reported_beside_the_cold_run(self) -> None:
+        """Catches a failing assembly nightly tier that the report does not mention.
+
+        The nightly tier runs on a schedule only, so no pull request shows its failure; the report
+        gives its last run a section of its own, read like the cold run's from its own workflow's
+        records only, so a failed nightly job does not make the cold run fail and the other way round.
+        """
+        now = collector.Timestamps.now()
+        nightly = collector.UsageReport.ASSEMBLIES_NIGHTLY_WORKFLOW_PATH
+        index = self._index([
+            {"run_id": 5, "job_id": 50, "workflow": "assemblies nightly", "workflow_path": nightly,
+             "job_name": "assemblies nightly tier", "conclusion": "failure",
+             "created_at": collector.Timestamps.format(now - timedelta(hours=3)), "wall_seconds": 1600.0},
+        ])
+
+        rendered = collector.UsageReport(index, now - timedelta(days=30), now - timedelta(days=3),
+                                         {"requests_made": 1}).render()
+
+        assert "## Last nightly assemblies run" in rendered
+        assert "Run 5 of " in rendered
+        assert "**failure**, 1 of 1 jobs failed: `assemblies nightly tier`." in rendered
+        assert "No run of the weekly cold-cache workflow finished in the window." in rendered
+
     def test_the_index_round_trips_through_json(self, tmp_path: Path) -> None:
         """Catches an index that cannot be written and read back, which breaks every later night."""
         now = collector.Timestamps.now()

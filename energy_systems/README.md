@@ -521,7 +521,7 @@ Without `--assembly-library` the harness runs the mock library and the real one,
 `energy_systems/assemblies/` with its `test_partners.yaml`. `assemblies` is the deterministic tier, run in the PR
 gate's own job `pytest (assemblies)` (every test under `tests/assemblies/` carries that marker or `nightly`, and
 needs the local LoadProfileGenerator); `nightly` is the hypercube, run by
-the `assemblies-nightly` job of `golden-year.yml` (`--samples`, default 16 per branch, and `--seed`,
+the workflow `assemblies-nightly.yml`, daily at 02:00 UTC (`--samples`, default 16 per branch, and `--seed`,
 default 20261003). `--assembly-library DIR` tests another library: its assemblies and the
 `test_partners.yaml` beside them, which names the site entry standing in for each partner class,
 circuit end, carrier provider or consumer, fact provider, observed component and controller

@@ -106,6 +106,7 @@ tests:
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtStartOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureAtEndOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
     - {output: Buffer.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}

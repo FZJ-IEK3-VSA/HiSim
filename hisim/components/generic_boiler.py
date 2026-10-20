@@ -937,7 +937,7 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.EnergyDemandSh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier, peer_output=self.EnergyDemandSh),
+            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier),
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -988,7 +988,7 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.WATT_HOUR,
             output_description="Energy demand",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier, peer_output=self.EnergyDemandDhw),
+            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier),
         )
         self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

@@ -1,7 +1,7 @@
 """Electricity meter module should replace the sumbuilder. """
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -13,6 +13,7 @@ from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClas
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.energy_port import MeteredExchange
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import (
     ComponentCostFacts,
@@ -94,6 +95,12 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
     ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
     ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
+
+    #: The grid import and export this meter counts. The energy balance compares them per step with the import and
+    #: export it derives from the house electricity bus of the meter's building (complete Sankey spec, §4.4).
+    METERED_EXCHANGES: ClassVar[Tuple[MeteredExchange, ...]] = (
+        MeteredExchange(lt.EnergyBalanceCarrier.ELECTRICITY, ElectricityFromGridInWatt, ElectricityToGridInWatt),
+    )
 
     #: Stable key of the channel carrying electricity a participant produces.
     PRODUCTION_CHANNEL = "production"

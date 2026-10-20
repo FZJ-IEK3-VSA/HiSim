@@ -303,9 +303,7 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for space heating",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputShPower
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -356,9 +354,7 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for domestic hot water",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputDhwPower
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

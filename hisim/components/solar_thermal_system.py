@@ -762,11 +762,7 @@ class SolarThermalSystem(PhysicsComponent):
             unit=loadtypes.Units.WATT,
             output_description="Electricity consumption of the solar pump.",
             postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-            energy_port=EnergyPort(
-                loadtypes.EnergyRole.IN,
-                loadtypes.EnergyBalanceCarrier.ELECTRICITY,
-                peer_output=self.ElectricityConsumptionOutput,
-            ),
+            energy_port=EnergyPort(loadtypes.EnergyRole.IN, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.solar_power_on_collector_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

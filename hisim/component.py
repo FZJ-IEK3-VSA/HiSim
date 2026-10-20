@@ -23,7 +23,7 @@ from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, MeteredExchange
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
@@ -266,6 +266,20 @@ class Component:
     # lifecycle-cost run it appears in — at simulation start via
     # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
+
+    #: Why this component declares no energy port although it is neither a controller nor a meter, or None.
+    #: Controllers and meters are exempt from the energy balance by their kind: a controller decides and a meter
+    #: counts, neither moves energy (owner decision D1 of the complete Sankey spec). Any other component that moves
+    #: no energy states the reason on its own class, for example a helper that sums two inputs; the balance then
+    #: lists it as exempt instead of undeclared and never draws it as the peer of a port
+    #: (:class:`hisim.postprocessing.energy_balance.ports.Exemptions`).
+    ENERGY_PORTS_EXEMPT_BECAUSE: ClassVar[Optional[str]] = None
+
+    #: What this component counts at the system boundary, for the cross-check of the energy balance; empty for a
+    #: component that counts nothing. A meter declares it, for example the electricity meter its grid import and
+    #: export, which the balance compares per step with the import and export it derives from the house
+    #: electricity bus (:class:`hisim.energy_port.MeteredExchange`).
+    METERED_EXCHANGES: ClassVar[Tuple[MeteredExchange, ...]] = ()
 
     @classmethod
     def get_classname(cls):

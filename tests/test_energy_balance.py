@@ -1,8 +1,10 @@
-"""The energy-balance check and the Sankey data, on synthetic components (hisim-energy-sankeys-9uoo.1, .2, .9).
+"""The energy-balance check and the Sankey graph, on synthetic components (hisim-9uoo.1, .2, .9, .18).
 
 Each test builds a result table by hand: a few outputs that declare energy ports, the columns they fill, and
 stand-ins for the wrapped components carrying their wiring. The numbers are chosen so the expected residual,
-throughput and verdict can be read off the test.
+throughput and verdict can be read off the test. The graph tests follow ``roadmap/complete_energy_sankeys_spec.md``
+§4: exempt components (controllers, meters) are never peers, every carrier has a default peer, and the house
+electricity bus derives the grid import and export per step, which the meter cross-checks.
 """
 
 from pathlib import Path
@@ -18,7 +20,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.config import ComponentID
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import DefaultPeer, EnergyPort, MeteredExchange
 from hisim.postprocessing.energy_balance import (
     EnergyBalanceError,
     EnergyBalanceReport,
@@ -31,6 +33,8 @@ from hisim.postprocessingoptions import PostProcessingOptions
 IN, OUT, LOSS, STORED = lt.EnergyRole.IN, lt.EnergyRole.OUT, lt.EnergyRole.LOSS, lt.EnergyRole.STORED_CHANGE
 SH = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
 ELECTRICITY = lt.EnergyBalanceCarrier.ELECTRICITY
+GAS = lt.EnergyBalanceCarrier.NATURAL_GAS
+SOLAR = lt.EnergyBalanceCarrier.SOLAR
 
 #: (component, field, unit, port or None, values per step)
 Column = Tuple[str, str, lt.Units, Optional[EnergyPort], Sequence[float]]
@@ -48,13 +52,51 @@ def wired_input(field: str, source: str, source_field: str) -> SimpleNamespace:
     return SimpleNamespace(field_name=field, src_object_name=source, src_field_name=source_field)
 
 
+class Meter(cp.MeterComponent):
+    """A stand-in electricity meter: exempt by its kind, it counts the grid import and export in W."""
+
+    METERED_EXCHANGES = (MeteredExchange(ELECTRICITY, "FromGridInWatt", "ToGridInWatt"),)
+
+
+class GasMeter(cp.MeterComponent):
+    """A stand-in gas meter: exempt by its kind; its cross-check is the acceptance PR's (spec §4.4, §9)."""
+
+
+class Manager(cp.L2ControllerComponent):
+    """A stand-in energy manager: exempt by its kind."""
+
+
+class Controller(cp.L1ControllerComponent):
+    """A stand-in L1 controller: exempt by its kind."""
+
+
+class Helper(cp.PhysicsComponent):
+    """A stand-in physics helper that states why it declares no port."""
+
+    ENERGY_PORTS_EXEMPT_BECAUSE = "it sums two inputs, which moves no energy"
+
+
+def stand_in(
+    name: str, component_class: Optional[type], component_inputs: List[SimpleNamespace], outputs: List[Any]
+) -> Any:
+    """A component stand-in carrying its name, wiring and outputs; of ``component_class`` when one is given."""
+    if component_class is None:
+        return SimpleNamespace(component_name=name, inputs=component_inputs, outputs=outputs)
+    component: Any = object.__new__(component_class)
+    component.component_name = name
+    component.inputs = component_inputs
+    component.outputs = outputs
+    return component
+
+
 def report(
     columns: Sequence[Column],
     seconds_per_timestep: int = 900,
     inputs: Optional[Dict[str, List[SimpleNamespace]]] = None,
     extra_components: Sequence[str] = (),
+    classes: Optional[Dict[str, type]] = None,
 ) -> EnergyBalanceReport:
-    """The balance report of a run whose result table has ``columns``."""
+    """The balance report of a run whose result table has ``columns``; ``classes`` gives stand-ins a kind."""
     outputs = [output(component, field, unit, port) for component, field, unit, port, _ in columns]
     steps = len(columns[0][4])
     table = pd.DataFrame(
@@ -68,10 +110,11 @@ def report(
     names.extend(extra_components)
     wrapped: List[Any] = [
         SimpleNamespace(
-            my_component=SimpleNamespace(
-                component_name=name,
-                inputs=(inputs or {}).get(name, []),
-                outputs=[o for o in outputs if o.component_name == name],
+            my_component=stand_in(
+                name,
+                (classes or {}).get(name),
+                (inputs or {}).get(name, []),
+                [o for o in outputs if o.component_name == name],
             )
         )
         for name in names
@@ -101,14 +144,43 @@ def test_an_energy_port_on_an_output_that_is_neither_power_nor_energy_is_refused
 
 @pytest.mark.base
 def test_an_energy_port_names_either_an_environment_node_or_a_component() -> None:
-    """``environment`` with ``peer_input`` is refused; a loss defaults to outdoors, ambient heat to its node."""
+    """``environment`` with ``peer_input`` is refused; a port naming its environment goes there whatever its carrier."""
     with pytest.raises(ValueError, match="either an environment node"):
         EnergyPort(LOSS, SH, peer_input="X", environment=lt.EnvironmentNode.OUTDOORS)
-    assert EnergyPort(LOSS, SH).default_environment() == lt.EnvironmentNode.OUTDOORS
-    assert EnergyPort(IN, lt.EnergyBalanceCarrier.AMBIENT_HEAT).default_environment() == (
-        lt.EnvironmentNode.AMBIENT_HEAT
+    named = EnergyPort(
+        OUT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, environment=lt.EnvironmentNode.HOT_WATER_USE
     )
-    assert EnergyPort(IN, SH, peer_input="X").default_environment() is None
+    assert named.default_boundary() == "hot water drawn at the taps" and not named.names_a_component
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("port", "default", "boundary"),
+    [
+        (EnergyPort(IN, ELECTRICITY), DefaultPeer.BUS, None),
+        (EnergyPort(OUT, ELECTRICITY), DefaultPeer.BUS, None),
+        (EnergyPort(LOSS, ELECTRICITY), DefaultPeer.BOUNDARY, "outdoors"),
+        (EnergyPort(IN, GAS), DefaultPeer.BOUNDARY, "natural gas supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.HEATING_OIL), DefaultPeer.BOUNDARY, "heating oil supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.WOOD_CHIPS), DefaultPeer.BOUNDARY, "wood chips supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.DISTRICT_HEAT), DefaultPeer.BOUNDARY, "district heat supply"),
+        (EnergyPort(OUT, GAS), DefaultPeer.NONE, None),
+        (EnergyPort(LOSS, GAS), DefaultPeer.BOUNDARY, "outdoors"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.AMBIENT_HEAT), DefaultPeer.BOUNDARY, "ambient heat"),
+        (EnergyPort(OUT, lt.EnergyBalanceCarrier.AMBIENT_HEAT), DefaultPeer.BOUNDARY, "ambient heat"),
+        (EnergyPort(IN, SOLAR), DefaultPeer.BOUNDARY, "sun"),
+        (EnergyPort(OUT, SOLAR), DefaultPeer.NONE, None),
+        (EnergyPort(IN, SH), DefaultPeer.NONE, None),
+        (EnergyPort(OUT, lt.EnergyBalanceCarrier.ROOM_HEAT), DefaultPeer.NONE, None),
+        (EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT), DefaultPeer.BOUNDARY, "outdoors"),
+    ],
+)
+def test_every_carrier_has_the_default_peer_of_the_spec(
+    port: EnergyPort, default: DefaultPeer, boundary: Optional[str]
+) -> None:
+    """Spec §4.3: electricity to the bus, bought carriers from their supply, losses outdoors, heat nowhere."""
+    assert port.default_peer() == default
+    assert port.default_boundary() == boundary
 
 
 @pytest.mark.base
@@ -417,8 +489,9 @@ def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() ->
 
     assert heat == {
         ("undeclared: Boiler", "Tank"): pytest.approx(1.0),
-        ("Tank", "outdoors"): pytest.approx(0.05),
-        ("Tank", "Tank (store)"): pytest.approx(0.25),
+        ("Tank", "Tank · Loss"): pytest.approx(0.05),
+        ("Tank · Loss", "outdoors"): pytest.approx(0.05),
+        ("Tank", "Tank · stored"): pytest.approx(0.25),
         ("Tank", "Loop"): pytest.approx(0.6996),
         ("Loop", "undeclared: Building"): pytest.approx(0.6496),
         ("Tank", "unaccounted"): pytest.approx(0.0004),
@@ -426,10 +499,13 @@ def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() ->
     }
     kinds = {node["name"]: node["kind"] for node in diagrams["overall"]["nodes"]}
     assert kinds["undeclared: Boiler"] == "undeclared" and kinds["unaccounted"] == "unaccounted"
-    assert kinds["outdoors"] == "environment" and kinds["Tank (store)"] == "store"
+    assert kinds["outdoors"] == "boundary" and kinds["Tank · stored"] == "storage" and kinds["Tank · Loss"] == "loss"
+    assert kinds["house electricity"] == "bus" and kinds["grid import"] == "boundary"
 
     overall = flows(diagrams["overall"])
-    for node in ("Tank", "Loop", "Pump"):
+    assert overall[("grid import", "house electricity")] == pytest.approx(0.025)
+    assert overall[("house electricity", "Pump")] == pytest.approx(0.025)
+    for node in ("Tank", "Loop", "Pump", "house electricity", "Tank · Loss"):
         inflow = sum(value for (_, target), value in overall.items() if target == node)
         outflow = sum(value for (source, _), value in overall.items() if source == node)
         assert inflow == pytest.approx(outflow), node
@@ -437,11 +513,11 @@ def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() ->
 
 @pytest.mark.base
 def test_the_sankey_files_are_written_into_the_result_directory(tmp_path: Path) -> None:
-    """The JSON and one HTML per carrier plus overall, sharing one plotly.min.js."""
+    """The JSON and one HTML per view, the connected graph first, sharing one plotly.min.js."""
     chain().write(str(tmp_path))
 
     written = json.loads((tmp_path / "energy_sankeys" / "energy_sankey.json").read_text())
-    assert set(written) == {"space_heating_heat", "electricity", "overall"}
+    assert list(written) == ["overall", "electricity", "space_heating_heat"]
     for name in written:
         assert (tmp_path / "energy_sankeys" / f"{name}.html").stat().st_size > 0
     assert (tmp_path / "energy_sankeys" / "plotly.min.js").exists()
@@ -613,3 +689,234 @@ def test_a_sankey_node_label_carries_the_energy_through_the_node() -> None:
         "store<br>15,252 kWh",
         "ambient heat<br>11,631 kWh",
     ]
+
+
+# --- the graph model of the complete Sankey (roadmap/complete_energy_sankeys_spec.md §4) ------------------------
+
+
+def house(
+    metered_import_watt: Sequence[float] = (2400.0, 0.0, 0.0),
+    metered_export_watt: Sequence[float] = (0.0, 1200.0, 1200.0),
+    extra_components: Sequence[str] = (),
+) -> EnergyBalanceReport:
+    """A heat pump and a PV system on the house bus, an energy manager and a meter reading both; three 900 s steps.
+
+    The heat pump takes 1.0, 0.2 and 0.0 kWh of electricity and 3, 0.6 and 0 kWh of ambient heat and gives their sum
+    as space heat to the building (undeclared, or exempt when ``extra_components`` lists nothing); the PV system turns
+    0.4, 0.5 and 0.3 kWh of sun into 0.4, 0.5 and 0.3 kWh. The bus nets them: 0.6 kWh imported in the first step,
+    0.3 kWh exported in each of the others. The meter's defaults, in W, count exactly that.
+    """
+    columns: List[Column] = [
+        ("HeatPump", "ElectricityIn", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [1.0, 0.2, 0.0]),
+        ("HeatPump", "AmbientIn", lt.Units.KWH, EnergyPort(IN, lt.EnergyBalanceCarrier.AMBIENT_HEAT), [3.0, 0.6, 0.0]),
+        (
+            "HeatPump",
+            "HeatOut",
+            lt.Units.KWH,
+            EnergyPort(OUT, SH, environment=lt.EnvironmentNode.OUTDOORS),
+            [4.0, 0.8, 0.0],
+        ),
+        ("PV", "SunIn", lt.Units.KWH, EnergyPort(IN, SOLAR), [0.4, 0.5, 0.3]),
+        ("PV", "ElectricityOut", lt.Units.KWH, EnergyPort(OUT, ELECTRICITY), [0.4, 0.5, 0.3]),
+        ("EMS", "Signal", lt.Units.ANY, None, [0.0, 0.0, 0.0]),
+        ("Meter", "FromGridInWatt", lt.Units.WATT, None, list(metered_import_watt)),
+        ("Meter", "ToGridInWatt", lt.Units.WATT, None, list(metered_export_watt)),
+    ]
+    inputs = {
+        "EMS": [
+            wired_input("HeatPumpElectricity", "HeatPump", "ElectricityIn"),
+            wired_input("PV", "PV", "ElectricityOut"),
+        ],
+        "Meter": [
+            wired_input("Consumption", "HeatPump", "ElectricityIn"),
+            wired_input("Production", "PV", "ElectricityOut"),
+        ],
+    }
+    return report(
+        columns, inputs=inputs, extra_components=extra_components, classes={"EMS": Manager, "Meter": Meter}
+    )
+
+
+@pytest.mark.base
+def test_the_bus_derives_grid_import_and_export_per_step_and_closes_by_construction(tmp_path: Path) -> None:
+    """1.0 - 0.4 kWh imported in step 0, 0.5 - 0.2 and 0.3 - 0 kWh exported after: not the 0.6 kWh net of the run."""
+    balance_report = house()
+    buses = balance_report.bus_check.buses
+    assert [bus.name for bus in buses] == ["house electricity"]
+    bus = buses[0]
+    assert bus.grid_import_per_step == pytest.approx([0.6, 0.0, 0.0])
+    assert bus.grid_export_per_step == pytest.approx([0.0, 0.3, 0.3])
+    overall = flows(balance_report.sankeys()["overall"])
+    assert overall[("grid import", "house electricity")] == pytest.approx(0.6)
+    assert overall[("house electricity", "grid export")] == pytest.approx(0.6)
+    assert overall[("house electricity", "HeatPump")] == pytest.approx(1.2)
+    assert overall[("PV", "house electricity")] == pytest.approx(1.2)
+    assert overall[("sun", "PV")] == pytest.approx(1.2)
+    inflow = sum(value for (_, target), value in overall.items() if target == "house electricity")
+    outflow = sum(value for (source, _), value in overall.items() if source == "house electricity")
+    assert inflow == pytest.approx(outflow) == pytest.approx(1.8)
+
+    written = json.loads(balance_report.write(str(tmp_path), with_html=False).read_text())
+    assert written["schema"] == "hisim.energy_balance/2"
+    (entry,) = written["buses"]
+    assert entry["grid_import_kwh"] == pytest.approx(0.6) and entry["grid_export_kwh"] == pytest.approx(0.6)
+    assert {(member["component"], member["role"]) for member in entry["members"]} == {("HeatPump", "in"), ("PV", "out")}
+    (cross_check,) = entry["meter_cross_checks"]
+    assert cross_check["agrees"] and cross_check["enforced"] and cross_check["failing_steps"] == 0
+
+
+@pytest.mark.base
+def test_the_controllers_and_meters_are_exempt_never_peers_and_never_undeclared(tmp_path: Path) -> None:
+    """The energy manager and the meter read the electricity ports, but the ports go to the bus; both are exempt."""
+    balance_report = house()
+    peers = {series.name: series.peer.name for series in balance_report.declared.all_series()}
+    assert peers["HeatPump.ElectricityIn"] == peers["PV.ElectricityOut"] == "house electricity"
+    assert peers["HeatPump.AmbientIn"] == "ambient heat" and peers["PV.SunIn"] == "sun"
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
+    assert report_path is not None
+    written = json.loads(report_path.read_text())
+    assert written["verdict"] == "closes" and written["undeclared"] == []
+    assert written["exempt"] == [
+        {"component": "EMS", "class": "Manager", "reason": "an L2 controller coordinates devices, it moves no energy"},
+        {"component": "Meter", "class": "Meter", "reason": "a meter counts, it moves no energy"},
+    ]
+    nodes = {node["name"] for node in json.loads((tmp_path / "energy_sankeys" / "energy_sankey.json").read_text())[
+        "overall"]["nodes"]}
+    assert not {"EMS", "Meter", "undeclared: EMS", "undeclared: Meter"} & nodes
+
+
+@pytest.mark.base
+def test_a_meter_that_disagrees_with_the_bus_fails_the_run_naming_both() -> None:
+    """The meter counts 1 kWh imported in step 0 where the bus derives 0.6 kWh: the run fails."""
+    balance_report = house(metered_import_watt=(4000.0, 0.0, 0.0))
+    (cross_check,) = balance_report.bus_check.cross_checks
+    assert not cross_check.agrees and cross_check.enforced and cross_check.worst_step == 0
+    with pytest.raises(EnergyBalanceError) as raised:
+        balance_report.conclude(None)
+    assert (
+        "meter Meter counts 1 kWh imported and 0.6 kWh exported, the bus house electricity derives 0.6 kWh and "
+        "0.6 kWh; 1 steps beyond tolerance, worst step 0 (2021-01-01T00:00:00)"
+    ) in str(raised.value)
+
+
+@pytest.mark.base
+def test_a_meter_that_disagrees_with_the_bus_is_reported_while_a_component_is_undeclared(tmp_path: Path) -> None:
+    """With the occupancy undeclared, the bus may miss its electricity: the disagreement is reported, the run passes."""
+    balance_report = house(metered_import_watt=(4000.0, 0.0, 0.0), extra_components=["Occupancy"])
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
+    assert report_path is not None
+    (cross_check,) = json.loads(report_path.read_text())["buses"][0]["meter_cross_checks"]
+    assert not cross_check["agrees"] and not cross_check["enforced"]
+    assert cross_check["not_enforced_because"] == "1 components are undeclared, so the bus may miss their electricity"
+    assert cross_check["worst_step"] == {"index": 0, "time": "2021-01-01T00:00:00"}
+
+
+@pytest.mark.base
+def test_a_fuel_port_read_only_by_its_meter_comes_from_the_carriers_supply() -> None:
+    """A boiler's gas port names the output its gas meter reads; the meter is skipped, the gas comes from its supply."""
+    columns: List[Column] = [
+        ("Boiler", "GasIn", lt.Units.KWH, EnergyPort(IN, GAS, peer_output="GasIn"), [1.0]),
+        ("Boiler", "FlueLoss", lt.Units.KWH, EnergyPort(LOSS, GAS), [0.1]),
+        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(OUT, SH, peer_output="Flow"), [0.9]),
+        ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, [0.1]),
+    ]
+    inputs = {
+        "GasMeter": [wired_input("Gas", "Boiler", "GasIn")],
+        "BoilerController": [wired_input("Flow", "Boiler", "Flow")],
+    }
+    balance_report = report(
+        columns,
+        inputs=inputs,
+        extra_components=["GasMeter", "BoilerController"],
+        classes={"GasMeter": GasMeter, "BoilerController": Controller},
+    )
+    overall = flows(balance_report.sankeys()["overall"])
+    assert overall == {
+        ("natural gas supply", "Boiler"): pytest.approx(1.0),
+        ("Boiler", "Boiler · FlueLoss"): pytest.approx(0.1),
+        ("Boiler · FlueLoss", "outdoors"): pytest.approx(0.1),
+        ("Boiler", "unlinked"): pytest.approx(0.9),
+    }
+    assert not balance_report.bus_check.buses
+
+
+@pytest.mark.base
+def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_path: Path) -> None:
+    """Only the controller reads the boiler's flow: the heat has no peer; the report lists the port as unlinked."""
+    columns: List[Column] = [
+        ("Boiler", "GasIn", lt.Units.KWH, EnergyPort(IN, GAS), [1.0]),
+        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(OUT, SH, peer_output="Flow"), [1.0]),
+        ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, [0.1]),
+    ]
+    balance_report = report(
+        columns,
+        inputs={"Sum": [wired_input("Flow", "Boiler", "Flow")]},
+        extra_components=["Sum"],
+        classes={"Sum": Helper},
+    )
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
+    assert report_path is not None
+    written = json.loads(report_path.read_text())
+    assert written["unlinked"] == [
+        {"component": "Boiler", "output": "HeatOut", "role": "out", "carrier": "space_heating_heat", "total_kwh": 1.0}
+    ]
+    assert written["exempt"] == [
+        {"component": "Sum", "class": "Helper", "reason": "it sums two inputs, which moves no energy"}
+    ]
+    kinds = {node["name"]: node["kind"] for node in balance_report.sankeys()["overall"]["nodes"]}
+    assert kinds["unlinked"] == "unlinked" and kinds["natural gas supply"] == "boundary"
+
+
+@pytest.mark.base
+def test_an_exempt_component_that_declares_a_port_is_refused() -> None:
+    """A controller moves no energy: one that declares an energy port contradicts its kind."""
+    with pytest.raises(ValueError, match="EMS declares the energy port Power, but it is exempt"):
+        report([("EMS", "Power", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [1.0])], classes={"EMS": Manager})
+
+
+@pytest.mark.base
+def test_each_carrier_is_a_filter_of_the_one_connected_graph() -> None:
+    """``overall`` holds every edge; the electricity view only the bus, grid and electricity edges."""
+    diagrams = house().sankeys()
+    overall = flows(diagrams["overall"])
+    electricity = flows(diagrams["electricity"])
+    assert set(electricity) == {
+        ("grid import", "house electricity"),
+        ("house electricity", "grid export"),
+        ("house electricity", "HeatPump"),
+        ("PV", "house electricity"),
+    }
+    assert set(electricity) < set(overall)
+    assert set(diagrams) == {"overall", "electricity", "ambient_heat", "solar", "space_heating_heat"}
+    assert {link["kind"] for link in diagrams["electricity"]["links"]} == {"grid", "bus"}
+
+
+@pytest.mark.base
+def test_links_are_coloured_by_carrier_and_every_carrier_has_a_colour() -> None:
+    """Okabe-Ito blue for electricity, grey for a converter's residual, which has no carrier."""
+    assert SankeyDiagram.link_colour("electricity") == "rgba(0,114,178,0.45)"
+    assert SankeyDiagram.link_colour(None) == "rgba(153,153,153,0.45)"
+    assert set(SankeyDiagram.CARRIER_COLOURS) == set(lt.EnergyBalanceCarrier)
+
+
+@pytest.mark.base
+def test_the_buses_are_one_per_building() -> None:
+    """Two heat pumps of two buildings take from two buses, each with its own grid import."""
+    outputs = [
+        cp.ComponentOutput(
+            f"{building}_HeatPump",
+            "ElectricityIn",
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.KWH,
+            energy_port=EnergyPort(IN, ELECTRICITY),
+            component_id=ComponentID("HeatPump", building=building),
+        )
+        for building in ("BUI1", "BUI2")
+    ]
+    table = pd.DataFrame([[1.0, 2.0]], index=pd.date_range("2021-01-01", periods=1, freq="900s"))
+    wrapped: List[Any] = [
+        SimpleNamespace(my_component=stand_in(output.component_name, None, [], [output])) for output in outputs
+    ]
+    balance_report = EnergyBalanceReport(table, outputs, wrapped, 900)
+    buses = {bus.name: float(bus.grid_import_per_step.sum()) for bus in balance_report.bus_check.buses}
+    assert buses == {"house electricity · BUI1": pytest.approx(1.0), "house electricity · BUI2": pytest.approx(2.0)}

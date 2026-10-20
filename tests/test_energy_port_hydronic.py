@@ -1,7 +1,7 @@
 """The :class:`HydronicPort` of ``hisim/energy_port.py``: its validation and the heat it derives.
 
-No component declares a hydronic port yet; these tests pin that a port refuses names and roles that cannot
-describe a circuit, and that its heat is the hydronics library's and refuses what the library refuses.
+No component declares a hydronic port yet; these tests pin that a port refuses names, roles and carriers that
+cannot describe a circuit, and that its heat is the hydronics library's and refuses what the library refuses.
 """
 
 import pytest
@@ -19,6 +19,8 @@ class Circuit:
 
     #: Mass flow, supply temperature and return temperature output names, in the order the port takes them.
     NAMES = ("MassFlowSh", "SupplyTemperatureSh", "ReturnTemperatureSh")
+    #: The heat the circuit carries.
+    CARRIER = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
 
 
 def test_the_heat_is_the_library_s_circuit_heat() -> None:
@@ -65,18 +67,36 @@ def test_the_heat_refuses_what_the_library_refuses(
 def test_names_must_be_distinct_identifiers(names: tuple) -> None:
     """A port whose names are not three distinct identifiers would pair the wrong outputs; it must be refused."""
     with pytest.raises(HydronicPortError):
-        HydronicPort(*names, role=lt.EnergyRole.OUT)
+        HydronicPort(*names, role=lt.EnergyRole.OUT, carrier=Circuit.CARRIER)
 
 
 def test_names_obey_the_one_identifier_rule() -> None:
     """A Python identifier outside HiSim's ASCII rule would be accepted here but refused by ``add_output``."""
     assert "Vorlauftemperaturé".isidentifier()
     with pytest.raises(HydronicPortError, match="supply_temperature"):
-        HydronicPort("MassFlowSh", "Vorlauftemperaturé", "ReturnTemperatureSh", role=lt.EnergyRole.OUT)
+        HydronicPort(
+            "MassFlowSh", "Vorlauftemperaturé", "ReturnTemperatureSh", role=lt.EnergyRole.OUT, carrier=Circuit.CARRIER
+        )
 
 
 @pytest.mark.parametrize("role", [lt.EnergyRole.LOSS, "in"])
 def test_role_is_in_or_out(role: object) -> None:
     """A circuit end is the supply owner (OUT) or the receiver (IN); any other role would unbalance the circuit."""
     with pytest.raises(HydronicPortError):
-        HydronicPort(*Circuit.NAMES, role=role)  # type: ignore[arg-type]  # the refusal of a wrong type is tested
+        # the refusal of a wrong type is tested
+        HydronicPort(*Circuit.NAMES, role=role, carrier=Circuit.CARRIER)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "carrier", [lt.EnergyBalanceCarrier.ELECTRICITY, lt.EnergyBalanceCarrier.ROOM_HEAT, "space_heating_heat"]
+)
+def test_carrier_is_space_heating_or_hot_water_heat(carrier: object) -> None:
+    """The Sankey must know which heat a circuit carries (spec §4.2); a circuit carries no other carrier."""
+    with pytest.raises(HydronicPortError, match="space-heating or hot-water heat"):
+        HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.OUT, carrier=carrier)  # type: ignore[arg-type]
+
+
+def test_a_circuit_names_its_heat() -> None:
+    """Both circuit carriers are accepted and kept."""
+    for carrier in HydronicPort.CIRCUIT_CARRIERS:
+        assert HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.IN, carrier=carrier).carrier is carrier

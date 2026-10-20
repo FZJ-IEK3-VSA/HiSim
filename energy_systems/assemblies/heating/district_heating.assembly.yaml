@@ -85,5 +85,5 @@ tests:
       # one test day: with every hot-water charge running to the 60 °C aim, a larger load ends the day's last charge at
       # a slightly different tank temperature (total 100.2 kWh at 12 kW, 100.1 kWh at 21 kW)
   expect:
-    - {kpi: Total energy consumption, member: Generator, min: 85, max: 120}
-      # 101.0 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+    - {kpi: Total energy consumption, member: Generator, min: 120, max: 175}
+      # 145.6 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

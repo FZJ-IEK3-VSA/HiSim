@@ -251,8 +251,9 @@ class Whitelist:
     #: The list itself, beside this module.
     PATH: ClassVar[Path] = Path(__file__).resolve().parent / "not_implemented_yet.yaml"
 
-    #: What a ``tracked`` value must look like: a bead id of this repository, e.g. ``hisim-4g9.6``.
-    BEAD_ID: ClassVar["re.Pattern[str]"] = re.compile(r"^hisim-[0-9a-z]+(\.[0-9]+)*$")
+    #: What a ``tracked`` value must look like: a bead id of this repository, e.g. ``hisim-4g9.6``: the prefix,
+    #: an optional readable slug, the hash and any child suffixes (AGENTS.md, "Creating a bead").
+    BEAD_ID: ClassVar["re.Pattern[str]"] = re.compile(r"^hisim-[0-9a-z]+(-[0-9a-z]+)*(\.[0-9]+)*$")
 
     def __init__(self, entries: Sequence[WhitelistEntry]) -> None:
         """Store the entries in file order and start an empty record of which ones were used."""

@@ -35,9 +35,9 @@ tests:
   # 24 h = 720 kWh, both with a 25 % margin.
   bounds:
     - {output: FuelMeter.HeatConsumption, unit: WATT_HOUR, min: 0, max: 9375}
-      # the heat taken from the network in the step (measured at most 1.9 kWh)
+      # the heat taken from the network in the step (measured at most 1.3 kWh)
     - {output: FuelMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 900000}
   monotone: []                                              # no numeric parameter: nothing to sweep
   expect:
-    - {kpi: Total energy consumption, member: FuelMeter, min: 120, max: 175}
-      # 145.6 kWh measured: the connection partner's day (1 January, Aachen), the heating assembly's own figure
+    - {kpi: Total energy consumption, member: FuelMeter, min: 66, max: 96}
+      # 80.1 kWh measured: the connection partner's day (1 January, Aachen), the heating assembly's own figure

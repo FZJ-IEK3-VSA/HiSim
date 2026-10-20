@@ -63,7 +63,7 @@ interface:
                       # the heater owns pump and supply leg, the cylinder the return leg
 
 tests:
-  # One day at 900 s beside the site partners (an unheated building, the cylinder, an energy manager, the grid). The
+  # One day at 900 s beside the site partners (the building it heats, the cylinder, an energy manager, the grid). The
   # heater turns every watt drawn into a watt of heat, at most the largest power of the box (20 kW): powers <= 25 kW,
   # per-step energies <= 25 kW x 0.25 h, both with a 25 % margin. The water the heater sends to the cylinder stays
   # liquid. The controller's one temperature output is the lift the cylinder asks for.
@@ -78,14 +78,14 @@ tests:
     - {output: Heater.ElectricOutputDhwPower, unit: WATT, min: 0, max: 25000}
     - {output: Heater.ElectricOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 6250}
     - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
-      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
+      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 35 K)
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (75 °C by default)
   monotone:
     - {parameter: power_in_watt, kpi: Energy consumption for space heating, member: Heater, direction: increasing}
       # a larger appliance covers at least as much of the space-heating demand. The total is not monotone on the one
       # test day: with every hot-water charge running to the 60 °C aim, a stronger heater ends the day's last charge at
-      # a slightly different tank temperature (total 99.1 kWh at 14 kW, 98.9 kWh at 20 kW, measured in the kind order)
+      # a slightly different tank temperature (total 84.0 kWh at 8 kW, 83.8 kWh at 14 kW, measured in the kind order)
   expect:
-    - {kpi: Total energy consumption, member: Heater, min: 155, max: 215}
-      # 181.8 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+    - {kpi: Total energy consumption, member: Heater, min: 69, max: 95}
+      # 80.9 kWh measured at the defaults on the test day (1 January, Aachen), 8.9 kWh of it for DHW

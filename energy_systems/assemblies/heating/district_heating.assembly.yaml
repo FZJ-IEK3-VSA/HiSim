@@ -62,11 +62,11 @@ interface:
                       # the connection owns pump and supply leg, the cylinder the return leg
 
 tests:
-  # One day at 900 s beside the site partners (an unheated building, its heat distribution without a storage, the
+  # One day at 900 s beside the site partners (the building it heats, its heat distribution without a storage, the
   # cylinder, the district-heat meter). The connection delivers at most its connected load, the largest of the box
   # 30 kW: powers <= 37.5 kW, per-step energies <= 37.5 kW x 0.25 h, both with a 25 % margin. Water stays liquid.
   bounds:
-    - {output: Generator.WaterOutputShTemperature, unit: CELSIUS, min: 0, max: 100}            # measured 16 to 32 °C
+    - {output: Generator.WaterOutputShTemperature, unit: CELSIUS, min: 0, max: 100}            # measured 17 to 32 °C
     - {output: Generator.ThermalOutputShPower, unit: WATT, min: 0, max: 37500}
     - {output: Generator.ThermalOutputShEnergy, unit: WATT_HOUR, min: 0, max: 9375}
     - {output: Generator.WaterOutputDhwTemperature, unit: CELSIUS, min: 0, max: 100}           # measured 45 to 75 °C
@@ -74,16 +74,17 @@ tests:
     - {output: Generator.ThermalOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 9375}
     - {output: Generator.DistrictHeatDrawn, unit: WATT_HOUR, min: 0, max: 9375}                # SH plus DHW of the step
     - {output: Controller.DeltaTemperatureNeededForSH, unit: CELSIUS, min: 0, max: 80}
-      # the lift the distribution asks for, at most its flow temperature over a cold return (measured 0 to 18 K)
+      # the lift the distribution asks for, at most its flow temperature over a cold return (measured 0 to 17 K)
     - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
-      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 37 K)
+      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 33 K)
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 0, max: 110}
       # the cylinder's start temperature plus that lift: 75 °C below the aim, 15 K above a cylinder over it, 0 idle
   monotone:
     - {parameter: power_in_watt, kpi: Energy consumption for space heating, member: Generator, direction: increasing}
-      # a larger connected load covers at least as much of the space-heating demand. The total is not monotone on the
-      # one test day: with every hot-water charge running to the 60 °C aim, a larger load ends the day's last charge at
-      # a slightly different tank temperature (total 100.2 kWh at 12 kW, 100.1 kWh at 21 kW)
+      # a larger connected load covers at least as much of the space-heating demand (measured 49.5 kWh at 3 kW, 71.8
+      # kWh from 12 kW up). The total adds the hot-water charges, which run to the 60 °C aim whatever the load, so a
+      # larger load may end the day's last charge at a slightly different tank temperature (total 83.9 kWh at 12 kW,
+      # 84.0 kWh at 21 kW)
   expect:
-    - {kpi: Total energy consumption, member: Generator, min: 120, max: 175}
-      # 145.6 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+    - {kpi: Total energy consumption, member: Generator, min: 66, max: 96}
+      # 80.1 kWh measured at the defaults on the test day (1 January, Aachen), 8.3 kWh of it for DHW

@@ -29,9 +29,11 @@ partners:
       config:
         data_acquisition_mode: USE_LOCAL_LPG
   Building:
-    # The house whose facts the members' sizing laws read. It reads no heat distribution: a building reading the heat
-    # distribution would need the heat distribution beside every assembly, and a test partner reads only what it
-    # requires. A direct heater (heating/electric_resistive) is wired to it.
+    # The house whose facts the members' sizing laws read, heated by the space heating of its system: its `heating`
+    # port reads the one heat distribution or direct electric heater beside it, as the Building of a composed file
+    # reads its HeatDistributionSystem or its ElectricHeating. The port is optional, so the house requires neither:
+    # the harness binds the one candidate per isolation system, the subject's member or a partner (isolation.py,
+    # bind_optional_partner_ports), and beside an assembly that heats nothing the house stays unheated.
     serves: [{partner: Building}, {fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
              {fact: set_heating_temperature_in_celsius}]
     requires: [Weather, UTSPConnector]
@@ -42,7 +44,9 @@ partners:
         number_of_apartments: 1.0
         enable_opening_windows: true
         weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
-      inputs: [Weather, UTSPConnector]
+      inputs: [Weather, UTSPConnector, {$port: heating}]
+      ports:
+        heating: {partner: [HeatDistribution, ElectricHeating], optional: true}   # ThermalPowerDelivered
   HeatingCurveController:
     # The heating curve: the supply temperature set point and the heating season every space-heating L1 controller
     # reads. Its emitter type is pinned to the floor heating the heat distribution controller's partner states, so the

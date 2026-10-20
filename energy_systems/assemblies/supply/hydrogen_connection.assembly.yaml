@@ -43,6 +43,6 @@ tests:
     - {output: GasMeter.CumulativeProduction, unit: WATT_HOUR, min: 0, max: 1200000}       # zero here
   monotone: []                                              # no numeric parameter: nothing to sweep
   expect:
-    - {kpi: Total gas consumption, member: GasMeter, min: 135, max: 190}
-      # 160.3 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure; the gas
+    - {kpi: Total gas consumption, member: GasMeter, min: 85, max: 120}
+      # 100.7 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure; the gas
       # meter names every carrier it measures gas

@@ -1698,6 +1698,16 @@
                       },
                       "output_description": {
                         "type": "string"
+                      },
+                      "time_column": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -1793,6 +1803,16 @@
                   },
                   "output_description": {
                     "type": "string"
+                  },
+                  "time_column": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               },

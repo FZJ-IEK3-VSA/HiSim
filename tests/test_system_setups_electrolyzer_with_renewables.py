@@ -1,5 +1,6 @@
 """Tests for the electrolyzer with renewables system setup."""
 
+import datetime
 from pathlib import Path
 import shutil
 from typing import Iterator
@@ -10,6 +11,7 @@ import pytest
 from hisim import hisim_main
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton
+from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
 from tests.functions_for_testing import SetupTestParameters
@@ -174,3 +176,40 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     assert "Skipping the building-sizer KPI JSON" in simulation_log, (
         f"The skipped building object was not reported in the simulation log: {results_dir}"
     )
+
+
+class TestJulyDay:
+    """The setup runs a July day on July's wind, read from its profile's time column (hisim-xgzf)."""
+
+    #: The row of the minutely wind profile labelled 2021-07-01 00:00:00: 181 days of minutes.
+    FIRST_OF_JULY_ROW = 181 * 24 * 60
+    #: The rows of one day of the minutely wind profile.
+    ROWS_OF_A_DAY = 24 * 60
+    #: The wind profile the setup reads, under the HiSim inputs directory.
+    WIND_PROFILE = "wind_generated_power_1_min.csv"
+
+    @pytest.mark.system_setups
+    def test_a_july_day_runs_on_the_july_wind(self, isolated_result_directory: str) -> None:
+        """Catches the setup refusing a July run, or running it on January's wind.
+
+        One day from 1 July 2021 at 60 s, with the cost and KPI options: the run must finish, and the loader's
+        exported output must be the profile's July rows, labelled with July's timestamps.
+        """
+        start = datetime.datetime(2021, 7, 1)
+        sim_params = SimulationParameters(
+            start_date=start, end_date=start + datetime.timedelta(days=1), seconds_per_timestep=60
+        )
+        sim_params.post_processing_options.extend(SetupTestParameters.OPTIONS)
+        sim_params.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        sim_params.result_directory = isolated_result_directory
+
+        results_dir = Path(hisim_main.main(ELECTROLYZER_SETUP_PATH, sim_params))
+
+        assert (results_dir / "finished.flag").is_file(), f"finished.flag missing in {results_dir}"
+        exported = list(results_dir.rglob("CSV_generated_power.csv"))
+        assert len(exported) == 1, f"expected one exported wind column in {results_dir}, found {exported}"
+        output = pd.read_csv(exported[0], index_col=0)
+        profile = pd.read_csv(Path(utils.HISIMPATH["inputs"]) / self.WIND_PROFILE)
+        july = profile.iloc[self.FIRST_OF_JULY_ROW:self.FIRST_OF_JULY_ROW + self.ROWS_OF_A_DAY]
+        assert str(output.index[0]).startswith("2021-07-01 00:00")
+        assert output.iloc[:, 0].tolist() == pytest.approx(july["generated_power"].tolist(), rel=1e-12)

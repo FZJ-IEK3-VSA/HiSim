@@ -48,7 +48,7 @@ class OrderOfMagnitude:
     value counts as zero, in the output's own unit: a net sum of large opposite flows ends near zero, and its ratio
     across step lengths means nothing. Example: the battery's net DC power over the one-day run, -0.20 / 0 / -6.16 W
     at 15 / 30 / 60 min, has a ratio of 31.5, but only -6.16 W lies above the floor, so there is no ratio to check
-    (hisim-fxix.18). The floor of 1.0 is ten times the absolute tolerance 0.1 of :func:`values_are_similar`.
+    (hisim-hydronics-fxix.18). The floor of 1.0 is ten times the absolute tolerance 0.1 of :func:`values_are_similar`.
     """
 
     #: The largest accepted max/min ratio of the absolute values, dimensionless.
@@ -100,7 +100,7 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = OrderOfMagnitu
     (1.0 in the output's own unit) count as zero: a net sum of large opposite
     flows, such as the battery's net DC power (-0.20 / 0 / -6.16 W) or the
     grid feed-in (0.25 / 1.8e-8 / 9.1e-8 W) of the one-day run, ends near zero
-    and its ratio means nothing (hisim-fxix.18).  When at least two values lie
+    and its ratio means nothing (hisim-hydronics-fxix.18).  When at least two values lie
     at or above the floor the max/min ratio of their absolute values must stay
     below *factor*; with fewer than two the ratio check is skipped.
 
@@ -187,7 +187,7 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = OrderOfMagnitu
         # Value below near-zero threshold is treated as zero.
         ([1e-13, 1.0], True),
         # Net sums of large opposite flows below the 1.0 floor count as zero
-        # (hisim-fxix.18): the battery's net DC power and the grid feed-in in W
+        # (hisim-hydronics-fxix.18): the battery's net DC power and the grid feed-in in W
         # of the one-day cluster-house run at 15 / 30 / 60 min.
         ([-0.1955, 0.0, -6.157], True),
         ([0.25, 1.8e-8, 9.1e-8], True),

@@ -590,59 +590,125 @@ def calculate_daily_average_outside_temperature(
     return daily_averages
 
 
-def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
-    """Reads the station name and its coordinates from the header of a weather data file.
+class StationHeader:
+    """Where each weather file format names its station and coordinates, and how to read them by name.
 
-    Based on the tsib project @[tsib-kotzur] (Check header)
+    Every format states the station in a header, under labels of its own: the CSV exports (NSRDB
+    15-minute, DWD 10- and 15-minute, ERA5) in a first row of column names over a second row of values,
+    the ``.dat`` files of the DWD test reference years and the hourly NSRDB data in ``label : value``
+    lines. The header is read by those labels and never by position, because the formats do not agree
+    on an order: the DWD and ERA5 exports put the longitude before the latitude, and a reader that took
+    the second column for the latitude computed the sun position of Düsseldorf near 6°N / 50.8°E.
+    """
+
+    #: Per CSV format, the column names of the station's name, latitude and longitude, in that order.
+    CSV_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, Tuple[str, str, str]]] = {
+        WeatherDataSourceEnum.NSRDB_15MIN: ("Location ID", "Latitude", "Longitude"),
+        WeatherDataSourceEnum.DWD_10MIN: ("location", "latitude", "longitude"),
+        WeatherDataSourceEnum.DWD_15MIN: ("location", "latitude", "longitude"),
+        WeatherDataSourceEnum.ERA5: ("location", "latitude", "longitude"),
+    }
+
+    #: The labels of the station's name, latitude and longitude in a ``.dat`` header (German: place,
+    #: degree of latitude, degree of longitude).
+    DAT_LABELS: ClassVar[Tuple[str, str, str]] = ("Ort", "Breitengrad", "Längengrad")
+
+    #: How many lines of a ``.dat`` file the header is looked for in; the station block is at the top.
+    DAT_HEADER_LINES: ClassVar[int] = 3
+
+    @classmethod
+    def read(cls, filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
+        """Read the station's name, latitude and longitude from the header of a weather file.
+
+        Example: the DWD 15-minute file of Düsseldorf, whose header is ``location,longitude,latitude``
+        over ``Duesseldorf,6.7686,51.296``, yields ``{"name": "Duesseldorf", "latitude": 51.296,
+        "longitude": 6.7686}``.
+
+        Args:
+            filepath: the configured source path: the file itself for the CSV formats, the stem of the
+                ``.dat`` for the others.
+            source_enum: the data source, which decides the header's layout and labels.
+
+        Returns:
+            Dict[str, Any]: ``name`` (str), ``latitude`` and ``longitude`` (float, in degrees).
+
+        Raises:
+            ValueError: if the header lacks one of the labels; the message names it.
+        """
+        if source_enum in cls.CSV_COLUMNS:
+            header = cls.read_csv_header(filepath)
+            labels = cls.CSV_COLUMNS[source_enum]
+        else:
+            filepath = filepath + ".dat"
+            header = cls.read_dat_header(filepath)
+            labels = cls.DAT_LABELS
+        name_label, latitude_label, longitude_label = labels
+        for label in labels:
+            if label not in header:
+                raise ValueError(
+                    f"The weather file {filepath} ({source_enum.value}) states no '{label}' in its header; "
+                    f"it has {sorted(header)}."
+                )
+        return {
+            "name": header[name_label],
+            "latitude": float(header[latitude_label]),
+            "longitude": float(header[longitude_label]),
+        }
+
+    @classmethod
+    def read_csv_header(cls, filepath: str) -> Dict[str, str]:
+        """Pair the column names of a CSV file's first row with the values of its second.
+
+        Args:
+            filepath: the CSV file.
+
+        Returns:
+            Dict[str, str]: each column name with its value, as the file spells it.
+        """
+        with open(filepath, encoding="utf-8") as csvfile:
+            rows = csv.reader(csvfile)
+            names = next(rows, [])
+            values = next(rows, [])
+        return dict(zip(names, values))
+
+    @classmethod
+    def read_dat_header(cls, filepath: str) -> Dict[str, str]:
+        """Read the ``label : value`` lines at the top of a ``.dat`` file.
+
+        A byte order mark before the first label and the tabs and spaces around the colon are dropped.
+
+        Args:
+            filepath: the ``.dat`` file.
+
+        Returns:
+            Dict[str, str]: each label with its value, as the file spells it.
+        """
+        header: Dict[str, str] = {}
+        with open(filepath, encoding="utf-8-sig") as file_stream:
+            for _, line in zip(range(cls.DAT_HEADER_LINES), file_stream):
+                label, separator, value = line.partition(":")
+                if separator:
+                    header[label.strip()] = value.strip()
+        return header
+
+
+def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
+    """Read the station name and its coordinates from the header of a weather data file.
+
+    The header is read by its labels (:class:`StationHeader`), so a format that lists the longitude
+    before the latitude yields each under its own name.
 
     Args:
         filepath: the configured source path.
-        source_enum: the data source, which decides where in the file the header is.
+        source_enum: the data source, which decides where in the file the header is and how it is labelled.
 
     Returns:
-        Dict[str, Any]: ``name``, ``latitude`` and ``longitude``.
+        Dict[str, Any]: ``name``, ``latitude`` and ``longitude``, the coordinates in degrees.
+
+    Raises:
+        ValueError: if the header lacks the station's name, latitude or longitude.
     """
-    if source_enum == WeatherDataSourceEnum.NSRDB_15MIN:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[1]
-                    lat = float(row[5])
-                    lon = float(row[6])
-                elif i > 1:
-                    break
-
-    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    elif source_enum == WeatherDataSourceEnum.ERA5:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    else:
-        # get the geoposition
-        with open(filepath + ".dat", encoding="utf-8") as file_stream:
-            lines = file_stream.readlines()
-            location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
-            lat = float(lines[1][20:37])
-            lon = float(lines[2][15:30])
-    return {"name": location_name, "latitude": lat, "longitude": lon}
+    return StationHeader.read(filepath, source_enum)
 
 
 def read_station_coordinates(filepath: str) -> Tuple[Any, Any]:

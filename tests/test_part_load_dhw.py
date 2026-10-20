@@ -135,7 +135,7 @@ def test_a_hot_water_charge_at_ratio_zero_books_nothing_and_reports_zero() -> No
 
     This is the step the controller's minimum running time holds in hot-water mode while the tank already starts at
     the aim: the rule commands 0, and the burner must not fire. The circuit then supplies its 55 °C return, as an
-    idle circuit does, not the 70 °C of a full-load charge (hisim-fxix.23).
+    idle circuit does, not the 70 °C of a full-load charge (hisim-hydronics-fxix.23).
     """
     idle = BoilerRig.charge(900, ratio=0.0)
     assert (idle["flow_kg_per_s"], idle["heat_w"], idle["fuel_w"], idle["fuel_wh"]) == (0.0, 0.0, 0.0, 0.0)

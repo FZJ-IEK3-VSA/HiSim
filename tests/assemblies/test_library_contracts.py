@@ -9,7 +9,7 @@ applicable ``bounds`` entry, and ``expect`` at the defaults. Every ``monotone`` 
 parameter from the samples admitting a sweep, once per distinct point set
 (:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
 samples run under the ``assemblies`` marker (the PR gate's job ``pytest (assemblies)``), the Latin
-hypercube under ``nightly`` (the golden-year workflow), sized and seeded by ``--samples`` and
+hypercube under ``nightly`` (the daily workflow ``assemblies-nightly.yml``), sized and seeded by ``--samples`` and
 ``--seed``. A failure reads ``pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in
 [-100, 33000]: …``.
 

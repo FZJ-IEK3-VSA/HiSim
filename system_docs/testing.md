@@ -37,7 +37,7 @@ split, and has no `renovisor_probes` job: its `pytest-others` takes those tests.
 | `system_setups` | Tests that run one of the Python setup files under `system_setups/` end to end. Nothing else. | `pytest (system-setups)` |
 | `buildingtest` | The systematic sweeps of the building component. | `pytest (buildingtest)` |
 | `assemblies` | Every test under `tests/assemblies/` except the nightly tier. `tests/assemblies/conftest.py` adds it and refuses `base`, `extendedbase` and `extendedbase2` there; never written by hand. Needs the local LoadProfileGenerator. | `pytest (assemblies)` |
-| `nightly` | The Latin hypercube tier of the assembly test contracts. | `assemblies-nightly` in `golden-year.yml` |
+| `nightly` | The Latin hypercube tier of the assembly test contracts. | `assemblies nightly tier` in `assemblies-nightly.yml`, daily at 02:00 UTC |
 | `renovisor_probes` | The RenoVisor tests that read the capability document or the translation map rendered from it (the session fixtures of `tests/renovisor/conftest.py`, which build the whole probe set). `tests/renovisor/conftest.py` refuses such a test without this marker or with `base`. | `pytest (renovisor-probes)`, one process |
 | `postprocessingoptions` | One named test per `PostProcessingOptions` value. | `pytest (postprocessingoptions)` |
 | `utsp` | Tests that need the LPG/UTSP connector. Networked, needs credentials. | `pytest (utsp)` |

@@ -845,8 +845,9 @@ tests:
 variants) with every declaration, a few one-day runs per assembly, in the `assemblies` tier: the pytest marker of every
 test under `tests/assemblies/` but the nightly ones, run by its own CI job `pytest (assemblies)`, not in `base`, since
 the tier runs long and needs the local LoadProfileGenerator (D28 b, amended). The Latin hypercube
-sample of the box runs as the job `assemblies-nightly` of `golden-year.yml`, beside the full-year goldens and for now
-behind the same gate, once per PR commit; a schedule comes with the real library. A failure opens a bead, as a golden
+sample of the box runs daily at 02:00 UTC in a workflow of its own, `assemblies-nightly.yml` (owner decision
+2026-10-19, once the real library was on main; before, a job of `golden-year.yml` on every PR commit). A failure
+opens a bead, as a golden
 drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
 The harness exists from step 1 on fixture assemblies with fake components (§13); it meets real components in step 4.
 
@@ -1114,7 +1115,7 @@ with `Sum(Many)`; selectors `observes:` as a filter on the observer's dynamic de
 check; source maps on every error; the import record with the binding decisions; `display:` templates; `describe`
 for assemblies; both JSON schemas; the harness rebuilt on pytest (sampler incl. the Latin hypercube tier, isolation
 builder with the partner registry, the bounds/monotone/expect checks; pytest's parametrization, reporting and `xdist`
-shards; the nightly tier a marker run by the golden-year workflow; an external library runs `pytest
+shards; the nightly tier a marker run daily by its own workflow, `assemblies-nightly.yml`; an external library runs `pytest
 --assembly-library DIR`).
 
 **Cut from v1 (D26):**
@@ -1219,11 +1220,12 @@ All by the owner on 2026-10-03.
   temperature output, at least one `tests.monotone` when the assembly has a numeric parameter, optional `tests.expect` per preset; a generic harness
   (`hisim/energy_system/assemblies/testing/`, `hisim energy-system test-assemblies`) runs each sample for one day at
   900 s beside test partners read from each library's `test_partners.yaml`, and samples presets, boundaries, values
-  and variants on every PR and a seeded Latin hypercube sample of the parameter box in the nightly tier, the job
-  `assemblies-nightly` of `golden-year.yml` (one hypercube per constraint branch, discrete parameters and variants
+  and variants on every PR and a seeded Latin hypercube sample of the parameter box in the nightly tier (one
+  hypercube per constraint branch, discrete parameters and variants
   stratified); an assembly without the contract is refused by the library test (§9.4). Rejected: a sibling test file
   (drifts) and hand-written Python tests per assembly
-  (no generic harness, no `describe`).
+  (no generic harness, no `describe`). Amended (owner, 2026-10-19): the nightly tier runs daily at 02:00 UTC in its
+  own workflow, `assemblies-nightly.yml`, instead of as a job of `golden-year.yml` on every PR commit.
 
 - **D25 — Buffer or no buffer is a different assembly, and the pump owner follows the circuit (owner, 2026-10-04):**
   `heating/air_source_heat_pump` (buffer inside) and `heating/air_source_heat_pump_direct` (the heat pump feeds the

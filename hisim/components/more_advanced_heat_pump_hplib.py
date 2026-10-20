@@ -2435,10 +2435,12 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                number_of_heat_pump_cycles = self.get_heatpump_cycles(
-                    output=output, index=index, postprocessing_results=postprocessing_results
-                )
-                if output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
+                if output.field_name == self.TimeOff:
+                    # Counted from this one column only: every other output would give 0.
+                    number_of_heat_pump_cycles = self.get_heatpump_cycles(
+                        output=output, index=index, postprocessing_results=postprocessing_results
+                    )
+                elif output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
                     # take only output values for heating
                     heating_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] > 0.0
@@ -2653,7 +2655,21 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
     # make kpi entries and append to list
     def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> float:
-        """Get the number of cycles of the heat pump for the simulated period."""
+        """Return the number of starts of the heat pump in the simulated period, counted in its ``TimeOff`` column.
+
+        A start is a step whose ``TimeOff`` is 0 after a step whose ``TimeOff`` is not: an idle period ended. For
+        example, the series 0, 60, 60, 0, 120, 0 holds two starts. A start in the first step of the simulation has
+        no idle step before it and is not counted, so the count is the published ``CounterOnOff`` at the end of the
+        run, less one if the machine ran in the first step. For any output other than ``TimeOff`` the count is 0.
+
+        Args:
+            output: The output whose column is read; only ``TimeOff`` is counted.
+            index: The position of that output's column in ``postprocessing_results``.
+            postprocessing_results: The simulated values of all outputs, one column per output.
+
+        Returns:
+            The number of starts.
+        """
         number_of_cycles = 0
         if output.field_name == self.TimeOff:
             for time_index, off_time in enumerate(postprocessing_results.iloc[:, index].values):

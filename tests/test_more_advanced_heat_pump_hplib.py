@@ -313,6 +313,33 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     )
 
 
+@pytest.mark.base
+def test_the_cycle_kpi_counts_the_starts_in_the_time_off_column_whatever_output_comes_after_it() -> None:
+    """Catches a cycle KPI that ends as the count of the component's last output instead of its TimeOff column.
+
+    The KPI entries walk every output of the heat pump. The cycle count used to be assigned for each of them, and every
+    output but ``TimeOff`` counts 0, so the KPI read 0 whenever an output came after ``TimeOff``, which it does in every
+    simulation. The ``TimeOff`` series 0, 60, 60, 0, 120, 0, 0, 60, 0 holds three starts: the steps where an idle
+    period ends.
+    """
+    simpars = SimulationParameters.one_day_only(2017, 60)
+    heatpump = MoreAdvancedHeatPumpHPLib(config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=simpars)
+    time_off_in_seconds = [0, 60, 60, 0, 120, 0, 0, 60, 0]
+    postprocessing_results = pd.DataFrame(
+        {
+            heatpump.TimeOff: time_off_in_seconds,
+            heatpump.TimeOnHeating: [60 if time_off == 0 else 0 for time_off in time_off_in_seconds],
+        }
+    )
+
+    kpi_entries = heatpump.get_component_kpi_entries(
+        all_outputs=[heatpump.time_off, heatpump.time_on_heating], postprocessing_results=postprocessing_results
+    )
+
+    cycles = next(entry for entry in kpi_entries if entry.name == "Number of SH heat pump cycles").value
+    assert cycles == 3
+
+
 def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) -> list:
     """Build a counter like TimeOnHeating/TimeOnCooling: increments while active, resets to 0 when idle."""
     counter = 0

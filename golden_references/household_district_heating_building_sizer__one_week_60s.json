@@ -81,7 +81,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.01918538800870439
+    "value": 0.019011898308604874
   },
   "BUI1.Building.Internal energy gains (Building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 21.42842704309726
+    "value": 21.42825436881167
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 18.654101376043574
+    "value": 18.65689393281718
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2.460488886359896
+    "value": 2.4641903553450057
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 525.9416252797978
+    "value": 542.1627378444796
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -270,7 +270,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 49.29
+    "value": 50.63
   },
   "BUI1.Costs.Energy grid costs for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 57.016182
+    "value": 58.356182000000004
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 94.58618200000001
+    "value": 95.92618200000001
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 94.58618200000001
+    "value": 95.92618200000001
   },
   "BUI1.District Heating.CAPEX - CO2 Footprint (DistrictHeating)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "District Heating",
     "unit": "kWh",
-    "value": 525.8
+    "value": 542.0
   },
   "BUI1.District Heating.OPEX - CO2 Footprint (DistrictHeating)": {
     "building": "BUI1",
@@ -457,7 +457,7 @@
     },
     "tag": "District Heating",
     "unit": "kg",
-    "value": 166.74
+    "value": 171.27600000000004
   },
   "BUI1.District Heating.OPEX - Energy costs (DistrictHeating)": {
     "building": "BUI1",
@@ -472,7 +472,7 @@
     },
     "tag": "District Heating",
     "unit": "EUR",
-    "value": 49.289535
+    "value": 50.630409
   },
   "BUI1.District Heating.OPEX - Maintenance costs (DistrictHeating)": {
     "building": "BUI1",
@@ -502,7 +502,7 @@
     },
     "tag": "District Heating",
     "unit": "kg",
-    "value": 167.0
+    "value": 171.53600000000003
   },
   "BUI1.District Heating.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (DistrictHeating)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "District Heating",
     "unit": "EUR",
-    "value": 60.82953500000001
+    "value": 62.17040900000001
   },
   "BUI1.District Heating.Total energy consumption (DistrictHeating)": {
     "building": "BUI1",
@@ -532,7 +532,7 @@
     },
     "tag": "District Heating",
     "unit": "kWh",
-    "value": 595.5
+    "value": 611.7
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -730,7 +730,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 166.73
+    "value": 171.28
   },
   "BUI1.Emissions.Total CO2 emissions for simulated period": {
     "building": "BUI1",
@@ -738,7 +738,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 184.4527
+    "value": 189.0027
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -754,7 +754,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 184.4527
+    "value": 189.0027
   },
   "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_4 (L2EMSElectricityController)": {
     "building": "BUI1",
@@ -814,7 +814,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kg",
-    "value": 166.73
+    "value": 171.28
   },
   "BUI1.Fuel Meter.OPEX - Energy costs (FuelMeter)": {
     "building": "BUI1",
@@ -829,7 +829,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "EUR",
-    "value": 49.29
+    "value": 50.63
   },
   "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)": {
     "building": "BUI1",
@@ -859,7 +859,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kWh",
-    "value": 595.48
+    "value": 611.71
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -883,7 +883,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 623.9534760065042
+    "value": 640.1834760065042
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -987,7 +987,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 11.65
+    "value": 11.39
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 4.339115045945501
+    "value": 4.547555365497502
   },
   "BUI1.Heat Distribution System.Mean flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1070,7 +1070,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 27.95323375085273
+    "value": 27.867692005223123
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1085,7 +1085,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 2.773648987058597
+    "value": 2.8591907326881945
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1145,7 +1145,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 525.897161461448
+    "value": 542.1162870331988
   },
   "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
     "building": "BUI1",

@@ -66,7 +66,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 136.84151256025743
+    "value": 239.90114363034596
   },
   "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 29.87265666295778
+    "value": 31.30395751981662
   },
   "BUI1.Building.Minimum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 21.229264514677283
+    "value": 20.782929491291817
   },
   "BUI1.Building.Rooftop area (building)": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 228.7566668909371
+    "value": 343.21117901887084
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (building)": {
     "building": "BUI1",
@@ -231,7 +231,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -271.53960742199894
+    "value": -407.34749690393494
   },
   "BUI1.Building.Theoretical heating demand (building)": {
     "building": "BUI1",
@@ -980,7 +980,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 29.87265666295778
+    "value": 31.30395751981662
   },
   "BUI1.Heat Distribution System.Max return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -995,7 +995,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 29.87265666295778
+    "value": 31.30395751981662
   },
   "BUI1.Heat Distribution System.Max temperature difference of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1025,7 +1025,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 25.81277251436987
+    "value": 28.162959134716118
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 25.81365273824516
+    "value": 28.163981352724036
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1055,7 +1055,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": -0.0008802238752934306
+    "value": -0.0010222180079183156
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1100,7 +1100,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": -0.7683010914007546
+    "value": -0.8872153094246116
   },
   "BUI1.Heat Distribution System.Thermal output energy of heat distribution system (hds)": {
     "building": "BUI1",

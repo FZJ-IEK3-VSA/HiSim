@@ -81,7 +81,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.01988608349245826
+    "value": 0.019752300271942504
   },
   "BUI1.Building.Internal energy gains (building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 21.35342645749774
+    "value": 21.3534683460296
   },
   "BUI1.Building.Minimum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 18.66666693561516
+    "value": 18.66828449698331
   },
   "BUI1.Building.Rooftop area (building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2.2094199658061315
+    "value": 2.217258486206833
   },
   "BUI1.Building.Theoretical cooling demand (building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 532.0560814018868
+    "value": 548.509325738059
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -664,7 +664,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 806.9
+    "value": 831.9
   },
   "BUI1.Gas Boiler.OPEX - CO2 Footprint (boiler)": {
     "building": "BUI1",
@@ -679,7 +679,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 193.65599999999998
+    "value": 199.65599999999998
   },
   "BUI1.Gas Boiler.OPEX - Fuel costs (boiler)": {
     "building": "BUI1",
@@ -694,7 +694,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "EUR",
-    "value": 60.11405
+    "value": 61.976549999999996
   },
   "BUI1.Gas Boiler.OPEX - Maintenance costs (boiler)": {
     "building": "BUI1",
@@ -739,7 +739,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 632.4
+    "value": 654.6
   },
   "BUI1.Gas Boiler.Total CO2 Footprint (CAPEX for simulated period + OPEX) (boiler)": {
     "building": "BUI1",
@@ -754,7 +754,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 194.10599999999997
+    "value": 200.10599999999997
   },
   "BUI1.Gas Boiler.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (boiler)": {
     "building": "BUI1",
@@ -769,7 +769,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "EUR",
-    "value": 68.39405
+    "value": 70.25655
   },
   "BUI1.Gas Boiler.Total Gas consumption (energy) (boiler)": {
     "building": "BUI1",
@@ -784,7 +784,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 806.9
+    "value": 831.9
   },
   "BUI1.Gas Boiler.Total Gas consumption (mass) (boiler)": {
     "building": "BUI1",
@@ -799,7 +799,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 52.3
+    "value": 54.0
   },
   "BUI1.Gas Boiler.Total Gas consumption (volume) (boiler)": {
     "building": "BUI1",
@@ -814,7 +814,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "l",
-    "value": 72951.1
+    "value": 75211.3
   },
   "BUI1.Gas Boiler.Total thermal energy delivered (boiler)": {
     "building": "BUI1",
@@ -829,7 +829,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 632.4
+    "value": 654.6
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -1010,7 +1010,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 4.328593633743733
+    "value": 4.53494688851405
   },
   "BUI1.Heat Distribution System.Mean flow temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 27.88903305572123
+    "value": 27.80226449806851
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1055,7 +1055,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 2.805895433988498
+    "value": 2.8926639916412182
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1115,7 +1115,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 532.0112425823023
+    "value": 548.4629776023348
   },
   "BUI1.Residents.Residents' total electricity consumption (occupancy)": {
     "building": "BUI1",

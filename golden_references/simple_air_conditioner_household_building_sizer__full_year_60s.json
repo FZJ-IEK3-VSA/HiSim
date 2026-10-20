@@ -42,7 +42,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": 7.2
+    "value": 8.6
   },
   "BUI1.Air Conditioner.OPEX - CO2 Footprint (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -57,7 +57,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 2.952
+    "value": 3.526
   },
   "BUI1.Air Conditioner.OPEX - Electricity costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -72,7 +72,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 2.1636
+    "value": 2.5843
   },
   "BUI1.Air Conditioner.OPEX - Maintenance costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -102,7 +102,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": -155.8
+    "value": -244.0
   },
   "BUI1.Air Conditioner.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -117,7 +117,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 9.618666666666666
+    "value": 10.192666666666668
   },
   "BUI1.Air Conditioner.Total Costs (CAPEX for simulated period + OPEX energy and maintenance) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -132,7 +132,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 102.1636
+    "value": 102.5843
   },
   "BUI1.Battery.Battery charging energy": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 58385.91364564077
+    "value": 59474.901317545715
   },
   "BUI1.Building.Internal energy gains (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 25.189654083039834
+    "value": 25.398333333333333
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -261,7 +261,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": -1.0695791302404567
+    "value": -1.8126007567650184
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -336,7 +336,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2.7006643613662304
+    "value": 0.1702847872780102
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",
@@ -351,7 +351,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 65376.7273631068
+    "value": 66510.19891070153
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -25.285716540660392
+    "value": -38.33826336535461
   },
   "BUI1.Building.Theoretical heating demand (Building)": {
     "building": "BUI1",
@@ -381,7 +381,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 77563.93767060929
+    "value": 78908.70544983241
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",

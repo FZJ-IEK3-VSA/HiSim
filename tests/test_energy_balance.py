@@ -796,6 +796,7 @@ def test_grid_import_and_export_are_what_the_meter_publishes_and_the_meter_node_
     assert {(read["component"], read["role"]) for read in entry["reads"]} == {("HeatPump", "in"), ("PV", "out")}
     assert entry["verdict"] == "agrees" and entry["enforced"] and entry["failing_steps"] == 0
     assert entry["residual_kwh"] == pytest.approx(0.0, abs=1e-12)
+    assert entry["largest_step_residual_kwh"] == pytest.approx(0.0, abs=1e-12)
     assert written["unmetered"] == {"enforced": True, "not_enforced_because": None, "ports": []}
 
 
@@ -849,6 +850,7 @@ def test_a_meter_that_publishes_other_than_it_reads_is_reported_while_a_componen
         "1 components are undeclared, so the meter may read flows no port declares"
     )
     assert entry["worst_step"]["index"] == 0 and entry["worst_step"]["residual_kwh"] == pytest.approx(0.4)
+    assert entry["largest_step_residual_kwh"] == pytest.approx(0.4)
     assert flows(balance_report.sankeys()["overall"])[("Meter", "unaccounted")] == pytest.approx(0.4)
 
 

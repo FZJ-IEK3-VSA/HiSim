@@ -135,6 +135,11 @@ class MeterBalance:
         return float(self.sum_of_role(self.ports, lt.EnergyRole.OUT, len(self.residual_per_step)).sum())
 
     @property
+    def largest_step_residual(self) -> float:
+        """The largest absolute residual of any step, in kWh, also when it is within the tolerance."""
+        return float(np.abs(self.residual_per_step).max()) if self.residual_per_step.size else 0.0
+
+    @property
     def fails_the_run(self) -> bool:
         """Whether the meter does not close in a run in which that is a failure."""
         return self.enforced and not self.agrees
@@ -185,6 +190,7 @@ class MeterBalance:
             "residual_kwh": self.residual,
             "throughput_kwh": float(self.throughput_per_step.sum()),
             "failing_steps": int(self.step_failures.sum()),
+            "largest_step_residual_kwh": self.largest_step_residual,
             "worst_step": None
             if worst is None
             else {

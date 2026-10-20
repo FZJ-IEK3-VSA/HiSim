@@ -97,12 +97,12 @@ class ElectricityBus:
     @property
     def grid_import_per_step(self) -> np.ndarray:
         """The grid import per step, in kWh: the net where it is positive."""
-        return np.maximum(self.net_per_step, 0.0)
+        return np.asarray(np.maximum(self.net_per_step, 0.0), dtype=float)
 
     @property
     def grid_export_per_step(self) -> np.ndarray:
         """The grid export per step, in kWh: minus the net where it is negative."""
-        return np.maximum(-self.net_per_step, 0.0)
+        return np.asarray(np.maximum(-self.net_per_step, 0.0), dtype=float)
 
     @property
     def throughput_per_step(self) -> np.ndarray:

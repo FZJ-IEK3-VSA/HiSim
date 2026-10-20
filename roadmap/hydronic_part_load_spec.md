@@ -230,7 +230,10 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   class (`PhysicsComponent`, `L1ControllerComponent`, … in `hisim/component.py`), and `hisim/evaluation_order.py`
   orders the physics. With it, every partial step of the gas twin in the window of `tests/test_part_load_twins.py`
   converges (15 of 15), and over the full year 2021 718 of 759 partial steps converge at 900 s and 614 of 643 at
-  3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch, §11).
+  3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch, §11). Since 2026-10-19
+  the test also runs the solar pump, in the gas + solar twin's first week of June with the default 4 m² collector
+  (mid-year windows read that week's weather, sun and occupancy): 4 of 4 partial steps converge, 0.016 to 0.023 K
+  above the 80 °C maximum storage temperature (hisim-hydronics-fxix.11).
 - **Two devices**: §7.
 
 ## 5. Devices

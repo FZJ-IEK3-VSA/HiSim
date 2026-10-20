@@ -7,7 +7,7 @@ Each case runs one week of 2021 of a twin with the shipped predefined occupancy 
   convergence ends the tank in the controller's target band, from its published target to the target plus
   ``PartLoadRule.TARGET_BAND_IN_KELVIN``. Two cases: the gas boiler's hot-water charge in the gas twin's first week,
   and the solar pump in the gas + solar twin's first week of June, where the default 4 m² collector fills the tank to
-  its 80 °C maximum storage temperature (hisim-fxix.11);
+  its 80 °C maximum storage temperature (hisim-hydronics-fxix.11);
 * at 900 s with the threshold at 900 s the twin is refused when it is built, since its space-heating buffer is a
   start-of-step node that cannot take whole steps above 600 s
   (``tests/test_space_heating_buffer_whole_step_refusal.py``); that a threshold at the step length keeps every

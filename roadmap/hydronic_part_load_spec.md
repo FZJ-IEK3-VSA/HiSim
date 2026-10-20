@@ -233,7 +233,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch, §11). Since 2026-10-19
   the test also runs the solar pump, in the gas + solar twin's first week of June with the default 4 m² collector
   (mid-year windows read that week's weather, sun and occupancy): 4 of 4 partial steps converge, 0.016 to 0.023 K
-  above the 80 °C maximum storage temperature (hisim-fxix.11).
+  above the 80 °C maximum storage temperature (hisim-hydronics-fxix.11).
 - **Two devices**: §7.
 
 ## 5. Devices

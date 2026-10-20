@@ -26,6 +26,18 @@ partners:
       class: tests.assemblies.mock_components.MockHeater
       preset: standard
       inputs: [Controller]
+  Grid:
+    # The one electricity provider an electricity need checks for, and its meter: it reads the electricity of the one
+    # heater in scope, the assembly's own, so the energy balance finds every bought carrier metered (owner decision
+    # Q-J of roadmap/complete_energy_sankeys_spec.md), as the real library's Grid does beside its energy manager.
+    serves: {carrier: electricity}
+    component:
+      class: tests.assemblies.mock_components.MockElectricityMeter
+      preset: standard
+      inputs: [{$port: consumer}]
+      ports:
+        connection: {carrier: electricity}
+        consumer: {partner: MockHeater}
   Tank:
     # A tank the residents draw from, heated by the one heater in scope: the assembly's own.
     serves: {partner: MockTank}

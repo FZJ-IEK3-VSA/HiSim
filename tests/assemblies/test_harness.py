@@ -307,7 +307,8 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
     """The site and both circuit ends for a boiler, a consumer for a connection, an array and a manager for a battery.
 
-    The real library's assemblies and partners, and the mock heater for the ports a variant switches.
+    The real library's assemblies and partners, and the mock heater for the ports a variant switches, with the grid
+    meter its electricity need binds.
     """
     real = AssemblyResolver([Real.LIBRARY])
     registries = {
@@ -348,7 +349,7 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         (
             "mock/variant_heater",
             Mocks.LIBRARY,
-            ["Occupancy", "Tank", "Ems"],
+            ["Occupancy", "Tank", "Ems", "Grid"],
             {"bind": {"tank_temperature": "Tank"}, "optional-bind": {"ems_modifier": "Ems"}},
         ),
     ):
@@ -860,6 +861,9 @@ def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_
             preset: standard
             config:
               power_in_watt: {{$param: power_in_watt}}
+        interface:
+          needs:
+            grid: {{carrier: electricity, outputs: [Heater.ElectricityInput]}}
         tests:
           bounds:
             - {{output: Heater.ThermalPower, unit: KWH, min: 0}}

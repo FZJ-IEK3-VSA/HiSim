@@ -1,0 +1,14 @@
+# The test partners of the deliberately wrong mock library (tests/assemblies/test_harness.py): only the grid meter
+# its heater's electricity need binds, the same partner as in the mock library's registry, so that every bought
+# carrier of the isolation system is metered (owner decision Q-J of roadmap/complete_energy_sankeys_spec.md) and the
+# heater fails by its test contract alone. Read by hisim/energy_system/assemblies/testing/partners.py.
+partners:
+  Grid:
+    serves: {carrier: electricity}
+    component:
+      class: tests.assemblies.mock_components.MockElectricityMeter
+      preset: standard
+      inputs: [{$port: consumer}]
+      ports:
+        connection: {carrier: electricity}
+        consumer: {partner: MockHeater}

@@ -897,7 +897,7 @@ def boiler(metered: bool, extra_components: Sequence[str] = ()) -> EnergyBalance
 
 @pytest.mark.base
 def test_a_fuel_port_its_gas_meter_reads_comes_from_the_supply_through_the_meter() -> None:
-    """natural gas supply -> GasMeter -> Boiler: the gas meter is the boiler's peer and closes."""
+    """The gas comes from natural gas supply through GasMeter to the boiler: the meter is its peer and closes."""
     balance_report = boiler(metered=True)
     overall = flows(balance_report.sankeys()["overall"])
     assert overall == {

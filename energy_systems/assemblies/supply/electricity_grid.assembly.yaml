@@ -39,4 +39,4 @@ tests:
   monotone: []                                              # no numeric parameter: nothing to sweep
   expect:
     - {kpi: Total energy from grid, member: ElectricityMeter, min: 10, max: 14}
-      # 12.1 kWh measured: the residents' day (couple_both_at_work, 1 January)
+      # 11.2 kWh measured: the residents' day (couple_both_at_work, 1 January)

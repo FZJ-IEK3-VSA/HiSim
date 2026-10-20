@@ -483,7 +483,7 @@ construction once its ports exist.
 | Q-F tanks' standby losses | outdoors as modelled today (the tank in an unheated cellar); configurable later, bead hisim-af8m (P3 feature) |
 | Q-G room heat | (a) the new carrier `ROOM_HEAT` |
 | Q-H when the meter cross-check fails the run (2026-10-20) | it is always computed and written to the report, and fails the run only once no component is undeclared; until then the report says `enforced: false` and why (built in PR 1, #1086). From PR 6 on undeclared components fail the run anyway, so the check is then always enforced |
-| Q-I static Sankey images for the PDF report (2026-10-20) | a P3 bead: PNG/SVG export of the connected diagram, after PR 6 and preferably with the arrow renderer (hisim-9uoo.19) |
+| Q-I static Sankey images for the PDF report (2026-10-20) | a P3 bead: PNG/SVG export of the connected diagram, after PR 6 and preferably with the arrow renderer (hisim-energy-sankeys-9uoo.19) |
 
 
 - **Q-B. Where the exemption list lives.** A component is exempt either by kind or by a reason. (a) *Kind plus a

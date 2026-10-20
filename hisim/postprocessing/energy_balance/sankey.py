@@ -1,4 +1,4 @@
-"""The yearly energy flows of a run as one connected Sankey graph, with one filter per carrier (hisim-9uoo.9, .18).
+"""The yearly energy flows of a run as one connected Sankey graph, with one filter per carrier (hisim-energy-sankeys-9uoo.9, .18).
 
 The graph follows ``roadmap/complete_energy_sankeys_spec.md`` §4 (owner decisions D1, D2, D4). Its nodes are of the
 kinds of :class:`NodeKind`; every edge carries one carrier, a yearly value in kWh (always drawn positive: a negative
@@ -239,7 +239,7 @@ class SankeyDiagram:
         NodeKind.UNLINKED: "#7f7f7f",
     }
 
-    #: The colour of each carrier's links, from the colour-blind-safe Okabe-Ito palette (hisim-9uoo.18). The
+    #: The colour of each carrier's links, from the colour-blind-safe Okabe-Ito palette (hisim-energy-sankeys-9uoo.18). The
     #: bought fuels and district heat share one colour: their supply nodes tell them apart.
     CARRIER_COLOURS: ClassVar[Mapping[lt.EnergyBalanceCarrier, str]] = {
         lt.EnergyBalanceCarrier.ELECTRICITY: "#0072B2",

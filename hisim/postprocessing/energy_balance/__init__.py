@@ -1,6 +1,6 @@
 """Energy balances per component and one connected Sankey graph of the house, from the declared energy ports.
 
-Epic hisim-9uoo; the graph model is ``roadmap/complete_energy_sankeys_spec.md`` §4. ``ports`` reads the declared
+Epic hisim-energy-sankeys-9uoo; the graph model is ``roadmap/complete_energy_sankeys_spec.md`` §4. ``ports`` reads the declared
 ports of a run and finds each port's peer, skipping the exempt components (controllers and meters move no energy)
 and falling back to the port's carrier default; ``check`` closes each component's balance and each link between
 declared components (both sides must book it); ``bus`` forms the house electricity bus, derives the grid import and
@@ -10,7 +10,7 @@ result directory. The check runs in every simulation; :class:`~hisim.postprocess
 ``EXPORT_ENERGY_BALANCE`` only writes the files.
 
 Coverage: the water storages and the heat distribution system declare their ports with the hydronic coupling
-(hisim-fxix.6), as ``HydronicPort`` on (mass flow, temperature); the electricity devices, the building and the rest
+(hisim-hydronics-fxix.6), as ``HydronicPort`` on (mass flow, temperature); the electricity devices, the building and the rest
 follow in the PRs of the spec's §9. Until then they are drawn as undeclared nodes.
 """
 

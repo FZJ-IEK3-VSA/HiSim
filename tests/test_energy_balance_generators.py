@@ -1,4 +1,4 @@
-"""The heat generators state their energy flows and close their balance (hisim-9uoo.4).
+"""The heat generators state their energy flows and close their balance (hisim-energy-sankeys-9uoo.4).
 
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
 generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check but the fuel-carrier
@@ -9,7 +9,7 @@ household, and the same week of the gas household for the boiler's combustion lo
 takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water)
 and what it loses; the Sankey links it to its carrier's supply node or the house electricity bus (never to a meter or
 a controller, which are exempt), its storages, its loss nodes and the environment. The storages and the heat
-distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
+distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-hydronics-fxix.6).
 """
 
 import json
@@ -251,7 +251,7 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     """The pump runs on 20 January: the collector delivers hot-water heat and its pump's electricity is a loss.
 
     Not a summer day: a window that does not start on 1 January still reads the weather from 1 January
-    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
+    (hisim-midyear-windows-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
     at 900 s hold the year's first day on which the pump delivers more than 0.5 kWh (20 January; the pump stands
     whenever the boiler has charged the tank above 60 °C).
     """

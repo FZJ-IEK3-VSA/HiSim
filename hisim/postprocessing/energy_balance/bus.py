@@ -136,7 +136,7 @@ class MeterCrossCheck:
 
     A step agrees when both the import and the export differ by at most ``max(1e-6 kWh, 0.1 %)`` of the step's
     reference, the larger of the bus's throughput and the meter's import plus export; the run agrees when every
-    step does and both run totals differ by at most 0.1 % of the summed reference (decision 6 of hisim-9uoo).
+    step does and both run totals differ by at most 0.1 % of the summed reference (decision 6 of hisim-energy-sankeys-9uoo).
 
     Attributes:
         reading: What the meter counts.

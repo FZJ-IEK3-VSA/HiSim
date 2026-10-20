@@ -3,7 +3,7 @@
 **Status:** design, not implemented. **Date:** 2026-10-02, revised after the owner's review of 2026-10-03 · **Owner:**
 Noah Pflugradt. The name ASSEMBLY (file `*.assembly.yaml`) and the frame of §2–§5 were decided in discussion on
 2026-10-02; the owner's review of 2026-10-03 settled the points §14.1 lists, and §14.2 keeps one open, with a
-recommendation. Related: renovisorissues #83, #85, #77; epic hisim-lt0b; beads hisim-fxix, hisim-9uoo, hisim-epc.28,
+recommendation. Related: renovisorissues #83, #85, #77; epic hisim-assemblies-lt0b; beads hisim-hydronics-fxix, hisim-energy-sankeys-9uoo, hisim-renovisor-translator-epc.28,
 hisim-9b0m (§15).
 
 All `file:line` citations are against `origin/main` at 0921f9bd. The hydronic coupling spec is cited from branch
@@ -145,7 +145,7 @@ variant's members where the variant is written), and an import's instances follo
 `order:` the sequence is site entries first, then the imports, each in file order. The importer positions an
 assembly as a whole, never inside it. Import and realized record state the final sequence, in which the simulator
 adds the components (`executor.py:343-344`): order is reviewed and pinned, since it moves a week's results by 0.1–7 %
-through on/off decisions and forced convergence (`roadmap/convergence_order_findings.md`, beads hisim-4g9.23–.28),
+through on/off decisions and forced convergence (`roadmap/convergence_order_findings.md`, beads hisim-component-physics-4g9.23–.28),
 and the twin's sequence interleaves site entries and import members; once a canonical dependency order makes results
 order-independent, the numbers become harmless rather than wrong.
 
@@ -596,7 +596,7 @@ Three patterns: (1) **pure parameter** — `GenericBoiler` takes `energy_carrier
 ports follow it (`EnergyPort.carrier_of_fuel`, `energy_port.py:116-124`, used at `generic_boiler.py:420`); (2)
 **parameter-selected internal variants** — different components sharing the rest (immersion heater or burner); (3)
 **separate assemblies** where variants share almost nothing (a heat-pump water heater). The storage water heater is
-pattern 2 († does not exist yet: the immersion heater is hisim-epc.21):
+pattern 2 († does not exist yet: the immersion heater is hisim-renovisor-translator-epc.21):
 
 ```yaml
 # energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml  (abridged)
@@ -882,7 +882,7 @@ per DHW type and array count.
 |---|---|---|---|
 | `from_space_heating_cylinder` | `dhw/indirect_cylinder` | volume | binds the heating assembly's `dhw` circuit (§11.1) |
 | `from_space_heating_combi` | `dhw/combi` | — (preset `nl_combiketel`; assembly presets are not in v1, D26) | generator DHW side without a vessel |
-| `storage_water_heater` | `dhw/storage_water_heater` | `energy_carrier`, volume | immersion heater (hisim-epc.21); LPG carrier |
+| `storage_water_heater` | `dhw/storage_water_heater` | `energy_carrier`, volume | immersion heater (hisim-renovisor-translator-epc.21); LPG carrier |
 | `instantaneous_water_heater` | `dhw/instantaneous_water_heater` | `energy_carrier` | a flow heater component |
 | `heat_pump_water_heater` | `dhw/heat_pump_water_heater` (nested, §2.5) | volume | DHW heat pump (hisim-lenz) |
 | `district_heating` | `dhw/district_heating` | — | substation DHW side; `supply/district_heating_connection` |
@@ -919,7 +919,7 @@ its economics retire the old import's members as replaced subjects and buy the n
 
 ## 11. Interplay
 
-### 11.1 Hydronic coupling (hisim-fxix, PR #878)
+### 11.1 Hydronic coupling (hisim-hydronics-fxix, PR #878)
 
 A circuit port is one end of one circuit (hydronic spec §3.1): its circuit name `<c>` selects the outputs `MassFlow<c>`,
 `SupplyTemperature<c>` and `ReturnTemperature<c>`, the naming convention says which end owns which leg and the pump, and
@@ -933,7 +933,7 @@ buffer and HDS are coupled through default connections (spec §9.2). Lean v1 cut
 circuit port lowers to bare names over those default connections (§3.2, §13 step 4), so the heating assemblies with a
 buffer do not wait for C and D; the buffer-less one does (D25).
 
-### 11.2 Energy balance (hisim-9uoo, #870/#871)
+### 11.2 Energy balance (hisim-energy-sankeys-9uoo, #870/#871)
 
 Members keep their classes' `EnergyPort`s; the two declarations the balance needs, and why, are §3.2. A fuel port's
 peer is the provider's meter observing it (`energy_port.py:12-17`), electricity's whoever observes the output (§4.3).
@@ -1088,7 +1088,7 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    from a small base (0.21 -> 0.12 °C·h), the temperature deviation below 20 °C, −19 %, and the grid injection, −13 %
    from 0.45 kWh (before #876: 58 KPIs, most below 0.2 %, the degree-hours −36 % from 0.28 °C·h).
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
-   their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
+   their components land (hisim-renovisor-translator-epc.21, hisim-lenz); #85 contract; further controllers.
 
 **Order in the base files** (§2.3). The composed files set a flat `order:` on site entries and imports to reproduce
 the twin's sequence up to neutral swaps: since D29 the heat-pump composed file
@@ -1313,7 +1313,7 @@ and `KpiAddress`, (a) for columns and names; to be settled on renovisorissues be
 
 - renovisorissues **#83** (several PV systems and batteries), **#85** (seven hot-water types), **#77** (LPG houses
   billed a gas standing charge).
-- Beads **hisim-fxix** (hydronic coupling), **hisim-9uoo** (energy balance), **hisim-epc.28** (PV adds), **hisim-9b0m**
+- Beads **hisim-hydronics-fxix** (hydronic coupling), **hisim-energy-sankeys-9uoo** (energy balance), **hisim-renovisor-translator-epc.28** (PV adds), **hisim-9b0m**
   (storeys; the roof area bounds the arrays' share, `roadmap/renovisor/implementation/storeys_geometry.md`).
 - PRs **#872** (closed; salvageable: own subject and register entry for an added unit, recorder fixes in
   `recording/matrix.py` and `regrouping.py`, commit eb2be815), **#878** (hydronic coupling spec).

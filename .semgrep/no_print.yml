@@ -1,4 +1,4 @@
-# No print() in hisim/ (bead hisim-o6a.11; system_docs/coding_style.md, "Types, formatting and checks").
+# No print() in hisim/ (bead hisim-repo-cleanup-o6a.11; system_docs/coding_style.md, "Types, formatting and checks").
 #
 # All output of the package goes through hisim.log, the one module that may call print(). A finding is
 # fixed by calling hisim.log (log.information, log.warning, log.error, ...) instead.

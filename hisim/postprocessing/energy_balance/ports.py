@@ -1,4 +1,4 @@
-"""The declared energy ports of a finished run, as kWh per step, and who is on the other side of each (hisim-9uoo.2).
+"""The declared energy ports of a finished run, as kWh per step, and who is on the other side of each (hisim-energy-sankeys-9uoo.2).
 
 :class:`DeclaredPorts` reads the result table once: every output that declares an
 :class:`~hisim.energy_port.EnergyPort` becomes a :class:`PortSeries`, its column converted to kWh per step

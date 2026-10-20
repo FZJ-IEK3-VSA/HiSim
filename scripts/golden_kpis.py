@@ -342,7 +342,7 @@ def _format_numeric_change(name: str, key: str, ref_v: float, got_v: float, rel_
     allowed_diff = max(relative_bound, abs_tol)
     deciding_tolerance = "relative" if relative_bound >= abs_tol else "absolute"
     # The plain ratio, not a percentage: a percentage with three decimals rounded a failing 4e-8 to
-    # "0.000%" (hisim-b3b.6).
+    # "0.000%" (hisim-declarative-systems-b3b.6).
     return (
         f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r} "
         f"(abs diff={abs_diff:.6g}, rel diff={rel_diff:.3g}; "

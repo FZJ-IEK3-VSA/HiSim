@@ -357,7 +357,7 @@ class SimpleWaterStorage(cp.PhysicsComponent):
         timestep 0 of a 3600 s run the boiler controller first answers the zero-initialised storage
         input with a 70 K lift, the boiler adds it to the storage's real 60 degC, and one hour of
         that 130 degC flow mixes the vessel to above 90 degC in an iterate the next iteration
-        discards (hisim-4g9.11). A converged value outside the range still fails, one timestep
+        discards (hisim-component-physics-4g9.11). A converged value outside the range still fails, one timestep
         earlier than before and with the same message.
         """
         lowest, highest = self.PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS

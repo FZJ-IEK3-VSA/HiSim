@@ -30,7 +30,7 @@ class CacheReaders:
 
     The list is now all five of them. Four arrived with the argument; the car was simply missed, and
     had been reading its cache inexactly the whole time. The solar thermal collector cached its sun
-    position until it read the sun the weather publishes (hisim-9g2.7), and left the list with it.
+    position until it read the sun the weather publishes (hisim-midyear-windows-9g2.7), and left the list with it.
     """
 
     SITES: Tuple[Tuple[str, str], ...] = (

@@ -8,7 +8,7 @@
 #
 # R11.5 asked for a January week and a July week. Both run: the July window was fenced until the
 # mid-year-start epic (roadmap/midyear_start_epic.md) made a mid-year start read the window's
-# profiles instead of January's (hisim-9g2.8).
+# profiles instead of January's (hisim-midyear-windows-9g2.8).
 #
 # It is dispatched by hand and never on push (R11.7). It blesses nothing and gates nothing.
 #

@@ -66,7 +66,7 @@ class WeatherYearNotImplementedError(NotImplementedError):
     """A run sets ``SimulationParameters.weather_year``, which the weather cannot honour yet.
 
     Selecting the rows of one year from a weather file and remapping them onto the calendar year is
-    PR C of ``roadmap/weather_year.md`` (hisim-wps1.3). Until it lands the parameter is accepted,
+    PR C of ``roadmap/weather_year.md`` (hisim-weather-year-wps1.3). Until it lands the parameter is accepted,
     keyed and recorded, and the weather component refuses to build rather than silently reading the
     file by position as if the parameter were unset.
     """
@@ -176,7 +176,7 @@ class Weather(DataSourceComponent):
             raise WeatherYearNotImplementedError(
                 f"The simulation parameters set weather_year={my_simulation_parameters.weather_year}, but "
                 "selecting a weather year from the data file and remapping it onto the calendar year "
-                f"{my_simulation_parameters.year} is not implemented yet (hisim-wps1.3, "
+                f"{my_simulation_parameters.year} is not implemented yet (hisim-weather-year-wps1.3, "
                 "roadmap/weather_year.md). Leave weather_year unset to lay the file onto the calendar "
                 "year by position, as every run so far has."
             )
@@ -510,7 +510,7 @@ class Weather(DataSourceComponent):
         years = ", ".join(str(year) for year in sorted(declared))
         return (
             f"weather of {years} laid onto {calendar_year} by position; set weather_year to select a year "
-            "(hisim-wps1.3)"
+            "(hisim-weather-year-wps1.3)"
         )
 
     def build_calculation_inputs(self, location_dict: Dict[str, Any]) -> WeatherSeriesInputs:

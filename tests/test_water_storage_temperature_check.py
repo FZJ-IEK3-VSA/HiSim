@@ -1,6 +1,6 @@
 """The water storages check their temperature once per timestep, on the value the timestep converged to.
 
-hisim-4g9.11: the gas building-sizer setup of an Irish 1950-66 detached house
+hisim-component-physics-4g9.11: the gas building-sizer setup of an Irish 1950-66 detached house
 (TABULA ``IE.N.SFH.04.Gen.ReEx.001.001``) aborted at 3600 s with "The water temperature in the DHW
 water storage is with 93 degC way too high or too low." It did so at timestep 0, on an
 intermediate iterate of the convergence loop: the boiler controller's first iteration answers the

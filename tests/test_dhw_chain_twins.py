@@ -16,14 +16,14 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
 * the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps reach
   the simulator's ``force_convergence`` (more than eleven passes). These are boiler charges that start kilowatts away
   from their final value and need a pass or two more than the simulator allows to reach its absolute tolerance; they
-  are forced within about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). Every partial step of
+  are forced within about 1e-3 W of their fixed point (hisim-component-physics-4g9.50, accepted by the owner). Every partial step of
   the part-load rule converges, so a forced step with a part-load ratio strictly between 0 and 1 counts against the
   bound like any other, and a file over the bound fails with those steps named: they point at a regression of the
   rule rather than of the boiler's own iteration. The simulator's
   kind order already evaluates every controller before its device and the device before the tank. The heat-pump
   files are recorded, not asserted: their forced steps come from the energy manager's set-temperature raise, which
   cycles within a step where the heat pump's extra draw under the raise removes the surplus that raised it
-  (hisim-4g9.53), and from controllers that decide once for a whole step, which a converged iteration cannot always
+  (hisim-component-physics-4g9.53), and from controllers that decide once for a whole step, which a converged iteration cannot always
   reconcile with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
@@ -125,7 +125,7 @@ class DhwTwins:
 
     #: The largest share of a file's steps, dimensionless, that may reach ``force_convergence`` in a file without a
     #: heat pump. The gas twins force about 0.15 % of their steps over a year at 900 s and 2 of 1,920 steps (0.1 %)
-    #: in the solar window (hisim-4g9.50); a loop that stops converging forces far more.
+    #: in the solar window (hisim-component-physics-4g9.50); a loop that stops converging forces far more.
     MAXIMAL_FORCED_STEP_SHARE: float = 0.005
 
     @classmethod

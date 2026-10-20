@@ -132,7 +132,7 @@ class TestTheReasonsSayWhereTheMoneyIs:
 
         The map once pointed it at ``monthly_cost_year1_in_euro``, which is what the plan pays in
         its first year and equals the annuity only when the cost is flat; then at the annual
-        annuity with a "divided by twelve" note. Since hisim-cyc.6 the document publishes the
+        annuity with a "divided by twelve" note. Since hisim-economics-engine-cyc.6 the document publishes the
         monthly figure itself, so the reason names a key a caller can read without arithmetic.
         """
         reason = CostBuilder.reason_for(CostField.MONTHLY_TWENTY_YEARS)

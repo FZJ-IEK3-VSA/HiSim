@@ -459,7 +459,7 @@ class TestSpotSeriesProvenance:
 
 
 class TestTheWoodFuelEmissionFactors:
-    """hisim-l07.5: the legacy wood-fuel factors are per kWh and stay undivided.
+    """hisim-cost-data-l07.5: the legacy wood-fuel factors are per kWh and stay undivided.
 
     The legacy dicts priced pellets and wood chips per ton but stated their emission
     factors per kWh; the migration divided both columns by the heating value, so the
@@ -509,9 +509,9 @@ class TestTheWoodFuelEmissionFactors:
         assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON["PELLETS"] == pytest.approx(180.0, rel=0.01)
 
     def test_the_wood_chip_heating_value_is_read_per_tonne(self):
-        """The UBA factsheet's 15.6 GJ is per tonne of fresh mass, so a kilogram of chips holds 15.6 MJ (hisim-l07.15).
+        """The UBA factsheet's 15.6 GJ is per tonne of fresh mass, so a kilogram of chips holds 15.6 MJ (hisim-cost-data-l07.15).
 
-        Until hisim-l07.15 the figure was stored as GJ per bulk cubic metre, which made a kilogram hold
+        Until hisim-cost-data-l07.15 the figure was stored as GJ per bulk cubic metre, which made a kilogram hold
         62.4 MJ and every wood-chip price per kWh four times too small.
         """
         physics = PhysicsConfig.get_properties_for_energy_carrier(lt.LoadTypes.WOOD_CHIPS)

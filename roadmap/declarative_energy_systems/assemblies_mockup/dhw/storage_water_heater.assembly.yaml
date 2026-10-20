@@ -1,7 +1,7 @@
 # Mockup (design): energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml, written in lean v1 syntax
 # (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet.
 # Spec §5.3, pattern 2 (parameter-selected internal variants). Request type `storage_water_heater`.
-# † ImmersionHeater and its L1 thermostat do not exist (hisim-epc.21); LPG is not a carrier yet (spec §5.1).
+# † ImmersionHeater and its L1 thermostat do not exist (hisim-renovisor-translator-epc.21); LPG is not a carrier yet (spec §5.1).
 # Carrier values are lt.EnergyBalanceCarrier values; † `lpg` has no member (LPG) yet, so the lpg fuel port is refused
 # (`fuel_lpg`) by the reader until the enum is extended in the step that brings the component.
 #

@@ -389,7 +389,7 @@ def test_the_matrix_covers_every_recorded_setup_in_every_window() -> None:
 
 @pytest.mark.base
 def test_the_july_window_reads_july_not_january(tmp_path: Path) -> None:
-    """Catches a July triple that simulates January, which is why the window was fenced until hisim-9g2.8.
+    """Catches a July triple that simulates January, which is why the window was fenced until hisim-midyear-windows-9g2.8.
 
     The two windows' weather and occupancy are read the way a run reads them: the July window's outside air
     is the warmer, and its household is another week of the profile than January's.
@@ -496,8 +496,8 @@ def check_participant_targets(stem: str, tmp_path: Path) -> None:
     ``test_p3_parity_participants_<short name>.py``, because each builds a building sizer for real
     (load profile and all, about 220 s in CI) and ``--dist loadfile`` keeps one module on one
     worker. Two cases in one module bounded the extendedbase shard at twice that; one module each
-    lets the workers take them side by side (hisim-60sv.10). The modules are deleted with this one
-    when P6 retires the rig (hisim-b3b.22), and
+    lets the workers take them side by side (hisim-ci-speed-60sv.10). The modules are deleted with this one
+    when P6 retires the rig (hisim-declarative-systems-b3b.22), and
     :func:`test_every_participant_canary_has_its_own_module` keeps their set equal to
     :attr:`Rig.PARTICIPANT_CANARIES`.
 

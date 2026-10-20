@@ -82,7 +82,7 @@ runs many times a day.
   simulation, is `extendedbase` or `extendedbase2`.
 - **Expensive setup is built once.** A fixture that builds something costly -- a translated energy system, a
   capability document, a simulated week -- has `scope="module"` or `scope="session"` and is not rebuilt per test.
-  Bead hisim-60sv.1 found the RenoVisor capability document built six times per `base` run, about 100 s each.
+  Bead hisim-ci-speed-60sv.1 found the RenoVisor capability document built six times per `base` run, about 100 s each.
 - **Measure before adding.** `pytest <file> --durations=10` shows the slowest tests of a module; CI prints the
   slowest of every job, 20 by default and 40 in `pytest (postprocessingoptions)` (`durations` in `tests.yml`). A
   new test that shows up there is moved or made faster in the same pull request.

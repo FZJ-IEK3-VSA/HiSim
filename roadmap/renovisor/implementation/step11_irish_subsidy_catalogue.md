@@ -1,4 +1,4 @@
-# Step 11 — an Irish subsidy catalogue as an AI-generated placeholder (todo H8, option 1) → hisim-cyc.2
+# Step 11 — an Irish subsidy catalogue as an AI-generated placeholder (todo H8, option 1) → hisim-economics-engine-cyc.2
 
 **Status:** implementation specification, 2026-09-19. **Owner decision (2026-09-19):** "go with
 option 1", i.e. the SEAI grants are encoded in the engine's catalogue language
@@ -214,7 +214,7 @@ runs, pylint critical-only and prospector are clean on every touched file; the d
 new warning. The final report lists every scheme id with its amount and its page source, every
 mapping decision beyond §3, and every omission.
 
-## Note, 2026-09-24 (hisim-cyc.3)
+## Note, 2026-09-24 (hisim-economics-engine-cyc.3)
 
 The record above stands as written; this note says what changed after it. HiSim now has the
 `TIERED_PER_UNIT` benefit kind item 5 of §3 asked for, and the four `LUMP_SUM` solar PV steps on

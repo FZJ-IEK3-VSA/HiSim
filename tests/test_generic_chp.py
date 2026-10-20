@@ -606,7 +606,7 @@ def test_chp_controller_config_refuses_an_inverted_dhw_band() -> None:
 
 @pytest.mark.base
 def test_the_heating_season_is_measured_in_days_of_the_year_not_of_the_run() -> None:
-    """Catches a run from 1 July heating as if its first day were 1 January, as before hisim-9g2.6.
+    """Catches a run from 1 July heating as if its first day were 1 January, as before hisim-midyear-windows-9g2.6.
 
     The season ends on day 150 and begins on day 270. A run from 1 July starts on day 181, in summer; a run
     from 1 January starts in the season, and its timestep of 190 days lies outside it.

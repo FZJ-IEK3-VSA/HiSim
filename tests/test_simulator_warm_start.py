@@ -4,7 +4,7 @@ The simulator iterates each time step until no output changes any more. On the f
 step, a component that reads an output computed later in the component order has no value of
 this step yet; it reads whatever the step's start vector holds. That start vector is the previous
 step's converged vector (the warm start). Only step 0 starts from all zeros, because there is no
-previous step. Until 2026-10-09 every step started from all zeros (bead hisim-4g9.23), so such a
+previous step. Until 2026-10-09 every step started from all zeros (bead hisim-component-physics-4g9.23), so such a
 reader saw 0 on every first pass.
 
 The reproduction has two components. ``Reader`` is added before ``Source`` and reads its output;

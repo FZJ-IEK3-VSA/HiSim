@@ -819,7 +819,7 @@ class PhysicsConfig:
     # Wood chips. Source: [14] in the source list at the top of this module (UBA factsheet of 30 Oct 2024), table 1,
     # "Holzhackschnitzel": lower heating value 15.6 GJ per tonne of fresh mass at 15 % water content for forest
     # softwood, forest hardwood and industrial residue chips (landscape-care wood: 14.3 GJ/t).
-    # The 15.6 is GJ per TONNE; until hisim-l07.15 it was read per m3, 17.3 instead of 4.33 kWh/kg, four times too much.
+    # The 15.6 is GJ per TONNE; until hisim-cost-data-l07.15 it was read per m3, 17.3 instead of 4.33 kWh/kg, four times too much.
     # Cross-check: FNR "Basisdaten Bioenergie Deutschland", spruce chips at 15 % water: 15.6 MJ/kg, 194 kg/m3.
     WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = 15.6e6
     # Bulk density: the same table's typical German mix, each row's share times its bulk density:

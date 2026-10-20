@@ -1,0 +1,26 @@
+# Bead ids renamed once to readable ids (owner decision, 2026-10-20).
+#
+# Each entry maps an old epic id to its new id `hisim-<slug>-<hash>`; the hash stays, so a search
+# for the old hash still finds the bead. Children follow their parent without an entry of their
+# own: `<old>.N` becomes `<new>.N` at every depth. `scripts/rename_bead_ids.py` applies this file
+# to a checkout (`.beads/issues.jsonl` and every tracked text file) and is safe to re-run, e.g. on
+# a branch rebased onto the rename; `--check` lists every old id still mentioned.
+renamed_on: "2026-10-20"
+ids:
+  hisim-4g9: hisim-component-physics-4g9
+  hisim-4o88: hisim-weather-readers-4o88
+  hisim-60sv: hisim-ci-speed-60sv
+  hisim-9g2: hisim-midyear-windows-9g2
+  hisim-9ks: hisim-rust-ideas-9ks
+  hisim-9uoo: hisim-energy-sankeys-9uoo
+  hisim-b3b: hisim-declarative-systems-b3b
+  hisim-cyc: hisim-economics-engine-cyc
+  hisim-epc: hisim-renovisor-translator-epc
+  hisim-fxix: hisim-hydronics-fxix
+  hisim-h2ib: hisim-agent-rules-h2ib
+  hisim-hi1: hisim-caching-hi1
+  hisim-l07: hisim-cost-data-l07
+  hisim-lt0b: hisim-assemblies-lt0b
+  hisim-o6a: hisim-repo-cleanup-o6a
+  hisim-vsq0: hisim-renovisor-not-modelled-vsq0
+  hisim-wps1: hisim-weather-year-wps1

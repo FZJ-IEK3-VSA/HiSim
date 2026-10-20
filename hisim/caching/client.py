@@ -166,7 +166,7 @@ class CacheClient:
 
         The one walk both entry points (this client's :meth:`lookup_producer` and
         :func:`hisim.utils.get_cache_file`) share, so the read order and the write target cannot
-        drift between them (hisim-epc.22). A hit in a later directory is returned at its own
+        drift between them (hisim-renovisor-translator-epc.22). A hit in a later directory is returned at its own
         path: the entry is content-keyed, so what the seed lacks the volume may hold, and what
         the volume holds is the same artifact the first directory would have produced.
 
@@ -212,7 +212,7 @@ class CacheClient:
         simulation's own cache locations and this method decides whether something else takes
         their place. A ``HISIM_CACHE_DIR`` override keeps its single-directory meaning and
         replaces the whole list; otherwise the read walks the locations in order and a miss is
-        written to the first writable one (hisim-epc.22).
+        written to the first writable one (hisim-renovisor-translator-epc.22).
 
         Args:
             key: the key, from :meth:`hisim.caching.keys.CacheKey.for_producer`.

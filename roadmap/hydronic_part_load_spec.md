@@ -9,7 +9,7 @@ owner brought #917 back on its own, directly on #915 (decision 20); #916 stays p
 extended the mechanism to the space-heating buffer, a start-of-step store since stage D, for the boiler and
 district-heating chain (decision 21, amending decision 7), and then to the heat pump's space heating (decision 22).
 Builds on the hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start
-(hisim-4g9.23, #914) and the simulator's kind order (#922, §4.3). This document describes the design of all four parts and marks what is
+(hisim-component-physics-4g9.23, #914) and the simulator's kind order (#922, §4.3). This document describes the design of all four parts and marks what is
 built; the measured results are in §11.
 
 ## 1. Problem
@@ -18,10 +18,10 @@ Stage C made the hot-water chain conserve energy and agree across step lengths f
 depend on the step length, because a controller decides once per step on the start temperature `T0` (D4) and a
 generator then runs the whole step (D6):
 
-- **Heat pump, hot water** (hisim-fxix.12). Full year 2021 against 60 s: hot-water heat +0.09 % at 900 s and
+- **Heat pump, hot water** (hisim-hydronics-fxix.12). Full year 2021 against 60 s: hot-water heat +0.09 % at 900 s and
   +0.27 % at 3600 s, but hot-water electricity **+1.73 %** and **+18.1 %**. An hour-long charge keeps the cylinder
   hot, so more of the heat is made above about 63 °C, where hplib runs near a COP of 1.
-- **Solar thermal** (hisim-fxix.11). Collector yield −7 % / −24 % (gas + solar) at 900 s / 3600 s; the backup makes
+- **Solar thermal** (hisim-hydronics-fxix.11). Collector yield −7 % / −24 % (gas + solar) at 900 s / 3600 s; the backup makes
   up the difference. The pump runs a whole step or none of it, and the backup heats the cylinder for a whole step
   beside the collector.
 - **Buffer-less heat distribution** (stage D, D3). Without a buffer the distribution system's pipe water is the only
@@ -81,7 +81,7 @@ Owner, 2026-10-12, after the year on the kind order (§11):
 
 17. **The boiler's part load goes ahead** (#915, directly on #922).
 18. **The heat pump's and the electric heater's (#916) and the collector's (#917) part load are parked** as draft
-    branches until the energy manager's raise cycle (hisim-4g9.28) and a fix of the car's controller under #922 are in;
+    branches until the energy manager's raise cycle (hisim-component-physics-4g9.28) and a fix of the car's controller under #922 are in;
     then they are measured again. The collector's part load came back on 2026-10-14 (decision 20).
 19. **The buffer-less loop's quasi-steady path (#918) is dropped**: on the kind order the district-heating twin meets
     hisim-hhj2's criterion without it (§11).
@@ -104,7 +104,7 @@ Owner, 2026-10-15, after stage D made the space-heating buffer a start-of-step s
     temperature of a start-of-step store is exactly linear in each circuit's ratio, so the rules of
     `part_load.StartOfStepPartLoadRule` are exact given the other circuits' ratios: each lands in one pass once the
     others stand, and together they settle within a few passes, where the rule of decision 11 alternates under a draw
-    (hisim-fxix.17). The boiler's controller raises the buffer to the heating curve's supply temperature, also from a
+    (hisim-hydronics-fxix.17). The boiler's controller raises the buffer to the heating curve's supply temperature, also from a
     buffer at that temperature that its draw would empty (a steady charge at full power: the controller asks for a 0.1 K
     lift only so that the boiler fires, and the boiler's pump sets the rise at its largest flow); the distribution
     controller lowers its ratio so that the buffer ends no lower than the room's start-of-step temperature, in forced
@@ -216,7 +216,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   follows `x_k = x_{k−1} − x_{k−2} + c` in `x = ln r`, whose roots lie on the unit circle: the ratio circles its fixed
   point with a period of six passes and settles only by chance. Measured on the gas twin, full year at 900 s, on the
   stack before the kind order moved under it: 1013 forced steps in the twin's order, 46 with the controller moved
-  before the boiler (§11). Owner decision (2026-10-10, hisim-fxix.16, closed): the simulator evaluates every L1
+  before the boiler (§11). Owner decision (2026-10-10, hisim-hydronics-fxix.16, closed): the simulator evaluates every L1
   controller before the physics, whatever the order of the file. Controller first is necessary, not sufficient: the
   condition is the cyclic order controller → device → store. `household_gas_solar_thermal` adds its hot-water tank
   before the boiler and the collector, so with the kind order alone a pass ran controller → tank → device, and on the
@@ -253,7 +253,7 @@ Unchanged against #914. It integrates every inflow it receives with `MixedNode.s
 own step mean. The controllers read its start temperature (`WaterTemperatureAtStartOfStepInCelsius`, `T0`) to decide
 and its end temperature (`WaterTemperatureAtEndOfStepInCelsius`) to set the ratio.
 
-The space-heating buffer (`SimpleHotWaterStorage`) follows once it is a node (stage D, hisim-fxix.5, hisim-ign9).
+The space-heating buffer (`SimpleHotWaterStorage`) follows once it is a node (stage D, hisim-hydronics-fxix.5, hisim-ign9).
 
 ## 7. Two devices on one store
 
@@ -264,7 +264,7 @@ the rule to the same end temperature, each with its own ratio run and target, an
   factor, so the store's rise follows the same line as with one device and lands as fast; the split is the one the
   two ratios had when they started, not a unique one;
 - with different targets (heat pump: 59.5 °C, 69.5 °C under the energy manager's raise; boiler: 60 °C; collector:
-  80 °C since 2026-10-11, owner decision, hisim-fxix.22) the device with the lower target sees the store above its
+  80 °C since 2026-10-11, owner decision, hisim-hydronics-fxix.22) the device with the lower target sees the store above its
   band once the other reaches its own aim, and its ratio decays geometrically towards 0, by the factor
   `(T_aim,low − T_start) / (T_end − T_start)` per pass, without swinging back; it reaches 0 only in the limit, so such
   a step may run into the simulator's forced passes
@@ -308,7 +308,7 @@ every step length; the code stays on the branch `part-load-hds`.
 | 60 s results and goldens | none | – |
 
 The same pattern serves the devices that will come (a separate hot-water heat pump, hisim-lenz; direct electric hot
-water, hisim-epc.21; the hybrid heat pump, hisim-epc.20), and the room-temperature devices with the room as their store
+water, hisim-renovisor-translator-epc.21; the hybrid heat pump, hisim-renovisor-translator-epc.20), and the room-temperature devices with the room as their store
 (hisim-w510).
 
 Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` when #915 is accepted:
@@ -343,13 +343,13 @@ gas + solar twin, whose collector runs whole steps, the hot-water gas is -0.18 %
 46 / 9). Four of its converged partial boiler steps end above the band, the worst 5.3 K: the collector lifts the tank
 past the boiler's band while the boiler's ratio decays towards 0 (§7). Space heating is not part of the rule: the
 boiler books +5.7 % / +21.3 % space-heating heat while the building receives -0.17 % / -0.66 %, on #922 too, because
-the space-heating buffer does not close its balance at coarse steps (stage D, hisim-fxix.5, hisim-ign9).
+the space-heating buffer does not close its balance at coarse steps (stage D, hisim-hydronics-fxix.5, hisim-ign9).
 
 **Parked (#916; decision 18)**, measured on its branch the same way, 900 s / 3600 s. The heat pump's
 hot-water electricity is +0.96 % / +8.89 % with the rule and +0.59 % / +9.36 % with whole-step charges, with
 1784 / 887 against 1601 / 618 flagged steps; 1383 of the 1784 flagged steps at 900 s run the whole step, the energy
-manager's raise cycle at the heat pump's own draw (hisim-4g9.28), and the 3600 s excess is the COP above 63 °C under
-that raise. The electric heater is -0.07 % / -0.26 % with the rule and 73 / 72 flagged steps (hisim-fxix.17), against
+manager's raise cycle at the heat pump's own draw (hisim-component-physics-4g9.28), and the 3600 s excess is the COP above 63 °C under
+that raise. The electric heater is -0.07 % / -0.26 % with the rule and 73 / 72 flagged steps (hisim-hydronics-fxix.17), against
 -0.14 % / +0.04 % and none with whole-step charges. On this base the rule does not improve the heat pump and the
 electric heater, and what is left for the heat pump comes from the energy manager's loop, so both wait for it. (On
 2026-10-12 the collector was measured on #916's branch: -1.75 % / -1.00 % with its rule, and the heat pump + solar
@@ -380,7 +380,7 @@ The gas + solar figures equal those of 2026-10-12 on #916's branch to every digi
 collector's rule takes the gas + solar collector within 1.75 % of 60 s at both steps and the boiler's hot-water gas
 within 0.3 %; the price is flagged steps at 3600 s, where 116 of the collector's 284 partial steps do not converge.
 In the heat pump + solar twin the heat pump runs whole steps here (#916 is parked); its hot-water electricity keeps
-the error of the energy manager's raise (hisim-4g9.28). hisim-fxix.11's done-when (collector and backup within 1 %
+the error of the energy manager's raise (hisim-component-physics-4g9.28). hisim-hydronics-fxix.11's done-when (collector and backup within 1 %
 at both steps, no step at `force_convergence`) is not met; it stays open.
 
 **Dropped (#918; decision 19).** District-heating twin, the quasi-steady loop / the dynamic one-step-lagged loop on the
@@ -394,13 +394,13 @@ the same head (then #914): in the twins' order, where the boiler ran before its 
 739 partial steps at 900 s and flagged 1013 / 679 steps at 900 s / 3600 s, with hot-water gas +0.27 % / +0.18 %; with
 the controller moved first it settled on 718 of 759 and flagged 46 / 50 steps (-0.00 % / -0.01 %), with fewer passes
 than the pass-counting search it replaced (3.42 against 4.20 at 900 s). That led to the kind order and the physics
-order (§4.3, #922, hisim-fxix.16, closed).
+order (§4.3, #922, hisim-hydronics-fxix.16, closed).
 
-**hisim-fxix.19's flow hysteresis alone, on the step mean, on the physics order (K′), 2026-10-11.** The same year
+**hisim-hydronics-fxix.19's flow hysteresis alone, on the step mean, on the physics order (K′), 2026-10-11.** The same year
 with the physics order of §4.3 (each L1 controller's device before the other physics the controller reads), measured
 on the old stack with #922 on top (after the removal of the simulator's fixed-point acceleration, #927, and with the
-solar pump's first hysteresis, hisim-fxix.19: the flow band alone, decided on the step mean, before the start-of-step
-decision and the restart band of hisim-fxix.21 and before the differential controller of 2026-10-14), against the
+solar pump's first hysteresis, hisim-hydronics-fxix.19: the flow band alone, decided on the step mean, before the start-of-step
+decision and the restart band of hisim-hydronics-fxix.21 and before the differential controller of 2026-10-14), against the
 60 s run of the same head, with the collector's part load (#917) and the heat pump's and the electric heater's (#916)
 on the branch. K is the kind order alone on the same base. Deviations are from the 60 s run, "forced" counts the
 flagged steps, and "partial steps converged" the partial steps that were not flagged. The physics order is part of
@@ -426,7 +426,7 @@ stores its controller reads, and their results are bit for bit those of K. In K�
 `household_gas_solar_thermal_building_sizer`, which differ only in the order their components are added, give
 identical results. Without the pump's hysteresis K′ forces 165 steps of the gas + solar year at 900 s (1292 in K);
 the 172 that remain are slow boiler heat-ups, alternations where the draw takes more than the rise the step still
-needs (hisim-fxix.17), and about 55 steps in which the collector pump switched on with no fixed point (hisim-fxix.21).
+needs (hisim-hydronics-fxix.17), and about 55 steps in which the collector pump switched on with no fixed point (hisim-hydronics-fxix.21).
 
 **The solar pump's hysteresis on #917 (#941), measured 2026-10-14**, full year 2021 with the predefined occupancy,
 #917 → #941, each against the 60 s run of its own head. #941 decides on the start-of-step sensors with the two
@@ -444,7 +444,7 @@ restart band included:
 
 The hysteresis removes most pump switch-ons and, in the gas + solar twin, most flagged steps. The 60 s years equal
 those of #941 measured on #915 (the collector's ratio is exactly 1 at 60 s). The restart band 3 K below a 60 °C stop
-costs collector heat at every step length (hisim-fxix.22), and the coarser the step the more (gas + solar at 3600 s:
+costs collector heat at every step length (hisim-hydronics-fxix.22), and the coarser the step the more (gas + solar at 3600 s:
 -15.6 % against 60 s). #942 moves the stop to the solar controller's own 80 °C maximum.
 
 **The differential controller with a speed-controlled pump (#941), measured 2026-10-14**, full year 2021 with the
@@ -523,19 +523,19 @@ both step lengths; its tank reaches 83.63 °C at 3600 s, below the tank's 90 °C
 
 ## 12. Beads
 
-Epic hisim-fxix.
+Epic hisim-hydronics-fxix.
 
 | Bead | Content | PR |
 |---|---|---|
 | hisim-naze (P1, closed) | threshold, rule, the boiler | #915 |
-| hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below #915 |
-| hisim-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
-| hisim-fxix.11 (P1) | the collector | #917 |
-| hisim-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
-| hisim-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
-| hisim-fxix.22 (P3, closed) | the solar controller's own 80 °C maximum storage temperature instead of the backups' 60 °C aim | #942 |
+| hisim-hydronics-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below #915 |
+| hisim-hydronics-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
+| hisim-hydronics-fxix.11 (P1) | the collector | #917 |
+| hisim-hydronics-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
+| hisim-hydronics-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
+| hisim-hydronics-fxix.22 (P3, closed) | the solar controller's own 80 °C maximum storage temperature instead of the backups' 60 °C aim | #942 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P3) | solar priority as a control strategy | – |
-| hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5): the boiler and district heating with decision 21, the heat pump's space heating with decision 22 | stage D |
+| hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-hydronics-fxix.5): the boiler and district heating with decision 21, the heat pump's space heating with decision 22 | stage D |
 | hisim-3y10 (P2) | the open points of decision 5 | measured on the old stack (#915 to #918) |
-| hisim-w510 (P4) | room-temperature devices (parent hisim-4g9) | – |
+| hisim-w510 (P4) | room-temperature devices (parent hisim-component-physics-4g9) | – |

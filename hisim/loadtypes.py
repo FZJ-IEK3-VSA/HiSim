@@ -303,7 +303,7 @@ class OutputPostprocessingRules(str, enum.Enum):
 @enum.unique
 class EnergyRole(str, enum.Enum):
 
-    """What an energy port of a component is in that component's energy balance (hisim-9uoo.1).
+    """What an energy port of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
     The balance a component closes is ``sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE) = 0``
     over all its ports, per timestep. A port's value is read with its own sign: a negative ``IN``
@@ -324,7 +324,7 @@ class EnergyRole(str, enum.Enum):
 @enum.unique
 class EnergyBalanceCarrier(str, enum.Enum):
 
-    """The energy carrier an energy port carries, for the balance check and the Sankey (hisim-9uoo.1).
+    """The energy carrier an energy port carries, for the balance check and the Sankey (hisim-energy-sankeys-9uoo.1).
 
     Distinct from :class:`hisim.economics.carriers.EnergyCarrier`, which names what is *priced* at the
     system boundary: this one also names the heat inside the house. Heat is split by what it is used

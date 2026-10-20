@@ -613,7 +613,7 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
 
     The pellet and wood-chip twins' on/off controller asks for full power on a lift that shrinks to a few mK while
     the buffer reaches its set temperature: the boiler pumped 958 kg/s on the year's mean and booked 51.7 MWh of
-    space heating for 11.0 MWh delivered (hisim-4g9.63). The pump moves at most
+    space heating for 11.0 MWh delivered (hisim-component-physics-4g9.63). The pump moves at most
     :attr:`PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND`, so a 0.01 K lift is raised to the rise the heat gives at that
     flow: 5 K at full power (18000 W), 1/3 K at the 2 kW minimum (1200 W at 0.6). The heat the boiler books is the
     heat that flow carries, which is the burner's heat, and the fuel the commanded power. The expected heats are

@@ -322,7 +322,7 @@ def test_compare_uses_module_tolerance_defaults() -> None:
 
 
 def test_compare_a_physically_zero_kpi_differing_in_its_last_bits_is_equal() -> None:
-    """The absolute floor absorbs the rounding noise a physically zero KPI is made of (hisim-b3b.6).
+    """The absolute floor absorbs the rounding noise a physically zero KPI is made of (hisim-declarative-systems-b3b.6).
 
     The values are the electric-heating house's one-week temperature deviation below 20 °C, as
     the bless wrote it and as the check computed it: 6e-17 apart, a relative difference of 4e-8.

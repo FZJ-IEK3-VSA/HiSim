@@ -175,11 +175,11 @@ tests/
   matrix is the shipped design; add a `--shard` mode only if per-pair spin-up
   overhead becomes a problem.
 
-## 7. Determinism & tolerance policy → hisim-b3b.6
+## 7. Determinism & tolerance policy → hisim-declarative-systems-b3b.6
 
 - Same-machine is byte-exact (proven); drift only appears cross-platform (last-ULP).
 - **Compare with `rel_tol = 1e-9`, `abs_tol = 1e-12`** (confirmed, §14.2; the floor added
-  2026-10-12, hisim-b3b.6) — absorbs sub-ULP platform noise, catches real changes. (Replaces
+  2026-10-12, hisim-declarative-systems-b3b.6) — absorbs sub-ULP platform noise, catches real changes. (Replaces
   the unjustified `1e-6` placeholder.) Values are equal when `math.isclose` holds, that is when
   `|got - ref| <= max(rel_tol * max(|got|, |ref|), abs_tol)`; both live in
   `hisim/postprocessing/kpi_computation/tolerances.py`.
@@ -402,7 +402,7 @@ bless. Adding a setup later is the same loop: append to the list, validate, bles
    `golden_config.json` holds all 22 system setups, and since #943 each has a week and a
    full-year pair, 44 pairs. `golden_validate.py` is the probe that a listed setup runs
    offline (several reference UTSP and may need `USE_PREDEFINED_PROFILE`).
-2. **Tolerance** — ✅ RESOLVED: `rel_tol = 1e-9`, `abs_tol = 1e-12` (the floor added 2026-10-12, hisim-b3b.6; §7).
+2. **Tolerance** — ✅ RESOLVED: `rel_tol = 1e-9`, `abs_tol = 1e-12` (the floor added 2026-10-12, hisim-declarative-systems-b3b.6; §7).
 3. **Parallel unit & triggers** — ✅ RESOLVED: per-pair (22 jobs at first; since #848 the pairs
    run in a few shards, `golden_matrix.py --shards`);
    `golden_check`/`golden_update`/`golden_matrix` take `--setup` + `--param`.

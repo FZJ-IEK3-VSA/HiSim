@@ -9,7 +9,7 @@ Where each document belongs -- the root, the binding guidelines in `system_docs/
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
 - No test should leave any calculation artefact in any other directory
-- Exception — cache directories (hisim-epc.22): the directories listed in `SimulationParameters.cache_directories` (or the `HISIM_CACHE_DIRECTORIES` environment variable) are shared state, not output, and are exempt from both rules above. A cache entry is content-keyed and deterministic; keeping it across calculations is wanted. Its location must be a declared directory, never the repository working tree.
+- Exception — cache directories (hisim-renovisor-translator-epc.22): the directories listed in `SimulationParameters.cache_directories` (or the `HISIM_CACHE_DIRECTORIES` environment variable) are shared state, not output, and are exempt from both rules above. A cache entry is content-keyed and deterministic; keeping it across calculations is wanted. Its location must be a declared directory, never the repository working tree.
 - When components expose string constants for field names, connection names, output names, or class-derived identifiers, reference those constants instead of duplicating the literal strings. This keeps connections safe when the constants are renamed or adjusted.
 - Every name that holds a physical quantity carries its unit: Python variables, attributes, function parameters,
   config fields, constants, component input and output names, KPI helpers and test helpers alike. Spell it as the
@@ -24,7 +24,7 @@ Where each document belongs -- the root, the binding guidelines in `system_docs/
   shown next to its mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor,
   the webtool and the golden references, so they are not renamed for this rule; renaming them would break the
   goldens and the RenoVisor side (owner decision, Noah, 2026-10-16). A KPI that is renamed for another reason
-  states that reason in its own bead, as hisim-h2ib.7 does for "Unmet DHW heat demand".
+  states that reason in its own bead, as hisim-agent-rules-h2ib.7 does for "Unmet DHW heat demand".
 - Every component follows `system_docs/component_design_principles.md`: it is one of the component kinds (data
   source, physics, L1 controller, L2 controller, meter), inherits that kind's base class from `hisim/component.py`
   (`DataSourceComponent`, `PhysicsComponent`, `L1ControllerComponent`, `L2ControllerComponent`, `MeterComponent`)
@@ -179,9 +179,17 @@ progress.
 ### Creating a bead
 
 ```bash
-br create "<what is wrong or wanted, as a sentence>" -t bug -p 1 --parent hisim-4g9 \
+br create "<what is wrong or wanted, as a sentence>" -t bug -p 1 --parent hisim-component-physics-4g9 \
     -l components -d "<where, how to reproduce, why it matters, the owner's decision if any>"
+br create "<the theme, as a sentence>" -t epic -p 2 --slug energy-sankeys -l postprocessing -d "<...>"
 ```
+
+Ids are readable. A child keeps its epic's id plus `.N` (`hisim-energy-sankeys-9uoo.18`); `--parent`
+numbers it. Every other bead, an epic above all, gets a slug of two to four lowercase words:
+`--slug energy-sankeys` gives `hisim-energy-sankeys-<hash>`. An agent that cannot run `br` (a
+worktree) writes the same shape by hand. The epics open on 2026-10-20 were renamed once and kept
+their hash, so a search for the hash still finds them; `.beads/renamed_ids.yaml` lists them, and
+`python scripts/rename_bead_ids.py` renames the old ids on a branch that still carries them.
 
 ### Getting the overview
 
@@ -303,8 +311,8 @@ git push                # Push to remote
   original text to be acted on without the source.
 - `br` commands never run git: stage `.beads/issues.jsonl` with the code change that closes or
   creates issues, after `br sync --flush-only`.
-- `.beads/issues.jsonl` stays sorted by bead id in plain string order (`hisim-4g9.10` before
-  `hisim-4g9.9`), the order `br sync --flush-only` writes. A bead added or edited without `br` is
+- `.beads/issues.jsonl` stays sorted by bead id in plain string order (`hisim-component-physics-4g9.10` before
+  `hisim-component-physics-4g9.9`), the order `br sync --flush-only` writes. A bead added or edited without `br` is
   inserted at its sorted position, never appended at the end, and an edited bead keeps its line in
   place. Two branches that each append a bead collide at the end of the file and force a rebase
   (and a fresh CI run) of every stacked pull request after its parent merges; at sorted positions

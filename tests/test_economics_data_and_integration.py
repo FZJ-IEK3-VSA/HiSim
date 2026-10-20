@@ -369,7 +369,7 @@ class TestEuroPerKilowattHourBasis:
     ):
         """Every shipped wood-chip EUR/kWh value is its notes' EUR/t quote over the PhysicsConfig kWh per tonne.
 
-        The pellet pin's analogue for the rows hisim-l07.15 re-quoted (96 EUR/t is 0.02215 EUR/kWh at 4333.3
+        The pellet pin's analogue for the rows hisim-cost-data-l07.15 re-quoted (96 EUR/t is 0.02215 EUR/kWh at 4333.3
         kWh/t). The divisor is read from PhysicsConfig rather than written down, so a heating value that drifts
         from the one the rows were converted with fails here; the AI rows' 80 kg CO2/t is pinned the same way.
         """
@@ -393,7 +393,7 @@ class TestEuroPerKilowattHourBasis:
                 )
 
     def test_the_legacy_german_wood_chip_price_is_about_two_cents_per_kwh(self):
-        """96 EUR/t over 15.6 GJ/t is 0.02215 EUR/kWh, not the 0.00554 the per-m3 reading gave (hisim-l07.15)."""
+        """96 EUR/t over 15.6 GJ/t is 0.02215 EUR/kWh, not the 0.00554 the per-m3 reading gave (hisim-cost-data-l07.15)."""
         price = CostDatabase().get_energy_price(EnergyCarrier.WOOD_CHIPS, 2024, "DE")
 
         assert price.working_price_in_euro_per_kwh.best_estimate == pytest.approx(0.02215, abs=5e-6)

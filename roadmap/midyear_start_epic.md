@@ -69,7 +69,7 @@ always come from its wired inputs — its own solar cache is dead code, see the 
 collector already follows `start_date`), and the whole occupancy/car chain is fixed inside the LPG
 connector, which is the profile owner for both.
 
-## Owner decisions of 2026-10-14 (PR2, hisim-9g2.4)
+## Owner decisions of 2026-10-14 (PR2, hisim-midyear-windows-9g2.4)
 
 Three points below were settled when PR2 was implemented, because the text above and below them
 contradicted itself or had been overtaken by the cache-service work:
@@ -86,7 +86,7 @@ contradicted itself or had been overtaken by the cache-service work:
    pins all of these.
 2. **Caches: producer keys, no epoch.** Weather, PV and the building's solar gains were already
    producers whose key fingerprints their code (cache-service work after this plan was written); the
-   solar-thermal sun position and the car profile followed (hisim-hi1.4). The manual
+   solar-thermal sun position and the car profile followed (hisim-caching-hi1.4). The manual
    `CacheEpoch` below is dropped: a producer's key moves when its code does. What a key cannot see
    by itself -- that two runs read different windows of the same weather year -- is carried as the
    `window_start` field of every window-sensitive producer's inputs (PV, building solar gains, solar
@@ -100,7 +100,7 @@ The oracle perturbs the numeric `initial_*` configuration fields for its self-ca
 a fixed set (weather, occupancy, the building's solar gains) exactly whatever the calibration says,
 and lists the components whose state no `initial_*` field sets as false alarms.
 
-## Owner decision of 2026-10-16: the CSV loader (hisim-9g2.14)
+## Owner decision of 2026-10-16: the CSV loader (hisim-midyear-windows-9g2.14)
 
 The CSV loader is a profile owner of the "slice a kept year" shape, but its configuration named no
 time column, so it read timestep 0 as 1 January whatever `start_date` said. `CSVLoaderConfig` now has
@@ -166,7 +166,7 @@ epic that changes what a cached producer writes bumps it, with the PR number as 
 history reads. CI never shares a cache across the epic's branches (the per-run empty cache
 directory pattern the parity rig already uses).
 
-## Initial states (storages, thermal mass, batteries) → hisim-9g2.2, hisim-4g9.14
+## Initial states (storages, thermal mass, batteries) → hisim-midyear-windows-9g2.2, hisim-component-physics-4g9.14
 
 The inventory, measured and cited in the analyses, in one line each: building thermal mass starts
 at 22 °C (winter-typical; still 4.9 % off on day 7 after a 6 K perturbation — the largest and
@@ -192,7 +192,7 @@ untangle before any building-side seasonal default: `initial_internal_temperatur
 doubles as the *permanent* window-opening comfort floor in the building's free-cooling rule — a
 field named "initial" that is silently a model parameter.
 
-**Superseded for the storages (hisim-4g9.64, owner request 2026-10-14, decisions 2026-10-15):**
+**Superseded for the storages (hisim-component-physics-4g9.64, owner request 2026-10-14, decisions 2026-10-15):**
 every storage now states one start value as a class constant, and the state classes lost their
 contradicting defaults. Half charged: the house battery and the car battery at a state of charge of
 0.5 (the "Battery losses" KPI now subtracts the change of the stored energy, so the charge held at
@@ -245,7 +245,7 @@ anchors — Berlin 00:30, Berlin 00:00 after the padding row ``Weather.interpola
 UTC 00:00 — which is exactly why "resolve against the delivered frame" is the rule); and the
 cold-then-warm cache equality assertion.
 
-## The PR plan → hisim-9g2.3, hisim-9g2.4, hisim-9g2.5, hisim-9g2.6, hisim-9g2.7, hisim-9g2.8, hisim-9g2.9
+## The PR plan → hisim-midyear-windows-9g2.3, hisim-midyear-windows-9g2.4, hisim-midyear-windows-9g2.5, hisim-midyear-windows-9g2.6, hisim-midyear-windows-9g2.7, hisim-midyear-windows-9g2.8, hisim-midyear-windows-9g2.9
 
 ```
 PR1 (window contract; YEARLYFORECAST→window renames; plot labels; delete dead smart device)
@@ -275,7 +275,7 @@ blesses the first true July references. The PR8+ series moves no golden at all: 
 default to today's constants, and each PR's proof is its component's columns going exactly to zero
 in the seeded oracle.
 
-## Independent repairs surfaced by the analyses → hisim-9g2.10, hisim-9g2.11, hisim-4g9.12, hisim-4g9.13, hisim-4g9.14, hisim-9g2.2
+## Independent repairs surfaced by the analyses → hisim-midyear-windows-9g2.10, hisim-midyear-windows-9g2.11, hisim-component-physics-4g9.12, hisim-component-physics-4g9.13, hisim-component-physics-4g9.14, hisim-midyear-windows-9g2.2
 
 In scope, batched as noted: the leap-year refusal (PR2 — the offset lookup is where "this source
 cannot serve this date" is decidable); the DWD_15MIN reader sizing its index from the *run's*
@@ -290,7 +290,7 @@ Out of scope, each with its trigger: `generic_price_signal` emits a constant (el
 forever) — not profile-driven, cannot be made wrong by this epic; fix when a setup needs a
 time-varying tariff. The `i_save_state` reference/self-assignment bugs — live convergence-loop
 defects, prerequisite for checkpointing; on the cleanup list. The initial-state default
-contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settled by hisim-4g9.64,
+contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settled by hisim-component-physics-4g9.64,
 every storage states one start value. The MPC's uninterpretable `10/15` Wh literal — flag for whoever
 touches the MPC. The building's dual-purpose `initial_internal_temperature_in_celsius` — split
 before any building-side seasonal default.

@@ -227,7 +227,7 @@ class TestEveryTargetReceivesItsValue:
         assert config_of(system, Targets.BUILDING)[Targets.SET_HEATING_TEMPERATURE] == 23
 
     def test_a_kept_heat_pumps_rated_scop_reaches_hplib(self) -> None:
-        """hisim-4g9.15: both ratings land on the hplib config, which calibrates its fit to them."""
+        """hisim-component-physics-4g9.15: both ratings land on the hplib config, which calibrates its fit to them."""
         system = translate(
             baseline(
                 heating={
@@ -377,7 +377,7 @@ class TestTheSwitchesOfDecisionDD:
 
 @pytest.mark.base
 class TestAStatedSizeReachesTheComponent:
-    """hisim-4g9.2: a size the request states is the size the run builds, not one the setup picks.
+    """hisim-component-physics-4g9.2: a size the request states is the size the run builds, not one the setup picks.
 
     The translator writes a battery's capacity and power onto the twin's two sized ``Battery``
     fields, which switches their sizing laws off, so the sizing kernel leaves them as written.

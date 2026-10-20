@@ -2,7 +2,7 @@
 
 PR A adds ``SimulationParameters.weather_year`` without behaviour: validated, keyed and recorded
 only when set -- every unset key, record and file stays byte-identical -- and refused by the weather
-component by name until selecting a year is implemented (hisim-wps1.3).
+component by name until selecting a year is implemented (hisim-weather-year-wps1.3).
 
 PR B reads the years a weather file declares (``WeatherSourceFiles.data_years``), publishes the
 effective weather year into the simulation repository and says at INFO when the file's year is not
@@ -176,7 +176,7 @@ def test_an_unknown_key_and_a_bad_weather_year_are_refused_as_format_errors(
 @pytest.mark.base
 def test_the_weather_refuses_a_set_weather_year_by_name() -> None:
     """Until selecting a year is implemented, the weather does not silently read by position."""
-    with pytest.raises(WeatherYearNotImplementedError, match="weather_year=2019.*hisim-wps1.3"):
+    with pytest.raises(WeatherYearNotImplementedError, match="weather_year=2019.*hisim-weather-year-wps1.3"):
         weather.Weather(
             my_simulation_parameters=one_day(2019),
             config=weather.WeatherConfig.preset_aachen("Weather"),
@@ -329,7 +329,7 @@ def test_a_2021_run_over_a_2019_file_says_so_at_info(tmp_path: pathlib.Path, mon
 
     notes = [message for message in messages if "by position" in message]
     assert notes == [
-        "weather of 2019 laid onto 2021 by position; set weather_year to select a year (hisim-wps1.3)"
+        "weather of 2019 laid onto 2021 by position; set weather_year to select a year (hisim-weather-year-wps1.3)"
     ]
     assert repository.get_entry(weather.Weather.WEATHER_YEAR_EFFECTIVE_KEY) == 2019
 

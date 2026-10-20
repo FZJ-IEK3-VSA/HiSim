@@ -27,7 +27,7 @@ parameters:
      description: 'Maximal electric power and so the maximal heat; AUTO is the building''s heating load. The heater
        caps only the steps that also heat water; a space-heating-only step follows the building''s demand.'}
      # range: the panel heaters of a small flat (2 kW) up to the direct heating of a large old house (20 kW)
-     # the uncapped space-heating-only steps are a component bug, hisim-4g9.30
+     # the uncapped space-heating-only steps are a component bug, hisim-component-physics-4g9.30
 
 components:
   Controller:

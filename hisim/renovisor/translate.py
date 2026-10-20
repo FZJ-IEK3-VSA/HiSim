@@ -1645,7 +1645,7 @@ def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optio
     """Return why a generator is an approximation of its twin, or ``None`` when it is exact.
 
     HVO is not here: it runs the oil twin as heating oil, which ``not_implemented_yet.yaml`` says,
-    as it says for LPG running the gas twin (hisim-epc.19).
+    as it says for LPG running the gas twin (hisim-renovisor-translator-epc.19).
     """
     del state
     if generator is HeatGenerator.BIOMASS_HEATING:
@@ -1758,7 +1758,7 @@ def _flow_temperature(state: _TranslationState, generator: HeatGenerator, heatin
 
 
 def _standardized_scop(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:
-    """Write the heat pump's rated SCOP onto hplib, which calibrates its fit to it (hisim-4g9.15).
+    """Write the heat pump's rated SCOP onto hplib, which calibrates its fit to it (hisim-component-physics-4g9.15).
 
     The request's checks guarantee a stated SCOP sits on a heat pump, and a ``heating_system``
     measure removes it with the rest of the old generator's description: a new heat pump keeps

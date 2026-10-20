@@ -90,7 +90,7 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     The expected counts are hand-written truths about the shipped config — twenty-three entries (the
     twenty-two Python setups and the energy-system file ``gas_boiler_household``) run the week, and all
     of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
-    decision 2026-10-11), and all of them the July week (hisim-9g2.8, the electrolyzer since hisim-xgzf)
+    decision 2026-10-11), and all of them the July week (hisim-midyear-windows-9g2.8, the electrolyzer since hisim-xgzf)
     — rather than re-derived through the very predicate under test, which would
     reproduce any logic error on both sides of the assertion. A new setup joining the config moves
     these literals on purpose: the reviewer of that change should see the gate grow.
@@ -107,7 +107,7 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
 def test_every_shipped_setup_runs_the_july_week() -> None:
     """Catches a setup slipping out of the July week pairs.
 
-    The July pairs bless the first true July references (hisim-9g2.8). The last setup kept out of them,
+    The July pairs bless the first true July references (hisim-midyear-windows-9g2.8). The last setup kept out of them,
     ``electrolyzer_with_renewables``, reads its wind profile's time column since hisim-xgzf; every profile
     owner now reads July, so no setup has a reason to stay out.
     """

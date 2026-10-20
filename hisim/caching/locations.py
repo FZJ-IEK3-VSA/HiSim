@@ -1,7 +1,7 @@
 """The ordered cache directories of one calculation: read in order, write to the first writable one.
 
 A container maps a persistent volume and a baked-in seed directory in and passes both as
-``SimulationParameters.cache_directories`` (hisim-epc.22): a read finds an entry in any of them,
+``SimulationParameters.cache_directories`` (hisim-renovisor-translator-epc.22): a read finds an entry in any of them,
 in order, and a new entry is written to the first directory that can take it, so a read-only seed
 is never written to and the volume accumulates what the seed lacks. The cache is content-keyed and
 deterministic, which is what makes reading across directories safe: an entry found in a later

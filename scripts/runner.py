@@ -62,7 +62,7 @@ class SetupConfig:
     #: The horizons this setup participates in (``"day"``/``"week"``/``"july_week"``/``"year"``), or
     #: ``None`` for all of them. Every shipped setup runs both the week and the full year
     #: (owner decision 2026-10-11: every system setup has a full-year golden) and the July week
-    #: (hisim-9g2.8); the shipped config sets it for no setup today
+    #: (hisim-midyear-windows-9g2.8); the shipped config sets it for no setup today
     #: (``tests/test_golden_matrix.py``).
     horizons: Optional[list[str]] = None
     #: The recorded wall time of each of its pairs on a GitHub runner, in seconds, by parameter-set

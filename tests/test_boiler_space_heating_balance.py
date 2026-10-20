@@ -6,7 +6,7 @@ content. Over a winter day at 60 s, the reference step, the boiler's booked heat
 three. The pellet and wood-chip twins did not: their on/off controller asked for full power on a lift that shrank to
 a few mK while the buffer reached its set temperature, the boiler sized its flow to that lift (hundreds of kg/s) and
 booked its full heat, and the buffer, which mixes a step's inflow into its water, took in only a small part of it.
-Over the year 2021 they booked 51.7 MWh for 11.0 MWh delivered (hisim-4g9.63). The boiler's pump now has a largest
+Over the year 2021 they booked 51.7 MWh for 11.0 MWh delivered (hisim-component-physics-4g9.63). The boiler's pump now has a largest
 flow, and a lift below the rise the heat gives at that flow is raised to it.
 
 The buffer is a start-of-step node: every circuit is booked on the temperature it starts the step at, and the buffer

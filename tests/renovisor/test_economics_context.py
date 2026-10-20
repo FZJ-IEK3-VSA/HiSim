@@ -83,7 +83,7 @@ def _mockup() -> Dict[str, Any]:
 #: choices here: the builder computes the existing generator's size from the building's design
 #: heat load, so a configuration without them cannot be priced at all, and these are the values
 #: ``tests/renovisor/test_translate.py`` pins the translated mockup to. The mockup's 1975 house
-#: lands on its exact band since the Building guards zero envelope areas (hisim-4g9.1); before,
+#: lands on its exact band since the Building guards zero envelope areas (hisim-component-physics-4g9.1); before,
 #: the unusable-row workaround substituted band 06 here.
 MOCKUP_BUILDING_CODE = "IE.N.SFH.05.Gen.ReEx.001.001"
 MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS = -3.0
@@ -589,7 +589,7 @@ class TestTheMappingReportHalf:
             assert value is not None
 
     def test_a_stated_living_area_wins_and_an_unstated_one_falls_back(self) -> None:
-        """hisim-epc.14: the area the cost lines scale with, stated or defaulted with a line."""
+        """hisim-renovisor-translator-epc.14: the area the cost lines scale with, stated or defaulted with a line."""
         document = _mockup()
         document["house"]["building"]["living_area_in_m2"] = 128.0
         built = _built(document)
@@ -708,7 +708,7 @@ class TestTheEnvelopeInstallationYears:
             _building(facade_area_in_m2=173.0),
             heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
         )
-        # A TABULA row without windows, as some rows are (hisim-4g9.1).
+        # A TABULA row without windows, as some rows are (hisim-component-physics-4g9.1).
         builder._envelope.information().window_area_in_m2 = 0.0  # pylint: disable=protected-access
         built = builder.build()
 
@@ -789,7 +789,7 @@ class TestTheSubsidyContext:
         ],
     )
     def test_the_applicant_role_becomes_the_profiles_actor(self, role: str, actor: ApplicantActor) -> None:
-        """hisim-epc.14: a landlord applies to landlord programmes, not to owner-occupier ones."""
+        """hisim-renovisor-translator-epc.14: a landlord applies to landlord programmes, not to owner-occupier ones."""
         document = _mockup()
         document["applicant"] = {"role": role, "main_residence": True}
         context = _built(document).context.subsidy_context
@@ -1042,7 +1042,7 @@ class TestTheTechnicalAttributes:
     def test_a_pinned_array_publishes_its_peak_power_in_kilowatt_peak(self) -> None:
         """The attribute a condition on array size could read; no shipped scheme reads it.
 
-        Ireland's solar PV grant is tiered on the cost facts' own size since hisim-cyc.3, not on
+        Ireland's solar PV grant is tiered on the cost facts' own size since hisim-economics-engine-cyc.3, not on
         this attribute; it stays published as information for condition authors.
         """
         document = _mockup()

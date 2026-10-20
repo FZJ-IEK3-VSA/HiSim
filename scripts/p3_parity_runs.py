@@ -42,7 +42,7 @@ class ParityWindows:
     HiSim ships starts on the first of January, which measures each cooling device, air conditioner
     and solar-thermal collector in the darkest week of the year, and the July week is the answer.
     It was fenced out of the rig until the mid-year-start epic (``roadmap/midyear_start_epic.md``)
-    made a mid-year start read the window's profiles instead of January's (hisim-9g2.8).
+    made a mid-year start read the window's profiles instead of January's (hisim-midyear-windows-9g2.8).
 
     Both names are spelled here and in ``p3_parity_matrix.MatrixPaths``, the one module of the rig
     that imports nothing, so the checker, the matrix emitter and the workflow agree on them; a test

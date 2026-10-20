@@ -18,7 +18,7 @@ Besides these, the root holds only what packaging, licensing and the tools need:
 `CITATION.cff`, the configuration of the build and the checks (`pyproject.toml`, `setup.py`, `setup.cfg`,
 `pytest.ini`, `mypy*.ini`, `.pylintrc`, ...), the Dockerfiles and the logos `README.md` shows. No spec, plan,
 notes, log or todo list lives in the root. Three files that fit none of this are still there and wait for removal
-(hisim-h2ib.10).
+(hisim-agent-rules-h2ib.10).
 
 ## `system_docs/`: binding guidelines
 
@@ -47,7 +47,7 @@ authority. It changes by pull request, with the owner's agreement.
 
 A spec is a design record, not a rule for the code: docstrings never cite it (`coding_style.md` §6), and a guide
 states its rules itself, naming a spec only as the source of an example or a decision. The spec citations that
-docstrings and comments in `hisim/` still carry are removed under hisim-h2ib.26. A rule that a spec settles for
+docstrings and comments in `hisim/` still carry are removed under hisim-agent-rules-h2ib.26. A rule that a spec settles for
 good is written into a guideline in `system_docs/`.
 
 ## Next to the code

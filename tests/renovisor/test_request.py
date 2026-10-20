@@ -771,7 +771,7 @@ class TestTheMeasurePriceBand:
 
 @pytest.mark.base
 class TestTheAdditiveRequestFields:
-    """T-SCHEMA: the four E-spec §7 fields the schema adopted (hisim-epc.14).
+    """T-SCHEMA: the four E-spec §7 fields the schema adopted (hisim-renovisor-translator-epc.14).
 
     They were read before they were accepted — the readers exist, the schema did not carry the
     blocks — so a real request could not reach them. The cases here are the schema's own: a

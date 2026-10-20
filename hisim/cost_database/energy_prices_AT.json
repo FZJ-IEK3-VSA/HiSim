@@ -96,7 +96,7 @@
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -112,7 +112,7 @@
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -241,7 +241,7 @@
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -257,7 +257,7 @@
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
     },
     {
       "carrier": "DISTRICT_HEATING",

@@ -166,7 +166,7 @@ class StandardizedSeasonalCop:
 
 
 class ScopCalibration:
-    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-4g9.15).
+    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
 
     hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole
     database group, so the simulated machine is the average unit of its group. A stated

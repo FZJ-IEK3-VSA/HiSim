@@ -273,7 +273,7 @@ def test_the_produced_profile_is_hourly_and_in_standard_time() -> None:
 
     In January the wall clock is standard time, so the drive from 08:00 to 08:30 is in the hour starting
     at 08:00, which carries its 15 km, and the car is at the workplace for all of the hours 09:00 to 16:00.
-    Catches the profile being read in UTC, an hour earlier, as it was before hisim-9g2.5.
+    Catches the profile being read in UTC, an hour earlier, as it was before hisim-midyear-windows-9g2.5.
     """
     produced = produce_car_profile(calculation_inputs())
 

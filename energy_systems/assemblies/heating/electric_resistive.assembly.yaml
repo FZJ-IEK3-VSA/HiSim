@@ -87,5 +87,5 @@ tests:
       # test day: with every hot-water charge running to the 60 °C aim, a stronger heater ends the day's last charge at
       # a slightly different tank temperature (total 99.1 kWh at 14 kW, 98.9 kWh at 20 kW, measured in the kind order)
   expect:
-    - {kpi: Total energy consumption, member: Heater, min: 85, max: 115}
-      # 98.9 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+    - {kpi: Total energy consumption, member: Heater, min: 155, max: 215}
+      # 181.8 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

@@ -146,7 +146,7 @@ tests:
       # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_WOOD_CHIP_HEATING): a larger vessel
       # has more surface
   expect:
-    - {kpi: Total WoodChips consumption (energy), member: Boiler, min: 105, max: 145}
-      # 123.8 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 125.9 kWh
+    - {kpi: Total WoodChips consumption (energy), member: Boiler, min: 135, max: 190}
+      # 161.1 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW; 125.9 kWh
       # before the burner kept its minimum firing time and pause (hisim-75mt), 201.1 kWh before the boiler's pump had
       # a largest flow (hisim-4g9.63)

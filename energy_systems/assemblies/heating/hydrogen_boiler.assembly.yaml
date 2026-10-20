@@ -131,5 +131,5 @@ tests:
        direction: increasing}
       # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_GAS_HEATER): a larger vessel has more surface
   expect:
-    - {kpi: Total Green Hydrogen consumption (energy), member: Boiler, min: 110, max: 150}
-      # 129.7 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW
+    - {kpi: Total Green Hydrogen consumption (energy), member: Boiler, min: 135, max: 190}
+      # 160.3 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW

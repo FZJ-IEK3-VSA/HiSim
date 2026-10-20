@@ -2,7 +2,7 @@
 
 Status: draft, D1 to D4 decided (owner, 2026-10-19), open questions in §8. Nothing of §4 is built: today only the
 five heat generators declare energy ports, and the Sankeys are one diagram per carrier. Owner: Noah Pflugradt. Epic:
-hisim-9uoo, acceptance bead hisim-mzft. Builds on: #870 and #871 (the energy-port contract, the balance check, the
+hisim-energy-sankeys-9uoo, acceptance bead hisim-mzft. Builds on: #870 and #871 (the energy-port contract, the balance check, the
 per-carrier Sankeys), `roadmap/hydronic_coupling_spec.md` (stages B to D built, stage E is part of §9),
 #1019 (the Sankeys carry their numbers).
 
@@ -22,7 +22,7 @@ in `more_advanced_heat_pump_hplib.py`, resolved by `Wiring.peer_of` in
 
 The diagrams are also split by carrier (`SankeyDiagram.per_carrier` in `sankey.py`): electricity, ambient heat,
 space-heating heat and hot-water heat each get their own picture, and the heat pump joins them only in
-`overall.html`, where every link is the same grey (hisim-9uoo.18).
+`overall.html`, where every link is the same grey (hisim-energy-sankeys-9uoo.18).
 
 What is wanted (hisim-mzft): for every recorded twin, one diagram from the sources (grid, sun, ambient heat, fuel,
 district heat) through the devices, storages and the distribution system to the end uses and losses, with no
@@ -59,10 +59,10 @@ have no energy port to declare: controllers, meters, data sources without energy
 with the interactive HTML and look at how the complete diagram reads. The owner prefers arrows in the style of his
 data-center picture (`matplotlib.sankey`-like, losses as side branches), but its automatic layout is involved.
 Consequence: the graph model (§4) does not depend on the drawing; one graph, one renderer (plotly) now. The arrow
-renderer is bead hisim-9uoo.19 (P3), with what it needs: orientation rules per node kind, losses as side branches,
+renderer is bead hisim-energy-sankeys-9uoo.19 (P3), with what it needs: orientation rules per node kind, losses as side branches,
 sources ordered left and sinks right.
 
-The epic's earlier decisions stand: the tolerance (decision 6 of hisim-9uoo: 0.1 % of the run's throughput, per step
+The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sankeys-9uoo: 0.1 % of the run's throughput, per step
 `max(1e-6 kWh, 0.1 %)`), and every failing balance or one-sided link fails the run (owner, 2026-10-02).
 
 ## 3. Terms
@@ -107,7 +107,7 @@ storage nodes add the port's display name.
 
 Every edge carries one carrier (`lt.EnergyBalanceCarrier`), a yearly value in kWh (always drawn positive; a negative
 total turns the edge round, as `SankeyBuilder.add` does) and the ports it came from. Links are coloured by carrier
-(hisim-9uoo.18; a colour-blind-safe palette such as Okabe-Ito).
+(hisim-energy-sankeys-9uoo.18; a colour-blind-safe palette such as Okabe-Ito).
 
 1. **Transfer** between two components that both declare ports: a producer's `OUT` port and a consumer's `IN` port
    of the same carrier whose peers name each other through the wiring (`DeclaredPorts.declared_links`, unchanged).
@@ -171,7 +171,7 @@ The bus is formed from the declared ports, nothing else:
 - Per step `t`, `net_t = Σ IN_t (consumers) − Σ OUT_t (producers)` over the members, in kWh.
 - **Grid import** `= max(net_t, 0)`, **grid export** `= max(−net_t, 0)`, each summed over the run. The bus closes
   by construction; it has no residual.
-- **Cross-check with the meter (system balance, hisim-9uoo.8):** when the run has an `ElectricityMeter`, its
+- **Cross-check with the meter (system balance, hisim-energy-sankeys-9uoo.8):** when the run has an `ElectricityMeter`, its
   `ElectricityFromGridInWatt` and `ElectricityToGridInWatt` must equal the derived import and export per step
   within the tolerance, or the run fails. A difference means a consumer or producer the meter counts and the bus
   does not (an undeclared device) or the reverse (a device not wired to the energy manager). Measured: equal in all
@@ -245,7 +245,7 @@ gets no port; the report may list it beside the diagram.
 | SH heat | `LOSS` | none today: the model has no pipe loss | – |
 
 Sign: `ThermalPowerDelivered` is split into a heating output (`>= 0`, `SPACE_HEATING_HEAT` `OUT`) and a cooling
-output (`>= 0`, `COOLING` `IN`) when cooling through the HDS is built (hisim-9uoo.17, hisim-fxix.7); no twin cools
+output (`>= 0`, `COOLING` `IN`) when cooling through the HDS is built (hisim-energy-sankeys-9uoo.17, hisim-hydronics-fxix.7); no twin cools
 through the HDS today.
 
 The generators' circuit ends (boiler, heat pump, district heating, electric heater, solar collector) become
@@ -423,7 +423,7 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
 |---|---|---|---|---|
 | B1 | `Building` | The mass carries its step-average temperature into the next step, so it keeps half of the energy the step's flows put into it | with B2 declared: per step up to 2.56 kW; Σ\|residual\| 4,470 kWh/yr against 19,806 kWh/yr of gains; the run's net only −19.7 kWh because it telescopes; 34,903 of 35,040 steps beyond tolerance (gas twin: 3,280 kWh/yr, 34,876 steps) | carry `θ_m,next` as the state (ISO 13790 and RC_BuildingSimulator do): a model change, results move (the building's response to gains is today as slow as with twice its heat capacity) |
 | B2 | `Building` | ISO 13790's gain split leaves `H_tr_w/(9.1 A_t)` of the gains on no node | 46.7 kWh/yr, 0.24 % of the gains | declared as the loss `GainsLostThroughWindowsInWatt`; no result change |
-| B3 | `DistrictHeating` without buffer | bills the heat its controller asks for, not what the HDS receives (hisim-9uoo.12) | 30.8 kWh/yr (bead) | hisim-pnw7, before PR 3 declares the HDS in the district-heating twin |
+| B3 | `DistrictHeating` without buffer | bills the heat its controller asks for, not what the HDS receives (hisim-energy-sankeys-9uoo.12) | 30.8 kWh/yr (bead) | hisim-pnw7, before PR 3 declares the HDS in the district-heating twin |
 
 The window opening (Q-E) is not an imbalance of the declared ports: it moves no energy in the model.
 
@@ -527,58 +527,58 @@ beads in its own branch.
 
 | PR | Scope | Tests | Goldens | Beads closed |
 |---|---|---|---|---|
-| 0 | This spec, the note on hisim-9uoo.18, bead hisim-9uoo.19 | – | none | – |
-| 1 | The graph model of §4: exempt kinds are never peers, carrier defaults and the bus with the derived grid (§4.3, §4.4), the boundary, loss and storage nodes, `ROOM_HEAT`, the new environment nodes, links coloured by carrier, `overall` as the connected diagram, per-carrier views as filters, report schema 2. Re-points the built generators' fuel and electricity ports (§5.2). | `base`: `tests/test_energy_balance.py` gains graph tests on hand-built port sets (bus import/export per step, a meter disagreeing fails, exempt peer skipped, unlinked reported). `extendedbase2`: `tests/test_energy_balance_generators.py`'s expected links change (`natural gas supply` instead of `undeclared: GasMeter`, `house electricity` instead of the energy manager). | none | hisim-9uoo.18 (as decided by D1, D2, D4); hisim-9uoo.1, .2, .4, .9 confirmed built (below) |
-| 2 | Electricity devices: PV, battery, occupancy (§5.3); the meter cross-check of the bus (the electricity part of hisim-9uoo.8). | `extendedbase2`, new `tests/test_energy_balance_electricity.py`: the heat-pump and gas twins, second January week at 900 s: PV, battery and occupancy close, the bus's import and export equal the meter's per step. | none (new outputs only) | – (hisim-9uoo.5 closes with PR 5b) |
-| 3 | Water storages and HDS as `HydronicPort` circuits, the generators' circuit ends with them (§5.1) = hydronic stage E. Needs hisim-pnw7 (B3) merged for the district-heating twin. | `extendedbase2`, `tests/test_energy_balance_storages.py`: buffer, tank, HDS and every circuit close per step in the gas, heat-pump, solar and district-heating twins; `tests/test_energy_port_hydronic.py` gains the pairing rules (one reader, both ends). | none | hisim-9uoo.3, hisim-fxix.6 |
+| 0 | This spec, the note on hisim-energy-sankeys-9uoo.18, bead hisim-energy-sankeys-9uoo.19 | – | none | – |
+| 1 | The graph model of §4: exempt kinds are never peers, carrier defaults and the bus with the derived grid (§4.3, §4.4), the boundary, loss and storage nodes, `ROOM_HEAT`, the new environment nodes, links coloured by carrier, `overall` as the connected diagram, per-carrier views as filters, report schema 2. Re-points the built generators' fuel and electricity ports (§5.2). | `base`: `tests/test_energy_balance.py` gains graph tests on hand-built port sets (bus import/export per step, a meter disagreeing fails, exempt peer skipped, unlinked reported). `extendedbase2`: `tests/test_energy_balance_generators.py`'s expected links change (`natural gas supply` instead of `undeclared: GasMeter`, `house electricity` instead of the energy manager). | none | hisim-energy-sankeys-9uoo.18 (as decided by D1, D2, D4); hisim-energy-sankeys-9uoo.1, .2, .4, .9 confirmed built (below) |
+| 2 | Electricity devices: PV, battery, occupancy (§5.3); the meter cross-check of the bus (the electricity part of hisim-energy-sankeys-9uoo.8). | `extendedbase2`, new `tests/test_energy_balance_electricity.py`: the heat-pump and gas twins, second January week at 900 s: PV, battery and occupancy close, the bus's import and export equal the meter's per step. | none (new outputs only) | – (hisim-energy-sankeys-9uoo.5 closes with PR 5b) |
+| 3 | Water storages and HDS as `HydronicPort` circuits, the generators' circuit ends with them (§5.1) = hydronic stage E. Needs hisim-pnw7 (B3) merged for the district-heating twin. | `extendedbase2`, `tests/test_energy_balance_storages.py`: buffer, tank, HDS and every circuit close per step in the gas, heat-pump, solar and district-heating twins; `tests/test_energy_port_hydronic.py` gains the pairing rules (one reader, both ends). | none | hisim-energy-sankeys-9uoo.3, hisim-hydronics-fxix.6 |
 | 4a | Fix B1: the building carries `θ_m,next` as its mass state. | `base`: the step's mass equation and the carried state agree (`C_m Δθ` of the state equals the flows' net). | re-bless all household twins; KPI deltas; renovisorissues heads-up | B1's bug bead |
-| 4 | The building's ports (§5.4), including B2 as a declared loss. | `extendedbase2`, `tests/test_energy_balance_building.py`: the building closes per step in the heat-pump and gas twins, a January and a July week (heating, solar gains, window opening). | none | hisim-9uoo.6 |
-| 5a | Other heat and cooling devices: `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner`, `IdealizedElectricHeater`, `SimpleHeatSource`. | `extendedbase2`: `basic_household`, `air_conditioned_house`, `simple_air_conditioner_household_building_sizer` close. | none | – (hisim-i7yq's view needs hisim-9uoo.17 too) |
-| 5b | Car and car battery; `L1Controller` exempt. | `extendedbase2`: `household_heatpump_car_building_sizer` closes, the car's charging is a bus consumer. | none | hisim-9uoo.5 |
+| 4 | The building's ports (§5.4), including B2 as a declared loss. | `extendedbase2`, `tests/test_energy_balance_building.py`: the building closes per step in the heat-pump and gas twins, a January and a July week (heating, solar gains, window opening). | none | hisim-energy-sankeys-9uoo.6 |
+| 5a | Other heat and cooling devices: `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner`, `IdealizedElectricHeater`, `SimpleHeatSource`. | `extendedbase2`: `basic_household`, `air_conditioned_house`, `simple_air_conditioner_household_building_sizer` close. | none | – (hisim-i7yq's view needs hisim-energy-sankeys-9uoo.17 too) |
+| 5b | Car and car battery; `L1Controller` exempt. | `extendedbase2`: `household_heatpump_car_building_sizer` closes, the car's charging is a bus consumer. | none | hisim-energy-sankeys-9uoo.5 |
 | 5c | Hydrogen and CHP: electrolyzers, hydrogen storage, fuel cell, both CHPs, transformer. | `extendedbase2`: `dynamic_components`, `electrolyzer_with_renewables` close. | none | – (hisim-svh4's view follows) |
-| 5d | The exemptions (Q-B), the example template's port, the `base` test that every component is declared or exempt. | `base`: walk every component class. | none | hisim-9uoo.7 |
-| 6 | System balance and acceptance: the bought carriers against their meters (§4.4), undeclared physics and unlinked ports fail the run, the acceptance test. | `extendedbase2`, `tests/test_complete_energy_sankeys.py`: heat-pump and gas twin, a week: no `undeclared` node, `unaccounted` within tolerance, every bus and meter cross-check holds. The full year of every golden setup runs in `golden-year.yml` with the check on. | none | hisim-9uoo.8, hisim-9uoo.10, hisim-9uoo.11, hisim-mzft (after the owner has reviewed one twin per heating system) |
+| 5d | The exemptions (Q-B), the example template's port, the `base` test that every component is declared or exempt. | `base`: walk every component class. | none | hisim-energy-sankeys-9uoo.7 |
+| 6 | System balance and acceptance: the bought carriers against their meters (§4.4), undeclared physics and unlinked ports fail the run, the acceptance test. | `extendedbase2`, `tests/test_complete_energy_sankeys.py`: heat-pump and gas twin, a week: no `undeclared` node, `unaccounted` within tolerance, every bus and meter cross-check holds. The full year of every golden setup runs in `golden-year.yml` with the check on. | none | hisim-energy-sankeys-9uoo.8, hisim-energy-sankeys-9uoo.10, hisim-energy-sankeys-9uoo.11, hisim-mzft (after the owner has reviewed one twin per heating system) |
 
 Order: PR 1 first, because every later PR's links resolve through it. PR 2 before PR 4, because the building's
 internal gains come from the occupancy. PR 3 before PR 4, because the building's heat comes from the HDS. The
 special views (hisim-svh4 hydrogen, hisim-cw22 car, hisim-i7yq cooling) are filters of the connected graph after
-PRs 5a to 5c. The arrow renderer (hisim-9uoo.19, D4) comes after PR 6.
+PRs 5a to 5c. The arrow renderer (hisim-energy-sankeys-9uoo.19, D4) comes after PR 6.
 
 **Foundation beads already built** (checked on 4ae6eb82):
 
-- hisim-9uoo.1 (the contract): `hisim/energy_port.py` (`EnergyPort` with role, carrier and peer; `HydronicPort`),
+- hisim-energy-sankeys-9uoo.1 (the contract): `hisim/energy_port.py` (`EnergyPort` with role, carrier and peer; `HydronicPort`),
   `lt.EnergyRole` and `lt.EnergyBalanceCarrier` with every carrier the bead names plus diesel and cooling,
   `Component.add_output(energy_port=...)` with unit validation; #870.
-- hisim-9uoo.2 (the check): `hisim/postprocessing/energy_balance/check.py` computes the residual per component and
+- hisim-energy-sankeys-9uoo.2 (the check): `hisim/postprocessing/energy_balance/check.py` computes the residual per component and
   step with the owner's tolerance, runs in every simulation (`PostProcessor.check_energy_balance`), lists every
   failing component and link in one error rather than stopping at the first, and writes `balance_report.json`
   (`export.py`); #870.
-- hisim-9uoo.4 (the generators): boiler, heat pump, district heating, electric heating and solar thermal declare
+- hisim-energy-sankeys-9uoo.4 (the generators): boiler, heat pump, district heating, electric heating and solar thermal declare
   their ports and close, `tests/test_energy_balance_generators.py`; #871. PR 1 re-points their fuel and
   electricity peers (D1), which is new work, not a reopening.
-- hisim-9uoo.9 (the Sankeys): `sankey.py` writes one diagram per carrier plus `overall`, the red `unaccounted` and
+- hisim-energy-sankeys-9uoo.9 (the Sankeys): `sankey.py` writes one diagram per carrier plus `overall`, the red `unaccounted` and
   grey `undeclared` nodes, under `PostProcessingOptions.EXPORT_ENERGY_BALANCE`; #870, numbers on the nodes since
-  #1019. D2 replaces the per-carrier diagrams by the connected graph in PR 1, under hisim-9uoo.18.
+  #1019. D2 replaces the per-carrier diagrams by the connected graph in PR 1, under hisim-energy-sankeys-9uoo.18.
 
-hisim-9uoo.11 (CI fails on an imbalance) is met by construction once everything declares: the check fails the run,
+hisim-energy-sankeys-9uoo.11 (CI fails on an imbalance) is met by construction once everything declares: the check fails the run,
 and `golden-year.yml` runs every golden setup for a year; it closes with PR 6.
 
 ## 10. Beads
 
-Epic hisim-9uoo, acceptance hisim-mzft.
+Epic hisim-energy-sankeys-9uoo, acceptance hisim-mzft.
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-9uoo.18 (P1) | D1, D2 recorded; colours by carrier, electricity from its physical source | 1 |
-| hisim-9uoo.19 (P3) | The arrow-style renderer (D4) | after 6 |
-| hisim-9uoo.3 (P1), hisim-fxix.6 | Storages and HDS, hydronic stage E | 3 |
-| hisim-9uoo.5 (P1) | Electricity devices | 2, 5b |
-| hisim-9uoo.6 (P1) | The building | 4 (4a first) |
-| hisim-9uoo.7 (P1) | The rest, exemptions | 5a to 5d |
-| hisim-9uoo.8 (P1) | System balance per carrier | 2 (electricity), 6 |
-| hisim-9uoo.10, .11 (P1) | Sweep, CI | 6 |
-| hisim-9uoo.12 (P1), hisim-pnw7 | District heating without buffer (B3) | before 3 |
-| hisim-9uoo.17 (P1) | Cooling into a buffer | hydronic stage F, before hisim-i7yq |
+| hisim-energy-sankeys-9uoo.18 (P1) | D1, D2 recorded; colours by carrier, electricity from its physical source | 1 |
+| hisim-energy-sankeys-9uoo.19 (P3) | The arrow-style renderer (D4) | after 6 |
+| hisim-energy-sankeys-9uoo.3 (P1), hisim-hydronics-fxix.6 | Storages and HDS, hydronic stage E | 3 |
+| hisim-energy-sankeys-9uoo.5 (P1) | Electricity devices | 2, 5b |
+| hisim-energy-sankeys-9uoo.6 (P1) | The building | 4 (4a first) |
+| hisim-energy-sankeys-9uoo.7 (P1) | The rest, exemptions | 5a to 5d |
+| hisim-energy-sankeys-9uoo.8 (P1) | System balance per carrier | 2 (electricity), 6 |
+| hisim-energy-sankeys-9uoo.10, .11 (P1) | Sweep, CI | 6 |
+| hisim-energy-sankeys-9uoo.12 (P1), hisim-pnw7 | District heating without buffer (B3) | before 3 |
+| hisim-energy-sankeys-9uoo.17 (P1) | Cooling into a buffer | hydronic stage F, before hisim-i7yq |
 | hisim-mzft (P1) | Acceptance | 6 |
 | to file with PR 4a | B1, the building's mass state | 4a |
 | to file with the decision | Q-B, Q-D, Q-E, Q-F, Q-G (`owner-decision`) | – |

@@ -181,7 +181,15 @@ progress.
 ```bash
 br create "<what is wrong or wanted, as a sentence>" -t bug -p 1 --parent hisim-4g9 \
     -l components -d "<where, how to reproduce, why it matters, the owner's decision if any>"
+br create "<the theme, as a sentence>" -t epic -p 2 --slug energy-sankeys -l postprocessing -d "<...>"
 ```
+
+Ids are readable. A child keeps its epic's id plus `.N` (`hisim-energy-sankeys-9uoo.18`); `--parent`
+numbers it. Every other bead, an epic above all, gets a slug of two to four lowercase words:
+`--slug energy-sankeys` gives `hisim-energy-sankeys-<hash>`. An agent that cannot run `br` (a
+worktree) writes the same shape by hand. The epics open on 2026-10-20 were renamed once and kept
+their hash, so a search for the hash still finds them; `.beads/renamed_ids.yaml` lists them, and
+`python scripts/rename_bead_ids.py` renames the old ids on a branch that still carries them.
 
 ### Getting the overview
 

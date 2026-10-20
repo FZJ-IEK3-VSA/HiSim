@@ -1326,7 +1326,7 @@ def _subject_flow_caption(margins: views.SubjectFlowMargins) -> str:
 def _energy_balance_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
     """Return the energy balance: where the house's electricity came from and went, in year-1 kWh.
 
-    Sources on the left, the house's electricity bus in the middle, sinks on the right, with money annotated only on
+    Sources on the left, the house's electricity in the middle, sinks on the right, with money annotated only on
     the two nodes that cross a billing boundary. Energy the drawn terminals do not account for goes to an explicit
     `losses / unattributed` node.
 
@@ -1345,16 +1345,21 @@ def _energy_balance_section_html(result: LifecycleCostResult, context: _ChapterC
             "does not know); the meter's own grid import and export are not device flows.",
         )
     flows = views.energy_balance_flows(result)
-    bus = "bus"
+    house = "house"
     ribbons: List[Tuple[str, str, float, str, bool]] = [
-        (f"src:{node.label}", bus, node.quantity_in_kwh, "var(--g5)", False)
+        (f"src:{node.label}", house, node.quantity_in_kwh, "var(--g5)", False)
         for node in flows.sources
     ]
     ribbons += [
-        (bus, f"snk:{node.label}", node.quantity_in_kwh, "var(--g5)", False)
+        (house, f"snk:{node.label}", node.quantity_in_kwh, "var(--g5)", False)
         for node in flows.sinks
     ]
-    labels = {bus: f"{views.EnergyBalanceLayout.BUS_LABEL} ({flows.bus_total_in_kwh:,.0f} kWh/a)"}
+    labels = {
+        house: (
+            f"{views.EnergyBalanceLayout.HOUSE_ELECTRICITY_LABEL} "
+            f"({flows.house_electricity_total_in_kwh:,.0f} kWh/a)"
+        )
+    }
     for prefix, nodes in (("src", flows.sources), ("snk", flows.sinks)):
         for node in nodes:
             money = (
@@ -1364,7 +1369,7 @@ def _energy_balance_section_html(result: LifecycleCostResult, context: _ChapterC
             labels[f"{prefix}:{node.label}"] = f"{node.label} {node.quantity_in_kwh:,.0f} kWh/a{money}"
     columns = [
         [f"src:{node.label}" for node in flows.sources],
-        [bus],
+        [house],
         [f"snk:{node.label}" for node in flows.sinks],
     ]
     return (
@@ -1379,7 +1384,7 @@ def _energy_balance_caption(flows: views.EnergyBalanceFlows) -> str:
     """Return the derived figures of the energy balance and everything the diagram could not place.
 
     States self-consumption, self-sufficiency and the battery's round-trip loss, the residual terminal, and the energy
-    in `unattributed_roles_in_kwh` whose role name has no side of the bus and is therefore not drawn.
+    in `unattributed_roles_in_kwh` whose role name has no side of the balance and is therefore not drawn.
 
     Args:
         flows: The balance `views.energy_balance_flows` returned.

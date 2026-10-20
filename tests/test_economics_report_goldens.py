@@ -200,7 +200,7 @@ PERSPECTIVES = [
 #: The two grid roles are **not** free: `views.energy_balance_flows` reconciles them against the
 #: metered `annual_energy_quantities_by_carrier` of `make_inputs` and refuses the diagram if they
 #: disagree, so they are that fixture's bought and sold quantities exactly. The rest are chosen so
-#: that the two sides of the bus do *not* close by construction — 15,200 kWh/a in against 14,700
+#: that the two sides of the balance do *not* close by construction — 15,200 kWh/a in against 14,700
 #: out — because the residual terminal the balance books for the difference is part of what the
 #: golden is there to pin.
 DEVICE_ENERGY_FLOWS = {

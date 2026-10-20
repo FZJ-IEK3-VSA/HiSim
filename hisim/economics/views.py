@@ -2923,10 +2923,10 @@ def subject_flow_margins(flows: Sequence[SubjectGroupFlow]) -> SubjectFlowMargin
 class EnergyBalanceLayout:
     """Node vocabulary and tolerances of the household electricity balance.
 
-    Sources on the left, the house's electricity bus in the middle, sinks on the right, with the battery on both sides
-    (discharging into the bus, charging from it); charge and discharge are not attributed to particular sources or
-    loads, as the simulation does not. `MINIMUM_DEVICE_FLOWS` is the skip threshold: the two grid roles come from the
-    meter in every run, so a balance needs device flows beyond them.
+    Sources on the left, the house's electricity in the middle (one node, the total both sides sum to), sinks on the
+    right, with the battery on both sides (discharging into the house, charging from it); charge and discharge are not
+    attributed to particular sources or loads, as the simulation does not. `MINIMUM_DEVICE_FLOWS` is the skip
+    threshold: the two grid roles come from the meter in every run, so a balance needs device flows beyond them.
     """
 
     SOURCE_ROLES = (
@@ -2955,7 +2955,8 @@ class EnergyBalanceLayout:
         EnergyFlowRole.GRID_EXPORT: "grid export",
         EnergyFlowRole.BATTERY_CHARGE: "battery charge",
     }
-    BUS_LABEL = "house electricity"
+    #: The middle node: the house's electricity, labelled with the total both sides sum to.
+    HOUSE_ELECTRICITY_LABEL = "house electricity"
     #: Where an imbalance between the two sides is booked. It is a node, not a rounding: losses
     #: and unattributed loads are real energy, and hiding them would make the balance close by
     #: construction and therefore prove nothing.
@@ -2980,20 +2981,20 @@ class EnergyBalanceNode:
 
 @dataclass(frozen=True)
 class EnergyBalanceFlows:
-    """The year-1 household electricity balance: sources, a bus and sinks, in kWh.
+    """The year-1 household electricity balance: sources, the house's electricity and sinks, in kWh.
 
-    The bus carries `bus_total_in_kwh`, the sum of both the sources and the sinks; any imbalance between the drawn
-    terminals becomes an explicit `losses / unattributed` terminal. `self_consumption_share` is the share of PV
-    generation used in the house and `self_sufficiency_share` the share of consumption not from the grid; both are None
-    when their denominator is zero. `battery_round_trip_loss_in_kwh` is charge minus discharge, clamped at zero (more
-    discharge than charge means charge carried over from the previous year). `unattributed_roles_in_kwh` lists role
-    names this reader's `EnergyFlowRole` does not know; they have no side of the bus and are reported instead of
-    dropped.
+    The middle node carries `house_electricity_total_in_kwh`, the sum of both the sources and the sinks; any imbalance
+    between the drawn terminals becomes an explicit `losses / unattributed` terminal. `self_consumption_share` is the
+    share of PV generation used in the house and `self_sufficiency_share` the share of consumption not from the grid;
+    both are None when their denominator is zero. `battery_round_trip_loss_in_kwh` is charge minus discharge, clamped at
+    zero (more discharge than charge means charge carried over from the previous year). `unattributed_roles_in_kwh`
+    lists role names this reader's `EnergyFlowRole` does not know; they have no side of the balance and are reported
+    instead of dropped.
     """
 
     sources: List[EnergyBalanceNode]
     sinks: List[EnergyBalanceNode]
-    bus_total_in_kwh: float
+    house_electricity_total_in_kwh: float
     self_consumption_share: Optional[float]
     self_sufficiency_share: Optional[float]
     battery_round_trip_loss_in_kwh: Optional[float]
@@ -3056,7 +3057,7 @@ def has_energy_balance(result: LifecycleCostResult) -> bool:
 
     Requires at least `MINIMUM_DEVICE_FLOWS` placeable device flows (the meter's own grid import and export do not
     count), and at least one placeable role from `EnergyBalanceLayout.SOURCE_ROLES` and one from `SINK_ROLES`, where
-    the grid roles do count. A bus fed by nothing, or a meter feeding itself, is not drawn.
+    the grid roles do count. A balance fed by nothing, or a meter feeding itself, is not drawn.
     """
     quantities = energy_balance_quantities(result)
     devices = [role for role in quantities if role not in EnergyBalanceLayout.METER_ROLES]
@@ -3070,20 +3071,20 @@ def has_energy_balance(result: LifecycleCostResult) -> bool:
 def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
     """Return where the house's electricity came from and where it went, in year-1 kWh.
 
-    Sources (PV generation, grid import, battery discharge), the bus, and sinks (heat pump, household, grid export,
-    battery charge). Money appears only as annotations on the two grid nodes, read from `carrier_year_one_bills`. The
-    view checks that the grid nodes equal the bought and sold quantities of `annual_energy_quantities_by_carrier` (the
-    meter the bills come from); the two sides of the bus balance because any remainder becomes a `losses /
-    unattributed` terminal on the shorter side. Unknown roles go to `unattributed_roles_in_kwh` for the renderers to
-    print.
+    Sources (PV generation, grid import, battery discharge), the house's electricity, and sinks (heat pump, household,
+    grid export, battery charge). Money appears only as annotations on the two grid nodes, read from
+    `carrier_year_one_bills`. The view checks that the grid nodes equal the bought and sold quantities of
+    `annual_energy_quantities_by_carrier` (the meter the bills come from); the two sides balance because any remainder
+    becomes a `losses / unattributed` terminal on the shorter side. Unknown roles go to `unattributed_roles_in_kwh`
+    for the renderers to print.
 
     Args:
         result: The evaluated perspective; quantities come from `annual_energy_attribution_by_subject_in_kwh`, and
             callers check `has_energy_balance` first.
 
     Returns:
-        The terminals, the bus total, the three derived figures the caption states and the roles that could not be
-            placed.
+        The terminals, the house's electricity total, the three derived figures the caption states and the roles
+            that could not be placed.
 
     Raises:
         CostDataError: If the result carries no usable device flows, or if a grid node disagrees with the metered
@@ -3096,7 +3097,7 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
             "annual_energy_attribution_by_subject_in_kwh`, one of them a source and one a sink, "
             "which this result does not carry (a run serialized before the field existed, a "
             "component set whose classes the adapter's `DeviceEnergySpecs` table does not know, "
-            "or a record with nothing on one side of the electricity bus). Check "
+            "or a record with nothing on one side of the electricity balance). Check "
             "`views.has_energy_balance` first."
         )
     quantities, unattributed = _read_energy_attribution(result)
@@ -3151,7 +3152,7 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
     return EnergyBalanceFlows(
         sources=sources,
         sinks=sinks,
-        bus_total_in_kwh=max(source_total, sink_total),
+        house_electricity_total_in_kwh=max(source_total, sink_total),
         self_consumption_share=((generation - exported) / generation if generation > 0.0 else None),
         self_sufficiency_share=((consumption - imported) / consumption if consumption > 0.0 else None),
         battery_round_trip_loss_in_kwh=max(charged - discharged, 0.0) if charged or discharged else None,

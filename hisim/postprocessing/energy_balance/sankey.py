@@ -5,25 +5,29 @@ of the kinds of :class:`NodeKind`; every edge carries one carrier, a yearly valu
 negative total turns the edge round) and the port it came from:
 
 * **transfer**: a producer's ``OUT`` port to a consumer's ``IN`` port, drawn once, at the value the receiver books;
-  what the sender booked beyond that goes to ``unaccounted``. A port whose peer declares no ports is drawn to or
-  from the grey node "undeclared: <component>", so the graph also shows how much of the house the balance covers.
+  when the two sides disagree beyond the tolerance, the difference goes to or from ``unaccounted`` at the sender. A
+  port whose peer declares no ports is drawn to or from the grey node "undeclared: <component>", so the graph also
+  shows how much of the house the balance covers.
 * **metered**: a metered port whose peer is a meter, ``IN`` from the meter and ``OUT`` to it.
 * **meter boundary**: what a meter publishes, its import from "grid import" or the carrier's supply node and its
   export to "grid export" (:mod:`.meters`). A meter's gap between what it publishes and what it reads is its
-  residual, drawn like a component's.
+  residual, treated like a component's.
 * **boundary**: an ``IN`` port from its boundary node ("natural gas supply", "ambient heat", "sun") or an ``OUT``
   port to one.
 * **loss**: a ``LOSS`` port to its own loss node, "<component> · <output>", which carries the total on to its
   boundary node, "outdoors" unless the port names another.
 * **storage**: a ``STORED_CHANGE`` port to the component's storage node, "<component> · stored", or from it when
   the component gave up more than it stored.
-* **residual**: a component's or a meter's residual to or from the red ``unaccounted`` node.
+* **residual**: a component's or a meter's residual to or from the red ``unaccounted`` node, drawn only where it is
+  beyond the balance's tolerance, the same tolerance that fails a run (owner, 2026-10-20). A residual within the
+  tolerance is not drawn; the report lists every residual.
 
-So every declared component node and every meter carries as much out as in over all carriers (the residual edge
-closes it, up to a receiver's within-tolerance surplus). ``overall`` is the one connected graph in which energy
-changes carrier along the chain (D2); each carrier's view keeps the edges of that carrier only, so a converting node
-there shows one side, and a converter's residual, which has no carrier, appears only in ``overall``. Links are coloured by carrier with
-the colour-blind-safe Okabe-Ito palette; the renderer is plotly (D4).
+So every declared component node and every meter that fails its balance carries as much out as in over all
+carriers once its red residual edge is drawn, and one that closes does so up to its within-tolerance residual.
+``overall`` is the one connected graph in which energy changes carrier along the chain (D2); each carrier's view
+keeps the edges of that carrier only, so a converting node there shows one side, and a converter's residual, which
+has no carrier, appears only in ``overall``. Links are coloured by carrier with the colour-blind-safe Okabe-Ito
+palette; the renderer is plotly (D4).
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import loadtypes as lt
-from hisim.postprocessing.energy_balance.check import ComponentBalance
+from hisim.postprocessing.energy_balance.check import ComponentBalance, LinkBalance
 from hisim.postprocessing.energy_balance.meters import MeterBalance
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Peer, PeerKind, PortSeries
 
@@ -126,11 +130,21 @@ class SankeyBuilder:
         declared: DeclaredPorts,
         balances: Sequence[ComponentBalance],
         meters: Sequence[MeterBalance] = (),
+        transfers: Sequence[LinkBalance] = (),
     ) -> None:
-        """Build from the ports, the balances and the meter balances of one run."""
+        """Build from the ports, the balances, the meter balances and the checked transfers of one run.
+
+        Args:
+            declared: The declared ports of the run.
+            balances: Every declared component's balance; one that does not close draws its residual.
+            meters: Every meter's balance; one that does not agree draws its residual.
+            transfers: Every transfer between declared components; one whose two sides disagree beyond the
+                tolerance draws their difference.
+        """
         self.declared = declared
         self.balances = list(balances)
         self.meters = list(meters)
+        self.transfers = list(transfers)
         self.links: List[SankeyLink] = []
         self.kinds: Dict[str, NodeKind] = {}
 
@@ -168,18 +182,22 @@ class SankeyBuilder:
                 self.add_port(component, series, paired)
         for meter in self.meters:
             self.add_meter(meter)
-        for (sender, receiver, carrier), (sent, received) in paired.items():
-            # within the tolerance (the check fails the run beyond it): only what was sent and not received is
-            # drawn, never a negative remainder against the receiver's side
+        for transfer in self.transfers:
+            # the receiver's value is drawn; a difference beyond the tolerance closes the sender's node through
+            # unaccounted, either way round, and one within it is not drawn
+            if transfer.closes or transfer.one_sided:
+                continue
             self.add(
-                sender,
+                transfer.sender,
                 self.node(SankeyNodes.UNACCOUNTED, NodeKind.UNACCOUNTED),
-                max(sent - received, 0.0),
-                carrier,
-                f"{sender} -> {receiver}: sent but not received",
+                transfer.difference,
+                transfer.carrier,
+                f"{transfer.sender} -> {transfer.receiver}: sent minus received",
                 EdgeKind.RESIDUAL,
             )
         for balance in self.balances:
+            if balance.closes:
+                continue
             self.add(
                 balance.component,
                 self.node(SankeyNodes.UNACCOUNTED, NodeKind.UNACCOUNTED),
@@ -191,7 +209,7 @@ class SankeyBuilder:
         return self.links
 
     def add_meter(self, meter: MeterBalance) -> None:
-        """Add the edges of one meter: its published import and export, and its gap to or from ``unaccounted``.
+        """Add the edges of one meter: its published import and export, and a gap beyond the tolerance.
 
         The ports it reads draw their own edges to and from it (:meth:`add_port`).
         """
@@ -205,6 +223,8 @@ class SankeyBuilder:
             exported = float(meter.reading.export_kilowatt_hours.sum())
             target = self.node(exchange.export_node(), NodeKind.BOUNDARY)
             self.add(name, target, exported, carrier, f"{name}.{exchange.export_output}", EdgeKind.METER_BOUNDARY)
+        if meter.agrees:
+            return
         self.add(
             name,
             self.node(SankeyNodes.UNACCOUNTED, NodeKind.UNACCOUNTED),

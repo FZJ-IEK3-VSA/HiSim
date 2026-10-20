@@ -161,7 +161,7 @@ class EnergyBalanceReport:
 
     def sankeys(self) -> Dict[str, Dict[str, Any]]:
         """Every view of the run's Sankey graph: ``overall``, the connected graph, then one filter per carrier."""
-        builder = SankeyBuilder(self.declared, self.balances, self.meter_check.balances)
+        builder = SankeyBuilder(self.declared, self.balances, self.meter_check.balances, self.links)
         links = builder.build()
         return SankeyDiagram.views(links, builder.kinds)
 

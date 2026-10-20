@@ -123,7 +123,8 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
 1. **Transfer** between two components that both declare ports: a producer's `OUT` port and a consumer's `IN` port
    of the same carrier whose peers name each other through the wiring (`DeclaredPorts.declared_links`, unchanged).
    Drawn once, at the receiver's value; the check fails a pair whose totals differ beyond the tolerance and a pair
-   only one side books (as today).
+   only one side books (as today). A difference beyond the tolerance is drawn at the sender, to or from
+   `unaccounted`.
 2. **Circuit**: the two ends of a water circuit, both declaring the same `HydronicPort` (supply owner `OUT`, receiver
    `IN`), paired by who reads the circuit's mass-flow output (`hisim/energy_port.py`, "Hydronic circuits"). Its heat
    is `m c (T_sup − T_ret) dt` from the three published values, computed once for both ends, so a circuit cannot
@@ -140,7 +141,9 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
    readable where it occurs.
 7. **Storage edge**: a `STORED_CHANGE` port between the component and its storage node, component → storage when
    the run's net is positive (it charged), storage → component when negative.
-8. **Residual edge**: a component's or a meter's residual, to or from `unaccounted`.
+8. **Residual edge**: a component's or a meter's residual, to or from `unaccounted`, drawn only where it is beyond
+   the balance's tolerance, the same tolerance that fails a run (owner, 2026-10-20). A residual within the
+   tolerance, float noise above all, is not drawn; the report lists every residual.
 
 ### 4.3 How a port finds its peer
 
@@ -202,8 +205,9 @@ There is no bus and no derived residual anywhere. A meter is a node, formed from
 - **The check (system balance, hisim-energy-sankeys-9uoo.8)**, per step `t`, in kWh:
   `residual_t = (import_t − export_t) − (Σ IN_t − Σ OUT_t)` over the ports it reads. It must be zero within the
   tolerance of the balance (decision 6), relative to the step's throughput `max(import + Σ OUT, export + Σ IN)`. A
-  gap is the meter's residual, drawn as a red `unaccounted` flow at the meter node and listed as a failing entry
-  under `meters` in the report; it is never absorbed into the import or the export. A gap means the meter reads a
+  gap beyond the tolerance is the meter's residual, drawn as a red `unaccounted` flow at the meter node and listed
+  as a failing entry under `meters` in the report (which lists every meter's residual and its largest per-step
+  residual, within the tolerance too); it is never absorbed into the import or the export. A gap means the meter reads a
   flow no declared port carries (an undeclared device, or a device the energy manager sums but whose port is
   wrong), or a port linked to it that the meter does not count.
 - **Every bought carrier passes a meter.** A metered port whose peer is neither a meter nor a component (a boiler's
@@ -523,7 +527,7 @@ reads in every step once the electricity devices declare their ports.
 | Q-G room heat | (a) the new carrier `ROOM_HEAT` |
 | Q-H when the meter check fails the run (2026-10-20) | it is always computed and written to the report, and fails the run only once no component is undeclared; until then the report says `enforced: false` and why (built in PR 1, #1086). From PR 6 on undeclared components fail the run anyway, so the check is then always enforced. Under Q-J it applies to both meter findings: a meter that publishes other than it reads, and an unmetered port |
 | Q-I static Sankey images for the PDF report (2026-10-20) | a P3 bead: PNG/SVG export of the connected diagram, after PR 6 and preferably with the arrow renderer (hisim-energy-sankeys-9uoo.19) |
-| Q-J no bus; meters are nodes and follow their wiring (2026-10-20) | "HiSim explicitly does not use buses as a concept, since they bring a whole host of problems." The house electricity bus of the first D1 is removed with its derived residual: it closed by construction, so electricity a port got wrong or missed vanished into grid import or export. And: "verifying if all the electricity is metered is a really good check", so D1 is revised for meters: every meter is a node under its own name, between its boundary node and the devices whose flows it reads through explicit connections, traced through exempt controllers (§4.3); grid import and export are the meter's published outputs; per step what a meter publishes equals what it reads, a gap is a red `unaccounted` flow at the meter and a failing entry; every metered port passes a meter, or it is an `unmetered` finding. Both findings follow Q-H. Controllers stay exempt and are never nodes. Built in PR 1 (#1086) |
+| Q-J no bus; meters are nodes and follow their wiring (2026-10-20) | "HiSim explicitly does not use buses as a concept, since they bring a whole host of problems." The house electricity bus of the first D1 is removed with its derived residual: it closed by construction, so electricity a port got wrong or missed vanished into grid import or export. And: "verifying if all the electricity is metered is a really good check", so D1 is revised for meters: every meter is a node under its own name, between its boundary node and the devices whose flows it reads through explicit connections, traced through exempt controllers (§4.3); grid import and export are the meter's published outputs; per step what a meter publishes equals what it reads, a gap is a red `unaccounted` flow at the meter and a failing entry; every metered port passes a meter, or it is an `unmetered` finding. Both findings follow Q-H. Controllers stay exempt and are never nodes. Built in PR 1 (#1086). Follow-up answers the same day: a meter keeps its component name as its label; a residual (component, meter or transfer) is drawn only beyond the tolerance and always listed in the report; the setups that buy a carrier without a meter get one in hisim-meter-bought-carriers-lyfl, not in PR 1 |
 
 
 - **Q-B. Where the exemption list lives.** A component is exempt either by kind or by a reason. (a) *Kind plus a
@@ -622,5 +626,6 @@ Epic hisim-energy-sankeys-9uoo, acceptance hisim-mzft.
 | hisim-energy-sankeys-9uoo.12 (P1), hisim-pnw7 | District heating without buffer (B3) | before 3 |
 | hisim-energy-sankeys-9uoo.17 (P1) | Cooling into a buffer | hydronic stage F, before hisim-i7yq |
 | hisim-mzft (P1) | Acceptance | 6 |
+| hisim-meter-bought-carriers-lyfl (P2) | Every setup that buys a carrier meters it: `gas_boiler_household`, `dynamic_components`, `simple_air_conditioner_household_building_sizer` (and `.grouped`), `electrolyzer_with_renewables` (Q-J) | before 6 |
 | to file with PR 4a | B1, the building's mass state | 4a |
 | to file with the decision | Q-B, Q-D, Q-E, Q-F, Q-G (`owner-decision`) | – |

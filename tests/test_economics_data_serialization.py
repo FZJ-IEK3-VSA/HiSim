@@ -1096,7 +1096,7 @@ class TestTheResultRecordsRefuseWhatTheyCannotVouchFor:
             EmbodiedCo2Basis.from_json({**basis.to_json(), "per_installation_in_kg": 999.0})
 
     def test_a_negative_energy_attribution_is_refused_on_both_sides_of_the_round_trip(self):
-        """Direction is the role, so a negative kWh would be drawn on the wrong side of the bus."""
+        """Direction is the role, so a negative kWh would be drawn on the wrong side of the balance."""
         from hisim.economics.calculators.aggregation import annual_energy_attribution
         from hisim.economics.serialization import _attribution_from_json, inputs_from_json
 

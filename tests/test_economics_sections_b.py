@@ -599,7 +599,7 @@ class TestEnergyBalanceSection:
         assert f"{residual.quantity_in_kwh:,.0f} kWh/a" in balance
 
     def test_a_role_the_balance_cannot_place_is_named_beside_the_diagram_not_in_it(self, database):
-        """It has no side of the bus, so the only honest place for it is the words beside it.
+        """It has no side of the balance, so the only honest place for it is the words beside it.
 
         A diagram quietly missing 2,500 kWh/a looks exactly like a diagram that never had them,
         which is why `EnergyBalanceFlows.unattributed_roles_in_kwh` exists at all — and a view

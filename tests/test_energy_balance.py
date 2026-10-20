@@ -462,7 +462,8 @@ def chain(received_watt_hour: float = 699.6) -> EnergyBalanceReport:
     """A boiler (undeclared) feeds a tank, the tank a radiator loop, the loop the building (undeclared).
 
     The tank sends 0.7 kWh, the loop books 0.6996 kWh of it: 0.4 Wh, within the tolerance, is sent but not
-    received. The loop loses 0.05 kWh it does not declare, so it carries a residual of 0.05 kWh. One 900 s step.
+    received. The loop loses 0.05 kWh it does not declare, so it carries a residual of 0.05 kWh, beyond the
+    tolerance. One 900 s step.
     """
     columns: List[Column] = [
         ("Tank", "HeatIn", lt.Units.WATT, EnergyPort(IN, SH, peer_input="FlowFromBoiler"), [4000.0]),
@@ -494,9 +495,14 @@ def flows(diagram: Dict[str, Any]) -> Dict[Tuple[str, str], float]:
 
 
 @pytest.mark.base
-def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() -> None:
-    """Links follow the wiring; the receiver's figure is drawn, the difference goes to unaccounted."""
-    diagrams = chain().sankeys()
+def test_the_sankey_draws_each_transfer_once_and_only_residuals_beyond_the_tolerance() -> None:
+    """Links follow the wiring and the receiver's figure is drawn.
+
+    The loop's 0.05 kWh residual is beyond the tolerance and goes to unaccounted; the 0.4 Wh the tank sent and the
+    loop did not book is within it, so it is not drawn (owner, 2026-10-20), but the report still lists it.
+    """
+    balance_report = chain()
+    diagrams = balance_report.sankeys()
     heat = flows(diagrams["space_heating_heat"])
 
     assert heat == {
@@ -506,9 +512,10 @@ def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() ->
         ("Tank", "Tank · stored"): pytest.approx(0.25),
         ("Tank", "Loop"): pytest.approx(0.6996),
         ("Loop", "undeclared: Building"): pytest.approx(0.6496),
-        ("Tank", "unaccounted"): pytest.approx(0.0004),
         ("Loop", "unaccounted"): pytest.approx(0.05),
     }
+    (link,) = balance_report.links
+    assert link.closes and link.as_dict()["difference_kwh"] == pytest.approx(0.0004)
     kinds = {node["name"]: node["kind"] for node in diagrams["overall"]["nodes"]}
     assert kinds["undeclared: Boiler"] == "undeclared" and kinds["unaccounted"] == "unaccounted"
     assert kinds["outdoors"] == "boundary" and kinds["Tank · stored"] == "storage" and kinds["Tank · Loss"] == "loss"
@@ -516,10 +523,10 @@ def test_the_sankey_draws_each_transfer_once_and_closes_every_declared_node() ->
 
     overall = flows(diagrams["overall"])
     assert overall[("unlinked", "Pump")] == pytest.approx(0.025)
-    for node in ("Tank", "Loop", "Tank · Loss"):
+    for node, within_tolerance in (("Tank", 0.0004), ("Loop", 0.0), ("Tank · Loss", 0.0)):
         inflow = sum(value for (_, target), value in overall.items() if target == node)
         outflow = sum(value for (source, _), value in overall.items() if source == node)
-        assert inflow == pytest.approx(outflow), node
+        assert inflow - outflow == pytest.approx(within_tolerance, abs=1e-12), node
 
 
 @pytest.mark.base
@@ -554,6 +561,10 @@ def test_a_link_whose_two_sides_disagree_fails_the_run_in_either_direction(
     balance_report = chain(received_watt_hour=received_watt_hour)
     (link,) = balance_report.failing_links
     assert (link.sender, link.receiver, link.carrier) == ("Tank", "Loop", "space_heating_heat")
+    heat = flows(balance_report.sankeys()["space_heating_heat"])
+    difference = (700.0 - received_watt_hour) / 1000
+    edge = ("Tank", "unaccounted") if difference > 0 else ("unaccounted", "Tank")
+    assert heat[edge] == pytest.approx(abs(difference)), "a difference beyond the tolerance is drawn"
     with pytest.raises(EnergyBalanceError) as raised:
         balance_report.conclude(None)
     assert (
@@ -834,6 +845,19 @@ def test_a_meter_that_publishes_other_than_it_reads_has_an_unaccounted_flow_and_
         "meter Meter publishes 1 kWh of electricity imported and 0.6 kWh exported, the ports it reads take 1.2 kWh "
         "and give 1.2 kWh: residual 0.4 kWh; 1 steps beyond tolerance, worst step 0 (2021-01-01T00:00:00)"
     ) in str(raised.value)
+
+
+@pytest.mark.base
+def test_a_meter_gap_within_the_tolerance_is_listed_but_not_drawn(tmp_path: Path) -> None:
+    """0.1 Wh more import than the devices take in a step of about 1 kWh is within 0.1 %: no red link, but reported."""
+    balance_report = house(metered_import_watt=(2400.4, 0.0, 0.0))
+    (meter,) = balance_report.meter_check.balances
+    assert meter.agrees and meter.residual == pytest.approx(1e-4)
+    overall = flows(balance_report.sankeys()["overall"])
+    assert ("Meter", "unaccounted") not in overall and "unaccounted" not in {node for edge in overall for node in edge}
+    written = json.loads(balance_report.write(str(tmp_path), with_html=False).read_text())
+    (entry,) = written["meters"]
+    assert entry["residual_kwh"] == pytest.approx(1e-4) and entry["largest_step_residual_kwh"] == pytest.approx(1e-4)
 
 
 @pytest.mark.base

@@ -133,14 +133,14 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
 
 
 def test_load_config_real_file_setups_and_params() -> None:
-    """The shipped config declares a non-empty set of uniquely-named setups and 2 parameter sets."""
+    """The shipped config declares uniquely-named setups and 3 parameter sets: January week, July week, full year."""
     cfg = load_config(REAL_CONFIG)
     assert cfg.setups  # non-empty
     ids = [s.id for s in cfg.setups]
     assert len(ids) == len(set(ids))  # setup ids are unique
-    assert len(cfg.parameter_sets) == 2
+    assert len(cfg.parameter_sets) == 3
     factories = {p.factory for p in cfg.parameter_sets}
-    assert factories == {"one_week_only", "full_year"}
+    assert factories == {"one_week_only", "one_week_july", "full_year"}
     for ps in cfg.parameter_sets:
         assert set(ps.post_processing_options) == {
             "COMPUTE_OPEX",
@@ -259,13 +259,13 @@ def test_an_energy_system_file_is_told_apart_from_a_python_setup() -> None:
     assert not SetupConfig("e", "system_setups/basic_household.simulation.json").is_energy_system_file()
 
 
-def test_the_shipped_config_lists_the_gas_boiler_household_file_for_both_horizons() -> None:
-    """The YAML-only reference system is a golden entry, as itself, with a week and a full-year pair."""
+def test_the_shipped_config_lists_the_gas_boiler_household_file_for_every_horizon() -> None:
+    """The YAML-only reference system is a golden entry, as itself, with a pair for each of the three horizons."""
     cfg = load_config(REAL_CONFIG)
     entry = next(setup for setup in cfg.setups if setup.id == GAS_BOILER_HOUSEHOLD.id)
     assert entry.path == GAS_BOILER_HOUSEHOLD.path
     pairs = [param.id for setup, param in select_pairs(cfg) if setup.id == entry.id]
-    assert pairs == ["one_week_60s", "full_year_60s"]
+    assert pairs == ["one_week_60s", "july_week_60s", "full_year_60s"]
 
 
 def test_resolve_setup_path_accepts_an_energy_system_file_and_refuses_other_files() -> None:

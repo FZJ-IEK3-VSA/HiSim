@@ -1,5 +1,5 @@
-# Manual "bless" of the golden KPI references. Re-runs EVERY pair (both the week
-# and full-year horizons) in the CI container — so the reference environment
+# Manual "bless" of the golden KPI references. Re-runs EVERY pair (the January week,
+# the July week and the full-year horizons) in the CI container — so the reference environment
 # matches the check environment — and opens a pull request with the updated
 # golden_references/ for review. This is the only sanctioned way to update goldens.
 #
@@ -11,10 +11,10 @@
 # The force_rewrite input dumps the fresh values verbatim instead — the way to clear
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
 #
-# A bless regenerates the goldens of golden_config.json's entries, every pair in both horizons:
-# 23 week and 23 full-year pairs. The entries are the Python setups and the energy-system file
-# gas_boiler_household. The YAML twins and the composed files have no goldens of their own; the
-# gates hold them to the Python setup's.
+# A bless regenerates the goldens of golden_config.json's entries, every pair in all three horizons:
+# 23 January-week, 22 July-week and 23 full-year pairs. The entries are the Python setups and the
+# energy-system file gas_boiler_household. The YAML twins and the composed files have no goldens of
+# their own; the gates hold them to the Python setup's.
 #
 # ONE JOB PER FULL-YEAR PAIR, THE WEEK PAIRS IN FOUR SHARDS (golden_matrix.py --shards 4
 # --one-pair-per-job year; owner decision 2026-10-15, as golden-year.yml has had since #1005). The
@@ -25,17 +25,18 @@
 # --jobs 1), so the regenerate phase takes about its slowest single pair: the heaviest recorded in
 # golden_config.json "seconds" are 690 s (heat pump with car) and 623 s (heat pump with solar
 # thermal), and the first bless in this layout (2026-10-15) took 0.7 to 11.1 minutes per full-year
-# job, the heat pump with solar thermal the longest. That bless took 22 minutes from dispatch to
-# PR only because two other branches' full CI had taken most runners a minute earlier, so its jobs
+# job, the heat pump with solar thermal the longest. That bless took 22 minutes from dispatch to PR
+# only because two other branches' full CI had taken most runners a minute earlier, so its jobs
 # started up to 10 minutes late; on free runners it would take about 13. The week pairs stay in four
-# shards of four pairs at once: they weigh 5 to 254 s each, the shards 140 to 254 s of busiest
-# lane, and a week shard took 4 to 5 minutes, well inside the slowest full-year job. A job per
-# week pair would not shorten the bless and would pay 18 more container starts, checkouts and
-# installs of about a minute each. That makes 26 regenerate jobs on the 56 runners, the full-year
-# jobs listed first and heaviest first. The price is runner time: a job per full-year pair pays
-# its own start and no longer shares a runner with a second pair, about 140 runner-minutes per
-# bless against about 80 in shards. Each job uploads exactly its own goldens under a name of its
-# own (golden-<cell name>); collect merges them all and checks that every pair's file arrived.
+# shards of four pairs at once, and the July week pairs in four shards of their own: they weigh 5 to
+# 254 s each, the shards 140 to 254 s of busiest lane, and a week shard took 4 to 5 minutes, well
+# inside the slowest full-year job. A job per week pair would not shorten the bless and would pay 18
+# more container starts, checkouts and installs of about a minute each. That makes 31 regenerate
+# jobs on the 56 runners, the full-year jobs listed first and heaviest first. The price is runner
+# time: a job per full-year pair pays its own start and no longer shares a runner with a second
+# pair, about 140 runner-minutes per bless against about 80 in shards. Each job uploads exactly its
+# own goldens under a name of its own (golden-<cell name>); collect merges them all and checks that
+# every pair's file arrived.
 #
 # TIMEOUTS. A hung simulation must not hold a runner until GitHub's six-hour default. A full-year
 # job runs its one pair in-process, so the job's own limit is the guard: 30 minutes, as in

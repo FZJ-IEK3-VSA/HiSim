@@ -90,7 +90,8 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     The expected counts are hand-written truths about the shipped config — twenty-three entries (the
     twenty-two Python setups and the energy-system file ``gas_boiler_household``) run the week, and all
     of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
-    decision 2026-10-11) — rather than re-derived through the very predicate under test, which would
+    decision 2026-10-11), and all of them but those in :data:`CANNOT_RUN_JULY` the July week
+    (hisim-9g2.8) — rather than re-derived through the very predicate under test, which would
     reproduce any logic error on both sides of the assertion. A new setup joining the config moves
     these literals on purpose: the reviewer of that change should see the gate grow.
     """
@@ -98,8 +99,31 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
 
     assert len(config["setups"]) == 23
     assert len(build_matrix(config, horizon="week")["include"]) == 23
+    assert len(build_matrix(config, horizon="july_week")["include"]) == 23 - len(CANNOT_RUN_JULY)
     assert len(build_matrix(config, horizon="year")["include"]) == 23
-    assert len(build_matrix(config)["include"]) == 46
+    assert len(build_matrix(config)["include"]) == 69 - len(CANNOT_RUN_JULY)
+
+
+#: The setups whose July week would still read January in part, each with the bead whose fix lifts its
+#: restriction to the January week and the year in ``golden_config.json``. A setup leaves this table in the
+#: change that fixes it.
+CANNOT_RUN_JULY: dict[str, str] = {
+    # The CSV loader indexes its wind profile by the timestep number, so a July week reads January's wind.
+    "electrolyzer_with_renewables": "hisim-9g2.14",
+}
+
+
+def test_every_setup_kept_from_the_july_week_is_restricted_for_its_bead() -> None:
+    """Catches a setup leaving the July week without a recorded reason, or keeping its restriction after its fix.
+
+    The July pairs bless the first true July references (hisim-9g2.8). A setup whose July is still in part
+    January's stays out of them, and :data:`CANNOT_RUN_JULY` names the bead that lifts the restriction.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+    july_setups = {pair["setup"] for pair in build_matrix(config, horizon="july_week")["include"]}
+    kept_out = {setup["id"] for setup in config["setups"]} - july_setups
+
+    assert kept_out == set(CANNOT_RUN_JULY)
 
 
 #: The setups that cannot complete a full year yet, each with the bead whose fix lifts its week-only
@@ -175,16 +199,12 @@ def test_a_parameter_set_factory_outside_the_vocabulary_is_refused() -> None:
     setups would silently skip the parameter set while unrestricted ones run it. A new factory
     has to enter the vocabulary consciously instead.
 
-    ``one_week_july`` is the example precisely because it is a factory the golden gate must not
-    gain today: a mid-year start date changes no profile in HiSim, so a July parameter set would
-    bless January's numbers under a summer name (R11.5 as amended, and the fence in
-    ``scripts/p3_parity_matrix.py``). The refusal here is about the vocabulary rather than about
-    that defect, and the two do not contradict each other — both refuse the factory.
+    ``three_months_only`` is the example: a factory of ``SimulationParameters`` that no horizon names.
     """
     config = _config()
-    config["parameter_sets"].append({"id": "july_60s", "factory": "one_week_july"})
+    config["parameter_sets"].append({"id": "three_months_60s", "factory": "three_months_only"})
 
-    with pytest.raises(ValueError, match="one_week_july"):
+    with pytest.raises(ValueError, match="three_months_only"):
         build_matrix(config)
 
 
@@ -265,7 +285,7 @@ def test_shards_run_as_many_pairs_at_once_as_the_horizon_memory_allows() -> None
     """A week shard runs four pairs at once, a full-year shard two (about 6 GiB each on a 16 GB runner)."""
     cells = build_shards(_weighted_config(), 3)["include"]
     assert {cell["horizon"]: cell["jobs"] for cell in cells} == {"week": 4, "year": 2}
-    assert PAIRS_AT_ONCE["week"] == 4 and PAIRS_AT_ONCE["year"] == 2
+    assert PAIRS_AT_ONCE["week"] == PAIRS_AT_ONCE["july_week"] == 4 and PAIRS_AT_ONCE["year"] == 2
 
 
 def test_shards_separate_the_heaviest_pairs_and_list_them_first() -> None:
@@ -333,21 +353,25 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
 
 
 def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_shards() -> None:
-    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 23 + 4 jobs.
+    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 23 + 4 + 4 jobs.
 
-    Every Python pair of both horizons is blessed exactly once, each full-year pair in a job of its
-    own running only it (``jobs`` 1), the week pairs in four shards. Catches a pair the bless would
-    no longer regenerate, which would leave its golden stale without anyone noticing.
+    Every Python pair of the three horizons is blessed exactly once, each full-year pair in a job of
+    its own running only it (``jobs`` 1), the January week pairs in four shards and the July week
+    pairs, every setup's but electrolyzer_with_renewables', in four shards of their own. Catches a
+    pair the bless would no longer regenerate, which would leave its golden stale without anyone
+    noticing.
     """
     config = json.loads(REAL_CONFIG.read_text())
     cells = build_shards(config, 4, one_pair_per_job=frozenset({"year"}))["include"]
     year = [cell for cell in cells if cell["horizon"] == "year"]
     week = [cell for cell in cells if cell["horizon"] == "week"]
+    july_week = [cell for cell in cells if cell["horizon"] == "july_week"]
     assert len(year) == 23 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
+    assert len(july_week) == 4 and sum(cell["count"] for cell in july_week) == 22
     emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
     assert emitted == sorted((p["setup"], p["param"]) for p in build_matrix(config)["include"])
-    assert len(emitted) == 46
+    assert len(emitted) == 68
 
 
 def test_one_pair_per_job_gives_each_pair_of_the_horizon_a_cell_first_and_shards_the_rest() -> None:

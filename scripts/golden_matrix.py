@@ -3,7 +3,7 @@
 
 Without ``--shards`` it prints ``{"include": [{"setup": <id>, "param": <id>}, ...]}`` — one
 entry per (setup, parameter_set) pair the setup's own ``horizons`` restriction permits.
-``--horizon week|year|day`` restricts to the parameter sets built by the matching
+``--horizon week|july_week|year|day`` restricts to the parameter sets built by the matching
 ``SimulationParameters`` factory, so each CI tier fans out only its own pairs.
 
 The golden workflows use ``--shards N``: each matrix cell is then a *shard*, a list of pairs one
@@ -94,9 +94,9 @@ HORIZON_FACTORIES = HorizonVocabulary.HORIZON_FACTORIES
 FACTORY_HORIZONS = HorizonVocabulary.FACTORY_HORIZONS
 
 #: How many pairs of a horizon one job runs at once, set by memory on a 16 GB runner: a week pair
-#: peaks at about 1.2 GiB, so four fit beside the runner's four cores; a full-year pair holds its
-#: year of results and peaks at about 6 GiB, so two.
-PAIRS_AT_ONCE: dict[str, int] = {"day": 4, "week": 4, "year": 2}
+#: (January's or July's) peaks at about 1.2 GiB, so four fit beside the runner's four cores; a
+#: full-year pair holds its year of results and peaks at about 6 GiB, so two.
+PAIRS_AT_ONCE: dict[str, int] = {"day": 4, "week": 4, "july_week": 4, "year": 2}
 
 #: The weight of a pair whose setup records no ``seconds`` for it: a typical building-sizer week.
 DEFAULT_PAIR_SECONDS = 120
@@ -235,7 +235,7 @@ def build_shards(
 
     solos: list[dict] = []
     include = []
-    for name in HORIZON_FACTORIES:  # day, week, year: a stable cell order
+    for name in HORIZON_FACTORIES:  # the horizons in their listed order: a stable cell order
         members = [p for p in pairs if FACTORY_HORIZONS[params[p["param"]]["factory"]] == name]
         if not members:
             continue

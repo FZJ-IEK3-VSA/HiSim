@@ -452,7 +452,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
-        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt
+        self.minimum_thermal_output_power_in_watt = config.minimum_thermal_output_power_in_watt
 
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(
@@ -1290,6 +1290,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: equal to the return is answered with this vanishing lift instead of zero.
     VANISHING_LIFT_IN_KELVIN: ClassVar[float] = 0.00000001
 
+    #: The lowest thermal power a hot-water step modulates down to, in W: none, so a hot-water charge follows the
+    #: tank's need. Space heating and cooling keep the configured ``minimum_thermal_output_power_in_watt``.
+    HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[float] = 0.0
+
     @staticmethod
     def fixed_flow_outlet_temperature_in_celsius(
         *,
@@ -1654,24 +1658,35 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     def hot_water(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
         """Return a hot-water step: at hplib's flow with a parallel storage, at the nominal flow otherwise.
 
-        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power.
+        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power
+        (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`); the configured minimum stays in force for space heating.
         """
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
-        self.minimum_thermal_output_power = 0.0
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             return self.hot_water_at_hplib_flow(conditions)
         return self.hot_water_at_fixed_flow(conditions, timers)
 
     def hplib_result(
-        self, conditions: "HeatPumpStepConditions", *, return_temperature_in_celsius: float, mode: int, operation_mode: str
+        self,
+        conditions: "HeatPumpStepConditions",
+        *,
+        return_temperature_in_celsius: float,
+        mode: int,
+        operation_mode: str,
+        minimal_thermal_power_in_watt: float,
     ) -> "HplibResult":
         """Return hplib's answer at the step's source and ambient temperatures and one circuit's return.
+
+        The minimal thermal power is the caller's: the configured minimum for space heating and cooling, none for
+        hot water (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`). The cache keys on ``operation_mode``, so each
+        circuit's cached answers are computed with that circuit's minimum only.
 
         Args:
             conditions: The step's temperatures.
             return_temperature_in_celsius: The return temperature of the circuit hplib is asked for, in °C.
             mode: hplib's mode, 1 heating, 2 cooling.
             operation_mode: The circuit hplib is evaluated for, part of the cache key.
+            minimal_thermal_power_in_watt: The lowest thermal power hplib modulates down to in this step, in W.
         """
         return self.get_cached_results_or_run_hplib_simulation(
             source_temperature_in_celsius=conditions.source_temperature_in_celsius,
@@ -1679,7 +1694,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             ambient_temperature_in_celsius=conditions.ambient_temperature_in_celsius,
             mode=mode,
             operation_mode=operation_mode,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
         )
 
     def space_heating_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
@@ -1691,7 +1706,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
@@ -1727,13 +1746,17 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         if self.heatpump.delta_t == 0:
             self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
             specific_heat_capacity_in_joule_per_kg_per_kelvin=(
                 self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
@@ -1782,7 +1805,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_dhw",
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
         outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, results.outlet_temperature_in_celsius)
         powers = self.booked_heating_powers_in_watt(
@@ -1812,13 +1839,17 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         mass_flow_in_kg_per_second = self.m_dot_ref
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_dhw",
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
         outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
             specific_heat_capacity_in_joule_per_kg_per_kelvin=(
                 self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
@@ -1880,7 +1911,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=2, operation_mode="cooling_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=2,
+            operation_mode="cooling_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=results.mass_flow_in_kg_per_second,

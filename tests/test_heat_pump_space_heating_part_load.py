@@ -233,30 +233,48 @@ class ControllerStep:
         return {output.field_name: stsv.values[output.global_index] for output in controller.outputs}
 
 
-def test_the_controller_sets_the_ratio_that_ends_the_buffer_at_the_supply_temperature() -> None:
-    """Heating, the ratio is the raising rule's for 38 °C with and 30 °C without the heat pump, the target 35 °C."""
+def test_the_controller_sets_the_ratio_that_ends_the_buffer_half_the_upper_offset_above_the_supply() -> None:
+    """Heating, the ratio is the raising rule's for 38 °C with and 30 °C without the heat pump, the target 37.5 °C.
+
+    The target is the 35 °C supply temperature plus half the default 5 K upper offset of the band (hisim-hydronics-fxix.27).
+    """
     outputs = ControllerStep.outputs()
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH] == 1
-    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius] == 35.0
+    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius] == 37.5
     expected = StartOfStepPartLoadRule.raising_ratio(
         ratio_run=1.0,
         end_temperature_in_celsius=38.0,
         end_temperature_without_circuit_in_celsius=30.0,
-        target_temperature_in_celsius=35.0,
+        target_temperature_in_celsius=37.5,
     )
     assert 0.0 < expected < 1.0
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh] == pytest.approx(expected)
 
 
 def test_the_energy_manager_s_raise_lifts_the_target() -> None:
-    """A 5 K raise of the buffer by the energy manager makes the target 40 °C."""
+    """A 5 K raise of the buffer by the energy manager makes the target 42.5 °C."""
     outputs = ControllerStep.outputs(SimpleHotWaterStorageTemperatureModifier=5.0)
-    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius] == 40.0
+    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius] == 42.5
+
+
+def test_the_target_follows_the_configured_upper_offset() -> None:
+    """The target lies half the band's upper offset above the supply: 36.5 °C at a 3 K offset, 35 °C at none."""
+    target = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.space_heating_target_temperature_in_celsius
+    assert target(
+        supply_temperature_set_in_celsius=35.0,
+        storage_temperature_modifier_in_kelvin=0.0,
+        upper_temperature_offset_in_kelvin=3.0,
+    ) == 36.5
+    assert target(
+        supply_temperature_set_in_celsius=35.0,
+        storage_temperature_modifier_in_kelvin=0.0,
+        upper_temperature_offset_in_kelvin=0.0,
+    ) == 35.0
 
 
 def test_a_buffer_at_its_target_that_its_draw_would_empty_is_charged() -> None:
-    """A buffer at 36 °C, above the 35 °C target, that would end at 30 °C without the heat pump gets a charge."""
-    outputs = ControllerStep.outputs(WaterTemperatureInput=36.0)
+    """A buffer at 38 °C, above the 37.5 °C target, that would end at 30 °C without the heat pump gets a charge."""
+    outputs = ControllerStep.outputs(WaterTemperatureInput=38.0)
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh] > 0.0
 
 

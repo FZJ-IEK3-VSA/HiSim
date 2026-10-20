@@ -739,7 +739,10 @@ for gas. The #1035 assertion (delivered within 1 %) holds with margin; it is re-
   controller cycles the buffer between supply −5 K and +5 K, and the fraction stops each charge at the supply
   temperature, so the heat-weighted charging temperature is about 1.4 K lower at 900 s and the COP higher
   (`sh_buffer_m4`, "Why heat-pump SH electricity is about 3 % low"). M4, M5 and S share it (−3.4 / −3.7 / −3.5 %). Bead
-  hisim-hydronics-fxix.27 (P1). Untested lever: a target nearer the 60 s cycle's mean charging temperature.
+  hisim-hydronics-fxix.27 (P1). Untested lever: a target nearer the 60 s cycle's mean charging temperature. *Done on
+  2026-10-19 (owner decision):* the target is the supply temperature plus the raise plus half the controller's upper
+  offset (2.5 K); heat-pump twin SH electricity +0.49 % at 900 s and −2.54 % at 3600 s against 60 s, 12.3 degree-hours
+  at 900 s; heat pump + solar thermal +3.09 % / +1.04 %.
 - **Gas fuel −9.3 % at 900 s and −19.4 % at 3600 s** with the heat within 1 %: the boiler's efficiency law rises with
   burner power, and a fraction of the step at full power burns less fuel than modulating low all step. Bead hisim-component-physics-4g9.66
   (P1). M2 at 900 s shows −6.7 % for the same reason (it fires in 58 % of steps at 2202 W mean against 77 % at 1662 W at

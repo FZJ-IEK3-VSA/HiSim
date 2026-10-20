@@ -20,7 +20,9 @@ golden, ``golden_references/<twin>__full_year_60s.json``, which the golden gate 
 the same setup. Both are run as committed, with the local LoadProfileGenerator's occupancy, and the KPI counts the
 steps in which the distribution system heats. Since the two-mode buffer's bless (owner decision Q5, 2026-10-18) the
 goldens are the iterated buffer's 60 s values; measured on 2026-10-18, the four 900 s years lie within 1 % of them:
-gas −0.16 %, pellets −0.04 %, heat pump −0.45 %, heat pump with solar thermal +0.15 %
+gas −0.16 %, pellets −0.04 %, heat pump −0.45 %, heat pump with solar thermal +0.15 %; since the heat pump's
+space-heating charge aims half the band's upper offset above the supply temperature (hisim-hydronics-fxix.27, re-measured
+2026-10-19) heat pump −0.32 % and heat pump with solar thermal +0.18 %
 (``SpaceHeatingResolutionRuns.MEASURED_AGAINST_ITERATED_60_S_GOLDENS``).
 
 The comparison needs the year, not a window: the delivered heat at a coarse step drifts with the buffer's charge and
@@ -83,13 +85,16 @@ class SpaceHeatingResolutionRuns:
 
     #: Measured 2026-10-18 on the two-mode buffer (T3), a record and not asserted: per twin the 900 s KPI, kWh, and
     #: its relative deviation (a fraction) from the golden blessed with the iterated buffer at 60 s (T2). The goldens
-    #: themselves are gas 10766.6, pellets 10778.4, heat pump 11469.1, heat pump with solar thermal 11466.9 kWh. The
-    #: 900 s runs are those of the start-of-step buffer, which the two-mode buffer leaves bit-equal.
+    #: themselves were gas 10766.6, pellets 10778.4, heat pump 11469.1, heat pump with solar thermal 11466.9 kWh. The
+    #: 900 s runs are those of the start-of-step buffer, which the two-mode buffer leaves bit-equal. The two heat-pump
+    #: twins were re-measured on 2026-10-19 with the heat pump's space-heating target half the band's upper offset
+    #: above the supply temperature (hisim-hydronics-fxix.27), against their goldens of that day, 11490.2 and 11457.5 kWh
+    #: (before the change: 11425.3 kWh, -0.57 %, and 11485.3 kWh, +0.24 %).
     MEASURED_AGAINST_ITERATED_60_S_GOLDENS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "household_gas_building_sizer": (10749.5, -0.0016),
         "household_pellets_building_sizer": (10774.0, -0.0004),
-        "household_heatpump_building_sizer": (11417.5, -0.0045),
-        "household_heatpump_solar_thermal_building_sizer": (11484.4, +0.0015),
+        "household_heatpump_building_sizer": (11454.0, -0.0032),
+        "household_heatpump_solar_thermal_building_sizer": (11478.1, +0.0018),
     }
 
     @classmethod
@@ -230,7 +235,9 @@ class SpaceHeatingWeekRuns:
     #: any step, the number of forced steps of the week, and the heat delivered to the building over the week against
     #: the same week at 60 s, a fraction (predefined occupancy, as the runs). A week has 2016 steps at 300 s, 1008 at
     #: 600 s, 672 at 900 s, 336 at 1800 s and 168 at 3600 s. The January weeks deliver 381 to 398 kWh; the July weeks
-    #: only 7 to 51 kWh, so there a few kWh are several percent.
+    #: only 7 to 51 kWh, so there a few kWh are several percent. The heat-pump twin's January week at 900, 1800 and
+    #: 3600 s was re-measured on 2026-10-19 with the space-heating target half the band's upper offset above the supply
+    #: temperature (hisim-hydronics-fxix.27); before the change, measured the same day, 900 s gave (28, 44, -0.0054).
     MEASURED: ClassVar[Dict[Tuple[str, str, int], Tuple[int, int, float]]] = {
         ("household_gas_building_sizer", "january", 300): (21, 1559, -0.0002),
         ("household_gas_building_sizer", "january", 600): (35, 938, +0.0002),
@@ -241,9 +248,9 @@ class SpaceHeatingWeekRuns:
         ("household_gas_building_sizer", "july", 600): (25, 192, -0.0180),
         ("household_heatpump_building_sizer", "january", 300): (23, 463, -0.0095),
         ("household_heatpump_building_sizer", "january", 600): (25, 817, -0.0104),
-        ("household_heatpump_building_sizer", "january", 900): (27, 47, -0.0059),
-        ("household_heatpump_building_sizer", "january", 1800): (41, 27, -0.0087),
-        ("household_heatpump_building_sizer", "january", 3600): (84, 22, -0.0195),
+        ("household_heatpump_building_sizer", "january", 900): (28, 49, -0.0027),
+        ("household_heatpump_building_sizer", "january", 1800): (44, 24, -0.0020),
+        ("household_heatpump_building_sizer", "january", 3600): (75, 16, -0.0137),
         ("household_heatpump_building_sizer", "july", 300): (22, 116, -0.0703),
         ("household_heatpump_building_sizer", "july", 600): (26, 155, -0.0654),
         ("household_heatpump_solar_thermal_building_sizer", "january", 300): (21, 487, +0.0071),

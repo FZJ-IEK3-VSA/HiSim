@@ -437,10 +437,10 @@ def test_a_heat_input_left_unconnected_beside_the_component_serving_it_is_named(
     assert HeatDelivery.lost(components) == [
         "Tank.ThermalPower is not connected, although Heater (MockHeater.ThermalPower) serves it by default"
     ]
-    assert HeatDelivery.lost({"Tank": tank}) == [], "an input no component serves loses nothing"
+    assert not HeatDelivery.lost({"Tank": tank}), "an input no component serves loses nothing"
     tank.connect_input("ThermalPower", "Heater", "ThermalPower")
-    assert HeatDelivery.lost(components) == []
-    assert HeatDelivery.heated_buildings(components) == [], "the room check reads buildings only"
+    assert not HeatDelivery.lost(components)
+    assert not HeatDelivery.heated_buildings(components), "the room check reads buildings only"
 
 
 @pytest.mark.assemblies

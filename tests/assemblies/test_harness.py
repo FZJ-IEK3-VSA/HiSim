@@ -6,11 +6,13 @@ function of its seed, and splits an ``exactly_one_of`` into its branches. The mo
 tested on synthetic series. The deliberately wrong mock under ``mock_assemblies/wrong`` must fail by
 name; a port without a registered test partner refuses with the class it needs; a registry that
 does not read is refused whole; the member contract names an unbounded output, a wrong unit and a
-KPI the member does not report.
+KPI the member does not report; a heat input left unconnected beside its source is named, and the test
+building that read none of the tested heat fails both heat checks.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import re
 import subprocess
@@ -29,7 +31,12 @@ from hisim.energy_system.assemblies.model import MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing import checks
-from hisim.energy_system.assemblies.testing.checks import AssemblyCheckFailure, MemberContract, offending_pair
+from hisim.energy_system.assemblies.testing.checks import (
+    AssemblyCheckFailure,
+    HeatDelivery,
+    MemberContract,
+    offending_pair,
+)
 from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
@@ -64,9 +71,10 @@ from hisim.energy_system.assemblies.testing.samples import (
 )
 from hisim.energy_system.model import ComponentEntry
 from hisim.postprocessing.kpi_computation import tolerances
+from hisim.simulationparameters import SimulationParameters
 from scripts import golden_kpis
 from tests.assemblies.helpers import Library, Mocks, Real
-from tests.assemblies.mock_components import MockHeater
+from tests.assemblies.mock_components import MockHeater, MockHeaterConfig, MockTank, MockTankConfig
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
 BOX = f"""
@@ -391,6 +399,84 @@ def test_an_optional_partner_port_keeps_a_verb_its_entry_writes() -> None:
     }
     bind_optional_partner_ports(components, {"Buffer": "SimpleHotWaterStorage"})
     assert "optional-bind" not in components["Controller"]
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribution_beside_it() -> None:
+    """Catches the test building losing the heat of the assembly under test again (hisim-fob3).
+
+    Example: beside ``heating/electric_resistive`` the building's ``heating`` port binds the subject's heater, beside
+    a boiler the partner ``HeatDistributionSystem``, beside district heating the distribution without storage; beside
+    a PV array nothing heats the house and the port stays unbound.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    for path, expected in (
+        ("heating/electric_resistive", {"heating": SUBJECT}),
+        ("heating/gas_condensing_boiler", {"heating": "HeatDistributionSystem"}),
+        ("heating/district_heating", {"heating": "HeatDistributionSystemWithoutStorage"}),
+        ("supply/oil_tank", {"heating": "HeatDistributionSystem"}),
+        ("pv/array", None),
+    ):
+        assembly = resolver.resolve(path, "test")
+        document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
+        assert document["components"]["Building"].get("optional-bind") == expected, path
+
+
+@pytest.mark.assemblies
+def test_a_heat_input_left_unconnected_beside_the_component_serving_it_is_named() -> None:
+    """The ``heat delivered`` check names a heat input its source stands beside unconnected, and passes it wired.
+
+    Example: a mock tank whose ``ThermalPower`` its class reads from a ``MockHeater`` by default, beside such a
+    heater and not connected, is the shape of the test building that read none of the tested heat (hisim-fob3).
+    """
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    heater = MockHeater(parameters, MockHeaterConfig.preset_standard("Heater"))
+    tank = MockTank(parameters, MockTankConfig.preset_standard("Tank"))
+    components = {"Heater": heater, "Tank": tank}
+    assert HeatDelivery.lost(components) == [
+        "Tank.ThermalPower is not connected, although Heater (MockHeater.ThermalPower) serves it by default"
+    ]
+    assert HeatDelivery.lost({"Tank": tank}) == [], "an input no component serves loses nothing"
+    tank.connect_input("ThermalPower", "Heater", "ThermalPower")
+    assert HeatDelivery.lost(components) == []
+    assert HeatDelivery.heated_buildings(components) == [], "the room check reads buildings only"
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both_heat_checks(tmp_path: Path) -> None:
+    """The wiring before hisim-fob3 fails loudly: the building beside the heater, reading only weather and residents.
+
+    The real ``Building`` partner with its ``heating`` port taken out is the partner every heating assembly stood
+    beside before: the heater followed the building's demand all day and the room air fell to about 9 °C.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    real = TestPartnerRegistry.from_directories(resolver.directories)
+    unheated = dict(real.partners["Building"].component)
+    unheated["inputs"] = ["Weather", "UTSPConnector"]
+    del unheated["ports"]
+    registry = TestPartnerRegistry(
+        [
+            dataclasses.replace(partner, component=unheated) if name == "Building" else partner
+            for name, partner in real.partners.items()
+        ],
+        real.files,
+    )
+    assembly = resolver.resolve("heating/electric_resistive", "test")
+    label = "heating/electric_resistive sample s000"
+    run = run_isolation(
+        assembly, ParameterSpace(assembly.model).defaults(), registry, resolver, tmp_path / "run", label
+    )
+    checks.check_run(run)
+    with pytest.raises(AssemblyCheckFailure) as caught:
+        checks.check_heat_delivered(run)
+    assert str(caught.value) == (
+        f"{label} heat delivered every heat input: Building.ThermalPowerDelivered is not connected, although "
+        "subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default: the heat never arrives"
+    )
+    with pytest.raises(AssemblyCheckFailure, match=r"room heated .* the room air of Building averages 1\d\.\d\d °C"):
+        checks.check_room_heated(run)
+    run.release()
 
 
 @pytest.mark.assemblies

@@ -18,6 +18,10 @@ and a check that needs a finished run fails, naming why, when the run did not fi
   KPI is found by the finder by name, import, member and assembly, never by key string; without a
   member it is the one derived KPI of that name (``source: null``), unambiguous in the isolation
   system's single building.
+- **The heat**, on every component of the system (:class:`HeatDelivery`): a heat input a component of
+  the system serves by default is connected, so no heat the system makes is lost; and at the defaults
+  a heated building keeps its room air, averaged over the day, within 1 K of its set heating
+  temperature.
 
 **A refused sample.** A run whose error was raised from a member's
 :class:`~hisim.config.ConfigurationRefusedError` (:attr:`IsolationRun.refusal`) is a parameter
@@ -44,6 +48,8 @@ import numpy as np
 import pandas as pd
 
 from hisim import loadtypes as lt
+from hisim.component import Component, ComponentInput
+from hisim.components.building.building import Building
 from hisim.energy_system.assemblies.describe import band
 from hisim.energy_system.assemblies.model import (
     BoundsDeclaration,
@@ -397,3 +403,141 @@ def check_member_contract(run: IsolationRun, tests: TestContract) -> None:
     found = MemberContract.violations(finished(run, "member contract", "the constructed members"), tests)
     if found:
         raise failure(run.label, "member contract", "the constructed members", "; ".join(found))
+
+
+class HeatDelivery:
+    """Whether the heat an isolation system makes reaches what it heats (checks ``heat delivered``, ``room heated``).
+
+    A component's heat input (load type ``HEATING``) is *served* by every other component of the system whose class
+    its class's default connections name for that input. A served input left unconnected loses that heat. Example:
+    beside ``heating/electric_resistive`` the ``Building``'s optional ``ThermalPowerDelivered`` is served by the
+    subject's heater (``ElectricHeating.ThermalOutputShPower``); unconnected, the heater follows the building's demand
+    all day while the room air falls from 20.7 to 8.9 °C (hisim-fob3). Because the input is optional, nothing else
+    refuses that system.
+
+    A building is *heated* when its heat input is connected or served. At the defaults (the members sized for the
+    house) its room air averaged over the day lies within :attr:`TOLERANCE_IN_KELVIN` of its set heating
+    temperature. The day's mean, not every step: a boiler that charges the hot-water cylinder with priority lets the
+    room air dip about 2 K for one step, which is the system's behaviour, not lost heat; a house without the heat
+    averages about 6 K below its set temperature.
+    """
+
+    #: How far the day's mean room air may lie from the set heating temperature: the building's own tolerance of
+    #: underheating (1 K), below which its comfort KPI counts the hours as cold.
+    TOLERANCE_IN_KELVIN: ClassVar[float] = Building.UNDERHEATING_TOLERANCE_IN_KELVIN
+
+    @staticmethod
+    def by_class(components: Mapping[str, Component]) -> Dict[str, List[str]]:
+        """The runtime names of the components, by the class name default connections use (``get_classname``)."""
+        names: Dict[str, List[str]] = {}
+        for name, component in components.items():
+            names.setdefault(type(component).get_classname(), []).append(name)
+        return names
+
+    @staticmethod
+    def sources(
+        name: str, component: Component, item: ComponentInput, by_class: Mapping[str, Sequence[str]]
+    ) -> List[str]:
+        """The other components that serve one input of a component, each as ``name (Class.Output)``.
+
+        Args:
+            name: The component's runtime name.
+            component: The component.
+            item: One of its inputs.
+            by_class: The runtime names of the system's components by class name (:meth:`by_class`).
+
+        Returns:
+            Every component whose class the component's default connections name for the input, in their order.
+        """
+        return [
+            f"{other} ({connection.source_class_name}.{connection.source_output_name})"
+            for connections in component.default_connections.values()
+            for connection in connections
+            if connection.target_input_name == item.field_name
+            for other in by_class.get(connection.source_class_name, ())
+            if other != name
+        ]
+
+    @classmethod
+    def lost(cls, components: Mapping[str, Component]) -> List[str]:
+        """Every served heat input that is not connected, each named with the components that serve it.
+
+        Args:
+            components: The constructed and wired components of a system, by runtime name.
+
+        Returns:
+            One sentence per lost input: ``Building.ThermalPowerDelivered is not connected, although subject-Heater
+            (ElectricHeating.ThermalOutputShPower) serves it by default``; empty when no heat is lost.
+        """
+        by_class = cls.by_class(components)
+        found: List[str] = []
+        for name, component in components.items():
+            for item in component.inputs:
+                if item.loadtype != lt.LoadTypes.HEATING or item.src_object_name is not None:
+                    continue
+                sources = cls.sources(name, component, item, by_class)
+                if sources:
+                    found.append(
+                        f"{name}.{item.field_name} is not connected, although {' and '.join(sources)} serves it by "
+                        "default"
+                    )
+        return found
+
+    @classmethod
+    def heated_buildings(cls, components: Mapping[str, Component]) -> List[str]:
+        """The runtime names of the buildings whose heat input is connected or served by a component of the system."""
+        by_class = cls.by_class(components)
+        heated: List[str] = []
+        for name, component in components.items():
+            if not isinstance(component, Building):
+                continue
+            item = component.thermal_power_delivered_channel
+            if item.src_object_name is not None or cls.sources(name, component, item, by_class):
+                heated.append(name)
+        return heated
+
+
+def check_heat_delivered(run: IsolationRun) -> None:
+    """No component of the system leaves a heat input unconnected that another component serves (:class:`HeatDelivery`).
+
+    Raises:
+        SampleRefused: When a member refused the sample's configuration at construction.
+        AssemblyCheckFailure: When a served heat input is not connected, naming it and its sources.
+    """
+    found = HeatDelivery.lost(finished(run, "heat delivered", "every heat input").components)
+    if found:
+        raise failure(run.label, "heat delivered", "every heat input", "; ".join(found) + ": the heat never arrives")
+
+
+def check_room_heated(run: IsolationRun) -> None:
+    """Every heated building's room air, averaged over the day, within 1 K of its set heating temperature.
+
+    Checked on the run at the defaults, whose members are sized for the house (:class:`HeatDelivery`).
+
+    Raises:
+        SampleRefused: When a member refused the sample's configuration at construction.
+        AssemblyCheckFailure: When the day's mean room air of a heated building lies further from its set heating
+            temperature, naming the mean, the set temperature and the range of the room air.
+    """
+    subject = f"the room air of every heated building within {HeatDelivery.TOLERANCE_IN_KELVIN:g} K"
+    results = finished(run, "room heated", subject).results
+    assert results is not None
+    for name in HeatDelivery.heated_buildings(run.components):
+        building = run.components[name]
+        column = next(
+            item.get_pretty_name()
+            for item in run.outputs
+            if item.component_name == name and item.field_name == Building.TemperatureIndoorAir
+        )
+        air_in_celsius = results[column].to_numpy(dtype=float)
+        mean_in_celsius = float(air_in_celsius.mean())
+        set_in_celsius = building.set_heating_temperature_in_celsius
+        if abs(mean_in_celsius - set_in_celsius) > HeatDelivery.TOLERANCE_IN_KELVIN:
+            raise failure(
+                run.label,
+                "room heated",
+                subject,
+                f"the room air of {name} averages {mean_in_celsius:.2f} °C over the day, "
+                f"{mean_in_celsius - set_in_celsius:+.2f} K from its set heating temperature {set_in_celsius:g} °C "
+                f"(it runs from {air_in_celsius.min():.2f} to {air_in_celsius.max():.2f} °C)",
+            )

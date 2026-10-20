@@ -11,6 +11,7 @@ their samples, the PR tier under the ``assemblies`` marker and the Latin hypercu
       branch, and the monotone sweeps;
     - :mod:`.partners` — the test partners of a library, read from its ``test_partners.yaml``;
     - :mod:`.isolation` — the isolation system of one sample and its one-day run;
-    - :mod:`.checks` — the checks of a run, of a sweep and of the member contract, each failing with
+    - :mod:`.checks` — the checks of a run, of a sweep, of the member contract and of the heat the
+      system delivers to what it heats, each failing with
       :class:`~.checks.AssemblyCheckFailure` named by assembly, sample, check and subject.
 """

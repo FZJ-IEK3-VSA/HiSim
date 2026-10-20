@@ -333,7 +333,10 @@ def bind_optional_partner_ports(components: Dict[str, Dict[str, Any]], member_cl
     Several candidates write no verb either, and the engine refuses the binding as ambiguous. A port the entry already
     gives a verb keeps it. Example: the heat distribution controller's ``buffer`` port (partner
     ``SimpleHotWaterStorage``) binds the subject beside a heating assembly with a buffer, the partner ``Buffer``
-    beside a hot-water cylinder whose heat pump charges one, and nothing beside district heating.
+    beside a hot-water cylinder whose heat pump charges one, and nothing beside district heating. A port naming several
+    partner classes counts a candidate of any of them: the building's ``heating`` port (``HeatDistribution`` or
+    ``ElectricHeating``) binds the subject's direct heater beside ``heating/electric_resistive`` and the partner
+    ``HeatDistributionSystem`` beside a boiler.
 
     Args:
         components: The partners' site entries by name, changed in place.
@@ -350,12 +353,13 @@ def bind_optional_partner_ports(components: Dict[str, Dict[str, Any]], member_cl
                 continue
             if port_name in written:
                 continue
-            wanted = port["partner"]
-            in_subject = sum(1 for class_name in member_classes.values() if class_name == wanted)
+            partner = port["partner"]
+            wanted = set(partner) if isinstance(partner, list) else {partner}
+            in_subject = sum(1 for class_name in member_classes.values() if class_name in wanted)
             in_partners = [
                 other
                 for other, entry in components.items()
-                if other != name and str(entry.get("class", "")).rsplit(".", 1)[-1] == wanted
+                if other != name and str(entry.get("class", "")).rsplit(".", 1)[-1] in wanted
             ]
             if in_subject == 1 and not in_partners:
                 component.setdefault("optional-bind", {})[port_name] = SUBJECT
@@ -399,6 +403,8 @@ class IsolationRun:
         results: The result frame of a finished run.
         outputs: The simulator's outputs, matching the frame's columns.
         members: Member name of the assembly under test to its constructed component.
+        components: Runtime name to constructed component, for every component of the system: the subject's members
+            and the test partners (the heat checks read the partners, :class:`~.checks.HeatDelivery`).
         runtime: Member name to its runtime name in the expanded system.
         released: Whether :meth:`release` dropped the run; no check reads it afterwards.
     """
@@ -410,6 +416,7 @@ class IsolationRun:
     results: Optional[pd.DataFrame] = None
     outputs: List[Any] = field(default_factory=list)
     members: Dict[str, Any] = field(default_factory=dict)
+    components: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, str] = field(default_factory=dict)
     released: bool = False
     _finder: Optional[KpiFinder] = field(default=None, repr=False)
@@ -434,6 +441,7 @@ class IsolationRun:
         self.results = None
         self.outputs = []
         self.members = {}
+        self.components = {}
         self._finder = None
         self.released = True
         if self.directory.exists():
@@ -472,6 +480,7 @@ def run_isolation(
     run.runtime = members_of(built.imports.addresses)
     components = dict(built.wired.components)
     run.members = {member: components[name] for member, name in run.runtime.items()}
+    run.components = components
     return run
 
 

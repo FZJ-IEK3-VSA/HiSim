@@ -77,7 +77,8 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector]}"
+        "inputs: [Weather, UTSPConnector, {$port: heating}], "
+        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}}}"
     )
     HEAT_DISTRIBUTION_CONTROLLER: ClassVar[str] = (
         "HeatDistributionController: "

@@ -65,7 +65,7 @@ grouped RenoVisor twins one at a time ("uncontended", `sh_buffer_m5_2026-10-17.m
 
 | | main (as merged, `341e6b9e`) | start-of-step buffer everywhere (stage D stack top, `e26cea8a`) | iterated buffer everywhere (M2) | **Two-mode buffer (iterated ≤ 600 s, start-of-step above)** |
 |---|---|---|---|---|
-| Buffer closes per step | No: the mixing law destroys 0.6 % (gas) to 3.9 % (pellets) of the booked heat even at 60 s, 18.7 % (HP) to 24.6 % (pellets) at 900 s (hisim-4g9.16, **measured**) | Yes, residual < 1e-11 kWh/a (**measured**) | Yes (**measured**) | Yes, both paths (**measured** each) |
+| Buffer closes per step | No: the mixing law destroys 0.6 % (gas) to 3.9 % (pellets) of the booked heat even at 60 s, 18.7 % (HP) to 24.6 % (pellets) at 900 s (hisim-component-physics-4g9.16, **measured**) | Yes, residual < 1e-11 kWh/a (**measured**) | Yes (**measured**) | Yes, both paths (**measured** each) |
 | Delivered heat at 900 s | HP −0.50 %, gas −0.18 % (against main's own 60 s, which is itself wrong) | HP −0.70 %, gas −0.13 % | HP −0.79 %, gas −0.06 % | = start-of-step: HP −0.70 %, gas −0.13 % against the start-of-step buffer's 60 s; against the two-mode buffer's 60 s reference (M2) **expected** HP ≈ −0.71 %, gas ≈ −0.15 % (§6.1) |
 | Booked heat at 900 s | HP +18.6 %, gas +5.1 %, pellets +25.8 % | HP −1.07 %, gas +0.02 % | HP −0.26 %, gas −0.04 % | = start-of-step |
 | SH electricity (HP) / fuel (gas) at 900 s | +16.3 % / +4.0 % | −3.54 % / −9.31 % | +3.18 % / −6.67 % (M2 overcharges: year-mean buffer 32.7 °C against 31.7 at 60 s, seasonal COP 4.42 against 4.57) | = start-of-step: −3.54 % / −9.31 %; against M2's 60 s **expected** HP ≈ −4.5 % (M2's 60 s uses +0.96 % more SH electricity than the start-of-step buffer's 60 s, §6.1) |
@@ -601,7 +601,7 @@ def publish_node_step(self, stsv, *, start_c, circuit_temperature_c, t_end_c, he
 5. **Docstrings**: the class docstring says which model runs when and what each port means in each (the table of §4.1 in
    prose).
 
-Against main: main has neither path (its `i_simulate` is the mixing law with the leak hisim-4g9.16), none of the
+Against main: main has neither path (its `i_simulate` is the mixing law with the leak hisim-component-physics-4g9.16), none of the
 five end-temperature outputs, no `heat_capacity_in_joule_per_kelvin`, no `circuit_inflows`.
 
 ### 5.2 Heat distribution system, `heat_distribution_system.py`
@@ -623,7 +623,7 @@ self.part_load_command.publish_ratio_run(stsv, ratio_run)
 ```
 
 Against main: main publishes the previous step's heat and temperatures (`self.state.*`, the one-step lag of
-hisim-fxix.14) and has no part-load command.
+hisim-hydronics-fxix.14) and has no part-load command.
 
 ### 5.3 Heat pump, `more_advanced_heat_pump_hplib.py`
 
@@ -679,7 +679,7 @@ line 424).
 No change. It reads `WaterTemperatureToSecondaryHeatGenerator` as its return ($\bar{T}$ with the iterated buffer, $T_0$
 with the start-of-step buffer). Above the threshold its collector part load uses the memoryless `PartLoadRule` of
 decision 11 against the buffer, which takes $T_0$ as the end temperature at ratio 0 and can alternate under a draw (the
-hisim-fxix.17 case); that is stage D's state today and unchanged here (§6.2).
+hisim-hydronics-fxix.17 case); that is stage D's state today and unchanged here (§6.2).
 
 ### 5.8 `hisim/part_load.py`
 
@@ -739,21 +739,21 @@ for gas. The #1035 assertion (delivered within 1 %) holds with margin; it is re-
   controller cycles the buffer between supply −5 K and +5 K, and the fraction stops each charge at the supply
   temperature, so the heat-weighted charging temperature is about 1.4 K lower at 900 s and the COP higher
   (`sh_buffer_m4`, "Why heat-pump SH electricity is about 3 % low"). M4, M5 and S share it (−3.4 / −3.7 / −3.5 %). Bead
-  hisim-fxix.27 (P1). Untested lever: a target nearer the 60 s cycle's mean charging temperature. *Done on
+  hisim-hydronics-fxix.27 (P1). Untested lever: a target nearer the 60 s cycle's mean charging temperature. *Done on
   2026-10-19 (owner decision):* the target is the supply temperature plus the raise plus half the controller's upper
   offset (2.5 K); heat-pump twin SH electricity +0.49 % at 900 s and −2.54 % at 3600 s against 60 s, 12.3 degree-hours
   at 900 s; heat pump + solar thermal +3.09 % / +1.04 %.
 - **Gas fuel −9.3 % at 900 s and −19.4 % at 3600 s** with the heat within 1 %: the boiler's efficiency law rises with
-  burner power, and a fraction of the step at full power burns less fuel than modulating low all step. Bead hisim-4g9.66
+  burner power, and a fraction of the step at full power burns less fuel than modulating low all step. Bead hisim-component-physics-4g9.66
   (P1). M2 at 900 s shows −6.7 % for the same reason (it fires in 58 % of steps at 2202 W mean against 77 % at 1662 W at
   60 s).
 - **Comfort at 3600 s** (hisim-6ehm): 109–193 degree-hours against 11–16 at 60 s.
-- **hisim-fxix.1** (open: "A stratified water storage of N mixed layers replaces the dt/3600 mixing factor of
+- **hisim-hydronics-fxix.1** (open: "A stratified water storage of N mixed layers replaces the dt/3600 mixing factor of
   `heat_exchanger_is_present=False`") stays: the two-mode buffer leaves the stratification path as it is, and no
   recorded file uses it. **hisim-pnw7** (open, P3: "Hydronic chain without a buffer: the pipe water as a start-of-step
   node, D25's flow ownership and district heating's bill") stays: chains without a buffer (district heating,
   `gas_boiler_household`) are outside the two-mode buffer, which concerns the buffer only; their pipe-water node is
-  decided there. **hisim-fxix.17** (open: "The memoryless part-load rule alternates where the draw takes more than the
+  decided there. **hisim-hydronics-fxix.17** (open: "The memoryless part-load rule alternates where the draw takes more than the
   rise the step still needs") remains for the collector's circuit on the buffer with the start-of-step buffer (§5.7).
 - **Forced steps.** M2 forces 49–70 % of the steps at 600 s (information only, owner rule); at 60 s it forces fewer than
   main (heat pump 3921 against 5346 under M5's 60 s run, which equals M2 there).
@@ -854,7 +854,7 @@ Each with options and a recommendation; none needs the code to decide.
 | Q6 threshold default | (a) 600 s |
 | Q7 forced steps at 300–600 s | (a) recorded, not asserted |
 | Q8 merge order of #1048 | settled: #1048 is merged |
-| Q9 the collector's circuit | (a) leave it under hisim-fxix.17, measure the heat pump + solar thermal twin at 900 s on T3; the exact rule in its own PR only if that shows alternation |
+| Q9 the collector's circuit | (a) leave it under hisim-hydronics-fxix.17, measure the heat pump + solar thermal twin at 900 s on T3; the exact rule in its own PR only if that shows alternation |
 
 The questions as they were put follow.
 
@@ -915,9 +915,9 @@ because 10 passes are fewer than $\theta$ needs and the controllers are then hel
 in the tree.
 
 **Q9. The collector's circuit on the buffer with the start-of-step buffer.** Above the threshold the solar collector's
-part load on the buffer uses the memoryless rule of decision 11, whose alternation under a draw is hisim-fxix.17's case;
+part load on the buffer uses the memoryless rule of decision 11, whose alternation under a draw is hisim-hydronics-fxix.17's case;
 with the iterated buffer it runs whole steps. The two-mode buffer does not change this. (a) *Leave it*, recorded under
-hisim-fxix.17, and measure the heat pump + solar thermal twin at 900 s on T3 (stage D measured −0.66 % delivered there).
+hisim-hydronics-fxix.17, and measure the heat pump + solar thermal twin at 900 s on T3 (stage D measured −0.66 % delivered there).
 (b) *Give the collector the exact rule* (`raising_ratio` against
 `WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius`, which the buffer already publishes) in a PR of its
 own. **Recommendation: (a) now, (b) as the next small PR after T3** if the 900 s measurement of that twin shows

@@ -236,7 +236,7 @@ class ControllerStep:
 def test_the_controller_sets_the_ratio_that_ends_the_buffer_half_the_upper_offset_above_the_supply() -> None:
     """Heating, the ratio is the raising rule's for 38 °C with and 30 °C without the heat pump, the target 37.5 °C.
 
-    The target is the 35 °C supply temperature plus half the default 5 K upper offset of the band (hisim-fxix.27).
+    The target is the 35 °C supply temperature plus half the default 5 K upper offset of the band (hisim-hydronics-fxix.27).
     """
     outputs = ControllerStep.outputs()
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH] == 1

@@ -21,7 +21,7 @@ the same setup. Both are run as committed, with the local LoadProfileGenerator's
 steps in which the distribution system heats. Since the two-mode buffer's bless (owner decision Q5, 2026-10-18) the
 goldens are the iterated buffer's 60 s values; measured on 2026-10-18, the four 900 s years lie within 1 % of them:
 gas −0.16 %, pellets −0.04 %, heat pump −0.45 %, heat pump with solar thermal +0.15 %; since the heat pump's
-space-heating charge aims half the band's upper offset above the supply temperature (hisim-fxix.27, re-measured
+space-heating charge aims half the band's upper offset above the supply temperature (hisim-hydronics-fxix.27, re-measured
 2026-10-19) heat pump −0.32 % and heat pump with solar thermal +0.18 %
 (``SpaceHeatingResolutionRuns.MEASURED_AGAINST_ITERATED_60_S_GOLDENS``).
 
@@ -88,7 +88,7 @@ class SpaceHeatingResolutionRuns:
     #: themselves were gas 10766.6, pellets 10778.4, heat pump 11469.1, heat pump with solar thermal 11466.9 kWh. The
     #: 900 s runs are those of the start-of-step buffer, which the two-mode buffer leaves bit-equal. The two heat-pump
     #: twins were re-measured on 2026-10-19 with the heat pump's space-heating target half the band's upper offset
-    #: above the supply temperature (hisim-fxix.27), against their goldens of that day, 11490.2 and 11457.5 kWh
+    #: above the supply temperature (hisim-hydronics-fxix.27), against their goldens of that day, 11490.2 and 11457.5 kWh
     #: (before the change: 11425.3 kWh, -0.57 %, and 11485.3 kWh, +0.24 %).
     MEASURED_AGAINST_ITERATED_60_S_GOLDENS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "household_gas_building_sizer": (10749.5, -0.0016),
@@ -237,7 +237,7 @@ class SpaceHeatingWeekRuns:
     #: 600 s, 672 at 900 s, 336 at 1800 s and 168 at 3600 s. The January weeks deliver 381 to 398 kWh; the July weeks
     #: only 7 to 51 kWh, so there a few kWh are several percent. The heat-pump twin's January week at 900, 1800 and
     #: 3600 s was re-measured on 2026-10-19 with the space-heating target half the band's upper offset above the supply
-    #: temperature (hisim-fxix.27); before the change, measured the same day, 900 s gave (28, 44, -0.0054).
+    #: temperature (hisim-hydronics-fxix.27); before the change, measured the same day, 900 s gave (28, 44, -0.0054).
     MEASURED: ClassVar[Dict[Tuple[str, str, int], Tuple[int, int, float]]] = {
         ("household_gas_building_sizer", "january", 300): (21, 1559, -0.0002),
         ("household_gas_building_sizer", "january", 600): (35, 938, +0.0002),

@@ -3001,7 +3001,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
     #: The share of the band's upper offset that the space-heating target lies above the supply temperature,
     #: dimensionless (:meth:`space_heating_target_temperature_in_celsius`). Owner decision of 2026-10-19
-    #: (hisim-fxix.27): half the upper offset, so a charge above the part-load threshold ends the buffer where the
+    #: (hisim-hydronics-fxix.27): half the upper offset, so a charge above the part-load threshold ends the buffer where the
     #: on/off controller holds it on average at 60 s, and the heat pump charges at the COP of the 60 s run.
     SHARE_OF_UPPER_OFFSET_IN_TARGET: ClassVar[float] = 0.5
 
@@ -3364,7 +3364,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         offset of the controller's hysteresis band (:attr:`SHARE_OF_UPPER_OFFSET_IN_TARGET`). Example: a 35 °C supply
         temperature, a 5 K raise and the default 5 K upper offset give a 42.5 °C target; without a raise 37.5 °C.
 
-        Why half the upper offset (owner decision of 2026-10-19, hisim-fxix.27): at 60 s the on/off controller lets the
+        Why half the upper offset (owner decision of 2026-10-19, hisim-hydronics-fxix.27): at 60 s the on/off controller lets the
         buffer swing up to its switch-off point, the supply temperature plus the upper offset, so the heat pump charges
         at a hotter outlet and a lower COP than a charge that stops at the supply temperature. A target at the supply
         temperature made the heat pump's space-heating electricity of the heat-pump twin 4.3 % lower at 900 s than at

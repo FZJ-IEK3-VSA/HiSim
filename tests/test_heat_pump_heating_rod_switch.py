@@ -97,14 +97,14 @@ def answers_at(
         ambient_temperature_in_celsius=0.0,
         mode=1,
         operation_mode="heating_dhw",
-        minimal_thermal_power_in_watt=heat_pump.minimum_thermal_output_power,
+        minimal_thermal_power_in_watt=heat_pump.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
     )
     exact = heat_pump.hplib_result_computed(
         source_on_grid_in_celsius=0.0,
         return_temperature_in_celsius=return_temperature_in_celsius,
         ambient_on_grid_in_celsius=0.0,
         mode=1,
-        minimal_thermal_power_in_watt=heat_pump.minimum_thermal_output_power,
+        minimal_thermal_power_in_watt=heat_pump.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
     )
     return answer, exact
 

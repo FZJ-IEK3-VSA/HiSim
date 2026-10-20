@@ -1,27 +1,28 @@
 """The yearly energy flows of a run as one connected Sankey graph, with one filter per carrier (hisim-energy-sankeys-9uoo.9, .18).
 
-The graph follows ``roadmap/complete_energy_sankeys_spec.md`` §4 (owner decisions D1, D2, D4). Its nodes are of the
-kinds of :class:`NodeKind`; every edge carries one carrier, a yearly value in kWh (always drawn positive: a negative
-total turns the edge round) and the port it came from:
+The graph follows ``roadmap/complete_energy_sankeys_spec.md`` §4 (owner decisions D1, D2, D4, Q-J). Its nodes are
+of the kinds of :class:`NodeKind`; every edge carries one carrier, a yearly value in kWh (always drawn positive: a
+negative total turns the edge round) and the port it came from:
 
 * **transfer**: a producer's ``OUT`` port to a consumer's ``IN`` port, drawn once, at the value the receiver books;
   what the sender booked beyond that goes to ``unaccounted``. A port whose peer declares no ports is drawn to or
   from the grey node "undeclared: <component>", so the graph also shows how much of the house the balance covers.
-* **bus**: an electricity port whose peer is the house electricity bus, ``IN`` from the bus and ``OUT`` to it.
-* **grid**: "grid import" to the bus and the bus to "grid export", the bus's per-step residual summed over the run
-  (:mod:`.bus`). A meter is never drawn; it is the cross-check of these two.
+* **metered**: a metered port whose peer is a meter, ``IN`` from the meter and ``OUT`` to it.
+* **meter boundary**: what a meter publishes, its import from "grid import" or the carrier's supply node and its
+  export to "grid export" (:mod:`.meters`). A meter's gap between what it publishes and what it reads is its
+  residual, drawn like a component's.
 * **boundary**: an ``IN`` port from its boundary node ("natural gas supply", "ambient heat", "sun") or an ``OUT``
   port to one.
 * **loss**: a ``LOSS`` port to its own loss node, "<component> · <output>", which carries the total on to its
   boundary node, "outdoors" unless the port names another.
 * **storage**: a ``STORED_CHANGE`` port to the component's storage node, "<component> · stored", or from it when
   the component gave up more than it stored.
-* **residual**: a component's residual to or from the red ``unaccounted`` node.
+* **residual**: a component's or a meter's residual to or from the red ``unaccounted`` node.
 
-So every declared component node carries as much out as in over all carriers (the residual edge closes it, up to a
-receiver's within-tolerance surplus). ``overall`` is the one connected graph in which energy changes carrier along
-the chain (D2); each carrier's view keeps the edges of that carrier only, so a converting node there shows one side,
-and a converter's residual, which has no carrier, appears only in ``overall``. Links are coloured by carrier with
+So every declared component node and every meter carries as much out as in over all carriers (the residual edge
+closes it, up to a receiver's within-tolerance surplus). ``overall`` is the one connected graph in which energy
+changes carrier along the chain (D2); each carrier's view keeps the edges of that carrier only, so a converting node
+there shows one side, and a converter's residual, which has no carrier, appears only in ``overall``. Links are coloured by carrier with
 the colour-blind-safe Okabe-Ito palette; the renderer is plotly (D4).
 """
 
@@ -32,8 +33,8 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import loadtypes as lt
-from hisim.postprocessing.energy_balance.bus import ElectricityBus
 from hisim.postprocessing.energy_balance.check import ComponentBalance
+from hisim.postprocessing.energy_balance.meters import MeterBalance
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Peer, PeerKind, PortSeries
 
 
@@ -42,7 +43,7 @@ class NodeKind(str, enum.Enum):
     """The kinds of nodes of the Sankey graph (complete Sankey spec, §4.1), each drawn in its own colour."""
 
     COMPONENT = "component"
-    BUS = "bus"
+    METER = "meter"
     BOUNDARY = "boundary"
     LOSS = "loss"
     STORAGE = "storage"
@@ -56,8 +57,8 @@ class EdgeKind(str, enum.Enum):
     """The kinds of edges of the Sankey graph (complete Sankey spec, §4.2)."""
 
     TRANSFER = "transfer"
-    BUS = "bus"
-    GRID = "grid"
+    METERED = "metered"
+    METER_BOUNDARY = "meter_boundary"
     BOUNDARY = "boundary"
     LOSS = "loss"
     STORAGE = "storage"
@@ -99,7 +100,7 @@ class SankeyNodes:
 
 
 class SankeyBuilder:
-    """Builds the yearly edges of a run, and the kind of every node, from its declared ports, balances and buses."""
+    """Builds the yearly edges of a run, and the kind of every node, from its declared ports, balances and meters."""
 
     #: Links below this many kWh over the run are left out.
     SMALLEST_LINK_IN_KILOWATT_HOUR: ClassVar[float] = 1e-9
@@ -107,15 +108,15 @@ class SankeyBuilder:
     #: The edge kind of a port's edge, by the kind of its peer.
     EDGE_OF_PEER: ClassVar[Mapping[PeerKind, EdgeKind]] = {
         PeerKind.COMPONENT: EdgeKind.TRANSFER,
+        PeerKind.METER: EdgeKind.METERED,
         PeerKind.BOUNDARY: EdgeKind.BOUNDARY,
-        PeerKind.BUS: EdgeKind.BUS,
         PeerKind.STORE: EdgeKind.STORAGE,
         PeerKind.UNLINKED: EdgeKind.UNLINKED,
     }
     #: The node kind of a peer that is no component.
     NODE_OF_PEER: ClassVar[Mapping[PeerKind, NodeKind]] = {
+        PeerKind.METER: NodeKind.METER,
         PeerKind.BOUNDARY: NodeKind.BOUNDARY,
-        PeerKind.BUS: NodeKind.BUS,
         PeerKind.STORE: NodeKind.STORAGE,
         PeerKind.UNLINKED: NodeKind.UNLINKED,
     }
@@ -124,12 +125,12 @@ class SankeyBuilder:
         self,
         declared: DeclaredPorts,
         balances: Sequence[ComponentBalance],
-        buses: Sequence[ElectricityBus] = (),
+        meters: Sequence[MeterBalance] = (),
     ) -> None:
-        """Build from the ports, the balances and the electricity buses of one run."""
+        """Build from the ports, the balances and the meter balances of one run."""
         self.declared = declared
         self.balances = list(balances)
-        self.buses = list(buses)
+        self.meters = list(meters)
         self.links: List[SankeyLink] = []
         self.kinds: Dict[str, NodeKind] = {}
 
@@ -165,15 +166,8 @@ class SankeyBuilder:
             self.node(component, NodeKind.COMPONENT)
             for series in ports:
                 self.add_port(component, series, paired)
-        electricity = lt.EnergyBalanceCarrier.ELECTRICITY.value
-        for bus in self.buses:
-            name = self.node(bus.name, NodeKind.BUS)
-            grid_import = self.node(lt.EnvironmentNode.GRID_IMPORT.value, NodeKind.BOUNDARY)
-            grid_export = self.node(lt.EnvironmentNode.GRID_EXPORT.value, NodeKind.BOUNDARY)
-            imported = float(bus.grid_import_per_step.sum())
-            exported = float(bus.grid_export_per_step.sum())
-            self.add(grid_import, name, imported, electricity, f"{name}: grid import", EdgeKind.GRID)
-            self.add(name, grid_export, exported, electricity, f"{name}: grid export", EdgeKind.GRID)
+        for meter in self.meters:
+            self.add_meter(meter)
         for (sender, receiver, carrier), (sent, received) in paired.items():
             # within the tolerance (the check fails the run beyond it): only what was sent and not received is
             # drawn, never a negative remainder against the receiver's side
@@ -195,6 +189,30 @@ class SankeyBuilder:
                 EdgeKind.RESIDUAL,
             )
         return self.links
+
+    def add_meter(self, meter: MeterBalance) -> None:
+        """Add the edges of one meter: its published import and export, and its gap to or from ``unaccounted``.
+
+        The ports it reads draw their own edges to and from it (:meth:`add_port`).
+        """
+        name = self.node(meter.meter, NodeKind.METER)
+        exchange = meter.reading.exchange
+        carrier = exchange.carrier.value
+        imported = float(meter.reading.import_kilowatt_hours.sum())
+        source = self.node(exchange.import_node(), NodeKind.BOUNDARY)
+        self.add(source, name, imported, carrier, f"{name}.{exchange.import_output}", EdgeKind.METER_BOUNDARY)
+        if exchange.export_output is not None:
+            exported = float(meter.reading.export_kilowatt_hours.sum())
+            target = self.node(exchange.export_node(), NodeKind.BOUNDARY)
+            self.add(name, target, exported, carrier, f"{name}.{exchange.export_output}", EdgeKind.METER_BOUNDARY)
+        self.add(
+            name,
+            self.node(SankeyNodes.UNACCOUNTED, NodeKind.UNACCOUNTED),
+            meter.residual,
+            carrier,
+            f"{name}: what it publishes minus what it reads",
+            EdgeKind.RESIDUAL,
+        )
 
     def add_port(
         self, component: str, series: PortSeries, paired: Mapping[Tuple[str, str, str], Tuple[float, float]]
@@ -230,7 +248,7 @@ class SankeyDiagram:
     #: The colour of each node kind.
     COLOURS: ClassVar[Mapping[NodeKind, str]] = {
         NodeKind.COMPONENT: "#4a6fa5",
-        NodeKind.BUS: "#4d4d4d",
+        NodeKind.METER: "#4d4d4d",
         NodeKind.BOUNDARY: "#3c9d5d",
         NodeKind.LOSS: "#e08a2c",
         NodeKind.STORAGE: "#c49a2c",

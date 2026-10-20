@@ -36,6 +36,7 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort, MeteredExchange
 
 
 @dataclass_json
@@ -372,6 +373,17 @@ class FuelMeter(DynamicComponent, cp.MeterComponent):
             )
         )
         return dynamic_connections
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The fuel this meter publishes as bought, in Wh: oil, pellets, wood chips or district heat (spec §4.4).
+
+        The energy balance draws the meter between the fuel's supply node and the devices whose fuel ports it reads,
+        and checks per step that ``HeatConsumption``, the energy of the fuel it counts, equals what they take.
+
+        Returns:
+            The one exchange of the configured fuel.
+        """
+        return (MeteredExchange(EnergyPort.carrier_of_fuel(self.fuel_loadtype), self.HeatConsumption),)
 
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""

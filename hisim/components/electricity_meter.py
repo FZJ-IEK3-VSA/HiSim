@@ -1,7 +1,7 @@
 """Electricity meter module should replace the sumbuilder. """
 
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -95,12 +95,6 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
     ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
     ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
-
-    #: The grid import and export this meter counts. The energy balance compares them per step with the import and
-    #: export it derives from the house electricity bus of the meter's building (complete Sankey spec, §4.4).
-    METERED_EXCHANGES: ClassVar[Tuple[MeteredExchange, ...]] = (
-        MeteredExchange(lt.EnergyBalanceCarrier.ELECTRICITY, ElectricityFromGridInWatt, ElectricityToGridInWatt),
-    )
 
     #: Stable key of the channel carrying electricity a participant produces.
     PRODUCTION_CHANNEL = "production"
@@ -519,6 +513,22 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             )
         )
         return dynamic_connections
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The grid import and export this meter publishes, in W (complete Sankey spec, §4.4).
+
+        The energy balance draws the meter between "grid import" and "grid export" and the devices whose electricity
+        ports it reads, and checks per step that the import minus the export equals what they take minus what they
+        give.
+
+        Returns:
+            The one electricity exchange.
+        """
+        return (
+            MeteredExchange(
+                lt.EnergyBalanceCarrier.ELECTRICITY, self.ElectricityFromGridInWatt, self.ElectricityToGridInWatt
+            ),
+        )
 
     def write_to_report(self):
         """Writes relevant information to report."""

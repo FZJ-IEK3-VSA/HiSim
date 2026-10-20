@@ -268,18 +268,26 @@ class Component:
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     #: Why this component declares no energy port although it is neither a controller nor a meter, or None.
-    #: Controllers and meters are exempt from the energy balance by their kind: a controller decides and a meter
-    #: counts, neither moves energy (owner decision D1 of the complete Sankey spec). Any other component that moves
-    #: no energy states the reason on its own class, for example a helper that sums two inputs; the balance then
-    #: lists it as exempt instead of undeclared and never draws it as the peer of a port
+    #: Controllers are exempt from the energy balance by their kind: a controller decides, it moves no energy (owner
+    #: decision D1 of the complete Sankey spec); a meter is a node by what it meters (:meth:`metered_exchanges`). Any
+    #: other component that moves no energy states the reason on its own class, for example a helper that sums two
+    #: inputs; the balance then lists it as exempt instead of undeclared and never draws it as the peer of a port
     #: (:class:`hisim.postprocessing.energy_balance.ports.Exemptions`).
     ENERGY_PORTS_EXEMPT_BECAUSE: ClassVar[Optional[str]] = None
 
-    #: What this component counts at the system boundary, for the cross-check of the energy balance; empty for a
-    #: component that counts nothing. A meter declares it, for example the electricity meter its grid import and
-    #: export, which the balance compares per step with the import and export it derives from the house
-    #: electricity bus (:class:`hisim.energy_port.MeteredExchange`).
-    METERED_EXCHANGES: ClassVar[Tuple[MeteredExchange, ...]] = ()
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """What this component publishes as the exchange of a carrier at the system boundary; empty for most.
+
+        A meter declares it, for example the electricity meter its grid import and export. The energy balance then
+        draws the meter as a node between the carrier's boundary node and the devices whose metered ports it reads,
+        and checks per step that what it publishes equals what it reads (owner decision Q-J of the complete Sankey
+        spec, :class:`hisim.energy_port.MeteredExchange`). It is a method, not a class attribute, because a meter's
+        carrier may be its configuration's: a gas meter counts natural gas in one house and hydrogen in the next.
+
+        Returns:
+            One exchange per carrier the component meters; the default, for a component that meters nothing, is empty.
+        """
+        return ()
 
     @classmethod
     def get_classname(cls):

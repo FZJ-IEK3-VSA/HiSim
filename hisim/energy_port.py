@@ -16,19 +16,25 @@ The other side of a port is found from the wiring (complete Sankey spec, §4.3):
 * otherwise the peer is the component reading ``peer_output`` -- one of the component's own outputs,
   by default the port's own output for an ``OUT`` port (the building reads the heat a distribution
   system delivers). A port names ``peer_input`` or ``peer_output``, never both.
-* A component that moves no energy is never a peer: a controller decides and a meter counts (owner decision D1).
-  Such a component is *exempt* (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`) and the wiring
-  skips it.
-* A port that names no component peer, or whose named peer is exempt, takes its carrier's default
-  (:meth:`EnergyPort.default_peer`): an electricity ``IN`` or ``OUT`` port the house electricity bus, a bought
+* A controller is never a peer: it decides, it moves no energy (owner decision D1). Such a component is *exempt*
+  (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`) and the wiring skips it.
+* A meter is a node (owner decision Q-J, 2026-10-20): a component that declares what it meters
+  (:meth:`hisim.component.Component.metered_exchanges`) stands between the boundary and the devices whose flows it
+  reads. A *metered* port (:attr:`EnergyPort.is_metered`: the ``IN`` or ``OUT`` port of electricity or of a bought
+  carrier) watches its own output, whatever its role, and its peer is the component that reads it: a meter of its
+  carrier, or a component that moves energy. The wiring is traced through exempt components to the first meter, so
+  a heat pump whose electricity the energy manager reads and passes on summed to the electricity meter links to that
+  meter. There is no derived junction: what the meter publishes is checked against what it reads, never assumed.
+* A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_peer`): a bought
   carrier's ``IN`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their nodes,
-  and every ``LOSS`` port ``OUTDOORS``. A heat port has no default; one that finds no peer is *unlinked*.
+  and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A metered
+  port whose peer is no meter and no component is *unmetered*, which the balance reports.
 
 A transfer between two components that both declare ports is booked by both: the sender's ``OUT`` port whose
 peer is the receiver, and the receiver's ``IN`` port of the same carrier whose peer is the sender. The check
 compares the two totals and fails the run when they disagree beyond its tolerance, and when only one side books
 the transfer (owner, 2026-10-02: always fail hard). A one-sided booking is allowed only toward a component that
-declares no ports at all, a boundary node, the bus or nobody.
+declares no ports at all, a meter, a boundary node or nobody.
 
 A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
 kJ) is taken per step as it is; any other unit is refused when the output is declared
@@ -72,14 +78,13 @@ from hisim.config.names import NameSyntax
 @enum.unique
 class DefaultPeer(str, enum.Enum):
 
-    """What kind of node a port goes to when it names no component peer (complete Sankey spec, §4.3).
+    """What kind of node a port goes to when the wiring names no peer for it (complete Sankey spec, §4.3).
 
-    ``BUS`` is the house electricity bus of the port's building, ``BOUNDARY`` a boundary node such as
-    "natural gas supply" or "outdoors" (:meth:`EnergyPort.default_boundary` names it), and ``NONE`` means the
-    carrier has no default for the port's role: such a port is unlinked unless the wiring names a peer.
+    ``BOUNDARY`` is a boundary node such as "natural gas supply" or "outdoors" (:meth:`EnergyPort.default_boundary`
+    names it), and ``NONE`` means the carrier has no default for the port's role: such a port is unlinked. There is
+    no junction default: an electricity port that no meter and no component reads is unlinked (owner decision Q-J).
     """
 
-    BUS = "bus"
     BOUNDARY = "boundary"
     NONE = "none"
 
@@ -182,6 +187,12 @@ class EnergyPort:
         }
     )
 
+    #: The carriers whose flows a meter counts at the system boundary: electricity and every bought carrier. Their
+    #: ``IN`` and ``OUT`` ports are metered (:attr:`is_metered`).
+    METERED_CARRIERS: ClassVar[FrozenSet[lt.EnergyBalanceCarrier]] = SUPPLIED_CARRIERS | {
+        lt.EnergyBalanceCarrier.ELECTRICITY
+    }
+
     @staticmethod
     def supply_node_name(carrier: lt.EnergyBalanceCarrier) -> str:
         """The name of the boundary node a bought carrier comes from.
@@ -198,20 +209,18 @@ class EnergyPort:
         return f"{carrier.value.replace('_', ' ')} supply"
 
     def default_peer(self) -> DefaultPeer:
-        """The kind of node this port goes to when it names no component peer, or its named peer is exempt.
+        """The kind of node this port goes to when the wiring names no peer for it.
 
-        The table of the complete Sankey spec, §4.3: an electricity ``IN`` or ``OUT`` port goes to the house
-        electricity bus; a ``LOSS`` port, a bought carrier's ``IN`` port, an ambient-heat ``IN`` or ``OUT`` port
-        and a solar ``IN`` port go to a boundary node (:meth:`default_boundary`); every other port, a heat port
-        above all, has no default. A port that names its ``environment`` goes to that boundary node.
+        The table of the complete Sankey spec, §4.3: a ``LOSS`` port, a bought carrier's ``IN`` port, an ambient-heat
+        ``IN`` or ``OUT`` port and a solar ``IN`` port go to a boundary node (:meth:`default_boundary`); every other
+        port has no default, an electricity port and a heat port above all. A port that names its ``environment``
+        goes to that boundary node.
 
         Returns:
-            ``BUS``, ``BOUNDARY`` or ``NONE``.
+            ``BOUNDARY`` or ``NONE``.
         """
         if self.default_boundary() is not None:
             return DefaultPeer.BOUNDARY
-        if self.carrier == lt.EnergyBalanceCarrier.ELECTRICITY and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT):
-            return DefaultPeer.BUS
         return DefaultPeer.NONE
 
     def default_boundary(self) -> Optional[str]:
@@ -237,18 +246,31 @@ class EnergyPort:
         return None
 
     @property
-    def names_a_component(self) -> bool:
-        """Whether the port names a component peer through the wiring.
+    def is_metered(self) -> bool:
+        """Whether a meter is to count this port's flow: an ``IN`` or ``OUT`` port of electricity or a bought carrier.
 
-        An ``OUT`` port names one implicitly through its own output, which the receiver reads; a ``LOSS`` port
-        and an ``IN`` port only when they name ``peer_input`` or ``peer_output``. A port with an ``environment``
-        names none.
+        For example, a heat pump's electricity ``IN`` port and a boiler's natural-gas ``IN`` port are metered, a
+        battery's electricity ``LOSS`` port is not. A port that names its ``environment`` is not metered.
+        """
+        return (
+            self.environment is None
+            and self.carrier in self.METERED_CARRIERS
+            and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+        )
+
+    @property
+    def names_a_component(self) -> bool:
+        """Whether the port names a peer through the wiring.
+
+        An ``OUT`` port and a metered ``IN`` port (:attr:`is_metered`) name one implicitly through their own output,
+        which the receiver or the meter reads; any other ``LOSS`` or ``IN`` port only when it names ``peer_input`` or
+        ``peer_output``. A port with an ``environment`` names none.
         """
         if self.environment is not None:
             return False
         if self.peer_input is not None or self.peer_output is not None:
             return True
-        return self.role == lt.EnergyRole.OUT
+        return self.role == lt.EnergyRole.OUT or self.is_metered
 
     def as_dict(self) -> Dict[str, object]:
         """The port as the balance report lists it."""
@@ -265,14 +287,16 @@ class EnergyPort:
 @dataclass(frozen=True)
 class MeteredExchange:
 
-    """What a meter counts at the system boundary of one carrier, for the cross-check of the energy balance.
+    """What a meter publishes as the exchange of one carrier at the system boundary (complete Sankey spec, §4.4).
 
-    A meter is not a node of the energy balance (owner decision D1): it counts, it moves no energy. What it counts
-    serves as a cross-check of the flows the balance derives itself (complete Sankey spec, §4.4). For example, the
-    electricity meter declares ``MeteredExchange(ELECTRICITY, "ElectricityFromGridInWatt",
-    "ElectricityToGridInWatt")``, and the balance compares the two with the grid import and export it derives per
-    step from the house electricity bus. A meter states this about itself in
-    :attr:`hisim.component.Component.METERED_EXCHANGES`, so the balance depends only on its published outputs.
+    A meter that declares an exchange is a node of the energy balance (owner decision Q-J): the published import
+    enters it from the carrier's boundary node, the published export leaves it to the export node, and the metered
+    ports of the devices it reads (:attr:`EnergyPort.is_metered`) link to it. Per step, what it publishes, import
+    minus export, must equal what it reads, the consumers' ``IN`` ports minus the producers' ``OUT`` ports; a gap is
+    the meter's residual, never absorbed. For example, the electricity meter declares
+    ``MeteredExchange(ELECTRICITY, "ElectricityFromGridInWatt", "ElectricityToGridInWatt")``. A meter states this
+    about itself (:meth:`hisim.component.Component.metered_exchanges`), so the balance depends only on its published
+    outputs.
 
     Attributes:
         carrier: The carrier the meter counts.
@@ -283,6 +307,21 @@ class MeteredExchange:
     carrier: lt.EnergyBalanceCarrier
     import_output: str
     export_output: Optional[str] = None
+
+    def import_node(self) -> str:
+        """The boundary node the import comes from: "grid import" for electricity, else the carrier's supply node.
+
+        For example, a gas meter's import comes from "natural gas supply" (:meth:`EnergyPort.supply_node_name`).
+        """
+        if self.carrier == lt.EnergyBalanceCarrier.ELECTRICITY:
+            return lt.EnvironmentNode.GRID_IMPORT.value
+        return EnergyPort.supply_node_name(self.carrier)
+
+    def export_node(self) -> str:
+        """The boundary node the export goes to: "grid export" for electricity, else "<carrier> export"."""
+        if self.carrier == lt.EnergyBalanceCarrier.ELECTRICITY:
+            return lt.EnvironmentNode.GRID_EXPORT.value
+        return f"{self.carrier.value.replace('_', ' ')} export"
 
 
 class HydronicPortError(ValueError):

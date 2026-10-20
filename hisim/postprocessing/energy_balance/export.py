@@ -3,17 +3,17 @@
 The check runs in every simulation (owner, 2026-10-02: always fail hard). :meth:`EnergyBalanceReport.conclude` fails
 the run with :class:`EnergyBalanceError` when a declared port is NaN or infinite, when a component's balance does
 not close, when the two sides of a transfer disagree beyond the tolerance, when only one of two declared
-components books a transfer between them, or when a meter disagrees with the house electricity bus in a run without
-undeclared components (:mod:`.bus`); the message names every one of them. A run in which no component declares a port
-passes.
+components books a transfer between them, or, in a run without undeclared components, when a meter publishes other
+than it reads or a metered port passes no meter (:mod:`.meters`); the message names every one of them. A run in
+which no component declares a port passes.
 
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only decides whether the
 files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/2``) lists, per
 declared component, the run's in / out / loss / storage change in kWh (in total and per carrier), the residual in kWh
 and in percent of the throughput, the worst step and the verdict; then every link between declared components (a
-side that books nothing is null, and a failing link states its reason); every house electricity bus with its
-members, its derived grid import and export and the cross-check of each meter of its building; every unlinked port;
-every undeclared component; and every exempt component with its reason. Beside it, ``energy_sankeys/`` holds
+side that books nothing is null, and a failing link states its reason); every meter with what it publishes, the
+ports it reads and whether the two agree; every unmetered port; every unlinked port; every undeclared component; and
+every exempt component with its reason. Beside it, ``energy_sankeys/`` holds
 ``energy_sankey.json`` (every view's nodes and links: ``overall``, the connected graph, and one filter per carrier)
 and one plotly HTML per view, which share one ``plotly.min.js``.
 """
@@ -37,7 +37,7 @@ from hisim.postprocessing.energy_balance.check import (
     NonFinitePort,
     Tolerance,
 )
-from hisim.postprocessing.energy_balance.bus import BusCheck
+from hisim.postprocessing.energy_balance.meters import MeterCheck
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts
 from hisim.postprocessing.energy_balance.sankey import SankeyBuilder, SankeyDiagram
 
@@ -51,7 +51,7 @@ class EnergyBalanceReport:
     SANKEY_DIRECTORY: ClassVar[str] = "energy_sankeys"
     #: The file of every view's nodes and links in the Sankey directory.
     SANKEY_JSON_FILE: ClassVar[str] = "energy_sankey.json"
-    #: The report's schema: 2 adds the buses, the meter cross-checks, the unlinked ports and the exempt components.
+    #: The report's schema: 2 adds the meters, the unmetered and unlinked ports and the exempt components.
     REPORT_SCHEMA: ClassVar[str] = "hisim.energy_balance/2"
 
     def __init__(
@@ -70,7 +70,7 @@ class EnergyBalanceReport:
         self.nonfinite: List[NonFinitePort] = check.nonfinite(self.declared)
         self.balances: List[ComponentBalance] = check.run(self.declared)
         self.links: List[LinkBalance] = check.links(self.declared)
-        self.bus_check = BusCheck(self.declared, tolerance)
+        self.meter_check = MeterCheck(self.declared, tolerance)
 
     @property
     def failing(self) -> List[ComponentBalance]:
@@ -91,8 +91,10 @@ class EnergyBalanceReport:
 
     @property
     def fails(self) -> bool:
-        """Whether a balance, a link or an enforced meter cross-check does not hold."""
-        return bool(self.failing or self.failing_links or self.bus_check.failing)
+        """Whether a balance, a link, an enforced meter balance or the enforced rule that flows are metered fails."""
+        return bool(
+            self.failing or self.failing_links or self.meter_check.failing or self.meter_check.failing_unmetered
+        )
 
     def step_time(self, step: Optional[int]) -> Optional[str]:
         """The time stamp of a step, as the result table indexes it."""
@@ -135,7 +137,8 @@ class EnergyBalanceReport:
             "verdict": self.verdict,
             "components": [self.component_entry(balance) for balance in self.balances],
             "links": [link.as_dict() for link in self.links],
-            "buses": [self.bus_check.bus_entry(bus, self.step_time) for bus in self.bus_check.buses],
+            "meters": [meter.as_dict(self.step_time) for meter in self.meter_check.balances],
+            "unmetered": self.meter_check.unmetered_entry(),
             "unlinked": [
                 {
                     "component": series.component,
@@ -158,7 +161,7 @@ class EnergyBalanceReport:
 
     def sankeys(self) -> Dict[str, Dict[str, Any]]:
         """Every view of the run's Sankey graph: ``overall``, the connected graph, then one filter per carrier."""
-        builder = SankeyBuilder(self.declared, self.balances, self.bus_check.buses)
+        builder = SankeyBuilder(self.declared, self.balances, self.meter_check.balances)
         links = builder.build()
         return SankeyDiagram.views(links, builder.kinds)
 
@@ -197,17 +200,19 @@ class EnergyBalanceReport:
 
         Raises:
             EnergyBalanceError: When a declared port is not finite, a balance does not close, a link's two
-                sides disagree beyond the tolerance, only one of two declared components books a transfer, or a
-                meter disagrees with the bus in a run without undeclared components.
+                sides disagree beyond the tolerance, only one of two declared components books a transfer, or, in a
+                run without undeclared components, a meter publishes other than it reads or a metered port passes
+                no meter.
         """
         if self.nonfinite:
             raise EnergyBalanceError(self.nonfinite_message())
         report_path = None if result_directory is None else self.write(result_directory, with_html)
-        cross_checks = self.bus_check.cross_checks
+        meters = self.meter_check.balances
         log.information(
             f"Energy balance: {len(self.balances) - len(self.failing)} of {len(self.balances)} declared components "
             f"close, {len(self.links) - len(self.failing_links)} of {len(self.links)} links between them close, "
-            f"{sum(check.agrees for check in cross_checks)} of {len(cross_checks)} meters agree with the bus, "
+            f"{sum(meter.agrees for meter in meters)} of {len(meters)} meters publish what they read, "
+            f"{len(self.meter_check.unmetered)} ports unmetered, "
             f"{len(self.declared.unlinked())} ports unlinked, {len(self.declared.undeclared)} components undeclared, "
             f"{len(self.declared.exempt)} exempt"
             + ("." if report_path is None else f"; report in {report_path}.")
@@ -226,7 +231,7 @@ class EnergyBalanceReport:
         return "The declared energy flows of this run are not finite:\n" + "\n".join(lines)
 
     def failure_message(self, report_path: Optional[Path] = None) -> str:
-        """The error of a run whose balances, links or meter cross-checks do not hold, naming each with its reason."""
+        """The error of a run whose balances, links or meters do not hold, naming each with its reason."""
         lines: List[str] = []
         for balance in self.failing:
             carriers = ", ".join(
@@ -246,11 +251,15 @@ class EnergyBalanceReport:
             )
         for link in self.failing_links:
             lines.append(f"- link {link.sender} -> {link.receiver} ({link.carrier}): {link.reason}")
-        for cross_check in self.bus_check.failing:
-            worst = cross_check.worst_step
+        for meter in self.meter_check.failing:
             lines.append(
-                f"- {cross_check.describe()} ({self.step_time(worst)}): a consumer or producer the meter counts is "
-                f"missing from the bus, or the reverse"
+                f"- {meter.describe()} ({self.step_time(meter.worst_step)}): the meter reads a flow no port declares, "
+                f"or a port linked to it is not what the meter reads"
+            )
+        for series in self.meter_check.failing_unmetered:
+            lines.append(
+                f"- port {series.name} ({series.port.role.value}, {series.port.carrier.value}, "
+                f"{series.annual_kilowatt_hours:.6g} kWh) passes no meter: its peer is {series.peer.name}"
             )
         where = "" if report_path is None else f"\nSee {report_path}."
         return (

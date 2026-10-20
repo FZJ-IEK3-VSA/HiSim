@@ -1,6 +1,7 @@
 # Spec: one connected energy Sankey shows the whole house, from the grid, the fuels and the environment to every end use and loss
 
-Status: draft, D1 to D4 decided (owner, 2026-10-19), open questions in §8. Nothing of §4 is built: today only the
+Status: draft, D1 to D4 decided (owner, 2026-10-19), D1 revised for meters by Q-J (2026-10-20), open questions in
+§8. Nothing of §4 is built: today only the
 five heat generators declare energy ports, and the Sankeys are one diagram per carrier. Owner: Noah Pflugradt. Epic:
 hisim-energy-sankeys-9uoo, acceptance bead hisim-mzft. Builds on: #870 and #871 (the energy-port contract, the balance check, the
 per-carrier Sankeys), `roadmap/hydronic_coupling_spec.md` (stages B to D built, stage E is part of §9),
@@ -30,13 +31,17 @@ undeclared node and a residual of zero within the tolerance.
 
 ## 2. Decisions
 
-**D1 — Controllers and meters are not nodes of the energy Sankey; electricity flows between physical devices
-through a house electricity bus, and the grid is a boundary node taken from the physical flows** (owner,
-2026-10-19). "I don't see any way to make that make sense": a controller decides, a meter counts, neither moves
-energy. Consequence: sources (grid import, PV, battery discharge) feed a bus node that is not a component, and the
-bus feeds the consumers (occupants' appliances, heat pump, electric heater, car charging, battery charging, grid
-export). Grid import and export are the bus's per-step residual (§4.4). Meter values serve only as a cross-check of
-that residual.
+**D1 — Controllers are not nodes of the energy Sankey; meters are** (owner, 2026-10-19; revised for meters by Q-J,
+2026-10-20). "I don't see any way to make that make sense": a controller decides, it moves no energy. As first
+decided, meters were not nodes either: electricity was to flow between the devices through a per-building "house
+electricity bus", with grid import and export derived as the bus's per-step residual and the meter as a
+cross-check. Q-J withdrew the bus and the residual: "HiSim explicitly does not use buses as a concept, since they
+bring a whole host of problems", and a bus closes by construction, so electricity that a declared port gets wrong
+or misses would disappear into grid import or export instead of showing as an imbalance. Q-J also made every meter
+a node: "verifying if all the electricity is metered is a really good check". Consequence: a meter stands between
+its boundary node (grid import and export, `natural gas supply`, …) and the devices whose flows it reads through
+explicit connections (§4.4); grid import and export are what the electricity meter publishes, never derived; what a
+meter publishes must equal what it reads in every step, and a gap is a red `unaccounted` flow at the meter.
 
 **D2 — One connected all-carrier diagram, in which energy changes carrier along the chain** (owner, 2026-10-19).
 In the style of the owner's data-center Sankey, not separate per-carrier diagrams joined by artificial couplings.
@@ -53,7 +58,8 @@ device-group PR (§9) declares the ports, runs the balance on the recorded twins
 imbalance it found, each with its own bug bead and its own fix PR. Because the check fails every run with a
 non-closing declared component and `golden-year.yml` runs every golden setup for a full year, a fix lands before
 the PR that declares the component, or in it, never after. The exemption list (§5, Q-B) holds only components that
-have no energy port to declare: controllers, meters, data sources without energy, helpers.
+have no energy port to declare: controllers, data sources without energy, helpers, and a meter that declares nothing
+it meters.
 
 **D4 — The renderer is plotly, as today; an arrow-style renderer is a later step** (owner, 2026-10-19). Start
 with the interactive HTML and look at how the complete diagram reads. The owner prefers arrows in the style of his
@@ -73,9 +79,14 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 - **Component node**: a physical component (kind `PhysicsComponent`, or a data source that moves energy, the
   occupancy) that declares ports. Its balance is `ΣIN − ΣOUT − ΣLOSS − ΣSTORED_CHANGE = 0` per step over all its
   ports and carriers.
-- **Exempt component**: a component that has no energy port: by its kind (L1 and L2 controllers, meters) or by a
-  stated reason (§5). It is never a node and never a peer.
-- **Bus**: the house's AC electricity network, one node per building, not a component (§4.4).
+- **Exempt component**: a component that has no energy port: by its kind (L1 and L2 controllers, and a meter that
+  declares no metered exchange) or by a stated reason (§5). It is never a node and never a peer.
+- **Meter node**: a component that declares what it publishes as the exchange of a carrier at the system boundary
+  (`Component.metered_exchanges`, a `MeteredExchange`: carrier, import output, optional export output). Drawn under
+  its own name (`ElectricityMeter`, `GasMeter`, `FuelMeter`) between its boundary node and the devices it reads
+  (§4.4).
+- **Metered port**: an `IN` or `OUT` port of electricity or of a bought carrier (`EnergyPort.is_metered`). Its flow
+  must pass a meter; a metered port whose peer is no meter and no component is **unmetered** (§4.4).
 - **Boundary node**: where energy enters or leaves the system: grid import, grid export, the supply of each bought
   carrier, ambient heat, sun, the residents' body heat, hot water drawn at the taps, outdoors.
 - **Loss node**: one per `LOSS` port, named after its component and port (`Battery · inverter loss`).
@@ -93,11 +104,11 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 | Kind | Formed from | Example | Colour (plotly, today's palette) |
 |---|---|---|---|
 | component | every component that declares at least one port | `MoreAdvancedHeatPumpHPLib`, `Building`, `UTSPConnector` | blue |
-| bus | the electricity ports with no component peer, per building (§4.4) | `house electricity` | dark grey |
-| boundary | the environment of a port (§4.3) or the bus's residual (grid) | `grid import`, `natural gas supply`, `ambient heat`, `sun`, `outdoors` | green |
+| meter | each component that declares a metered exchange (§4.4) | `ElectricityMeter`, `GasMeter` | dark grey |
+| boundary | the environment of a port (§4.3) or of a meter's published exchange (§4.4) | `grid import`, `natural gas supply`, `ambient heat`, `sun`, `outdoors` | green |
 | loss | each `LOSS` port | `SimpleHotWaterStorage · standby loss` | orange |
 | storage change | each `STORED_CHANGE` port | `Battery · stored` | gold |
-| unaccounted | each component residual and each link difference (as today) | `unaccounted` | red |
+| unaccounted | each component residual, each meter residual and each link difference | `unaccounted` | red |
 | undeclared | a physical component that declares no port and has no exemption: a coverage view until the acceptance PR, a failure after it (§9, PR 6) | `undeclared: Building` | light grey |
 
 Node labels use the component's display name once hisim-9w3g gives one, else its instance name; the loss and
@@ -119,8 +130,9 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
    disagree with itself. **`HydronicPort` gains a carrier** (`SPACE_HEATING_HEAT` or `DOMESTIC_HOT_WATER_HEAT`): the
    diagram must know which heat a circuit carries. A cooling circuit keeps the carrier of its circuit and its
    negative heat, which turns the edge round (§4.6).
-3. **Bus edge**: an electricity port whose peer is the bus: `IN` is bus → component, `OUT` component → bus (§4.4).
-4. **Grid edge**: grid import → bus and bus → grid export, derived per step from the bus (§4.4).
+3. **Metered edge**: a metered port whose peer is a meter: `IN` is meter → component, `OUT` component → meter (§4.4).
+4. **Meter boundary edge**: what a meter publishes: its import from its boundary node (`grid import`,
+   `<carrier> supply`) and its export to `grid export` (§4.4). Never derived from the devices.
 5. **Boundary edge**: an `IN` port from its environment node (fuel, district heat, ambient heat, sun, body heat), or
    an `OUT` port to its environment node (hot water drawn at the taps).
 6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to `outdoors` only in the
@@ -128,31 +140,43 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
    readable where it occurs.
 7. **Storage edge**: a `STORED_CHANGE` port between the component and its storage node, component → storage when
    the run's net is positive (it charged), storage → component when negative.
-8. **Residual edge**: a component's residual, to or from `unaccounted` (as today).
+8. **Residual edge**: a component's or a meter's residual, to or from `unaccounted`.
 
 ### 4.3 How a port finds its peer
 
 Today's rule (`Wiring.peer_of`) resolves `peer_input`/`peer_output` through the wiring and takes the first reader,
-preferring declared readers. Two changes make D1 hold:
+preferring declared readers. Three changes make D1 and Q-J hold:
 
-- **An exempt component is never a peer.** Readers and sources whose kind is `L1ControllerComponent`,
-  `L2ControllerComponent` or `MeterComponent` (`hisim.component.ComponentKinds.of`), or that carry an exemption
-  reason (§5), are skipped. A port whose wiring names only exempt components falls through to its carrier default.
-- **Every carrier has a default peer**, used when the port names no component peer or its named peer is exempt:
+- **An exempt component is never a peer.** Readers and sources whose kind is `L1ControllerComponent` or
+  `L2ControllerComponent` (`hisim.component.ComponentKinds.of`), a meter that declares no metered exchange, or a
+  component that carries an exemption reason (§5) are skipped.
+- **A metered port goes to the meter that reads it** (Q-J). A metered port (§3) watches its own output, whatever its
+  role (or its `peer_output`), and its peer is the first that reads it through an explicit connection: (1) a
+  component that reads it directly and is not exempt, a meter of the port's carrier first, then a component that
+  declares ports, then the first in the order of the run; (2) else a meter of the port's carrier reached through
+  exempt components, breadth first, each passing the flow on through its outputs of the same load type. In the
+  household twins the energy manager reads the heat pump's, the PV system's, the battery's and the occupancy's
+  electricity and gives the electricity meter one signed sum (`TotalElectricityToOrFromGrid`): each device links to
+  the meter, whose input carries their sum. What a controller hands to anything but a meter is a decision (a set
+  point), not the flow, so only a meter is taken through a controller. A meter is the peer only of a port of a
+  carrier it meters. Nothing depends on how another component is modelled: only on published ports, declared
+  metered exchanges and the explicit connections.
+- **Every other port falls back to its carrier's boundary default**, used when the wiring names no peer:
 
 | Carrier | Default for `IN` | Default for `OUT` | Default for `LOSS` |
 |---|---|---|---|
-| `ELECTRICITY` | bus | bus | outdoors |
-| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary | none: an error | outdoors |
-| `DISTRICT_HEAT` | `district heat supply` boundary | none: an error | outdoors |
+| `ELECTRICITY` | none: unlinked (and unmetered) | none: unlinked (and unmetered) | outdoors |
+| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary (unmetered) | none: an error | outdoors |
+| `DISTRICT_HEAT` | `district heat supply` boundary (unmetered) | none: an error | outdoors |
 | `AMBIENT_HEAT` | `ambient heat` (as today) | `ambient heat` (heat rejected by a cooling device) | outdoors |
 | `SOLAR` | `sun` (today `solar`) | none: an error | outdoors |
 | heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | outdoors |
 
-So the heat pump's electricity ports drop `peer_output` and default to the bus; the boiler's fuel ports drop
-`peer_output=EnergyDemandSh` and default to `natural gas supply`; the district-heat ports drop theirs. The meters stay
-wired as they are; they only stop being drawn. A port that has no peer after these rules is `unlinked`: reported
-today, a failure from the acceptance PR on (fail loudly: energy that goes nowhere physical is a wiring fault).
+So the heat pump's electricity ports drop `peer_output` and link to the electricity meter through the energy manager;
+the boiler's fuel ports drop `peer_output=EnergyDemandSh` and link to the gas or fuel meter that reads them; the
+district-heat ports link to the fuel meter. The meters stay wired as they are and are drawn. A port that has no peer
+after these rules is `unlinked`: reported today, a failure from the acceptance PR on (fail loudly: energy that goes
+nowhere physical is a wiring fault).
 
 New members of `lt.EnvironmentNode`: `GRID_IMPORT` ("grid import"), `GRID_EXPORT` ("grid export"),
 `HOT_WATER_USE` ("hot water drawn at the taps"), `RESIDENTS` ("residents' body heat"); `SOLAR` is renamed in its
@@ -162,24 +186,35 @@ New carrier `lt.EnergyBalanceCarrier.ROOM_HEAT` (Q-G): heat released into or los
 of internal gains, of the building's losses and of its thermal mass. Space heating keeps `SPACE_HEATING_HEAT` up to
 the building's input, so the space-heating filter shows the heating chain and not the whole building.
 
-### 4.4 The house electricity bus
+### 4.4 The meters (owner decision Q-J)
 
-The bus is formed from the declared ports, nothing else:
+There is no bus and no derived residual anywhere. A meter is a node, formed from what it declares and what it reads:
 
-- Its members are every `ELECTRICITY` port of a component node whose peer resolves to the bus (§4.3), grouped by
-  `ComponentID.building` (one bus per building; a run without building ids has one bus).
-- Per step `t`, `net_t = Σ IN_t (consumers) − Σ OUT_t (producers)` over the members, in kWh.
-- **Grid import** `= max(net_t, 0)`, **grid export** `= max(−net_t, 0)`, each summed over the run. The bus closes
-  by construction; it has no residual.
-- **Cross-check with the meter (system balance, hisim-energy-sankeys-9uoo.8):** when the run has an `ElectricityMeter`, its
-  `ElectricityFromGridInWatt` and `ElectricityToGridInWatt` must equal the derived import and export per step
-  within the tolerance, or the run fails. A difference means a consumer or producer the meter counts and the bus
-  does not (an undeclared device) or the reverse (a device not wired to the energy manager). Measured: equal in all
-  35,040 steps of both twins (§7).
-- A battery is a bus member twice: charging is an `IN` port, discharging an `OUT` port, so both are visible. Within
-  one step the bus nets PV against consumption, which is the physical flow at step resolution.
-- The same per-step derivation applies to each bought carrier against its meter (`GasMeter`, `FuelMeter`): the sum of
-  a carrier's `IN` ports from its supply node equals the meter's reading per step.
+- **What it publishes.** A meter declares one `MeteredExchange` per carrier it meters
+  (`Component.metered_exchanges`): `ElectricityMeter` its `ElectricityFromGridInWatt` and `ElectricityToGridInWatt`,
+  `GasMeter` its `GasFromGrid` (natural gas or hydrogen, as configured), `FuelMeter` its `HeatConsumption` (oil,
+  pellets, wood chips or district heat, as configured). The published import enters the meter from `grid import` or
+  `<carrier> supply`; the published export leaves it to `grid export`. Grid import and export are these published
+  outputs, never derived. `HeatingMeter` declares no exchange (no setup uses it) and stays exempt.
+- **What it reads.** Its peers: every metered port of its carrier whose peer resolves to it (§4.3). A consumer's `IN`
+  port takes from it, a producer's `OUT` port gives to it. A battery is read twice, charging as `IN` and discharging
+  as `OUT`.
+- **The check (system balance, hisim-energy-sankeys-9uoo.8)**, per step `t`, in kWh:
+  `residual_t = (import_t − export_t) − (Σ IN_t − Σ OUT_t)` over the ports it reads. It must be zero within the
+  tolerance of the balance (decision 6), relative to the step's throughput `max(import + Σ OUT, export + Σ IN)`. A
+  gap is the meter's residual, drawn as a red `unaccounted` flow at the meter node and listed as a failing entry
+  under `meters` in the report; it is never absorbed into the import or the export. A gap means the meter reads a
+  flow no declared port carries (an undeclared device, or a device the energy manager sums but whose port is
+  wrong), or a port linked to it that the meter does not count.
+- **Every bought carrier passes a meter.** A metered port whose peer is neither a meter nor a component (a boiler's
+  gas port that no meter reads comes straight from `natural gas supply`; an electricity port nothing reads is
+  unlinked) is **unmetered**, listed under `unmetered` in the report. A metered port whose peer is a component hands
+  its flow on, and that component's ports are checked in turn.
+- **Enforcement (Q-H).** Both findings are computed and written in every run. While a component of the run is
+  undeclared, a meter may read flows no port declares, so they are reported with `enforced: false` and the reason;
+  in a run without undeclared components they fail the run. From PR 6 on undeclared components fail the run anyway.
+- One meter per building follows from the wiring: each building's meter reads its own devices; nothing groups ports
+  by building.
 
 ### 4.5 Carrier conversion and the per-carrier filters
 
@@ -255,11 +290,11 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 
 | Component | `IN` | `OUT` | `LOSS` | Change in PR 1 |
 |---|---|---|---|---|
-| `GenericBoiler` | fuel (`EnergyDemandSh`, `EnergyDemandDhw`, Wh) | SH and DHW circuits | `CombustionHeatLoss` (W) | fuel peer: `<fuel> supply`, not the meter |
-| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `ThermalPowerInputFromEnvironment` (W) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`) | none (hplib is a converter: heat = electricity + ambient) | electricity peer: bus, not the energy manager |
-| `DistrictHeating` | `ThermalOutputShEnergy`, `ThermalOutputDhwEnergy` as `DISTRICT_HEAT` (Wh) | SH, DHW | none today; the substation's pipe water is hisim-pnw7 | district heat peer: `district heat supply` |
-| `ElectricHeating` | `ElectricOutputShPower`, `...DhwPower` (W) | `ThermalOutputShPower` to the building, DHW circuit | none (efficiency 1) | electricity peer: bus |
-| `SolarThermalSystem` | `SolarPowerOnCollector` (W, `SOLAR`), `ElectricityConsumptionOutput` (W) | DHW circuit | `CollectorHeatLoss` (`SOLAR`), `SolarPumpHeatLoss` (`ELECTRICITY`) | electricity peer: bus; sun node renamed |
+| `GenericBoiler` | fuel (`EnergyDemandSh`, `EnergyDemandDhw`, Wh) | SH and DHW circuits | `CombustionHeatLoss` (W) | fuel peer: the gas or fuel meter that reads it (Q-J) |
+| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `ThermalPowerInputFromEnvironment` (W) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`) | none (hplib is a converter: heat = electricity + ambient) | electricity peer: the electricity meter, through the energy manager (Q-J); `...ForCooling` and `...BrinePump` are read by nothing and stay unmetered until hisim-component-physics-4g9.39 |
+| `DistrictHeating` | `ThermalOutputShEnergy`, `ThermalOutputDhwEnergy` as `DISTRICT_HEAT` (Wh) | SH, DHW | none today; the substation's pipe water is hisim-pnw7 | district heat peer: the fuel meter |
+| `ElectricHeating` | `ElectricOutputShPower`, `...DhwPower` (W) | `ThermalOutputShPower` to the building, DHW circuit | none (efficiency 1) | electricity peer: the electricity meter |
+| `SolarThermalSystem` | `SolarPowerOnCollector` (W, `SOLAR`), `ElectricityConsumptionOutput` (W) | DHW circuit | `CollectorHeatLoss` (`SOLAR`), `SolarPumpHeatLoss` (`ELECTRICITY`) | electricity peer: the electricity meter; sun node renamed |
 
 ### 5.3 Electricity devices (PR 2)
 
@@ -267,20 +302,20 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | bus |
+| `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | the electricity meter, through the energy manager |
 | `SOLAR` | `IN` | **new** `SolarPowerOnModulesInWatt`: plane-of-array irradiance times module area (Q-D) | sun |
 | `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | outdoors |
 
 The two new outputs need the plane-of-array irradiance in the PV series (`produce_pv_series` in
 `generic_pv_system/calculation.py` returns AC power ratios only), so the PV cache key changes; no KPI moves. If Q-D
-is answered "start at the electricity", PVSystem declares only the `OUT` port and is a source of the bus.
+is answered "start at the electricity", PVSystem declares only the `OUT` port and is a source of the meter.
 
 **`Battery` (`advanced_battery_bslib`)**, every `*_building_sizer` household twin.
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `IN` | `ChargingPower` (W, `>= 0`) | bus |
-| `ELECTRICITY` | `OUT` | `DischargingPower` (W, published `<= 0`: `negated=True`) | bus |
+| `ELECTRICITY` | `IN` | `ChargingPower` (W, `>= 0`; `peer_output=AcBatteryPowerUsed`, the signed output the energy manager reads) | the electricity meter, through the energy manager |
+| `ELECTRICITY` | `OUT` | `DischargingPower` (W, published `<= 0`: `negated=True`; `peer_output=AcBatteryPowerUsed`) | the electricity meter, through the energy manager |
 | `ELECTRICITY` | `LOSS` | **new** `InverterLossInWatt` = `AcBatteryPowerUsed − DcBatteryPowerUsed` | its loss node |
 | `ELECTRICITY` | `LOSS` | **new** `CellLossInWatt` = `DcBatteryPowerUsed − StoredEnergyIncreaseInWattHour / dt` | its loss node |
 | `ELECTRICITY` | `STORED_CHANGE` | `StoredEnergyIncreaseInWattHour` (Wh, from the state of charge) | storage node |
@@ -295,7 +330,7 @@ energy: it declares.
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `IN` | `ElectricalPowerConsumption` (W) | bus |
+| `ELECTRICITY` | `IN` | `ElectricalPowerConsumption` (W) | the electricity meter, through the energy manager |
 | `ROOM_HEAT` | `IN` | `HeatingByResidents` (W) | `RESIDENTS` boundary |
 | `ROOM_HEAT` | `OUT` | `HeatingByDevices` (W) | the building (reads it) |
 | `ROOM_HEAT` | `OUT` | **new** `BodyHeatToBuildingInWatt`, equal to `HeatingByResidents` (an output carries one port, so the body heat's way out needs its own output) | the building |
@@ -306,7 +341,7 @@ The LoadProfileGenerator gives device heat gains as a profile of its own, not as
 exceed the electricity in a step. The body heat passes through the occupancy node so that the building has one peer
 for all internal gains. The hot water the residents draw is the tank's `OUT` to `HOT_WATER_USE` (§5.1).
 
-**`L2GenericEnergyManagementSystem`, `ElectricityMeter`**: exempt (D1). The meter is the cross-check of §4.4.
+**`L2GenericEnergyManagementSystem`**: exempt (D1). **`ElectricityMeter`**: a node (Q-J), §4.4.
 
 ### 5.4 The building (PR 4)
 
@@ -356,14 +391,15 @@ has ports after this epic; "exempt" means it is never a node.
 | Component (module) | Kind | Verdict | Carriers (in / out / loss / stored) or reason | PR |
 |---|---|---|---|---|
 | `Battery` (advanced_battery_bslib) | physics | declares | §5.3 | 2 |
-| `CarBattery` (advanced_ev_battery_bslib) | physics | declares | el in from bus (`AcBatteryChargingPower`), el out to the car (discharge for driving), inverter and cell loss, stored | 5b |
-| `CHP` (advanced_fuel_cell) | physics | declares | hydrogen or gas in; el out to bus, SH heat out; conversion loss | 5c |
+| `CarBattery` (advanced_ev_battery_bslib) | physics | declares | el in from its meter (`AcBatteryChargingPower`), el out to the car (discharge for driving), inverter and cell loss, stored | 5b |
+| `CHP` (advanced_fuel_cell) | physics | declares | hydrogen or gas in; el out to its meter, SH heat out; conversion loss | 5c |
 | `AirConditioner` (air_conditioner) | physics | declares | el in; heating: ambient in, SH heat out to the building; cooling: `COOLING` in from the building, heat rejected to ambient | 5a |
 | `AirConditionerController` | L1 | exempt (kind) | controller | – |
 | `Building` (building.building) | physics | declares | §5.4 | 4 |
 | `ElectrolyzerController`, `SimpleController`, `FuelCellController`, `L1Controller` (EV charge), `GenericBoilerController`, `L1CHPController`, `DistrictHeatingController`, `ElectricHeatingController`, `GenericHeatPumpController`, `HeatDistributionController`, `IdealizedElectricHeaterController`, `MoreAdvancedHeatPumpHPLibControllerDHW`, `...SpaceHeating`, `SimpleAirConditionerController`, `SolarThermalSystemController` | L1 | exempt (kind) | controllers decide, move no energy (D1) | – |
 | `L2GenericEnergyManagementSystem`, `PTXController`, `XTPController`, `HeatingCurveController`, `NightSetbackController` | L2 | exempt (kind) | D1 | – |
-| `ElectricityMeter`, `GasMeter`, `FuelMeter`, `HeatingMeter` | meter | exempt (kind) | D1; cross-check of §4.4 | – |
+| `ElectricityMeter`, `GasMeter`, `FuelMeter` | meter | node (Q-J) | publishes its exchange (`metered_exchanges`), checked against what it reads, §4.4 | 1 |
+| `HeatingMeter` | meter | exempt (kind) | declares no metered exchange; no setup uses it | – |
 | `CSVLoader` | data source | exempt (reason) | an arbitrary series; a consumer reading energy from it takes the energy from its carrier default | 5 |
 | `RandomNumbers`, `TariffProvider`, `Weather` | data source | exempt (reason) | no energy; the sun and the ambient heat are boundary nodes of the ports that take them | 5 |
 | `UtspLpgConnector` | data source | declares | §5.3 | 2 |
@@ -378,7 +414,7 @@ has ports after this epic; "exempt" means it is never a node.
 | `FuelCell` (generic_fuel_cell) | physics | declares | hydrogen in; el out; heat as loss or out | 5c |
 | `GenericHeatPump` (generic_heat_pump) | physics | declares | el, ambient in; SH heat out (`ThermalPowerDelivered` to the building); cooling as `COOLING` in | 5a |
 | `HeatDistribution` | physics | declares | §5.1 | 3 |
-| `IdealizedElectricHeater` | physics | declares | el in (bus), SH heat out to the building | 5a |
+| `IdealizedElectricHeater` | physics | declares | el in (its meter), SH heat out to the building | 5a |
 | `MoreAdvancedHeatPumpHPLib` | physics | declares (built) | §5.2 | 1, 3 |
 | `PVSystem` | physics | declares | §5.3 | 2 |
 | `SimpleAirConditioner` | physics | declares | as `AirConditioner`, cooling only | 5a |
@@ -405,17 +441,20 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
 ### 6.2 Interfaces
 
 - `balance_report.json` gets schema `hisim.energy_balance/2`: an `exempt` list with each component's reason,
-  `unlinked` ports, the bus with its derived grid series totals and the meter cross-check, and `HydronicPort`
-  circuits under `links`.
+  `unlinked` ports, `meters` (each meter's published import and export, the ports it reads, its residual, failing
+  steps, worst step and verdict, `enforced` and why not), `unmetered` (the metered ports that pass no meter, with
+  `enforced` and why not), and `HydronicPort` circuits under `links`.
 - `energy_sankeys/energy_sankey.json`: node kinds of §4.1, every edge with its carrier; `overall.html` is the
   connected diagram, one HTML per carrier as filters.
-- `lt.EnergyBalanceCarrier.ROOM_HEAT`, `lt.EnvironmentNode` members of §4.3, `HydronicPort.carrier`.
+- `lt.EnergyBalanceCarrier.ROOM_HEAT`, `lt.EnvironmentNode` members of §4.3, `HydronicPort.carrier`,
+  `Component.metered_exchanges()` with `MeteredExchange` (Q-J).
 - New outputs of §5 (named with their units). No output is renamed.
 
 ### 6.3 What does not change
 
 - The tolerance, the fail-hard rule, the check running in every simulation.
-- The meters and the energy manager keep their wiring and outputs; they stop being drawn.
+- The meters and the energy manager keep their wiring and outputs; the meters are drawn (Q-J), the energy manager
+  is not.
 
 ### 6.4 Imbalances already found (each needs its bug bead and fix PR under D3)
 
@@ -441,7 +480,7 @@ condensing gas boiler: 17,182.7, residual 0.0) and 14 components are undeclared.
 
 | Node | In | Out | Loss | Stored | Closes per step today |
 |---|---|---|---|---|---|
-| bus | PV 26,315.1, grid import 1,708.8, battery discharge 2,506.9 | appliances 4,658.5, heat pump SH 2,537.1, heat pump DHW 1,113.6, battery charge 3,461.3, grid export 18,760.3 | – | – | by construction; the derived import and export equal the meter's in all 35,040 steps |
+| ElectricityMeter | PV 26,315.1, grid import 1,708.8, battery discharge 2,506.9 | appliances 4,658.5, heat pump SH 2,537.1, heat pump DHW 1,113.6, battery charge 3,461.3, grid export 18,760.3 | – | – | yes: what it publishes equals what it reads in all 35,040 steps (measured on 2026-10-19 as a derived bus against the meter, the same condition) |
 | Battery | 3,461.3 | 2,506.9 | inverter 808.3, cell 157.2 | −11.2 | yes (losses never negative) |
 | heat pump | electricity 3,650.7, ambient 11,650.6 | SH 11,980.4, DHW 3,321.0 | – | – | yes (declared today) |
 | buffer | 11,980.4 | to HDS 11,408.2 | standby 575.1 | −2.8 | yes, 0 steps beyond tolerance; both circuits agree with their other end in every step |
@@ -458,7 +497,7 @@ Sources of the connected diagram: sun 3,821.6 (windows; PV's sun input depends o
 
 | Node | In | Out | Loss | Stored | Closes per step today |
 |---|---|---|---|---|---|
-| bus | PV 26,315.1, grid import 511.4, battery discharge 1,928.0 | appliances 4,658.5, battery charge 2,670.6, grid export 21,425.4 | – | – | by construction; equal to the meter in every step |
+| ElectricityMeter | PV 26,315.1, grid import 511.4, battery discharge 1,928.0 | appliances 4,658.5, battery charge 2,670.6, grid export 21,425.4 | – | – | yes, in every step |
 | Battery | 2,670.6 | 1,928.0 | inverter 633.5, cell 118.7 | −9.6 | yes |
 | gas boiler | natural gas 17,182.7 | SH 10,903.4, DHW 3,312.1 | combustion 2,967.2 | – | yes (declared today) |
 | buffer | 10,903.4 | to HDS 10,733.3 | standby 171.3 (negative in some steps, min −9.9 W) | −1.2 | yes |
@@ -468,8 +507,8 @@ Sources of the connected diagram: sun 3,821.6 (windows; PV's sun input depends o
 | Building | HDS 10,733.3, internal 4,576.3, solar 3,821.6 | – | ventilation 5,463.4, windows and doors 3,202.7, opaque 10,457.9, gains through windows 46.7 | step equation −39.5; persistent −19.7 | as in 7.1; B1 Σ\|residual\| 3,280 kWh/yr |
 
 So, of everything the complete diagram of these two twins would show, only the building does not close; the
-hydronic chain closes per step since hydronic stage D (#1011, #1035), and the electricity side closes by
-construction once its ports exist.
+hydronic chain closes per step since hydronic stage D (#1011, #1035), and the electricity meter publishes what it
+reads in every step once the electricity devices declare their ports.
 
 ## 8. Open questions
 
@@ -482,8 +521,9 @@ construction once its ports exist.
 | Q-E window opening | neither option: window opening needs a proper ventilation model with an adjustable air-exchange rate (open windows do not make the indoor air equal the outdoor air without strong wind or fans). Bead hisim-opxv (P2). Until it lands, the Sankey draws no window flow. |
 | Q-F tanks' standby losses | outdoors as modelled today (the tank in an unheated cellar); configurable later, bead hisim-af8m (P3 feature) |
 | Q-G room heat | (a) the new carrier `ROOM_HEAT` |
-| Q-H when the meter cross-check fails the run (2026-10-20) | it is always computed and written to the report, and fails the run only once no component is undeclared; until then the report says `enforced: false` and why (built in PR 1, #1086). From PR 6 on undeclared components fail the run anyway, so the check is then always enforced |
+| Q-H when the meter check fails the run (2026-10-20) | it is always computed and written to the report, and fails the run only once no component is undeclared; until then the report says `enforced: false` and why (built in PR 1, #1086). From PR 6 on undeclared components fail the run anyway, so the check is then always enforced. Under Q-J it applies to both meter findings: a meter that publishes other than it reads, and an unmetered port |
 | Q-I static Sankey images for the PDF report (2026-10-20) | a P3 bead: PNG/SVG export of the connected diagram, after PR 6 and preferably with the arrow renderer (hisim-energy-sankeys-9uoo.19) |
+| Q-J no bus; meters are nodes and follow their wiring (2026-10-20) | "HiSim explicitly does not use buses as a concept, since they bring a whole host of problems." The house electricity bus of the first D1 is removed with its derived residual: it closed by construction, so electricity a port got wrong or missed vanished into grid import or export. And: "verifying if all the electricity is metered is a really good check", so D1 is revised for meters: every meter is a node under its own name, between its boundary node and the devices whose flows it reads through explicit connections, traced through exempt controllers (§4.3); grid import and export are the meter's published outputs; per step what a meter publishes equals what it reads, a gap is a red `unaccounted` flow at the meter and a failing entry; every metered port passes a meter, or it is an `unmetered` finding. Both findings follow Q-H. Controllers stay exempt and are never nodes. Built in PR 1 (#1086) |
 
 
 - **Q-B. Where the exemption list lives.** A component is exempt either by kind or by a reason. (a) *Kind plus a
@@ -500,7 +540,7 @@ construction once its ports exist.
   area as `SOLAR` `IN` and module plus inverter loss, like the solar collector does today; at about 20 % module
   efficiency the sun into PV is roughly five times its 26,315 kWh of electricity and the widest band of the diagram.
   Costs the plane-of-array irradiance in the PV series (cache key changes, no KPI moves). (b) *At its electricity*:
-  PV is a source of the bus; no sun edge for PV, the narrowest diagram; inconsistent with the collector and the
+  PV is a source of the meter; no sun edge for PV, the narrowest diagram; inconsistent with the collector and the
   heat pump's ambient heat, which start at the environment. (c) *At its DC output* with the inverter loss only:
   between the two, needs the DC power from pvlib. Recommendation: (a), for one rule for every converter of
   environmental energy; the electricity filter shows PV without its sun.
@@ -530,16 +570,16 @@ beads in its own branch.
 | PR | Scope | Tests | Goldens | Beads closed |
 |---|---|---|---|---|
 | 0 | This spec, the note on hisim-energy-sankeys-9uoo.18, bead hisim-energy-sankeys-9uoo.19 | – | none | – |
-| 1 | The graph model of §4: exempt kinds are never peers, carrier defaults and the bus with the derived grid (§4.3, §4.4), the boundary, loss and storage nodes, `ROOM_HEAT`, the new environment nodes, links coloured by carrier, `overall` as the connected diagram, per-carrier views as filters, report schema 2. Re-points the built generators' fuel and electricity ports (§5.2). | `base`: `tests/test_energy_balance.py` gains graph tests on hand-built port sets (bus import/export per step, a meter disagreeing fails, exempt peer skipped, unlinked reported). `extendedbase2`: `tests/test_energy_balance_generators.py`'s expected links change (`natural gas supply` instead of `undeclared: GasMeter`, `house electricity` instead of the energy manager). | none | hisim-energy-sankeys-9uoo.18 (as decided by D1, D2, D4); hisim-energy-sankeys-9uoo.1, .2, .4, .9 confirmed built (below) |
-| 2 | Electricity devices: PV, battery, occupancy (§5.3); the meter cross-check of the bus (the electricity part of hisim-energy-sankeys-9uoo.8). | `extendedbase2`, new `tests/test_energy_balance_electricity.py`: the heat-pump and gas twins, second January week at 900 s: PV, battery and occupancy close, the bus's import and export equal the meter's per step. | none (new outputs only) | – (hisim-energy-sankeys-9uoo.5 closes with PR 5b) |
+| 1 | The graph model of §4: exempt controllers are never peers, the meters as nodes with their check and the unmetered ports (§4.3, §4.4, Q-J), carrier defaults, the boundary, loss and storage nodes, `ROOM_HEAT`, the new environment nodes, links coloured by carrier, `overall` as the connected diagram, per-carrier views as filters, report schema 2. Re-points the built generators' fuel and electricity ports (§5.2). | `base`: `tests/test_energy_balance.py` gains graph tests on hand-built port sets (a device the meter reads links to it, also through an exempt controller; grid import and export are the meter's outputs; a meter publishing other than it reads has an `unaccounted` flow and fails, or is reported while a component is undeclared; an unmetered bought-carrier port is reported, then fails; exempt peer skipped, unlinked reported). `extendedbase2`: `tests/test_energy_balance_generators.py`'s expected links change (`natural gas supply` → `GasMeter` → boiler instead of `undeclared: GasMeter`, `ElectricityMeter` instead of the energy manager). | none | hisim-energy-sankeys-9uoo.18 (as decided by D1, D2, D4, Q-J); hisim-energy-sankeys-9uoo.1, .2, .4, .9 confirmed built (below) |
+| 2 | Electricity devices: PV, battery, occupancy (§5.3), linked to the electricity meter through the energy manager; the electricity meter check (the electricity part of hisim-energy-sankeys-9uoo.8). | `extendedbase2`, new `tests/test_energy_balance_electricity.py`: the heat-pump and gas twins, second January week at 900 s: PV, battery and occupancy close, the electricity meter publishes what it reads in every step. | none (new outputs only) | – (hisim-energy-sankeys-9uoo.5 closes with PR 5b) |
 | 3 | Water storages and HDS as `HydronicPort` circuits, the generators' circuit ends with them (§5.1) = hydronic stage E. Needs hisim-pnw7 (B3) merged for the district-heating twin. | `extendedbase2`, `tests/test_energy_balance_storages.py`: buffer, tank, HDS and every circuit close per step in the gas, heat-pump, solar and district-heating twins; `tests/test_energy_port_hydronic.py` gains the pairing rules (one reader, both ends). | none | hisim-energy-sankeys-9uoo.3, hisim-hydronics-fxix.6 |
 | 4a | Fix B1: the building carries `θ_m,next` as its mass state. | `base`: the step's mass equation and the carried state agree (`C_m Δθ` of the state equals the flows' net). | re-bless all household twins; KPI deltas; renovisorissues heads-up | B1's bug bead |
 | 4 | The building's ports (§5.4), including B2 as a declared loss. | `extendedbase2`, `tests/test_energy_balance_building.py`: the building closes per step in the heat-pump and gas twins, a January and a July week (heating, solar gains, window opening). | none | hisim-energy-sankeys-9uoo.6 |
 | 5a | Other heat and cooling devices: `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner`, `IdealizedElectricHeater`, `SimpleHeatSource`. | `extendedbase2`: `basic_household`, `air_conditioned_house`, `simple_air_conditioner_household_building_sizer` close. | none | – (hisim-i7yq's view needs hisim-energy-sankeys-9uoo.17 too) |
-| 5b | Car and car battery; `L1Controller` exempt. | `extendedbase2`: `household_heatpump_car_building_sizer` closes, the car's charging is a bus consumer. | none | hisim-energy-sankeys-9uoo.5 |
+| 5b | Car and car battery; `L1Controller` exempt. | `extendedbase2`: `household_heatpump_car_building_sizer` closes, the car's charging is read by the electricity meter. | none | hisim-energy-sankeys-9uoo.5 |
 | 5c | Hydrogen and CHP: electrolyzers, hydrogen storage, fuel cell, both CHPs, transformer. | `extendedbase2`: `dynamic_components`, `electrolyzer_with_renewables` close. | none | – (hisim-svh4's view follows) |
 | 5d | The exemptions (Q-B), the example template's port, the `base` test that every component is declared or exempt. | `base`: walk every component class. | none | hisim-energy-sankeys-9uoo.7 |
-| 6 | System balance and acceptance: the bought carriers against their meters (§4.4), undeclared physics and unlinked ports fail the run, the acceptance test. | `extendedbase2`, `tests/test_complete_energy_sankeys.py`: heat-pump and gas twin, a week: no `undeclared` node, `unaccounted` within tolerance, every bus and meter cross-check holds. The full year of every golden setup runs in `golden-year.yml` with the check on. | none | hisim-energy-sankeys-9uoo.8, hisim-energy-sankeys-9uoo.10, hisim-energy-sankeys-9uoo.11, hisim-mzft (after the owner has reviewed one twin per heating system) |
+| 6 | System balance and acceptance: undeclared physics and unlinked ports fail the run, so every meter check and the unmetered ports are enforced (§4.4), the acceptance test. | `extendedbase2`, `tests/test_complete_energy_sankeys.py`: heat-pump and gas twin, a week: no `undeclared` node, `unaccounted` within tolerance, every meter publishes what it reads, no unmetered port. The full year of every golden setup runs in `golden-year.yml` with the check on. | none | hisim-energy-sankeys-9uoo.8, hisim-energy-sankeys-9uoo.10, hisim-energy-sankeys-9uoo.11, hisim-mzft (after the owner has reviewed one twin per heating system) |
 
 Order: PR 1 first, because every later PR's links resolve through it. PR 2 before PR 4, because the building's
 internal gains come from the occupancy. PR 3 before PR 4, because the building's heat comes from the HDS. The

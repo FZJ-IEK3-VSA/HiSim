@@ -361,8 +361,9 @@ class EnvironmentNode(str, enum.Enum):
 
     An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
     ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
-    (:meth:`hisim.energy_port.EnergyPort.default_peer`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are the two ends of
-    the house electricity bus's per-step residual, which no port names. ``HOT_WATER_USE`` is the hot water drawn
+    (:meth:`hisim.energy_port.EnergyPort.default_peer`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    electricity meter's published import comes from and its export goes to, which no port names
+    (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
     at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as
     "natural gas supply", is derived from its carrier and not listed here
     (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).

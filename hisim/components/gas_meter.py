@@ -42,6 +42,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort, MeteredExchange
 
 
 @dataclass_json
@@ -340,6 +341,18 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
             )
         )
         return dynamic_connections
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The gas this meter publishes as bought, in Wh: natural gas or hydrogen, as configured (spec §4.4).
+
+        The energy balance draws the meter between the gas's supply node and the burners whose fuel ports it reads,
+        and checks per step that ``GasFromGrid`` equals what they burn minus what producers feed in. The meter
+        publishes no export: gas a producer feeds in beyond the consumption leaves no output.
+
+        Returns:
+            The one exchange of the configured gas.
+        """
+        return (MeteredExchange(EnergyPort.carrier_of_fuel(self.gas_loadtype), self.GasFromGrid),)
 
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""

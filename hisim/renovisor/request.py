@@ -1275,13 +1275,13 @@ class SemanticChecks:
     #: The generators a request may name as the house's existing one but HiSim cannot simulate
     #: yet, each with the reason its refusal gives. ``solid_fuel_heating`` (peat, coal) ran on the
     #: pellet twin and was priced as wood chips, so its fuel, cost and CO2 were a wood boiler's
-    #: (renovisorissues #76); until a coal/peat carrier exists (bead hisim-vsq0.2) it is refused by
+    #: (renovisorissues #76); until a coal/peat carrier exists (bead hisim-renovisor-not-modelled-vsq0.2) it is refused by
     #: name (``heating.type_of_system.unsupported``) instead of answered wrongly.
     UNSUPPORTED_GENERATORS: ClassVar[Dict[HeatGenerator, str]] = {
         HeatGenerator.SOLID_FUEL_HEATING: (
             "HiSim has no coal or peat fuel, so neither the boiler's fuel use nor its cost and CO2 "
             "could be this house's; a heating_system measure replacing the boiler is not supported "
-            "either, until a coal/peat carrier exists (bead hisim-vsq0.2)"
+            "either, until a coal/peat carrier exists (bead hisim-renovisor-not-modelled-vsq0.2)"
         ),
     }
 

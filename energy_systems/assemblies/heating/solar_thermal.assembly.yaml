@@ -61,7 +61,7 @@ tests:
   # the fixed test day, 1 January in Aachen, on which the solar pump never starts (see the monotone entry), so the
   # collector delivers no heat and no entry can fail on the collector's physics. That physics is covered by the
   # goldens of the two solar twins until the assembly's composed file and its gate arrive with hydronic stage C, whose
-  # golden-year run covers summer; bead hisim-lt0b.23 adds the test of collection then.
+  # golden-year run covers summer; bead hisim-assemblies-lt0b.23 adds the test of collection then.
   #
   # One day at 900 s on the test weather beside a DHW cylinder at the other end of the solar_dhw circuit. The bounds
   # are sized for the physical ceiling, not for the test day: irradiance on the collector plane is at most about

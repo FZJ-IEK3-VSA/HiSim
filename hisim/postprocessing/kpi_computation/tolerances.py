@@ -18,7 +18,7 @@ REL_TOL = 1e-9
 #:
 #: A KPI that is physically zero still comes out as accumulated rounding noise, for example the
 #: electric-heating house's one-week temperature deviation below 20 °C of about 1.4e-9 K·h. Its last
-#: bits depend on the environment and the cache state, not on the code (hisim-b3b.6): the bless wrote
+#: bits depend on the environment and the cache state, not on the code (hisim-declarative-systems-b3b.6): the bless wrote
 #: 1.3982390948778326e-09, the check computed 1.398239035665938e-09, 6e-17 apart. Relative to a zero,
 #: one last-bit difference is a relative error of 4e-8, forty times ``REL_TOL``. The floor makes such
 #: values comparable. At 1e-12 it lies far above that noise and far below any value a KPI states

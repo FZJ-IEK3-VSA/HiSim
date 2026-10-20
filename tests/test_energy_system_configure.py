@@ -247,7 +247,7 @@ class _NestedProbeConfig(ConfigBase):
 
     The energy-system codec rebuilds a nested mapping through the nested field's own class, both in a
     complete ``config`` block and in a sparse override. These tests used the solar-thermal collector's
-    coordinates until that unread field left the format (hisim-9g2.13), so the rule is pinned on this
+    coordinates until that unread field left the format (hisim-midyear-windows-9g2.13), so the rule is pinned on this
     test-only class.
     """
 
@@ -926,7 +926,7 @@ def test_a_complete_config_block_keeps_the_nested_objects_its_class_rebuilt() ->
     can get.
 
     No HiSim configuration holds a nested dataclass today (the solar-thermal collector's
-    coordinates were the last, removed in hisim-9g2.13), so the test-only :class:`_NestedProbeConfig`
+    coordinates were the last, removed in hisim-midyear-windows-9g2.13), so the test-only :class:`_NestedProbeConfig`
     carries one: its coordinates are a dataclass.
     """
     configured = Systems.configure(Systems.NESTED_PROBE)
@@ -1011,7 +1011,7 @@ def test_a_collector_that_still_sets_its_removed_coordinates_is_refused() -> Non
     """Catches the solar-thermal collector accepting a location it does not read.
 
     The collector stands at the weather's location, and its ``coordinates`` field left the format
-    with hisim-9g2.13. A file that still sets it must be refused with the key named, not run with a
+    with hisim-midyear-windows-9g2.13. A file that still sets it must be refused with the key named, not run with a
     value that has no effect.
     """
     entry = """  collector:

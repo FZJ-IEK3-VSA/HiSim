@@ -1,4 +1,4 @@
-# IE.json — an AI-generated placeholder catalogue → hisim-cyc.2
+# IE.json — an AI-generated placeholder catalogue → hisim-economics-engine-cyc.2
 
 **Status: AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED.**
 
@@ -74,14 +74,14 @@ from them.
 ## The approximation this file contains: the doors grant
 
 The doors grant is the one rule the catalogue language cannot state exactly; it is flagged in its
-scheme's `display_name` as well as here. Solar PV was a second approximation until hisim-cyc.3 and
+scheme's `display_name` as well as here. Solar PV was a second approximation until hisim-economics-engine-cyc.3 and
 is kept below the doors grant as the record of how it was resolved.
 
 * **The doors grant assumes two doors.** SEAI pays 800 € per door for at most two doors; the
   request carries no door count, so the scheme is a 1,600 € lump sum and its display name says
   `(assumes 2 doors)`. A one-door replacement is overstated by 800 €, which the solver's clamp
   to the eligible cost only partly corrects.
-* **Solar PV is pro rata, and so is the catalogue since hisim-cyc.3.** SEAI pays 700 €/kWp up to
+* **Solar PV is pro rata, and so is the catalogue since hisim-economics-engine-cyc.3.** SEAI pays 700 €/kWp up to
   2 kWp, then 200 €/kWp up to 4 kWp, capped at 1,800 €, *pro rata* — a 2.5 kWp array gets
   1,500 €. `IE_SEAI_SOLAR_PV` states exactly that as one `TIERED_PER_UNIT` benefit (tiers
   `[{up_to: 2, amount_per_unit: 700}, {up_to: 4, amount_per_unit: 200}]`, `size_unit: "kW"`,

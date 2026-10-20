@@ -118,7 +118,7 @@ class SimulationParameters:
                 debugging and verification. Defaults to False.
             cache_directories: Ordered cache directories, read in order and written to the
                 first writable one, for a container that maps a read-only seed directory and a writable
-                one in (hisim-epc.22). Empty (the default) means the single
+                one in (hisim-renovisor-translator-epc.22). Empty (the default) means the single
                 ``cache_dir_path``, exactly as before.
             weather_year: The year whose weather the run reads, when it is not the calendar year
                 (``roadmap/weather_year.md``). ``None`` (the default) means today's behaviour: the
@@ -235,7 +235,7 @@ class SimulationParameters:
         Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
         say -- is not decided here, but by the component that owns the source. The contract fixes the
         window's shape, not that its dates are served: the weather and its readers deliver the window
-        (hisim-9g2.4), while the other profiles read a window that starts after 1 January from
+        (hisim-midyear-windows-9g2.4), while the other profiles read a window that starts after 1 January from
         1 January until the later steps of the mid-year epic, as :meth:`one_week_july` explains.
 
         Args:
@@ -547,7 +547,7 @@ class SimulationParameters:
         gains and the solar-thermal collector read July; the LoadProfileGenerator occupancy and its cars
         read July from their profiles (``hisim/components/lpg_local_time.py``); the CHP controller's
         heating season counts the days of the year. The CSV loader reads July from a file with a time
-        column and refuses a July run from a file without one (hisim-9g2.14).
+        column and refuses a July run from a file without one (hisim-midyear-windows-9g2.14).
 
         Args:
             year: Calendar year the week is taken from.
@@ -641,7 +641,7 @@ class SimulationParameters:
         """The ordered cache directories this calculation reads, and the first writable one it writes.
 
         Every cache reader and writer of a run goes through this, so a container that maps a
-        read-only seed directory and a writable one in (hisim-epc.22) redirects the whole cache
+        read-only seed directory and a writable one in (hisim-renovisor-translator-epc.22) redirects the whole cache
         at once. Empty ``cache_directories`` means the single ``cache_dir_path``, exactly the
         behaviour every caller had before the list existed.
         """

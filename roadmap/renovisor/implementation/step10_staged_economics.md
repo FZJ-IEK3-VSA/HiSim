@@ -20,7 +20,7 @@ Ground rules as in step 3 §0 (worktree `/home/noah/hisim/HiSim-renovisor`, inte
 mypy clean on `hisim/economics`, `hisim/renovisor` and the tests; prospector clean on every file
 you touch — run `prospector --profile .prospector.yml <file>`; the three CI mypy runs). New tests
 `@pytest.mark.base`; the end-to-end one `system_setups`. **Invent no numbers**: every constant
-carries a source comment and the words TO BE REVIEWED; the worked examples' expected values are → hisim-epc.8, hisim-cyc.1
+carries a source comment and the words TO BE REVIEWED; the worked examples' expected values are → hisim-renovisor-translator-epc.8, hisim-economics-engine-cyc.1
 computed by the harness and left `unreviewed` for a person to attest, never typed as if reviewed.
 
 ---
@@ -143,10 +143,10 @@ Tests: schema validity; every stack sums to its total per slot on the written fi
 order fixed; ids only (no label strings from HiSim); `measure_id` stamped from the mapping
 report's `subjects` map (§4).
 
-> **Note (2026-09-24, hisim-cyc.6).** The document is at `schema_version: 2` since: awarded
-> `subsidies[]` rows state `amount_by_year_in_euro` and an amount (hisim-cyc.5), and `totals` /
+> **Note (2026-09-24, hisim-economics-engine-cyc.6).** The document is at `schema_version: 2` since: awarded
+> `subsidies[]` rows state `amount_by_year_in_euro` and an amount (hisim-economics-engine-cyc.5), and `totals` /
 > `comparison` carry the required `monthly_equivalent_cost_in_euro` /
-> `monthly_equivalent_cost_delta_in_euro` (hisim-cyc.6).
+> `monthly_equivalent_cost_delta_in_euro` (hisim-economics-engine-cyc.6).
 >
 > **Note (2026-09-26, hisim-fig7).** The document is at `schema_version: 3` since: every
 > `by_subject` row carries the required `investment_by_stage`, the subject's investment split by

@@ -25,7 +25,7 @@ class ZeroReferenceWindowAreaError(ValueError):
     window areas (``A_Window_1`` and ``A_Window_2``); the per-direction window areas that carry
     the solar gains are the row's ``A_Window_<direction>`` columns rescaled so their sum matches
     that window area. A row whose reference window areas are both zero has no distribution to
-    rescale, which makes two cases inconsistent, and both are refused by name (hisim-4g9.1):
+    rescale, which makes two cases inconsistent, and both are refused by name (hisim-component-physics-4g9.1):
 
     * A window area configured for such a row would count in the transmission losses while it
       vanished from every orientation.
@@ -148,7 +148,7 @@ class BuildingInformation:
         #: weighted average is the pinned ``(u * area) / area`` float round trip (findings
         #: log entries 7 and 17), which the guard skips when ``A_Door_1`` is 0; the window's
         #: two-column average divides by zero for a row whose reference window areas are
-        #: both zero (hisim-4g9.1). A zero-area element has zero conductance either way,
+        #: both zero (hisim-component-physics-4g9.1). A zero-area element has zero conductance either way,
         #: so the kept raw U-value is the material's property, unused by the physics.
         keep_u_value_when_reference_area_is_zero: bool = False
 
@@ -213,7 +213,7 @@ class BuildingInformation:
     #: Window: no b_Transmission columns (factor is always 1), and its own zero-area guard,
     #: the same rule the door's descriptor declares: a row whose reference window areas
     #: are both zero keeps the raw U_Actual_Window_1 instead of dividing the weighted
-    #: average by zero (hisim-4g9.1). The per-direction area scaling remains the one
+    #: average by zero (hisim-component-physics-4g9.1). The per-direction area scaling remains the one
     #: legitimate special case the table does not cover; it lives as an explicit
     #: window-specific step in get_building_area_parameters, which scales by 0 for a row
     #: with no window data anywhere and refuses a zero-reference row that states its windows
@@ -538,7 +538,7 @@ class BuildingInformation:
         TABULA reference window area — zero for some codes, for which the scaling factor
         is 0 instead of a division by zero when the row has no window data anywhere, and a
         ``ZeroReferenceWindowAreaError`` when the row states its windows per direction only
-        or a window area is configured for it (findings log entries 1 and 2, hisim-4g9.1).
+        or a window area is configured for it (findings log entries 1 and 2, hisim-component-physics-4g9.1).
         The door follows as the second special case: a row without a reference door area
         gets TABULA's estimated door area. The total envelope area closes the pipeline.
         """
@@ -558,7 +558,7 @@ class BuildingInformation:
 
         # Window special case: rescale the per-direction TABULA window areas so their
         # total matches the window area derived above. The divisor is the *reference*
-        # window area (findings log entries 1 and 2, hisim-4g9.1). A code whose reference
+        # window area (findings log entries 1 and 2, hisim-component-physics-4g9.1). A code whose reference
         # areas are both zero has no distribution to rescale. When the row has no window
         # data anywhere the factor is 0, consistent with the window area of 0 derived from
         # the same reference. When it states its windows per direction only, those windows
@@ -750,7 +750,7 @@ class BuildingInformation:
         """Refuse a zero-reference-window row that states windows per direction or is given a window area.
 
         Called only for a row whose reference window areas are both zero, where the
-        per-direction window scaling has no distribution to rescale (hisim-4g9.1). A row
+        per-direction window scaling has no distribution to rescale (hisim-component-physics-4g9.1). A row
         that lists windows per direction all the same would lose every one of them, and a
         configured window area would count in the transmission losses while it vanished
         from every orientation; either way the building would be inconsistent, so it raises
@@ -906,7 +906,7 @@ class BuildingInformation:
         set) that average IS the pinned ``(u * area) / area`` round trip, which is NOT a
         float no-op — it shifts the last mantissa bit for 164 TABULA codes (findings log
         entries 7 and 17) — so it must not be simplified algebraically. The guard skips
-        the division only when the reference area is zero (door and window, hisim-4g9.1
+        the division only when the reference area is zero (door and window, hisim-component-physics-4g9.1
         for the window's two columns) and keeps the raw first U-value. The
         adjustment factor is the largest of the ``b_Transmission`` columns when the
         descriptor names any, and the fixed factor otherwise (window and door).

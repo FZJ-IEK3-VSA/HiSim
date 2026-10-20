@@ -108,7 +108,7 @@ class PinnedTwin:
 
 @pytest.mark.base
 class TestExplicitSizes:
-    """hisim-4g9.2: a stated battery capacity and heat-pump power are the sizes the run builds."""
+    """hisim-component-physics-4g9.2: a stated battery capacity and heat-pump power are the sizes the run builds."""
 
     def test_pinned_sizes_reach_the_components_unchanged(self) -> None:
         """Each pinned field comes out of the sizing kernel exactly as written."""

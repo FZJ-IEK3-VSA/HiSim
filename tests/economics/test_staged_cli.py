@@ -757,7 +757,7 @@ class TestTheMappingReportIsRequired:
 
 
 class TestTheStageMeasuresComeFromTheReport:
-    """``stages[].measures`` is read from each stage's mapping report (hisim-cyc.4).
+    """``stages[].measures`` is read from each stage's mapping report (hisim-economics-engine-cyc.4).
 
     The end-to-end test on the mockup pair cannot show the filter at work, because every measure
     of that package is ``used`` or ``approximated`` at measure level -- a value-level substitution

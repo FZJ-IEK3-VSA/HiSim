@@ -77,7 +77,7 @@ class SimulationSetup:
     LOGGING_LEVEL: ClassVar[int] = 3
 
     #: The environment variable holding the ordered cache directories a container maps in,
-    #: separated by :data:`os.pathsep` (hisim-epc.22). Every entry must be absolute: a relative
+    #: separated by :data:`os.pathsep` (hisim-renovisor-translator-epc.22). Every entry must be absolute: a relative
     #: one would resolve against whatever the worker's working directory happens to be, and two
     #: workers would then disagree about where the cache is. An explicit ``cache_directory``
     #: argument to :meth:`parameters` outranks the variable, which is then not consulted.
@@ -116,7 +116,7 @@ class SimulationSetup:
                 one. It is the one location outside the output directory a calculation writes
                 to, and it is shared state rather than output (decision Q25). Given, it is the
                 single cache directory and ``HISIM_CACHE_DIRECTORIES`` is not consulted; absent,
-                the variable fills the ordered directory list when it is set (hisim-epc.22).
+                the variable fills the ordered directory list when it is set (hisim-renovisor-translator-epc.22).
             country: The dwelling's country, which selects the legacy fuel-price and emission
                 tables. For a country registered as a placeholder the numbers in them are the
                 sentinel; see the module docstring.

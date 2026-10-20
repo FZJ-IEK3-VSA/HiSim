@@ -259,7 +259,7 @@ def get_cache_file(
 
     The locations are chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
     ``my_simulation_parameters.cache_locations()`` -- the parameter list, read in order and written to the
-    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-epc.22). The
+    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-renovisor-translator-epc.22). The
     argument wins over the environment so that a test pointing at its own directory keeps working on a
     machine where the override or a directory list is set.
 

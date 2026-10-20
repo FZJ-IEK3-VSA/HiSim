@@ -199,7 +199,7 @@ class TestTheResultPayload:
         assert set(report["unpriced_subjects"]) <= set(report["subjects"])
 
     def test_the_mapping_report_accounts_for_the_economics_only_leaves(self, tmp_path: Path) -> None:
-        """The stated installation year is covered before the fail-loud stage runs (hisim-epc.14)."""
+        """The stated installation year is covered before the fail-loud stage runs (hisim-renovisor-translator-epc.14)."""
         document = package_document()
         assert run(document, tmp_path, "dated") == ExitCode.FINISHED
 
@@ -295,7 +295,7 @@ def _emitter_config(emitter: Any) -> Any:
 
 @pytest.mark.system_setups
 class TestTheCacheDirectories:
-    """hisim-epc.22: a container's seed-and-volume cache pair, end to end.
+    """hisim-renovisor-translator-epc.22: a container's seed-and-volume cache pair, end to end.
 
     The first run populates the writable directory (and reads the seed, which starts empty),
     the second finds every entry and recomputes nothing. The cache is content-keyed and

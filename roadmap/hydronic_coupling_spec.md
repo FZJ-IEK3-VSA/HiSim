@@ -1,8 +1,8 @@
 # Spec: hydronic coupling in the temperature domain (pure (m, T) ports)
 
 **Date:** 2026-10-01 · **Owner:** Noah Pflugradt · **Status:** decided (owner, 2026-10-01: the frame in §2,
-D1–D8 in §10); ready for staged implementation (§9.5). Replaces PR #864. Beads: hisim-4g9.16, hisim-4g9.21,
-hisim-4g9.22, hisim-9uoo.12, hisim-9uoo.15, hisim-9uoo.17, hisim-6ehm; renovisorissues #76. **Stage D couples the
+D1–D8 in §10); ready for staged implementation (§9.5). Replaces PR #864. Beads: hisim-component-physics-4g9.16, hisim-component-physics-4g9.21,
+hisim-component-physics-4g9.22, hisim-energy-sankeys-9uoo.12, hisim-energy-sankeys-9uoo.15, hisim-energy-sankeys-9uoo.17, hisim-6ehm; renovisorissues #76. **Stage D couples the
 space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler and heat-pump
 chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12). A chain without a buffer
 (district heating) keeps whole steps. Stage D closes with the buffer chain; the chain without a buffer is split out
@@ -20,7 +20,7 @@ receives are three different numbers:
 - **The vessel mixes masses instead of integrating.** `calculate_mean_water_temperature_in_water_storage`
   (`hisim/components/simple_water_storage.py:372-397`) sets `T_new = (M T0 + Σ m_i dt T_i) / (M + Σ m_i dt)`, the
   temperature of a vessel that swallowed one step of every inflow without anything leaving. At 900 s the inflow
-  mass is comparable to the vessel, so the result is far from the physical one (hisim-4g9.16).
+  mass is comparable to the vessel, so the result is far from the physical one (hisim-component-physics-4g9.16).
 - **Energy is booked against the start temperature.** The inflow heat is `m dt c (T_i − T0)`
   (`simple_water_storage.py:991-1006`, DHW `:1834-1846`) and the outlet to every circuit is `T0`
   (`:1010-1012`, DHW `:1872-1873`). A generator thus books heat into a vessel that, by the end of the step, is
@@ -34,10 +34,10 @@ receives are three different numbers:
 - **The distribution system lags one step.** `HeatDistribution.i_simulate` publishes the previous step's state
   (`heat_distribution_system.py:471-491`) and writes this step's result into the state afterwards (`:498-501`).
   District heating feeding it without a buffer bills `m c ΔT_needed` while the HDS books its own exchange: 30.8
-  kWh/yr sent and never received (hisim-9uoo.12).
+  kWh/yr sent and never received (hisim-energy-sankeys-9uoo.12).
 - **The heat pump's flow and power disagree.** hplib is cached on inputs rounded to 0.1 K
   (`more_advanced_heat_pump_hplib.py:1997-1999`), while the storage integrates the flow at the unrounded return; the
-  flow then carries up to ~0.5 % more heat than `P_th` (hisim-4g9.21; the rounding is the likely cause).
+  flow then carries up to ~0.5 % more heat than `P_th` (hisim-component-physics-4g9.21; the rounding is the likely cause).
 
 PR #864 closed the vessels' balance with an energy back-channel (storages publish the heat they accepted, generators
 book it, the HDS requests and is granted heat). That makes watts a second coupling next to the temperatures, and
@@ -47,7 +47,7 @@ it does not compose: every series tank, coil, valve or buffer-less loop would ne
 
 1. **No interim fix.** #864's accepted-heat back-channel (`ThermalPowerAcceptedByStorage*`,
    `AcceptedHeat.booked`, HDS `Requested/Granted/Floor`) is not merged; #864 is replaced by this design, keeping
-   what §9.3 lists. hisim-4g9.16 was closed against the #864 branch and is re-solved here; hisim-6ehm, also closed
+   what §9.3 lists. hisim-component-physics-4g9.16 was closed against the #864 branch and is re-solved here; hisim-6ehm, also closed
    there, stays open as a validation item (§10, D4).
 2. **Everything in the temperature domain, with pure (m, T) ports.** A hydronic circuit carries a mass flow, a
    supply temperature and a return temperature, nothing else. Energy is only ever derived, as
@@ -56,7 +56,7 @@ it does not compose: every series tank, coil, valve or buffer-less loop would ne
    tanks in series, a buffer charging a DHW tank through a coil, mixing valves, pipes, a generator feeding the
    HDS without a buffer.
 3. **The circuit-law extension is not adopted now.** An owner publishing its outlet-versus-inlet curve so the
-   node can solve a step in 2-3 iterations is bead hisim-4g9.22 (P4), for when iterations get slow or biased
+   node can solve a step in 2-3 iterations is bead hisim-component-physics-4g9.22 (P4), for when iterations get slow or biased
    (§7 lists the measured limits that would trigger it).
 
 ## 3. Port convention
@@ -177,8 +177,8 @@ parameters (owner, 2026-10-04): water `c = 4180 J/(kg K)`, pinned equal to `Phys
   monotonically towards it, so a vessel never passes its hottest inflow (or its coldest). #864's acceptance cap
   becomes a property of the integration instead of a rule.
 - **Cooling falls out.** A flow colder than the vessel cools it with the same equation and `Q < 0`. On the storage
-  side hisim-9uoo.17 needs nothing more; the refusal #864 introduced for a cooling heat pump into a storage can
-  go once the heat pump itself has its cooling model and metering (hisim-9uoo.15, §5.2).
+  side hisim-energy-sankeys-9uoo.17 needs nothing more; the refusal #864 introduced for a cooling heat pump into a storage can
+  go once the heat pump itself has its cooling model and metering (hisim-energy-sankeys-9uoo.15, §5.2).
 - **Standby loss exact.** The loss is `UA (T̄ − T_amb) dt`, taken inside the same integration; it replaces the
   explicit after-step subtraction at `simple_water_storage.py:1147-1160`.
 
@@ -204,7 +204,7 @@ The DHW tank publishes the step mean it computes from its inputs and its saved s
 2026-10-10). Until then it published its start temperature `T0` on the first pass of every step and accelerated
 later passes from its own iteration history (§6); both are iteration memory inside the component, which component
 design principle 5 rules out ("`i_simulate` is a function of the inputs and the saved state"). The first pass now
-starts from the previous step's converged values (the simulator's warm start, hisim-4g9.23). The acceleration
+starts from the previous step's converged values (the simulator's warm start, hisim-component-physics-4g9.23). The acceleration
 moved into the simulator on 2026-10-10 and was removed on 2026-10-11 (§6): the tank's step mean is now iterated
 like every other output.
 
@@ -239,7 +239,7 @@ building's demand, it computes its return in the same step with the existing law
 Without a buffer (district heating, or a generator with `NO_STORAGE_*`, `:74-75`), the HDS's own pipe water is
 the node: its mass is already computed (`mass_of_water_in_hds`, `:531`, 8.8 m of 16 mm pipe per m² of floor area,
 `:526`), and the free-convection decay of `:503-554` is the `m = 0` case of the same node equation with the
-building as `T_amb`. The generator then sees the pipe water's `T̄` as its return, which fixes hisim-9uoo.12: the
+building as `T_amb`. The generator then sees the pipe water's `T̄` as its return, which fixes hisim-energy-sankeys-9uoo.12: the
 heat district heating bills is the heat that entered the pipe water, and the heat the building gets is what left
 it, with the pipe water's `ΔU` in between (§10, D3).
 
@@ -262,7 +262,7 @@ district-heating substation (§5.4): when `T_ret + ΔT` would exceed `T_max`, th
 flow stays the one the unthrottled law pumps, and the heat is `m c (T_max − T_ret)`. The fuel or electricity of a
 throttled step follows from that heat through the generator's own efficiency or COP law; unthrottled steps stay as
 D1 and D2 say. Without the limit, a full-power charge decided on `T0` (D4) heated the conserving DHW tank past
-90 °C at 3600 s, and at 900 s for a small tank or a large generator (hisim-fxix.9).
+90 °C at 3600 s, and at 900 s for a small tank or a large generator (hisim-hydronics-fxix.9).
 
 **Hot-water supply capped at the controller's set temperature (owner, 2026-10-09).** A generator's hot-water
 supply is also capped at its controller's set temperature, the value the controller already aims at:
@@ -297,7 +297,7 @@ output, the boiler its `T̄` output; on main both read the same start temperatur
 Consequence: a firing boiler holds its lift, so every firing boiler step is the power-limited case of §7: the node
 cannot see the boiler's within-step reaction, and the iteration needs about 11 tries at 900 s, just past the
 simulator's `force_convergence` limit of 10. The iteration histogram test covers the boiler setups explicitly; since
-the acceleration was removed (§6), the boiler charges forced at 900 s are accepted (hisim-4g9.50). The **electric
+the acceleration was removed (§6), the boiler charges forced at 900 s are accepted (hisim-component-physics-4g9.50). The **electric
 DHW heater** stays the same way: it keeps its `P_max ΔT/100` regulation (`ElectricHeating.hot_water_circuit`) and
 fixed lift, publishing `T_sup = T_ret + ΔT`.
 
@@ -318,9 +318,9 @@ before (owner, 2026-10-10). A boiler that does not fire publishes zero fuel powe
 hplib returns `P_th`, `P_el`, `COP`, `T_out` and `m_dot` for a return temperature (parallel mode,
 `more_advanced_heat_pump_hplib.py:1504-1530`). hplib's `m_dot` and `T_out` are authoritative and published as
 the circuit's mass flow and supply; the heat pump books `P_th = m c (T_out − T_in)` with `T_in` the node's
-unrounded `T̄`, and `P_el = P_th / COP`. This resolves hisim-4g9.21 this way round: the booked heat is what the
+unrounded `T̄`, and `P_el = P_th / COP`. This resolves hisim-component-physics-4g9.21 this way round: the booked heat is what the
 flow carries, and it may differ from hplib's calibrated `P_th` (and so from the calibrated SCOP,
-`ScopCalibration`, `:236`) by up to ~0.5 %, the excess hisim-4g9.21 measured. The fixed-flow mode (`:1531-1580`,
+`ScopCalibration`, `:236`) by up to ~0.5 %, the excess hisim-component-physics-4g9.21 measured. The fixed-flow mode (`:1531-1580`,
 `m_dot_ref`, `T_out = T_in + P_th/(m c)`) is consistent under the same rule.
 
 The cache keeps today's 0.1 K rounding of its inputs (`:1997-1999`); the rounding is the likely cause of the
@@ -330,7 +330,7 @@ grid points is the remedy if it shows. It showed, and the remedy is applied in s
 cache stays keyed on the 0.1 K grid, and the results of the two neighbouring grid points are interpolated
 linearly in the return temperature, which is not rounded any more (`T_out`, `m_dot`, `P_th`, `P_el` and `COP`
 alike); the source and ambient temperatures stay rounded, since they are constant while a step iterates. Cooling uses the same circuit with `T_sup < T_ret`; its electricity and
-the brine pump must reach the meter (hisim-9uoo.15) before #864's cooling refusal is removed (hisim-9uoo.17).
+the brine pump must reach the meter (hisim-energy-sankeys-9uoo.15) before #864's cooling refusal is removed (hisim-energy-sankeys-9uoo.17).
 
 The heat pump's hot-water outlet is limited to
 `MoreAdvancedHeatPumpHPLibConfig.maximal_dhw_supply_temperature_in_celsius`, 75 °C (owner, 2026-10-09): hplib has
@@ -350,7 +350,7 @@ Corrected (owner, 2026-10-09): the outlet stays `T_in + 2 ΔT_n`, because `ΔT_n
 efficiency curve is evaluated at, and the flow is sized for `2 ΔT_n`: the collector is pump owner at
 `m = Q_coll(T̄)/(c · 2 ΔT_n)`, reads the node's `T̄` and publishes `T_sup = T̄ + 2 ΔT_n`, so its water carries exactly
 `Q_coll(T̄)`. While the pump stands or the collector has no heat, the circuit moves no water and its supply is its
-return. The pump decides on `T0` (owner, 2026-10-11; hisim-fxix.21): the collector publishes, whether or not the pump
+return. The pump decides on `T0` (owner, 2026-10-11; hisim-hydronics-fxix.21): the collector publishes, whether or not the pump
 runs, the flow its heat at the tank's start-of-step temperature needs, `Q_coll(T0)/(c · 2 ΔT_n)`
 (`RequiredWaterMassFlowAtStartOfStepInKgPerSecond`, from the tank's `WaterTemperatureAtStartOfStepInCelsius` wired to
 its `TemperatureCollectorInletAtStartOfStepInCelsius`), and the controller switches the pump on and off on that flow.
@@ -361,7 +361,7 @@ The step-mean flow it also published whether or not the pump ran (`RequiredWater
 the controller decided on `T0` and was removed on 2026-10-14. From 2026-10-09 to 2026-10-11 the pump decided on the
 step-mean flow, an exception to D4 (owner, 2026-10-09), because deciding on `T0`
 had made the collector's yield and the tank's hot-water fuel depend on the step length; with the step-mean decision
-about 50 steps a year at 900 s had no consistent on/off state (hisim-fxix.21). The controller's former switch-on comparison, the
+about 50 steps a year at 900 s had no consistent on/off state (hisim-hydronics-fxix.21). The controller's former switch-on comparison, the
 collector's outlet at `T̄` against `T̄` plus `set_temperature_difference_for_on`, is removed with that field and the
 collector's `CollectorTemperatureAtStepMeanInCelsius` output (owner, 2026-10-10): the difference was `2 ΔT_n`
 whenever the collector had heat and 0 otherwise, so the comparison only repeated the minimum flow below 20 K and
@@ -376,14 +376,14 @@ no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s wit
 0.005 kg/s, the same collector heat as before (owner, 2026-10-09). Since 2026-10-11 the pump switches with a
 hysteresis, as a differential solar controller does (on at about 7 K, off at about 3 K): a pump that stood in the
 previous step switches on at 0.005 kg/s, a pump that ran switches off below 0.0025 kg/s, and whether it ran is the
-controller's saved state (owner, 2026-10-11; hisim-fxix.19). The full-tank stop has a restart hysteresis too (owner,
+controller's saved state (owner, 2026-10-11; hisim-hydronics-fxix.19). The full-tank stop has a restart hysteresis too (owner,
 2026-10-11): once the tank starts a step above the maximum the stop holds until it starts a step at least 3 K below it
 (`SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN`), as solar controllers restart a few
 kelvin below their maximum storage temperature; the stop is saved state as well. Without it a tank that started a
 step just above the stop's temperature cooled below it by the next step's standby loss and restarted the pump, so
 the pump switched every second step.
 
-The maximum storage temperature is the solar controller's own, 80 °C (owner, 2026-10-11; hisim-fxix.22), above the 60 °C
+The maximum storage temperature is the solar controller's own, 80 °C (owner, 2026-10-11; hisim-hydronics-fxix.22), above the 60 °C
 warm-water aim the backups charge to. Real solar controllers let the sun heat the tank past the backup's set point up to
 a maximum installers set between about 60 and 80 °C, with a thermostatic mixing valve at the tap, which the tank's tap
 valve already is (`hydronics.mixing_valve_draw`: above the 40 °C tap temperature the tap draws less tank water for the
@@ -448,7 +448,7 @@ hysteresis band was about 12 K of tank temperature at 4 m² and 2 K at 24 m², a
 The substation is a power-limited heat exchanger: `T_sup = T_ret + min(T_set − T_ret, P_connected/(m c))` on
 whichever circuit runs, replacing `P = m c ΔT_needed` (`generic_district_heating.py:653-685`) and the
 `P_connected ΔT/100` regulation of its DHW side (`:687-707`). It books the derived heat, so its bill is what the
-node received (hisim-9uoo.12). On the DHW circuit the pump runs at `m = P_connected / (c · 100 K)`, the flow the
+node received (hisim-energy-sankeys-9uoo.12). On the DHW circuit the pump runs at `m = P_connected / (c · 100 K)`, the flow the
 former regulation implied, and `T_set` is the controller's `T0` plus the lift it asks for (owner, 2026-10-09). Its
 early return under `force_convergence` (`:452-453`) keeps the balance
 consistent, since the node integrates what the frozen supply carries; only its reaction is stale.
@@ -468,7 +468,7 @@ and with the former strict `T0 > t_max + raise` a charge never ended (hot-water 
 60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
 `t_max − 0.5 K` (owner decision, 2026-10-09): at `t_max`, a tank between `t_max − 0.5 K` and
 `t_max` would be switched on with the raise and off without it, and the raise follows the heat pump's draw, so it
-can come and go within a step (hisim-4g9.28); with the stop at the same point the charge's state cannot toggle with
+can come and go within a step (hisim-component-physics-4g9.28); with the stop at the same point the charge's state cannot toggle with
 it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on at `t_max`, 97983 with it at
 `t_max − 0.5 K`). The solar pump decided on the node's `T̄` from 2026-10-09 to
 2026-10-11 and decides on `T0` since (§5.3). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
@@ -511,11 +511,11 @@ component's output in the middle of the iteration, so the other components react
 computed. `hisim/fixed_point_acceleration.py`, the `is_accelerated` flag and the simulator's use of it are gone; the
 hot-water tank publishes its step mean as it computes it. #927 changed no component, so the slow loops the
 acceleration had shortened now run the plain iteration. A boiler charge at 900 s needs 12 to 13 passes and is forced
-within about 1e-3 W of its end; the owner accepted that (hisim-4g9.50, closed). The air-conditioned house's slow loop
-is open (hisim-4g9.49), and so is the energy manager's raise cycle in the heat-pump twins (hisim-4g9.53). A rule that
-forces a step when the iteration stops making progress, instead of after a fixed ten passes, is hisim-4g9.55. What
+within about 1e-3 W of its end; the owner accepted that (hisim-component-physics-4g9.50, closed). The air-conditioned house's slow loop
+is open (hisim-component-physics-4g9.49), and so is the energy manager's raise cycle in the heat-pump twins (hisim-component-physics-4g9.53). A rule that
+forces a step when the iteration stops making progress, instead of after a fixed ten passes, is hisim-component-physics-4g9.55. What
 changed the iteration since: every step starts from the previous step's converged values (the warm start, #914,
-hisim-4g9.23), and a pass evaluates the components kind by kind (#922, above). The boiler's part-load rule (#915)
+hisim-component-physics-4g9.23), and a pass evaluates the components kind by kind (#922, above). The boiler's part-load rule (#915)
 and its measured forced steps are in `roadmap/hydronic_part_load_spec.md` §11. The two paragraphs below and their
 table record the design that was removed and what it measured.
 
@@ -529,7 +529,7 @@ under-relaxed value (weight 0.5) when the residual changes sign (an oscillation,
 should not produce, but a circuit whose heat falls steeply with `T̄` can, such as the heat pump's hot-water supply
 capped at its controller's set temperature). A converged iteration can alternate between two neighbouring floats;
 the energy manager, which switches its set-temperature raise on the sign of the surplus after the battery, keeps
-its previous step's decision within 0.01 W of zero surplus (hisim-4g9.31), so that alternation no longer becomes a
+its previous step's decision within 0.01 W of zero surplus (hisim-component-physics-4g9.31), so that alternation no longer becomes a
 cycle of its own. Once the simulator forces convergence it stops accelerating: the controllers are then frozen,
 and a secant from a history that spans their switching aims at a fixed point that no longer exists (with the
 extrapolation kept under forced convergence the heat-pump twin's year at 3600 s aborted on a 100-pass cycle). The
@@ -546,7 +546,7 @@ steps instead of 2980 (mean passes 8.79 → 8.81), its space-heating electricity
 
 Measured on the six twins with a hot-water tank, full year 2021, mean passes per step and forced steps (more than
 ten passes), before (the tank's own memory) and after (the simulator's acceleration), both with the simulator's warm
-start (hisim-4g9.23):
+start (hisim-component-physics-4g9.23):
 
 | twin | 60 s before | 60 s after | 900 s before | 900 s after | 3600 s before | 3600 s after |
 |---|---|---|---|---|---|---|
@@ -560,7 +560,7 @@ start (hisim-4g9.23):
 The hot-water KPIs (tap heat, generators' hot-water heat and fuel or electricity, unmet heat) of the gas, electric,
 district-heating and gas-and-solar twins agree within 0.2 % (the collector heat of the gas-and-solar twin within
 1.3 % at 900 s, its pump decisions being whole-step); the heat-pump twins' within 0.8 %, their forced steps being
-the energy manager's cycles (hisim-4g9.28, hisim-4g9.31). Without the warm start (the state of this stage alone) the
+the energy manager's cycles (hisim-component-physics-4g9.28, hisim-component-physics-4g9.31). Without the warm start (the state of this stage alone) the
 heat-pump twins' forced steps at 900 s rise by 6 % (heat pump, 7909 → 8396) and 10 % (heat pump + solar,
 1561 → 1725), fall by 11 % at 60 s (heat pump, 97983 → 86860), and the other twins are unchanged or better; the
 heat-pump-and-solar year at 3600 s no longer aborts either way.
@@ -568,12 +568,12 @@ heat-pump-and-solar year at 3600 s no longer aborts either way.
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
 (`Simulator.process_one_timestep` returns the count and the forced flag) are asserted: at 900 s at most
 `MAXIMAL_FORCED_STEP_SHARE` (0.5 %) of the steps of a file without a heat pump reach `force_convergence` (more than
-10 tries; the accepted boiler charges, hisim-4g9.50), and the heat-pump files are recorded, not asserted
-(hisim-4g9.53). The boiler twins (gas, oil, pellets, wood chips, hydrogen, gas + solar thermal), the heat-pump twins (for
+10 tries; the accepted boiler charges, hisim-component-physics-4g9.50), and the heat-pump files are recorded, not asserted
+(hisim-component-physics-4g9.53). The boiler twins (gas, oil, pellets, wood chips, hydrogen, gas + solar thermal), the heat-pump twins (for
 the energy manager's on/off loop; the rounding staircase is interpolated since stage C) and the district-heating twin (no buffer) are listed explicitly. The histogram and each
 twin's mean are a CI artifact, so drifts are seen.
 
-**Escalation to hisim-4g9.22** if, after stage D (§9.5), a twin still has 900 s steps at `force_convergence`, or
+**Escalation to hisim-component-physics-4g9.22** if, after stage D (§9.5), a twin still has 900 s steps at `force_convergence`, or
 the §7 bias exceeds 1 % of an annual KPI against 60 s; the buffer-less district-heating loop (D3) goes first.
 
 ## 7. Known limits of pure ports
@@ -593,7 +593,7 @@ pump at 0.16 kg/s with `P_th = 9000 (1 − 0.015x − 0.0004x²)`, `x` the retur
 The earlier draft measured a power-limited boiler at 4 / 11 / 41 iterations at 60 / 900 / 3600 s, and district
 heating feeding the HDS without a buffer at 24 iterations and 0.5 K off at 900 s: past the simulator's freeze
 after 10 tries, inside its abort at 100. With D1 the boiler figure applies to every firing boiler step; hence
-the escalation of §6 (and the acceleration of §6, removed on 2026-10-11). Circuit laws (hisim-4g9.22) remove bias
+the escalation of §6 (and the acceleration of §6, removed on 2026-10-11). Circuit laws (hisim-component-physics-4g9.22) remove bias
 and iterations at a richer port.
 
 ## 8. Composability test cases
@@ -610,7 +610,7 @@ Each is a unit test asserting every node's per-step balance (relative 1e-6) and 
 4. **Generator → HDS without a buffer.** District heating directly on the HDS pipe-water node: per step, the heat
    district heating books equals the pipe water's `ΔU` plus the heat delivered to the building.
 5. **Cooling into a buffer.** A heat pump with `T_sup < T_ret` lowers the buffer; the storage side books `Q < 0`
-   and closes; the heat pump's cooling electricity is asserted to reach the meter once hisim-9uoo.15 is done.
+   and closes; the heat pump's cooling electricity is asserted to reach the meter once hisim-energy-sankeys-9uoo.15 is done.
 
 ## 9. Migration
 
@@ -646,7 +646,7 @@ the translator follows them; the translation map (`roadmap/renovisor/translation
 | `combustion_efficiency_at_burner_power`, the power-band guard | kept |
 | `hot_water_draw` (now `hydronics.mixing_valve_draw` and `solve_tank_step`), `ThermalEnergyUnmetDHWInWattHour`, `check_water_mass` (now `refuse_a_tank_without_water`) | kept, on `(m, T)` (§4.3) |
 | `StorageForecast`, `DhwChargeYield` and the controllers' forecast inputs | dropped (D4) |
-| cooling-into-storage refusal | kept until hisim-9uoo.15 / 9uoo.17 land |
+| cooling-into-storage refusal | kept until hisim-energy-sankeys-9uoo.15 / 9uoo.17 land |
 | `tests/test_water_storage_energy_balance.py` | winter-week, tap and boiler-law scenarios kept, assertions rewritten to node closure; forecast and yield tests dropped |
 | #864's re-blessed golden references | discarded |
 
@@ -662,7 +662,7 @@ the translator follows them; the translation map (`roadmap/renovisor/translation
   each other (extends `tests/test_time_resolution.py`).
 - **Fuel plausibility:** pellet/gas fuel ratio for the same house close to the efficiency ratio (~1.1, not the
   ~2.5 measured earlier). The stated-versus-simulated seasonal efficiency of renovisorissues #76 is reported in the
-  same run; its part-load efficiency curve (hisim-9uoo.13) is out of scope here.
+  same run; its part-load efficiency curve (hisim-energy-sankeys-9uoo.13) is out of scope here.
 - **Heat-pump comfort (hisim-6ehm):** underheating hours and minimum buffer temperature of the heat-pump twins at
   900 s against 60 s; a regression reopens the control question then, not before.
 - **Comparison runs** main / #864 / new on gas, pellets, heat pump, gas + solar thermal and district heating
@@ -678,7 +678,7 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   acceleration, removed again on 2026-10-11, §6) with unit tests, used by nothing. Done when: closure and no-overshoot property tests pass and no
   golden changes.
 - **B. Heat-pump consistency.** Scope: `P_th = m c (T_out − T_in)`, `P_el = P_th/COP` in both modes, rounding
-  kept. Done when: the flow heat equals the booked `P_th` on every step of the heat-pump twins, hisim-4g9.21 is
+  kept. Done when: the flow heat equals the booked `P_th` on every step of the heat-pump twins, hisim-component-physics-4g9.21 is
   closed, goldens re-blessed.
 - **C. DHW chain.** Scope: `SimpleDHWStorage` as node, tap valve and unmet DHW, the DHW circuits of boiler, heat
   pump, district heating, electric heater and solar thermal, controllers on `T0`. Done when: the DHW tank closes
@@ -688,12 +688,12 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   accepted. For the houses with solar thermal the residual comes from the solar pump's whole-step decisions
   (collector yield -7 % / -24 % with a gas boiler and -15 % / -15 % with a heat pump at 900 / 3600 s, the backup's
   gas +1.3 % / +4.3 % and electricity +9.2 % / +43 %, measured before the heat pump's hot-water cap); it moves to
-  hisim-fxix.11, due before RenoVisor's solar results are relied on (RenoVisor runs at 900 s). The heat pump's
+  hisim-hydronics-fxix.11, due before RenoVisor's solar results are relied on (RenoVisor runs at 900 s). The heat pump's
   hot-water electricity residual (+1.73 % at 900 s, +18.1 % at 3600 s against 60 s, while its hot-water heat agrees
   within 0.4 %) comes from whole-step charge decisions (D4) into hplib's near-COP-1 range above about 63 °C and from
-  the energy manager's raise switching inside a step; it moves to hisim-fxix.12 (owner, 2026-10-09). The
+  the energy manager's raise switching inside a step; it moves to hisim-hydronics-fxix.12 (owner, 2026-10-09). The
   heat-pump-and-solar twin's year at 3600 s aborts on a 2-cycle the pinned 0.5 under-relaxation cannot damp
-  (hisim-fxix.13; the owner kept 0.5, 2026-10-09).
+  (hisim-hydronics-fxix.13; the owner kept 0.5, 2026-10-09).
   *Amended (owner, Noah, 2026-10-16):* at 3600 s the generators' hot-water heat, net of the change of the heat the
   tank holds over the window, may differ from the 60 s run by up to 1.5 %; at 900 s it stays within 1 %
   (`tests/test_dhw_chain_time_resolution.py`, the first four weeks of 2021). The excess at 3600 s is the standby
@@ -704,15 +704,15 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   done-when below is the first one; §12 says how the stage stands against it.* Scope as first written:
   `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a buffer, the SH circuits, the
   iteration histogram test. Done when: buffer and HDS close per step, district heating's bill equals pipe-water `ΔU`
-  plus delivered heat (hisim-9uoo.12 closed), no step at `force_convergence` at 900 s in the boiler, heat-pump and
+  plus delivered heat (hisim-energy-sankeys-9uoo.12 closed), no step at `force_convergence` at 900 s in the boiler, heat-pump and
   district-heating twins, goldens re-blessed.
   *Amended (owner, Noah, 2026-10-16):* stage D closes with the buffer chain. The half without a buffer -- the
-  pipe-water node, D25 (who pumps a circuit without a buffer) and district heating's bill (hisim-9uoo.12) -- is split
+  pipe-water node, D25 (who pumps a circuit without a buffer) and district heating's bill (hisim-energy-sankeys-9uoo.12) -- is split
   out to bead hisim-pnw7, with the parts of the done-when that concern it.
 - **E. Energy balance.** Scope: `HydronicPort` on every circuit in #870/#871's check. Done when: the balance
   report closes for every twin, stratification-path storages flagged, no result changes.
 - **F. Cooling.** Scope: cooling into a buffer, heat-pump cooling and brine-pump electricity to the meter, the
-  refusal removed. Done when: hisim-9uoo.15 and hisim-9uoo.17 closed, test case 5 of §8 passes.
+  refusal removed. Done when: hisim-energy-sankeys-9uoo.15 and hisim-energy-sankeys-9uoo.17 closed, test case 5 of §8 passes.
 - **G. Close-out.** Scope: comparison runs, close #864. Done when: the comparison table is on the PR and #864 is
   closed.
 
@@ -725,7 +725,7 @@ SH circuit is not. If main must never hold that mixed state, C and D go in one P
 `P_th` from `control_signal` and `modulate_power`, `m = P_th/(c ΔT)`; no flow thermostat. Consequence: every
 firing boiler step is the power-limited pure-port case of §7 (≈11 iterations at 900 s, just past the 10-try
 `force_convergence` limit), so the node acceleration (removed on 2026-10-11; the forced charges are accepted,
-hisim-4g9.50) and the iteration histogram test cover the boiler setups explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
+hisim-component-physics-4g9.50) and the iteration histogram test cover the boiler setups explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
 
 *Amendment (owner, 2026-10-09).* Every fixed-lift generator (boiler, electric heater's DHW side, heat pump's DHW
 side) has a maximum supply temperature and throttles to it when `T_ret + ΔT` would exceed it (§5); on a throttled
@@ -737,16 +737,16 @@ inverse fuel law is not used (§5.1). The heat pump's hot-water outlet is capped
 `t_max` plus the energy manager's raise, below its 75 °C maximum (§5.2).
 
 **D2 — Heat-pump authority: hplib's `m_dot` and `T_out`.** `P_th = m c (T_out − T_in)`, `P_el = P_th/COP`;
-resolves hisim-4g9.21, with the delivered heat differing from the calibrated SCOP value by up to ~0.5 %. The
+resolves hisim-component-physics-4g9.21, with the delivered heat differing from the calibrated SCOP value by up to ~0.5 %. The
 cache keeps today's 0.1 K rounding (`more_advanced_heat_pump_hplib.py:1997-1999`). Consequence: a staircase in
 the return temperature that can make an iteration hop between bins; the histogram test watches for it, and
 interpolation is the remedy if it shows. *Amendment (owner, 2026-10-09):* the staircase showed (a heat pump's
 hot-water outlet throttled at 75 °C left the storage's step mean without a fixed point), and the interpolation is
 applied in stage C (§5.2).
 
-**D3 — Generator → HDS without a buffer: the HDS pipe water is the node** (§4.6). Fixes hisim-9uoo.12 and keeps
+**D3 — Generator → HDS without a buffer: the HDS pipe water is the node** (§4.6). Fixes hisim-energy-sankeys-9uoo.12 and keeps
 the RenoVisor district-heating path as it is. Consequence: ≈24 iterations at 900 s (the acceleration once planned
-for it was removed on 2026-10-11, §6); the first candidate for hisim-4g9.22 if the histogram fails.
+for it was removed on 2026-10-11, §6); the first candidate for hisim-component-physics-4g9.22 if the histogram fails.
 
 **D4 — Feed-forward and DHW priority: drop both.** No temperature forecast for on/off controllers, no
 `DhwChargeYield`; controllers stay as on main, deciding on start-of-step values. Consequence: hisim-6ehm stays
@@ -758,11 +758,11 @@ controller's set temperature (§5) relates to D4 as a limit, not a forecast: the
 controller's target inside the step, while the controller still decides on `T0`; the heat pump's hot-water
 controller ends a charge within 0.5 K of its set temperature, since a capped supply never passes it (§5.5).
 *Amendment (owner, 2026-10-11):* the solar controller's full-tank stop is its own maximum storage temperature,
-80 °C, not the backups' 60 °C warm-water aim (§5.3, hisim-fxix.22); every controller still decides on `T0` against
+80 °C, not the backups' 60 °C warm-water aim (§5.3, hisim-hydronics-fxix.22); every controller still decides on `T0` against
 its own temperature, and nothing ranks the collector against the backup.
 
 **D5 — Stratification path: keep for now.** `heat_exchanger_is_present=False` and the `dt/3600` mixing stay as they
-are; bead hisim-fxix.1 tackles it later. Consequence: the node rule covers only the fully mixed path;
+are; bead hisim-hydronics-fxix.1 tackles it later. Consequence: the node rule covers only the fully mixed path;
 the stratification path is documented as not energy-consistent, outside the balance guarantee, and flagged by the
 energy-balance check (#870) rather than hidden (§4.5).
 
@@ -774,7 +774,7 @@ step and, since 2026-10-11, accelerates nothing.) Node-side acceleration and the
 convergence burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
 *Amendment (owner, 2026-10-10):* the iteration memory moves out of the nodes. The simulator accelerates the outputs
 a component declares accelerated (§6) and starts every step from the previous step's converged values (the warm
-start, hisim-4g9.23); both are generic and know nothing about a component.
+start, hisim-component-physics-4g9.23); both are generic and know nothing about a component.
 *Amendment (owner, 2026-10-09):* the warm start. Every step's iteration starts from the values the previous step
 converged to, where it used to start from all zeros; only step 0 still starts from zeros. The iteration itself, its
 tolerance and its `force_convergence` limit are unchanged. Measured on the stack after stage C, before the review
@@ -784,7 +784,7 @@ and its underheating below the set temperature by -4 %. The gas twin needs 4.10 
 forced steps either way and KPIs equal to float noise (3e-12); the electric-heating twin needs 6.16 instead of 6.95,
 its KPIs equal to 1e-7. On main, before stage B, the verification also measured the order sensitivity of the
 heat-pump twin's annual KPIs: it fell 3-7x. The heat pump's DHW zero guard stays as a step-0 guard until the
-controller restore fix (hisim-4g9.28).
+controller restore fix (hisim-component-physics-4g9.28).
 *Amendment (owner, 2026-10-11):* the acceleration is removed again (§6); the simulator only iterates.
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:
@@ -793,11 +793,11 @@ renovisorissues.
 
 ## 11. Beads
 
-hisim-4g9.16 (vessels conserve energy; re-solved by §4), hisim-4g9.21 (heat-pump flow vs `P_th`; resolved by D2,
-§5.2), hisim-4g9.22 (circuit laws; §6 escalation, D3 first candidate), hisim-9uoo.12 (district heating without a
-buffer; §4.6, D3), hisim-9uoo.15 (cooling and brine-pump electricity metering; §5.2), hisim-9uoo.17 (cooling
+hisim-component-physics-4g9.16 (vessels conserve energy; re-solved by §4), hisim-component-physics-4g9.21 (heat-pump flow vs `P_th`; resolved by D2,
+§5.2), hisim-component-physics-4g9.22 (circuit laws; §6 escalation, D3 first candidate), hisim-energy-sankeys-9uoo.12 (district heating without a
+buffer; §4.6, D3), hisim-energy-sankeys-9uoo.15 (cooling and brine-pump electricity metering; §5.2), hisim-energy-sankeys-9uoo.17 (cooling
 through a buffer; §4.2), hisim-6ehm (buffer control at coarse steps; open as a validation item, D4, §9.4);
-renovisorissues #76 (stated vs simulated boiler efficiency; §9.4); the D5 stratification bead hisim-fxix.1; the epic hisim-fxix with one bead per stage (A hisim-fxix.2 … G hisim-fxix.8).
+renovisorissues #76 (stated vs simulated boiler efficiency; §9.4); the D5 stratification bead hisim-hydronics-fxix.1; the epic hisim-hydronics-fxix with one bead per stage (A hisim-hydronics-fxix.2 … G hisim-hydronics-fxix.8).
 
 ## 12. Stage D as decided: start-of-step coupling (owner, 2026-10-15)
 
@@ -819,7 +819,7 @@ distribution system that holds a drop (it takes the building's demand whatever i
 contracts per pass only by `θ = 1 − (1 − e^(−a))/a` (§6), and the twins have `a` of 2 to 3.4 at 900 s. The gas twin
 needed 34 passes per step at 900 s (96 % of the steps at `force_convergence`) and aborted at 3600 s; the heat-pump
 twin aborted at 900 s. The acceleration the design counted on was removed on 2026-10-11. The circuit laws of
-hisim-4g9.22 converged in a prototype (7 passes at 900 s) but the owner found them too complex to maintain.
+hisim-component-physics-4g9.22 converged in a prototype (7 passes at 900 s) but the owner found them too complex to maintain.
 
 **The decision.** Every node of the space-heating chain publishes the temperature it starts the step at, `T0`, a
 value no pass of the step moves:
@@ -850,7 +850,7 @@ space heating), S8 (0.5 % forced steps at 900 s for the boiler twins) and S10 (D
 hisim-pnw7) stand as recommended; S6 is the comfort remainder of the part-load mode. S9 (heat within 1 % at 900 s and
 3600 s against 60 s, fuel and electricity reported) is amended (owner, 2026-10-16; the decisions after the review,
 below). S7 (the heat-pump twins add no forced steps) is not met with the heat pump's part load; the owner accepted
-that for stage D (hisim-fxix.26, filed with pull request 8). S9 as first written is not met everywhere either (the
+that for stage D (hisim-hydronics-fxix.26, filed with pull request 8). S9 as first written is not met everywhere either (the
 second table below): the delivered heat is within 1 % at 900 s in all four twins, but not at 3600 s (gas −1.01 %, heat
 pump −1.99 %, heat pump + solar thermal −1.15 %), and the booked heat misses 1 % in the pellet twin (−1.31 %,
 −1.72 %), in the heat-pump twin (−1.08 %, −2.34 %) and with solar thermal at 3600 s (−1.09 %).
@@ -884,7 +884,7 @@ on those branches only:
 A first space-heating part load with the existing rule of `hisim/part_load.py` stopped the stack (owner's stop rule:
 more forced steps than today): the pellet twin at 900 s forced 5714 steps instead of 94. The rule takes the buffer's
 start temperature as its end temperature at ratio 0, but the distribution system draws from the buffer all step, so
-the end temperature at ratio 0 lies far below the start and the rule alternates (the case of hisim-fxix.17). It was
+the end temperature at ratio 0 lies far below the start and the rule alternates (the case of hisim-hydronics-fxix.17). It was
 dropped for the part-load mode.
 
 **Second decision (owner, 2026-10-15): the part-load mode above 600 s for the boiler and district-heating chain.**
@@ -896,8 +896,8 @@ four pieces:
   port quantities. A rule that reads them lands in one pass once the other circuits' ratios stand; it needs no model
   of the store. The circuit ends of one buffer read each other's ratios of the pass before, so together they settle
   within a few passes (`tests/test_start_of_step_part_load.py` iterates both rules against a real node; this
-  coupling is one of the candidate causes of hisim-fxix.25). This amends decision 7 of
-  `roadmap/hydronic_part_load_spec.md` (decision 21 there) and answers hisim-fxix.17's option (c) for start-of-step
+  coupling is one of the candidate causes of hisim-hydronics-fxix.25). This amends decision 7 of
+  `roadmap/hydronic_part_load_spec.md` (decision 21 there) and answers hisim-hydronics-fxix.17's option (c) for start-of-step
   stores.
 - *The generator's exact fraction, with a steady charge.* The boiler's controller sets the fraction that ends the
   buffer at the heating curve's supply temperature (`StartOfStepPartLoadRule.raising_ratio`). A buffer that starts at
@@ -942,7 +942,7 @@ pumps with their part load (pull request 8). The 60 s references:
 
 At 60 s the gas twin is bit-identical to pull request 5. The heat-pump twin moves by +0.04 % of booked heat in pull
 request 7 (12467.8 kWh before), with 5174 instead of 5028 forced steps: it already forces about 5000 steps a year at
-60 s through the energy manager's raise cycle (hisim-4g9.28), and the distribution controller's new inputs change the
+60 s through the energy manager's raise cycle (hisim-component-physics-4g9.28), and the distribution controller's new inputs change the
 order the simulator evaluates the components in. Pull request 8 leaves 60 s unchanged.
 
 Forced steps in brackets are the stack top's; degree-hours are below the set temperature less 1 K:
@@ -975,26 +975,26 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
   gas twin's fuel gap (−9.31 % at 900 s, −19.36 % at 3600 s, while its booked heat is +0.02 % and −0.66 % and its
   delivered heat −0.13 % and −1.01 %) comes from the boiler's efficiency law, which rises with burner power, so a
   fraction of the step at full power burns less fuel than modulating low all step. It is not a coupling error. The law
-  is parked as the P1 bead hisim-4g9.66 until the open pull requests are merged; stage D is not stacked on it.
+  is parked as the P1 bead hisim-component-physics-4g9.66 until the open pull requests are merged; stage D is not stacked on it.
 - *The gas twin's extra forced steps* (98 against 94 at 900 s, 504 against 47 at 3600 s) are accepted for now
-  (the P3 bead hisim-fxix.25, filed with pull request 7).
+  (the P3 bead hisim-hydronics-fxix.25, filed with pull request 7).
 - *The heat-pump twins' extra forced steps* (S7 not met): 1668 against 1620 and 805 against 618, with solar thermal
-  1326 against 946 and 543 against 313. Accepted for stage D and recorded, not asserted; the P1 bead hisim-fxix.26,
+  1326 against 946 and 543 against 313. Accepted for stage D and recorded, not asserted; the P1 bead hisim-hydronics-fxix.26,
   filed with pull request 8, addresses them once the current pull requests are merged.
 - *The heat pump's electricity at coarse steps*: −3.54 % at 900 s and −5.91 % at 3600 s against 60 s (with solar
   thermal −2.79 % and −3.78 %), while its delivered heat is within 1 % at 900 s. Accepted for stage D and recorded,
-  not asserted, like the gas fuel; the P1 bead hisim-fxix.27, filed with pull request 8, addresses it once the
+  not asserted, like the gas fuel; the P1 bead hisim-hydronics-fxix.27, filed with pull request 8, addresses it once the
   current pull requests are merged.
   RenoVisor runs at 900 s, so a RenoVisor heat pump's electricity is about 3.5 % low against 60 s.
 
-**Against the first done-when of §9.5 D** (and hisim-fxix.5's):
+**Against the first done-when of §9.5 D** (and hisim-hydronics-fxix.5's):
 
 - *The buffer and the distribution system close per step:* met behind a buffer
   (`tests/test_space_heating_buffer_twins.py`, every file with a buffer, a January day at 900 s); without a buffer
   split out to hisim-pnw7 (owner, 2026-10-16).
-- *District heating's bill (hisim-9uoo.12):* split out to hisim-pnw7 (owner, 2026-10-16).
-- *No step at `force_convergence` at 900 s:* not met. The owner accepted the gas twin's forced steps (hisim-fxix.25)
-  and the heat-pump twins' (hisim-fxix.26); the district-heating twin forces none.
+- *District heating's bill (hisim-energy-sankeys-9uoo.12):* split out to hisim-pnw7 (owner, 2026-10-16).
+- *No step at `force_convergence` at 900 s:* not met. The owner accepted the gas twin's forced steps (hisim-hydronics-fxix.25)
+  and the heat-pump twins' (hisim-hydronics-fxix.26); the district-heating twin forces none.
 - *Heat-pump comfort at 900 s (hisim-6ehm):* 23.0 degree-hours against 16.3 at 60 s (gas 36.8 against 9.5); open.
 - *Goldens re-blessed, the change announced on renovisorissues (D8):* still to do. Pull requests 1, 4, 5, 7 and 8 name
   the golden references they move, to be re-blessed with the golden-update workflow; none records an announcement yet.
@@ -1004,7 +1004,7 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 - *Stage D closes with the buffer chain.* The chain without a buffer (district heating, `gas_boiler_household`) is
   split out of stage D into bead hisim-pnw7: the pipe-water node of §4.6 as a start-of-step node, S10's flow
   ownership (D25: the distribution system learns from the circuit who pumps, and its position enum
-  `PositionHotWaterStorageInSystemSetup` goes) and district heating's bill (hisim-9uoo.12). The district-heating twin
+  `PositionHotWaterStorageInSystemSetup` goes) and district heating's bill (hisim-energy-sankeys-9uoo.12). The district-heating twin
   forces no steps and its results did not move in stage D, so this half does not block stage D's merge.
 - *S9 amended: stage D asserts the delivered heat within 1 % of the 60 s run at 900 s*, RenoVisor's step length, for
   the four twins with a buffer: gas, pellets, heat pump, and heat pump + solar thermal (−0.13, −0.09, −0.70 and

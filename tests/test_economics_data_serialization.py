@@ -446,7 +446,7 @@ class TestSerializationRoundtrip:
         assert restored.total_npv_in_euro.minimum == pytest.approx(original.total_npv_in_euro.minimum)
 
     def test_a_stored_result_reads_back_its_monthly_equivalent_or_derives_it(self):
-        """`monthly_equivalent_cost_in_euro` round-trips, and a pre-hisim-cyc.6 file gets EAC / 12.
+        """`monthly_equivalent_cost_in_euro` round-trips, and a pre-hisim-economics-engine-cyc.6 file gets EAC / 12.
 
         Twelve is a literal on purpose, for the reason the staged document's test gives: comparing
         with the constant the loader used would pass whatever that constant said.

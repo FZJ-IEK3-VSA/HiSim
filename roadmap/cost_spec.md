@@ -1011,7 +1011,7 @@ spells it (`"kW"`, `"kWh"`, `"L"`, `"m2"`, `"-"`); the solver refuses to price a
 is stated in another unit. `TIERED_PER_UNIT` pays each band's rate on the part of the size inside
 it (bands ascending, only the last open with `up_to: null`), then caps the sum at `cap_in_euro`; a
 closed last band needs a cap, and with more than one band the cap must lie above the first band's
-full value. SEAI's solar PV grant is the shipped case (hisim-cyc.3).
+full value. SEAI's solar PV grant is the shipped case (hisim-economics-engine-cyc.3).
 
 Payout kinds map benefits to timeline entries: `UPFRONT_GRANT` (year 0, negative SUBSIDY),
 `TAX_CREDIT_SCHEDULE` (negative flows years 1..N), `LOAN_TERMS` (modifies FinancingPlan),
@@ -1860,7 +1860,7 @@ revertable by turning the flag off.
 
 ---
 
-## 11. Open questions (decisions needed before the respective phase) → hisim-l07.4, hisim-l07.6, hisim-l07.8, hisim-l07.13, hisim-cyc.10, hisim-cyc.20, hisim-cyc.21
+## 11. Open questions (decisions needed before the respective phase) → hisim-cost-data-l07.4, hisim-cost-data-l07.6, hisim-cost-data-l07.8, hisim-cost-data-l07.13, hisim-economics-engine-cyc.10, hisim-economics-engine-cyc.20, hisim-economics-engine-cyc.21
 
 **Phase 1**
 1. Nominal vs. real rates as the documented default. Proposal: nominal (interest 3 %, general

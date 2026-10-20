@@ -1,4 +1,4 @@
-"""The energy-port contract: what an output of a component is in that component's energy balance (hisim-9uoo.1).
+"""The energy-port contract: what an output of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
 An output that carries energy states it with an :class:`EnergyPort`, passed to
 :meth:`hisim.component.Component.add_output` as ``energy_port=``: its role in the balance

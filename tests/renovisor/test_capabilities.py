@@ -285,9 +285,9 @@ class TestTheListIsHonestInBothDirections:
         "fate",
         [
             "",
-            "  tracked: hisim-4g9.6\n  deliberate: Never.\n",
+            "  tracked: hisim-component-physics-4g9.6\n  deliberate: Never.\n",
             "  tracked: roadmap/simulation_issues.md item 8\n",
-            "  tracked: [hisim-4g9.6, challenges.md D-D]\n",
+            "  tracked: [hisim-component-physics-4g9.6, challenges.md D-D]\n",
         ],
         ids=["neither", "both", "a document", "a list with a document"],
     )
@@ -304,11 +304,11 @@ class TestTheListIsHonestInBothDirections:
         """One entry may cover several features, each with its own bead."""
         listed = tmp_path / "not_implemented_yet.yaml"
         listed.write_text(
-            "- path: house.heating.cooking_range\n  note: No range cooker.\n  tracked: [hisim-6clg, hisim-epc.4]\n",
+            "- path: house.heating.cooking_range\n  note: No range cooker.\n  tracked: [hisim-6clg, hisim-renovisor-translator-epc.4]\n",
             encoding="utf-8",
         )
 
-        assert Whitelist.load(listed).entries()[0].tracked == ("hisim-6clg", "hisim-epc.4")
+        assert Whitelist.load(listed).entries()[0].tracked == ("hisim-6clg", "hisim-renovisor-translator-epc.4")
 
     @pytest.mark.renovisor_probes
     def test_no_probe_ends_in_a_translator_error(self, document: CapabilityDocument) -> None:
@@ -427,7 +427,7 @@ class TestTheDocument:
     def test_every_value_entry_announces_whether_it_is_a_substitution(
         self, document: CapabilityDocument
     ) -> None:
-        """hisim-epc.10: the per-value flag the frontend's F8 wording keys on.
+        """hisim-renovisor-translator-epc.10: the per-value flag the frontend's F8 wording keys on.
 
         Every ``values`` entry of every option and every inventory field carries the flag, and
         it is true exactly when the entry's own note says "modelled as" or "stands in for".
@@ -463,7 +463,7 @@ class TestTheDocument:
 
     @pytest.mark.renovisor_probes
     def test_hvo_is_reported_as_lpg_is(self, document: CapabilityDocument) -> None:
-        """HVO runs the oil twin as heating oil: a listed stand-in on the measure and on the house (hisim-epc.19)."""
+        """HVO runs the oil twin as heating oil: a listed stand-in on the measure and on the house (hisim-renovisor-translator-epc.19)."""
         heating = next(
             entry for entry in document.body["measures"] if entry["measure_id"] == "heating_system"
         )

@@ -1,4 +1,4 @@
-# Step 12 — answering the review of PR #779 → hisim-cyc.1, hisim-cyc.4
+# Step 12 — answering the review of PR #779 → hisim-economics-engine-cyc.1, hisim-economics-engine-cyc.4
 
 **Status:** implementation specification, 2026-09-20. **Source:** the aggregated multi-reviewer
 report on PR #779 (`/hisimreviews/779.md`, 50 deduplicated findings against head `3cbac31d`),
@@ -151,7 +151,7 @@ with the reason saying "divided by twelve"; `monthly_net_cost_10y_in_euro` → n
 staged document is evaluated over one horizon; a ten-year figure needs a plan evaluated with
 `horizon_years: 10`". Adjust `reason_for`, the capability results section and the tests.
 
-> **Note (2026-09-24, hisim-cyc.6).** `monthly_net_cost_20y_in_euro` now points at
+> **Note (2026-09-24, hisim-economics-engine-cyc.6).** `monthly_net_cost_20y_in_euro` now points at
 > `plan.totals.monthly_equivalent_cost_in_euro`, a key of its own that carries the equivalent annual
 > cost over twelve (the division is done by the engine, `TimelineAggregation`, not by the reader).
 > The reason also states that the figure is over the document's `parameters.horizon_years`.

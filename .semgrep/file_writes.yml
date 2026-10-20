@@ -1,4 +1,4 @@
-# Static half of the write guard (bead hisim-epc.23; the runtime half is hisim/write_guard.py).
+# Static half of the write guard (bead hisim-renovisor-translator-epc.23; the runtime half is hisim/write_guard.py).
 #
 # During a calculation HiSim may write only into the run's result directory and the cache
 # directories. The runtime guard enforces that for what a run actually does; these rules keep new

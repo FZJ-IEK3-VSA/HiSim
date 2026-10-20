@@ -1,4 +1,4 @@
-"""hisim-epc.22: the ordered cache directories a calculation reads and writes.
+"""hisim-renovisor-translator-epc.22: the ordered cache directories a calculation reads and writes.
 
 Two directories, a seed and a volume: a file present only in the second is read from there, a
 new entry is written to the first writable one, a read-only seed is read but never written, and
@@ -158,7 +158,7 @@ def _key_material_of(parameter_class: object, parameters: SimulationParameters) 
 
 
 class TestAReadOnlySeed:
-    """The bead's done-when: a read-only seed directory plus a writable one (hisim-epc.22).
+    """The bead's done-when: a read-only seed directory plus a writable one (hisim-renovisor-translator-epc.22).
 
     The seed is populated, then made read-only. Reads find its entries where they lie, a stale
     entry there is a miss and not an error, and every write lands in the writable directory

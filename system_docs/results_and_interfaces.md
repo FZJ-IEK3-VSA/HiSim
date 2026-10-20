@@ -52,7 +52,7 @@ rules are in `testing.md`, the commit and PR form in `coding_style.md` §9 and �
 
 - **Two KPI values are equal when `math.isclose(got, ref, rel_tol=1e-9, abs_tol=1e-12)` holds**, the absolute
   tolerance in the KPI's own unit. The values live in `hisim/postprocessing/kpi_computation/tolerances.py`, which
-  every golden comparer reads; the reasoning is `roadmap/golden_ref_spec.md` §7 (decision of hisim-b3b.6). The assembly
+  every golden comparer reads; the reasoning is `roadmap/golden_ref_spec.md` §7 (decision of hisim-declarative-systems-b3b.6). The assembly
   harness's monotone check reads only the relative tolerance there and keeps its own absolute floor
   (`MONOTONE_ABS_FLOOR` in `hisim/energy_system/assemblies/testing/checks.py`).
 - **Why so tight.** On one machine HiSim is byte-exact run to run, so the relative tolerance only absorbs
@@ -88,7 +88,7 @@ Rules:
   in passing.
 - **A KPI name is a display label beside its mandatory `unit` field** (AGENTS.md, "Guidelines for coding"). The
   KPI "Unmet DHW heat demand" (`hisim/components/simple_water_storage.py`) is to be renamed, as one pull request
-  under §5 (owner, 2026-10-15; bead hisim-h2ib.7), and that pull request states its own reason. Every other KPI
+  under §5 (owner, 2026-10-15; bead hisim-agent-rules-h2ib.7), and that pull request states its own reason. Every other KPI
   name keeps the exception, because renaming it breaks the goldens and the RenoVisor side (owner, 2026-10-16).
 - **The committed schemas follow the code.** A change to the format regenerates
   `hisim/energy_system_v3.schema.json` and `hisim/assembly_v4.schema.json` with `hisim energy-system schema`;

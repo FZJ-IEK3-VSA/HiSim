@@ -890,7 +890,7 @@ class MeterComponent(Component):
     the post-processing and never acts on what it reads. For example,
     ``class ElectricityMeter(DynamicComponent, MeterComponent)``. The simulator evaluates the meters last in every
     pass, after everything they read. Nothing in the simulation reads a meter, except the listed exceptions of bead
-    hisim-o6a.22, so no other component waits for it; such an exception reads the meter's value of the pass before,
+    hisim-repo-cleanup-o6a.22, so no other component waits for it; such an exception reads the meter's value of the pass before,
     which costs passes but not the converged value.
 
     The class adds no attribute and no method: inheriting it is the declaration of the kind, which

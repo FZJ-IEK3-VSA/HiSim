@@ -1,4 +1,4 @@
-"""The energy-balance check and the Sankey data, on synthetic components (hisim-9uoo.1, .2, .9).
+"""The energy-balance check and the Sankey data, on synthetic components (hisim-energy-sankeys-9uoo.1, .2, .9).
 
 Each test builds a result table by hand: a few outputs that declare energy ports, the columns they fill, and
 stand-ins for the wrapped components carrying their wiring. The numbers are chosen so the expected residual,

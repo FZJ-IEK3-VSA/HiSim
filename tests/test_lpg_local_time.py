@@ -2,7 +2,7 @@
 
 The LoadProfileGenerator labels its minutes on the German wall clock without the daylight-saving switches. A run's
 clock is standard time (``roadmap/midyear_start_epic.md``, owner decision 1 of 2026-10-14), UTC+1 all year for a
-German household, as for the weather of a Berlin frame. Before hisim-9g2.5 the conversion went to UTC instead: it
+German household, as for the weather of a Berlin frame. Before hisim-midyear-windows-9g2.5 the conversion went to UTC instead: it
 started every run at the profile's row 60, 01:00 on the wall clock, and filled the hour that left missing at the
 end with a copy of the year's last hour. These tests pin the conversion that replaced it: localize, convert,
 slice.
@@ -254,7 +254,7 @@ def test_the_occupancy_refuses_a_timestep_of_no_whole_minutes(
 
 @pytest.mark.base
 def test_a_july_occupancy_reads_the_profiles_july(tmp_path: pathlib.Path) -> None:
-    """Catches the occupancy of a run from 1 July reading January, as it did before hisim-9g2.6.
+    """Catches the occupancy of a run from 1 July reading January, as it did before hisim-midyear-windows-9g2.6.
 
     1 July 00:00 in standard time is 01:00 on the wall clock, row 260 700 of the shipped profile.
     """

@@ -35,7 +35,7 @@ def test_solar_thermal_system() -> None:
     fake binary control signal at a 3rd-of-July noon timestep, and asserts the
     thermal power output matches the reference value (~3253.71 W).
 
-    The sun is the weather's (hisim-9g2.7): at noon of the run's standard-time clock, 13:00 summer time. Before,
+    The sun is the weather's (hisim-midyear-windows-9g2.7): at noon of the run's standard-time clock, 13:00 summer time. Before,
     the collector worked out its own sun at noon UTC, an hour later, and the reference was 3260.38 W.
     """
     # Inputs

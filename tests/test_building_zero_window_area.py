@@ -1,4 +1,4 @@
-"""The zero-window-area guards in ``BuildingInformation`` (hisim-4g9.1).
+"""The zero-window-area guards in ``BuildingInformation`` (hisim-component-physics-4g9.1).
 
 A TABULA row whose reference window areas are both zero used to crash ``BuildingInformation``
 twice over: the per-direction window scaling divided by the reference window area (findings log
@@ -24,7 +24,7 @@ that kind are ``ES.ME.MFH.05.Gen.ReEx.001.001/.002/.003``, the characterization 
 The real rows with no window data anywhere are the 121 ``DE.DistrictMZLerch`` rows, whose
 envelope geometry is zero for *every* element. With the minimal config they pass the window guard
 and still crash one division later, on the floor element, which it does not cover
-(hisim-4g9.16); with a configured window area they fail with ``ZeroReferenceWindowAreaError``
+(hisim-component-physics-4g9.16); with a configured window area they fail with ``ZeroReferenceWindowAreaError``
 first. Both stay pinned as ``raises:`` entries of the golden, so the guard's scaling factor of 0
 is tested here on a synthetic row.
 """
@@ -117,7 +117,7 @@ class TestARowWithNoWindowDataAnywhere:
     """A synthetic row with every window column zero: controlled, and distinct window U-values.
 
     No real row with no window data anywhere gets past the window step -- the only ones, the
-    ``DE.DistrictMZLerch`` rows, crash on their zero floor next (hisim-4g9.16). The synthetic row
+    ``DE.DistrictMZLerch`` rows, crash on their zero floor next (hisim-component-physics-4g9.16). The synthetic row
     is the ordinary German row with every window column set to 0 and two distinct window
     U-values, which also shows that the guard keeps the *first* raw U-value rather than forming
     some average of the two. It is run through the two derivation pipelines on an instance built

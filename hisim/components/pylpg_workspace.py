@@ -8,7 +8,7 @@ the constant ``1``, which meant every local-LPG process in one virtual environme
 same ``pylpg/C1`` directory: two at once corrupted each other's sqlite files, and whichever finished
 first deleted the directory the other was still using.
 
-Since hisim-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
+Since hisim-renovisor-translator-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
 directories live below the calculation's cache directory (:meth:`PylpgWorkspace.work_root`) and
 :meth:`PylpgWorkspace.start_executor` builds the executor there, so a calculation writes nothing into
 the installed package. The binaries the calculations are copied from live in the cache directory as

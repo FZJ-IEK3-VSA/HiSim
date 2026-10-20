@@ -20,7 +20,7 @@ controller (#941).
   differed by up to 1.5 % per step. Now the heat pump books `m c (T_out - T_in)` of its own outputs, and
   `tests/test_heat_pump_flow_booking.py` checks it on every step.
 - **A coupled store publishes its start-of-step temperature, and both ends book their flows on it** (owner,
-  2026-10-15; built for the space-heating chain by hydronic stage D, hisim-fxix.5, in progress). A store that
+  2026-10-15; built for the space-heating chain by hydronic stage D, hisim-hydronics-fxix.5, in progress). A store that
   holds water (a buffer, a cylinder) publishes its temperature at the start of the step: a committed value that no
   pass of the step changes. The generator books its flow on it, its outlet the start temperature plus its lift;
   the distribution system books its own, its return the start temperature minus its drop. The store integrates the
@@ -51,11 +51,11 @@ controller (#941).
   `HydronicPort`. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's
   above `max(1e-6 kWh, 0.1 %)` of the step's throughput, a transfer booked by only one of two declared components,
-  or a port that is not finite (owner decision 6 of epic hisim-9uoo). A new or changed energy-moving component
+  or a port that is not finite (owner decision 6 of epic hisim-energy-sankeys-9uoo). A new or changed energy-moving component
   declares its ports and gets a test that runs it and reads the balance report, as
   `tests/test_energy_balance_generators.py` does for the generators. Today the generators declare ports (boiler,
   heat pump, district heating, electric heating, solar thermal); the storages and the distribution system are
-  still undeclared, and the check reads `HydronicPort` from hydronic stage E on (hisim-fxix.6).
+  still undeclared, and the check reads `HydronicPort` from hydronic stage E on (hisim-hydronics-fxix.6).
 - **An exact step is preferred to a fine one.** Where a law has a closed-form solution over a step with constant
   inputs, use it: `MixedNode.step` solves `C dT/dt = Σ m_i c (T_i - T) - UA (T - T_amb)` exactly, so its heat
   balance closes to float precision at any step length, without sub-stepping.
@@ -108,10 +108,10 @@ part B, principle 10):
   tolerance is a bug or a decision for the owner, never a widened tolerance.
 - **A switching decision does not flip between the passes of a step.** A controller may react to the values of the
   current pass: the passes exist so that components react to each other within the step, and the owner rejected a
-  general rule that controllers decide only on start-of-step values (2026-10-10, bead hisim-4g9.38). But a decision
+  general rule that controllers decide only on start-of-step values (2026-10-10, bead hisim-component-physics-4g9.38). But a decision
   at an edge that its own effect moves -- a pump whose heat lowers the flow it switches on -- gets a hysteresis held
   in the controller's saved state, or holds under `force_convergence`. Why: the solar controller of #917 had no
-  consistent pump state at such an edge, and the step was forced (hisim-fxix.21: 156 forced steps a year at 900 s
+  consistent pump state at such an edge, and the step was forced (hisim-hydronics-fxix.21: 156 forced steps a year at 900 s
   in the heat pump + solar twin). Since #941 it switches on at 7 K and off at 3 K of the collector above the tank,
   whether the pump ran is saved state, and it decides on the tank's start-of-step temperature (owner, 2026-10-11,
   for this controller; `roadmap/hydronic_coupling_spec.md` §5.3).
@@ -156,12 +156,12 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
   and DeltaSol ES manuals, https://www.heizungsdiscount24.de/pdf/Resol-DeltaSol-A-Anleitung.pdf). The owner chose
   7 K and 3 K on 2026-10-14."
 - **An estimate says it is one**, with what it rests on ("estimated from ..."). The existing values
-  without a source are listed per component family in beads hisim-h2ib.11 to hisim-h2ib.25; until they have one,
+  without a source are listed per component family in beads hisim-agent-rules-h2ib.11 to hisim-agent-rules-h2ib.25; until they have one,
   they are not copied into new code.
 - **A parameter the system decides is sized, not pinned**: a power from the building's heating load is a
   `sized_field(rule=...)` (CLAUDE.md, "Adding a new component"), and a copy of another component's value is sized
   from that component's fact, never configured on its own (the heating threshold lives in the heating-curve L2
-  component, and every user reads it there, hisim-4g9.36).
+  component, and every user reads it there, hisim-component-physics-4g9.36).
 
 ## 6. State and initial values
 
@@ -171,4 +171,4 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
 - **`i_simulate` changes no configuration and no derived constant** (`coding_style.md` §2, rule 4), and a cache key
   holds everything the cached result depends on. Why: the heat pump sets its minimum thermal power to 0 in hot-water
   mode and never restores it, and the hplib cache key does not contain it, so results depend on when the first
-  hot-water charge happens (bead hisim-4g9.26).
+  hot-water charge happens (bead hisim-component-physics-4g9.26).

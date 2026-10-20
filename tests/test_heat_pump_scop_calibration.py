@@ -1,4 +1,4 @@
-"""The heat pump's calibration to a stated EN 14825 SCOP (hisim-4g9.15).
+"""The heat pump's calibration to a stated EN 14825 SCOP (hisim-component-physics-4g9.15).
 
 A datasheet rates a heat pump's seasonal COP by the bin method of EN 14825. The tests pin that
 method on hplib's generic fit (the numbers of the 2026-09-21 check), then show that the fit

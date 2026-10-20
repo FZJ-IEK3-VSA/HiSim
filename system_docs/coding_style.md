@@ -60,13 +60,13 @@ violations are fixed bead by bead, never in one big rewrite.
    code, and a function takes at most 6 arguments; more arguments become a parameter object (a dataclass). Only
    code counts: comments, docstrings and blank lines do not, so documentation is never cut to meet a limit.
    A 468-line `i_simulate` can neither be unit-tested nor reviewed. CI: a code-line count and pylint's argument
-   and branch checks, with a baseline (hisim-o6a.12).
+   and branch checks, with a baseline (hisim-repo-cleanup-o6a.12).
 2. **Leave it better (the boy-scout rule).** Whoever changes a function leaves it cleaner than they found it:
    shorter, better named, tested. Every metric in this section only improves.
 3. **Typed, explicit data.** Structured data is a `@dataclass`, frozen where possible: no `dict[str, Any]` passed
    between functions, no positional tuples with meaning by index. No new `Any`. Every `# type: ignore` and
-   `pylint: disable` names its reason on the same line. CI: escape-hatch ratchet (hisim-o6a.13), stricter mypy
-   step by step (hisim-o6a.14).
+   `pylint: disable` names its reason on the same line. CI: escape-hatch ratchet (hisim-repo-cleanup-o6a.13), stricter mypy
+   step by step (hisim-repo-cleanup-o6a.14).
 4. **Explicit state, immutable configuration.** A configuration is frozen once the component is built; nothing
    changes it in `i_simulate`. The state that changes from step to step is one state dataclass per component,
    and `i_save_state` / `i_restore_state` copy that whole object (`dataclasses.replace`) instead of copying
@@ -79,15 +79,15 @@ violations are fixed bead by bead, never in one big rewrite.
 6. **Fail fast, no silent fallbacks.** Inputs are checked at the boundary: in the config's `__post_init__`, where
    a file is read. Invariants are asserted. No default value hides an error (a 0 that means "not published
    yet"), and no `except Exception` or bare `except:` keeps a calculation running. An error message says what
-   was wrong, with which value, and what was expected. CI: part of hisim-o6a.13.
+   was wrong, with which value, and what was expected. CI: part of hisim-repo-cleanup-o6a.13.
 7. **Explicit control flow.** No `importlib.import_module` or `getattr` by string to dodge a circular import: a
    circular import is a design error and is fixed. No attributes created at run time, no monkeypatching in
    production code. The allowed import directions between packages are declared and checked. CI: import-linter
-   (hisim-o6a.15).
+   (hisim-repo-cleanup-o6a.15).
 8. **Tests first for bugs, coverage for new code.** A bug fix starts with a test that fails without the fix. New
    and changed lines are covered by tests (about 90 %). Tests are deterministic and independent of each other and
    of their order. Pure functions (§1) are tested in fast unit tests; system tests check only the wiring. CI:
-   diff coverage (hisim-o6a.16).
+   diff coverage (hisim-repo-cleanup-o6a.16).
 9. **No magic numbers.** Every literal with a physical or technical meaning is a named class constant with its
    unit and its source (§4): not `0.992`, `60.0` or `0.01` in the middle of a formula.
 10. **Composition over inheritance.** A class hierarchy is flat: one kind base class (`DataSourceComponent`,
@@ -96,7 +96,7 @@ violations are fixed bead by bead, never in one big rewrite.
     base. No mixins that carry state. Shared behaviour sits in a helper that is passed in or called, not in a base
     class.
 11. **Duplicates are searched for.** A regular job compares the first docstring sentences of all functions (§1)
-    and files the candidates for merging as beads (hisim-o6a.17).
+    and files the candidates for merging as beads (hisim-repo-cleanup-o6a.17).
 
 ## 3. Design patterns
 
@@ -272,7 +272,7 @@ Before pushing, read each new docstring once as a newcomer would.
   mypy runs and `semgrep --config .semgrep/ --error hisim/`.
 - **All output goes through `hisim.log`** (`log.information`, `log.warning`, `log.error`, ...). `hisim/log.py` is
   the only module in `hisim/` that calls `print`; the CI enforces it (`.semgrep/no_print.yml`, whose temporary
-  allowlist bead hisim-o6a.11 empties).
+  allowlist bead hisim-repo-cleanup-o6a.11 empties).
 - **Exceptions**: raise a specific type, never catch everything (§2, rule 6).
 
 ## 9. Commit messages

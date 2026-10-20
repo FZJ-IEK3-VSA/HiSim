@@ -1,4 +1,4 @@
-"""The yearly energy flows of a run as Sankey diagrams, one per carrier and one over all (hisim-9uoo.9).
+"""The yearly energy flows of a run as Sankey diagrams, one per carrier and one over all (hisim-energy-sankeys-9uoo.9).
 
 The links come from the declared ports and their peers (:mod:`.ports`): an ``IN`` port is a link from its peer, an
 ``OUT`` port a link to it, a ``LOSS`` a link to its environment node (``outdoors``), a storage change a link to or

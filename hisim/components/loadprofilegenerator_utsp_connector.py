@@ -1264,7 +1264,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
         list_of_unique_household_configs: List = []
 
         # a config-level override stays the one directory; None falls through to the simulation's
-        # own cache locations, which may be a read-ordered list (hisim-epc.22)
+        # own cache locations, which may be a read-ordered list (hisim-renovisor-translator-epc.22)
 
         # config household is list of jsonreferences and no other guid than default is given ("")
         # if the guid = "" and multiple households are given as a list, each household will be calculated and cached individually

@@ -251,7 +251,7 @@ class Whitelist:
     #: The list itself, beside this module.
     PATH: ClassVar[Path] = Path(__file__).resolve().parent / "not_implemented_yet.yaml"
 
-    #: What a ``tracked`` value must look like: a bead id of this repository, e.g. ``hisim-4g9.6``: the prefix,
+    #: What a ``tracked`` value must look like: a bead id of this repository, e.g. ``hisim-component-physics-4g9.6``: the prefix,
     #: an optional readable slug, the hash and any child suffixes (AGENTS.md, "Creating a bead").
     BEAD_ID: ClassVar["re.Pattern[str]"] = re.compile(r"^hisim-[0-9a-z]+(-[0-9a-z]+)*(\.[0-9]+)*$")
 

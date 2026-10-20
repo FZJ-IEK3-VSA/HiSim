@@ -1157,7 +1157,7 @@ class EconomicContextBuilder:
 
     #: The technical attribute the peak power of the photovoltaic array is published under. It is
     #: published as information for condition authors — a scheme that conditions on array size
-    #: can read it — and no shipped scheme reads it: since hisim-cyc.3 the Irish PV grant is
+    #: can read it — and no shipped scheme reads it: since hisim-economics-engine-cyc.3 the Irish PV grant is
     #: tiered on the cost facts' own size, which every array has. It is only published when the
     #: request pins the array's power, because an array sized as a share of the roof has no peak
     #: power until the simulation has run.

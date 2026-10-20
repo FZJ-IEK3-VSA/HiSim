@@ -134,10 +134,12 @@ def test_a_hot_water_charge_at_ratio_zero_books_nothing_and_reports_zero() -> No
     """In hot-water mode a commanded ratio of 0 gives no flow, no heat and no fuel, and the boiler reports ratio 0.
 
     This is the step the controller's minimum running time holds in hot-water mode while the tank already starts at
-    the aim: the rule commands 0, and the burner must not fire.
+    the aim: the rule commands 0, and the burner must not fire. The circuit then supplies its 55 °C return, as an
+    idle circuit does, not the 70 °C of a full-load charge (hisim-hydronics-fxix.23).
     """
     idle = BoilerRig.charge(900, ratio=0.0)
     assert (idle["flow_kg_per_s"], idle["heat_w"], idle["fuel_w"], idle["fuel_wh"]) == (0.0, 0.0, 0.0, 0.0)
+    assert idle["supply_c"] == 55.0
     assert idle["ratio_run"] == 0.0
 
 
@@ -181,8 +183,33 @@ def test_the_part_loaded_firing_example() -> None:
         return_temperature_in_celsius=55.0,
     )
     assert run.mass_flow_in_kg_per_second == pytest.approx(0.05, rel=1e-12)
+    assert run.supply_temperature_in_celsius == 70.0
     assert run.thermal_power_in_watt == pytest.approx(3135.0, rel=1e-12)
     assert run.fuel_power_in_watt == pytest.approx(3500.0, rel=1e-12)
+
+
+@pytest.mark.base
+def test_the_part_loaded_firing_at_ratio_zero_is_idle_with_the_supply_at_the_return() -> None:
+    """At a ratio of 0 either circuit carries nothing and supplies its 55 °C return, not the 70 °C full-load supply.
+
+    The same function part-loads the space-heating circuit behind a buffer (#1011), so this holds for both circuits.
+    """
+    run = generic_boiler.GenericBoiler.part_loaded_firing(
+        generic_boiler.BoilerFiring(
+            fuel_power_in_watt=14000.0,
+            thermal_power_in_watt=12540.0,
+            mass_flow_in_kg_per_second=0.2,
+            supply_temperature_in_celsius=70.0,
+        ),
+        part_load_ratio=0.0,
+        return_temperature_in_celsius=55.0,
+    )
+    assert run == generic_boiler.BoilerFiring(
+        fuel_power_in_watt=0.0,
+        thermal_power_in_watt=0.0,
+        mass_flow_in_kg_per_second=0.0,
+        supply_temperature_in_celsius=55.0,
+    )
 
 
 @pytest.mark.base

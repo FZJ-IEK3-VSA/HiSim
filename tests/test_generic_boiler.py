@@ -428,7 +428,8 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries_from_the_tanks_s
     """A boiler that booked another heat than its water carries would unbalance the hot-water circuit.
 
     20 kW at full signal, a 20 K lift and a 47.3 °C return: the boiler pumps P / (c 20 K) and supplies 67.3 °C, and
-    the heat it books is the heat that water carries, which is its thermal power.
+    the heat it books is the heat that water carries, which is its thermal power: the burner's heat at full load
+    and a 47.3 °C return, 20000 * (0.877 + 0.0030 * (60 - 47.3)) = 18302 W on the current condensing gas curve.
     """
     boiler, output = BoilerStep.run(
         control_signal=1.0,
@@ -444,7 +445,7 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries_from_the_tanks_s
     assert booked_power_in_watt == hydronics.circuit_power_w(
         mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=supply_temperature_in_celsius, t_return_c=47.3
     )
-    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency, rel=1e-12)
+    assert booked_power_in_watt == pytest.approx(20000.0 * (0.877 + 0.0030 * (60.0 - 47.3)), rel=1e-12)
     assert output(boiler.energy_demand_dhw_channel) == pytest.approx(20000.0 * 900 / 3600)
     assert output(boiler.total_fuel_input_power_channel) == 20000.0
 
@@ -513,8 +514,9 @@ def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what
     assert booked_power_in_watt == hydronics.circuit_power_w(
         mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=80.0, t_return_c=70.0
     )
-    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 3.0, rel=1e-12)
-    assert fuel_power_in_watt == pytest.approx(booked_power_in_watt / boiler.burner.efficiency_at(20000.0), rel=1e-12)
+    # a 70 °C return is above the 60 °C test return, where the condensing gain stays 0: 0.877 at full load
+    assert booked_power_in_watt == pytest.approx(20000.0 * 0.877 / 3.0, rel=1e-12)
+    assert fuel_power_in_watt == pytest.approx(booked_power_in_watt / 0.877, rel=1e-12)
     assert fuel_power_in_watt == pytest.approx(20000.0 / 3.0, rel=1e-12)
     assert output(boiler.energy_demand_dhw_channel) == pytest.approx(fuel_power_in_watt * 900 / 3600)
     assert output(boiler.combustion_heat_loss_channel) == pytest.approx(fuel_power_in_watt - booked_power_in_watt)
@@ -541,7 +543,8 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
     assert booked_power_in_watt == hydronics.circuit_power_w(
         mass_flow_kg_per_s=output(boiler.water_output_mass_flow_dhw_channel), t_supply_c=70.0, t_return_c=60.0
     )
-    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 2.0, rel=1e-12)
+    # the 60 °C return is the full-load test return: 0.877 at full load
+    assert booked_power_in_watt == pytest.approx(20000.0 * 0.877 / 2.0, rel=1e-12)
     assert output(boiler.total_fuel_input_power_channel) == pytest.approx(10000.0, rel=1e-12)
 
     _, output = BoilerStep.run(
@@ -575,8 +578,9 @@ def test_the_space_heating_circuit_is_throttled_at_the_maximal_flow_temperature_
 class PumpCase:
     """The pump of :class:`BoilerStep`'s boiler, a namespace for the pump tests' expected values."""
 
-    #: The largest flow of a 20 kW boiler at 0.9 over the default 5 K: 18000 / (4180 * 5) = 0.861 kg/s.
-    MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND = 20000.0 * 0.9 / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 5.0)
+    #: The largest flow of a 20 kW boiler at its full-load efficiency, 0.877 on the current condensing gas curve,
+    #: over the default 5 K: 17540 / (4180 * 5) = 0.839 kg/s.
+    MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND = 20000.0 * 0.877 / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 5.0)
 
     #: Per circuit, the operating mode and the return inputs of a step: space heating on a 35 °C buffer return, hot
     #: water on a 50 °C tank return.
@@ -604,10 +608,16 @@ class PumpCase:
 @pytest.mark.base
 @pytest.mark.parametrize("circuit", sorted(PumpCase.CIRCUITS))
 @pytest.mark.parametrize(
-    ("control_signal", "burner_power_in_watt", "heat_in_watt"), [(1.0, 20000.0, 18000.0), (0.05, 2000.0, 1200.0)]
+    ("control_signal", "burner_power_in_watt", "heat_in_watt_per_circuit"),
+    [
+        # full load: 0.877 + 0.0030 (60 - T_ret), on the 35 °C and the 50 °C return
+        (1.0, 20000.0, {"space heating": 20000.0 * 0.952, "hot water": 20000.0 * 0.907}),
+        # 10 % load keeps the 30 % value: 0.978 - 0.0030 (T_ret - 30)
+        (0.05, 2000.0, {"space heating": 2000.0 * 0.963, "hot water": 2000.0 * 0.918}),
+    ],
 )
 def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_heat(
-    circuit: str, control_signal: float, burner_power_in_watt: float, heat_in_watt: float
+    circuit: str, control_signal: float, burner_power_in_watt: float, heat_in_watt_per_circuit: Dict[str, float]
 ) -> None:
     """A boiler that sized its flow to a lift close to 0 K pumped hundreds of kg/s and booked heat no store got.
 
@@ -615,10 +625,11 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
     the buffer reaches its set temperature: the boiler pumped 958 kg/s on the year's mean and booked 51.7 MWh of
     space heating for 11.0 MWh delivered (hisim-component-physics-4g9.63). The pump moves at most
     :attr:`PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND`, so a 0.01 K lift is raised to the rise the heat gives at that
-    flow: 5 K at full power (18000 W), 1/3 K at the 2 kW minimum (1200 W at 0.6). The heat the boiler books is the
-    heat that flow carries, which is the burner's heat, and the fuel the commanded power. The expected heats are
-    written out by hand, not read from the burner's efficiency law, so a fault in that law fails here too.
+    flow: about 5 K at full power, about 0.5 K at the 2 kW minimum. The heat the boiler books is the heat that flow
+    carries, which is the burner's heat, and the fuel the commanded power. The expected heats are written out by hand,
+    not read from the burner's efficiency law, so a fault in that law fails here too.
     """
+    heat_in_watt = heat_in_watt_per_circuit[circuit]
     mode, space_heating_return_in_celsius, hot_water_return_in_celsius = PumpCase.CIRCUITS[circuit]
     boiler, output = BoilerStep.run(
         control_signal=control_signal,
@@ -647,9 +658,10 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
 def test_a_lift_the_pump_carries_is_kept() -> None:
     """A boiler that raised every lift would overshoot the supply a modulating controller asks for.
 
-    At half signal the burner turns 10 kW into 10000 * 0.7333 = 7333 W (0.6 at 2 kW rising linearly to 0.9 at
-    20 kW, written out by hand), which the pump's largest flow carries over 2.04 K. A 3 K lift is above that, so the
-    boiler runs it: the supply is the return plus 3 K, and the flow carries the heat over that lift.
+    At half signal on a 35 °C return the burner turns 10 kW into 10000 * 0.9599 = 9599 W (the current condensing gas
+    curve, written out by hand: 0.877 + (0.978 - 0.877 - 0.09) * 0.5 / 0.7 + 0.0030 * 25), which the pump's largest
+    flow carries over 2.74 K. A 3 K lift is above that, so the boiler runs it: the supply is the return plus 3 K, and
+    the flow carries the heat over that lift.
     """
     boiler, output = BoilerStep.run(
         control_signal=0.5,
@@ -658,7 +670,7 @@ def test_a_lift_the_pump_carries_is_kept() -> None:
         space_heating_return=35.0,
         hot_water_return=50.0,
     )
-    heat_in_watt = 10000.0 * (0.6 + (10000.0 - 2000.0) * (0.9 - 0.6) / (20000.0 - 2000.0))
+    heat_in_watt = 10000.0 * (0.877 + (0.978 - 0.877 - 0.09) * 0.5 / 0.7 + 0.0030 * 25.0)
     assert output(boiler.water_output_temperature_sh_channel) == 38.0
     assert output(boiler.water_output_mass_flow_sh_channel) == pytest.approx(
         heat_in_watt / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 3.0), rel=1e-12
@@ -674,32 +686,50 @@ def test_a_lift_the_pump_carries_is_kept() -> None:
 def test_the_burner_never_runs_below_its_minimal_power(control_signal: float, expected_power_in_watt: float) -> None:
     """A burner commanded below its band would burn less than it can modulate down to."""
     burner = generic_boiler.BurnerModulation(
-        minimal_power_in_watt=2000.0, maximal_power_in_watt=20000.0, minimal_efficiency=0.6, maximal_efficiency=0.9
+        minimal_power_in_watt=2000.0,
+        maximal_power_in_watt=20000.0,
+        efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.877, 0.978, 0.0030),
     )
     assert burner.commanded_power_in_watt(control_signal) == expected_power_in_watt
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("burner_power_in_watt", "expected_efficiency"), [(1000.0, 0.6), (2000.0, 0.6), (11000.0, 0.75), (20000.0, 0.9)]
+    ("burner_power_in_watt", "return_temperature_in_celsius", "expected_efficiency"),
+    [
+        (20000.0, 60.0, 0.877),
+        (6000.0, 30.0, 0.978),
+        # below 30 % load the 30 % value
+        (2000.0, 30.0, 0.978),
+        # half load on a 40 °C return, the spec's worked example
+        (10000.0, 40.0, 0.877 + 0.011 * 0.5 / 0.7 + 0.0030 * 20.0),
+    ],
 )
-def test_the_combustion_efficiency_runs_linearly_across_the_band(
-    burner_power_in_watt: float, expected_efficiency: float
+def test_the_burner_reads_its_efficiency_off_the_curve_at_its_load_ratio(
+    burner_power_in_watt: float, return_temperature_in_celsius: float, expected_efficiency: float
 ) -> None:
-    """An efficiency off its line, or below the minimum below the band, would bill a wrong fuel for the same heat."""
+    """A burner that passed its power instead of its load ratio to the curve would bill a wrong fuel for the same heat."""
     burner = generic_boiler.BurnerModulation(
-        minimal_power_in_watt=2000.0, maximal_power_in_watt=20000.0, minimal_efficiency=0.6, maximal_efficiency=0.9
+        minimal_power_in_watt=2000.0,
+        maximal_power_in_watt=20000.0,
+        efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.877, 0.978, 0.0030),
     )
-    assert burner.efficiency_at(burner_power_in_watt) == pytest.approx(expected_efficiency, rel=1e-12)
+    efficiency = burner.efficiency_at(burner_power_in_watt, return_temperature_in_celsius)
+    assert efficiency == pytest.approx(expected_efficiency, rel=1e-12)
+    assert burner.heat_power_in_watt(burner_power_in_watt, return_temperature_in_celsius) == pytest.approx(
+        burner_power_in_watt * expected_efficiency, rel=1e-12
+    )
 
 
 @pytest.mark.base
-def test_a_burner_with_a_single_power_burns_at_its_minimal_efficiency() -> None:
-    """A band of one power has no slope; dividing by its width would fail or return nonsense."""
+def test_a_burner_with_a_single_power_burns_at_its_full_load_efficiency() -> None:
+    """A band of one power runs at full load; the old law divided by the band's width there."""
     burner = generic_boiler.BurnerModulation(
-        minimal_power_in_watt=10000.0, maximal_power_in_watt=10000.0, minimal_efficiency=0.85, maximal_efficiency=0.95
+        minimal_power_in_watt=10000.0,
+        maximal_power_in_watt=10000.0,
+        efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.92, 0.92),
     )
-    assert burner.efficiency_at(10000.0) == 0.85
+    assert burner.efficiency_at(10000.0, 50.0) == pytest.approx(0.92, rel=1e-12)
 
 
 @pytest.mark.base
@@ -732,40 +762,46 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize(
-    ("eff_th_min", "eff_th_max"),
-    [
-        (0.0, 0.9),  # no heat from a throttled step: the fuel divides by zero
-        (-0.1, 0.9),
-        (0.6, 0.0),
-        (float("nan"), 0.9),
-        (0.6, float("inf")),
-    ],
-)
-def test_a_boiler_with_impossible_combustion_efficiencies_is_refused(eff_th_min: float, eff_th_max: float) -> None:
-    """An efficiency of 0 or less, or one that is not finite, would divide by zero or book fuel without heat."""
-    with pytest.raises(ValueError, match="eff_th_m"):
+@pytest.mark.parametrize("seasonal_efficiency", [0.0, -0.1, 0.971, 1.04, float("nan"), float("inf")])
+def test_a_boiler_with_an_impossible_seasonal_efficiency_is_refused(seasonal_efficiency: float) -> None:
+    """A seasonal efficiency of 0 or less divides by zero; one above 0.97 is not an energy label's eta_s (GCV).
+
+    1.04 is the figure a German datasheet states on the net calorific value for a condensing boiler: taken as eta_s,
+    it would scale the curve above 1 on the gross calorific value.
+    """
+    with pytest.raises(ValueError, match="seasonal_efficiency"):
         generic_boiler.GenericBoilerConfig(
             component_id=ComponentID(name="Boiler"),
             energy_carrier=lt.LoadTypes.GAS,
             boiler_type=generic_boiler.BoilerType.CONDENSING,
-            eff_th_min=eff_th_min,
-            eff_th_max=eff_th_max,
+            seasonal_efficiency=seasonal_efficiency,
         )
 
 
 @pytest.mark.base
-@pytest.mark.parametrize(("eff_th_min", "eff_th_max"), [(0.6, 0.9), (0.9, 0.9), (0.01, 1.0)])
-def test_a_boiler_with_positive_combustion_efficiencies_is_accepted(eff_th_min: float, eff_th_max: float) -> None:
-    """The refusal must keep the edges ``eff_th_min == eff_th_max`` and ``eff_th_max == 1``, which real boilers use."""
+@pytest.mark.parametrize("seasonal_efficiency", [None, 0.01, 0.9, 0.97])
+def test_a_boiler_with_a_possible_seasonal_efficiency_is_accepted(seasonal_efficiency: Optional[float]) -> None:
+    """The refusal must keep no stated value and the edge 0.97, where eta_s plus the 3 % correction is 1."""
     config = generic_boiler.GenericBoilerConfig(
         component_id=ComponentID(name="Boiler"),
         energy_carrier=lt.LoadTypes.GAS,
         boiler_type=generic_boiler.BoilerType.CONDENSING,
-        eff_th_min=eff_th_min,
-        eff_th_max=eff_th_max,
+        seasonal_efficiency=seasonal_efficiency,
     )
-    assert (config.eff_th_min, config.eff_th_max) == (eff_th_min, eff_th_max)
+    assert config.seasonal_efficiency == seasonal_efficiency
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("installation_year", [1995.5, True])
+def test_a_boiler_with_a_fractional_installation_year_is_refused(installation_year: Any) -> None:
+    """An installation year picks a decade row; a fraction or a boolean is not a year."""
+    with pytest.raises(ValueError, match="installation_year"):
+        generic_boiler.GenericBoilerConfig(
+            component_id=ComponentID(name="Boiler"),
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=generic_boiler.BoilerType.CONDENSING,
+            installation_year=installation_year,
+        )
 
 
 @pytest.mark.base
@@ -829,7 +865,7 @@ def test_every_boiler_preset_passes_the_config_checks(
 ) -> None:
     """A preset that the efficiency or flow-temperature checks refused could not be built at all."""
     config = preset("Boiler")
-    assert 0.0 < config.eff_th_min <= config.eff_th_max <= 1.0  # the presets also keep the stricter physical bounds
+    assert config.seasonal_efficiency is None and config.installation_year is None  # a current boiler, unscaled
     assert config.maximal_flow_temperature_in_celsius > 0.0
 
 
@@ -981,10 +1017,12 @@ def test_a_wood_burner_burns_its_minimum_firing_time_and_rests_its_minimum_pause
     )
     assert BurnerSequence.lit_steps(fuel_power_in_watt) == [True] * firing_steps + [False] * pause_steps + [True]
     # held lit in space heating at the commanded full power, the buffer taking the heat at the pump's largest flow;
-    # at full power the burner runs at its maximal efficiency
+    # at full power the burner runs at its full-load efficiency (no condensing gain for a solid fuel)
     assert fuel_power_in_watt[1] == pytest.approx(BurnerSequence.MAXIMAL_POWER_IN_WATT)
     maximal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT
-    assert space_heating_heat_in_watt[1] == pytest.approx(maximal_power_in_watt * boiler.config.eff_th_max)
+    assert space_heating_heat_in_watt[1] == pytest.approx(
+        maximal_power_in_watt * boiler.efficiency_curve.efficiency_at_full_load
+    )
     assert boiler.burner_times == generic_boiler.BurnerTimes(
         minimum_firing_time_in_seconds=minimum_firing_time_in_seconds,
         minimum_pause_in_seconds=minimum_pause_in_seconds,
@@ -1004,8 +1042,10 @@ def test_a_burner_held_lit_after_its_controller_switched_off_burns_at_its_minima
     )
     minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
     assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
-    # at its minimal power the burner runs at its minimal efficiency
-    assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
+    # at its minimal power, a twelfth of the maximum, the burner keeps its 30 % load efficiency
+    assert space_heating_heat_in_watt[1] == pytest.approx(
+        minimal_power_in_watt * boiler.efficiency_curve.efficiency_at_part_load
+    )
     assert hot_water_heat_in_watt[1] == 0.0
 
 
@@ -1024,7 +1064,9 @@ def test_a_held_burner_burns_its_whole_step_although_its_controller_commands_no_
     )
     minimal_power_in_watt = BurnerSequence.MAXIMAL_POWER_IN_WATT / 12
     assert fuel_power_in_watt[1] == pytest.approx(minimal_power_in_watt)
-    assert space_heating_heat_in_watt[1] == pytest.approx(minimal_power_in_watt * boiler.config.eff_th_min)
+    assert space_heating_heat_in_watt[1] == pytest.approx(
+        minimal_power_in_watt * boiler.efficiency_curve.efficiency_at_part_load
+    )
     assert boiler.burner_state.is_lit
 
 
@@ -1197,3 +1239,37 @@ def test_a_hot_water_step_without_a_remainder_command_leaves_the_buffer_alone() 
     )
     assert output(boiler.thermal_output_power_sh_channel) == 0.0
     assert output(boiler.space_heating_part_load_command.ratio_run_channel) == 0.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("control_signal", "space_heating_return_in_celsius", "expected_efficiency"),
+    [
+        # 30 % load on a 30 °C return: the condensing boiler's best point, 0.978 on the gross calorific value
+        (0.3, 30.0, 0.978),
+        # full load on a 60 °C return: 0.877
+        (1.0, 60.0, 0.877),
+    ],
+)
+def test_a_condensing_gas_boiler_burns_at_its_ecodesign_test_points_not_on_the_old_linear_law(
+    control_signal: float, space_heating_return_in_celsius: float, expected_efficiency: float
+) -> None:
+    """The old law ran linearly from 0.60 at minimal to 0.90 at maximal power (hisim-component-physics-4g9.66).
+
+    It gave this 2-20 kW condensing gas boiler 0.667 at 6 kW, so the gas twin's space heating ran at 0.73 where a
+    current condensing boiler's Ecodesign fiche (Viessmann Vitodens 200-W) gives 0.978 at 30 % load and a 30 °C return,
+    and 0.877 at full load and a 60 °C return. The efficiency is read off the boiler's published heat and fuel, so the
+    test runs on any version of the boiler.
+    """
+    boiler, output = BoilerStep.run(
+        control_signal=control_signal,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=10.0,
+        space_heating_return=space_heating_return_in_celsius,
+        hot_water_return=50.0,
+    )
+    fuel_power_in_watt = output(boiler.total_fuel_input_power_channel)
+    heat_in_watt = output(boiler.thermal_output_power_sh_channel)
+
+    assert fuel_power_in_watt == pytest.approx(20000.0 * control_signal, rel=1e-12)
+    assert heat_in_watt / fuel_power_in_watt == pytest.approx(expected_efficiency, rel=1e-12)

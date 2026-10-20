@@ -52,8 +52,10 @@ DETACHED = "field:building.building_type=detached_sfh"
 #: A pair whose leaf is not_implemented_yet beside a heat pump, although the field alone is approximated.
 SCOP_ON_HEAT_PUMP = "pair:seasonal_efficiency_on_heat_pump"
 
-#: The single-change probe that makes the capability document announce the SCOP as approximated.
-SCOP = "field:heating.seasonal_efficiency_in_percent=400"
+#: The single-change probe that makes the capability document announce the SCOP as approximated. The probe's
+#: high end, 400 %, is refused on the gas-boiler base since a boiler's seasonal efficiency is an Ecodesign eta_s of
+#: at most 97 % (hisim-component-physics-4g9.66), so the low end carries the status.
+SCOP = "field:heating.seasonal_efficiency_in_percent=1"
 
 #: An option probe whose base, ``measure:battery_system``, carries the measure with no option at all.
 BATTERY_CAPACITY = "option:battery_system.capacity_in_kwh=200"

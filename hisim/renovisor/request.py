@@ -1265,6 +1265,12 @@ class SemanticChecks:
     #: (:meth:`_floor_areas`).
     FLOOR_AREA_RANGE: ClassVar[Tuple[int, int]] = (20, 1000)
 
+    #: The highest seasonal efficiency a boiler house may state, in percent: the Ecodesign ``eta_s``
+    #: on the gross calorific value is the active-mode efficiency, at most 100 %, less the 3 %
+    #: temperature-control correction F(1) (Commission communication 2014/C 207/02, point 4.4(a);
+    #: Regulation (EU) 2015/1189, Annex IV, point 4(a)). ``GenericBoilerConfig`` refuses more.
+    BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT: ClassVar[float] = 97.0
+
     #: The ``house.building`` field :attr:`FLOOR_AREA_RANGE` bounds, the heated floor area the
     #: simulation runs.
     FLOOR_AREA_KEY: ClassVar[str] = "absolute_conditioned_floor_area_in_m2"
@@ -1321,6 +1327,7 @@ class SemanticChecks:
         problems.extend(cls._hot_water_volumes(house))
         problems.extend(cls._heat_pump_scop(house))
         problems.extend(cls._floor_areas(house))
+        problems.extend(cls._boiler_seasonal_efficiency(house))
         problems.extend(cls._unsupported_generator(house))
         problems.extend(cls._measures(document["measures"], house))
         problems.extend(cls._cost_bands(document["measures"]))
@@ -1494,6 +1501,37 @@ class SemanticChecks:
                 )
             )
         return problems
+
+    @classmethod
+    def _boiler_seasonal_efficiency(cls, house: Mapping[str, Any]) -> List[Problem]:
+        """Refuse a boiler's seasonal efficiency above :attr:`BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT`.
+
+        The stated figure is the Ecodesign seasonal space heating efficiency ``eta_s`` of the
+        boiler's energy label, on the gross calorific value. A larger one is no such figure -- a
+        German datasheet's 104 % for a condensing boiler is on the net calorific value -- and HiSim's
+        boiler refuses it (``GenericBoilerConfig``), so the request is refused with the reason
+        instead of failing inside the simulation. Other generators list the figure and are not
+        checked.
+        """
+        heating = house.get("heating") or {}
+        stated = heating.get("seasonal_efficiency_in_percent")
+        generator = heating.get("type_of_system")
+        if stated is None or generator not in {member.value for member in HeatGenerator.boilers()}:
+            return []
+        maximum = cls.BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT
+        if stated <= maximum:
+            return []
+        return [
+            Problem(
+                path="house.heating.seasonal_efficiency_in_percent",
+                code=ProblemCode.RANGE_EXCEEDED,
+                message=(
+                    f"a boiler's seasonal efficiency is the Ecodesign eta_s of its energy label on the gross "
+                    f"calorific value, at most {maximum:g} %; house.heating.seasonal_efficiency_in_percent is "
+                    f"{stated:g} %, which is no such figure (a value on the net calorific value?)"
+                ),
+            )
+        ]
 
     @classmethod
     def _unsupported_generator(cls, house: Mapping[str, Any]) -> List[Problem]:

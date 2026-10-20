@@ -670,14 +670,48 @@ class TestASeasonalEfficiencyWithoutABoiler:
             ReportStatus.NOT_IMPLEMENTED_YET, "The heat pump follows its hplib model curve."
         )
 
-    def test_a_boiler_still_takes_it_as_its_efficiency(self) -> None:
-        """Unchanged for boilers: the figure becomes the full-load efficiency, approximated."""
+    def test_a_boiler_takes_it_as_its_ecodesign_seasonal_efficiency(self) -> None:
+        """hisim-component-physics-4g9.66: the figure is eta_s (GCV) and scales the boiler's sourced curve.
+
+        The old mapping wrote it as the full-load efficiency and 0.3 below it as the part-load one.
+        """
         system = translate(issue_72_request("conventional_oil_heating"))
 
         line = system.report.line(self.PATH)
         assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.note is not None and "scales the boiler type's sourced part-load curve" in line.note
         config = config_of(system, BaseFiles.generator_component(system.base_file_name))
-        assert config[Targets.EFFICIENCY_MAXIMUM] == pytest.approx(0.9)
+        assert config[Targets.SEASONAL_EFFICIENCY] == pytest.approx(0.9)
+        assert "eff_th_max" not in config and "eff_th_min" not in config
+
+
+@pytest.mark.base
+class TestTheBoilersInstallationYear:
+    """hisim-component-physics-4g9.66: the existing boiler's year picks its efficiency row; a new boiler is current."""
+
+    PATH = "house.heating.installation_year"
+
+    def test_the_existing_boilers_year_reaches_the_boiler_and_its_line_says_so(self) -> None:
+        """The mockup's gas boiler of 1995, kept, takes the 1990s row; the line stays the economics stage's."""
+        system = translate(baseline(heating__installation_year=1995))
+
+        config = config_of(system, BaseFiles.generator_component(system.base_file_name))
+        assert config[Targets.INSTALLATION_YEAR] == 1995
+        line = system.report.line(self.PATH)
+        assert line is not None and line.status is ReportStatus.USED
+        assert line.target == Translator.ECONOMICS_TARGET
+        assert line.note is not None and "efficiency row" in line.note
+
+    def test_a_replaced_boiler_leaves_no_year_on_the_new_one(self) -> None:
+        """A heating_system measure that installs a condensing gas boiler makes it a current boiler."""
+        document = baseline(heating__installation_year=1995)
+        document["measures"] = [{"id": "heating_system", "options": {"type_of_system": "condensing_gas_heating"}}]
+        system = translate(document)
+
+        assert system.base_file_name == BaseFiles.select(HeatGenerator.CONDENSING_GAS_HEATING, with_solar_thermal=False)
+        component = BaseFiles.generator_component(system.base_file_name)
+        assert _entry(system, component) is not None  # the boiler is there
+        assert Targets.INSTALLATION_YEAR not in config_of(system, component)
 
 
 @pytest.mark.base

@@ -131,8 +131,8 @@ components:
       boiler_type: CONDENSING
       minimal_thermal_power_in_watt: 0.0 # author default (constant law)
       maximal_thermal_power_in_watt: 8558.827420000001 # sized from building.heating_load_in_watt=7780.752200000001, building.number_of_apartments=1
-      eff_th_min: 0.6
-      eff_th_max: 0.9
+      seasonal_efficiency: null
+      installation_year: null
       temperature_delta_in_celsius: 20.0
       maximal_flow_temperature_in_celsius: 80.0
       minimal_lift_at_maximal_power_in_kelvin: 5.0

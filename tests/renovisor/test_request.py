@@ -495,6 +495,45 @@ class TestTheSemanticChecks:
         assert "20 to 1000 m²" in problem.message and f"{area} m²" in problem.message
         assert problem.accepted is None
 
+    @pytest.mark.parametrize(
+        "generator, stated, refused",
+        [
+            ("conventional_gas_heating", 90, False),
+            ("conventional_gas_heating", 97, False),
+            ("conventional_gas_heating", 97.5, True),
+            ("condensing_oil_heating", 104, True),  # a German datasheet's figure on the net calorific value
+            ("pellet_heating", 400, True),
+            ("air_source_heat_pump", 300, False),  # a heat pump lists the figure; it is not checked
+            ("district_heating", 104, False),
+        ],
+    )
+    def test_a_boilers_seasonal_efficiency_above_97_percent_is_refused(
+        self, generator: str, stated: float, refused: bool
+    ) -> None:
+        """hisim-component-physics-4g9.66: a boiler's figure is eta_s on the GCV, at most 100 % less F(1) = 3 %."""
+        path = "house.heating.seasonal_efficiency_in_percent"
+        document = mockup()
+        document["measures"] = []
+        document["house"]["heating"] = {"type_of_system": generator, "seasonal_efficiency_in_percent": stated}
+
+        problems = codes_of(document)
+
+        assert ((path, ProblemCode.RANGE_EXCEEDED.value) in problems) is refused
+        if refused:
+            with pytest.raises(RequestError) as caught:
+                Request.parse(document)
+            problem = next(item for item in caught.value.problems if item.path == path)
+            assert "at most 97 %" in problem.message and "gross calorific value" in problem.message
+
+    def test_the_boiler_maximum_is_the_boilers_own(self) -> None:
+        """The request refuses exactly what GenericBoilerConfig refuses: 100 % less the F(1) correction."""
+        from hisim.components.generic_boiler import (  # pylint: disable=import-outside-toplevel
+            BoilerEfficiencySources,
+        )
+
+        correction = BoilerEfficiencySources.TEMPERATURE_CONTROL_CORRECTION
+        assert SemanticChecks.BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT == pytest.approx(100 * (1 - correction))
+
     @pytest.mark.parametrize("living", [15, 300])
     def test_a_living_area_up_to_the_conditioned_floor_area_is_accepted(self, living: float) -> None:
         """The living area keeps the schema's ``> 0``: 15 m² passes, below the conditioned area's own range."""

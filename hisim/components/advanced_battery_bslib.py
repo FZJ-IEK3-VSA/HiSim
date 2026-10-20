@@ -34,8 +34,9 @@ from hisim.config import (
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
+from hisim.energy_port import EnergyPort
 from hisim.economics.uncertainty import UncertainValue
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType, EnergyBalanceCarrier, EnergyRole
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
@@ -284,6 +285,10 @@ class Battery(PhysicsComponent):
     MinimumChargingPowerInWatt = "MinimumChargingPowerInWatt"
     #: The increase of the energy stored in the cells over the step, in Wh; negative while the battery discharges.
     StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
+    #: The inverter's loss over the step, in W: the AC power minus the DC power.
+    InverterLossInWatt = "InverterLossInWatt"
+    #: The cells' loss over the step, in W: the DC power minus the increase of the stored energy per second.
+    CellLossInWatt = "CellLossInWatt"
 
     def __init__(
         self,
@@ -377,6 +382,10 @@ class Battery(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=f"here a description for {self.ChargingPower} will follow.",
+            # the energy manager reads the signed AC power, not this split of it: the meter is found through that
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.AcBatteryPowerUsed
+            ),
         )
 
         self.discharging_power_channel: ComponentOutput = self.add_output(
@@ -385,6 +394,9 @@ class Battery(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=f"here a description for {self.DischargingPower} will follow.",
+            energy_port=EnergyPort(
+                EnergyRole.OUT, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.AcBatteryPowerUsed, negated=True
+            ),
         )
         self.maximum_charging_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -417,6 +429,33 @@ class Battery(PhysicsComponent):
                 "charge times the capacity, negative while the battery discharges. Summed over the run it is the "
                 "stored energy at the end minus the stored energy at the start, which the battery's losses subtract."
             ),
+            energy_port=EnergyPort(EnergyRole.STORED_CHANGE, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        # bslib is a black box that publishes three numbers: the AC power, the DC power and the state of charge.
+        # The two losses are their differences, so the energy balance checks that the published flows agree with
+        # each other (complete Sankey spec, §5.3), not bslib's physics.
+        self.inverter_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.InverterLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The inverter's loss over the step, in W: the AC power minus the DC power. While the battery charges "
+                "the inverter takes more AC than it gives the cells, while it discharges it gives less AC than it "
+                "takes from them."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.cell_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CellLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The cells' loss over the step, in W: the DC power minus the increase of the stored energy divided by "
+                "the step's duration."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
 
     def i_save_state(self) -> None:
@@ -488,10 +527,18 @@ class Battery(PhysicsComponent):
         stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
-        stsv.set_output_value(
-            self.stored_energy_increase_channel,
-            (state_of_charge - self.state.state_of_charge) * self.charging_parameters.capacity_in_watt_hour,
+        stored_energy_increase_in_watt_hour = (
+            state_of_charge - self.state.state_of_charge
+        ) * self.charging_parameters.capacity_in_watt_hour
+        stsv.set_output_value(self.stored_energy_increase_channel, stored_energy_increase_in_watt_hour)
+        inverter_loss_in_watt, cell_loss_in_watt = self.losses_in_watt(
+            ac_power_in_watt=ac_battery_power_used_for_charging_or_discharging_in_watt,
+            dc_power_in_watt=dc_battery_power_used_for_charging_or_discharging_in_watt,
+            stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
+            seconds_per_timestep=time_increment_in_seconds,
         )
+        stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
+        stsv.set_output_value(self.cell_loss_channel, cell_loss_in_watt)
         stsv.set_output_value(self.charging_power_channel, charging_power_in_watt)
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
@@ -500,6 +547,38 @@ class Battery(PhysicsComponent):
             state_of_charge=state_of_charge,
             recharging_is_blocked=BslibChargingParameters.recharging_is_blocked(self.ac_coupled_battery_object),
         )
+
+    @classmethod
+    def losses_in_watt(
+        cls,
+        *,
+        ac_power_in_watt: float,
+        dc_power_in_watt: float,
+        stored_energy_increase_in_watt_hour: float,
+        seconds_per_timestep: float,
+    ) -> Tuple[float, float]:
+        """Return the inverter's and the cells' loss of one step from the three numbers bslib publishes, in W.
+
+        The inverter loss is the AC power minus the DC power and the cell loss the DC power minus the increase of
+        the stored energy per second (complete Sankey spec, §5.3). Charging and discharging power, both losses and
+        the stored change then close the battery's balance by construction, so the balance check proves that the
+        published flows agree with each other in sign and unit. For example, a step of one hour charging with
+        1000 W AC, 950 W DC and 930 Wh more in the cells loses 50 W in the inverter and 20 W in the cells; one
+        discharging with -1000 W AC, -1060 W DC and 1080 Wh less in the cells loses 60 W and 20 W.
+
+        Args:
+            ac_power_in_watt: The AC power the battery used, in W; positive while it charges.
+            dc_power_in_watt: The DC power at the cells, in W; positive while they charge.
+            stored_energy_increase_in_watt_hour: The increase of the energy stored in the cells over the step, in Wh.
+            seconds_per_timestep: The step's duration, in s.
+
+        Returns:
+            The inverter loss and the cell loss, in W.
+        """
+        stored_energy_increase_in_watt = (
+            stored_energy_increase_in_watt_hour * cls.SECONDS_PER_HOUR / seconds_per_timestep
+        )
+        return ac_power_in_watt - dc_power_in_watt, dc_power_in_watt - stored_energy_increase_in_watt
 
     @staticmethod
     def refuse_an_impossible_size(config: BatteryConfig) -> Tuple[float, float]:

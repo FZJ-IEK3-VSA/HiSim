@@ -655,3 +655,42 @@ class TestStoredEnergyAndLosses:
         # The config keeps the energies rounded to 0.1 kWh for the aging count.
         assert battery.battery_config.charge_in_kwh == pytest.approx(0.1)
         assert battery.battery_config.discharge_in_kwh == pytest.approx(0.1)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "ac_power_in_watt, dc_power_in_watt, stored_energy_increase_in_watt_hour, expected",
+    [
+        (1000.0, 950.0, 930.0, (50.0, 20.0)),  # charging for an hour
+        (-1000.0, -1060.0, -1080.0, (60.0, 20.0)),  # discharging for an hour
+        (0.0, 0.0, 0.0, (0.0, 0.0)),  # idle
+    ],
+)
+def test_the_losses_are_the_differences_of_the_three_published_numbers(
+    ac_power_in_watt: float,
+    dc_power_in_watt: float,
+    stored_energy_increase_in_watt_hour: float,
+    expected: Tuple[float, float],
+) -> None:
+    """Inverter loss is AC minus DC, cell loss DC minus the stored increase per second; the battery then closes.
+
+    Catches: a sign or a unit error between the AC, DC and stored-energy outputs, which the energy balance would
+    report as a battery that does not close.
+    """
+    inverter_loss, cell_loss = advanced_battery_bslib.Battery.losses_in_watt(
+        ac_power_in_watt=ac_power_in_watt,
+        dc_power_in_watt=dc_power_in_watt,
+        stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
+        seconds_per_timestep=3600.0,
+    )
+    assert (inverter_loss, cell_loss) == pytest.approx(expected)
+    charging, discharging = max(ac_power_in_watt, 0.0), max(-ac_power_in_watt, 0.0)
+    residual_in_watt = charging - discharging - inverter_loss - cell_loss - stored_energy_increase_in_watt_hour
+    assert residual_in_watt == pytest.approx(0.0)
+    quarter_hour = advanced_battery_bslib.Battery.losses_in_watt(
+        ac_power_in_watt=ac_power_in_watt,
+        dc_power_in_watt=dc_power_in_watt,
+        stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour / 4.0,
+        seconds_per_timestep=900.0,
+    )
+    assert quarter_hour == pytest.approx(expected)

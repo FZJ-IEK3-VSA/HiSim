@@ -18,7 +18,7 @@ import importlib
 import pathlib
 import sys
 from types import ModuleType
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict
 
 import numpy as np
 import pytest
@@ -446,3 +446,87 @@ def test_the_producer_refuses_a_weather_payload_that_does_not_match_the_key() ->
 
     with pytest.raises(ValueError, match="48 values"):
         pv_calculation.produce_pv_series(mismatched)
+
+
+class ClearSkyDay:
+    """A clear-sky summer day in Aachen at 900 s, as the PV producer's inputs, for the solar power column's tests."""
+
+    #: The site of the test reference year the twins run on.
+    LATITUDE_IN_DEGREES: ClassVar[float] = 50.78
+    LONGITUDE_IN_DEGREES: ClassVar[float] = 6.09
+
+    @classmethod
+    def inputs(cls) -> PvSeriesInputs:
+        """The default rooftop array's inputs on 21 June 2021, with the bundled CEC databases and clear-sky weather.
+
+        Returns:
+            PvSeriesInputs: the DTO, its weather computed by pvlib's clear-sky model.
+        """
+        import pandas as pd  # pylint: disable=import-outside-toplevel
+        import pvlib  # pylint: disable=import-outside-toplevel
+
+        from hisim import utils  # pylint: disable=import-outside-toplevel
+
+        times = pd.date_range("2021-06-21", periods=96, freq="900s", tz="Europe/Berlin")
+        location = pvlib.location.Location(cls.LATITUDE_IN_DEGREES, cls.LONGITUDE_IN_DEGREES)
+        position = location.get_solarposition(times)
+        clear_sky = location.get_clearsky(times)
+        paths = utils.HISIMPATH["photovoltaic"]
+        return calculation_inputs(
+            module_database_path=str(paths["cec_modules"]),
+            inverter_database_path=str(paths["cec_inverters"]),
+            window_start="2021-06-21T00:00:00",
+            weather_series=PvWeatherSeries.of(
+                dni_extra=pvlib.irradiance.get_extra_radiation(times).to_numpy(),
+                dni=clear_sky["dni"].to_numpy(),
+                dhi=clear_sky["dhi"].to_numpy(),
+                ghi=clear_sky["ghi"].to_numpy(),
+                azimuth=position["azimuth"].to_numpy(),
+                apparent_zenith=position["apparent_zenith"].to_numpy(),
+                temperature=np.full(96, 20.0),
+                wind_speed=np.full(96, 2.0),
+            ),
+        )
+
+
+@pytest.mark.base
+def test_the_solar_power_column_is_the_irradiance_on_the_modules_per_watt_peak() -> None:
+    """The solar column is the plane-of-array irradiance times module area over module peak power; zero at night.
+
+    Catches: a solar power that is not the irradiance the performance model computes from, a module area or peak
+    power taken from elsewhere than the module's database row, and a NaN left at night.
+    """
+    inputs = ClearSkyDay.inputs()
+    frame = pv_calculation.produce_pv_series(inputs)
+    module = pv_calculation.read_module(inputs)
+    poa_irrad, _, _ = pv_calculation.calculate_irradiance(inputs, inputs.weather_series)
+    poa_global = np.nan_to_num(np.asarray(poa_irrad["poa_global"], dtype=float))
+
+    assert list(frame.columns) == [column.value for column in pv_calculation.PvSeriesColumn]
+    assert pv_calculation.module_area_and_peak_power(inputs, module) == pytest.approx((1.98, 435.16))
+    solar = frame[pv_calculation.PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value].to_numpy()
+    np.testing.assert_allclose(solar, poa_global * 1.98 / 435.16, rtol=1e-12, atol=0.0)
+    assert not np.isnan(solar).any() and solar[0] == 0.0 and solar.max() > 2.0
+
+
+@pytest.mark.base
+def test_the_ac_power_column_is_unchanged_and_below_the_solar_power() -> None:
+    """The AC power ratio is the performance model's own, and the modules convert 15 to 25 % of the sun at noon.
+
+    Catches: an AC power ratio that the solar column changed (every PV KPI would move), and a solar power so small
+    that the array's loss turned negative.
+    """
+    inputs = ClearSkyDay.inputs()
+    frame = pv_calculation.produce_pv_series(inputs)
+    module = pv_calculation.read_module(inputs)
+    inverter = pv_calculation.read_inverter(inputs)
+    ac_ratio = frame[pv_calculation.PvSeriesColumn.AC_POWER_RATIO.value].to_numpy()
+    solar = frame[pv_calculation.PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value].to_numpy()
+
+    np.testing.assert_array_equal(
+        ac_ratio, pv_calculation.simulate_cec(inputs, inputs.weather_series, module, inverter)
+    )
+    assert pv_calculation.OUTPUT_COLUMN == pv_calculation.PvSeriesColumn.AC_POWER_RATIO.value
+    assert (solar - ac_ratio >= 0.0).all()
+    noon = int(np.argmax(solar))
+    assert 0.15 < ac_ratio[noon] / solar[noon] < 0.25

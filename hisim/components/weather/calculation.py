@@ -1,7 +1,7 @@
 """Produces the processed weather series that :mod:`hisim.components.weather` simulates from.
 
-What this module produces is one artifact: the full-year frame of eleven columns -- irradiances, air
-temperature, sun position, wind speed, pressure -- read from a weather data file, interpolated to one
+What this module produces is one artifact: the full-year frame of twelve columns -- irradiances, air
+temperature, sun position, wind speed, pressure, relative humidity -- read from a weather data file, interpolated to one
 minute, aggregated to the simulation's timestep and handed back as a :class:`pandas.DataFrame`. It is the
 first producer under ``roadmap/cache_service_spec.md`` (§3, §12), which is why it is a module of its own
 rather than a section of the component.
@@ -312,8 +312,95 @@ class WeatherSeriesInputs:
     source_path: str = field(metadata=KeyMaterial.PAYLOAD)
 
 
+class RelativeHumidity:
+    """The outdoor relative humidity every reader delivers, and the check every delivered series passes.
+
+    The relative humidity is the water vapour pressure of the outdoor air as a share of its saturation
+    pressure over water at the air temperature, in percent: 0 is dry air, 100 is saturated air. Every
+    data source carries it in its file, under its own column name (:attr:`FILE_COLUMNS`), and every
+    reader renames that column to :attr:`COLUMN`. Example: row 1 of a DWD test reference year with
+    ``RF`` = 88 delivers 88.0 in the hour it stands for.
+
+    Where each source's humidity comes from:
+
+    - ``DWD_TRY``: the ``RF`` column of the test reference year itself.
+    - ``NSRDB`` and ``NSRDB_15MIN``: a ``Relative Humidity`` column from the same data set, site and
+      period as the other columns of the file: NSRDB's Meteosat Prime Meridian data of 2019, and for the
+      Seville file, which is a PVGIS typical year, that year's humidity.
+    - ``DWD_10MIN`` and ``DWD_15MIN``: ``RF_10`` of the DWD ten-minute air temperature product, combined
+      over the stations exactly as the file's temperature is.
+    - ``ERA5``: the ``relative_humidity`` column of the export; ERA5 publishes the 2 m dew point, from
+      which the export computes it.
+
+    The provenance of the shipped files is in ``hisim/inputs/weather/humidity_provenance.md``.
+
+    An hourly source is padded back to midnight with its first humidity sample, not with the zero the
+    other columns get (:func:`interpolate`).
+
+    A file without the column, or with a value that is missing or outside 0 to 100, is refused: the
+    humidity feeds the defrosting of an air-source heat pump, and a fabricated series would change its
+    efficiency without anyone noticing.
+    """
+
+    #: The column name of the relative humidity in the raw frame and in the produced frame.
+    COLUMN: ClassVar[str] = "relative_humidity_in_percent"
+
+    #: The lowest relative humidity a source may deliver: perfectly dry air.
+    MINIMUM_IN_PERCENT: ClassVar[float] = 0.0
+
+    #: The highest relative humidity a source may deliver: saturated air.
+    MAXIMUM_IN_PERCENT: ClassVar[float] = 100.0
+
+    #: The name of the relative humidity column in each data source's file, as its reader finds it.
+    FILE_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, str]] = {
+        WeatherDataSourceEnum.DWD_TRY: "RF",
+        WeatherDataSourceEnum.NSRDB: "Relative Humidity",
+        WeatherDataSourceEnum.NSRDB_15MIN: "Relative Humidity",
+        WeatherDataSourceEnum.DWD_10MIN: "relative_humidity",
+        WeatherDataSourceEnum.DWD_15MIN: "relative_humidity",
+        WeatherDataSourceEnum.ERA5: "relative_humidity",
+    }
+
+    @classmethod
+    def checked(cls, raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) -> pd.DataFrame:
+        """Return the raw frame with its relative humidity as floats, refusing a series that is not one.
+
+        Example: a DWD ten-minute file written before the humidity was added has no
+        ``relative_humidity`` column and is refused with the name of the file and of the column.
+
+        Args:
+            raw_data: the raw frame a reader returned, with the humidity renamed to :attr:`COLUMN`.
+            inputs: the calculation's inputs; supply the data source and the file for the message.
+
+        Returns:
+            pd.DataFrame: the same frame, its :attr:`COLUMN` converted to float.
+
+        Raises:
+            ValueError: if the frame has no humidity column, or a value of it is missing or outside
+                :attr:`MINIMUM_IN_PERCENT` to :attr:`MAXIMUM_IN_PERCENT`.
+        """
+        file_column = cls.FILE_COLUMNS[inputs.data_source]
+        if cls.COLUMN not in raw_data.columns:
+            raise ValueError(
+                f"The weather file {inputs.source_path!r} ({inputs.data_source.value}) has no relative humidity "
+                f"column {file_column!r}. Every weather source publishes the outdoor relative humidity; add the "
+                "column from the file's own upstream source (see hisim/inputs/weather/humidity_provenance.md)."
+            )
+        humidity = raw_data[cls.COLUMN].astype(float)
+        outside = humidity.isna() | (humidity < cls.MINIMUM_IN_PERCENT) | (humidity > cls.MAXIMUM_IN_PERCENT)
+        if outside.any():
+            raise ValueError(
+                f"The relative humidity column {file_column!r} of the weather file {inputs.source_path!r} "
+                f"({inputs.data_source.value}) is missing or outside {cls.MINIMUM_IN_PERCENT} to "
+                f"{cls.MAXIMUM_IN_PERCENT} % at {int(outside.sum())} of {len(humidity)} rows, the first at "
+                f"{humidity.index[outside][0]} with {humidity[outside].iloc[0]!r}."
+            )
+        raw_data[cls.COLUMN] = humidity
+        return raw_data
+
+
 #: The raw columns every reader provides and the producer carries forward to one-minute resolution.
-RAW_COLUMNS: Tuple[str, ...] = ("DNI", "T", "DHI", "GHI", "Wspd", "Pressure")
+RAW_COLUMNS: Tuple[str, ...] = ("DNI", "T", "DHI", "GHI", "Wspd", "Pressure", RelativeHumidity.COLUMN)
 
 #: Data sources that arrive at a resolution finer than an hour: their columns are resampled to one
 #: minute and linearly interpolated in place. The hourly sources go through :func:`interpolate`, which
@@ -340,6 +427,7 @@ PRODUCED_COLUMNS: Tuple[str, ...] = (
     "Pressure",
     "DNIextra",
     "t_out_daily_average",
+    RelativeHumidity.COLUMN,
 )
 
 
@@ -402,6 +490,7 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         per_timestep["Pressure"],
         per_timestep["DNIextra"],
         daily_average,
+        per_timestep[RelativeHumidity.COLUMN],
     ]
     return pd.DataFrame(np.transpose(series), columns=list(PRODUCED_COLUMNS), index=labels)
 
@@ -415,25 +504,29 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         inputs: the calculation's inputs; supplies the path and the year.
 
     Returns:
-        pd.DataFrame: the raw frame, indexed by time at the file's own resolution.
+        pd.DataFrame: the raw frame, indexed by time at the file's own resolution, with the relative
+        humidity checked by :meth:`RelativeHumidity.checked`.
 
     Raises:
-        ValueError: if no reader is registered for the data source.
+        ValueError: if no reader is registered for the data source, or the file's relative humidity is
+            missing or out of range.
     """
     filepath = inputs.source_path
     if inputs.data_source == WeatherDataSourceEnum.NSRDB:
-        return read_nsrdb_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_TRY:
-        return read_dwd_try_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-        return read_nsrdb_15min_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_10MIN:
-        return read_dwd_10min_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        return read_dwd_15min_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.ERA5:
-        return read_era5_data(filepath, inputs.year)
-    raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
+        raw_data = read_nsrdb_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_TRY:
+        raw_data = read_dwd_try_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
+        raw_data = read_nsrdb_15min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_10MIN:
+        raw_data = read_dwd_10min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_15MIN:
+        raw_data = read_dwd_15min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.ERA5:
+        raw_data = read_era5_data(filepath, inputs.year)
+    else:
+        raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
+    return RelativeHumidity.checked(raw_data, inputs)
 
 
 def resample_to_one_minute(raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) -> Dict[str, pd.Series]:
@@ -455,7 +548,12 @@ def resample_to_one_minute(raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) 
             column: raw_data[column].resample("1min").asfreq().interpolate(method="linear")
             for column in RAW_COLUMNS
         }
-    return {column: interpolate(raw_data[column], inputs.year) for column in RAW_COLUMNS}
+    return {
+        column: interpolate(
+            raw_data[column], inputs.year, pad_start_with_first_sample=column == RelativeHumidity.COLUMN
+        )
+        for column in RAW_COLUMNS
+    }
 
 
 def aggregate_to_timestep(columns: Mapping[str, pd.Series], seconds_per_timestep: int) -> Dict[str, List[float]]:
@@ -505,10 +603,12 @@ def timestep_labels(one_minute_series: pd.Series, seconds_per_timestep: int) -> 
     return labels.set_names(ProducedFrame.INDEX_NAME)
 
 
-def interpolate(pd_database: Any, year: int) -> Any:
+def interpolate(pd_database: Any, year: int, pad_start_with_first_sample: bool = False) -> Any:
     """Interpolates a time series to one minute, padding the year's first and last hour.
 
-    The hourly sources label each hour at its middle, 00:30 to 23:30. A zero is prepended at midnight,
+    The hourly sources label each hour at its middle, 00:30 to 23:30. A zero is prepended at midnight
+    (the first sample instead when ``pad_start_with_first_sample`` is set: a zero is the irradiance of
+    the night before, but a relative humidity of zero would be air drier than any outdoor air),
     and the last sample is repeated at the end of the hour it stands for -- 29 minutes after it, which
     for a source that covers the year is the year's last minute, 23:59. The end padding never reaches
     past that hour: a source of 365 days laid onto a leap year ends on 30 December, and padding it to
@@ -518,12 +618,14 @@ def interpolate(pd_database: Any, year: int) -> Any:
     Args:
         pd_database: the hourly series.
         year: the simulated year.
+        pad_start_with_first_sample: pad midnight with the series' first sample rather than with zero.
 
     Returns:
         Any: the one-minute series.
     """
+    start_value = float(pd_database.iloc[0]) if pad_start_with_first_sample else 0.0
     firstday = pd.Series(
-        [0.0],
+        [start_value],
         index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
     )
     end_of_year = pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")
@@ -753,6 +855,9 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     if os.path.isfile(filepath + ".csv"):
         data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
         data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
+        data = data.rename(
+            columns={RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_TRY]: RelativeHumidity.COLUMN}
+        )
     # else read from .dat and calculate DNI etc.
     else:
         # get data
@@ -770,6 +875,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
                 "HH": "Hour",
                 "p": "Pressure",
                 "WR": "Wdir",
+                RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_TRY]: RelativeHumidity.COLUMN,
             }
         )
 
@@ -804,6 +910,7 @@ def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
             "Wind Direction": "Wdir",
             "GHI": "GHI",
             "DNI": "DNI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.NSRDB]: RelativeHumidity.COLUMN,
         }
     )
     return data
@@ -826,6 +933,7 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
         columns={
             "Temperature": "T",
             "Wind Speed": "Wspd",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.NSRDB_15MIN]: RelativeHumidity.COLUMN,
         }
     )
     return data
@@ -861,6 +969,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
             "pressure": "Pressure",
             "wind_direction": "Wdir",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_10MIN]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal
@@ -907,6 +1016,7 @@ def read_dwd_15min_data(filepath: str, year: int) -> pd.DataFrame:
             "pressure": "Pressure",
             "wind_direction": "Wdir",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_15MIN]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal
@@ -945,6 +1055,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
             "wind_direction": "Wdir",
             "wind_speed": "Wspd",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.ERA5]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal

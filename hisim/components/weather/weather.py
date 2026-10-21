@@ -95,6 +95,7 @@ class Weather(DataSourceComponent):
     ApparentZenith: str = "ApparentZenith"
     WindSpeed: str = "WindSpeed"
     Pressure: str = "Pressure"
+    RelativeHumidity: str = "RelativeHumidity"
     Weather_Temperature_Forecast_24h: str = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures: str = "DailyAverageOutsideTemperatures"
 
@@ -151,6 +152,7 @@ class Weather(DataSourceComponent):
         "Pressure": "pressure_list",
         "DNIextra": "dniextra_list",
         "t_out_daily_average": "daily_average_outside_temperature_list_in_celsius",
+        calculation.RelativeHumidity.COLUMN: "relative_humidity_list_in_percent",
     }
 
     @utils.measure_execution_time
@@ -279,6 +281,17 @@ class Weather(DataSourceComponent):
             output_description=f"here a description for {self.Pressure} will follow.",
         )
 
+        self.relative_humidity_output: ComponentOutput = self.add_output(
+            self.component_name,
+            self.RelativeHumidity,
+            lt.LoadTypes.HUMIDITY,
+            lt.Units.PERCENT,
+            output_description=(
+                "The outdoor relative humidity in percent, 0 (dry air) to 100 (saturated air), from the weather "
+                "data file of every data source (calculation.RelativeHumidity says where each takes it from)."
+            ),
+        )
+
         self.daily_average_outside_temperature_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DailyAverageOutsideTemperatures,
@@ -298,6 +311,7 @@ class Weather(DataSourceComponent):
         self.apparent_zenith_list: List[float]
         self.dhi_list: List[float]
         self.daily_average_outside_temperature_list_in_celsius: List[float]
+        self.relative_humidity_list_in_percent: List[float]
         #: Each row's label in the source's standard time; what the run's window is looked up in.
         self.standard_time_labels: pd.DatetimeIndex = pd.DatetimeIndex([])
         #: The row of the series the run's timestep 0 reads; 0 for a run starting on 1 January.
@@ -344,6 +358,7 @@ class Weather(DataSourceComponent):
             self.daily_average_outside_temperature_output,
             self.daily_average_outside_temperature_list_in_celsius[row],
         )
+        stsv.set_output_value(self.relative_humidity_output, self.relative_humidity_list_in_percent[row])
 
         # set the temperature forecast: the next 24 h of the source's year, which near the end of the
         # window reaches past it, as it always has, and stops at the end of the year

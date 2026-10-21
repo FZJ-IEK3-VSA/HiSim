@@ -97,7 +97,7 @@ class ShippedSources:
 
 
 def write_era5_file(tmp_path: pathlib.Path) -> str:
-    """Write an hourly ERA5 export of 2021 with the header the reader expects, all zeros but the temperature.
+    """Write an hourly ERA5 export of 2021 with the header the reader expects, constant in every column.
 
     Args:
         tmp_path: the directory to write into.
@@ -119,6 +119,7 @@ def write_era5_file(tmp_path: pathlib.Path) -> str:
             "wind_speed": 3.0,
             "global_irradiance": 0.0,
             "direct_irradiance": 0.0,
+            "relative_humidity": 80.0,
         }
     )
     path = tmp_path / "era5_2021.csv"

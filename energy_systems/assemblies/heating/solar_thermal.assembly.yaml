@@ -7,7 +7,8 @@
 #
 # The members expand as one block in the order their lines stand here, the twins' SolarThermalSystem,
 # SolarThermalSystemController. The collector area reads the number of apartments from the site by the engine's
-# bare-fact rule (§6, D29), as in the twins. The collector loop is the cylinder's primary coil, as the twins wire it
+# bare-fact rule (§6, D29), as in the twins. The collector loop is the cylinder's secondary coil, its lower solar coil
+# (owner, 2026-10-21), as the twins wire it
 # (household_gas_solar_thermal_building_sizer, household_heatpump_solar_thermal_building_sizer): the cylinder reads the
 # collector's supply through its default connections from SolarThermalSystem, the collector the cylinder's return
 # leg. The defaults reproduce both twins (D9): a parameter at its preset's value, AUTO or none writes no config line

@@ -882,8 +882,10 @@ class SolarThermalSystem(PhysicsComponent):
     ) -> List[ComponentConnection]:
         """Return the connections from the hot-water storage: the collector inlet's temperatures.
 
-        The collector's inlet is the storage's return leg. Its step mean is the temperature the collector runs at;
-        its start-of-step temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
+        The collector's inlet is the storage's return leg of its secondary coil, the lower solar coil of a bivalent
+        cylinder, which the storage's own defaults wire the collector into (owner decision of 2026-10-21,
+        hisim-dhw-tank-one-return-7kq2). Its step mean is the temperature the collector runs at; its start-of-step
+        temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
 
         Returns:
             The connection list.
@@ -895,7 +897,7 @@ class SolarThermalSystem(PhysicsComponent):
             ComponentConnection(
                 SolarThermalSystem.TemperatureCollectorInletDegC,
                 storage_classname,
-                SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+                SimpleDHWStorage.StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius,
             )
         )
         connections.append(

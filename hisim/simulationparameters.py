@@ -32,6 +32,15 @@ class WeatherYearError(ValueError):
     """
 
 
+class CacheDirectoriesError(ValueError):
+    """A ``cache_directories`` entry that is not an absolute path.
+
+    Raised by :class:`SimulationParameters` at construction. A relative cache directory would name a
+    different directory for every working directory, so two workers sharing a cache would not agree
+    on where it is.
+    """
+
+
 class SimulationWindowError(ValueError):
     """A simulated period that breaks the window contract of :class:`SimulationParameters`.
 
@@ -119,7 +128,9 @@ class SimulationParameters:
             cache_directories: Ordered cache directories, read in order and written to the
                 first writable one, for a container that maps a read-only seed directory and a writable
                 one in (hisim-renovisor-translator-epc.22). Empty (the default) means the single
-                ``cache_dir_path``, exactly as before.
+                ``cache_dir_path``, exactly as before. A single string is one directory, not a
+                sequence of one-letter ones. Every entry has to be absolute; see
+                :meth:`validated_cache_directories`.
             weather_year: The year whose weather the run reads, when it is not the calendar year
                 (``roadmap/weather_year.md``). ``None`` (the default) means today's behaviour: the
                 weather file's rows are laid onto the calendar year by position. ``self.year``
@@ -148,6 +159,7 @@ class SimulationParameters:
             SimulationWindowError: If the window breaks the window contract.
             WeatherYearError: If ``weather_year`` is not a year in range.
             PartLoadThresholdError: If ``part_load_above_seconds`` is not a step length.
+            CacheDirectoriesError: If an entry of ``cache_directories`` is not an absolute path.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
@@ -166,7 +178,7 @@ class SimulationParameters:
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
         self.cache_dir_path = cache_dir_path
-        self.cache_directories: List[str] = list(cache_directories or [])
+        self.cache_directories: List[str] = self.validated_cache_directories(cache_directories)
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
@@ -369,6 +381,39 @@ class SimulationParameters:
         if not first <= weather_year <= last:
             raise WeatherYearError(f"weather_year must lie from {first} to {last}, not {weather_year}.")
         return weather_year
+
+    @classmethod
+    def validated_cache_directories(cls, cache_directories: Optional[Sequence[str]]) -> List[str]:
+        """Returns the cache directories as a list, refusing an entry that is not an absolute path.
+
+        Example: ``"/data/cache"`` gives ``["/data/cache"]``, ``["/seed", "/volume"]`` gives the same
+        two entries, ``None`` gives ``[]``. A single string is one directory: ``list()`` on it would
+        split the path into one-letter directories, which is what a scalar in a
+        ``*.simulation.yaml`` file would otherwise produce.
+
+        Args:
+            cache_directories: The value handed to the constructor: ``None``, one path, or a
+                sequence of paths.
+
+        Returns:
+            The directories, in the given order.
+
+        Raises:
+            CacheDirectoriesError: When an entry is not an absolute path, the empty string included.
+        """
+        if cache_directories is None:
+            return []
+        if isinstance(cache_directories, str):
+            directories = [cache_directories]
+        else:
+            directories = list(cache_directories)
+        relative = [entry for entry in directories if not os.path.isabs(entry)]
+        if relative:
+            raise CacheDirectoriesError(
+                f"cache_directories holds relative path(s) {relative!r}; every cache directory has to be "
+                "absolute, so two workers agree on where the cache is whatever their working directory is"
+            )
+        return directories
 
     def require_lifecycle_costs(self) -> None:
         """Makes a failure of the lifecycle cost engine fail the run instead of being logged.

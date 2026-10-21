@@ -18,7 +18,7 @@ from hisim.caching import CacheClient, CacheKey, CacheSettings
 from hisim.caching.local import CacheEntryMetadata
 from hisim.caching.locations import CacheLocations, CacheLocationsError
 from hisim.renovisor.simulation import SimulationSetup
-from hisim.simulationparameters import SimulationParameters
+from hisim.simulationparameters import CacheDirectoriesError, SimulationParameters
 
 pytestmark = pytest.mark.base
 
@@ -69,6 +69,26 @@ def test_empty_directories_are_refused() -> None:
     """A location list without a directory has nowhere to write, so it is refused."""
     with pytest.raises(ValueError, match="at least one cache directory"):
         CacheLocations([])
+
+
+class TestTheParameterList:
+    """SimulationParameters builds the list: one string is one directory, and every entry is absolute."""
+
+    def test_a_single_string_is_one_directory(self) -> None:
+        """A scalar, as a *.simulation.yaml file may hold it, is not split into one-letter directories."""
+        parameters = SimulationParameters(
+            start_date=datetime.datetime(2019, 1, 1),
+            end_date=datetime.datetime(2019, 1, 2),
+            seconds_per_timestep=3600,
+            cache_directories="/data/cache",
+        )
+
+        assert parameters.cache_directories == ["/data/cache"]
+
+    def test_a_relative_entry_is_refused(self) -> None:
+        """A relative entry would name a different directory per working directory; it is refused by name."""
+        with pytest.raises(CacheDirectoriesError, match="relative/second"):
+            Given.parameters(["/abs/first", "relative/second"])
 
 
 def test_a_new_producer_entry_is_written_to_the_first_directory(tmp_path: pathlib.Path) -> None:
@@ -289,6 +309,21 @@ class TestTheEnvironmentVariable:
 
         with pytest.raises(ValueError, match="absolute"):
             self._parameters(tmp_path)
+
+    @pytest.mark.parametrize("value", [os.pathsep, os.pathsep * 2])
+    def test_a_value_naming_no_directory_is_refused_by_name(
+        self, value: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Separators only filter to an empty list; the variable is named instead of an IndexError."""
+        monkeypatch.setenv(SimulationSetup.CACHE_DIRECTORIES_VARIABLE, value)
+
+        with pytest.raises(ValueError, match=SimulationSetup.CACHE_DIRECTORIES_VARIABLE):
+            self._parameters(tmp_path)
+
+    def test_a_relative_explicit_directory_is_refused(self, tmp_path: pathlib.Path) -> None:
+        """The explicit argument obeys the same rule as the variable: a relative path is refused."""
+        with pytest.raises(ValueError, match="absolute"):
+            self._parameters(tmp_path, cache_directory=pathlib.Path("relative/cache"))
 
     def test_the_manifest_states_the_directories_used(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """calculation.json names the directories, in priority order.

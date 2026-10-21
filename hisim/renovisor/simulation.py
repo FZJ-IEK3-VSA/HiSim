@@ -117,6 +117,7 @@ class SimulationSetup:
                 to, and it is shared state rather than output (decision Q25). Given, it is the
                 single cache directory and ``HISIM_CACHE_DIRECTORIES`` is not consulted; absent,
                 the variable fills the ordered directory list when it is set (hisim-renovisor-translator-epc.22).
+                Either way every cache directory has to be absolute.
             country: The dwelling's country, which selects the legacy fuel-price and emission
                 tables. For a country registered as a placeholder the numbers in them are the
                 sentinel; see the module docstring.
@@ -124,6 +125,10 @@ class SimulationSetup:
         Returns:
             The parameters, with the result directory created, the post-processing options set
             and the lifecycle costs required.
+
+        Raises:
+            ValueError: When ``cache_directory`` is relative, or ``HISIM_CACHE_DIRECTORIES`` holds a
+                relative entry or nothing but separators.
         """
         start = datetime.datetime(cls.YEAR, 1, 1)
         days = period.days
@@ -146,12 +151,22 @@ class SimulationSetup:
         if cache_directory is not None:
             # The explicit argument outranks the environment: a caller that names a directory
             # gets exactly that one, and the variable is not consulted.
+            if not cache_directory.is_absolute():
+                raise ValueError(
+                    f"the cache directory {str(cache_directory)!r} is relative; every cache directory has to be "
+                    "absolute, so two workers agree on where the cache is whatever their working directory is"
+                )
             cache_directory.mkdir(parents=True, exist_ok=True)
             parameters.cache_dir_path = str(cache_directory)
             return parameters
         env_directories = os.environ.get(cls.CACHE_DIRECTORIES_VARIABLE)
         if env_directories:
             directories = [entry for entry in env_directories.split(os.pathsep) if entry]
+            if not directories:
+                raise ValueError(
+                    f"{cls.CACHE_DIRECTORIES_VARIABLE} is {env_directories!r}, which names no directory; "
+                    "unset it to use the default cache directory, or list at least one absolute path"
+                )
             relative = [entry for entry in directories if not os.path.isabs(entry)]
             if relative:
                 raise ValueError(

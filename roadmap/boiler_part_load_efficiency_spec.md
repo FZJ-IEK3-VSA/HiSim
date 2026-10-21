@@ -29,6 +29,7 @@ efficiency onto the two ends of that line (`eff_th_max = value/100`, `eff_th_min
 | 2026-10-20 | owner | C: a boiler with no installation year, or one from 2000 on, takes current product data (Vitodens for condensing gas, the same row on the GCV for hydrogen; a condensing-oil and a low-temperature datasheet sourced the same way). IWU's decade rows apply only to a stated year before 2000. |
 | 2026-10-21 | owner | Review item A: a condensing boiler stating an `η_s` above its own ceiling (§4.5) passes the request's 97 % check and is refused by its build (RenoVisor exit 5, not 2). Left as it is. |
 | 2026-10-21 | owner | Review item B: a boiler booked on the NCV (every non-condensing one, pellets, wood chips) stating an `η_s` whose scaled curve exceeds 1 on the NCV is refused, by the RenoVisor request check (exit 2, naming the ceiling) and by the build as the backstop. The frontend's 90 % default is then refused for most of them (§4.6). |
+| 2026-10-21 | owner | Review item C: a condensing oil boiler gains 0.0020 per K of return on the GCV (BRE S10TP-12 Fig. 2, oil curve; Viessmann 5811441 as a cross-check), not gas's 0.0030, linear between 30 and 60 °C as for gas (§4.3). The current condensing-oil curve then reaches 0.970 at full load and a 30 °C return instead of 1.000. |
 
 ## 3. Terms
 
@@ -100,9 +101,17 @@ With `β` limited to `[0.3, 1]` and the return `T` to `[30, 60]` °C:
 η(β, T) = η_100 + (η_30 − η_100 − g · 30 K) · (1 − β) / 0.7 + g · (60 °C − T)
 ```
 
-- `g` = 0.0030 per kelvin on the GCV for a condensing boiler (BRE, SAP 10 Technical Paper S10TP-12 issue 1.2, 2023,
-  §4.5: theoretical maximum gross efficiency 97.3 % at a 30 °C and 88.3 % at a 60 °C return), 0 for the others (the
-  same paper: "typically 1 % or below" for a non-condensing boiler).
+- `g` = 0.0030 per kelvin on the GCV for a condensing gas or hydrogen boiler (BRE, SAP 10 Technical Paper S10TP-12
+  issue 1.2, 2023, §4.5: theoretical maximum gross efficiency 97.3 % at a 30 °C and 88.3 % at a 60 °C return; the
+  paper's Fig. 2 gas curve, 96.82 % and 87.54 %, gives 0.0031), 0.0020 for a condensing oil boiler (the same paper,
+  Fig. 2 p. 18, oil curve 96.74 % at a 30 °C and 90.83 % at a 60 °C return, GCV, read off the figure's vector data;
+  owner decision C of 2026-10-21), 0 for the others (the same paper: "typically 1 % or below" for a non-condensing
+  boiler). Oil gains less because its flue gas carries less water vapour (latent heat about 6.2 % of its GCV against
+  9.8 % for natural gas; 0.0030 · 6.2 / 9.8 = 0.0019). Cross-check: Viessmann Planungsanleitung Vitorondens 200-T /
+  Vitoladens 300-C / 300-T, document 5811441 DE (4/2025): the rated heat output at 50/30 °C and at 80/60 °C for the
+  same rated heat input (NCV) gives 0.0022 per K on the GCV, 0.0018 to 0.0023 over 18 ratings. Both fuels are kept
+  linear between the two test returns; Fig. 2 bends at the dew point (oil about 46 °C, gas about 52 °C), so the line
+  lies up to 2 points above the figure between them.
 - The curve passes through both test points. Below 30 % load it keeps the 30 % value (no lower test point; cycling
   losses are hisim-3y10). Outside the two test returns the gain stays constant.
 - Worked example, current gas condensing at half load and a 40 °C return:
@@ -133,14 +142,15 @@ rounded down to a hundredth:
 | Boiler (no installation year) | Booked on | Ceiling `η_s` |
 |---|---|---|
 | Gas or hydrogen condensing | GCV | 95.45 % |
-| Oil condensing | GCV | 93.52 % (full load at a 30 °C return reaches 1.000 first, §4.3) |
+| Oil condensing | GCV | 96.00 % (93.52 % with gas's gain, when full load at a 30 °C return reached 1.000 first) |
 | Gas conventional | NCV | 86.82 % |
 | Oil conventional | NCV | 90.49 % |
 | Pellets | NCV | 86.78 % |
 | Wood chips | NCV | 86.23 % |
 
 The IWU rows: conventional gas 1990s 87.14 %, 1980s 86.26 to 86.30 %, 1970s 82.53 to 82.73 %; conventional oil
-1990s 90.83 %, 1980s 89.91 to 89.95 %, 1970s 85.97 to 86.19 %, each from 1 kW to 400 kW. Eq. 2-1 adds the same
+1990s 90.83 %, 1980s 89.91 to 89.95 %, 1970s 85.97 to 86.19 %; condensing oil 1990s 94.77 to 94.86 %, 1980s and
+1970s 94.70 to 94.79 %; each from 1 kW to 400 kW. Eq. 2-1 adds the same
 correction to both points of a row, so where the two differ the ceiling rises with the size.
 
 F(1) = 3 % is the correction for temperature controls (Commission communication 2014/C 207/02, point 4.4(a), for

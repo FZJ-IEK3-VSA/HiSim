@@ -124,6 +124,23 @@ def test_a_condensing_boiler_gains_with_a_colder_return_and_a_conventional_one_d
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("installation_year", [None, 1995, 1985])
+def test_a_condensing_oil_boiler_gains_0_20_points_per_kelvin_on_the_gross_value(
+    installation_year: Optional[int],
+) -> None:
+    """BRE S10TP-12 Fig. 2, oil curve: 96.74 % at a 30 °C and 90.83 % at a 60 °C return (GCV), 0.0020 per K.
+
+    Owner decision C of 2026-10-21: oil's flue gas carries less water vapour than natural gas's, so it gains less
+    than gas's 0.0030. The current GB125 curve therefore reaches 0.970 at full load on a 30 °C return, not 1.000.
+    """
+    curve = curve_of(lt.LoadTypes.OIL, BoilerType.CONDENSING, installation_year)
+
+    assert curve.efficiency_at(1.0, 30.0) - curve.efficiency_at(1.0, 60.0) == pytest.approx(30 * 0.0020, rel=1e-12)
+    if installation_year is None:
+        assert curve.efficiency_at(1.0, 30.0) == pytest.approx(0.970, rel=1e-12)
+
+
+@pytest.mark.base
 def test_below_30_percent_load_the_burner_keeps_its_30_percent_value() -> None:
     """The standards measure no lower point; cycling losses below it are not modelled (hisim-3y10)."""
     curve = curve_of(lt.LoadTypes.PELLETS, BoilerType.CONVENTIONAL, None)
@@ -210,8 +227,9 @@ def test_a_seasonal_efficiency_that_lifts_the_curve_above_1_on_the_gross_value_i
 CURRENT_CEILINGS: Tuple[Tuple[lt.LoadTypes, BoilerType, float], ...] = (
     # Vitodens, GCV: the 30 % point at the 30 °C return is the highest
     (lt.LoadTypes.GAS, BoilerType.CONDENSING, (0.85 * 0.978 + 0.15 * 0.877) / 0.978 - 0.03),
-    # Logano plus GB125, GCV: full load at the 30 °C return, 0.910 + 0.0030 * 30 = 1.000, is the highest
-    (lt.LoadTypes.OIL, BoilerType.CONDENSING, (0.85 * 0.975 + 0.15 * 0.910) / (0.910 + 0.0030 * 30) - 0.03),
+    # Logano plus GB125, GCV, oil's gain 0.0020 (BRE S10TP-12 Fig. 2): full load at the 30 °C return is
+    # 0.910 + 0.0020 * 30 = 0.970, so the 30 % point, 0.975, is the highest; 0.9600
+    (lt.LoadTypes.OIL, BoilerType.CONDENSING, (0.85 * 0.975 + 0.15 * 0.910) / 0.975 - 0.03),
     # Logano G125, NCV: 0.8682 for gas, 0.9050 for oil
     (lt.LoadTypes.GAS, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.GAS) - 0.03),
     (lt.LoadTypes.OIL, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.OIL) - 0.03),

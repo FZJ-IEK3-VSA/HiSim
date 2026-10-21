@@ -544,16 +544,17 @@ class CombustionEfficiencyCurve:
     fuel is booked on (:meth:`CalorificBasis.of_booking`). The load ratio ``beta`` is the burner (fuel) power over the
     maximal burner power. The curve passes through the two test points: ``eta_100`` at full load and the 60 °C test
     return, ``eta_30`` at 30 % load and the 30 °C test return. Between them it is linear in load, and a condensing
-    boiler gains ``g`` per kelvin its return is below 60 °C (BRE, SAP 10 Technical Paper S10TP-12 issue 1.2, 2023,
-    §4.5: 0.30 percentage points per kelvin on the GCV):
+    boiler gains ``g`` per kelvin its return is below 60 °C (BRE, SAP 10 Technical Paper S10TP-12 issue 1.2, 2023:
+    0.30 percentage points per kelvin on the GCV for gas, §4.5, and 0.20 for oil, Fig. 2):
 
     ``eta(beta, T) = eta_100 + (eta_30 - eta_100 - g (60 - 30)) (1 - beta) / 0.7 + g (60 - T)``
 
     with ``beta`` limited to ``[0.3, 1]`` and ``T`` to ``[30, 60]`` °C. Below 30 % load the burner keeps its 30 %
     value: the standards measure no lower point, and cycling losses are not modelled. Outside the two test returns
-    the condensing gain stays constant: above 60 °C natural gas condenses almost nothing (dew point about 55 °C), and
-    below 30 °C both standards are silent. For example, the Vitodens curve (0.877, 0.978, g = 0.0030) gives
-    ``0.877 + (0.978 - 0.877 - 0.09) * 0.5 / 0.7 + 0.0030 * 20 = 0.945`` at half load and a 40 °C return.
+    the condensing gain stays constant: above 60 °C natural gas condenses almost nothing (dew point about 55 °C, oil
+    about 47 °C), and below 30 °C both standards are silent. For example, the Vitodens curve (0.877, 0.978,
+    g = 0.0030) gives ``0.877 + (0.978 - 0.877 - 0.09) * 0.5 / 0.7 + 0.0030 * 20 = 0.945`` at half load and a 40 °C
+    return.
     """
 
     #: The return temperature of the full-load test point, in °C: 813/2013, Annex II, Table 1, footnote (80/60 °C).
@@ -677,21 +678,32 @@ class BoilerEfficiencySources:
     decade. A condensing boiler has no 1970s row and takes the 1980s one.
     """
 
-    #: ``g`` of a condensing boiler on the GCV, per K of return below 60 °C: BRE, SAP 10 Technical Paper S10TP-12
-    #: issue 1.2 (2023), §4.5, theoretical maximum gross efficiency of a gas condensing boiler 97.3 % at a 30 °C and
-    #: 88.3 % at a 60 °C return, 9.0 points over 30 K.
-    CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN: ClassVar[float] = 0.0030
+    #: ``g`` of a condensing gas (and hydrogen) boiler on the GCV, per K of return below 60 °C: BRE, SAP 10 Technical
+    #: Paper S10TP-12 issue 1.2 (2023), §4.5, theoretical maximum gross efficiency of a gas condensing boiler 97.3 %
+    #: at a 30 °C and 88.3 % at a 60 °C return, 9.0 points over 30 K. The paper's Fig. 2 gas curve gives the same,
+    #: 96.82 % and 87.54 %, 0.0031 per K.
+    CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN: ClassVar[float] = 0.0030
+    #: ``g`` of a condensing oil boiler on the GCV, per K of return below 60 °C: BRE, SAP 10 Technical Paper
+    #: S10TP-12 issue 1.2 (2023), §4.1, Fig. 2 "Boiler efficiency - return water temperature relationship by fuel"
+    #: (p. 18), oil curve 96.74 % at a 30 °C and 90.83 % at a 60 °C return (GCV, read off the figure's vector data),
+    #: 5.9 points over 30 K, 0.00197 per K; linear between the two returns as for gas. Oil gains less than gas because
+    #: its flue gas carries less water vapour: the latent heat is about 6.2 % of its GCV against 9.8 % for natural
+    #: gas, and 0.0030 * 6.2 / 9.8 = 0.0019. Cross-check: Viessmann, Planungsanleitung Vitorondens 200-T /
+    #: Vitoladens 300-C / Vitoladens 300-T, document 5811441 DE (4/2025), technical data: the rated heat output at
+    #: 50/30 °C and at 80/60 °C for the same rated heat input gives 0.0022 per K (0.0018 to 0.0023 over 18 ratings).
+    #: Owner decision C of 2026-10-21.
+    CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN: ClassVar[float] = 0.0020
 
     #: Current condensing gas boiler: Viessmann Vitodens 200-W B2HF-11 (10 kW), product fiche to (EU) 811/2013 and
     #: 813/2013, document 5593552-01: eta_4 = 87.7 % (full load, 80/60 °C), eta_1 = 97.8 % (30 % load, 30 °C
     #: return), GCV.
     VITODENS_200W_B2HF_11: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.877, 0.978, CalorificBasis.GROSS, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN
+        0.877, 0.978, CalorificBasis.GROSS, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN
     )
     #: Current condensing oil boiler: Buderus Logano plus GB125-22 (22 kW, article 7736604146), product fiche to
     #: (EU) 811/2013 and 813/2013, document 6721825297 (2020/10): eta_4 = 91.0 %, eta_1 = 97.5 %, GCV.
     LOGANO_PLUS_GB125_22: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.910, 0.975, CalorificBasis.GROSS, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN
+        0.910, 0.975, CalorificBasis.GROSS, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN
     )
     #: Current conventional (low-temperature) boiler: Buderus Logano G125-21 (21 kW oil low-temperature boiler),
     #: Planungsunterlage Logano G125 (Ausgabe 08/2004), section 1.4, "Kennwerte zur Ermittlung der
@@ -710,20 +722,20 @@ class BoilerEfficiencySources:
     #: IWU 2002, "Gas-Niedertemperatur-/Brennwertkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3
     #: "Gas-Brennwertkessel" eta_30% = 0.97 at 30 °C; NCV, 20 kW.
     IWU_GAS_CONDENSING_1980S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.89, 0.97, CalorificBasis.NET, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.89, 0.97, CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, the same rows, 90er Jahre: Tab. 2 eta_k,70 = 0.92, Tab. 3 eta_30% = 1.01; NCV, 20 kW.
     IWU_GAS_CONDENSING_1990S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.92, 1.01, CalorificBasis.NET, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.92, 1.01, CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, "Oel-Niedertemperaturkessel/Brennwertkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3
     #: "Oel-Brennwertkessel" eta_30% = 0.94 at 30 °C; NCV, 20 kW.
     IWU_OIL_CONDENSING_1980S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.89, 0.94, CalorificBasis.NET, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.89, 0.94, CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, the same rows, 90er Jahre: Tab. 2 eta_k,70 = 0.92, Tab. 3 eta_30% = 0.97; NCV, 20 kW.
     IWU_OIL_CONDENSING_1990S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.92, 0.97, CalorificBasis.NET, CONDENSING_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.92, 0.97, CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, "Gas-/Oel-Niedertemperaturkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3 eta_30% = 0.88 at
     #: 40 °C; NCV, 20 kW (the gas and the oil rows are equal).

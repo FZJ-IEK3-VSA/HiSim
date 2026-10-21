@@ -256,7 +256,10 @@ Recording is deterministic: the same setup and the same parameters produce the s
 machine. A twin is therefore regenerated rather than edited — change the setup, re-record, and read
 the diff. `python scripts/record_all_setups.py --check` re-records every setup into a throwaway
 directory and fails on any difference, which is what the `energy-system-freshness` workflow runs on
-every pull request, so a setup cannot change without its twin.
+every pull request, so a setup cannot change without its twin. A setup with a committed
+`<setup>.grouping.yaml` has its grouped twin re-recorded and compared the same way, through
+`hisim energy-system record --grouping` (see "Groups and variants" below), so a change that moves a
+grouped twin, or that the grouping pass can no longer reproduce, fails the same job.
 
 There is no skip list. A setup that cannot be recorded is a defect in the setup or a gap in the
 format, and the driver names every one it could not record and exits non-zero. Every setup in the

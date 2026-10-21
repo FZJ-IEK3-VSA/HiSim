@@ -149,6 +149,9 @@ class PVSystem(cp.PhysicsComponent):
         self.pvconfig = config
         self.ac_power_ratios_for_all_timesteps_output: List = []
         self.solar_power_ratios_for_all_timesteps: List[float] = []
+        #: The array's peak power in W, the configured ``power_in_watt``, resolved once in
+        #: ``i_prepare_simulation`` so that ``i_simulate`` only multiplies.
+        self.peak_power_in_watt: float
         self.coordinates: Any
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -450,10 +453,8 @@ class PVSystem(cp.PhysicsComponent):
         the prediction horizon is additionally published to the dynamic
         simulation repository for the controller to consume.
         """
-        ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt
-        solar_power_in_watt: float = self.solar_power_ratios_for_all_timesteps[timestep] * concrete(
-            self.pvconfig.power_in_watt
-        )
+        ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.peak_power_in_watt
+        solar_power_in_watt = self.solar_power_ratios_for_all_timesteps[timestep] * self.peak_power_in_watt
 
         stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
         stsv.set_output_value(self.solar_power_on_modules_channel, solar_power_in_watt)
@@ -470,7 +471,7 @@ class PVSystem(cp.PhysicsComponent):
             if last_forecast_timestep > len(self.ac_power_ratios_for_all_timesteps_output):
                 last_forecast_timestep = len(self.ac_power_ratios_for_all_timesteps_output)
             pvforecast = [
-                self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t] * self.peak_power_in_watt
                 for t in range(timestep, last_forecast_timestep)
             ]
             self.simulation_repository.set_dynamic_entry(
@@ -511,7 +512,11 @@ class PVSystem(cp.PhysicsComponent):
         configuration JSON, and it carries the weather's key by reference, so an
         edit to either calculation -- or to a weather file, or to a module
         database -- files the series somewhere else by itself.
+
+        The configured peak power is resolved here once, as ``peak_power_in_watt``, which every
+        step multiplies the two ratios with.
         """
+        self.peak_power_in_watt = float(concrete(self.pvconfig.power_in_watt))
         calculation_inputs = self.build_calculation_inputs()
         entry = self.cache_entry(calculation_inputs)
 

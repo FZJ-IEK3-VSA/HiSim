@@ -672,25 +672,30 @@ def test_the_losses_are_the_differences_of_the_three_published_numbers(
     stored_energy_increase_in_watt_hour: float,
     expected: Tuple[float, float],
 ) -> None:
-    """Inverter loss is AC minus DC, cell loss DC minus the stored increase per second; the battery then closes.
+    """Catches a sign or a unit error between the battery's AC, DC and stored-energy outputs in its two losses.
 
-    Catches: a sign or a unit error between the AC, DC and stored-energy outputs, which the energy balance would
-    report as a battery that does not close.
+    The inverter loss is the AC power minus the DC power, the cell loss the DC power minus the stored energy's
+    increase divided by the step's duration; with both, the battery's balance closes in W. An error would show in the
+    energy balance as a battery that does not close.
     """
-    inverter_loss, cell_loss = advanced_battery_bslib.Battery.losses_in_watt(
+    seconds_per_timestep = 3600.0
+    inverter_loss_in_watt, cell_loss_in_watt = advanced_battery_bslib.Battery.losses_in_watt(
         ac_power_in_watt=ac_power_in_watt,
         dc_power_in_watt=dc_power_in_watt,
         stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
-        seconds_per_timestep=3600.0,
+        seconds_per_timestep=seconds_per_timestep,
     )
-    assert (inverter_loss, cell_loss) == pytest.approx(expected)
-    charging, discharging = max(ac_power_in_watt, 0.0), max(-ac_power_in_watt, 0.0)
-    residual_in_watt = charging - discharging - inverter_loss - cell_loss - stored_energy_increase_in_watt_hour
+    assert (inverter_loss_in_watt, cell_loss_in_watt) == pytest.approx(expected)
+    charging_in_watt, discharging_in_watt = max(ac_power_in_watt, 0.0), max(-ac_power_in_watt, 0.0)
+    stored_energy_increase_in_watt = stored_energy_increase_in_watt_hour * 3600.0 / seconds_per_timestep
+    residual_in_watt = (
+        charging_in_watt - discharging_in_watt - inverter_loss_in_watt - cell_loss_in_watt - stored_energy_increase_in_watt
+    )
     assert residual_in_watt == pytest.approx(0.0)
-    quarter_hour = advanced_battery_bslib.Battery.losses_in_watt(
+    quarter_hour_losses_in_watt = advanced_battery_bslib.Battery.losses_in_watt(
         ac_power_in_watt=ac_power_in_watt,
         dc_power_in_watt=dc_power_in_watt,
         stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour / 4.0,
         seconds_per_timestep=900.0,
     )
-    assert quarter_hour == pytest.approx(expected)
+    assert quarter_hour_losses_in_watt == pytest.approx(expected)

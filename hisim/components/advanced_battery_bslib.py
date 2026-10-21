@@ -287,7 +287,8 @@ class Battery(PhysicsComponent):
     StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
     #: The inverter's loss over the step, in W: the AC power minus the DC power.
     InverterLossInWatt = "InverterLossInWatt"
-    #: The cells' loss over the step, in W: the DC power minus the increase of the stored energy per second.
+    #: The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the step's
+    #: duration.
     CellLossInWatt = "CellLossInWatt"
 
     def __init__(
@@ -452,8 +453,8 @@ class Battery(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=(
-                "The cells' loss over the step, in W: the DC power minus the increase of the stored energy divided by "
-                "the step's duration."
+                "The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the "
+                "step's duration."
             ),
             energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
@@ -559,8 +560,8 @@ class Battery(PhysicsComponent):
     ) -> Tuple[float, float]:
         """Return the inverter's and the cells' loss of one step from the three numbers bslib publishes, in W.
 
-        The inverter loss is the AC power minus the DC power and the cell loss the DC power minus the increase of
-        the stored energy per second (complete Sankey spec, §5.3). Charging and discharging power, both losses and
+        The inverter loss is the AC power minus the DC power and the cell loss the DC power minus the stored
+        energy's increase divided by the step's duration (complete Sankey spec, §5.3). Charging and discharging power, both losses and
         the stored change then close the battery's balance by construction, so the balance check proves that the
         published flows agree with each other in sign and unit. For example, a step of one hour charging with
         1000 W AC, 950 W DC and 930 Wh more in the cells loses 50 W in the inverter and 20 W in the cells; one

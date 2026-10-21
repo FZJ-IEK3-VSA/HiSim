@@ -510,6 +510,27 @@ def test_the_solar_power_column_is_the_irradiance_on_the_modules_per_watt_peak()
 
 
 @pytest.mark.base
+def test_a_sandia_module_has_its_database_area_and_its_mpp_current_times_voltage_as_peak_power() -> None:
+    """A Sandia module's area is its ``Area`` column and its peak power its ``Impo`` times its ``Vmpo``.
+
+    The Sandia row "Hanwha HSL60P6-PA-4-250T [2013]" states 1.65 m², 8.0822 A and 29.2011 V, so 236.01 W (not
+    the 250 W of its name). Catches: the Sandia branch reading other columns than the performance model divides
+    by, which would give the solar power column a different denominator than the AC power column.
+    """
+    from hisim import utils  # pylint: disable=import-outside-toplevel
+
+    inputs = calculation_inputs(
+        module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+        module_database_path=str(utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]),
+    )
+    module = pv_calculation.read_module(inputs)
+    area_in_square_meter, peak_power_in_watt = pv_calculation.module_area_and_peak_power(inputs, module)
+    assert area_in_square_meter == 1.65
+    assert peak_power_in_watt == pytest.approx(236.01, abs=0.005)
+
+
+@pytest.mark.base
 def test_the_ac_power_column_is_unchanged_and_below_the_solar_power() -> None:
     """The AC power ratio is the performance model's own, and the modules convert 15 to 25 % of the sun at noon.
 

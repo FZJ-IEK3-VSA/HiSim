@@ -97,11 +97,12 @@ class AssemblyDescription:
         elif port.kind == PortKind.CIRCUIT:
             text = f"circuit {port.circuit} end at {', '.join(port.members)}"
         elif port.kind == PortKind.CARRIER:
-            text = f"carrier {port.carrier}: " + (
-                f"consumes {', '.join(port.outputs)}"
-                if port.outputs
-                else f"provided, metered by {port.meter or 'none'}"
-            )
+            if port.is_provision:
+                text = f"carrier {port.carrier}: provided, metered by {port.meter or 'none'}"
+            elif port.outputs:
+                text = f"carrier {port.carrier}: consumes {', '.join(port.outputs)}"
+            else:
+                text = f"carrier {port.carrier}: needs the {port.carrier} connection"
         elif port.kind == PortKind.FACT:
             text = f"fact {port.fact} " + (
                 f"from {port.members[0]}"

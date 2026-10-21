@@ -538,6 +538,24 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
 
 
 @pytest.mark.assemblies
+def test_describe_prints_a_carrier_need_without_outputs_as_a_need(capsys: pytest.CaptureFixture) -> None:
+    """Catches ``describe`` printing a carrier need that names no consuming outputs as a provision.
+
+    The energy manager's ``grid`` port is an electricity need with no outputs: its balance is a controller's
+    sum, not an energy port. A carrier port's text follows ``Port.is_provision``, so this need reads as the
+    connection it needs and never as "provided, metered by none". The test reads only the assembly file.
+    """
+    assert cli.main(["energy-system", "describe", "control/ems_self_consumption"]) == 0
+    out = capsys.readouterr().out
+    line = (
+        "needs: grid             carrier electricity: needs the electricity connection; "
+        "optional (bind:, optional-bind: or none:)"
+    )
+    assert line in out, f"{line!r} is not in:\n{out}"
+    assert "provided, metered by none" not in out, out
+
+
+@pytest.mark.assemblies
 def test_facts_lists_an_imports_parameters_and_selected_variants_as_knobs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:

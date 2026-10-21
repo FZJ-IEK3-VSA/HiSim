@@ -243,4 +243,5 @@ def building_to_dict(building: BuildingDescription) -> Dict[str, Any]:
         ],
         "windows": [dataclasses.asdict(window) for window in building.windows],
         "thermal_bridging_surcharge_in_watt_per_m2_per_kelvin": building.thermal_bridging_surcharge_used_by_hisim,
+        **({} if building.hot_water is None else {"hot_water": dataclasses.asdict(building.hot_water)}),
     }

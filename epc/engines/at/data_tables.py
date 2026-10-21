@@ -7,8 +7,9 @@ source of that contract (I-6). A missing file is refused with ``E-11``, a wrong 
 ``E-12``, a malformed header, cell, key or band with ``E-19``, each naming the file.
 
 This module reads the two non-climate tables itself, the usage profiles of B 8110-5 Tab. 7 and 9 and
-the temperature-correction factors of B 8110-6-1 Tab. 3–5, and assembles :class:`AustrianTables` with the
-SHA-256 of every file, which a result repeats under ``provenance.tables``. The dwelling-unit classes
+the temperature-correction factors of B 8110-6-1 Tab. 3–5, takes the tables of the recoverable
+hot-water losses from :mod:`epc.engines.at.hot_water_tables`, and assembles :class:`AustrianTables` with
+the SHA-256 of every file, which a result repeats under ``provenance.tables``. The dwelling-unit classes
 are read from their labels; nothing here knows a value of a table.
 """
 
@@ -22,7 +23,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Dict, Mapping, Optional, Tuple
 
-from epc.engines.at import climate_tables
+from epc.engines.at import climate_tables, hot_water_tables
 from epc.engines.at import table_reading as reading
 from epc.engines.at.climate_tables import (
     RADIATION_COEFFICIENTS_FILE,
@@ -34,6 +35,7 @@ from epc.engines.at.climate_tables import (
     TemperatureCoefficients,
     TranspositionBand,
 )
+from epc.engines.at.hot_water_tables import HOT_WATER_FILE, OPERATION_FILE, Operation
 
 #: The folder the engine reads by default: ``epc/data/at``.
 DEFAULT_DATA_FOLDER = Path(__file__).resolve().parents[2] / "data" / "at"
@@ -52,6 +54,8 @@ TABLE_FILES: Tuple[str, ...] = (
     TRANSPOSITION_FACTORS_FILE,
     USAGE_PROFILES_FILE,
     TEMPERATURE_CORRECTION_FACTORS_FILE,
+    HOT_WATER_FILE,
+    OPERATION_FILE,
 )
 
 USAGE_CLASSES = 3
@@ -109,6 +113,8 @@ class AustrianTables:
     transposition_bands: Tuple[TranspositionBand, ...]
     usage_profiles: Tuple[UsageProfileRow, ...]
     temperature_correction_factors: Mapping[str, TemperatureCorrectionFactor]
+    hot_water: Mapping[str, float]
+    operation: Mapping[str, Operation]
     digests: Mapping[str, str]
 
 
@@ -125,13 +131,20 @@ def load_tables(data_folder: Path = DEFAULT_DATA_FOLDER) -> AustrianTables:
         EpcError: ``E-11`` for a missing file, ``E-12`` for a wrong row count, ``E-19`` for anything malformed.
     """
     folder = Path(data_folder)
+    reference_climate = climate_tables.load_reference_climate(folder)
+    temperature_coefficients = climate_tables.load_temperature_coefficients(folder)
+    radiation_coefficients = climate_tables.load_radiation_coefficients(folder)
+    transposition_bands = climate_tables.load_transposition_factors(folder)
+    profiles = _load_usage_profiles(folder)
     tables = AustrianTables(
-        reference_climate=climate_tables.load_reference_climate(folder),
-        temperature_coefficients=climate_tables.load_temperature_coefficients(folder),
-        radiation_coefficients=climate_tables.load_radiation_coefficients(folder),
-        transposition_bands=climate_tables.load_transposition_factors(folder),
-        usage_profiles=_load_usage_profiles(folder),
+        reference_climate=reference_climate,
+        temperature_coefficients=temperature_coefficients,
+        radiation_coefficients=radiation_coefficients,
+        transposition_bands=transposition_bands,
+        usage_profiles=profiles,
         temperature_correction_factors=_load_temperature_correction_factors(folder),
+        hot_water=hot_water_tables.load_hot_water(folder),
+        operation=hot_water_tables.load_operation(folder, tuple(profile.label for profile in profiles)),
         digests=MappingProxyType({}),
     )
     digests = {file: f"sha256:{hashlib.sha256((folder / file).read_bytes()).hexdigest()}" for file in TABLE_FILES}

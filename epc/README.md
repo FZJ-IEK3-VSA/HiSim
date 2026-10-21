@@ -47,7 +47,7 @@ editions and whether their tables load (`ready`, or the error id of the missing 
 The run path is the run directory relative to the results root. A batch writes only into an output
 directory that is new or empty, and records a refused run in the summary and continues.
 
-Every refusal carries an id (`E-01` … `E-19`) and names what is missing; the ids and messages are in
+Every refusal carries an id (`E-01` … `E-20`) and names what is missing; the ids and messages are in
 `model/errors.py` (design §8).
 
 ## Where everything is
@@ -113,18 +113,20 @@ Climate basis `reference+site`; the site block must state `climate_region` and `
 | Key | Unit | Meaning |
 |---|---|---|
 | `heating_demand_reference_climate` | kWh/(m2 a) | HWB_RK, per BGF |
-| `heating_demand_site_climate` | kWh/(m2 a) | HWB_SK, per BGF; stage 1 without recoverable hot-water losses |
+| `heating_demand_site_climate` | kWh/(m2 a) | HWB_SK, per BGF; heating days with the recoverable hot-water losses Q_TW,beh (H 5056-1 Eq. (15), (51)) |
 | `indicator_reference_area` | m2 | BGF = conditioned floor area / 0.8 |
 | `heating_degree_days_22_14_site_climate` | Kd | HGT 22/14 of the site, B 8110-5 Eq. (4) with the days of each month |
 | `mean_u_value`, `characteristic_length`, `lek_t` | W/(m2 K), m, 1 | U_m, ℓ_c, LEK_T |
 | `heating_days_reference_climate`, `heating_days_site_climate` | d | days of the heating period |
 
 Annual terms: the conductances, envelope area, gross volume, thermal capacity, time constant, the
-utilisation parameter, internal gains, and per climate the transmission and ventilation losses, the
+utilisation parameter, internal gains, the recoverable hot-water losses Q_TW,beh and the heat flow of the
+hot-water pipes in the conditioned area, and per climate the transmission and ventilation losses, the
 solar gains and the heating demand. Monthly series per climate: heating demand, losses, gains, heating
-share and outdoor temperature. Assumptions: gross floor area, gross volume (when the record states
-none), construction from HiSim's heat capacity class, glass share (for windows without a stated glass
-area), shading factor, thermal bridges,
-ventilation, and the Tab. 4 row of every element against an unconditioned space. An element whose
-description states its temperature-correction factor (a hand-written description of a certificate)
-takes that factor, with no row and no assumption.
+share and outdoor temperature; and Q_TW,beh. Assumptions: gross floor area, gross volume (when the record
+states none), construction from HiSim's heat capacity class, glass share (for windows without a stated
+glass area), shading factor, thermal bridges, ventilation, the hot-water system (when the description
+states none: the OIB default system), and the Tab. 4 row of every element against an unconditioned
+space. An element whose description states its temperature-correction factor (a hand-written
+description of a certificate) takes that factor, with no row and no assumption. A hot-water storage, an
+uninsulated pipe or circulation in the conditioned area are refused with `E-20` (not computed yet).

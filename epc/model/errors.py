@@ -9,9 +9,10 @@ raised it.
 The ids ``E-01`` … ``E-17`` and their templates are those of ``roadmap/epc/design.md`` §8, held here
 once so that a message cannot drift between the places that raise it. ``E-18`` adds the value checks
 of the building description, which §5.2 states without an id of its own, and ``E-19`` a data table
-that is present but malformed (a cell, a key, a band), beside ``E-12`` for a wrong row count. The
-engine ids (``E-09`` … ``E-14``, ``E-19``) are listed although no registered engine raises them yet,
-so that the catalogue lives in one place.
+that is present but malformed (a cell, a key, a band), beside ``E-12`` for a wrong row count, and
+``E-20`` a case an engine does not compute yet, naming why, instead of computing it by a guess. The
+engine ids (``E-09`` … ``E-14``, ``E-19``, ``E-20``) are listed although no registered engine raises them
+yet, so that the catalogue lives in one place.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ class EpcErrorKind(enum.Enum):
     NO_COMMON_CORE = "E-17"
     VALUE_NOT_ADMISSIBLE = "E-18"
     TABLE_MALFORMED = "E-19"
+    NOT_COMPUTED_YET = "E-20"
 
 
 #: The message template of every id; the placeholders are filled by the raising call.
@@ -97,6 +99,7 @@ MESSAGES: Dict[EpcErrorKind, str] = {
     EpcErrorKind.NO_COMMON_CORE: "Engine '{cc}' returned no '{key}'; every engine fills {COMMON_CORE}.",
     EpcErrorKind.VALUE_NOT_ADMISSIBLE: "Building '{name}': '{field}' = {value} is not admissible ({rule}).",
     EpcErrorKind.TABLE_MALFORMED: "{file}, line {line}: {problem}.",
+    EpcErrorKind.NOT_COMPUTED_YET: "Building '{name}': {what} is not computed by the {cc} engine yet ({reason}).",
 }
 
 

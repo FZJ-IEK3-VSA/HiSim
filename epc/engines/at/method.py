@@ -3,8 +3,9 @@
 :class:`AustrianEngine` is what the registry hands out for ``AT``. It loads the local tables once
 (``E-11``, ``E-12``, ``E-19``) and computes one building in the order of the norm: the site fields it
 reads (``E-09``, ``E-10``), the reference area and volume (:mod:`~epc.engines.at.defaults`), the usage
-profile, the conductances, the thermal inertia, the gains and the monthly balance under the reference
-and under the site climate, and finally the result keys (:mod:`~epc.engines.at.indicators`). Every norm
+profile, the conductances, the thermal inertia, the gains, the recoverable hot-water losses
+(:mod:`~epc.engines.at.hot_water`) and the monthly balance under the reference and under the site
+climate, and finally the result keys (:mod:`~epc.engines.at.indicators`). Every norm
 default it applies stands in the result's assumptions, and the digests of the tables in its provenance.
 """
 
@@ -14,7 +15,7 @@ import math
 from pathlib import Path
 from typing import ClassVar, Optional, Tuple
 
-from epc.engines.at import balance, climate, defaults, envelope, gains, indicators, usage
+from epc.engines.at import balance, climate, defaults, envelope, gains, hot_water, indicators, usage
 from epc.engines.at.climate_tables import CLIMATE_REGIONS
 from epc.engines.at.data_tables import DEFAULT_DATA_FOLDER, AustrianTables, load_tables
 from epc.model.building import BuildingDescription
@@ -53,7 +54,8 @@ class AustrianEngine:
 
         Raises:
             EpcError: ``E-09``, ``E-10`` for the site; ``E-13`` for a window angle off the grid; ``E-14`` for a
-                reference-climate month without positive losses; ``E-18`` for a building without envelope area.
+                reference-climate month without positive losses; ``E-18`` for a building without envelope area;
+                ``E-20`` for a hot-water system stage 1b does not compute.
         """
         self.load_data()
         tables = self._tables
@@ -70,23 +72,29 @@ class AustrianEngine:
         internal = gains.internal_gains(profile, area.value)
         reference_climate = climate.reference_climate(tables, building.windows)
         site_climate = climate.site_climate(tables, building.windows, region, elevation)
+        system, system_assumption = defaults.hot_water_system(building)
+        recoverable = hot_water.recoverable_losses(
+            tables.hot_water, building, system, tables.operation[profile.dwelling_unit_class],
+            profile.set_temperature_heating_in_c, defaults.REFERENCE_AREA_SHARE * area.value,
+        )
         balances = [
             balance.balance(
                 conductances, inertia, profile.set_temperature_heating_in_c, each,
                 tuple(q_i + q_s for q_i, q_s in zip(internal, gains.solar_gains(collectors, each))),
-                reference=is_reference,
+                reference=is_reference, recoverable=None if is_reference else recoverable.total,
             )
             for each, is_reference in ((reference_climate, True), (site_climate, False))
         ]
         result = EpcResult(building)
         indicators.fill(result, indicators.Computation(
             area.value, volume.value, profile.set_temperature_heating_in_c, conductances, inertia, internal,
-            reference_climate, site_climate, balances[0], balances[1],
+            reference_climate, site_climate, balances[0], balances[1], recoverable,
         ))
         for defaulted in (area, volume, construction, glass, shading):
             if defaulted.assumption is not None:
                 result.assume(defaulted.assumption.key, defaulted.assumption.value, defaulted.assumption.source)
-        for assumption in (defaults.thermal_bridges(), defaults.ventilation()) + conductances.assumptions:
+        stated = (system_assumption,) if system_assumption is not None else ()
+        for assumption in (defaults.thermal_bridges(), defaults.ventilation()) + stated + conductances.assumptions:
             result.assume(assumption.key, assumption.value, assumption.source)
         result.tables.update(tables.digests)
         return result

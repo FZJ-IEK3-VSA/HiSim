@@ -60,11 +60,13 @@ def test_the_engine_fills_the_core_the_site_key_and_its_assumptions(engine: Aust
     assert written["indicators"]["indicator_reference_area"]["value"] == 115.0 / 0.8
     keys = [assumption["key"] for assumption in written["assumptions"]]
     for key in ("gross_floor_area", "gross_volume", "construction", "glass_share", "shading_factor",
-                "thermal_bridges", "ventilation"):
+                "thermal_bridges", "ventilation", "hot_water_system"):
         assert key in keys
     tables = engine._tables  # pylint: disable=protected-access
     assert tables is not None and set(written["provenance"]["tables"]) == set(tables.digests)
-    assert written["indicators"][SITE_CLIMATE_KEY]["note"].startswith("stage 1")
+    assert "Q_TW,beh" in written["indicators"][SITE_CLIMATE_KEY]["note"]
+    assert written["terms"]["annual"]["recoverable_hot_water_losses"]["value"] == sum(
+        written["terms"]["monthly"]["recoverable_hot_water_losses"]["values"])
     for climate in ("reference_climate", "site_climate"):
         demand = written["terms"]["monthly"][f"heating_demand_{climate}"]["values"]
         assert written["terms"]["annual"][f"heating_demand_{climate}"]["value"] == sum(demand)

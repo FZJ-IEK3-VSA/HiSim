@@ -21,7 +21,9 @@ import math
 from dataclasses import dataclass
 from typing import Any, List, Literal, Optional, Tuple
 
+from epc.model import hot_water
 from epc.model.errors import EpcError, EpcErrorKind
+from epc.model.hot_water import HotWaterSystem
 
 ElementName = Literal["floor", "wall", "roof", "window", "door"]
 BuildingType = Literal["detached", "terraced", "multi_family", "apartment_block"]
@@ -156,6 +158,8 @@ class BuildingDescription:
         thermal_bridging_surcharge_used_by_hisim: HiSim's thermal-bridging surcharge, information only.
         site: Where the building stands.
         provenance: Where the description came from.
+        hot_water: The domestic hot-water system, if stated (a certificate prints it); ``None`` lets the
+            engine take its defaults (D45). HiSim's record never states it.
 
     Raises:
         EpcError: ``E-18`` for a value no building can have.
@@ -173,6 +177,7 @@ class BuildingDescription:
     thermal_bridging_surcharge_used_by_hisim: float
     site: Site
     provenance: Provenance
+    hot_water: Optional[HotWaterSystem] = None
 
     def __post_init__(self) -> None:
         """Refuses the values no building can have (I-9)."""
@@ -257,6 +262,8 @@ class BuildingDescription:
                     "a finite number > 0 and at most the window's area, or null",
                 ),
             ]
+        if self.hot_water is not None:
+            checks += hot_water.checks(self.hot_water)
         for field, value, admissible, rule in checks:
             if not admissible:
                 raise EpcError(EpcErrorKind.VALUE_NOT_ADMISSIBLE, name=self.name, field=field, value=value, rule=rule)

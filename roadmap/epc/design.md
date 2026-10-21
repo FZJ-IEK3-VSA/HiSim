@@ -163,13 +163,14 @@ engines follow where it fits them and depart from where their norm is shaped dif
 | File | Responsibility | Austria (pilot) | Ireland (profiled from DEAP 4.2.7) |
 |---|---|---|---|
 | `method.py` | the stages in order, the result assembled; validates the site fields its method reads | AT, 2024-03 package, `reference+site`, reads `climate_region` and `elevation_in_m` | IE, DEAP 4.2.7 (2025-06), `national`, reads no site field |
-| `data_tables.py` | load and cache the CSVs of `epc/data/<cc>/`, completeness checks (I-6), E-11/E-12 | Annex A, B, D, E; Tab. 7/9; Tab. 3–5; the examples | Tab. 1a/1b climate; Tab. 6a–6d windows; Table 8 factors (later) |
+| `data_tables.py` | load and cache the CSVs of `epc/data/<cc>/`, completeness checks (I-6), E-11/E-12 | Annex A, B, D, E; Tab. 7/9; Tab. 3–5; H 5056-1 Tab. 3–10, 15 and B 8110-5 Tab. 4, 5, 8 (stage 1b); the examples | Tab. 1a/1b climate; Tab. 6a–6d windows; Table 8 factors (later) |
 | `defaults.py` | the norm's own defaults for inputs the description does not state, as constants with citations; a use appends an `Assumption` | BGF = BF / 0.8 (Sec. 4); V = BGF × 3.00 m (Eq. (65), D34) when the record states none; thermal bridges Eq. (11a); natural ventilation; the Tab. 3–5 row per situation (D29, D32); construction (D3); glass share 0.7 unless stated (D38); F_S,h | thermal bridging y = 0.15 (App. K); infiltration by structure type (App. S); no chimneys or fans unless stated; living-area fraction; thermal-mass category (Table 11 / S10); overshading "average" (Table 6d) |
 | `climate.py` | monthly outdoor temperatures and irradiation per surface | reference climate as printed; site climate Eq. (1)–(3); grid lookups (D21) | one national table; six orientation bins; horizontal |
 | `usage.py` | set temperature, internal gains basis, air change basis, heating schedule | B 8110-5 Section 8 by dwelling units; θ_i,h of Tab. 7 | occupancy N(TFA); 21/18 °C, 56 h/week; gains per TFA |
 | `envelope.py` | transmission and ventilation conductances, envelope area, mean U | Σ f·A·U over HiSim's elements with f by situation (Tab. 3–5, row from `defaults.py`), Eq. (11a), L_V Eq. (13)–(15), U_m, ℓ_c | Σ A·U with U adjusted by R_u for unheated spaces, + y·A_exposed; ventilation from the effective air change rate (Table 2.2) |
 | `gains.py` | internal and solar gains per month | Eq. (37); A_g stated or Eq. (40) (D38), (43), (44) with F_S,h by units or terraced house | gains from floor area and water heating; 0.9·A·S·g·FF·Z |
-| `balance.py` | losses, utilisation, heating period, monthly heat demand | C, τ, a, η (Eq. 49, 50, 57–59); f_h per H 5050-1 Eq. (9) (RK), f_H per H 5056-1 7.1 (SK), no share where θ_e ≥ θ_i,h (D35); Eq. (52), (53) | mean internal temperature with intermittency and thermal mass; utilisation factor; October–May |
+| `hot_water.py` | recoverable hot-water losses per month (stage 1b) | Q_TW,beh of H 5056-1 Eq. (15): emission Eq. (22), pipes in the conditioned area Eq. (24), (26), stub lines Eq. (28); the system stated or the OIB default (D45, from `defaults.py`); E-20 for what stage 1b does not compute | — |
+| `balance.py` | losses, utilisation, heating period, monthly heat demand | C, τ, a, η (Eq. 49, 50, 57–59); f_h per H 5050-1 Eq. (9) (RK), f_H per H 5056-1 7.1 (SK) with Q_TW,beh in γ_H, Eq. (51) (D44), no share where θ_e ≥ θ_i,h (D35); Eq. (52), (53) | mean internal temperature with intermittency and thermal mass; utilisation factor; October–May |
 | `indicators.py` | the result keys of this engine | HWB_RK, HWB_SK per BGF; L_T, L_V, U_m, ℓ_c, τ; losses and gains per climate; heating days; HGT 22/14 | space heat use per TFA; heat loss coefficient and HLI; later: delivered and primary energy, BER band |
 
 Two rules hold for every engine:
@@ -278,6 +279,7 @@ class Situation(Enum):
 class Element:        name: Literal["floor", "wall", "roof", "window", "door"]; area_in_m2: float
                       u_value_in_watt_per_m2_per_kelvin: float; adjustment_factor_used_by_hisim: float; situation: Situation
                       u_value_origin: str
+                      stated_correction_factor: float | None = None    # stated by hand, a certificate's f (D43)
 @dataclass(frozen=True)
 class Window:         name: str; azimuth_in_degree: float; tilt_in_degree: float; area_in_m2: float; g_value: float
                       frame_factor: float | None; non_perpendicular_factor: float | None; external_shading_factor: float | None
@@ -297,6 +299,7 @@ class BuildingDescription:
     thermal_bridging_surcharge_used_by_hisim: float                 # information only
     site: Site
     provenance: Provenance
+    hot_water: HotWaterSystem | None = None                         # stated by hand (D45); epc/model/hot_water.py
     # __post_init__ refuses with E-18 what D31 lists, and a window element with area but no window
 ```
 
@@ -390,6 +393,8 @@ column names are the single source (I-6); the README states the same numbers.
 | `transposition_factors_b8110_5_2024_annex_e.csv` | Tab. E.1–E.7 |
 | `usage_profiles_b8110_5_2024_tab7_tab9.csv` | residential rows of Tab. 7 and 9 |
 | `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | 14 rows of Tab. 3–5, among them those the situations of §5.2 map to (keys in `epc/data/README.md`) |
+| `hot_water_h5056_1_2024_tab3_15.csv` | H 5056-1 Tab. 3, 4, 6–10, 15: the values of Q_TW,beh (D44) |
+| `operation_b8110_5_2024_tab4_5_8.csv` | B 8110-5 Tab. 4, 5, 8: usage days and daily operating hours of the residential rows |
 | `validation_examples_b8110_6_2_2024.csv` | inputs and expected values of B 8110-6-2 Sections 4 and 5 |
 
 The Irish engine's files are listed in Appendix A.
@@ -468,6 +473,7 @@ error, `batch` records and continues (D18).
 | E-17 | an engine returned no common-core key | `EpcResult.to_dict` | "Engine '{cc}' returned no '{key}'; every engine fills {COMMON_CORE}." |
 | E-18 | a value no building can have (D31); an envelope without area | `model.building`, `at.envelope`, `at.defaults` | "Building '{name}': '{field}' = {value} is not admissible ({rule})." |
 | E-19 | a table malformed: header, cell, key or band | `<cc>.data_tables` | "{file}, line {line}: {problem}." |
+| E-20 | a case the engine does not compute yet (D45: a storage, an uninsulated pipe or circulation in the conditioned area) | `at.hot_water` | "Building '{name}': {what} is not computed by the {cc} engine yet ({reason})." |
 
 HiSim's writer refuses a building with a missing or non-finite value before the run starts and
 writes no partial file; a building type its code does not state is `null`, not an error. Not errors: a window direction with area 0
@@ -488,8 +494,8 @@ when the data are absent; output attached to the PR, R9.3.
 | T-2 | R4.2–R4.4, I-7, I-8 | unit | a result built by hand: duplicate key, eleven values, missing core, assumptions, `to_dict` | shape drift |
 | T-3 | R2.1, R2.4, R6, I-5, AC5, AC7, AC10 | unit | expanded fixture records: a detached house with and without overrides, a record with factor 0.5 on the floor, a record with 0 units, one with windows but no direction, one with factor 0.7, no record, version 2, a missing field | a computed value, a refusal missing or misnamed |
 | T-4 | R6.2, D25 | unit | every (factor, element class) pair of §7.2 | a wrong situation |
-| T-5 | R5.1–R5.13, D-R1, I-1, I-2, I-4, I-10 | unit, hand-computed | one element per situation, one window, a toy twelve-month climate as values; Eq. (11a) lower bound; the four f_h cases; the cellar row (D32); the BGF and V assumptions recorded; E-13, E-14 | a term deviating from its equation |
-| T-6 | R8.6, E-11, E-12, AC11 | unit | `AustrianEngine(data_folder=tmp)` over an empty folder and synthetic incomplete CSVs | a silent default |
+| T-5 | R5.1–R5.13, D-R1, I-1, I-2, I-4, I-10 | unit, hand-computed | one element per situation, one window, a toy twelve-month climate as values; Eq. (11a) lower bound; the four f_h cases; the cellar row (D32); the BGF and V assumptions recorded; E-13, E-14; Q_TW,beh Eq. (15), (22), (26), (28), the default system, E-20, γ_H of Eq. (51) (D44, D45) | a term deviating from its equation |
+| T-6 | R8.6, E-11, E-12, AC11 | unit | `AustrianEngine(data_folder=tmp)` over an empty folder and synthetic incomplete CSVs; the two hot-water tables (D44) | a silent default |
 | T-7 | R3, R10, AC8, I-7 | unit | a dummy engine "ZZ" with and without the core keys; registered, run, reported | the Austrian engine touched; a result without the core accepted |
 | T-8 | R7, R11 | unit | result → JSON; two results → table; refusals → summary | a column lost, a unit missing |
 | T-9 | R2.2, R2.3, R12, AC1 (shape), AC3, AC4, AC9, I-11 | integration | `python -m epc` in a subprocess over a fixture results tree with the dummy engine; country DE; run and batch; refusal paths; non-empty output directory; exit codes | a wrong exit code, a batch that stops |

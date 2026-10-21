@@ -356,9 +356,6 @@ class DistrictHeating(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal power output for space heating",
-            energy_port=EnergyPort(
-                EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputShTemperature
-            ),
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -390,11 +387,6 @@ class DistrictHeating(PhysicsComponent):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
-            energy_port=EnergyPort(
-                EnergyRole.OUT,
-                EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterOutputDhwMassFlowRate,
-            ),
         )
         self.district_heat_drawn_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -415,6 +407,23 @@ class DistrictHeating(PhysicsComponent):
             output_description="Thermal energy output for domestic hot water.",
             energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT),
         )
+        # the heat the substation gives is what its circuits carry (complete Sankey spec §5.1): the space-heating
+        # circuit at the distribution system's flow, which the substation reads, the hot-water circuit at its own
+        self.add_hydronic_port(
+            mass_flow=self.water_input_mass_flow_rate_sh_channel,
+            supply_temperature=self.water_output_temperature_sh_channel,
+            return_temperature=self.water_input_temperature_sh_channel,
+            role=EnergyRole.OUT,
+            carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+        )
+        if self.water_input_temperature_dhw_channel is not None:
+            self.add_hydronic_port(
+                mass_flow=self.water_mass_flow_dhw_output_channel,
+                supply_temperature=self.water_output_temperature_dhw_channel,
+                return_temperature=self.water_input_temperature_dhw_channel,
+                role=EnergyRole.OUT,
+                carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            )
         self.add_default_connections(self.get_default_connections_from_district_heating_controller())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         if self.config.with_domestic_hot_water_preparation:

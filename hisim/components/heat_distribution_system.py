@@ -19,6 +19,7 @@ from hisim.components.heating_curve import EmitterDesign, HeatDistributionSystem
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
+from hisim.energy_port import EnergyPort
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import (
@@ -126,6 +127,14 @@ class HeatDistribution(cp.PhysicsComponent):
 
     It simulates the heat exchange between heat generator and building.
 
+    In the energy balance (complete Sankey spec §5.1, hydronic stage E) the system declares its ports behind a
+    buffer (``PARALLEL``), where it books this step's heat on the buffer's start-of-step temperature: its end of the
+    buffer's circuit (``IN``, a :class:`~hisim.energy_port.HydronicPort`) and the heat it delivers to the building
+    (``ThermalPowerDelivered``, ``OUT``, space-heating heat up to the building's input). Without a buffer it declares
+    none yet: there its outputs lag one step behind its circuit, and the boiler of ``gas_boiler_household`` books a
+    flow of its own on the same circuit, so its balance would not close (beads hisim-pnw7, the pipe water as a
+    start-of-step node, and hisim-boiler-circuit-flow-gap-g2mx, who pumps a circuit without a buffer); until they
+    land it is drawn as undeclared.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -196,6 +205,11 @@ class HeatDistribution(cp.PhysicsComponent):
             self.position_hot_water_storage_in_system in self.POSITIONS_PUMPING_THE_DESIGN_FLOW
         )
         self.refuse_a_design_flow_that_moves_no_water()
+        #: Whether the system declares its energy ports: only behind a buffer, where its outputs are this step's
+        #: (see the class docstring).
+        self.declares_energy_ports: bool = (
+            self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
+        )
 
         self.build()
 
@@ -273,7 +287,16 @@ class HeatDistribution(cp.PhysicsComponent):
             self.ThermalPowerDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
+            output_description=(
+                "Heat the circuit delivers to the building, in W, the mean over the step: positive while it heats, "
+                "negative while it cools. Behind a buffer it is the heat of this step's circuit, m c (T_sup - T_ret); "
+                "without a buffer it lags one step."
+            ),
+            energy_port=(
+                EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT)
+                if self.declares_energy_ports
+                else None
+            ),
         )
         self.water_mass_flow_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -289,6 +312,15 @@ class HeatDistribution(cp.PhysicsComponent):
             ratio_run_output_name=self.PartLoadRatioRun,
             device_description="the heat distribution system's circuit",
         )
+        if self.declares_energy_ports:
+            # its end of the buffer's circuit: its own flow and return, and the buffer's supply it reads
+            self.add_hydronic_port(
+                mass_flow=self.water_mass_flow_channel,
+                supply_temperature=self.water_temperature_input_channel,
+                return_temperature=self.water_temperature_outlet_channel,
+                role=lt.EnergyRole.IN,
+                carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+            )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())

@@ -459,26 +459,26 @@ def setup_function(
         my_occupancy.WaterConsumption,
     )
 
-    # Connect solarthermal as primary heat generator
+    # Connect the solar thermal collector to the secondary coil, the lower solar coil of the cylinder
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterTemperatureFromHeatGenerator,
+        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
         my_solar_thermal_system.component_name,
         my_solar_thermal_system.WaterTemperatureOutput,
     )
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
+        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
         my_solar_thermal_system.component_name,
         my_solar_thermal_system.WaterMassFlowOutput,
     )
 
-    # Connect gas as secondary heat generator
+    # Connect the heat pump to the primary coil
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
+        my_dhw_storage.WaterTemperatureFromHeatGenerator,
         my_heatpump.component_name,
         my_heatpump.TemperatureOutputDHW,
     )
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
+        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
         my_heatpump.component_name,
         my_heatpump.MassFlowOutputDHW,
     )

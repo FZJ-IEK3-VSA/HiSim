@@ -100,11 +100,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - CondensingGasBoiler
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputMassFlowDhw
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputTemperatureDhw
   GasMeter:
     class: hisim.components.gas_meter.GasMeter
     preset: standard

@@ -115,8 +115,8 @@ partners:
         dhw: {circuit: dhw}
 
   SolarCylinder:
-    # The other end of a solar collector's solar_dhw circuit: the cylinder of the solar twins, whose primary coil the
-    # collector charges, and the cylinder the collector's controller reads (a need binds the partner of its class that
+    # The other end of a solar collector's solar_dhw circuit: the cylinder of the solar twins, whose secondary (solar)
+    # coil the collector charges, and the cylinder the collector's controller reads (a need binds the partner of its class that
     # a circuit end of the same assembly already brings, isolation.py). Without a back-up generator: the test day's
     # draws cool it, which the collector's contract does not depend on.
     serves: {circuit: solar_dhw, other_end: [SolarThermalSystem]}

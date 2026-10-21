@@ -1086,7 +1086,9 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    and re-record of `household_heatpump_solar_thermal_building_sizer` (its two heat-pump controllers before the heat
    pump, the heating block contiguous) wait for hydronic stage C (owner, 2026-10-08): D20's coil becomes hydronic
    ports of the cylinder's two coils and the generators' DHW supply, from which the binder derives the wires; no
-   interim mechanism. The planned reorder, measured on the weekly golden after the window solar gains of #876: 55 of
+   interim mechanism. *Since 2026-10-21* (owner decision on hisim-dhw-tank-one-return-7kq2) the cylinder's default
+   connections put the collector on its secondary coil and the generator on its primary coil, each reading its own
+   coil's return, so the twins record both as bare names and the `EF-26` collision is gone. The planned reorder, measured on the weekly golden after the window solar gains of #876: 55 of
    127 KPIs move, 42 of them below 0.5 %; the largest are the degree-hours more than 1 K below the set point, −41 %
    from a small base (0.21 -> 0.12 °C·h), the temperature deviation below 20 °C, −19 %, and the grid injection, −13 %
    from 0.45 kWh (before #876: 58 KPIs, most below 0.2 %, the degree-hours −36 % from 0.28 °C·h).

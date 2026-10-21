@@ -15,7 +15,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple, Type
 import json
 import pandas as pd
 
@@ -954,6 +954,124 @@ class ComponentKinds:
                 f"{found}."
             )
         return kinds[0]
+
+
+class LostHeatError(ValueError):
+    """A system leaves a heat input unconnected although another of its components serves it by default.
+
+    For example, a ``Building`` whose ``ThermalPowerDelivered`` is not connected while the system has a
+    ``HeatDistribution``: the distribution system heats water that reaches no room, and the room air falls to the
+    outside temperature. Raised by :meth:`ServedHeatInputs.refuse_lost`, which the simulator calls when it connects
+    the components, so the error comes before the first time step.
+    """
+
+
+class ServedHeatInputs:
+    """Which heat inputs of a system its other components serve, and which of those are left unconnected.
+
+    A component's heat input (an input of load type ``HEATING``) is *served* by every other component of the system
+    whose class the component's default connections name for that input. Example: the ``Building``'s default
+    connections name ``HeatDistribution.ThermalPowerDelivered`` and ``ElectricHeating.ThermalOutputShPower`` for its
+    ``ThermalPowerDelivered``, so in a system with a ``HeatDistribution`` that input is served.
+
+    A served heat input that is not connected *loses* that heat: the serving component makes it and nothing receives
+    it. The building's heat input is optional (``mandatory=False``), so the mandatory-input check does not refuse
+    such a system; :meth:`refuse_lost` does. The assemblies' isolation checks use the same rule
+    (``hisim.energy_system.assemblies.testing.checks.HeatDelivery``).
+    """
+
+    @staticmethod
+    def by_class(components: Mapping[str, Component]) -> Dict[str, List[str]]:
+        """Return the runtime names of the components, keyed by the class name default connections use.
+
+        The class name is :meth:`Component.get_classname`, the name a :class:`ComponentConnection` stores as
+        ``source_class_name``.
+
+        Args:
+            components: The components of a system, by runtime name.
+
+        Returns:
+            For each class name, the runtime names of the system's components of that class, in their order.
+        """
+        names: Dict[str, List[str]] = {}
+        for name, component in components.items():
+            names.setdefault(type(component).get_classname(), []).append(name)
+        return names
+
+    @staticmethod
+    def sources(
+        name: str, component: Component, item: ComponentInput, by_class: Mapping[str, Sequence[str]]
+    ) -> List[str]:
+        """Return the other components that serve one input of a component, each as ``name (Class.Output)``.
+
+        Example: ``["HeatDistributionSystem (HeatDistribution.ThermalPowerDelivered)"]`` for the building's
+        ``ThermalPowerDelivered`` in a system with one distribution system.
+
+        Args:
+            name: The component's runtime name.
+            component: The component.
+            item: One of its inputs.
+            by_class: The runtime names of the system's components by class name (:meth:`by_class`).
+
+        Returns:
+            Every component whose class the component's default connections name for the input, in their order.
+        """
+        return [
+            f"{other} ({connection.source_class_name}.{connection.source_output_name})"
+            for connections in component.default_connections.values()
+            for connection in connections
+            if connection.target_input_name == item.field_name
+            for other in by_class.get(connection.source_class_name, ())
+            if other != name
+        ]
+
+    @classmethod
+    def lost(cls, components: Mapping[str, Component]) -> List[str]:
+        """Return every served heat input that is not connected, each named with the components that serve it.
+
+        An input counts as connected once a connection names its source (``src_object_name``), which is what the
+        explicit ``connect_input``, ``connect_only_predefined_connections`` and the automatic default connections
+        all set.
+
+        Args:
+            components: The constructed and wired components of a system, by runtime name.
+
+        Returns:
+            One sentence per lost input, such as ``Building.ThermalPowerDelivered is not connected, although
+            HeatDistributionSystem (HeatDistribution.ThermalPowerDelivered) serves it by default``; empty when no
+            heat is lost.
+        """
+        by_class = cls.by_class(components)
+        found: List[str] = []
+        for name, component in components.items():
+            for item in component.inputs:
+                if item.loadtype != lt.LoadTypes.HEATING or item.src_object_name is not None:
+                    continue
+                sources = cls.sources(name, component, item, by_class)
+                if sources:
+                    found.append(
+                        f"{name}.{item.field_name} is not connected, although {' and '.join(sources)} serves it by "
+                        "default"
+                    )
+        return found
+
+    @classmethod
+    def refuse_lost(cls, components: Mapping[str, Component]) -> None:
+        """Refuse a system that loses heat: a served heat input left unconnected (:meth:`lost`).
+
+        Args:
+            components: The constructed and wired components of a system, by runtime name.
+
+        Raises:
+            LostHeatError: When a served heat input is not connected, naming every such input and its sources.
+        """
+        found = cls.lost(components)
+        if found:
+            raise LostHeatError(
+                "; ".join(found) + ": the heat would never arrive. Connect the input to the component that serves it "
+                "(for a building: my_building.connect_only_predefined_connections(..., my_heat_distribution_system), "
+                "or list the distribution system among the building's inputs in an energy-system file)."
+            )
 
 
 @dataclass

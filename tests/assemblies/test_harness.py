@@ -444,11 +444,15 @@ def test_a_heat_input_left_unconnected_beside_the_component_serving_it_is_named(
 
 
 @pytest.mark.assemblies
-def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both_heat_checks(tmp_path: Path) -> None:
+def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_the_run_and_both_heat_checks(
+    tmp_path: Path,
+) -> None:
     """The wiring before hisim-fob3 fails loudly: the building beside the heater, reading only weather and residents.
 
     The real ``Building`` partner with its ``heating`` port taken out is the partner every heating assembly stood
-    beside before: the heater followed the building's demand all day and the room air fell to about 9 °C.
+    beside before: the heater followed the building's demand all day and the room air fell to about 9 °C. The
+    simulator now refuses that system when it connects the components (``LostHeatError``), so the run check names
+    the lost input, and both heat checks fail on the run that did not finish.
     """
     resolver = AssemblyResolver([Real.LIBRARY])
     real = TestPartnerRegistry.from_directories(resolver.directories)
@@ -467,15 +471,17 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
     run = run_isolation(
         assembly, ParameterSpace(assembly.model).defaults(), registry, resolver, tmp_path / "run", label
     )
-    checks.check_run(run)
-    with pytest.raises(AssemblyCheckFailure) as caught:
-        checks.check_heat_delivered(run)
-    assert str(caught.value) == (
-        f"{label} heat delivered every heat input: Building.ThermalPowerDelivered is not connected, although "
-        "subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default: the heat never arrives"
+    lost = (
+        "LostHeatError: Building.ThermalPowerDelivered is not connected, although subject-Heater "
+        "(ElectricHeating.ThermalOutputShPower) serves it by default: the heat would never arrive."
     )
-    with pytest.raises(AssemblyCheckFailure, match=r"room heated .* the room air of Building averages 1\d\.\d\d °C"):
-        checks.check_room_heated(run)
+    with pytest.raises(AssemblyCheckFailure) as caught:
+        checks.check_run(run)
+    assert str(caught.value).startswith(f"{label} run the isolation run: {lost}")
+    for check, name in ((checks.check_heat_delivered, "heat delivered"), (checks.check_room_heated, "room heated")):
+        with pytest.raises(AssemblyCheckFailure) as caught:
+            check(run)
+        assert f"{label} {name} " in str(caught.value) and f"the run did not finish ({lost}" in str(caught.value)
     run.release()
 
 

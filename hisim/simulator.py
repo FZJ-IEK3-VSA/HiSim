@@ -391,10 +391,21 @@ class Simulator:
 
         The plan reads each component's sources from the outputs its inputs resolved to (:meth:`evaluation_plan`), so
         a plan computed before the inputs were connected would order nothing by the wiring.
+
+        A system that loses heat is refused here, before the first time step: a heat input that another component
+        of the system serves by default but that no connection names (:class:`hisim.component.ServedHeatInputs`),
+        such as a building that does not read its distribution system's heat.
+
+        Raises:
+            ValueError: If an input cannot be connected (:meth:`ComponentWrapper.connect_inputs`).
+            hisim.component.LostHeatError: If a served heat input is left unconnected.
         """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
         self._evaluation_plan = None
+        cp.ServedHeatInputs.refuse_lost(
+            {wrapped.my_component.component_name: wrapped.my_component for wrapped in self.wrapped_components}
+        )
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:

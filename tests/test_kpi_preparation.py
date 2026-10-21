@@ -18,11 +18,11 @@ import pandas as pd
 import pytest
 from dataclasses_json import dataclass_json
 
-from hisim.component import CapexCostDataClass, Component, OpexCostDataClass
+from hisim.component import CapexCostDataClass, Component, ComponentOutput, OpexCostDataClass
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
-from hisim.loadtypes import ComponentType, LoadTypes, Units
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import opex_calculation
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
@@ -620,6 +620,47 @@ class TestElectricityKpisReadTheDeclaredUnit:
         assert total_production_in_kilowatt_hour == pytest.approx(delivered, rel=1e-9)
         assert preparation.kpi_collection_dict_unsorted[building]["Total electricity production"]["value"] == (
             pytest.approx(10.0, rel=1e-9)
+        )
+
+    @pytest.mark.base
+    def test_a_watt_column_and_a_kilowatt_column_each_keep_their_own_factor(self) -> None:
+        """Catches the unit factors being applied to the wrong columns when W and kW outputs are summed together.
+
+        A PV-flagged output in W comes first and the transformer's output in kW after it, as in a run where both
+        feed the grid. Each column must be scaled by its own factor before the sum: 2000 W plus 10 kW is 12 kW,
+        so one hour gives 12 kWh. Factors swapped or shifted by one column would give 2,000,010 W or 20 kW.
+        """
+        transformer, transformer_outputs, transformer_frame = self.one_hour_of_transformer_output(
+            power_in_kilowatt=10.0
+        )
+        pv_output_in_watt = ComponentOutput(
+            object_name="PhotovoltaicStandIn",
+            field_name="ElectricityOutput",
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION, ComponentType.PV],
+            component_id=transformer.component_id,
+        )
+        outputs = [pv_output_in_watt, *transformer_outputs]
+        frame = pd.DataFrame({0: [2000.0] * 60, 1: transformer_frame[0].tolist()})
+        building = transformer.component_id.building_label
+        preparation = _bare_preparation(building)
+
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=building
+        )
+        _, total_production_in_kilowatt_hour, _, _, _ = (
+            preparation.compute_electricity_consumption_and_production_and_battery_kpis(
+                result_dataframe=filtered, building_objects_in_district=building, kpi_tag=KpiTagEnumClass.GENERAL
+            )
+        )
+
+        expected_in_kilowatt_hour = (2000.0 + 1000.0 * 10.0) / 1000.0
+        assert filtered["total_production"].tolist() == pytest.approx([2000.0 + 1000.0 * 10.0] * 60, rel=1e-12)
+        assert filtered["pv_production"].tolist() == pytest.approx([2000.0] * 60, rel=1e-12)
+        assert total_production_in_kilowatt_hour == pytest.approx(expected_in_kilowatt_hour, rel=1e-9)
+        assert preparation.kpi_collection_dict_unsorted[building]["Total electricity production"]["value"] == (
+            pytest.approx(expected_in_kilowatt_hour, rel=1e-9)
         )
 
     @pytest.mark.base

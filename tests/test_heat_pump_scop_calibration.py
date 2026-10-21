@@ -1,10 +1,11 @@
 """The heat pump's calibration to a stated EN 14825 SCOP (hisim-component-physics-4g9.15).
 
 A datasheet rates a heat pump's seasonal COP by the bin method of EN 14825. The tests pin that
-method on hplib's generic fit (the numbers of the 2026-09-21 check), then show that the fit
-calibrated to one or two stated ratings is rated exactly at them, that a calibrated call keeps its
-thermal output and only changes the electricity the compressor draws, and that the component
-refuses a configuration no datasheet could state.
+method on the simulated machine (hplib's generic capacity with the Carnot-efficiency COP,
+:class:`CarnotCopHeatPump`), then show that the machine calibrated to one or two stated ratings is
+rated exactly at them, that a calibrated call keeps its thermal output and only changes the
+electricity the compressor draws, and that the component refuses a configuration no datasheet
+could state.
 """
 
 import re
@@ -15,6 +16,7 @@ from hplib import hplib as hpl
 
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
 from hisim.components.more_advanced_heat_pump_hplib_model import (
+    CarnotCopHeatPump,
     ScopApplication,
     ScopCalibration,
     StandardizedSeasonalCop,
@@ -25,9 +27,11 @@ from hisim.simulationparameters import SimulationParameters
 pytestmark = pytest.mark.base
 
 
-def generic(group_id: int = 1) -> Any:
-    """Return hplib's generic fit for air/water (group 1) or brine/water (group 2), 10 kW at A-7/W52."""
-    heatpump = hpl.HeatPump(hpl.get_parameters("Generic", group_id, -7 if group_id == 1 else 0, 52, 10000))
+def generic(group_id: int = 1) -> CarnotCopHeatPump:
+    """Return the machine on hplib's generic air/water (group 1) or brine/water (group 2) fit, 10 kW at A-7/W52."""
+    heatpump = CarnotCopHeatPump(
+        hpl.HeatPump(hpl.get_parameters("Generic", group_id, -7 if group_id == 1 else 0, 52, 10000))
+    )
     heatpump.delta_t = 5
     return heatpump
 
@@ -41,13 +45,23 @@ def heating_call(heatpump: Any, outlet: float = 35.0, outdoor: float = 2.0, p_th
 
 
 class TestTheBinMethod:
-    """The EN 14825 rating of hplib's generic fits, as the 2026-09-21 check computed it."""
+    """The EN 14825 rating of the uncalibrated machines: the pooled Keymark unit of each source type."""
 
-    def test_the_generic_air_water_fit_rates_3_40_at_w55_and_4_74_at_w35(self) -> None:
-        """The two numbers the calibration factors are made of for an air/water machine."""
+    def test_the_air_water_machine_rates_3_32_at_w55_and_4_46_at_w35(self) -> None:
+        """The two numbers the calibration factors are made of for an air/water machine.
+
+        Close to the Keymark population's medians (W35 4.60, W55 3.39), which the law was fitted to.
+        hplib's own generic COP plane rated 4.74 and 3.40.
+        """
         heatpump = generic(1)
-        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W55) == pytest.approx(3.40, abs=0.05)
-        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W35) == pytest.approx(4.74, abs=0.05)
+        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W55) == pytest.approx(3.32, abs=0.01)
+        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W35) == pytest.approx(4.46, abs=0.01)
+
+    def test_the_brine_water_machine_rates_3_94_at_w55_and_4_74_at_w35(self) -> None:
+        """The brine/water machine, brine at 0 °C in every bin (Keymark medians W35 5.20, W55 3.90)."""
+        heatpump = generic(2)
+        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W55) == pytest.approx(3.94, abs=0.01)
+        assert StandardizedSeasonalCop.of(heatpump, ScopApplication.W35) == pytest.approx(4.74, abs=0.01)
 
     def test_a_brine_machine_rates_better_at_the_lower_outlet(self) -> None:
         """Brine enters at 0 °C in every bin; the lower outlet still wins."""
@@ -67,7 +81,7 @@ class TestTheBinMethod:
 
     def test_a_machine_of_another_group_is_refused_by_name(self) -> None:
         """The bins' source temperature is defined for air/water and brine/water only."""
-        heatpump = hpl.HeatPump(hpl.get_parameters("Generic", 3, 10, 52, 10000))
+        heatpump = CarnotCopHeatPump(hpl.HeatPump(hpl.get_parameters("Generic", 3, 10, 52, 10000)))
         with pytest.raises(ValueError, match="this one is hplib group 3"):
             StandardizedSeasonalCop.of(heatpump, ScopApplication.W35)
 
@@ -105,13 +119,15 @@ class TestTheCalibration:
                     stated, abs=ScopCalibration.TOLERANCE
                 )
 
-    def test_a_pair_beyond_the_fits_reach_is_refused_with_the_limit(self) -> None:
-        """With W35 at 6.0 the air/water fit cannot rate W55 below 1.31, whatever the factors."""
-        with pytest.raises(ValueError, match=re.escape("with W35 at 6.0, hplib's fit cannot rate below W55 1.31")):
+    def test_a_pair_beyond_the_machines_reach_is_refused_with_the_limit(self) -> None:
+        """With W35 at 6.0 the air/water machine cannot rate W55 below 1.28, whatever the factors."""
+        with pytest.raises(
+            ValueError, match=re.escape("with W35 at 6.0, the Carnot-efficiency COP cannot rate below W55 1.28")
+        ):
             ScopCalibration.of(generic(1), 6.0, 1.1)
 
     def test_the_factors_stay_moderate_for_a_wide_pair(self) -> None:
-        """The reason for the mean-outlet anchors: 5.5 / 3.0 no longer drives a factor to 0.46."""
+        """The reason for the mean-outlet anchors: 5.5 / 3.0 does not drive a factor to 0.46 (now 1.28 / 0.85)."""
         factors = ScopCalibration.of(generic(1), 5.5, 3.0).factors
         assert all(0.6 < factor < 1.3 for factor in factors.values())
 
@@ -121,7 +137,7 @@ class TestTheCalibration:
         calibration = ScopCalibration.of(heatpump, None, 3.0)
         factor = calibration.factors[ScopApplication.W55]
         raw = heating_call(heatpump)
-        calibrated = calibration.apply(heatpump, raw, mode=1)
+        calibrated = calibration.apply(raw, mode=1)
         assert float(calibrated["P_th"]) == pytest.approx(float(raw["P_th"]))
         assert float(calibrated["P_el"]) == pytest.approx(float(raw["P_el"]) / factor)
         assert float(calibrated["COP"]) == pytest.approx(float(raw["COP"]) * factor)
@@ -135,24 +151,24 @@ class TestTheCalibration:
         assert calibration.factor(60.0) == pytest.approx(1.2)
         assert calibration.factor((low + high) / 2) == pytest.approx(1.05)
 
-    def test_a_rod_only_call_and_a_cooling_call_are_left_alone(self) -> None:
-        """The heating rod is not the unit the SCOP rates, and cooling is out of scope."""
-        heatpump = generic(1)
+    def test_a_cooling_call_is_left_alone(self) -> None:
+        """Cooling is out of scope: its EER and electricity stay hplib's."""
         calibration = ScopCalibration({ScopApplication.W55: 0.8})
-        rod_only = {"COP": 1.0, "P_th": 5000.0, "P_el": 5000.0, "T_out": 55.0}
-        assert calibration.apply(heatpump, rod_only, mode=1) == rod_only
         cooling = {"COP": 0.0, "EER": 3.0, "P_th": -4000.0, "P_el": 1300.0, "T_out": 18.0}
-        assert calibration.apply(heatpump, cooling, mode=2) == cooling
+        assert calibration.apply(cooling, mode=2) == cooling
 
-    def test_in_the_compressor_plus_rod_branch_only_the_compressor_is_calibrated(self) -> None:
-        """The mixed branch draws p_el_ref + p_th_ref in hplib; the rod's share keeps its COP of 1."""
+    def test_a_call_where_hplib_runs_its_rod_is_calibrated_as_the_compressor(self) -> None:
+        """At A-7/W65 hplib's plane runs the rod alone (COP 1); the machine runs the compressor, and it is scaled.
+
+        Catches the calibration skipping a call it takes for the rod's: the machine has no rod any more.
+        """
         heatpump = generic(1)
         calibration = ScopCalibration({ScopApplication.W55: 0.8})
-        compressor, rod = float(heatpump.p_el_ref), float(heatpump.p_th_ref)
-        mixed = {"COP": 1.5, "P_th": 1.5 * (compressor + rod), "P_el": compressor + rod, "T_out": 55.0}
-        calibrated = calibration.apply(heatpump, mixed, mode=1)
-        assert float(calibrated["P_el"]) == pytest.approx(compressor / 0.8 + rod)
-        assert float(calibrated["P_th"]) == pytest.approx(mixed["P_th"])
+        raw = heating_call(heatpump, outlet=65.0, outdoor=-7.0)
+        assert float(raw["COP"]) > 1.5
+        calibrated = calibration.apply(raw, mode=1)
+        assert float(calibrated["COP"]) == pytest.approx(float(raw["COP"]) * 0.8)
+        assert float(calibrated["P_th"]) == pytest.approx(float(raw["P_th"]))
 
 
 class TestTheComponent:
@@ -174,7 +190,7 @@ class TestTheComponent:
         return MoreAdvancedHeatPumpHPLib(SimulationParameters.one_day_only(2021, 900), config)
 
     def test_without_a_scop_nothing_is_calibrated(self) -> None:
-        """The fit as hplib ships it: no factor, and the cached call is hplib's own."""
+        """The uncalibrated machine: no factor, and the cached call is the machine's own."""
         component = self.build(self.config())
         assert not component.scop_calibration.factors
         cached = component.get_cached_results_or_run_hplib_simulation(
@@ -217,8 +233,8 @@ class TestTheComponent:
                 {"standardized_scop_en14825_w35": 6.0, "standardized_scop_en14825_w55": 1.1},
                 "HeatPump.*: "
                 + re.escape(
-                    "the stated SCOPs W35 6.0 and W55 1.1 cannot be met: with W35 at 6.0, hplib's "
-                    "Generic air/water fit cannot rate below W55 1.31; a lower W55 rating would need a factor "
+                    "the stated SCOPs W35 6.0 and W55 1.1 cannot be met: with W35 at 6.0, the air/water "
+                    "Carnot-efficiency COP cannot rate below W55 1.28; a lower W55 rating would need a factor "
                     "below 0.001 at the W55 anchor (40.7 °C)."
                 ),
             ),

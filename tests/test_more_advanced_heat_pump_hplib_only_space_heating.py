@@ -151,10 +151,11 @@ def test_heat_pump_hplib_new() -> None:
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     # Check
     # The booked heat is what hplib's flow carries at 4180 J/(kg K), not its 10 kW: the flow is
-    # 10 kW / (4200 * 5) = 0.47619 kg/s, so 0.47619 * 4180 * 5 = 9952.38 W (10 kW * 4180 / 4200).
+    # 10 kW / (4200 * 5) = 0.47619 kg/s, so 0.47619 * 4180 * 5 = 9952.38 W (10 kW * 4180 / 4200). The COP is the
+    # Carnot-efficiency law at A-7/W52, 0.451 * 325.15 / (59 + 4.45) = 2.3112 (hplib's own COP plane gave 1.41).
     assert stsv.values[heatpump.p_th_space_heating.global_index] == pytest.approx(9952.380952380952)
-    assert stsv.values[heatpump.p_el_space_heating.global_index] == pytest.approx(7040.347698931308)
-    assert stsv.values[heatpump.cop.global_index] == pytest.approx(1.4136206588052005)
+    assert stsv.values[heatpump.p_el_space_heating.global_index] == pytest.approx(4306.24086122674)
+    assert stsv.values[heatpump.cop.global_index] == pytest.approx(2.311152876280536)
     assert t_out == stsv.values[heatpump.t_out_space_heating.global_index]
     assert stsv.values[heatpump.m_dot_space_heating.global_index] == pytest.approx(0.47619047619047616)
     assert 60 == stsv.values[heatpump.time_on_heating.global_index]

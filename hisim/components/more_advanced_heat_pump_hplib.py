@@ -79,6 +79,7 @@ from hisim.components.more_advanced_heat_pump_hplib_model import (
     HeatPumpRunTimers,
     HeatPumpStepConditions,
     HeatPumpSwitchCounters,
+    CarnotCopHeatPump,
     HplibResult,
     ScopCalibration,
     StandardizedSeasonalCop,
@@ -152,7 +153,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     maximal_dhw_supply_temperature_in_celsius: float = field(default=75.0, metadata={"unit": Units.CELSIUS})
     #: The unit's standardised SCOP as its datasheet states it (EN 14825, average climate) for the
     #: low- (W35) and medium-temperature (W55) application. Either, both or neither: a stated one
-    #: calibrates hplib's fit to it (:class:`ScopCalibration`); unset keeps the fit as hplib ships it.
+    #: calibrates the machine's COP to it (:class:`ScopCalibration`); unset keeps the Carnot-efficiency
+    #: COP of the average Keymark unit of its source type (:class:`CarnotEfficiencyCop`).
     #: Air/water and brine/water only; above 1, at most 10, and W55 not above W35.
     standardized_scop_en14825_w35: Optional[float] = field(default=None, metadata={"unit": Units.ANY})
     standardized_scop_en14825_w55: Optional[float] = field(default=None, metadata={"unit": Units.ANY})
@@ -479,7 +481,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         # Load parameters from heat pump database
         self.parameters = hpl.get_parameters(self.model, self.group_id, self.t_in, self.t_out_val, self.p_th_set)
-        self.heatpump = hpl.HeatPump(self.parameters)
+        # hplib's thermal power, outlet and flow with the Carnot-efficiency COP and no heating rod.
+        self.heatpump = CarnotCopHeatPump(hpl.HeatPump(self.parameters))
         self.heatpump.delta_t = 5
         self.scop_calibration = self.calibration_of(config, self.heatpump)
 
@@ -1135,8 +1138,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 valid, their combination is not.
             ValueError: When a stated SCOP is not above 1 or above :attr:`MAXIMUM_STANDARDIZED_SCOP`,
                 when the machine is neither air/water nor brine/water, the two groups EN 14825's
-                rating here covers, or when hplib's fit cannot be calibrated to the stated pair
-                (:meth:`ScopCalibration.of`).
+                rating here covers, or when the machine's Carnot-efficiency COP cannot be calibrated to
+                the stated pair (:meth:`ScopCalibration.of`).
         """
         w35, w55 = config.standardized_scop_en14825_w35, config.standardized_scop_en14825_w55
         given = {"standardized_scop_en14825_w35": w35, "standardized_scop_en14825_w55": w55}
@@ -1159,7 +1162,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 f"{config.component_id.name}: a standardised SCOP calibrates air/water (group 1) and brine/water "
                 f"(group 2) machines only, and this one is hplib group {heatpump.group_id}."
             )
-        machine = f"hplib's {config.model} {StandardizedSeasonalCop.RATED_GROUPS[int(heatpump.group_id)]} fit"
+        machine = f"the {StandardizedSeasonalCop.RATED_GROUPS[int(heatpump.group_id)]} Carnot-efficiency COP"
         try:
             return ScopCalibration.of(heatpump, w35, w55, machine=machine)
         except ValueError as error:
@@ -2386,10 +2389,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         mode: int,
         minimal_thermal_power_in_watt: float,
     ) -> "HplibResult":
-        """Return hplib's result at one operating point, computed by hplib with the stated SCOP's calibration applied.
+        """Return the machine's result at one operating point, with the stated SCOP's calibration applied.
 
-        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result is the calibrated
-        machine's.
+        The machine (:class:`CarnotCopHeatPump`) answers with hplib's thermal power, outlet and flow and the
+        Carnot-efficiency COP; the calibration (:class:`ScopCalibration`) is applied to that answer, so the result is
+        the calibrated machine's.
 
         Args:
             source_on_grid_in_celsius: The source temperature, in °C, on hplib's 0.1 K grid.
@@ -2408,7 +2412,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             mode=mode,
             p_th_min=minimal_thermal_power_in_watt,
         )
-        return HplibResult.from_hplib(self.scop_calibration.apply(self.heatpump, results, mode))
+        return HplibResult.from_hplib(self.scop_calibration.apply(results, mode))
 
     def get_component_kpi_entries(
         self,

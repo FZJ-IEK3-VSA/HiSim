@@ -692,6 +692,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             unit=Units.KG_PER_SEC,
             output_description="Mass flow output",
         )
+        # the space heat, and in cooling mode the heat drawn back, is what the space-heating circuit carries: one
+        # circuit whose heat turns negative while it cools (complete Sankey spec §4.2 and §5.1)
+        self.add_hydronic_port(
+            mass_flow=self.m_dot_space_heating,
+            supply_temperature=self.t_out_space_heating,
+            return_temperature=self.t_in_secondary_space_heating,
+            role=EnergyRole.PRODUCTION,
+            carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+        )
 
         self.time_on_heating: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -734,9 +743,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Heat delivered to the space-heating circuit in W: ThermalOutputPowerSH when positive.",
-            energy_port=EnergyPort(
-                EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.MassFlowOutputSH
-            ),
         )
         self.thermal_power_drawn_for_cooling: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -747,7 +753,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "Heat drawn from the space-heating circuit in cooling mode in W: minus ThermalOutputPowerSH when "
                 "negative. It leaves, with the electricity, to the environment."
             ),
-            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.COOLING, peer_output=self.MassFlowOutputSH),
         )
 
         self.thermal_energy_hp_space_heating_channel: ComponentOutput = self.add_output(
@@ -864,9 +869,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 unit=Units.WATT,
                 output_description=("Thermal output power dhw Storage in Watt"),
                 postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-                energy_port=EnergyPort(
-                    EnergyRole.PRODUCTION, EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=self.MassFlowOutputDHW
-                ),
             )
 
             self.p_el_dhw: ComponentOutput = self.add_output(
@@ -900,6 +902,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.WARM_WATER,
                 unit=Units.KG_PER_SEC,
                 output_description="Mass flow output",
+            )
+            # the hot-water heat is what the hot-water circuit carries (complete Sankey spec §5.1)
+            self.add_hydronic_port(
+                mass_flow=self.m_dot_dhw,
+                supply_temperature=self.t_out_dhw,
+                return_temperature=self.t_in_secondary_dhw,
+                role=EnergyRole.PRODUCTION,
+                carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
             )
 
             self.thermal_energy_hp_dhw_channel: ComponentOutput = self.add_output(

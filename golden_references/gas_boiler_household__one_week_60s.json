@@ -664,7 +664,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 831.9
+    "value": 749.2
   },
   "BUI1.Gas Boiler.OPEX - CO2 Footprint (boiler)": {
     "building": "BUI1",
@@ -679,7 +679,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 199.65599999999998
+    "value": 179.808
   },
   "BUI1.Gas Boiler.OPEX - Fuel costs (boiler)": {
     "building": "BUI1",
@@ -694,7 +694,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "EUR",
-    "value": 61.976549999999996
+    "value": 55.815400000000004
   },
   "BUI1.Gas Boiler.OPEX - Maintenance costs (boiler)": {
     "building": "BUI1",
@@ -739,7 +739,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 654.6
+    "value": 729.6
   },
   "BUI1.Gas Boiler.Total CO2 Footprint (CAPEX for simulated period + OPEX) (boiler)": {
     "building": "BUI1",
@@ -754,7 +754,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 200.10599999999997
+    "value": 180.25799999999998
   },
   "BUI1.Gas Boiler.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (boiler)": {
     "building": "BUI1",
@@ -769,7 +769,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "EUR",
-    "value": 70.25655
+    "value": 64.0954
   },
   "BUI1.Gas Boiler.Total Gas consumption (energy) (boiler)": {
     "building": "BUI1",
@@ -784,7 +784,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 831.9
+    "value": 749.2
   },
   "BUI1.Gas Boiler.Total Gas consumption (mass) (boiler)": {
     "building": "BUI1",
@@ -799,7 +799,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kg",
-    "value": 54.0
+    "value": 48.6
   },
   "BUI1.Gas Boiler.Total Gas consumption (volume) (boiler)": {
     "building": "BUI1",
@@ -814,7 +814,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "l",
-    "value": 75211.3
+    "value": 67734.5
   },
   "BUI1.Gas Boiler.Total thermal energy delivered (boiler)": {
     "building": "BUI1",
@@ -829,7 +829,7 @@
     },
     "tag": "Gas Boiler",
     "unit": "kWh",
-    "value": 654.6
+    "value": 729.6
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -980,7 +980,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 33.48943435046474
+    "value": 33.99136968313642
   },
   "BUI1.Heat Distribution System.Max return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1025,7 +1025,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 30.694928489709728
+    "value": 30.98236067439781
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 27.80226449806851
+    "value": 28.089696682756593
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (hds)": {
     "building": "BUI1",

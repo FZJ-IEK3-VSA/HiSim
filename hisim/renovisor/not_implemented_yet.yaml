@@ -119,8 +119,14 @@
   note: Boilers have no flow-temperature field.
   tracked: hisim-component-physics-4g9.4
 
-# A seasonal efficiency is written onto a boiler's efficiency bounds (approximated, translate.py
-# `_efficiency`). The generators below have no efficiency parameter to write it to (renovisorissues
+# A seasonal efficiency is written onto a boiler's `seasonal_efficiency`, which scales its sourced
+# part-load curve (approximated, translate.py `_efficiency`). A boiler booked on the net calorific
+# value -- conventional gas, LPG, oil and HVO, pellets, logs and wood chips -- takes at most its own
+# ceiling (`BoilerEfficiencySources.highest_seasonal_efficiency`), above which its curve exceeds 100 %
+# there: the request is refused (exit 2, `SemanticChecks._boiler_seasonal_efficiency`; owner decision
+# of 2026-10-21). That includes the frontend's 90 % default for every one of them but a conventional
+# oil or HVO boiler from 1990 on or with no year (ceilings with no year: gas 86.82 %, pellets and logs 86.78 %,
+# wood chips 86.23 %, oil 90.49 %). The generators below have no efficiency parameter to write it to (renovisorissues
 # #72); a frontend that keeps its 90 % default for them must not lose the whole calculation.
 - path: house.heating.seasonal_efficiency_in_percent
   when: heating.type_of_system in [air_source_heat_pump, ground_source_heat_pump, hybrid_heat_pump]

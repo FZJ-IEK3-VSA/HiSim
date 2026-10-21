@@ -281,9 +281,13 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
 
 @pytest.mark.extendedbase2
 def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> None:
-    """The combustion loss is the billed fuel times one minus the efficiency: 10 to 40 % of the gas in a week."""
+    """The combustion loss is the billed fuel times one minus the efficiency: 2 to 13 % of the gas in a week.
+
+    The current condensing gas curve runs between 0.877 (full load, 60 °C return) and 0.978 (30 % load, 30 °C
+    return) on the gross calorific value, so no step loses more than 12.3 % or less than 2.2 % of its gas.
+    """
     results = run_household(tmp_path)
     boiler = balance_entry(results, "CondensingGasBoiler")
     gas = boiler["carriers"]["natural_gas"]
-    assert 0.1 * gas["in_kwh"] < gas["loss_kwh"] < 0.4 * gas["in_kwh"]
+    assert 0.02 * gas["in_kwh"] < gas["loss_kwh"] < 0.13 * gas["in_kwh"]
     assert boiler["out_kwh"] == pytest.approx(gas["in_kwh"] - gas["loss_kwh"], rel=1e-12)

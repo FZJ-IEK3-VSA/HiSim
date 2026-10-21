@@ -262,7 +262,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 20.212028109563562
+    "value": 20.28418165331379
   },
   "BUI1.Costs.Costs of other heating fuels for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -41.69423189043644
+    "value": -41.62207834668621
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -4.004231890436444
+    "value": -3.932078346686211
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -4.004231890436444
+    "value": -3.932078346686211
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -679,7 +679,7 @@
     },
     "tag": "Gas Meter",
     "unit": "Euro",
-    "value": 20.212028109563562
+    "value": 20.28418165331379
   },
   "BUI1.Gas Meter.Total gas consumption (GasMeter)": {
     "building": "BUI1",
@@ -694,7 +694,7 @@
     },
     "tag": "Gas Meter",
     "unit": "kWh",
-    "value": 80.8
+    "value": 81.1
   },
   "BUI1.Gas Meter.Total gas demand from grid (GasMeter)": {
     "building": "BUI1",
@@ -709,7 +709,7 @@
     },
     "tag": "Gas Meter",
     "unit": "kWh",
-    "value": 80.8
+    "value": 81.1
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -733,7 +733,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 87.06862844623218
+    "value": 87.36862844623218
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -837,7 +837,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 52.22
+    "value": 52.14
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 80.8
+    "value": 81.1
   },
   "BUI1.Hydrogen Boiler.Energy Green Hydrogen consumption for space heating (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1085,7 +1085,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "EUR",
-    "value": 20.2
+    "value": 20.275
   },
   "BUI1.Hydrogen Boiler.OPEX - Maintenance costs (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1115,7 +1115,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 72.8
+    "value": 72.7
   },
   "BUI1.Hydrogen Boiler.Thermal energy delivered for space heating (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1160,7 +1160,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "EUR",
-    "value": 28.48
+    "value": 28.555
   },
   "BUI1.Hydrogen Boiler.Total Green Hydrogen consumption (energy) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1175,7 +1175,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 80.8
+    "value": 81.1
   },
   "BUI1.Hydrogen Boiler.Total Green Hydrogen consumption (mass) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "l",
-    "value": 22823.1
+    "value": 22907.8
   },
   "BUI1.Hydrogen Boiler.Total thermal energy delivered (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1220,7 +1220,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 72.8
+    "value": 72.7
   },
   "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
     "building": "BUI1",

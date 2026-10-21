@@ -732,13 +732,13 @@ def test_a_value_that_does_not_fit_its_field_is_refused_naming_the_entry() -> No
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
     config:
-      eff_th_max: very high
+      seasonal_efficiency: very high
 """
         )
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
-    assert "boiler" in message and "eff_th_max" in message
+    assert "boiler" in message and "seasonal_efficiency" in message
 
 
 @pytest.mark.base

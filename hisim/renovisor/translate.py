@@ -30,6 +30,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from hisim import loadtypes as lt
 from hisim.components.weather.config import LocationEnum
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.loader import dump_energy_system, load_energy_system
@@ -557,20 +558,8 @@ class BaseFiles:
     #: The generators whose twin is a heat pump, which alone has a flow temperature to write.
     HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.heat_pumps()
 
-    #: The generators whose twin is a ``GenericBoiler``, which alone has efficiency bounds.
-    BOILERS: ClassVar[Tuple[HeatGenerator, ...]] = (
-        HeatGenerator.CONDENSING_GAS_HEATING,
-        HeatGenerator.CONVENTIONAL_GAS_HEATING,
-        HeatGenerator.CONVENTIONAL_LPG_HEATING,
-        HeatGenerator.CONDENSING_LPG_HEATING,
-        HeatGenerator.CONVENTIONAL_OIL_HEATING,
-        HeatGenerator.CONDENSING_OIL_HEATING,
-        HeatGenerator.HVO_HEATING,
-        HeatGenerator.PELLET_HEATING,
-        HeatGenerator.BIOMASS_HEATING,
-        HeatGenerator.WOODCHIP_HEATING,
-        HeatGenerator.HYDROGEN_HEATING,
-    )
+    #: The generators whose twin is a ``GenericBoiler``, which alone takes a seasonal efficiency.
+    BOILERS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.boilers()
 
     @classmethod
     def select(cls, generator: HeatGenerator, with_solar_thermal: bool) -> str:
@@ -842,8 +831,8 @@ class Targets:
     FLOW_TEMPERATURE: ClassVar[str] = "flow_temperature_in_celsius"
     STANDARDIZED_SCOP_W35: ClassVar[str] = "standardized_scop_en14825_w35"
     STANDARDIZED_SCOP_W55: ClassVar[str] = "standardized_scop_en14825_w55"
-    EFFICIENCY_MAXIMUM: ClassVar[str] = "eff_th_max"
-    EFFICIENCY_MINIMUM: ClassVar[str] = "eff_th_min"
+    SEASONAL_EFFICIENCY: ClassVar[str] = "seasonal_efficiency"
+    INSTALLATION_YEAR: ClassVar[str] = "installation_year"
     BOILER_TYPE: ClassVar[str] = "boiler_type"
     DOMESTIC_HOT_WATER: ClassVar[str] = "with_domestic_hot_water_preparation"
 
@@ -1817,7 +1806,16 @@ def _scop_note(generator: HeatGenerator) -> Optional[str]:
 
 
 def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:
-    """Write a stated seasonal efficiency onto the boiler's two efficiency bounds."""
+    """Write a stated seasonal efficiency and the boiler's installation year onto the boiler.
+
+    The stated ``seasonal_efficiency_in_percent`` is the Ecodesign seasonal space heating efficiency
+    ``eta_s`` of the boiler's energy label, on the gross calorific value; a hundredth of it becomes
+    ``GenericBoiler.config.seasonal_efficiency``, which scales the boiler type's sourced efficiency
+    curve so that its ``0.85 eta_30 + 0.15 eta_100`` minus the 3 % temperature-control correction
+    reproduces it (owner decision of 2026-10-20, hisim-component-physics-4g9.66). The installation
+    year of the existing gas or oil boiler picks its IWU 2002 decade row (:func:`_boiler_installation_year`).
+    """
+    _boiler_installation_year(state, generator)
     path = "house.heating.seasonal_efficiency_in_percent"
     if not state.present(path):
         return
@@ -1832,23 +1830,63 @@ def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any
         state.listed(path, heating.seasonal_efficiency_in_percent)
         return
     component = BaseFiles.generator_component(state.base_file_name)
-    maximum = heating.seasonal_efficiency_in_percent / BoilerEfficiency.PERCENT
-    minimum = max(maximum - BoilerEfficiency.SPREAD, BoilerEfficiency.MINIMUM)
-    state.write(component, Targets.EFFICIENCY_MAXIMUM, maximum, source=path, note="the stated efficiency")
+    seasonal_efficiency = heating.seasonal_efficiency_in_percent / BoilerEfficiency.PERCENT
     state.write(
         component,
-        Targets.EFFICIENCY_MINIMUM,
-        minimum,
+        Targets.SEASONAL_EFFICIENCY,
+        seasonal_efficiency,
         source=path,
-        note=f"the part-load bound, {BoilerEfficiency.SPREAD:g} below the full-load one",
+        note="the stated Ecodesign seasonal efficiency, which scales the boiler type's efficiency curve",
     )
     state.report.approximated(
         path,
-        f"a seasonal figure becomes the boiler's full-load efficiency {maximum:.4g} and a "
-        f"part-load bound {minimum:.4g}; HiSim interpolates between the two",
-        target=Targets.describe(component, Targets.EFFICIENCY_MAXIMUM),
-        value=maximum,
+        f"the Ecodesign seasonal efficiency {seasonal_efficiency:.4g} (gross calorific value) scales the "
+        "boiler type's sourced part-load curve so that 0.85 eta_30 + 0.15 eta_100 less the 3 % "
+        "temperature-control correction reproduces it; the auxiliary-electricity, standby and "
+        "ignition corrections are not modelled",
+        target=Targets.describe(component, Targets.SEASONAL_EFFICIENCY),
+        value=seasonal_efficiency,
     )
+
+
+def _boiler_installation_year(state: _TranslationState, generator: HeatGenerator) -> None:
+    """Write the existing boiler's installation year, which picks its efficiency row.
+
+    A gas or oil boiler installed before 2000 takes the IWU 2002 row of its decade; without a year,
+    or from 2000 on, it takes a current product's data (``BoilerVintage``). A pellet, log or
+    wood-chip boiler takes its product data whatever the year, since IWU's solid-fuel rows describe
+    log boilers: the year reaches it and changes nothing. The renovated house carries the year only
+    for the boiler the request describes: a ``heating_system`` measure removes it with the generator
+    it dated, so a new boiler is a current one. The report line stays the economics stage's (the
+    year dates the boiler's register row as well); its note says what the year does to the boiler.
+    """
+    year = state.raw.get("heating", {}).get("installation_year")
+    if year is None or generator not in BaseFiles.BOILERS:
+        return
+    component = BaseFiles.generator_component(state.base_file_name)
+    landed = state.write(
+        component,
+        Targets.INSTALLATION_YEAR,
+        int(year),
+        source="house.heating.installation_year",
+        note="the boiler's installation year, which picks its efficiency row",
+    )
+    path = "house.heating.installation_year"
+    line = state.report.line(path)
+    target = Targets.describe(component, Targets.INSTALLATION_YEAR)
+    energy_carrier, _ = SemanticChecks.BOILER_FUEL_AND_TYPE[generator]
+    if energy_carrier in (lt.LoadTypes.PELLETS, lt.LoadTypes.WOOD_CHIPS):
+        effect = (
+            f"it also reaches the boiler ({target}), whose efficiency does not depend on it: a pellet or "
+            "wood-chip boiler takes its product data whatever the year"
+        )
+    else:
+        effect = (
+            f"it also picks the boiler's efficiency row ({target}): the IWU 2002 decade row before 2000, "
+            "a current product's data from 2000 on"
+        )
+    if landed and line is not None:
+        state.report.field(path, line.status, target=line.target, value=line.value, note=f"{line.note}; {effect}")
 
 
 def _hot_water(state: _TranslationState) -> None:

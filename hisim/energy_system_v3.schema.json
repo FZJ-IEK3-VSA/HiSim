@@ -2676,11 +2676,25 @@
                       }
                     ]
                   },
-                  "eff_th_min": {
-                    "type": "number"
+                  "seasonal_efficiency": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
-                  "eff_th_max": {
-                    "type": "number"
+                  "installation_year": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "temperature_delta_in_celsius": {
                     "type": "number"

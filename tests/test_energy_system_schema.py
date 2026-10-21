@@ -288,7 +288,7 @@ def test_auto_is_accepted_on_a_sizable_field_and_refused_elsewhere(validator: An
     """
     boiler = "hisim.components.generic_boiler.GenericBoiler"
     sizable = {"class": boiler, "preset": "condensing_gas", "config": {"maximal_thermal_power_in_watt": "AUTO"}}
-    plain = {"class": boiler, "preset": "condensing_gas", "config": {"eff_th_max": "AUTO"}}
+    plain = {"class": boiler, "preset": "condensing_gas", "config": {"seasonal_efficiency": "AUTO"}}
 
     assert errors_of(validator, Documents.with_entry(sizable)) == []
     assert errors_of(validator, Documents.with_entry(plain))

@@ -36,6 +36,9 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 
+from hisim import loadtypes as lt
+from hisim.components.generic_boiler import BoilerEfficiencySources, BoilerType, CalorificBasis
+from hisim.renovisor.constants import BoilerEfficiency
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.vocabulary import (
     AirTightness,
@@ -1265,6 +1268,41 @@ class SemanticChecks:
     #: (:meth:`_floor_areas`).
     FLOOR_AREA_RANGE: ClassVar[Tuple[int, int]] = (20, 1000)
 
+    #: The highest seasonal efficiency a boiler house may state, in percent: the Ecodesign ``eta_s``
+    #: on the gross calorific value is the active-mode efficiency, at most 100 %, less the 3 %
+    #: temperature-control correction F(1) (Commission communication 2014/C 207/02, point 4.4(a);
+    #: Regulation (EU) 2015/1189, Annex IV, point 4(a)). ``GenericBoilerConfig`` refuses more.
+    BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT: ClassVar[float] = 97.0
+
+    #: The fuel and the boiler type of the ``GenericBoiler`` each boiler generator runs: the
+    #: twin's preset (``BaseFiles.BY_GENERATOR``) with the re-typing of ``BaseFiles.BOILER_TYPE``.
+    #: The check runs before anything is translated, so it cannot read the twin;
+    #: ``tests/renovisor/test_translate.py`` pins this table to the translated twins.
+    BOILER_FUEL_AND_TYPE: ClassVar[Dict[HeatGenerator, Tuple[lt.LoadTypes, BoilerType]]] = {
+        HeatGenerator.CONDENSING_GAS_HEATING: (lt.LoadTypes.GAS, BoilerType.CONDENSING),
+        HeatGenerator.CONVENTIONAL_GAS_HEATING: (lt.LoadTypes.GAS, BoilerType.CONVENTIONAL),
+        HeatGenerator.CONVENTIONAL_LPG_HEATING: (lt.LoadTypes.GAS, BoilerType.CONVENTIONAL),
+        HeatGenerator.CONDENSING_LPG_HEATING: (lt.LoadTypes.GAS, BoilerType.CONDENSING),
+        HeatGenerator.CONVENTIONAL_OIL_HEATING: (lt.LoadTypes.OIL, BoilerType.CONVENTIONAL),
+        HeatGenerator.CONDENSING_OIL_HEATING: (lt.LoadTypes.OIL, BoilerType.CONDENSING),
+        HeatGenerator.HVO_HEATING: (lt.LoadTypes.OIL, BoilerType.CONVENTIONAL),
+        HeatGenerator.PELLET_HEATING: (lt.LoadTypes.PELLETS, BoilerType.CONVENTIONAL),
+        HeatGenerator.BIOMASS_HEATING: (lt.LoadTypes.PELLETS, BoilerType.CONVENTIONAL),
+        HeatGenerator.WOODCHIP_HEATING: (lt.LoadTypes.WOOD_CHIPS, BoilerType.CONVENTIONAL),
+        HeatGenerator.HYDROGEN_HEATING: (lt.LoadTypes.GREEN_HYDROGEN, BoilerType.CONDENSING),
+    }
+
+    #: The boiler power, in W, at which a non-condensing boiler's ceiling
+    #: (:meth:`BoilerEfficiencySources.highest_seasonal_efficiency`) is checked: 1 kW, below every
+    #: household boiler. The twin sizes the boiler only when it runs, so the check cannot know its
+    #: power; the ceiling of the IWU rows whose two test points differ rises with the power (IWU
+    #: 2002 eq. 2-1), so a figure at or below the 1 kW ceiling stays below it at every larger size.
+    #: Product rows do not depend on the size, so for a boiler with no year or one from 2000 on,
+    #: for pellets and for wood chips the check refuses exactly what the boiler's build refuses; for
+    #: a conventional gas boiler of the 1970s it refuses up to 0.1 points more than a 20 kW boiler
+    #: would take.
+    BOILER_POWER_OF_THE_CEILING_CHECK_IN_WATT: ClassVar[float] = 1000.0
+
     #: The ``house.building`` field :attr:`FLOOR_AREA_RANGE` bounds, the heated floor area the
     #: simulation runs.
     FLOOR_AREA_KEY: ClassVar[str] = "absolute_conditioned_floor_area_in_m2"
@@ -1321,6 +1359,7 @@ class SemanticChecks:
         problems.extend(cls._hot_water_volumes(house))
         problems.extend(cls._heat_pump_scop(house))
         problems.extend(cls._floor_areas(house))
+        problems.extend(cls._boiler_seasonal_efficiency(house))
         problems.extend(cls._unsupported_generator(house))
         problems.extend(cls._measures(document["measures"], house))
         problems.extend(cls._cost_bands(document["measures"]))
@@ -1494,6 +1533,83 @@ class SemanticChecks:
                 )
             )
         return problems
+
+    @classmethod
+    def _boiler_seasonal_efficiency(cls, house: Mapping[str, Any]) -> List[Problem]:
+        """Refuse a boiler's seasonal efficiency the boiler cannot reach on the basis its fuel is booked on.
+
+        The stated figure is the Ecodesign seasonal space heating efficiency ``eta_s`` of the
+        boiler's energy label, on the gross calorific value. Two limits apply, and a figure above
+        either is refused here with the reason instead of failing inside the simulation (exit 5):
+
+        - every boiler: at most :attr:`BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT`. A larger one
+          is no such figure -- a German datasheet's 104 % for a condensing boiler is on the net
+          calorific value -- and ``GenericBoilerConfig`` refuses it.
+        - a boiler booked on the net calorific value (conventional gas, LPG, oil and HVO, pellets,
+          logs and wood chips): at most its own ceiling,
+          :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` at the stated installation
+          year and :attr:`BOILER_POWER_OF_THE_CEILING_CHECK_IN_WATT`. Above it the scaled curve
+          exceeds 1 on the net calorific value: the boiler would make more heat than the fuel booked
+          for it, and its combustion loss would turn negative. For example, a current conventional
+          gas boiler takes at most 86.82 %, so the frontend's 90 % default is refused for it (owner
+          decision of 2026-10-21). The boiler's build refuses the same, the backstop. A condensing
+          gas, oil or hydrogen boiler, booked on the gross value, is checked by its build only
+          (owner decision of 2026-10-21).
+
+        The house's boiler is checked as stated, as the 97 % limit is, whether or not a measure
+        replaces it. Other generators list the figure and are not checked.
+
+        Example: ``{"type_of_system": "pellet_heating", "seasonal_efficiency_in_percent": 90}`` is
+        refused, naming the ceiling 86.78 %; 86 % passes.
+        """
+        heating = house.get("heating") or {}
+        stated = heating.get("seasonal_efficiency_in_percent")
+        generator = heating.get("type_of_system")
+        boilers = {member.value: member for member in HeatGenerator.boilers()}
+        if stated is None or generator not in boilers:
+            return []
+        path = "house.heating.seasonal_efficiency_in_percent"
+        maximum = cls.BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT
+        if stated > maximum:
+            return [
+                Problem(
+                    path=path,
+                    code=ProblemCode.RANGE_EXCEEDED,
+                    message=(
+                        f"a boiler's seasonal efficiency is the Ecodesign eta_s of its energy label on the gross "
+                        f"calorific value, at most {maximum:g} %; {path} is {stated:g} %, which is no such figure "
+                        "(a value on the net calorific value?)"
+                    ),
+                )
+            ]
+        energy_carrier, boiler_type = cls.BOILER_FUEL_AND_TYPE[boilers[generator]]
+        if CalorificBasis.of_booking(energy_carrier, boiler_type) != CalorificBasis.NET:
+            return []
+        installation_year = heating.get("installation_year")
+        ceiling = BoilerEfficiencySources.highest_seasonal_efficiency(
+            energy_carrier=energy_carrier,
+            boiler_type=boiler_type,
+            installation_year=installation_year,
+            maximal_power_in_watt=cls.BOILER_POWER_OF_THE_CEILING_CHECK_IN_WATT,
+        )
+        # The translator writes stated / PERCENT, the boiler's build compares that with the ceiling.
+        if stated / BoilerEfficiency.PERCENT <= ceiling:
+            return []
+        # Rounded down, so the figure the message names is itself accepted.
+        ceiling_in_percent = math.floor(ceiling * BoilerEfficiency.PERCENT * 100.0) / 100.0
+        vintage = f"installed in {installation_year}" if installation_year is not None else "with no installation year"
+        return [
+            Problem(
+                path=path,
+                code=ProblemCode.RANGE_EXCEEDED,
+                message=(
+                    f"a {generator} boiler {vintage} does not condense and its fuel is booked on the net "
+                    f"calorific value, on which its efficiency curve cannot exceed 100 %: it takes a seasonal "
+                    f"efficiency of at most {ceiling_in_percent:.2f} % (eta_s, gross calorific value); {path} is "
+                    f"{stated:g} %"
+                ),
+            )
+        ]
 
     @classmethod
     def _unsupported_generator(cls, house: Mapping[str, Any]) -> List[Problem]:

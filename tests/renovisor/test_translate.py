@@ -18,6 +18,7 @@ from typing import Any, Dict, Mapping, Optional
 
 import pytest
 
+from hisim.components.generic_boiler import BoilerType, GenericBoilerConfig
 from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.apply import SelectsNothing, apply
 from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
@@ -130,6 +131,20 @@ class TestEveryGenerator:
 
         config = config_of(system, BaseFiles.generator_component(system.base_file_name))
         assert config.get(Targets.BOILER_TYPE) == boiler_type
+
+    @pytest.mark.parametrize("generator", HeatGenerator.boilers())
+    def test_the_request_checks_boiler_table_is_the_translated_twins(self, generator: HeatGenerator) -> None:
+        """``SemanticChecks.BOILER_FUEL_AND_TYPE`` names the fuel and type the twin's boiler gets.
+
+        The request check needs them before anything is translated, to refuse a stated seasonal efficiency above
+        the boiler's own ceiling; read off the twin's preset and the re-typing, they must agree.
+        """
+        system = translate(baseline(heating__type_of_system=generator.value))
+
+        entry = _entry(system, BaseFiles.generator_component(system.base_file_name))
+        preset = getattr(GenericBoilerConfig, f"preset_{entry.preset}")("Boiler")
+        boiler_type = BoilerType(dict(entry.config).get(Targets.BOILER_TYPE, preset.boiler_type.value))
+        assert SemanticChecks.BOILER_FUEL_AND_TYPE[generator] == (preset.energy_carrier, boiler_type)
 
     def test_a_solar_thermal_house_runs_the_twin_that_wires_a_collector(self) -> None:
         """Only gas and the heat pump have one, which is why the others are on the list."""
@@ -670,14 +685,57 @@ class TestASeasonalEfficiencyWithoutABoiler:
             ReportStatus.NOT_IMPLEMENTED_YET, "The heat pump follows its hplib model curve."
         )
 
-    def test_a_boiler_still_takes_it_as_its_efficiency(self) -> None:
-        """Unchanged for boilers: the figure becomes the full-load efficiency, approximated."""
+    def test_a_boiler_takes_it_as_its_ecodesign_seasonal_efficiency(self) -> None:
+        """hisim-component-physics-4g9.66: the figure is eta_s (GCV) and scales the boiler's sourced curve.
+
+        The old mapping wrote it as the full-load efficiency and 0.3 below it as the part-load one.
+        """
         system = translate(issue_72_request("conventional_oil_heating"))
 
         line = system.report.line(self.PATH)
         assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.note is not None and "scales the boiler type's sourced part-load curve" in line.note
         config = config_of(system, BaseFiles.generator_component(system.base_file_name))
-        assert config[Targets.EFFICIENCY_MAXIMUM] == pytest.approx(0.9)
+        assert config[Targets.SEASONAL_EFFICIENCY] == pytest.approx(0.9)
+        assert "eff_th_max" not in config and "eff_th_min" not in config
+
+
+@pytest.mark.base
+class TestTheBoilersInstallationYear:
+    """hisim-component-physics-4g9.66: the existing boiler's year picks its efficiency row; a new boiler is current."""
+
+    PATH = "house.heating.installation_year"
+
+    def test_the_existing_boilers_year_reaches_the_boiler_and_its_line_says_so(self) -> None:
+        """The mockup's gas boiler of 1995, kept, takes the 1990s row; the line stays the economics stage's."""
+        system = translate(baseline(heating__installation_year=1995))
+
+        config = config_of(system, BaseFiles.generator_component(system.base_file_name))
+        assert config[Targets.INSTALLATION_YEAR] == 1995
+        line = system.report.line(self.PATH)
+        assert line is not None and line.status is ReportStatus.USED
+        assert line.target == Translator.ECONOMICS_TARGET
+        assert line.note is not None and "efficiency row" in line.note
+
+    @pytest.mark.parametrize("generator", ["pellet_heating", "biomass_heating", "woodchip_heating"])
+    def test_a_wood_boilers_line_says_the_year_does_not_change_its_efficiency(self, generator: str) -> None:
+        """A pellet or wood-chip boiler takes its product data whatever the year; no IWU decade row is claimed."""
+        system = translate(baseline(heating__type_of_system=generator, heating__installation_year=1995))
+
+        line = system.report.line(self.PATH)
+        assert line is not None and line.note is not None
+        assert "whatever the year" in line.note and "IWU" not in line.note
+
+    def test_a_replaced_boiler_leaves_no_year_on_the_new_one(self) -> None:
+        """A heating_system measure that installs a condensing gas boiler makes it a current boiler."""
+        document = baseline(heating__installation_year=1995)
+        document["measures"] = [{"id": "heating_system", "options": {"type_of_system": "condensing_gas_heating"}}]
+        system = translate(document)
+
+        assert system.base_file_name == BaseFiles.select(HeatGenerator.CONDENSING_GAS_HEATING, with_solar_thermal=False)
+        component = BaseFiles.generator_component(system.base_file_name)
+        assert _entry(system, component) is not None  # the boiler is there
+        assert Targets.INSTALLATION_YEAR not in config_of(system, component)
 
 
 @pytest.mark.base

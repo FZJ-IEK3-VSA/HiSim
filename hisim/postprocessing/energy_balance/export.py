@@ -84,10 +84,14 @@ class EnergyBalanceReport:
 
     @property
     def verdict(self) -> str:
-        """``nothing_declared``, ``closes`` or ``does_not_close``."""
-        if not self.balances:
-            return "nothing_declared"
-        return "does_not_close" if self.fails else "closes"
+        """``does_not_close`` whenever the run fails, else ``nothing_declared`` or ``closes``.
+
+        A run in which no component declares a port can still fail, by an enforced meter or an unmetered port, and
+        the report then says so rather than "nothing_declared".
+        """
+        if self.fails:
+            return "does_not_close"
+        return "nothing_declared" if not self.balances else "closes"
 
     @property
     def fails(self) -> bool:

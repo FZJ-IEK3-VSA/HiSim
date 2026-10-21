@@ -10,9 +10,10 @@ metered port passes a meter; ``sankey`` draws the yearly flows as one connected 
 check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE``
 only writes the files.
 
-Coverage: the water storages and the heat distribution system declare their ports with the hydronic coupling
-(hisim-hydronics-fxix.6), as ``HydronicPort`` on (mass flow, temperature); the electricity devices, the building and
-the rest follow in the PRs of the spec's §9. Until then they are drawn as undeclared nodes.
+Coverage: today the heat generators declare their ports and the meters their published exchanges. The water storages
+and the heat distribution system declare ``HydronicPort`` circuits in PR 3 of the spec's §9 (hisim-hydronics-fxix.6),
+the electricity devices, the building and the rest in the other PRs of §9; until then they are drawn as undeclared
+nodes.
 """
 
 from hisim.postprocessing.energy_balance.check import (

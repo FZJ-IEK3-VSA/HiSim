@@ -2983,8 +2983,8 @@ class EnergyBalanceNode:
 class EnergyBalanceFlows:
     """The year-1 household electricity balance: sources, the house's electricity and sinks, in kWh.
 
-    The middle node carries `house_electricity_total_in_kwh`, the sum of both the sources and the sinks; any imbalance
-    between the drawn terminals becomes an explicit `losses / unattributed` terminal. `self_consumption_share` is the
+    The middle node carries `house_electricity_total_in_kwh`, the total both sides sum to once the explicit `losses /
+    unattributed` terminal pads the shorter side (the larger of the two sides' sums). `self_consumption_share` is the
     share of PV generation used in the house and `self_sufficiency_share` the share of consumption not from the grid;
     both are None when their denominator is zero. `battery_round_trip_loss_in_kwh` is charge minus discharge, clamped at
     zero (more discharge than charge means charge carried over from the previous year). `unattributed_roles_in_kwh`

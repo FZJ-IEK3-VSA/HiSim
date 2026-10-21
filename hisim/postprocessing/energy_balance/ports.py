@@ -11,7 +11,7 @@ D1). The peer of each port comes from the wiring the simulator left on the compo
 (:attr:`~hisim.component.ComponentInput.src_object_name`), skipping exempt components (:class:`Wiring`): a metered
 port of electricity or a bought carrier goes to the meter that reads it, directly or through exempt components, or
 to a component that reads it. A port with no peer falls back to its carrier's boundary default
-(:meth:`hisim.energy_port.EnergyPort.default_peer`), such as "natural gas supply" or "outdoors", or to nobody, which
+(:meth:`hisim.energy_port.EnergyPort.default_boundary`), such as "natural gas supply" or "outdoors", or to nobody, which
 leaves the port *unlinked*. A metered port whose peer is no meter and no component is *unmetered*
 (:meth:`DeclaredPorts.unmetered`).
 
@@ -46,6 +46,7 @@ from hisim.component import (
     MeterComponent,
 )
 from hisim.component_wrapper import ComponentWrapper
+from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_port import EnergyPort, MeteredExchange
 
 
@@ -452,8 +453,13 @@ class Wiring:
 
     @staticmethod
     def load_types_agree(first: Optional[lt.LoadTypes], second: Optional[lt.LoadTypes]) -> bool:
-        """Whether two outputs can carry the same flow: equal load types, or either is ``ANY`` or unknown."""
-        return first is None or second is None or lt.LoadTypes.ANY in (first, second) or first == second
+        """Whether two outputs can carry the same flow: either is unknown, or the port types agree.
+
+        The rule is HiSim's one spelling of it (:meth:`hisim.config.channels.PortTypeCompatibility.load_types_agree`),
+        equal load types or the ``ANY`` wildcard; only an unknown load type, an output the wiring has no record of,
+        is added here.
+        """
+        return first is None or second is None or PortTypeCompatibility.load_types_agree(first, second)
 
     def metered_peer(self, component_name: str, field_name: str, port: EnergyPort) -> Optional[Peer]:
         """The peer of a metered port (:attr:`~hisim.energy_port.EnergyPort.is_metered`); None when nothing reads it.

@@ -21,7 +21,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.config import ComponentID
-from hisim.energy_port import DefaultPeer, EnergyPort, MeteredExchange
+from hisim.energy_port import EnergyPort, MeteredExchange
 from hisim.postprocessing.energy_balance import (
     EnergyBalanceError,
     EnergyBalanceReport,
@@ -167,32 +167,65 @@ def test_an_energy_port_names_either_an_environment_node_or_a_component() -> Non
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("port", "default", "boundary"),
+    ("port", "boundary"),
     [
-        (EnergyPort(IN, ELECTRICITY), DefaultPeer.NONE, None),
-        (EnergyPort(OUT, ELECTRICITY), DefaultPeer.NONE, None),
-        (EnergyPort(LOSS, ELECTRICITY), DefaultPeer.BOUNDARY, "outdoors"),
-        (EnergyPort(IN, GAS), DefaultPeer.BOUNDARY, "natural gas supply"),
-        (EnergyPort(IN, lt.EnergyBalanceCarrier.HEATING_OIL), DefaultPeer.BOUNDARY, "heating oil supply"),
-        (EnergyPort(IN, lt.EnergyBalanceCarrier.WOOD_CHIPS), DefaultPeer.BOUNDARY, "wood chips supply"),
-        (EnergyPort(IN, lt.EnergyBalanceCarrier.DISTRICT_HEAT), DefaultPeer.BOUNDARY, "district heat supply"),
-        (EnergyPort(OUT, GAS), DefaultPeer.NONE, None),
-        (EnergyPort(LOSS, GAS), DefaultPeer.BOUNDARY, "outdoors"),
-        (EnergyPort(IN, lt.EnergyBalanceCarrier.AMBIENT_HEAT), DefaultPeer.BOUNDARY, "ambient heat"),
-        (EnergyPort(OUT, lt.EnergyBalanceCarrier.AMBIENT_HEAT), DefaultPeer.BOUNDARY, "ambient heat"),
-        (EnergyPort(IN, SOLAR), DefaultPeer.BOUNDARY, "sun"),
-        (EnergyPort(OUT, SOLAR), DefaultPeer.NONE, None),
-        (EnergyPort(IN, SH), DefaultPeer.NONE, None),
-        (EnergyPort(OUT, lt.EnergyBalanceCarrier.ROOM_HEAT), DefaultPeer.NONE, None),
-        (EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT), DefaultPeer.BOUNDARY, "outdoors"),
+        (EnergyPort(IN, ELECTRICITY), None),
+        (EnergyPort(OUT, ELECTRICITY), None),
+        (EnergyPort(LOSS, ELECTRICITY), "outdoors"),
+        (EnergyPort(IN, GAS), "natural gas supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.HEATING_OIL), "heating oil supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.WOOD_CHIPS), "wood chips supply"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.DISTRICT_HEAT), "district heat supply"),
+        (EnergyPort(OUT, GAS), None),
+        (EnergyPort(LOSS, GAS), "outdoors"),
+        (EnergyPort(IN, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat"),
+        (EnergyPort(OUT, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat"),
+        (EnergyPort(IN, SOLAR), "sun"),
+        (EnergyPort(OUT, SOLAR), None),
+        (EnergyPort(IN, SH), None),
+        (EnergyPort(OUT, lt.EnergyBalanceCarrier.ROOM_HEAT), None),
+        (EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT), "outdoors"),
     ],
 )
-def test_every_carrier_has_the_default_peer_of_the_spec(
-    port: EnergyPort, default: DefaultPeer, boundary: Optional[str]
-) -> None:
+def test_every_carrier_has_the_boundary_default_of_the_spec(port: EnergyPort, boundary: Optional[str]) -> None:
     """Spec §4.3: bought carriers from their supply, losses outdoors; electricity and heat have no default (Q-J)."""
-    assert port.default_peer() == default
     assert port.default_boundary() == boundary
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("role", "carrier", "environment", "refusal"),
+    [
+        (IN, ELECTRICITY, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
+        (OUT, ELECTRICITY, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
+        (IN, GAS, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
+        (IN, lt.EnergyBalanceCarrier.DISTRICT_HEAT, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
+        (IN, ELECTRICITY, lt.EnvironmentNode.GRID_IMPORT, "cannot name 'grid import'"),
+        (LOSS, ELECTRICITY, lt.EnvironmentNode.GRID_EXPORT, "cannot name 'grid export'"),
+        (OUT, SH, lt.EnvironmentNode.GRID_EXPORT, "cannot name 'grid export'"),
+    ],
+)
+def test_a_port_cannot_name_an_environment_that_takes_its_flow_past_every_meter(
+    role: lt.EnergyRole, carrier: lt.EnergyBalanceCarrier, environment: lt.EnvironmentNode, refusal: str
+) -> None:
+    """A metered port's peer is its meter, and the grid is reached only through the meter (Q-J): both are refused.
+
+    A loss of electricity may still name its boundary, and a heat port any node but the grid.
+    """
+    with pytest.raises(ValueError, match=refusal):
+        EnergyPort(role, carrier, environment=environment)
+    assert EnergyPort(LOSS, ELECTRICITY, environment=lt.EnvironmentNode.OUTDOORS).default_boundary() == "outdoors"
+    assert not EnergyPort(LOSS, ELECTRICITY).is_metered and EnergyPort(IN, GAS).is_metered
+
+
+@pytest.mark.base
+def test_a_metered_exchange_names_a_metered_carrier_and_two_distinct_outputs() -> None:
+    """A meter counts electricity or a bought carrier, with one output per direction."""
+    with pytest.raises(ValueError, match="got 'FlowInWatt' for both"):
+        MeteredExchange(ELECTRICITY, "FlowInWatt", "FlowInWatt")
+    with pytest.raises(ValueError, match="not space_heating_heat"):
+        MeteredExchange(SH, "HeatInWatt")
+    assert MeteredExchange(GAS, "GasFromGrid").export_output is None
 
 
 @pytest.mark.base

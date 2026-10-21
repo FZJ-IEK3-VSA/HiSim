@@ -25,7 +25,7 @@ The other side of a port is found from the wiring (complete Sankey spec, §4.3):
   carrier, or a component that moves energy. The wiring is traced through exempt components to the first meter, so
   a heat pump whose electricity the energy manager reads and passes on summed to the electricity meter links to that
   meter. There is no derived junction: what the meter publishes is checked against what it reads, never assumed.
-* A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_peer`): a bought
+* A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_boundary`): a bought
   carrier's ``IN`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their nodes,
   and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A metered
   port whose peer is no meter and no component is *unmetered*, which the balance reports.
@@ -65,7 +65,6 @@ heat and solar.
 
 from __future__ import annotations
 
-import enum
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
@@ -73,20 +72,6 @@ from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
 from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim.config.names import NameSyntax
-
-
-@enum.unique
-class DefaultPeer(str, enum.Enum):
-
-    """What kind of node a port goes to when the wiring names no peer for it (complete Sankey spec, §4.3).
-
-    ``BOUNDARY`` is a boundary node such as "natural gas supply" or "outdoors" (:meth:`EnergyPort.default_boundary`
-    names it), and ``NONE`` means the carrier has no default for the port's role: such a port is unlinked. There is
-    no junction default: an electricity port that no meter and no component reads is unlinked (owner decision Q-J).
-    """
-
-    BOUNDARY = "boundary"
-    NONE = "none"
 
 
 @dataclass(frozen=True)
@@ -116,11 +101,34 @@ class EnergyPort:
     POWER_UNITS_IN_KILOWATT: ClassVar[Dict[lt.Units, float]] = {lt.Units.WATT: 1e-3, lt.Units.KILOWATT: 1.0}
 
     def __post_init__(self) -> None:
-        """Refuse a port whose role or carrier is not one of the enums, or that names two peers."""
+        """Refuse a port whose role or carrier is not one of the enums, that names two peers, or that skips a meter.
+
+        A metered port (``IN`` or ``OUT`` of electricity or a bought carrier) names no ``environment``: its peer is
+        the meter that reads it, and a boundary node named on it would take its flow past every meter (owner decision
+        Q-J). The grid nodes are no port's environment at all: "grid import" and "grid export" are where a meter's
+        published exchange comes from and goes to (:meth:`MeteredExchange.import_node`).
+
+        Raises:
+            ValueError: For any of the above, naming the port's role, carrier and environment.
+        """
         lt.EnergyRole(self.role)
         lt.EnergyBalanceCarrier(self.carrier)
         if self.environment is not None and (self.peer_input is not None or self.peer_output is not None):
             raise ValueError("An energy port's peer is either an environment node or a component, not both.")
+        if self.environment in (lt.EnvironmentNode.GRID_IMPORT, lt.EnvironmentNode.GRID_EXPORT):
+            raise ValueError(
+                f"An energy port cannot name {self.environment.value!r} as its environment: the grid is reached only "
+                "through the electricity meter's published exchange."
+            )
+        if (
+            self.environment is not None
+            and self.carrier in self.METERED_CARRIERS
+            and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+        ):
+            raise ValueError(
+                f"A {self.role.value} port of {self.carrier.value} is metered and names no environment "
+                f"({self.environment.value!r}): its peer is the meter that reads it."
+            )
         if self.peer_input is not None and self.peer_output is not None:
             raise ValueError(
                 f"An energy port names its peer by one of peer_input or peer_output, not both: "
@@ -208,27 +216,14 @@ class EnergyPort:
         """
         return f"{carrier.value.replace('_', ' ')} supply"
 
-    def default_peer(self) -> DefaultPeer:
-        """The kind of node this port goes to when the wiring names no peer for it.
+    def default_boundary(self) -> Optional[str]:
+        """The boundary node this port goes to when the wiring names no peer for it, or None when it has none.
 
         The table of the complete Sankey spec, §4.3: a ``LOSS`` port, a bought carrier's ``IN`` port, an ambient-heat
-        ``IN`` or ``OUT`` port and a solar ``IN`` port go to a boundary node (:meth:`default_boundary`); every other
-        port has no default, an electricity port and a heat port above all. A port that names its ``environment``
-        goes to that boundary node.
-
-        Returns:
-            ``BOUNDARY`` or ``NONE``.
-        """
-        if self.default_boundary() is not None:
-            return DefaultPeer.BOUNDARY
-        return DefaultPeer.NONE
-
-    def default_boundary(self) -> Optional[str]:
-        """The boundary node this port goes to when it names no component peer, or None when it has none.
-
-        For example, a boiler's natural-gas ``IN`` port goes to "natural gas supply", a heat pump's ambient-heat
-        ``IN`` port to "ambient heat", a collector's solar ``IN`` port to "sun" and every ``LOSS`` port to
-        "outdoors". A port that names its ``environment`` goes there whatever its carrier.
+        ``IN`` or ``OUT`` port and a solar ``IN`` port have one; an electricity port and a heat port have none, and
+        such a port with no peer is unlinked. For example, a boiler's natural-gas ``IN`` port that no meter reads goes
+        to "natural gas supply", a heat pump's ambient-heat ``IN`` port to "ambient heat", a collector's solar ``IN``
+        port to "sun" and every ``LOSS`` port to "outdoors". A port that names its ``environment`` goes there.
 
         Returns:
             The boundary node's name, or None for a port whose carrier has no boundary default for its role.
@@ -250,13 +245,9 @@ class EnergyPort:
         """Whether a meter is to count this port's flow: an ``IN`` or ``OUT`` port of electricity or a bought carrier.
 
         For example, a heat pump's electricity ``IN`` port and a boiler's natural-gas ``IN`` port are metered, a
-        battery's electricity ``LOSS`` port is not. A port that names its ``environment`` is not metered.
+        battery's electricity ``LOSS`` port is not. Such a port names no ``environment`` (:meth:`__post_init__`).
         """
-        return (
-            self.environment is None
-            and self.carrier in self.METERED_CARRIERS
-            and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
-        )
+        return self.carrier in self.METERED_CARRIERS and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
 
     @property
     def names_a_component(self) -> bool:
@@ -307,6 +298,23 @@ class MeteredExchange:
     carrier: lt.EnergyBalanceCarrier
     import_output: str
     export_output: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Refuse an exchange of a carrier no meter counts, or whose import and export are the same output.
+
+        Raises:
+            ValueError: If the carrier is not electricity or a bought carrier (:attr:`EnergyPort.METERED_CARRIERS`),
+                or if ``import_output`` and ``export_output`` coincide: one output cannot be both directions.
+        """
+        if lt.EnergyBalanceCarrier(self.carrier) not in EnergyPort.METERED_CARRIERS:
+            raise ValueError(
+                f"A metered exchange counts electricity or a bought carrier, not {self.carrier.value}: no meter "
+                "stands at the system boundary of it."
+            )
+        if self.export_output is not None and self.export_output == self.import_output:
+            raise ValueError(
+                f"A metered exchange names two outputs, one per direction; got {self.import_output!r} for both."
+            )
 
     def import_node(self) -> str:
         """The boundary node the import comes from: "grid import" for electricity, else the carrier's supply node.

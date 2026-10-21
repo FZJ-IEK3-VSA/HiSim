@@ -247,6 +247,10 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
     assert exempt, "the controllers of the household are exempt"
     drawn = {node for _, source, target in links for node in (source, target)}
     assert not {name for name in drawn if name.removeprefix("undeclared: ") in exempt}
+    if setup == "household_gas_building_sizer":
+        # the boiler is the gas meter's one consumer and declares its fuel: the meter publishes what it reads
+        meters = {meter["meter"]: meter for meter in report["meters"]}
+        assert meters["GasMeter"]["verdict"] == "agrees", meters["GasMeter"]
 
 
 @pytest.mark.extendedbase2
@@ -269,9 +273,10 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     assert carriers["solar"]["in_kwh"] == pytest.approx(heat_out + carriers["solar"]["loss_kwh"], rel=1e-9)
     assert carriers["electricity"]["in_kwh"] > 0.0
     assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["in_kwh"])
-    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {
-        (carrier, source) for carrier, source, _ in sankey_links(results)
-    }
+    links = sankey_links(results)
+    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {(carrier, source) for carrier, source, _ in links}
+    # the pump's re-pointed electricity port reaches the meter through the energy manager (spec §5.2)
+    assert ("electricity", "ElectricityMeter", "SolarThermalSystem") in links
 
 
 @pytest.mark.extendedbase2

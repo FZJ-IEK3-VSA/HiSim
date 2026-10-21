@@ -334,8 +334,9 @@ class EnergyBalanceCarrier(str, enum.Enum):
     the same name. ``ROOM_HEAT`` is heat released into or lost from the heated zone: the carrier of
     the internal gains, of the building's losses and of its thermal mass, so that ``SPACE_HEATING_HEAT``
     stays the heat the heating system delivers up to the building (complete Sankey spec, Q-G).
-    Every carrier has a default peer for a port that names no component
-    (:meth:`hisim.energy_port.EnergyPort.default_peer`).
+    A port whose wiring names no peer takes its carrier's boundary default where one exists
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
+    unlinked.
     """
 
     ELECTRICITY = "electricity"
@@ -361,7 +362,7 @@ class EnvironmentNode(str, enum.Enum):
 
     An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
     ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
-    (:meth:`hisim.energy_port.EnergyPort.default_peer`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
     at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as

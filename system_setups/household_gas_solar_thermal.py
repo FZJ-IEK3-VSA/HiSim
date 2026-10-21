@@ -105,6 +105,9 @@ def setup_function(
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The building holds as many apartments as the archetype has dwellings, like the sizer setups:
+    # the DHW storage is sized from the building's count, the collector and the boiler from this one.
+    my_building_config.number_of_apartments = number_of_apartments
     # The design outside temperature is the weather's, not the building's: the building reads
     # it as a sized field, so it is resolved before the archetype lookup runs on the config.
     my_building_config = my_building_config.resolve(

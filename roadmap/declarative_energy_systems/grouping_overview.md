@@ -17,7 +17,7 @@ grouping table or re-record.
 | [`household_district_heating_building_sizer`](#household_district_heating_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 5 |
 | [`household_electric_heating_building_sizer`](#household_electric_heating_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 4 |
 | [`household_gas_building_sizer`](#household_gas_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 7 |
-| [`household_gas_solar_thermal`](#household_gas_solar_thermal) | — | — | — | 0 |
+| [`household_gas_solar_thermal`](#household_gas_solar_thermal) | — | — | — | 1 |
 | [`household_gas_solar_thermal_building_sizer`](#household_gas_solar_thermal_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 7 |
 | [`household_heatpump_building_sizer`](#household_heatpump_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 7 |
 | [`household_heatpump_car_building_sizer`](#household_heatpump_car_building_sizer) | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 7 |
@@ -209,24 +209,27 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_gas_solar_thermal`
 
-Recorded from `system_setups/household_gas_solar_thermal.py`, described in the grouped file as "Household setup with gas boiler and solar thermal system for DHW." 14 components are shared by every configuration, and the grouped file declares no variant group.
+Recorded from `system_setups/household_gas_solar_thermal.py`, described in the grouped file as "Household setup with gas boiler and solar thermal system for DHW." 14 components are shared by every configuration, and the grouped file declares no variant group. One of the shared components is an override, which means the grouped file states the baseline's value for it and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_gas_solar_thermal"]
-    fixed["fixed in every configuration (14)<br/>Building<br/>UTSPConnector<br/>Weather<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>HeatingCurveController<br/>DHWStorage<br/>SimpleHotWaterStorage<br/>ElectricityMeter<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>GasMeter<br/>SolarThermalSystem<br/>SolarThermalSystemController"]
+    fixed["fixed in every configuration (13)<br/>UTSPConnector<br/>Weather<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>HeatingCurveController<br/>DHWStorage<br/>SimpleHotWaterStorage<br/>ElectricityMeter<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>GasMeter<br/>SolarThermalSystem<br/>SolarThermalSystemController"]
+    knobs["knobs, stated at the baseline value (1)<br/>Building"]
 
     setup --> fixed
+    setup --> knobs
 ```
 
-The first box is the grouped file's shared `components:` section — 14 components, none of them a knob — and the setup has no variant group, so that is every component it has.
+The first two boxes together are the grouped file's shared `components:` section — 14 components, of which the one knobs are the ones whose committed value a consumer replaces — and the setup has no variant group, so that is every component it has.
 
 ### Assignments
 
 | Component | Assignment | Judgement |
 | --- | --- | --- |
+| `Building` | `override` | Only the apartment count moves. The DHW storage, the boiler and the collector are sized from it by their laws and stay AUTO in the file, so a second dwelling is a number a consumer sets, not a component that comes or goes. |
 
 Ordering rule: variant assignments first, then overrides. Within the variant assignments, groups in the order the grouped file's `variants:` section lists them; within a group, the members assigned to the group as a whole before the members assigned to a single option, then the options in the order that section lists them, and within each option the order that option's `components:` block lists them. Within the overrides, the order the shared `components:` section lists them. The judgement text is the note from the grouping table in full, with the YAML line wrapping undone.
 

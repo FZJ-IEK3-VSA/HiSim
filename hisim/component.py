@@ -23,7 +23,7 @@ from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
-from hisim.energy_port import EnergyPort, MeteredExchange
+from hisim.energy_port import CircuitEnd, EnergyPort, HydronicPort, HydronicPortError, MeteredExchange
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
@@ -337,6 +337,8 @@ class Component:
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []
+        #: The ends of water circuits this component declares (:meth:`add_hydronic_port`).
+        self.hydronic_ports: List[CircuitEnd] = []
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
@@ -485,6 +487,76 @@ class Component:
         )
         self.outputs.append(outp)
         return outp
+
+    #: The unit each leg of a water circuit must have.
+    CIRCUIT_LEG_UNITS: ClassVar[Dict[str, lt.Units]] = {
+        "mass_flow": lt.Units.KG_PER_SEC,
+        "supply_temperature": lt.Units.CELSIUS,
+        "return_temperature": lt.Units.CELSIUS,
+    }
+
+    def add_hydronic_port(
+        self,
+        *,
+        mass_flow: typing.Union[ComponentInput, ComponentOutput],
+        supply_temperature: typing.Union[ComponentInput, ComponentOutput],
+        return_temperature: typing.Union[ComponentInput, ComponentOutput],
+        role: lt.EnergyRole,
+        carrier: lt.EnergyBalanceCarrier,
+    ) -> CircuitEnd:
+        """Declare this component's end of a water circuit by the channels that carry its three quantities.
+
+        Each quantity is one of the component's own outputs, when it publishes it, or one of its inputs, when it
+        reads it from the other end; the energy balance follows an input to the output connected to it, so both ends
+        of a circuit resolve to the same three columns and derive the same heat
+        (:class:`~hisim.energy_port.HydronicPort`). ``role`` is ``OUT`` for the supply owner and ``IN`` for the
+        receiver. For example, a buffer
+        declares its end of the boiler's circuit with ``mass_flow`` and ``supply_temperature`` its inputs from the
+        boiler, ``return_temperature`` its own output to the boiler, role ``IN``.
+
+        Args:
+            mass_flow: The channel of the circuit's mass flow, in kg/s.
+            supply_temperature: The channel of the supply temperature, in °C.
+            return_temperature: The channel of the return temperature, in °C.
+            role: ``OUT`` for the supply owner, ``IN`` for the receiver.
+            carrier: The heat the circuit carries, space-heating or hot-water heat.
+
+        Returns:
+            The declared end, also kept in :attr:`hydronic_ports`.
+
+        Raises:
+            HydronicPortError: If a channel is not one of this component's own inputs or outputs, has the wrong unit
+                (kg/s for the flow, °C for the temperatures), or the port itself is malformed.
+        """
+        channels = {
+            "mass_flow": mass_flow,
+            "supply_temperature": supply_temperature,
+            "return_temperature": return_temperature,
+        }
+        for leg, channel in channels.items():
+            own = self.inputs if isinstance(channel, ComponentInput) else self.outputs
+            if channel.component_name != self.component_name or all(channel is not mine for mine in own):
+                raise HydronicPortError(
+                    f"{self.component_name} declares a circuit whose {leg} is {channel.component_name}."
+                    f"{channel.field_name}, which is not one of its own inputs or outputs."
+                )
+            if channel.unit != self.CIRCUIT_LEG_UNITS[leg]:
+                raise HydronicPortError(
+                    f"{self.component_name} declares a circuit whose {leg} {channel.field_name} is in "
+                    f"{channel.unit.value}, not {self.CIRCUIT_LEG_UNITS[leg].value}."
+                )
+        end = CircuitEnd(
+            port=HydronicPort(
+                mass_flow=mass_flow.field_name,
+                supply_temperature=supply_temperature.field_name,
+                return_temperature=return_temperature.field_name,
+                role=role,
+                carrier=carrier,
+            ),
+            input_legs=frozenset(leg for leg, channel in channels.items() if isinstance(channel, ComponentInput)),
+        )
+        self.hydronic_ports.append(end)
+        return end
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""

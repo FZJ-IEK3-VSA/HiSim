@@ -138,8 +138,8 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
     """Import minus export of the electricity meter equals what the devices it reads take minus what they give.
 
     The meter reads the energy manager's sum of the devices, so every device links to it through the manager. The
-    check is reported and not yet enforced, because the building and the storages are still undeclared (Q-H); with
-    PV, battery and occupancy declared it already agrees in every step.
+    check is reported and not yet enforced, because the building is still undeclared (Q-H); with PV, battery and
+    occupancy declared it already agrees in every step.
     """
     setup, results = twin
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))

@@ -334,11 +334,6 @@ class ElectricHeating(PhysicsComponent):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
-            energy_port=EnergyPort(
-                EnergyRole.OUT,
-                EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterOutputDhwMassFlowRate,
-            ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -363,6 +358,15 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT_HOUR,
             output_description="Electric energy output for domestic hot water",
         )
+        if self.water_input_temperature_dhw_channel is not None:
+            # the hot-water heat is what the hot-water circuit carries (complete Sankey spec §5.1)
+            self.add_hydronic_port(
+                mass_flow=self.water_mass_flow_dhw_output_channel,
+                supply_temperature=self.water_output_temperature_dhw_channel,
+                return_temperature=self.water_input_temperature_dhw_channel,
+                role=EnergyRole.OUT,
+                carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            )
 
         self.add_default_connections(self.get_default_connections_from_electric_heating_controller())
         self.add_default_connections(self.get_default_connections_from_building())

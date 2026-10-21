@@ -68,6 +68,10 @@ class DynamicConnectionResolver:
     #: of the participant. It is filled by the component's own constructor.
     DEFAULT_FEEDS_ATTRIBUTE: ClassVar[str] = "dynamic_default_connections"
 
+    #: Method of a dynamic component that states its default feeds from one participant of the system; it reads
+    #: the registry above, or, for a component that reads ports by role, the participant's declared ports.
+    DEFAULT_FEEDS_HOOK: ClassVar[str] = "default_connections_for"
+
     #: Method a component implements to create the ports of its resolved feeds.
     RESOLUTION_HOOK: ClassVar[str] = "resolve_dynamic_connections"
 
@@ -109,25 +113,30 @@ class DynamicConnectionResolver:
         )
 
     @classmethod
-    def default_feeds_of(cls, target: Any, source_class_name: str) -> Tuple[Any, ...]:
-        """Reads an aggregator's declared default feeds for one participant class.
+    def default_feeds_of(cls, target: Any, source: Any) -> Tuple[Any, ...]:
+        """Reads an aggregator's declared default feeds from one participant of the system.
 
-        The lookup is per aggregator and participant class, exactly like the static default
-        connection registry it parallels, and returns several because one bare item can
-        legitimately expand into more than one feed — an energy management system declares a
-        space-heating and a hot-water feed for the same heat pump class.
+        The aggregator says what it reads of the participant (``default_connections_for``): usually the
+        declarations for the participant's class, exactly like the static default connection registry it
+        parallels, and for the electricity meter every electricity port the participant declares. It returns
+        several because one bare item can legitimately expand into more than one feed — an energy management
+        system declares a space-heating and a hot-water feed for the same heat pump class. A target without that
+        method is read through its registry by class name.
 
         Args:
             target: The aggregator the bare item is addressed at.
-            source_class_name: Class name of the participant.
+            source: The participant, a constructed component.
 
         Returns:
-            The declarations for that class, in declaration order, or an empty tuple.
+            The declarations, in declaration order, or an empty tuple.
         """
+        reader = getattr(target, cls.DEFAULT_FEEDS_HOOK, None)
+        if callable(reader):
+            return tuple(reader(source))
         declared = getattr(target, cls.DEFAULT_FEEDS_ATTRIBUTE, None)
         if not isinstance(declared, Mapping):
             return ()
-        return tuple(declared.get(source_class_name, ()) or ())
+        return tuple(declared.get(source.get_classname(), ()) or ())
 
     @classmethod
     def feed_from_declaration(
@@ -179,7 +188,7 @@ class DynamicConnectionResolver:
         participant = self.components_by_name[source]
         return [
             self.feed_from_declaration(declaration, consumer, source)
-            for declaration in self.default_feeds_of(target, participant.get_classname())
+            for declaration in self.default_feeds_of(target, participant)
         ]
 
     def resolve_all(
@@ -420,7 +429,7 @@ class DynamicConnectionResolver:
         if feed.output is not None:
             return feed.output
         source = self.components_by_name[feed.source]
-        declarations = self.default_feeds_of(target, source.get_classname())
+        declarations = self.default_feeds_of(target, source)
         if len(declarations) == 1:
             return str(declarations[0].source_component_field_name)
         candidates = [str(declaration.source_component_field_name) for declaration in declarations]

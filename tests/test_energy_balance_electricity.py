@@ -7,9 +7,10 @@ takes the sun on its modules and gives its AC power to the electricity meter, lo
 battery charges from the meter and discharges to it, loses in its inverter and in its cells, and stores the change;
 the occupancy takes the appliances' electricity from the meter and the residents' body heat from the residents,
 releases the device heat gains and the body heat into the building, and loses the electricity the device heat gains
-do not account for. In both households the energy manager reads the devices and gives the meter their signed sum, so
-each device links to the meter through the exempt energy manager. Per step, the import minus the export the meter
-publishes must equal what the devices linked to it take minus what they give.
+do not account for. In both households the meter reads every device's electricity port directly, by its role
+(bead hisim-component-physics-4g9.39); the energy manager keeps its own balance for its decisions and the meter never
+reads it. Per step, the import minus the export the meter publishes must equal what the devices linked to it take
+minus what they give, and no electricity port is left unmetered, the heat pump's cooling and brine pump included.
 
 The second January week at 900 s of the heat-pump and the gas household (each run once per module): the run
 finishing proves every declared balance closes; the tests read its report. The building declares no ports until
@@ -55,14 +56,13 @@ class Expected:
         },
     }
 
-    #: The heat pump's electricity ports nothing reads, so no meter counts them (hisim-component-physics-4g9.39): its
-    #: cooling and its brine pump, both zero in the air-source heat pump of the twin.
-    UNMETERED: ClassVar[Dict[str, Set[Tuple[str, str]]]] = {
-        "household_gas_building_sizer": set(),
-        "household_heatpump_building_sizer": {
-            ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerForCooling"),
-            ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerBrinePump"),
-        },
+    #: The heat pump's electricity ports the meter reads, its cooling and its brine pump included, which no energy
+    #: manager reads and which were unmetered until hisim-component-physics-4g9.39.
+    HEAT_PUMP_READS: ClassVar[Set[Tuple[str, str]]] = {
+        ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerSH"),
+        ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerDHW"),
+        ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerForCooling"),
+        ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerBrinePump"),
     }
 
     #: Links of the connected diagram as (carrier, source, target), in both households.
@@ -137,9 +137,9 @@ def test_the_flows_of_the_electricity_devices_are_physical(twin: Tuple[str, Path
 def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple[str, Path]) -> None:
     """Import minus export of the electricity meter equals what the devices it reads take minus what they give.
 
-    The meter reads the energy manager's sum of the devices, so every device links to it through the manager. The
-    check is reported and not yet enforced, because the building and the storages are still undeclared (Q-H); with
-    PV, battery and occupancy declared it already agrees in every step.
+    The meter reads every device's electricity port directly, the heat pump's cooling and brine pump too, and no
+    electricity port is unmetered. The check is reported and not yet enforced, because the building and the storages
+    are still undeclared (Q-H); with PV, battery and occupancy declared it already agrees in every step.
     """
     setup, results = twin
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
@@ -152,9 +152,8 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
         ("Battery", "DischargingPower"),
         ("UTSPConnector", "ElectricalPowerConsumption"),
     } <= reads
-    assert (setup == "household_heatpump_building_sizer") == any(
-        component == "MoreAdvancedHeatPumpHPLib" for component, _ in reads
-    )
+    heat_pump_reads = {(component, output) for component, output in reads if component == "MoreAdvancedHeatPumpHPLib"}
+    assert heat_pump_reads == (Expected.HEAT_PUMP_READS if setup == "household_heatpump_building_sizer" else set())
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0 and meter["worst_step"] is None
     assert meter["enforced"] is False and "undeclared" in meter["not_enforced_because"]
     assert abs(meter["residual_kwh"]) <= 1e-6
@@ -162,18 +161,16 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
         meter["consumed_kwh"] - meter["produced_kwh"], rel=1e-6, abs=1e-6
     )
     assert meter["published_export_kwh"] > 1.0
-    unmetered = {(port["component"], port["output"]) for port in report["unmetered"]["ports"]}
-    assert unmetered == Expected.UNMETERED[setup]
+    assert not report["unmetered"]["ports"]
 
 
 @pytest.mark.extendedbase2
 def test_the_connected_diagram_draws_the_electricity_devices(twin: Tuple[str, Path]) -> None:
     """Sun to PV, PV and battery to and from the meter, their losses, and the occupancy's room heat to the building."""
-    setup, results = twin
+    _, results = twin
     links = overall_links(results)
     assert Expected.LINKS <= links
     nodes = {node for _, source, target in links for node in (source, target)}
     assert not {"undeclared: PVSystem", "undeclared: Battery", "undeclared: UTSPConnector"} & nodes
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
-    unlinked = {(port["component"], port["output"]) for port in report["unlinked"]}
-    assert unlinked == Expected.UNMETERED[setup], "every port but the ones nothing reads finds its peer"
+    assert not report["unlinked"], "every port finds its peer"

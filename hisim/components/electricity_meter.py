@@ -1,7 +1,8 @@
 """Electricity meter module should replace the sumbuilder. """
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from types import MappingProxyType
+from typing import ClassVar, List, Mapping, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -71,9 +72,17 @@ class ElectricityMeterConfig(ConfigBase):
 
 
 class ElectricityMeter(DynamicComponent, cp.MeterComponent):
-    """Electricity meter class.
+    """The electricity meter: it reads every electricity port of the house and bills the grid exchange itself.
 
-    It calculates the electricity production and consumption dynamically for all components.
+    The meter reads physics ports only, and nothing in the simulation reads the meter (component design principles,
+    kind "Meter"; owner decision of 2026-10-10, bead hisim-component-physics-4g9.39). Its default connections are
+    found by port role, not by class (:meth:`default_connections_for`): every output of any component that declares
+    an electricity energy port, an ``IN`` port as consumption and an ``OUT`` port as production. Per step it sums
+    them and publishes the grid import ``max(consumption - production, 0)`` and the export
+    ``max(production - consumption, 0)``; ``ElectricityConsumption`` and ``ElectricityProduction`` carry the two
+    totals. For example, a heat pump taking 2 kW, the residents 0.5 kW and a PV system giving 1 kW make a
+    consumption of 2.5 kW, a production of 1 kW and an import of 1.5 kW. A port published with the opposite sign of
+    its role (``EnergyPort.negated``, the battery's discharging power) is read with its sign turned.
     """
 
     # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2): energy is billed at this
@@ -113,6 +122,15 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
     #: their own, because subset matching lets a feed carrying the extra tag select the channel
     #: here while the tag itself survives verbatim on the created port and stays visible to the
     #: narrower query.
+    #: The flow tag a feed of an electricity port carries, by the port's role: what a component takes in is the
+    #: meter's consumption, what it gives out its production.
+    FLOW_TAG_OF_ROLE: ClassVar[Mapping[lt.EnergyRole, lt.InandOutputType]] = MappingProxyType(
+        {
+            lt.EnergyRole.IN: lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            lt.EnergyRole.OUT: lt.InandOutputType.ELECTRICITY_PRODUCTION,
+        }
+    )
+
     CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
         DynamicConnectionChannel(
             key=PRODUCTION_CHANNEL,
@@ -153,8 +171,12 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             my_display_config=my_display_config,
         )
 
-        self.production_inputs: List[ComponentInput] = []
-        self.consumption_uncontrolled_inputs: List[ComponentInput] = []
+        #: What the meter reads as production and as consumption: each input with the factor its value is read with,
+        #: -1 for a port published with the opposite sign of its role. Sorted at the first step, once the inputs are
+        #: connected (:meth:`readings_of_channel`).
+        self.production_readings: List[Tuple[ComponentInput, float]] = []
+        self.consumption_readings: List[Tuple[ComponentInput, float]] = []
+        self.readings_sorted = False
         self.production_inputs_building: List[ComponentInput] = []
         self.consumption_inputs_building: List[ComponentInput] = []
 
@@ -169,21 +191,25 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityToGridInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description=f"here a description for {self.ElectricityToGridInWatt} will follow.",
+            output_description="The export to the grid, in W: production minus consumption where positive, else zero.",
         )
         self.electricity_from_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityFromGridInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description=f"here a description for {self.ElectricityFromGridInWatt} will follow.",
+            output_description=(
+                "The import from the grid, in W: consumption minus production where positive, else zero."
+            ),
         )
         self.electricity_production_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityProductionInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description=f"here a description for {self.ElectricityProductionInWatt} will follow.",
+            output_description=(
+                "The electricity the ports the meter reads give out (their OUT ports), in W; zero or positive."
+            ),
         )
         if lt.DistrictNames.is_district(config.component_id.building):
             self.surplus_electricity_unused_to_district_ems_from_building_ems_output: cp.ComponentOutput = self.add_output(
@@ -223,7 +249,9 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityConsumptionInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description=f"here a description for {self.ElectricityConsumptionInWatt} will follow.",
+            output_description=(
+                "The electricity the ports the meter reads take in (their IN ports), in W; zero or positive."
+            ),
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
@@ -252,7 +280,9 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityToGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ElectricityToGrid} will follow.",
+            output_description=(
+                "The export to the grid over the step, in Wh: production minus consumption where positive, else zero."
+            ),
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.electricity_from_grid_channel: cp.ComponentOutput = self.add_output(
@@ -260,7 +290,10 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ElectricityFromGrid} will follow.",
+            output_description=(
+                "The import from the grid over the step, in Wh: consumption minus production where positive, else "
+                "zero."
+            ),
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
@@ -269,7 +302,9 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ElectricityConsumption} will follow.",
+            output_description=(
+                "The electricity the ports the meter reads take in over the step, in Wh; zero or positive."
+            ),
         )
 
         self.electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -277,7 +312,9 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             field_name=self.ElectricityProduction,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ElectricityProduction} will follow.",
+            output_description=(
+                "The electricity the ports the meter reads give out over the step, in Wh; zero or positive."
+            ),
         )
 
         self.cumulative_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -297,172 +334,68 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
             aggregation=lt.OutputAggregation.LAST,
         )
-        self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
-        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
-        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
-        self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_car())
-        self.add_dynamic_default_connections(self.get_default_connections_from_energy_management_system())
 
-    def get_default_connections_from_utsp_occupancy(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get utsp occupancy default connections."""
+    def declares_default_connections(self) -> bool:
+        """Whether the meter declares default connections: always, since it reads every electricity port it finds."""
+        return True
 
-        from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
-            UtspLpgConnector,
-        )
+    def default_connections_for(self, source_component: cp.Component) -> List[DynamicComponentConnection]:
+        """What the meter reads of one component: every electricity port it declares, by the port's role.
 
-        dynamic_connections: List[DynamicComponentConnection] = []
-        occupancy_class_name = UtspLpgConnector.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=UtspLpgConnector,
-                source_class_name=occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricalPowerConsumption,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+        An output of the source that declares an :class:`~hisim.energy_port.EnergyPort` of the electricity carrier
+        with the role ``IN`` is fed as consumption, one with the role ``OUT`` as production (:attr:`FLOW_TAG_OF_ROLE`),
+        each at the monitored-only weight: the meter ranks nothing. A component type the output itself is flagged
+        with (the PV system's ``PV``) goes with the feed, so that a selection by component type finds it. Nothing
+        depends on the source's class, so a consumer no energy manager reads is billed like any other: a heat pump's
+        cooling and brine-pump electricity, for example. Losses and stored changes are not read; they never cross the
+        meter. The meter never reads itself.
+
+        One class is still read by name: the electric car's charge controller, whose
+        ``BatteryChargingPowerToEMS`` is the car's charging until the car battery declares its ports
+        (complete Sankey spec, §9, PR 5b).
+
+        Args:
+            source_component: A component of the run.
+
+        Returns:
+            The meter's connections from it, in the order of its outputs.
+        """
+        if source_component is self:
+            return []
+        connections = super().default_connections_for(source_component)
+        for output in source_component.outputs:
+            port = output.energy_port
+            if port is None or port.carrier != lt.EnergyBalanceCarrier.ELECTRICITY:
+                continue
+            if port.role not in self.FLOW_TAG_OF_ROLE:
+                continue
+            connections.append(
+                DynamicComponentConnection(
+                    source_component_class=type(source_component),
+                    source_class_name=source_component.get_classname(),
+                    source_component_field_name=output.field_name,
+                    source_load_type=output.load_type,
+                    source_unit=output.unit,
+                    source_tags=[
+                        *(tag for tag in output.postprocessing_flag or [] if isinstance(tag, lt.ComponentType)),
+                        self.FLOW_TAG_OF_ROLE[port.role],
+                    ],
+                    source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+                )
             )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_pv_system(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get pv system default connections."""
-
-        from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        pv_class_name = PVSystem.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=PVSystem,
-                source_class_name=pv_class_name,
-                source_component_field_name=PVSystem.ElectricityOutput,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.PV,
-                    lt.InandOutputType.ELECTRICITY_PRODUCTION,
-                ],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_more_advanced_heat_pump(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get more advanced heat pump default connections."""
-
-        from hisim.components.more_advanced_heat_pump_hplib import (   # pylint: disable=import-outside-toplevel
-            MoreAdvancedHeatPumpHPLib,
-        )
-        dynamic_connections: List[DynamicComponentConnection] = []
-        more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=MoreAdvancedHeatPumpHPLib,
-                source_class_name=more_advanced_heat_pump_class_name,
-                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.HEAT_PUMP_BUILDING,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=MoreAdvancedHeatPumpHPLib,
-                source_class_name=more_advanced_heat_pump_class_name,
-                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.HEAT_PUMP_DHW,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-                # The DHW electrical power output only exists when the heat pump
-                # has domestic hot water preparation enabled; allow this mandatory
-                # input to remain unconnected when DHW is deactivated.
-                allow_unconnected_mandatory=True,
-            )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_electric_heater(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get electric heater default connections."""
-
-        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        electric_boiler_class_name = ElectricHeating.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=ElectricHeating,
-                source_class_name=electric_boiler_class_name,
-                source_component_field_name=ElectricHeating.ElectricOutputShPower,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.ELECTRIC_HEATING_SH,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=ElectricHeating,
-                source_class_name=electric_boiler_class_name,
-                source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.ELECTRIC_HEATING_DHW,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_solar_thermal_system(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get solar thermal default connections."""
-
-        from hisim.components.solar_thermal_system import SolarThermalSystem  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        solar_thermal_class_name = SolarThermalSystem.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=SolarThermalSystem,
-                source_class_name=solar_thermal_class_name,
-                source_component_field_name=SolarThermalSystem.ElectricityConsumptionOutput,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.SOLAR_THERMAL_SYSTEM, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        return dynamic_connections
+        return connections
 
     def get_default_connections_from_electric_car(
         self,
     ) -> List[DynamicComponentConnection]:
-        """Get electric car default connections."""
+        """The electric car's charging, read from its charge controller until the car battery declares its ports.
+
+        The car battery (``advanced_ev_battery_bslib``) declares no energy port yet (complete Sankey spec, §9,
+        PR 5b), so the meter cannot find its charging by role; the charge controller publishes it as
+        ``BatteryChargingPowerToEMS``. Once the car battery declares its electricity port, the meter reads that
+        port by role and this declaration goes.
+        """
 
         from hisim.components.controller_l1_generic_ev_charge import L1Controller  # pylint: disable=import-outside-toplevel
 
@@ -476,39 +409,6 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_energy_management_system(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get the energy management system's default connection: its grid balance, on the production channel.
-
-        The EMS sums the flows it observes into ``TotalElectricityToOrFromGrid``; a meter beside it
-        reads that balance instead of the flows themselves, as production at 999 — exactly the feed
-        the recorded twins write by hand (``household_heatpump_building_sizer.grouped``, option
-        ``ems_with_battery``). Declaring it is what lets an assembly's ``grid`` import select the
-        balance by name and lets the double-count check compare the meter's selection with the
-        EMS's (``assemblies_spec.md`` §4.3, dry run G6). Setups that wire an EMS add the meter
-        without ``connect_automatically``, so no existing system grows this feed.
-        """
-
-        from hisim.components.controller_l2_energy_management_system import (  # pylint: disable=import-outside-toplevel
-            L2GenericEnergyManagementSystem,
-        )
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        ems_class_name = L2GenericEnergyManagementSystem.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=L2GenericEnergyManagementSystem,
-                source_class_name=ems_class_name,
-                source_component_field_name=L2GenericEnergyManagementSystem.TotalElectricityToOrFromGrid,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
                 source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
@@ -550,12 +450,61 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         """Doublechecks values."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the grid energy balancer."""
+    def readings_of_channel(self, channel_key: str) -> List[Tuple[ComponentInput, float]]:
+        """The inputs of one channel, each with the factor the meter reads its value with.
 
-        if timestep == 0:
-            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
-            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+        The port an input reads decides: an electricity ``IN`` port is consumption, an ``OUT`` port production
+        (:attr:`FLOW_TAG_OF_ROLE`), and a port published with the opposite sign of its role (``negated``, the
+        battery's ``DischargingPower``, published <= 0) is read with the factor -1, so that both totals are
+        positive. An input whose output declares no energy port (an undeclared device, such as the car's charge
+        controller) is read as its channel says, with the factor 1. Called once the inputs are connected, at the
+        first step.
+
+        Args:
+            channel_key: :attr:`PRODUCTION_CHANNEL` or :attr:`CONSUMPTION_UNCONTROLLED_CHANNEL`.
+
+        Returns:
+            The channel's inputs with their factors, in the order the channel sums them.
+
+        Raises:
+            ValueError: For an input whose output declares a port the meter does not read (not electricity, or a
+                loss or a stored change), or an electricity port fed through the channel of the other role.
+        """
+        role_of_channel = {
+            self.PRODUCTION_CHANNEL: lt.EnergyRole.OUT,
+            self.CONSUMPTION_UNCONTROLLED_CHANNEL: lt.EnergyRole.IN,
+        }[channel_key]
+        readings: List[Tuple[ComponentInput, float]] = []
+        for component_input in self.get_channel_inputs(channel_key):
+            source = component_input.source_output
+            port = source.energy_port if source is not None else None
+            if port is None:
+                readings.append((component_input, 1.0))
+                continue
+            if port.carrier != lt.EnergyBalanceCarrier.ELECTRICITY or port.role not in self.FLOW_TAG_OF_ROLE:
+                raise ValueError(
+                    f"The electricity meter '{self.component_name}' reads {component_input.src_object_name}."
+                    f"{component_input.src_field_name}, a {port.carrier.value} {port.role.value} port. A meter reads "
+                    "the electricity a component takes in or gives out (its IN and OUT ports of electricity), never a "
+                    "loss, a stored change or another carrier."
+                )
+            if port.role != role_of_channel:
+                raise ValueError(
+                    f"The electricity meter '{self.component_name}' reads {component_input.src_object_name}."
+                    f"{component_input.src_field_name}, an electricity {port.role.value} port, as "
+                    f"{self.FLOW_TAG_OF_ROLE[role_of_channel].name}; its role makes it "
+                    f"{self.FLOW_TAG_OF_ROLE[port.role].name}. Feed it with that tag."
+                )
+            readings.append((component_input, -1.0 if port.negated else 1.0))
+        return readings
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+        """Sum what the meter reads into consumption and production, and publish the grid import and export."""
+
+        if not self.readings_sorted:
+            self.production_readings = self.readings_of_channel(self.PRODUCTION_CHANNEL)
+            self.consumption_readings = self.readings_of_channel(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+            self.readings_sorted = True
             # The building-tagged subsets are as constant over a run as the two lists above, so
             # they are resolved here once rather than re-filtered and re-sorted on every step of
             # every convergence iteration in the district branch below. Literal on purpose:
@@ -570,9 +519,11 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         # ELECTRICITY #
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        production_in_watt = sum(
+            factor * stsv.get_input_value(component_input=elem) for elem, factor in self.production_readings
+        )
         consumption_uncontrolled_in_watt = sum(
-            [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
+            factor * stsv.get_input_value(component_input=elem) for elem, factor in self.consumption_readings
         )
 
         if lt.DistrictNames.is_district(self.config.component_id.building):

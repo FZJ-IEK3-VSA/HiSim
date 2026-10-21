@@ -473,14 +473,15 @@ partners:
       preset: optimize_own_consumption
       observes: declared
   Grid:
-    # The one electricity provider an electricity need checks for. Its meter observes the energy manager's grid
-    # balance, which it requires: a need for electricity stands beside a manager in this library (the heating
-    # assemblies bind their modifiers to one), and a meter observing the balance and the flows is refused.
+    # The one electricity provider an electricity need checks for. Its meter observes every electricity port of the
+    # system by its role, never the energy manager's balance (a meter reads physics ports only). It requires the
+    # manager because a need for electricity stands beside one in this library (the heating assemblies bind their
+    # modifiers to it).
     serves: {carrier: electricity}
     requires: [EnergyManager]
     component:
       class: hisim.components.electricity_meter.ElectricityMeter
       preset: standard
-      observes: [{output: TotalElectricityToOrFromGrid}]
+      observes: declared
       ports:
         connection: {carrier: electricity}

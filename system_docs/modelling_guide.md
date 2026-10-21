@@ -73,6 +73,7 @@ Today HiSim mixes conventions:
 | Energy-port values | read with the sign of their role: positive `IN` enters, positive `OUT` and `LOSS` leave, positive `STORED_CHANGE` is stored; `EnergyPort.negated` turns round an output published the other way | `hisim/loadtypes.py` (`EnergyRole`), `hisim/energy_port.py` |
 | Hot water drawn at the tap | positive (`ThermalPowerConsumptionDHW`, stated in its description since #909) | `hisim/components/simple_water_storage.py` |
 | Grid balance of the energy manager | signed net, positive for a surplus to the grid, in an output whose description states no sign (`TotalElectricityToOrFromGrid`) | `hisim/components/controller_l2_energy_management_system.py` |
+| Grid exchange of the electricity meter | import and export both `>= 0` (`ElectricityFromGrid*`, `ElectricityToGrid*`), consumption and production both `>= 0`: the sums of the electricity `IN` and `OUT` ports it reads, stated in the descriptions since hisim-component-physics-4g9.39 | `hisim/components/electricity_meter.py` |
 | Battery power | signed (`AcBatteryPowerUsed`), the description states no sign | `hisim/components/advanced_battery_bslib.py` |
 | Building heat demand | signed, positive for heating and negative for cooling (`TheoreticalThermalBuildingDemand`), the description states no sign | `hisim/components/building/building.py` |
 

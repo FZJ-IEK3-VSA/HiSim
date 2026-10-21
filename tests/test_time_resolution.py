@@ -659,21 +659,11 @@ def run_cluster_house(
         src_object=loading_power_input_for_battery_in_watt,
     )
 
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Electricity Meter
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_electricity_controller.component_name,
-        source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=999,
-    )
-
     # =================================================================================================================================
     # Add Remaining Components to Simulation Parameters
 
-    my_sim.add_component(my_electricity_meter)
+    # the meter reads every electricity port by its role, never the energy manager's balance
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 

@@ -49,8 +49,8 @@ class HeatPumpHouse:
     """The heat-pump composed file and the variants of it these tests build, as text.
 
     Example: ``HeatPumpHouse.without_energy_manager()`` is the composed file of the twin's
-    ``metered_directly`` option: the file's header says how, dropping ``control``, ``battery``, the
-    grid's ``observes:`` line and the ``optional-bind:`` lines naming ``control``.
+    ``metered_directly`` option: the file's header says how, dropping ``control``, ``battery`` and the
+    ``optional-bind:`` lines naming ``control``.
     """
 
     #: The twin's grouped file, whose option ``metered_directly`` writes the meter's feeds by hand.
@@ -73,7 +73,6 @@ class HeatPumpHouse:
         document = cls.document()
         for key in ("control", "battery"):
             del document["imports"][key]
-        del document["imports"]["grid"]["observes"]
         for entry in list(document["components"].values()) + list(document["imports"].values()):
             if "control" in entry.get("optional-bind", {}).values():
                 del entry["optional-bind"]
@@ -151,7 +150,7 @@ def test_the_metered_directly_shape_writes_exactly_the_twins_feeds(tmp_path: Pat
 def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_the_first(tmp_path: Path) -> None:
     """The weights are the controller class's own (DEFAULT_WEIGHTS); the k-th further battery gets default + k."""
     batteries = "battery: {assembly: storage/battery, instances: {garage: {}, cellar: {}}}"
-    model = build(light_house(Real.PV, batteries, Real.CONTROL, Real.GRID_ON_BALANCE), tmp_path)
+    model = build(light_house(Real.PV, batteries, Real.CONTROL, Real.GRID), tmp_path)
     ranked = [(feed.source, feed.weight) for feed in feeds(model, "control-EMS") if feed.weight != MEASURED]
     defaults = L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS
     assert ranked == [
@@ -360,15 +359,17 @@ def test_an_output_selected_and_fed_explicitly_is_refused_as_a_duplicate_feed(tm
 
 
 @pytest.mark.assemblies
-def test_the_grid_left_at_its_default_beside_a_controller_counts_the_flows_twice(tmp_path: Path) -> None:
-    """EF-7T: the meter reads the manager's balance and the flows the manager observes."""
-    message = refusal(light_house(Real.PV, Real.CONTROL, "grid: {assembly: supply/electricity_grid}"), tmp_path)
-    assert message.startswith("EF-7T at components.grid-ElectricityMeter.inputs")
-    assert (
-        "'grid-ElectricityMeter' reads an output of 'control-EMS' and both observe "
-        "UTSPConnector.ElectricalPowerConsumption" in message
-    )
-    assert "[source: grid-ElectricityMeter (import grid" in message
+def test_the_grid_at_its_default_beside_a_controller_reads_the_devices_not_the_balance(tmp_path: Path) -> None:
+    """Beside an energy manager the meter reads every electricity port by its role and nothing of the manager.
+
+    A meter reads physics ports only (bead hisim-component-physics-4g9.39), so the grid at its default selection is
+    the right shape beside a manager too: no double count, since the meter reads no output of the manager.
+    """
+    model = build(light_house(Real.PV, Real.CONTROL, Real.GRID), tmp_path)
+    assert [(feed.source, feed.output, feed.tags) for feed in feeds(model, "grid-ElectricityMeter")] == [
+        ("UTSPConnector", "ElectricalPowerConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",)),
+        ("pv-PVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",)),
+    ]
 
 
 @pytest.mark.assemblies
@@ -421,7 +422,7 @@ components:
                 "battery: {assembly: storage/battery}",
                 Real.CONTROL,
                 "second: {assembly: control/ems_self_consumption}",
-                Real.GRID_ON_BALANCE,
+                Real.GRID,
             ),
             "is ranked by control-EMS, second-EMS",
         ),
@@ -447,7 +448,7 @@ def test_a_controllable_output_is_actuated_by_exactly_the_one_controller_it_bind
 def test_derived_port_names_replace_the_address_separator_and_a_collision_is_refused(tmp_path: Path) -> None:
     """``-`` becomes ``_`` in a derived port; a site entry named like the result collides (EF-32)."""
     assert NameSyntax.port_name_part("pv-east-PVSystem") == "pv_east_PVSystem"
-    house = light_house(Real.PV, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID_ON_BALANCE)
+    house = light_house(Real.PV, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID)
     ems = build_text(house, tmp_path / "a").wired.component_of("control-EMS")
     assert "DispatchTobattery_Battery_LoadingPowerInput" in [output.field_name for output in ems.outputs]
     roof = (
@@ -460,16 +461,13 @@ def test_derived_port_names_replace_the_address_separator_and_a_collision_is_ref
 
 
 @pytest.mark.assemblies
-def test_the_real_meter_declares_its_feed_from_the_real_ems() -> None:
-    """The ElectricityMeter's dynamic default connection from the EMS's grid balance (§4.3, dry run G6)."""
+def test_the_real_meter_declares_no_feed_from_the_real_ems() -> None:
+    """The ElectricityMeter reads ports by role; the EMS's grid balance is a controller's sum and no port of it."""
     meter = ElectricityMeter.__new__(ElectricityMeter)
-    connections = meter.get_default_connections_from_energy_management_system()
-    assert len(connections) == 1
-    connection = connections[0]
-    assert connection.source_class_name == L2GenericEnergyManagementSystem.get_classname()
-    assert connection.source_component_field_name == "TotalElectricityToOrFromGrid"
-    assert connection.source_tags == [lt.InandOutputType.ELECTRICITY_PRODUCTION]
-    assert connection.source_weight == 999
+    meter.dynamic_default_connections = {}
+    manager = L2GenericEnergyManagementSystem.__new__(L2GenericEnergyManagementSystem)
+    manager.outputs = []
+    assert not meter.default_connections_for(manager)
 
 
 # ------------------------------------------------------------------------------------------ one day
@@ -517,7 +515,8 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
     observers = record["metadata"]["imports"]["observers"]
     assert [(item["observer"], item["selection"], len(item["feeds"])) for item in observers] == [
         ("control-EMS", "declared", len(written)),
-        ("grid-ElectricityMeter", "[{output: TotalElectricityToOrFromGrid}]", 1),
+        # residents, PV, the heat pump's four electricity ports and the battery's two
+        ("grid-ElectricityMeter", "declared", 8),
     ]
 
     second = tmp_path / "second"

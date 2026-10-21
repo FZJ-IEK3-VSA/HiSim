@@ -832,6 +832,25 @@ class BoilerEfficiencySources:
             }
         return rows[vintage]
 
+    @staticmethod
+    def require_finite_positive_power(maximal_power_in_watt: float) -> None:
+        """Refuse a boiler power the efficiency's size law cannot use: not finite, or not above 0 W.
+
+        The curve is built once per run, while the component is constructed, so this check runs at build time and
+        never in a simulated step.
+
+        Args:
+            maximal_power_in_watt: The boiler's maximal burner power, in W.
+
+        Raises:
+            ValueError: If the power is not finite or not above 0 W.
+        """
+        if not math.isfinite(maximal_power_in_watt) or maximal_power_in_watt <= 0.0:
+            raise ValueError(
+                f"The boiler's maximal_thermal_power_in_watt must be a finite power above 0 W, got "
+                f"{maximal_power_in_watt!r}: the efficiency's size law and the pump's largest flow need it."
+            )
+
     @classmethod
     def size_correction(cls, maximal_power_in_watt: float) -> float:
         """Return IWU 2002 eq. 2-1's correction of a 20 kW efficiency to a boiler's size, dimensionless.
@@ -849,11 +868,7 @@ class BoilerEfficiencySources:
         Raises:
             ValueError: If the power is not finite or not above 0 W.
         """
-        if not math.isfinite(maximal_power_in_watt) or maximal_power_in_watt <= 0.0:
-            raise ValueError(
-                f"The boiler's maximal_thermal_power_in_watt must be a finite power above 0 W, got "
-                f"{maximal_power_in_watt!r}: the efficiency's size law and the pump's largest flow need it."
-            )
+        cls.require_finite_positive_power(maximal_power_in_watt)
         return cls.SIZE_LAW_OFFSET + cls.SIZE_LAW_SLOPE_PER_DECADE_OF_KILOWATT * math.log10(
             maximal_power_in_watt / 1000.0
         )

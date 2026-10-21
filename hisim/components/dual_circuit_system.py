@@ -74,24 +74,12 @@ class DiverterValve:
             The mode for this step.
         """
 
-        def space_heating_needed(
-            current_water_temperature_in_celsius: float,
-            target_water_temperature_in_celsius: float,
-        ) -> bool:
-            assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
-            if not is_heating_season:
-                return False
-            if (
-                current_water_temperature_in_celsius
-                >= target_water_temperature_in_celsius
-                + set_temperatures.hysteresis_water_temperature_offset_in_celsius
-            ):
-                return False
-            return True
-
-        needs_space_heating = space_heating_needed(
-            water_temperature_input_sh_in_celsius,
-            set_temperatures.set_temperature_space_heating_in_celsius,
+        assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
+        needs_space_heating = DiverterValve.space_heating_needed(
+            is_heating_season=is_heating_season,
+            water_temperature_in_celsius=water_temperature_input_sh_in_celsius,
+            set_temperature_in_celsius=set_temperatures.set_temperature_space_heating_in_celsius,
+            hysteresis_in_kelvin=set_temperatures.hysteresis_water_temperature_offset_in_celsius,
         )
         needs_dhw_heating = False
         if with_domestic_hot_water_preparation:
@@ -120,6 +108,30 @@ class DiverterValve:
                 mode = HeatingMode.SPACE_HEATING
 
         return mode
+
+    @staticmethod
+    def space_heating_needed(
+        *,
+        is_heating_season: bool,
+        water_temperature_in_celsius: float,
+        set_temperature_in_celsius: float,
+        hysteresis_in_kelvin: float,
+    ) -> bool:
+        """Return whether the space-heating circuit asks for heat: in the heating season, below set plus hysteresis.
+
+        For example, with a 35 °C set temperature and a 10 K hysteresis, a buffer at 40 °C on a winter day asks for
+        heat, one at 45 °C does not, and no buffer asks for heat outside the heating season.
+
+        Args:
+            is_heating_season: Whether the day is in the heating season.
+            water_temperature_in_celsius: The space-heating water temperature, in °C.
+            set_temperature_in_celsius: The space-heating set temperature, in °C.
+            hysteresis_in_kelvin: The controller's hysteresis, in K.
+
+        Returns:
+            Whether space heating is needed.
+        """
+        return is_heating_season and water_temperature_in_celsius < set_temperature_in_celsius + hysteresis_in_kelvin
 
     #: The controller modes in which a hot-water charge is running: the latch keeps it going up to the set temperature,
     #: and a generator runs its hot-water circuit in exactly these modes.
@@ -192,6 +204,138 @@ class DiverterValve:
                 f"warm-water set temperature, got {hysteresis_in_kelvin!r} K: a hot-water charge starts at the set "
                 "temperature less this hysteresis, so a negative value charges above the set temperature, 0 starts "
                 "and ends a charge at one point, and a value at or above the set temperature never starts one."
+            )
+
+
+@dataclass(frozen=True)
+class HotWaterPriorityTimer:
+
+    """Where a hot-water charge stands against its maximum priority time, at the start or the end of a step.
+
+    ``charge_time_in_seconds`` is how long the charge has had priority since it started or resumed;
+    ``space_heating_interval_left_in_seconds`` how much of the space-heating interval after an interruption is left;
+    ``charge_interrupted`` whether a charge waits for its interval to end, so a controller that latches its charge on
+    its own mode (the boiler's diverter valve) can keep the charge pending while it heats the space. The idle timer,
+    all zero and not interrupted, is the state of a generator with no charge running.
+    """
+
+    charge_time_in_seconds: float = 0.0
+    space_heating_interval_left_in_seconds: float = 0.0
+    charge_interrupted: bool = False
+
+
+class HotWaterPriorityLimit:
+
+    """The maximum time a hot-water charge has priority over space heating, and the space-heating interval after it.
+
+    A charge that has had priority for the maximum time while space heating asks for heat is interrupted for the
+    space-heating interval; it then resumes, and repeats this until the tank reaches its target. A charge is never
+    interrupted while space heating does not ask for heat (outside the heating season, or a space-heating circuit at
+    its set temperature), and an interval ends early when space heating stops asking. Both times count whole steps,
+    rounded up: with 15 / 15 minutes at 900 s the charge and space heating take turns step by step, at 60 s 15 steps
+    each. A maximum time of 0 s switches the limit off, and hot water has absolute priority.
+
+    Sources: heat-pump system controllers interrupt a hot-water charge after an installer-set maximum time and then
+    block it for a while, so space heating gets the generator: Vaillant multiMATIC VRC 700 ("Max. cylinder charge
+    time", off or 20 to 120 min, default 45 min; "DHW req. anti-cycling time", 0 to 120 min, default 30 min),
+    Mitsubishi Ecodan FTC3 PAC-IF041B-E ("DHW max. operation time", 30 to 120 min, default 60 min; "DHW mode
+    restriction", 30 to 120 min, default 30 min). Siemens Albatros2 boiler and heat-pump controllers (operating
+    line 5030 "Ladezeitbegrenzung", 10 to 600 min) interrupt the charge after the set time for as long again, give
+    the generator's power to the heating circuits in the pause, and do not interrupt it while the heating circuits are
+    off (summer, eco). The defaults of the boiler's and the heat pump's controllers are shorter than those factory
+    settings, for the reason given at their fields.
+    """
+
+    @staticmethod
+    def decide(
+        *,
+        timer: HotWaterPriorityTimer,
+        charge_requested: bool,
+        space_heating_requested: bool,
+        maximum_priority_time_in_seconds: float,
+        space_heating_interval_in_seconds: float,
+        seconds_per_timestep: float,
+    ) -> Tuple[bool, HotWaterPriorityTimer]:
+        """Return whether the charge runs in this step, and the timer at the step's end.
+
+        The rules, the first that applies winning:
+
+        | condition | the charge runs | timer at the end of the step |
+        |---|---|---|
+        | the limit is off (maximum time 0) or no charge is requested | as requested | idle |
+        | space heating asks for heat and an interval is running | no | interval less one step |
+        | space heating asks for heat and the charge has had its maximum time | no | full interval less one step |
+        | otherwise (an interval ends early when space heating stops asking) | yes | charge time plus one step |
+
+        A step the charge yields marks the timer ``charge_interrupted``; a step it runs clears the mark.
+
+        For example, at 900 s with 15 / 15 minutes and space heating asking throughout, a charge requested on five
+        steps runs on the first, third and fifth and yields the second and fourth to space heating.
+
+        Args:
+            timer: The timer at the start of the step.
+            charge_requested: Whether the controller's own charge rule asks for a charge in this step.
+            space_heating_requested: Whether the space-heating circuit asks for heat in this step.
+            maximum_priority_time_in_seconds: How long a charge has priority before it is interrupted, in s; 0
+                switches the limit off.
+            space_heating_interval_in_seconds: How long space heating has the generator after an interruption, in s.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            Whether the charge runs in this step, and the timer at the step's end.
+        """
+        if maximum_priority_time_in_seconds <= 0.0 or not charge_requested:
+            return charge_requested, HotWaterPriorityTimer()
+        if space_heating_requested and (
+            timer.space_heating_interval_left_in_seconds > 0.0
+            or timer.charge_time_in_seconds >= maximum_priority_time_in_seconds
+        ):
+            interval_left_in_seconds = (
+                timer.space_heating_interval_left_in_seconds
+                if timer.space_heating_interval_left_in_seconds > 0.0
+                else space_heating_interval_in_seconds
+            )
+            return False, HotWaterPriorityTimer(
+                charge_time_in_seconds=0.0,
+                space_heating_interval_left_in_seconds=max(interval_left_in_seconds - seconds_per_timestep, 0.0),
+                charge_interrupted=True,
+            )
+        return True, HotWaterPriorityTimer(
+            charge_time_in_seconds=timer.charge_time_in_seconds + seconds_per_timestep,
+            space_heating_interval_left_in_seconds=0.0,
+            charge_interrupted=False,
+        )
+
+    @staticmethod
+    def require_valid_times(
+        *,
+        maximum_priority_time_in_seconds: float,
+        space_heating_interval_in_seconds: float,
+        controller_description: str,
+    ) -> None:
+        """Refuse a maximum priority time below 0 s, or a space-heating interval not above 0 s, naming both values.
+
+        For example, 900 s and 900 s are accepted, as is a maximum time of 0 s (no limit) with any interval; a
+        negative maximum time and an interval of 0 s beside a maximum time are refused, since an interruption without
+        an interval would resume the charge on the step it was interrupted.
+
+        Args:
+            maximum_priority_time_in_seconds: The configured maximum priority time, in s.
+            space_heating_interval_in_seconds: The configured space-heating interval, in s.
+            controller_description: Which controller's configuration, for the message.
+
+        Raises:
+            ValueError: If a time is not finite, the maximum time is negative, or the maximum time is above 0 s and
+                the interval is not.
+        """
+        maximum, interval = maximum_priority_time_in_seconds, space_heating_interval_in_seconds
+        finite = math.isfinite(maximum) and math.isfinite(interval)
+        limit_without_interval = maximum > 0.0 and not interval > 0.0
+        if not finite or maximum < 0.0 or limit_without_interval:
+            raise ValueError(
+                f"{controller_description} needs maximum_hot_water_priority_time_in_seconds of at least 0 s (0 means "
+                "no limit) and, with a limit, space_heating_interval_after_hot_water_priority_in_seconds above 0 s, "
+                f"got {maximum!r} s and {interval!r} s."
             )
 
 

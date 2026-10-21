@@ -53,6 +53,7 @@ components:
     preset: standard
     inputs:
       - {$port: ems_modifier_dhw}                           # DHWStorageTemperatureModifier
+      - ControllerSH                                        # SpaceHeatingStateFromController, for the priority limit
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
   HeatPump:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib

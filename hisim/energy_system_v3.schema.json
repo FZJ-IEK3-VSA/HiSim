@@ -2846,6 +2846,12 @@
                   },
                   "hysteresis_water_temperature_offset": {
                     "type": "number"
+                  },
+                  "maximum_hot_water_priority_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "space_heating_interval_after_hot_water_priority_in_seconds": {
+                    "type": "number"
                   }
                 }
               },
@@ -4906,6 +4912,12 @@
                     "type": "number"
                   },
                   "charge_end_below_target_in_kelvin": {
+                    "type": "number"
+                  },
+                  "maximum_hot_water_priority_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "space_heating_interval_after_hot_water_priority_in_seconds": {
                     "type": "number"
                   }
                 }

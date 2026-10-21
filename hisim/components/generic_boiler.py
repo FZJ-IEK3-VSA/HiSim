@@ -53,6 +53,8 @@ from hisim.config import (
 from hisim.energy_port import EnergyPort
 from hisim.components.dual_circuit_system import (
     DiverterValve,
+    HotWaterPriorityLimit,
+    HotWaterPriorityTimer,
     HeatingMode,
     SetTemperatureConfig,
 )
@@ -2584,6 +2586,20 @@ class GenericBoilerControllerConfig(ConfigBase):
     #: If used as secondary heat generator for DHW in hybrid mode.
     secondary_mode: Optional[bool] = False
     hysteresis_water_temperature_offset: float = 10.0
+    #: How long a hot-water charge has priority over space heating before it is interrupted for
+    #: :attr:`space_heating_interval_after_hot_water_priority_in_seconds`, in s; 0 means absolute priority
+    #: (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`, which names the sources). Real
+    #: controllers that have the limit ship 45 to 150 min. The default is 15 min, the owner's decision of 2026-10-21
+    #: (hisim-room-air-dhw-dip-a5by): the space-heating buffer, sized at 20 l/kW, empties after 20 to 25 min of
+    #: priority, and the room air, which has no heat capacity of its own in the building model, falls with it. On
+    #: household_gas_building_sizer (full year 2021, 900 s) the quarter-hours with a room-air drop above 0.5 K during
+    #: hot water were 246 with absolute priority, 243 with 60 / 30 min, 231 with 45 / 30 min and 16 with 15 / 15 min.
+    maximum_hot_water_priority_time_in_seconds: float = field(default=900.0, metadata={"unit": lt.Units.SECONDS})
+    #: How long space heating has the boiler after an interrupted hot-water charge before the charge resumes, in s.
+    #: The default is 15 min, as long as the maximum priority time (the Siemens Albatros2 rule).
+    space_heating_interval_after_hot_water_priority_in_seconds: float = field(
+        default=900.0, metadata={"unit": lt.Units.SECONDS}
+    )
 
     def __post_init__(self) -> None:
         """Refuse a minimum runtime or resting time that is negative or not finite, naming the field and the value.
@@ -2592,9 +2608,12 @@ class GenericBoilerControllerConfig(ConfigBase):
         a negative count, which means no minimum without a word. For example, the ``on_off`` preset's 0 s (no
         minimum) and a pellet boiler's 1800 s are accepted, -900 s is refused.
 
+        The hot-water priority times are checked by
+        :meth:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit.require_valid_times`.
+
         Raises:
             ValueError: If ``minimum_runtime_in_seconds`` or ``minimum_resting_time_in_seconds`` is not a finite
-                number of at least 0 s.
+                number of at least 0 s, or the hot-water priority times are invalid.
         """
         for field_name, seconds in (
             ("minimum_runtime_in_seconds", self.minimum_runtime_in_seconds),
@@ -2605,6 +2624,11 @@ class GenericBoilerControllerConfig(ConfigBase):
                     f"The boiler's controller needs {field_name} to be a finite time of at least 0 s, "
                     f"got {seconds!r} s: 0 means no minimum, and a negative time would silently mean the same."
                 )
+        HotWaterPriorityLimit.require_valid_times(
+            maximum_priority_time_in_seconds=self.maximum_hot_water_priority_time_in_seconds,
+            space_heating_interval_in_seconds=self.space_heating_interval_after_hot_water_priority_in_seconds,
+            controller_description="The boiler's controller",
+        )
 
     @preset
     @classmethod
@@ -2789,6 +2813,9 @@ class GenericBoilerController(L1ControllerComponent):
         )
 
         self.state: GenericBoilerControllerState = GenericBoilerControllerState(0, 0, 0, 0)
+        # the hot-water priority timer at the end of the last unforced pass, and at the start of the step
+        self.hot_water_priority_timer = HotWaterPriorityTimer()
+        self.hot_water_priority_timer_at_start_of_step = HotWaterPriorityTimer()
 
         self.build()
 
@@ -3047,8 +3074,13 @@ class GenericBoilerController(L1ControllerComponent):
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state."""
+        """Save the current state: the mode, and the hot-water priority timer the step starts from.
+
+        Every unforced pass decides the step from the timer saved here; a forced pass keeps the timer of the last
+        unforced pass, as it keeps that pass's outputs, so the timer always matches what the controller published.
+        """
         self.previous_controller_mode = self.controller_mode
+        self.hot_water_priority_timer_at_start_of_step = self.hot_water_priority_timer
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
@@ -3202,9 +3234,13 @@ class GenericBoilerController(L1ControllerComponent):
         """Determine which operating mode to use in dual-circuit system."""
 
         previous_controller_mode = self.controller_mode
+        timer = self.hot_water_priority_timer_at_start_of_step
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
-            current_controller_mode=previous_controller_mode,
+            # an interrupted charge stays latched while space heating has the boiler, so it resumes after the interval
+            current_controller_mode=(
+                HeatingMode.DOMESTIC_HOT_WATER if timer.charge_interrupted else previous_controller_mode
+            ),
             is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
             water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
@@ -3214,6 +3250,15 @@ class GenericBoilerController(L1ControllerComponent):
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
             ),
             parallel_space_heating_and_dhw_option=False,
+        )
+        self.limit_hot_water_priority(
+            timer,
+            space_heating_requested=DiverterValve.space_heating_needed(
+                is_heating_season=is_heating_season,
+                water_temperature_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
+                set_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
+            ),
         )
 
         # Enforce minimum run and idle times (if necessary overwrites previously set mode)
@@ -3254,6 +3299,31 @@ class GenericBoilerController(L1ControllerComponent):
             raise ValueError("Controller mode unknown.")
 
         return control_signal, temperature_delta
+
+    def limit_hot_water_priority(self, timer: HotWaterPriorityTimer, *, space_heating_requested: bool) -> None:
+        """Hand a hot-water step to space heating once the charge has had priority for its maximum time.
+
+        The diverter valve's mode is the request; :meth:`HotWaterPriorityLimit.decide` says whether the charge runs
+        in this step. A step it yields becomes a space-heating step, and the timer it returns keeps the charge latched
+        (``charge_interrupted``) until the charge resumes and ends at the warm-water aim. For example, at 900 s with
+        the default 15 / 15 minutes on a winter day, a charge that needs three steps runs on the first, third and fifth
+        step, and space heating has the second and the fourth.
+
+        Args:
+            timer: The hot-water priority timer at the start of the step.
+            space_heating_requested: Whether the space-heating circuit asks for heat in this step
+                (:meth:`DiverterValve.space_heating_needed`).
+        """
+        charges, self.hot_water_priority_timer = HotWaterPriorityLimit.decide(
+            timer=timer,
+            charge_requested=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
+            space_heating_requested=space_heating_requested,
+            maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
+            space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+        )
+        if self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
+            self.controller_mode = HeatingMode.SPACE_HEATING
 
     def enforce_minimum_run_and_idle_times(self, previous_controller_mode: HeatingMode, timestep: int) -> None:
         """Enforces minimum run and idle times."""

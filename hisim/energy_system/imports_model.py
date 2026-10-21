@@ -264,7 +264,8 @@ class Port(BaseModel):
             a fuel provision's meter, a provided fact's member, an observer's members.
         circuit: A circuit end's circuit, its medium (``dhw``, ``space_heating``, §11.1).
         carrier: A carrier port's ``lt.EnergyBalanceCarrier`` value.
-        outputs: A carrier need's consuming outputs, ``Member.Output`` (a site entry's: ``Output``).
+        outputs: A carrier need's consuming outputs, ``Member.Output`` (a site entry's: ``Output``); an
+            electricity need may name none, since electricity has no link.
         meter: The member metering a provided fuel, where its consumers' feeds land.
         fact: A fact port's sizing fact.
         many: Whether a fact need reads the fact from every provider in scope (a list, ``Sum``).
@@ -313,8 +314,15 @@ class Port(BaseModel):
 
     @property
     def is_provision(self) -> bool:
-        """Whether the port offers something another port binds to: a provided output, fact or carrier."""
+        """Whether the port offers something another port binds to: a provided output, fact or carrier.
+
+        A carrier port of an interface is a need under ``needs`` and a provision under ``provides``; an electricity
+        need may name no consuming outputs (assemblies spec D32). A site entry's carrier port has no section of its
+        own: it is a need when it names consuming outputs and a provision when it names none.
+        """
         if self.kind == PortKind.CARRIER:
+            if self.section in ("needs", "provides"):
+                return self.section == "provides"
             return not self.outputs
         return self.kind == PortKind.PROVIDED or (self.kind == PortKind.FACT and self.section == "provides")
 

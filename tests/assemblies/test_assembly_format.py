@@ -178,6 +178,28 @@ def test_a_port_both_optional_and_required_when_is_refused() -> None:
 
 
 @pytest.mark.assemblies
+def test_an_electricity_need_may_name_no_consuming_outputs_a_fuel_need_must() -> None:
+    """Electricity has no link, so its need may name no outputs (D32); a fuel's need still names the feeds it lands.
+
+    Catches the relaxation reaching the fuels, whose consumers' feeds land in the meter, and the reader and the
+    schema an editor validates against disagreeing on either case.
+    """
+    electricity = MINIMAL + "interface:\n  needs:\n    grid: {carrier: electricity, optional: true}\n"
+    read_assembly(electricity)
+    jsonschema.validate(yaml.safe_load(electricity), AssemblySchemaBuilder().build())
+    model, _ = AssemblyReader.read_text(electricity, "test/minimal.assembly.yaml")
+    assert model.ports["grid"].kind == PortKind.CARRIER and model.ports["grid"].outputs == ()
+
+    gas = MINIMAL + "interface:\n  needs:\n    fuel: {carrier: natural_gas}\n"
+    with pytest.raises(EnergySystemFormatError, match="EF-07") as refusal:
+        read_assembly(gas)
+    assert "interface.needs.fuel.outputs" in str(refusal.value)
+    assert "a non-empty list of consuming outputs" in str(refusal.value)
+    with pytest.raises(jsonschema.ValidationError, match="'outputs' is a required property"):
+        jsonschema.validate(yaml.safe_load(gas), AssemblySchemaBuilder().build())
+
+
+@pytest.mark.assemblies
 def test_the_verbs_model_refuses_a_port_under_two_verbs() -> None:
     """Catches a verbs model built in code holding a port the reader would refuse, which then dumps a bad file."""
     with pytest.raises(pydantic.ValidationError, match="the ports p carry two verbs"):

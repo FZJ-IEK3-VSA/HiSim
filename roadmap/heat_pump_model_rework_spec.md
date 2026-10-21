@@ -89,7 +89,7 @@ alternatives in Q1.
 
 **Calibration.** `ScopCalibration` and `StandardizedSeasonalCop` are unchanged in method; they rate the machine
 with the new COP. With a stated SCOP pair the calibrated machine still rates exactly at the stated SCOPs. Without a
-stated SCOP the machine is the pooled Keymark unit: EN 14825 rates it at W35 4.46 / W55 3.33 (air; Keymark median
+stated SCOP the machine is the pooled Keymark unit: EN 14825 rates it at W35 4.46 / W55 3.32 (air; Keymark median
 4.60 / 3.39) and 4.74 / 3.94 (brine; median 5.20 / 3.90). hplib's Generic plane rated 4.74 / 3.40 and 4.85 / 4.02.
 The law replaces the COP of every hplib model, also a named manufacturer model (Q3).
 
@@ -235,7 +235,7 @@ calibration (hisim-f79l, waits on the frontend); wiring a brine machine for Reno
 * **Q4 — Capacity where hplib's plane switches to its rod** (step a only, until step d): the compressor's capacity
   at the switch, `P_el,fit`. It is continuous but low (about 4.8 kW of 8 kW at A0/W69). Acceptable as an interim?
 * **Q5 — Uncalibrated default.** Without a stated SCOP every machine becomes the pooled Keymark unit (air W35 4.46 /
-  W55 3.33) instead of hplib's Generic plane (4.74 / 3.40). Goldens move with it. Agreed?
+  W55 3.32) instead of hplib's Generic plane (4.74 / 3.40). Goldens move with it. Agreed?
 * **Q6 — Defrost targets and the 60 s / 900 s band.** A2 ×0.90 and a 4-7 % defrost heat share are the targets;
   what annual difference between the two modes is acceptable (proposed: 1 % of the heat pump's electricity)?
 * **Q7 — Start-up loss.** Which source for `t_start_loss` (EN 14825 Cdh test cycles, field data, AixLib)? Order of

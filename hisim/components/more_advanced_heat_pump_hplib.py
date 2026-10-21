@@ -614,9 +614,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power for SH in Watt",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerSH
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.p_el_cooling: ComponentOutput = self.add_output(
@@ -626,9 +624,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for cooling in Watt",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerForCooling
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.p_el_brine_pump: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -639,9 +635,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "Electricity of the brine or well pump of a ground- or water-source heat pump in W, part of "
                 "ElectricalInputPowerTotalHeatpump; zero for an air-source heat pump."
             ),
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerBrinePump
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -874,9 +868,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT,
                 output_description="Electricity input power for DHW in Watt",
-                energy_port=EnergyPort(
-                    EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerDHW
-                ),
+                energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
             )
 
             self.t_in_dhw: ComponentOutput = self.add_output(

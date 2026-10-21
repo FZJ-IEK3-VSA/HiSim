@@ -483,7 +483,7 @@ class DeviceEnergySpecs:
         # `carriers.EnergyFlowRole` has no terminal for these. Their kilowatt hours stay in the
         # balance's residual node; giving one a terminal means adding a role to the chart.
         #
-        # An EV battery is not a pass-through of the house bus (the car drives away with the
+        # An EV battery is not a pass-through of the house's electricity (the car drives away with the
         # energy), so it cannot be drawn under the battery's charge/discharge pair.
         "CarBattery": (),
         "Car": (),
@@ -495,7 +495,7 @@ class DeviceEnergySpecs:
         # Auxiliary pump electricity of a solar thermal loop.
         "SolarThermalSystem": (),
         # The hydrogen chain (electrolyzers, fuel cells, reversible cells, CHP and their storage):
-        # electricity that leaves or enters the bus as hydrogen. The balance has no hydrogen
+        # electricity that leaves or enters the house as hydrogen. The balance has no hydrogen
         # terminal, and half of these channels are the same energy seen twice (a load in W beside
         # a cumulative total in kWh).
         "AdvancedElectrolyzer": (),

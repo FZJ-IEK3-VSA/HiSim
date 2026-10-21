@@ -350,7 +350,8 @@
             "domestic_hot_water_heat",
             "cooling",
             "ambient_heat",
-            "solar"
+            "solar",
+            "room_heat"
           ]
         },
         "outputs": {

@@ -13,6 +13,7 @@ from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClas
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.energy_port import MeteredExchange
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import (
     ComponentCostFacts,
@@ -512,6 +513,22 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             )
         )
         return dynamic_connections
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The grid import and export this meter publishes, in W (complete Sankey spec, §4.4).
+
+        The energy balance draws the meter between "grid import" and "grid export" and the devices whose electricity
+        ports it reads, and checks per step that the import minus the export equals what they take minus what they
+        give.
+
+        Returns:
+            The one electricity exchange.
+        """
+        return (
+            MeteredExchange(
+                lt.EnergyBalanceCarrier.ELECTRICITY, self.ElectricityFromGridInWatt, self.ElectricityToGridInWatt
+            ),
+        )
 
     def write_to_report(self):
         """Writes relevant information to report."""

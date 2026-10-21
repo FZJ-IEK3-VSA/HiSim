@@ -7,7 +7,9 @@ the gas, heat-pump, district-heating and electric-heating households for the por
 of the solar-thermal one, in which its pump runs, the second January week at 900 s of each recorded generator
 household, and the same week of the gas household for the boiler's combustion loss. Each generator declares what it
 takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water)
-and what it loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat
+and what it loses; the Sankey links its fuel and electricity to the meter that reads them, which the carrier's supply
+node or the grid feeds (owner decision Q-J; never to a controller, which is exempt), and the generator to its
+storages, its loss nodes and the environment. The storages and the heat
 distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-hydronics-fxix.6).
 """
 
@@ -23,14 +25,18 @@ from hisim.energy_port import EnergyPort
 ROOT = Path(__file__).resolve().parents[1]
 
 #: Per setup: the generator, the carriers it takes in, the carriers it gives out, and links its Sankey must show.
+#: The fuel and the electricity come through the meter that reads them, directly or through the exempt energy manager
+#: (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way outdoors.
 GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
         {"natural_gas"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
-            ("natural_gas", "undeclared: GasMeter", "CondensingGasBoiler"),
-            ("natural_gas", "CondensingGasBoiler", "outdoors"),
+            ("natural_gas", "natural gas supply", "GasMeter"),
+            ("natural_gas", "GasMeter", "CondensingGasBoiler"),
+            ("natural_gas", "CondensingGasBoiler", "CondensingGasBoiler · CombustionHeatLoss"),
+            ("natural_gas", "CondensingGasBoiler · CombustionHeatLoss", "outdoors"),
             ("space_heating_heat", "CondensingGasBoiler", "undeclared: SimpleHotWaterStorage"),
             ("domestic_hot_water_heat", "CondensingGasBoiler", "undeclared: DHWStorage"),
         },
@@ -41,7 +47,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
             ("ambient_heat", "ambient heat", "MoreAdvancedHeatPumpHPLib"),
-            ("electricity", "undeclared: L2EMSElectricityController", "MoreAdvancedHeatPumpHPLib"),
+            ("electricity", "ElectricityMeter", "MoreAdvancedHeatPumpHPLib"),
+            ("electricity", "grid import", "ElectricityMeter"),
             ("space_heating_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: SimpleHotWaterStorage"),
             ("domestic_hot_water_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: DHWStorage"),
         },
@@ -51,7 +58,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"district_heat"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
-            ("district_heat", "undeclared: FuelMeter", "DistrictHeating"),
+            ("district_heat", "district heat supply", "FuelMeter"),
+            ("district_heat", "FuelMeter", "DistrictHeating"),
             ("domestic_hot_water_heat", "DistrictHeating", "undeclared: DHWStorage"),
             ("space_heating_heat", "DistrictHeating", "undeclared: HeatDistributionSystem"),
         },
@@ -61,6 +69,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"electricity"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
+            ("electricity", "ElectricityMeter", "ElectricHeating"),
             ("space_heating_heat", "ElectricHeating", "undeclared: Building"),
             ("domestic_hot_water_heat", "ElectricHeating", "undeclared: DHWStorage"),
         },
@@ -71,8 +80,9 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"solar"},
         set(),
         {
-            ("solar", "solar", "SolarThermalSystem"),
-            ("solar", "SolarThermalSystem", "outdoors"),
+            ("solar", "sun", "SolarThermalSystem"),
+            ("solar", "SolarThermalSystem", "SolarThermalSystem · CollectorHeatLoss"),
+            ("solar", "SolarThermalSystem · CollectorHeatLoss", "outdoors"),
         },
     ),
 }
@@ -123,7 +133,7 @@ def port_roles(entry: Dict[str, Any]) -> Dict[str, Tuple[str, str]]:
 
 
 def sankey_links(results: Path) -> Set[Tuple[str, str, str]]:
-    """Every link of every carrier's diagram as (carrier, source, target)."""
+    """Every link of every carrier's view of the Sankey graph as (carrier, source, target)."""
     diagrams: Dict[str, Any] = json.loads((results / "energy_sankeys" / "energy_sankey.json").read_text("utf-8"))
     links = set()
     for carrier, diagram in diagrams.items():
@@ -230,7 +240,17 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
         assert entry["carriers"][carrier]["in_kwh"] > 0.0, carrier
     for carrier in carriers_out:
         assert entry["carriers"][carrier]["out_kwh"] > 0.0, carrier
-    assert expected_links <= sankey_links(results)
+    links = sankey_links(results)
+    assert expected_links <= links
+    report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
+    exempt = {item["component"] for item in report["exempt"]}
+    assert exempt, "the controllers of the household are exempt"
+    drawn = {node for _, source, target in links for node in (source, target)}
+    assert not {name for name in drawn if name.removeprefix("undeclared: ") in exempt}
+    if setup == "household_gas_building_sizer":
+        # the boiler is the gas meter's one consumer and declares its fuel: the meter publishes what it reads
+        meters = {meter["meter"]: meter for meter in report["meters"]}
+        assert meters["GasMeter"]["verdict"] == "agrees", meters["GasMeter"]
 
 
 @pytest.mark.extendedbase2
@@ -253,9 +273,10 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     assert carriers["solar"]["in_kwh"] == pytest.approx(heat_out + carriers["solar"]["loss_kwh"], rel=1e-9)
     assert carriers["electricity"]["in_kwh"] > 0.0
     assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["in_kwh"])
-    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {
-        (carrier, source) for carrier, source, _ in sankey_links(results)
-    }
+    links = sankey_links(results)
+    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {(carrier, source) for carrier, source, _ in links}
+    # the pump's re-pointed electricity port reaches the meter through the energy manager (spec §5.2)
+    assert ("electricity", "ElectricityMeter", "SolarThermalSystem") in links
 
 
 @pytest.mark.extendedbase2

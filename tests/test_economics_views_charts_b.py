@@ -573,11 +573,11 @@ class TestEnergyBalanceFlows:
         )
 
     def test_flow_conservation_holds_at_every_node(self):
-        """Both sides of the bus carry the same energy; that is what makes it a balance."""
+        """Both sides of the house's electricity carry the same energy; that is what makes it a balance."""
         flows = views.energy_balance_flows(self.make_balanced_result())
         assert sum(node.quantity_in_kwh for node in flows.sources) == pytest.approx(12900.0)
         assert sum(node.quantity_in_kwh for node in flows.sinks) == pytest.approx(12900.0)
-        assert flows.bus_total_in_kwh == pytest.approx(12900.0)
+        assert flows.house_electricity_total_in_kwh == pytest.approx(12900.0)
 
     def test_grid_nodes_equal_the_metered_quantities(self):
         """Import and export are the meter's own figures, or the euro annotation lies."""
@@ -649,7 +649,7 @@ class TestEnergyBalanceFlows:
             views.energy_balance_flows(result)
 
     def test_an_attribution_with_no_source_is_refused(self):
-        """A bus fed by nothing is the meter-only stub arrived at from the other side."""
+        """A balance fed by nothing is the meter-only stub arrived at from the other side."""
         result = make_result(
             [entry(1, 100.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
                    subject_kind=SubjectKind.CARRIER)],
@@ -700,7 +700,7 @@ class TestEnergyBalanceFlows:
             },
         )
         flows = views.energy_balance_flows(result)
-        assert flows.bus_total_in_kwh == pytest.approx(9000.0)
+        assert flows.house_electricity_total_in_kwh == pytest.approx(9000.0)
 
     def test_a_battery_that_discharged_more_than_it_charged_reports_no_loss(self):
         """Carried-over charge is not energy the battery made, so the loss clamps at zero."""
@@ -751,7 +751,7 @@ class TestEnergyBalanceFlows:
         assert residual[0].quantity_in_kwh == pytest.approx(5000.0), (
             "the unplaceable role must not be folded into the residual, which would hide it"
         )
-        assert flows.bus_total_in_kwh == pytest.approx(9000.0)
+        assert flows.house_electricity_total_in_kwh == pytest.approx(9000.0)
 
     def test_a_known_only_record_reports_no_unattributed_roles(self):
         """The honest empty case: nothing was dropped, so nothing is disclosed."""

@@ -58,7 +58,7 @@ from hisim.dynamic_component import (
     DynamicConnectionInput,
     DynamicConnectionOutput,
 )
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, MeteredExchange
 from hisim.economics.facts import CostRelevance
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
@@ -479,6 +479,52 @@ class MockWaterHeater(MockHeater):
     ) -> None:
         """Builds the heater."""
         super().__init__(my_simulation_parameters, config)
+
+
+# ---------------------------------------------------------------------------------- electricity meter
+
+
+@dataclass_json
+@dataclass
+class MockElectricityMeterConfig(ConfigBase):
+    """The grid connection's meter."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockElectricityMeter"
+
+    component_id: ComponentID
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "MockElectricityMeterConfig":
+        """The one meter: nothing to configure."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class MockElectricityMeter(MockComponent, MeterComponent):
+    """Reads the heater's electricity and publishes it as bought from the grid; nothing is ever sold.
+
+    Stands in for the real electricity meter beside the mock heaters: every setup that buys a carrier meters it
+    (owner decision Q-J of ``roadmap/complete_energy_sankeys_spec.md``), so the energy balance of an isolation
+    system finds the meter that reads the heater's electricity port. It declares that exchange with
+    :meth:`metered_exchanges`, as the real meter does.
+    """
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockElectricityMeterConfig) -> None:
+        """Builds the meter and its default connection from the heater's electricity output."""
+        super().__init__(my_simulation_parameters, config)
+        self.input_port("Consumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, mandatory=False)
+        self.output_port("FromGridInWatt", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.output_port("ToGridInWatt", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.defaults_from("MockHeater", {"Consumption": "ElectricityInput"})
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The grid import and export, in W."""
+        return (MeteredExchange(lt.EnergyBalanceCarrier.ELECTRICITY, "FromGridInWatt", "ToGridInWatt"),)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """What the heater draws is bought; nothing is produced, so nothing is sold."""
+        self.set(stsv, "FromGridInWatt", max(self.value(stsv, "Consumption"), 0.0))
+        self.set(stsv, "ToGridInWatt", 0.0)
 
 
 # ---------------------------------------------------------------------------------------- controller

@@ -16,8 +16,9 @@ finite in every step, and every transfer between two declared components
 (:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``OUT`` port and its
 receiver's ``IN`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
 two. A transfer only one of two declared components books fails; one toward a component that declares no ports at
-all, an environment node or nobody does not. The check runs in every simulation; whatever does not hold fails
-the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes.
+all, a meter, a boundary node or nobody does not. The check runs in every simulation; whatever does not hold fails
+the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes. The meters, what they
+publish against what they read, are :mod:`.meters`'s.
 """
 
 from __future__ import annotations

@@ -331,7 +331,12 @@ class EnergyBalanceCarrier(str, enum.Enum):
     for, space heating, domestic hot water and cooling, and a water flow counts by the heat it
     carries, ``m c dT``, never by its mass. ``AMBIENT_HEAT`` and ``SOLAR`` are what the environment
     gives a heat pump or a collector; a port of either carrier is linked to the environment node of
-    the same name.
+    the same name. ``ROOM_HEAT`` is heat released into or lost from the heated zone: the carrier of
+    the internal gains, of the building's losses and of its thermal mass, so that ``SPACE_HEATING_HEAT``
+    stays the heat the heating system delivers up to the building (complete Sankey spec, Q-G).
+    A port whose wiring names no peer takes its carrier's boundary default where one exists
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
+    unlinked.
     """
 
     ELECTRICITY = "electricity"
@@ -347,20 +352,31 @@ class EnergyBalanceCarrier(str, enum.Enum):
     COOLING = "cooling"
     AMBIENT_HEAT = "ambient_heat"
     SOLAR = "solar"
+    ROOM_HEAT = "room_heat"
 
 
 @enum.unique
 class EnvironmentNode(str, enum.Enum):
 
-    """The environment as the balance and the Sankey see it: where energy comes from or goes to outside the house.
+    """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.
 
-    An ``IN`` port of carrier ``AMBIENT_HEAT`` or ``SOLAR`` comes from the node of that name and a
-    ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself.
+    An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
+    ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    electricity meter's published import comes from and its export goes to, which no port names
+    (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
+    at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as
+    "natural gas supply", is derived from its carrier and not listed here
+    (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
 
     AMBIENT_HEAT = "ambient heat"
-    SOLAR = "solar"
+    SOLAR = "sun"
     OUTDOORS = "outdoors"
+    GRID_IMPORT = "grid import"
+    GRID_EXPORT = "grid export"
+    HOT_WATER_USE = "hot water drawn at the taps"
+    RESIDENTS = "residents' body heat"
 
 
 @enum.unique

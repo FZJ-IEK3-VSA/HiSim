@@ -594,9 +594,9 @@ class DhwControllerTable:
     """The transitions of the heat pump's hot-water controller with the default 40/60 °C band, a namespace.
 
     Each row is (state before, tank start temperature in °C, energy manager's raise in K, state after). The rows
-    cover every transition of :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` and the boundary values of
-    each condition: the switch-on below 40 °C, the switch-off within 0.5 K of 60 °C plus the raise, and the surplus
-    switch-on below 59.5 °C while a raise is active.
+    cover every transition of :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` with the default charge end of
+    2 K and the boundary values of each condition: the switch-on below 40 °C, the switch-off 2 K below 60 °C plus the
+    raise, and the surplus switch-on below 58 °C while a raise is active.
     """
 
     OFF = HeatPumpDhwState.OFF
@@ -606,13 +606,13 @@ class DhwControllerTable:
         (OFF, 40.0, 0.0, OFF),  # at the minimum: no switch-on (strict)
         (OFF, 50.0, 0.0, OFF),  # inside the band: keeps off
         (ON, 50.0, 0.0, ON),  # inside the band: keeps on
-        (ON, 59.49, 0.0, ON),  # just below the switch-off point
-        (ON, 59.5, 0.0, OFF),  # at the switch-off point: off
-        (OFF, 59.49, 10.0, ON),  # surplus switch-on just below 59.5 °C
-        (OFF, 59.5, 10.0, OFF),  # surplus switch-on stops at 59.5 °C: keeps off in the raised band
-        (ON, 65.0, 10.0, ON),  # charging in the raised band [59.5, 69.5)
-        (ON, 69.49, 10.0, ON),  # just below the raised switch-off point
-        (ON, 69.5, 10.0, OFF),  # at the raised switch-off point: off
+        (ON, 57.99, 0.0, ON),  # just below the switch-off point
+        (ON, 58.0, 0.0, OFF),  # at the switch-off point: off
+        (OFF, 57.99, 10.0, ON),  # surplus switch-on just below 58 °C
+        (OFF, 58.0, 10.0, OFF),  # surplus switch-on stops at 58 °C: keeps off in the raised band
+        (ON, 65.0, 10.0, ON),  # charging in the raised band [58, 68)
+        (ON, 67.99, 10.0, ON),  # just below the raised switch-off point
+        (ON, 68.0, 10.0, OFF),  # at the raised switch-off point: off
         (ON, 61.0, 0.0, OFF),  # the raise came and went: off without it
     ]
 
@@ -624,7 +624,7 @@ def test_the_hot_water_controller_takes_every_transition_of_its_table(
 ) -> None:
     """A transition off its edge would start or end charges at the wrong tank temperature.
 
-    The surplus switch-on stopping at 59.5 °C rather than 60 °C is the row that keeps a raise that comes and goes
+    The surplus switch-on stopping at 58 °C rather than 60 °C is the row that keeps a raise that comes and goes
     within a step from toggling the charge.
     """
     assert (
@@ -634,9 +634,35 @@ def test_the_hot_water_controller_takes_every_transition_of_its_table(
             raise_in_kelvin=raise_in_kelvin,
             minimum_temperature_in_celsius=40.0,
             maximum_temperature_in_celsius=60.0,
+            charge_end_below_target_in_kelvin=MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+                "HeatPumpControllerDHW"
+            ).charge_end_below_target_in_kelvin,
         )
         == expected
     )
+
+
+@pytest.mark.base
+def test_the_hot_water_charge_ends_two_kelvin_below_its_target_by_default() -> None:
+    """A charge that runs on to within 0.5 K of its capped supply empties the space-heating buffer.
+
+    The heat pump's hot-water supply is capped at the target, so the tank's last kelvins come at a power falling
+    towards zero (3.0, 1.5 and 0.9 kW in the last steps at 900 s) while space heating waits. The owner decided on
+    2026-10-21 (hisim-room-air-dhw-dip-a5by) that the charge ends 2 K below the target, as a configuration field.
+    """
+    config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+    assert config.charge_end_below_target_in_kelvin == 2.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("charge_end_below_target_in_kelvin", [0.0, -1.0, 20.0, 25.0, float("nan"), float("inf")])
+def test_a_charge_end_outside_the_band_is_refused(charge_end_below_target_in_kelvin: float) -> None:
+    """A charge end of 0 K never ends a charge against the capped supply, one at or beyond the band ends it at once."""
+    with pytest.raises(ValueError, match="charge_end_below_target_in_kelvin"):
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig(
+            component_id=ComponentID(name="HeatPumpControllerDHW"),
+            charge_end_below_target_in_kelvin=charge_end_below_target_in_kelvin,
+        )
 
 
 def dhw_controller_with_fake_inputs() -> Tuple[MoreAdvancedHeatPumpHPLibControllerDHW, cp.SingleTimeStepValues, Dict[str, cp.ComponentOutput]]:
@@ -660,9 +686,9 @@ def dhw_controller_with_fake_inputs() -> Tuple[MoreAdvancedHeatPumpHPLibControll
 @pytest.mark.base
 @pytest.mark.parametrize(
     ("start_temperature_in_celsius", "raise_in_kelvin", "expected_state", "expected_set_temperature_in_celsius"),
-    [(59.4, 0.0, HeatPumpDhwState.ON, 60.0), (59.5, 0.0, HeatPumpDhwState.OFF, 60.0), (69.4, 10.0, HeatPumpDhwState.ON, 70.0), (69.5, 10.0, HeatPumpDhwState.OFF, 70.0)],
+    [(57.9, 0.0, HeatPumpDhwState.ON, 60.0), (58.0, 0.0, HeatPumpDhwState.OFF, 60.0), (67.9, 10.0, HeatPumpDhwState.ON, 70.0), (68.0, 10.0, HeatPumpDhwState.OFF, 70.0)],
 )
-def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
+def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
     start_temperature_in_celsius: float,
     raise_in_kelvin: float,
     expected_state: HeatPumpDhwState,

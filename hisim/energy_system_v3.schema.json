@@ -4904,6 +4904,9 @@
                   },
                   "t_max_dhw_storage_in_celsius": {
                     "type": "number"
+                  },
+                  "charge_end_below_target_in_kelvin": {
+                    "type": "number"
                   }
                 }
               },

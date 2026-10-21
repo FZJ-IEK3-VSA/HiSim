@@ -462,8 +462,9 @@ on/off controllers and no `DhwChargeYield`; #864's `StorageForecast` and `DhwCha
 priority stays in `DiverterValve` (`dual_circuit_system.py:108-112`), one circuit per step (D6). Whether
 heat-pump buffers run dry and underheat at coarse steps once the vessels conserve energy (hisim-6ehm) is a
 validation item (§9.4); if it returns, it is solved then. The heat pump's hot-water controller ends a charge when
-`T0 ≥ t_max + raise − 0.5 K` (`MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN`; owner,
-2026-10-09): its supply is capped at `t_max + raise` (§5.2), so the tank approaches that target without passing it,
+`T0 ≥ t_max + raise − 0.5 K` (owner,
+2026-10-09; since 2026-10-21 `MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin`,
+2 K by default, hisim-room-air-dhw-dip-a5by): its supply is capped at `t_max + raise` (§5.2), so the tank approaches that target without passing it,
 and with the former strict `T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at
 60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
 `t_max − 0.5 K` (owner decision, 2026-10-09): at `t_max`, a tank between `t_max − 0.5 K` and

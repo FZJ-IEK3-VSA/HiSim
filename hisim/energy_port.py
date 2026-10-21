@@ -44,23 +44,38 @@ Hydronic circuits
 -----------------
 
 A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
-its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
-derives the heat from :func:`hisim.hydronics.circuit_power_w`, the one rule. Both ends of a circuit declare the
-same port, the supply owner with role ``PRODUCTION`` and the receiver with role ``CONSUMPTION``, so a circuit balances by
-construction. No component declares one yet, and the balance check does not read them yet. The contract the
-balance check is to implement:
+its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three quantities and
+derives the heat with :func:`hisim.hydronics.circuit_power_w`, the one rule. Both ends of a circuit declare it,
+the supply owner with role ``PRODUCTION`` and the receiver with role ``CONSUMPTION``, each through
+:meth:`hisim.component.Component.add_hydronic_port` and by its own names: a quantity the end publishes is one of its
+outputs, a quantity it reads is one of its inputs, and the balance check follows an input to the output connected
+to it (:class:`CircuitEnd`). So both ends of a circuit resolve to the same three columns of the result table, the
+check derives the circuit's heat once for both, and a circuit balances by construction; a mismatch can only come
+from inside a component. The rules the check applies (:mod:`hisim.postprocessing.energy_balance.ports`):
 
 * A port names no peer. The two ends come from the wiring: the component that reads the circuit's mass-flow
-  output is the other end.
+  output is the other end of the mass flow's owner, and the owner is the other end of a component that reads it. A
+  flow nobody reads (a boiler whose distribution system pumps a flow of its own) has as its other end the component
+  that publishes or reads the circuit's temperatures.
 * **One reader.** A mass-flow output read by more than one component that declares a ``HydronicPort`` on it
   fails the run: one flow cannot deliver its heat twice, and a split is a valve component with one circuit per
   branch.
 * **Both ends or neither.** A circuit whose one end declares a ``HydronicPort`` while the other end, a
-  component that declares ports, does not declare the matching one fails the run. A circuit whose other end
-  declares no ports at all is reported as undeclared, as for an :class:`EnergyPort`.
+  component that declares ports, does not declare the matching one (the same three outputs, the other role) fails
+  the run. A circuit whose other end declares no ports at all is drawn to that end as undeclared, as for an
+  :class:`EnergyPort`.
+* **An idle end.** An end whose mass flow it reads through an input that is not connected moves no water in this
+  run and is left out, as a storage's second generator circuit without a second generator is. An end that pumps
+  water into a circuit whose other quantities it cannot read fails the run.
+
+The rules that need no value of the run fail it right after the build, before it simulates
+(:meth:`hisim.postprocessing.energy_balance.ports.Wiring.refuse_a_broken_wiring`), together with rule (a) of the
+owner's decision of 2026-10-02 for an :class:`EnergyPort`: a ``PRODUCTION`` port that is not metered and names no
+``peer_input`` or ``peer_output`` must not be read by more than one component that declares ports.
 
 The :class:`EnergyPort` peer pointers remain for the carriers that are not water: fuel, electricity, ambient
-heat and solar.
+heat and solar, and for heat that leaves a component other than on a circuit (a tank's tap, a distribution
+system's heat to the building).
 """
 
 from __future__ import annotations
@@ -68,6 +83,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
+
+import numpy as np
 
 from hisim import hydronics
 from hisim import loadtypes as lt
@@ -344,12 +361,17 @@ class HydronicPortError(ValueError):
 @dataclass(frozen=True)
 class HydronicPort:
 
-    """The three outputs of one water circuit, as one end of it declares them.
+    """The three quantities of one water circuit, as one end of it names them.
 
-    ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
-    outputs (°C) of the components the water leaves on each leg; each is a name under the component-key rule,
+    ``mass_flow`` is the circuit's mass flow (kg/s), which the pump owner publishes, ``supply_temperature`` and
+    ``return_temperature`` the temperatures (°C) of the water on each leg, each published by the component the water
+    leaves. The declaring end names each by one of its own outputs or inputs (:class:`CircuitEnd` says which); an
+    input stands for the output connected to it. Each name follows the component-key rule,
     :meth:`hisim.config.names.NameSyntax.require_component_key`: an identifier, or identifiers joined by ``-`` as
-    an assembly member's serialized address is.
+    an assembly member's serialized address is. For example, a buffer's end of its boiler's circuit names its inputs
+    ``WaterMassFlowRateFromHeatGenerator`` and ``WaterTemperatureFromHeatGenerator`` and its output
+    ``WaterTemperatureToHeatGenerator``; the boiler's end names its outputs ``WaterOutputMassFlowSh`` and
+    ``WaterOutputTemperatureSh`` and its input ``WaterInputTemperatureSh``. Both resolve to the same three columns.
 
     ``carrier`` is the heat the circuit carries, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``, so that the
     Sankey knows which heat a circuit moves (complete Sankey spec, §4.2).
@@ -446,3 +468,90 @@ class HydronicPort:
             t_return_c=return_temperature_in_celsius,
         )
         return power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR
+
+    @staticmethod
+    def heat_in_kilowatt_hours_per_step(
+        *,
+        mass_flow_in_kg_per_second: np.ndarray,
+        supply_temperature_in_celsius: np.ndarray,
+        return_temperature_in_celsius: np.ndarray,
+        seconds_per_timestep: float,
+    ) -> np.ndarray:
+        """Return the heat a circuit's water carries in every step of a run, ``m c (T_sup - T_ret) dt``, in kWh.
+
+        The rule of :meth:`heat_in_kilowatt_hour`, the same operations in the same order, applied to the three
+        columns of the result table at once; the balance check derives every circuit's heat with it. For example,
+        flows of 0.1 and 0 kg/s over 10 K for one hour carry 4.18 and 0 kWh.
+
+        Args:
+            mass_flow_in_kg_per_second: The circuit's mass flow per step, in kg/s, at least 0 in every step.
+            supply_temperature_in_celsius: The supply temperature per step, in °C.
+            return_temperature_in_celsius: The return temperature per step, in °C.
+            seconds_per_timestep: The step duration, in s.
+
+        Returns:
+            The heat per step, in kWh; negative in a step in which the circuit cools.
+
+        Raises:
+            HydronicsError: If a step's flow is negative (``NegativeMassFlowError``, naming the first such step) or
+                the step is not positive (``NonPositiveTimestepError``), as :meth:`heat_in_kilowatt_hour` and
+                :func:`hisim.hydronics.circuit_power_w` raise them for one step.
+        """
+        mass_flow = np.asarray(mass_flow_in_kg_per_second, dtype=float)
+        if seconds_per_timestep <= 0.0:
+            raise hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
+        negative = mass_flow < 0.0
+        if negative.any():
+            first = int(np.argmax(negative))
+            raise hydronics.NegativeMassFlowError(
+                f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow[first]!r} in step {first}."
+            )
+        supply = np.asarray(supply_temperature_in_celsius, dtype=float)
+        returned = np.asarray(return_temperature_in_celsius, dtype=float)
+        power_in_watt = mass_flow * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * (supply - returned)
+        return np.asarray(
+            power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR, dtype=float
+        )
+
+
+@dataclass(frozen=True)
+class CircuitEnd:
+
+    """One end of a water circuit as a component declares it: its :class:`HydronicPort` and which names are inputs.
+
+    A component publishes some of a circuit's three quantities and reads the others, so each name of its port is one
+    of its outputs or one of its inputs; ``input_legs`` lists the legs (:attr:`LEGS`) it names by an input, and the
+    balance check follows each such input to the output connected to it. A component declares an end with
+    :meth:`hisim.component.Component.add_hydronic_port`, which builds this from its channels. For example, a buffer's
+    end of its boiler's circuit reads the mass flow and the supply temperature, ``input_legs={"mass_flow",
+    "supply_temperature"}``, and publishes the return.
+
+    Attributes:
+        port: The circuit's three names, role and carrier.
+        input_legs: The legs the component names by one of its inputs; the others are its outputs.
+    """
+
+    port: HydronicPort
+    input_legs: FrozenSet[str] = frozenset()
+
+    #: The three legs of a circuit, as the fields of :class:`HydronicPort` name them.
+    LEGS: ClassVar[Tuple[str, ...]] = ("mass_flow", "supply_temperature", "return_temperature")
+
+    def __post_init__(self) -> None:
+        """Refuse an input leg that is not one of :attr:`LEGS`.
+
+        Raises:
+            HydronicPortError: If ``input_legs`` names something other than a leg.
+        """
+        unknown = set(self.input_legs) - set(self.LEGS)
+        if unknown:
+            raise HydronicPortError(f"A circuit end's input legs are among {self.LEGS}, got {sorted(unknown)}.")
+
+    def name_of(self, leg: str) -> str:
+        """The component's own output or input that names ``leg``, for example ``"WaterOutputMassFlowSh"``."""
+        name: str = getattr(self.port, leg)
+        return name
+
+    def is_input(self, leg: str) -> bool:
+        """Whether the component names ``leg`` by one of its inputs rather than one of its outputs."""
+        return leg in self.input_legs

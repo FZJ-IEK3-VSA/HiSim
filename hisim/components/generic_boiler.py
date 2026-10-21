@@ -1591,9 +1591,6 @@ class GenericBoiler(PhysicsComponent):
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalOutputEnergySh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputMassFlowSh
-            ),
         )
 
         # DHW
@@ -1642,11 +1639,6 @@ class GenericBoiler(PhysicsComponent):
             unit=lt.Units.WATT_HOUR,
             output_description="Thermal energy output",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION,
-                lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterOutputMassFlowDhw,
-            ),
         )
         self.combustion_heat_loss_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -1675,6 +1667,18 @@ class GenericBoiler(PhysicsComponent):
             thermal_energy=self.thermal_output_energy_dhw_channel,
             fuel_energy=self.energy_demand_dhw_channel,
         )
+        # the heat the boiler gives is what its two circuits carry (complete Sankey spec §5.1, hydronic stage E)
+        for circuit, carrier in (
+            (self.space_heating_circuit, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+            (self.hot_water_circuit, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
+        ):
+            self.add_hydronic_port(
+                mass_flow=circuit.mass_flow,
+                supply_temperature=circuit.supply_temperature,
+                return_temperature=circuit.return_temperature,
+                role=lt.EnergyRole.PRODUCTION,
+                carrier=carrier,
+            )
         # Set important parameters
         self.build()
         # the burner's state committed at the end of the previous step, and the one this step's pass leaves

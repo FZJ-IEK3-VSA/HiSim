@@ -9,8 +9,10 @@ household, and the same week of the gas household for the boiler's combustion lo
 takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water)
 and what it loses; the Sankey links its fuel and electricity to the meter that reads them, which the carrier's supply
 node or the grid feeds (owner decision Q-J; never to a controller, which is exempt), and the generator to its
-storages, its loss nodes and the environment. The storages and the heat
-distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-hydronics-fxix.6).
+storages, its loss nodes and the environment. The heat a generator gives to a storage or a distribution system is
+the heat of its water circuit, which both ends declare as a ``HydronicPort`` (hydronic stage E,
+hisim-hydronics-fxix.6): the buffer and the hot-water tank are declared nodes, and the distribution system without a
+buffer (district heating) is undeclared until hisim-pnw7.
 """
 
 import json
@@ -37,8 +39,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
             ("natural_gas", "GasMeter", "CondensingGasBoiler"),
             ("natural_gas", "CondensingGasBoiler", "CondensingGasBoiler · CombustionHeatLoss"),
             ("natural_gas", "CondensingGasBoiler · CombustionHeatLoss", "outdoors"),
-            ("space_heating_heat", "CondensingGasBoiler", "undeclared: SimpleHotWaterStorage"),
-            ("domestic_hot_water_heat", "CondensingGasBoiler", "undeclared: DHWStorage"),
+            ("space_heating_heat", "CondensingGasBoiler", "SimpleHotWaterStorage"),
+            ("domestic_hot_water_heat", "CondensingGasBoiler", "DHWStorage"),
         },
     ),
     "household_heatpump_building_sizer": (
@@ -49,8 +51,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
             ("ambient_heat", "ambient heat", "MoreAdvancedHeatPumpHPLib"),
             ("electricity", "ElectricityMeter", "MoreAdvancedHeatPumpHPLib"),
             ("electricity", "grid import", "ElectricityMeter"),
-            ("space_heating_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: SimpleHotWaterStorage"),
-            ("domestic_hot_water_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: DHWStorage"),
+            ("space_heating_heat", "MoreAdvancedHeatPumpHPLib", "SimpleHotWaterStorage"),
+            ("domestic_hot_water_heat", "MoreAdvancedHeatPumpHPLib", "DHWStorage"),
         },
     ),
     "household_district_heating_building_sizer": (
@@ -60,7 +62,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {
             ("district_heat", "district heat supply", "FuelMeter"),
             ("district_heat", "FuelMeter", "DistrictHeating"),
-            ("domestic_hot_water_heat", "DistrictHeating", "undeclared: DHWStorage"),
+            ("domestic_hot_water_heat", "DistrictHeating", "DHWStorage"),
             ("space_heating_heat", "DistrictHeating", "undeclared: HeatDistributionSystem"),
         },
     ),
@@ -71,7 +73,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {
             ("electricity", "ElectricityMeter", "ElectricHeating"),
             ("space_heating_heat", "ElectricHeating", "undeclared: Building"),
-            ("domestic_hot_water_heat", "ElectricHeating", "undeclared: DHWStorage"),
+            ("domestic_hot_water_heat", "ElectricHeating", "DHWStorage"),
         },
     ),
     "household_gas_solar_thermal_building_sizer": (
@@ -144,15 +146,15 @@ def sankey_links(results: Path) -> Set[Tuple[str, str, str]]:
     return links
 
 
-#: Per fast setup: the generator and its ports as ``output -> (role, carrier)``.
+#: Per fast setup: the generator and its ports as ``output -> (role, carrier)``; a circuit is named by its mass flow.
 FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
         {
             "EnergyDemandSh": ("consumption", "natural_gas"),
             "EnergyDemandDhw": ("consumption", "natural_gas"),
-            "ThermalOutputEnergySh": ("production", "space_heating_heat"),
-            "ThermalOutputEnergyDhw": ("production", "domestic_hot_water_heat"),
+            "circuit CondensingGasBoiler.WaterOutputMassFlowSh": ("production", "space_heating_heat"),
+            "circuit CondensingGasBoiler.WaterOutputMassFlowDhw": ("production", "domestic_hot_water_heat"),
             "CombustionHeatLoss": ("loss", "natural_gas"),
         },
     ),
@@ -164,19 +166,19 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ElectricalInputPowerForCooling": ("consumption", "electricity"),
             "ElectricalInputPowerBrinePump": ("consumption", "electricity"),
             "ThermalPowerInputFromEnvironment": ("consumption", "ambient_heat"),
-            "ThermalPowerDeliveredForSpaceHeating": ("production", "space_heating_heat"),
-            "ThermalPowerDrawnForCooling": ("consumption", "cooling"),
-            "ThermalOutputPowerDHW": ("production", "domestic_hot_water_heat"),
+            "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputSH": ("production", "space_heating_heat"),
+            "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW": ("production", "domestic_hot_water_heat"),
         },
     ),
-    # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum.
+    # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum. The
+    # space-heating circuit runs at the distribution system's flow, which the substation reads.
     "household_district_heating_building_sizer": (
         "DistrictHeating",
         {
             "ThermalOutputShEnergy": ("consumption", "district_heat"),
             "ThermalOutputDhwEnergy": ("consumption", "district_heat"),
-            "ThermalOutputShPower": ("production", "space_heating_heat"),
-            "ThermalOutputDhwPower": ("production", "domestic_hot_water_heat"),
+            "circuit HeatDistributionSystem.WaterMassFlowHDS": ("production", "space_heating_heat"),
+            "circuit DistrictHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
         },
     ),
     "household_electric_heating_building_sizer": (
@@ -185,7 +187,7 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ElectricOutputShPower": ("consumption", "electricity"),
             "ElectricOutputDhwPower": ("consumption", "electricity"),
             "ThermalOutputShPower": ("production", "space_heating_heat"),
-            "ThermalOutputDhwPower": ("production", "domestic_hot_water_heat"),
+            "circuit ElectricHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
         },
     ),
 }

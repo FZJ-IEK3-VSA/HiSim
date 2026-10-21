@@ -2160,25 +2160,27 @@ class SimpleDHWStorage(SimpleWaterStorage):
             ),
         )
 
-        for mass_flow, supply_temperature in (
+        for mass_flow, supply_temperature, return_temperature in (
             (
                 self.water_mass_flow_rate_heat_generator_input_channel,
                 self.water_temperature_heat_generator_input_channel,
+                self.water_temperature_to_heat_generator_channel,
             ),
             (
                 self.water_mass_flow_rate_secondary_heat_generator_input_channel,
                 self.water_temperature_secondary_heat_generator_input_channel,
+                self.water_temperature_secondary_heat_generator_output_channel,
             ),
         ):
-            # Each charging circuit enters the tank; one whose flow input is not connected is left out by the balance.
-            # The tank is one mixed node with one step mean, the return of every charging circuit, and every
-            # generator's default connection reads it from StepMeanWaterTemperatureToHeatGeneratorInCelsius, the
-            # secondary generator's too; StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius publishes the
-            # same value and no setup reads it (bead hisim-dhw-tank-one-return-7kq2).
+            # Each charging coil is a circuit with its own return (owner decision of 2026-10-21 on
+            # hisim-dhw-tank-one-return-7kq2): the primary generator reads the first of the two step-mean outputs,
+            # the secondary one (the solar coil) the second. The two are equal while the tank is fully mixed; a
+            # stratified tank may give the lower coil a colder return. A circuit whose flow input is not connected is
+            # left out by the balance.
             self.add_hydronic_port(
                 mass_flow=mass_flow,
                 supply_temperature=supply_temperature,
-                return_temperature=self.water_temperature_to_heat_generator_channel,
+                return_temperature=return_temperature,
                 role=lt.EnergyRole.IN,
                 carrier=lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
             )
@@ -2267,7 +2269,15 @@ class SimpleDHWStorage(SimpleWaterStorage):
     def get_default_connections_from_solar_thermal_system(
         self,
     ) -> List[cp.ComponentConnection]:
-        """Get solar thermal system default connections."""
+        """Return the default connections from the solar thermal collector: its supply and flow into the secondary coil.
+
+        The collector is the tank's secondary generator, the lower solar coil of a bivalent cylinder, and reads the
+        secondary coil's return (:class:`hisim.components.solar_thermal_system.SolarThermalSystem`'s defaults); the
+        primary coil is left to the space-heating generator, whose defaults wire it.
+
+        Returns:
+            The connection list.
+        """
 
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.solar_thermal_system"
@@ -2275,16 +2285,18 @@ class SimpleDHWStorage(SimpleWaterStorage):
         component_class = getattr(component_module, "SolarThermalSystem")
         connections = []
         solar_thermal_system_classname = component_class.get_classname()
+        # the collector charges the tank's secondary coil, the lower solar coil of a bivalent cylinder; the primary
+        # coil is the space-heating generator's (owner decision of 2026-10-21, hisim-dhw-tank-one-return-7kq2)
         connections.append(
             cp.ComponentConnection(
-                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                SimpleDHWStorage.WaterTemperatureFromSecondaryHeatGenerator,
                 solar_thermal_system_classname,
                 component_class.WaterTemperatureOutput,
             )
         )
         connections.append(
             cp.ComponentConnection(
-                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                SimpleDHWStorage.WaterMassFlowRateFromSecondaryHeatGenerator,
                 solar_thermal_system_classname,
                 component_class.WaterMassFlowOutput,
             )

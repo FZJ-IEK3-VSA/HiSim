@@ -109,9 +109,22 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
-              - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
+              - from: Battery.ChargingPower
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: Battery.DischargingPower
                 tags:
                   - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: PVSystem.ElectricityOutput
+                component_type: PV
+                tags:
+                  - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: UTSPConnector.ElectricalPowerConsumption
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
           Battery:
             class: hisim.components.advanced_battery_bslib.Battery

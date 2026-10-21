@@ -89,13 +89,19 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
-        component_type: HEAT_PUMP_DHW
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
-        component_type: HEAT_PUMP_BUILDING
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999

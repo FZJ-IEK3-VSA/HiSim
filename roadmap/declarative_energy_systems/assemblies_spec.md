@@ -489,6 +489,14 @@ grid: {assembly: supply/electricity_grid}                                       
 grid: {assembly: supply/electricity_grid, observes: [{output: TotalElectricityToOrFromGrid}]}   # EMS: its grid balance
 ```
 
+**Superseded on 2026-10-21 (bead hisim-component-physics-4g9.39, owner decision of 2026-10-10: a meter reads
+physics ports only, and nothing reads a meter).** The meter no longer declares a feed from the EMS; it reads every
+electricity port of the system by its role (`ElectricityMeter.default_connections_for`: an `IN` port as consumption,
+an `OUT` port as production), with or without an EMS, so the grid import stays at its default
+(`grid: {assembly: supply/electricity_grid}`) in every shape, and the EMS's `TotalElectricityToOrFromGrid` serves only
+its own decisions. The double-count check of §3.3 stays: a meter written to read the balance and a flow is refused.
+The rest of this section describes the design before that decision.
+
 Without an EMS the meter computes the exchange from the flows (twin `metered_directly`, `:145-171` of
 `household_heatpump_building_sizer.grouped.energy_system.yaml`); with one, `control/ems_self_consumption` observes the
 flows and outputs their sum, `TotalElectricityToOrFromGrid`, which the meter reads (`ems_with_battery`, `:105-109`).

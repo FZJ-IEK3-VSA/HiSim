@@ -9,8 +9,8 @@
 # time step (spec §2.3): Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, HeatingCurveController 6, heating 7
 # (ControllerSH, ControllerDHW, HeatPump, Buffer), dhw 10, HeatDistributionSystem 12, grid 13, battery 14, control 15.
 # Against the twin, the buffer before the cylinder is a neutral swap (dry run §9.1). Without an energy manager (the
-# twin's metered_directly) the file drops `control`, `battery`, the grid's `observes:` line and the `optional-bind:`
-# lines naming `control`.
+# twin's metered_directly) the file drops `control`, `battery` and the `optional-bind:` lines naming `control`; the
+# grid's meter reads every electricity port either way.
 
 schema_version: 4
 name: household_heatpump_building_sizer
@@ -103,4 +103,3 @@ imports:
   grid:
     order: 13
     assembly: supply/electricity_grid
-    observes: [{output: TotalElectricityToOrFromGrid}]      # the manager's grid balance only, never its flows twice

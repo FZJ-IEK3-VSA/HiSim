@@ -185,7 +185,7 @@ class TwoArrays:
 
     @classmethod
     def alone(cls, array: str) -> Dict[str, Any]:
-        """Builds the fixture with only one of its two arrays: the other's entry and its manager input removed.
+        """Builds the fixture with only one of its two arrays: the other's entry and its two readers' inputs removed.
 
         The battery stays, now sized to the remaining array, so the variant is the household that array would
         make on its own.
@@ -200,8 +200,9 @@ class TwoArrays:
         for other in cls.ARRAYS:
             if other != array:
                 del document["components"][other]
-                manager = document["components"][cls.MANAGER]
-                manager["inputs"] = [item for item in manager["inputs"] if not item["from"].startswith(f"{other}.")]
+                for reader in (cls.MANAGER, cls.METER):
+                    entry = document["components"][reader]
+                    entry["inputs"] = [item for item in entry["inputs"] if not item["from"].startswith(f"{other}.")]
         return document
 
     @classmethod
@@ -455,8 +456,9 @@ def test_a_variant_differs_from_the_fixture_only_where_it_says() -> None:
     fixture = TwoArrays.document()
     south_alone = TwoArrays.alone(TwoArrays.SOUTH)
     assert set(fixture["components"]) - set(south_alone["components"]) == {TwoArrays.WEST}
-    expected = copy.deepcopy(fixture["components"][TwoArrays.MANAGER]["inputs"])
-    expected = [item for item in expected if not item["from"].startswith(f"{TwoArrays.WEST}.")]
-    assert south_alone["components"][TwoArrays.MANAGER]["inputs"] == expected
-    for name in (TwoArrays.SOUTH, TwoArrays.BATTERY, TwoArrays.METER, TwoArrays.RESIDENTS):
+    for reader in (TwoArrays.MANAGER, TwoArrays.METER):
+        expected = copy.deepcopy(fixture["components"][reader]["inputs"])
+        expected = [item for item in expected if not item["from"].startswith(f"{TwoArrays.WEST}.")]
+        assert south_alone["components"][reader]["inputs"] == expected
+    for name in (TwoArrays.SOUTH, TwoArrays.BATTERY, TwoArrays.RESIDENTS):
         assert south_alone["components"][name] == fixture["components"][name]

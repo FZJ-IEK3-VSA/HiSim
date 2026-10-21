@@ -106,11 +106,9 @@ class Real:
     )
     #: A PV array at a stated power, which a build sizes without a building.
     PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000}}"
-    #: The energy manager, and the grid whose meter observes the manager's balance alone (ems_with_battery).
+    #: The energy manager, and the grid, whose meter reads every electricity port, beside a manager too.
     CONTROL: ClassVar[str] = "control: {assembly: control/ems_self_consumption}"
-    GRID_ON_BALANCE: ClassVar[str] = (
-        "grid: {assembly: supply/electricity_grid, observes: [{output: TotalElectricityToOrFromGrid}]}"
-    )
+    GRID: ClassVar[str] = "grid: {assembly: supply/electricity_grid}"
 
     @classmethod
     def heating_site(cls, *extra: str) -> str:

@@ -43,6 +43,18 @@ class AssemblySchemaBuilder:
         "selection",
     )
 
+    #: A need: a port, and a carrier need of a fuel names its consuming outputs. Electricity has no link, so an
+    #: electricity need may name none (owner, 2026-10-21): the reader's rule, stated in the schema.
+    NEED: ClassVar[Dict[str, Any]] = {
+        "allOf": [
+            {"$ref": "#/$defs/port"},
+            {
+                "if": {"required": ["carrier"], "not": {"properties": {"carrier": {"const": "electricity"}}}},
+                "then": {"required": ["outputs"]},
+            },
+        ]
+    }
+
     #: The parameter types that are numbers, which carry a unit and a range.
     NUMERIC: ClassVar[list] = [kind.value for kind in ParameterType if kind.is_numeric]
 
@@ -85,7 +97,12 @@ class AssemblySchemaBuilder:
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        section: {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}}
+                        section: {
+                            "type": "object",
+                            "additionalProperties": (
+                                self.NEED if section == "needs" else {"$ref": "#/$defs/port"}
+                            ),
+                        }
                         for section in AssemblyFile.INTERFACE_SECTIONS
                     },
                 },

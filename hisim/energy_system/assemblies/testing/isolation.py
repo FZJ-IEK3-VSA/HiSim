@@ -8,7 +8,10 @@ circuit end of the assembly brings, as the cylinder a collector charges is the o
 reads, the engine's default rule binding the one candidate in scope), a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
-it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
+it observes, and a ``controllable: {target_input}`` output the controller ranking it. A partner a partner requires
+does not join when a member of the assembly has its class: the member meets the requirement
+(:meth:`~.partners.TestPartnerRegistry.closure`), as the energy manager under test is the one the grid meter
+observes. A sizing fact
 a member's class reads that no member provides and no fact port names crosses the boundary by the
 engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
 registered provider of that fact as well (:func:`add_fact_providers`, which recomputes what is
@@ -151,7 +154,9 @@ def facts_needed(
     ]
 
 
-def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Set[str]:
+def facts_of_partners(
+    registry: TestPartnerRegistry, names: Sequence[str], member_classes: Collection[str] = ()
+) -> Set[str]:
     """The sizing facts the classes of the partners and of every partner they require contribute.
 
     Example: an oil boiler partner contributes ``energy_carrier``, so a fuel meter beside it reads
@@ -160,11 +165,15 @@ def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Se
     Args:
         registry: The test partners.
         names: The partners in the system so far.
+        member_classes: The short class names of the subject's members: a requirement of one of these classes is met
+            by the member and does not join (:meth:`TestPartnerRegistry.closure`), so it contributes nothing here.
 
     Returns:
         The union of the facts their classes declare.
     """
-    return facts_declared_by(registry.config_class_of(name) for name in registry.closure(names))
+    return facts_declared_by(
+        registry.config_class_of(name) for name in registry.closure(names, member_classes)
+    )
 
 
 def add_fact_providers(
@@ -193,8 +202,9 @@ def add_fact_providers(
         TestPartnerRegistryError: When the partner registered for a fact does not contribute it.
     """
     added: Set[str] = set()
+    member_classes = [member.entry.class_path.rsplit(".", 1)[-1] for member in members.values()]
     while True:
-        needed = facts_needed(port_facts, members, facts_of_partners(registry, partners))
+        needed = facts_needed(port_facts, members, facts_of_partners(registry, partners, member_classes))
         if not needed:
             return
         fact = needed[0][0][1]
@@ -310,7 +320,8 @@ def isolation_document(
     add_fact_providers(partners, port_facts, selection.members, registry, assembly.path)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
-    components = registry.document(partners, f"the test partners of '{assembly.path}'")
+    # A partner's requirement a member of the subject has the class of is met by that member (partners.py).
+    components = registry.document(partners, f"the test partners of '{assembly.path}'", classes.values())
     bind_optional_partner_ports(components, classes)
     return {
         "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,

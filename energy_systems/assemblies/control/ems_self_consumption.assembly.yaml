@@ -33,6 +33,12 @@ components:
       domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_celsius}
 
 interface:
+  needs:
+    grid:         {carrier: electricity, optional: true}
+                  # the grid connection whose meter observes the manager's balance (TotalElectricityToOrFromGrid):
+                  # every bought carrier is metered (owner decision Q-J of roadmap/complete_energy_sankeys_spec.md).
+                  # No consuming outputs: the balance is a controller's sum, not an energy port, and electricity has
+                  # no link. Optional, as the meter is the file's own (supply/electricity_grid).
   observes:
     flows:        {into: [EMS], default: declared}          # every electricity output its class declares; never its own
   provides:

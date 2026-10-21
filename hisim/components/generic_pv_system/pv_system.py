@@ -26,6 +26,7 @@ from hisim import utils
 from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import DisplayConfig, concrete
+from hisim.energy_port import EnergyPort
 # The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer`` walks
 # its import closure and hashes the source of everything in it, so an edit to the calculation changes
 # the key without anyone declaring anything.
@@ -33,6 +34,7 @@ from hisim.components.generic_pv_system import calculation
 from hisim.components.generic_pv_system.calculation import (
     ARTIFACT_KIND,
     PVLibModuleAndInverterEnum,
+    PvSeriesColumn,
     PvSeriesInputs,
     PvWeatherSeries,
 )
@@ -128,6 +130,10 @@ class PVSystem(cp.PhysicsComponent):
     # Additional output channels must not contain 'ElectricityOutput' or
     # dynamic components will fail.
     ElectricityEnergyOutput = "ElectricityEnergyOutput"
+    #: The solar power on the modules, the plane-of-array irradiance times the array's module area, in W.
+    SolarPowerOnModulesInWatt = "SolarPowerOnModulesInWatt"
+    #: What the modules and the inverter do not convert: the solar power on the modules minus the AC power, in W.
+    ModuleAndInverterLossInWatt = "ModuleAndInverterLossInWatt"
 
     # Similar components to connect to:
     # 1. Weather
@@ -142,6 +148,7 @@ class PVSystem(cp.PhysicsComponent):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.ac_power_ratios_for_all_timesteps_output: List = []
+        self.solar_power_ratios_for_all_timesteps: List[float] = []
         self.coordinates: Any
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -227,6 +234,7 @@ class PVSystem(cp.PhysicsComponent):
                 lt.ComponentType.PV,
             ],
             output_description="Electricity output of the PV system.",
+            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
@@ -238,6 +246,34 @@ class PVSystem(cp.PhysicsComponent):
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
+        )
+
+        # The sun's input and the conversion loss close the array's energy balance (complete Sankey spec, Q-D):
+        # the solar power on the modules enters from the sun, the AC power leaves to the electricity meter that
+        # reads it (through the energy manager in the household twins), and what the modules and the inverter do
+        # not convert leaves to outdoors.
+        self.solar_power_on_modules_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.SolarPowerOnModulesInWatt,
+            load_type=lt.LoadTypes.IRRADIANCE,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The solar power on the modules, in W: the global irradiance on the plane of the array times the "
+                "area of its modules (peak power over module peak power, times module area). Zero at night."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.SOLAR),
+        )
+        self.module_and_inverter_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ModuleAndInverterLossInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                "What the modules and the inverter do not convert to AC power, in W: the solar power on the modules "
+                "minus the electricity output. At night it is the inverter's standby consumption, which the "
+                "electricity output carries as a small negative power."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR),
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -415,8 +451,13 @@ class PVSystem(cp.PhysicsComponent):
         simulation repository for the controller to consume.
         """
         ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt
+        solar_power_in_watt: float = self.solar_power_ratios_for_all_timesteps[timestep] * concrete(
+            self.pvconfig.power_in_watt
+        )
 
         stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
+        stsv.set_output_value(self.solar_power_on_modules_channel, solar_power_in_watt)
+        stsv.set_output_value(self.module_and_inverter_loss_channel, solar_power_in_watt - ac_power_in_watt)
         stsv.set_output_value(
             self.electricity_energy_output_channel,
             ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
@@ -482,9 +523,11 @@ class PVSystem(cp.PhysicsComponent):
             # measured on this data: 317 of 2000 with the default write format, 358 with
             # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
             # not the digits on disk, which is why writing more of them does not help.
-            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
-                entry.path, sep=",", decimal=".", float_precision="round_trip"
-            )[calculation.OUTPUT_COLUMN].tolist()
+            cached = pd.read_csv(entry.path, sep=",", decimal=".", float_precision="round_trip")
+            self.ac_power_ratios_for_all_timesteps_output = cached[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.solar_power_ratios_for_all_timesteps = cached[
+                PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
+            ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
                 raise ValueError(
@@ -495,8 +538,9 @@ class PVSystem(cp.PhysicsComponent):
         else:
             log.information(f"PV series cache miss: computing it and filing it at {entry.path}")
             database = calculation.produce_pv_series(calculation_inputs)
-            self.ac_power_ratios_for_all_timesteps_output = database[
-                calculation.OUTPUT_COLUMN
+            self.ac_power_ratios_for_all_timesteps_output = database[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.solar_power_ratios_for_all_timesteps = database[
+                PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
             ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:

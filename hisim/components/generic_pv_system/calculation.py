@@ -2,9 +2,13 @@
 
 What this module produces is one artifact: the AC power of the array divided by its peak power, one
 value per simulated timestep, computed in a single vectorized pvlib run over the whole simulation
-period. It is the second producer under ``roadmap/cache_service_spec.md`` (§3, §12), after the weather
-series it consumes, which is why it is a module of its own inside the component's package rather than a
-section of the component.
+period, and beside it the solar power on the modules divided by the same peak power, which the component
+publishes as the sun's input to the array's energy balance (complete Sankey spec, Q-D). Both come from one
+plane-of-array irradiance: :func:`produce_pv_series` computes it once (:func:`calculate_irradiance`), hands
+it to the performance model (:func:`simulate_cec` or :func:`simulate_sandia`) for the AC power, and
+multiplies it by the module area for the solar power. It is the second producer under
+``roadmap/cache_service_spec.md`` (§3, §12), after the weather series it consumes, which is why it is a
+module of its own inside the component's package rather than a section of the component.
 
 **The Merkle reference.** The PV series is a function of the weather series, and the spec's answer to
 that (§3.1, "Upstream artifacts as references, not payloads") is a reference rather than a copy: the DTO
@@ -86,9 +90,20 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 #: differently named PV components with the same geometry and weather share one entry.
 ARTIFACT_KIND: str = "pv_series"
 
-#: The single column of the produced frame, and the column the cached CSV is read back by. The AC power
-#: of the array divided by its peak power, dimensionless, one row per simulated timestep.
-OUTPUT_COLUMN: str = "output_power"
+
+@unique
+class PvSeriesColumn(str, Enum):
+    """The columns of the produced frame, which the cached CSV is read back by; one row per simulated timestep.
+
+    ``AC_POWER_RATIO`` is the AC power of the array divided by its peak power. ``SOLAR_POWER_ON_MODULES_RATIO`` is
+    the solar power on the modules, the global plane-of-array irradiance times the modules' area, divided by the
+    same peak power (W per W peak). For example, 1000 W/m² on a 1.98 m² module of 435.16 W peak gives 4.55: the
+    sun brings 4.55 W for every watt peak of the array. The component multiplies both by the array's peak power.
+    """
+
+    AC_POWER_RATIO = "output_power"
+    SOLAR_POWER_ON_MODULES_RATIO = "solar_power_on_modules_ratio"
+
 
 #: What one weather series may arrive as: the component reads lists out of the repository, a caller
 #: without a simulation (the prewarm CLI, a test) has arrays. Both are turned into float64 arrays by
@@ -362,18 +377,20 @@ class PvSeriesInputs:
 
 
 def produce_pv_series(inputs: PvSeriesInputs) -> pd.DataFrame:
-    """Produce the AC power ratio of the array for every timestep of the simulated period.
+    """Produce the AC power ratio and the solar power ratio of the array for every timestep of the simulated period.
 
-    Reads the module and inverter parameters, runs the performance model the module database implies
-    over the whole period in one vectorized pvlib call, and returns the result as the one-column frame
-    the cache stores. The result is a pure function of ``inputs``.
+    Reads the module and inverter parameters and computes the plane-of-array irradiance once
+    (:func:`calculate_irradiance`). From it, the performance model the module database implies gives the
+    AC power ratio in one vectorized pvlib call, and the global irradiance times the module area over the
+    module peak power gives the solar power ratio; night timesteps, whose irradiance is NaN, give 0.0.
+    Both go into the two-column frame the cache stores. The result is a pure function of ``inputs``.
 
     Args:
         inputs: the calculation's inputs.
 
     Returns:
-        pd.DataFrame: one row per timestep, with the single column :data:`OUTPUT_COLUMN`, holding the
-            AC power divided by the array's peak power.
+        pd.DataFrame: one row per timestep, with the columns of :class:`PvSeriesColumn`: the AC power and
+            the solar power on the modules, each divided by the array's peak power.
 
     Raises:
         ValueError: if the weather payload does not cover exactly the requested number of timesteps --
@@ -400,9 +417,47 @@ def produce_pv_series(inputs: PvSeriesInputs) -> pd.DataFrame:
                     is not available."""
         )
 
+    with np.errstate(invalid="ignore", divide="ignore"):
+        irradiance = calculate_irradiance(inputs, weather)
+
     # one vectorized pvlib run over the entire simulation period
-    ac_power_ratios = simulate_fct(inputs=inputs, weather=weather, module=module, inverter=inverter)
-    return pd.DataFrame({OUTPUT_COLUMN: list(ac_power_ratios)}, columns=[OUTPUT_COLUMN])
+    ac_power_ratios = simulate_fct(
+        inputs=inputs, weather=weather, module=module, inverter=inverter, irradiance=irradiance
+    )
+    module_area_in_square_meter, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
+    poa_global_in_watt_per_square_meter = np.nan_to_num(np.asarray(irradiance[0]["poa_global"], dtype=float), nan=0.0)
+    solar_power_ratios = poa_global_in_watt_per_square_meter * module_area_in_square_meter / module_peak_power_in_watt
+    return pd.DataFrame(
+        {
+            PvSeriesColumn.AC_POWER_RATIO.value: list(ac_power_ratios),
+            PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value: list(solar_power_ratios),
+        },
+        columns=[column.value for column in PvSeriesColumn],
+    )
+
+
+def module_area_and_peak_power(inputs: PvSeriesInputs, module: Any) -> Tuple[float, float]:
+    """Return the area and the peak power of one module, as its database states them.
+
+    The peak power is the denominator of both ratios of the produced frame: the performance models divide the
+    AC power by it (:func:`simulate_cec`, :func:`simulate_sandia`), :func:`produce_pv_series` the solar power.
+    For example, the CEC module "Trina Solar TSM-435NE09RC.05" has 1.98 m² and 9.89 A times 44 V, 435.16 W.
+
+    Args:
+        inputs: the calculation's inputs; supplies the module database, which names the parameters.
+        module: the module parameters from :func:`read_module`.
+
+    Returns:
+        Tuple[float, float]: the module's area in m² and its peak power in W.
+
+    Raises:
+        KeyError: if the module database is not one this producer implements.
+    """
+    if inputs.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
+        return float(module["A_c"]), float(module["I_mp_ref"] * module["V_mp_ref"])
+    if inputs.module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
+        return float(module["Area"]), float(module["Impo"] * module["Vmpo"])
+    raise KeyError(f"The module database '{inputs.module_database}' is not available.")
 
 
 def read_module(inputs: PvSeriesInputs) -> Any:
@@ -556,6 +611,7 @@ def simulate_sandia(
     weather: PvWeatherSeries,
     module: Any,
     inverter: Any,
+    irradiance: Tuple[Dict[str, Any], np.ndarray, np.ndarray],
 ) -> np.ndarray:
     """Simulates with the Sandia PV Array Performance Model, vectorized.
 
@@ -574,17 +630,19 @@ def simulate_sandia(
     Based on the tsib project @[tsib-kotzur] (Check header)
 
     Args:
-        inputs: the calculation's inputs; supplies tilt, azimuth and whether the inverter counts.
+        inputs: the calculation's inputs; supplies the module database and whether the inverter counts.
         weather: the weather series, one value per timestep.
         module: the module parameters from :func:`read_module`.
         inverter: the inverter parameters from :func:`read_inverter`.
+        irradiance: the plane-of-array irradiance components, the relative airmass and the angle of
+            incidence from :func:`calculate_irradiance`, computed once by :func:`produce_pv_series`.
 
     Returns:
         np.ndarray: AC power ratio per timestep, NaN-free.
     """
+    poa_irrad, airmass, aoi = irradiance
+    _, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
     with np.errstate(invalid="ignore", divide="ignore"):
-        poa_irrad, airmass, aoi = calculate_irradiance(inputs, weather)
-
         pvtemps = pvlib.temperature.sapm_cell(
             poa_irrad["poa_global"],
             weather.temperature,
@@ -606,9 +664,6 @@ def simulate_sandia(
             module=module,
             temp_cell=pvtemps,
         )
-        # calculate peak load of single module [W]
-        module_peak_load_in_watt = module["Impo"] * module["Vmpo"]
-
         if inputs.integrate_inverter:
             # calculate load after inverter
             inverter_load_in_watt = pvlib.inverter.sandia(
@@ -619,10 +674,10 @@ def simulate_sandia(
             # if inverter load is nan, make it zero otherwise ac_power_ratio
             # will be nan also
             inverter_load_in_watt = np.where(np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt)
-            ac_power_ratio = inverter_load_in_watt / module_peak_load_in_watt
+            ac_power_ratio = inverter_load_in_watt / module_peak_power_in_watt
         else:
             # load in [kW/kWp]
-            ac_power_ratio = np.asarray(sapm_out["p_mp"], dtype=float) / module_peak_load_in_watt
+            ac_power_ratio = np.asarray(sapm_out["p_mp"], dtype=float) / module_peak_power_in_watt
 
     return np.where(np.isnan(ac_power_ratio), 0.0, ac_power_ratio)
 
@@ -632,6 +687,7 @@ def simulate_cec(
     weather: PvWeatherSeries,
     module: Any,
     inverter: Any,
+    irradiance: Tuple[Dict[str, Any], np.ndarray, np.ndarray],
 ) -> np.ndarray:
     """Simulates a defined PV array using the single-diode model.
 
@@ -641,18 +697,20 @@ def simulate_cec(
     https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm
 
     Args:
-        inputs: the calculation's inputs; supplies tilt, azimuth and whether the inverter counts.
+        inputs: the calculation's inputs; supplies the module database and whether the inverter counts.
         weather: the weather series, one value per timestep.
         module: the module parameters from :func:`read_module`.
         inverter: the inverter parameters from :func:`read_inverter`.
+        irradiance: the plane-of-array irradiance components, the relative airmass and the angle of
+            incidence from :func:`calculate_irradiance`, computed once by :func:`produce_pv_series`. Only
+            the irradiance components are used.
 
     Returns:
         np.ndarray: AC power ratio per timestep, NaN-free.
     """
+    poa_irrad = irradiance[0]
+    _, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
     with np.errstate(invalid="ignore", divide="ignore"):
-        # Calculate irradiance
-        poa_irrad, _, _ = calculate_irradiance(inputs, weather)
-
         # Calculate cell temperature
         pvtemps = pvlib.temperature.pvsyst_cell(
             poa_irrad["poa_global"],
@@ -714,19 +772,16 @@ def simulate_cec(
                 method="newton",
             )
 
-            # Calculate peak load of single module [W]
-            module_peak_load_in_watt = module["I_mp_ref"] * module["V_mp_ref"]
-
             if inputs.integrate_inverter:
                 # calculate load after inverter
                 inverter_load_in_watt = pvlib.inverter.sandia(inverter=inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"])
                 # if inverter load is nan, make it zero otherwise
                 # ac_power_ratio will be nan also
                 inverter_load_in_watt = np.where(np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt)
-                valid_ac_power_ratio = inverter_load_in_watt / module_peak_load_in_watt
+                valid_ac_power_ratio = inverter_load_in_watt / module_peak_power_in_watt
             else:
                 # load in [kW/kWp]
-                valid_ac_power_ratio = np.asarray(mp["p_mp"], dtype=float) / module_peak_load_in_watt
+                valid_ac_power_ratio = np.asarray(mp["p_mp"], dtype=float) / module_peak_power_in_watt
 
             ac_power_ratio[valid] = np.where(np.isnan(valid_ac_power_ratio), 0.0, valid_ac_power_ratio)
 
@@ -745,7 +800,8 @@ def calculate_irradiance(
     airmass, and the angle of incidence, each as an array over all
     timesteps. At night the relative airmass — and consequently the Perez
     sky-diffuse model and the global plane-of-array irradiance — is NaN;
-    the callers translate those timesteps into zero power output.
+    :func:`produce_pv_series` and the performance models translate those
+    timesteps into zero power.
 
     Args:
         inputs: the calculation's inputs; supplies the array's tilt and azimuth.

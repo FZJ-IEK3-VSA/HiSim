@@ -532,6 +532,30 @@ def test_the_real_site_entries_of_the_test_helpers_equal_the_real_test_partners(
 
 
 @pytest.mark.assemblies
+def test_a_requirement_a_member_has_the_class_of_is_met_by_the_member_and_joins_otherwise() -> None:
+    """The grid meter requires the energy manager it observes: beside the manager under test, no second one joins.
+
+    Catches a second manager beside ``control/ems_self_consumption`` (the meter would read both balances, twice the
+    house), and a requirement dropped where no member meets it: beside ``heating/electric_resistive``, which has no
+    manager, the meter still brings the registry's ``EnergyManager``. A partner named among the ones the ports need
+    always joins, whatever the members' classes.
+    """
+    registry = TestPartnerRegistry.from_directories([Real.LIBRARY])
+    manager = "L2GenericEnergyManagementSystem"
+    assert registry.class_of("EnergyManager") == manager
+    assert registry.closure(["Grid"]) == ["EnergyManager", "Grid"]
+    assert registry.closure(["Grid"], [manager]) == ["Grid"]
+    assert registry.closure(["Grid", "EnergyManager"], [manager]) == ["EnergyManager", "Grid"]
+
+    ems, ems_space = mock("control/ems_self_consumption", Real.LIBRARY)
+    components = isolation_document(ems, ems_space.defaults(), registry)["components"]
+    assert "Grid" in components and "EnergyManager" not in components
+    heater, heater_space = mock("heating/electric_resistive", Real.LIBRARY)
+    components = isolation_document(heater, heater_space.defaults(), registry)["components"]
+    assert {"Grid", "EnergyManager"} <= set(components)
+
+
+@pytest.mark.assemblies
 def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_path: Path) -> None:
     """A battery whose law reads the arrays' peak power by the bare-fact rule, with no fact port, gets the array."""
     library = Library(tmp_path)

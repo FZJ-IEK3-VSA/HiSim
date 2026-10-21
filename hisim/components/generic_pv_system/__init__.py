@@ -37,8 +37,8 @@ Note on ``PVSystem.__module__``:
 
 from hisim.components.generic_pv_system.calculation import (
     ARTIFACT_KIND,
-    OUTPUT_COLUMN,
     PVLibModuleAndInverterEnum,
+    PvSeriesColumn,
     PvSeriesInputs,
     PvWeatherSeries,
     content_hash,
@@ -59,10 +59,10 @@ PVSystem.__module__ = __name__
 
 __all__ = [
     "ARTIFACT_KIND",
-    "OUTPUT_COLUMN",
     "PVLibModuleAndInverterEnum",
     "PVSystem",
     "PVSystemConfig",
+    "PvSeriesColumn",
     "PvSeriesInputs",
     "PvWeatherSeries",
     "content_hash",

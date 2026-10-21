@@ -48,6 +48,7 @@ from hisim.component import OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.components.lpg_car_information import CarProfileHandover, GenericCarInformation
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort
 
 # Constants for warm water fallback values used in i_simulate
 DEFAULT_WW_TEMPERATURE_INPUT: float = 40.45  # °C - default warm water temperature fallback
@@ -366,6 +367,10 @@ class UtspLpgConnector(cp.DataSourceComponent):
     ElectricalPowerConsumption: str = "ElectricalPowerConsumption"
     ElectricalEnergyConsumption: str = "ElectricalEnergyConsumption"
     WaterConsumption: str = "WaterConsumption"
+    #: The residents' body heat, released into the building, in W; equal to ``HeatingByResidents``.
+    BodyHeatToBuildingInWatt: str = "BodyHeatToBuildingInWatt"
+    #: The appliances' electricity that does not heat the building, in W: consumption minus device heat gains.
+    ApplianceElectricityNotReleasedIndoorsInWatt: str = "ApplianceElectricityNotReleasedIndoorsInWatt"
 
     Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
@@ -479,6 +484,9 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
+            energy_port=EnergyPort(
+                lt.EnergyRole.IN, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS
+            ),
         )
         self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -486,6 +494,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description="Inner device heat gains, which heat the building (not intentionally)",
+            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ROOM_HEAT),
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -494,6 +503,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electrical power consumption by residents.",
+            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
@@ -511,6 +521,38 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
             output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow.",
+        )
+
+        # The occupancy moves energy (complete Sankey spec, §5.3): it takes the appliances' electricity from the
+        # electricity meter that reads it and the residents' body heat from the residents, and releases the device heat
+        # gains and the body heat into the building, which reads both. The LoadProfileGenerator gives the device
+        # heat gains as a profile of its own, so the electricity they do not account for leaves the house with
+        # waste water, exhaust air and light. An output carries one port, so the body heat's way out to the
+        # building is an output of its own; its peer is the building that reads HeatingByResidents.
+        self.body_heat_to_building_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.BodyHeatToBuildingInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The residents' body heat released into the building, in W; equal to HeatingByResidents, which the "
+                "building reads as its gain."
+            ),
+            energy_port=EnergyPort(
+                lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ROOM_HEAT, peer_output=self.HeatingByResidents
+            ),
+        )
+        self.appliance_electricity_not_released_indoors_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ApplianceElectricityNotReleasedIndoorsInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The appliances' electricity that does not become a heat gain of the building, in W: the electrical "
+                "power consumption minus the device heat gains. It leaves the house with waste water, exhaust air "
+                "and light."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
     def i_save_state(self) -> None:
@@ -597,6 +639,11 @@ class UtspLpgConnector(cp.DataSourceComponent):
         stsv.set_output_value(self.heating_by_residents_channel, self.heating_by_residents[timestep])
         stsv.set_output_value(self.heating_by_devices_channel, self.heating_by_devices[timestep])
         stsv.set_output_value(self.electricity_output_channel, self.electricity_consumption[timestep])
+        stsv.set_output_value(self.body_heat_to_building_channel, self.heating_by_residents[timestep])
+        stsv.set_output_value(
+            self.appliance_electricity_not_released_indoors_channel,
+            self.electricity_consumption[timestep] - self.heating_by_devices[timestep],
+        )
         stsv.set_output_value(
             self.electricity_energy_output_channel,
             self.electricity_consumption[timestep] * self.my_simulation_parameters.seconds_per_timestep / 3600,

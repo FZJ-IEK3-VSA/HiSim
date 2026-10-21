@@ -70,7 +70,30 @@
         "needs": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/port"
+            "allOf": [
+              {
+                "$ref": "#/$defs/port"
+              },
+              {
+                "if": {
+                  "required": [
+                    "carrier"
+                  ],
+                  "not": {
+                    "properties": {
+                      "carrier": {
+                        "const": "electricity"
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "outputs"
+                  ]
+                }
+              }
+            ]
           }
         },
         "provides": {

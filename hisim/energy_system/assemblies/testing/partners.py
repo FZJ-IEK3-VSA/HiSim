@@ -30,6 +30,14 @@ system only as another partner's requirement:
 - ``{controls: <class name>}`` — the controller ranking a ``controllable: {target_input}`` output of a
   member of that class (§4.4).
 
+A requirement is met by the assembly under test when one of its members has the required partner's class (by the
+short class name of the partner's component): the partner then does not join, as a need binds the partner of its
+class the assembly's own circuit end brings. For example, the real library's ``Grid`` meter requires the
+``EnergyManager`` whose grid balance it observes; beside ``control/ems_self_consumption``, whose member is that
+manager, the meter observes the member and no second manager joins. A partner whose site entry names its
+requirement in ``inputs`` cannot be met so, since the name would not exist in the system: such a system does not
+read and is refused with the site's error.
+
 One thing is served by one partner, every name a ``requires`` lists is a partner, and no partner
 requires itself through others; a file that breaks this, or a site entry that does not read, is
 refused whole (:class:`TestPartnerRegistryError`). A port no partner serves is refused when its
@@ -40,7 +48,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, ClassVar, Collection, Dict, List, Mapping, Sequence, Tuple
 
 import yaml
 
@@ -255,12 +263,24 @@ class TestPartnerRegistry:
         entry = ComponentEntry(name=name, class_path=self.partners[name].component["class"])
         return ClassBinder.config_class_of(name, entry)
 
-    def closure(self, names: Sequence[str]) -> List[str]:
+    def class_of(self, name: str) -> str:
+        """The short class name of a registered partner's component, for example ``ElectricityMeter``."""
+        return str(self.partners[name].component["class"]).rsplit(".", 1)[-1]
+
+    def closure(self, names: Sequence[str], member_classes: Collection[str] = ()) -> List[str]:
         """The partners and every partner they require, transitively, each once, a requirement first.
+
+        A requirement whose partner has the class of a member of the assembly under test is met by that member and
+        does not join (see the module docstring); a partner named in ``names`` always joins.
+
+        Args:
+            names: The partners the assembly's ports need.
+            member_classes: The short class names of the assembly's members present with the sample's parameters.
 
         Raises:
             TestPartnerRegistryError: For partners requiring each other in a cycle, naming it.
         """
+        met_by_members = set(member_classes)
         ordered: List[str] = []
         visiting: List[str] = []
 
@@ -276,6 +296,8 @@ class TestPartnerRegistry:
                 )
             visiting.append(name)
             for required in self.partners[name].requires:
+                if required not in names and self.class_of(required) in met_by_members:
+                    continue
                 visit(required)
             visiting.pop()
             ordered.append(name)
@@ -284,13 +306,21 @@ class TestPartnerRegistry:
             visit(name)
         return ordered
 
-    def document(self, names: Sequence[str], origin: str) -> Dict[str, Dict[str, Any]]:
+    def document(
+        self, names: Sequence[str], origin: str, member_classes: Collection[str] = ()
+    ) -> Dict[str, Dict[str, Any]]:
         """The site entries of the partners and their requirements, checked to read as a site.
+
+        Args:
+            names: The partners the assembly's ports need.
+            origin: Where the entries come from, for the message.
+            member_classes: The short class names of the assembly's members; a requirement of one of these classes is
+                met by the member and does not join (:meth:`closure`).
 
         Raises:
             TestPartnerRegistryError: When the entries do not read as the components of a file.
         """
-        components = {name: dict(self.partners[name].component) for name in self.closure(names)}
+        components = {name: dict(self.partners[name].component) for name in self.closure(names, member_classes)}
         document = {
             "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
             "name": "test_partners",

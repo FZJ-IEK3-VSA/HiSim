@@ -346,7 +346,9 @@ exposes and lowers to declarations HiSim already has:
   connections for the circuit's three outputs `MassFlowDhw`, `SupplyTemperatureDhw`, `ReturnTemperatureDhw` (§11.1).
   The circuit name is the medium: a brine circuit's outputs are not what a DHW tank declares connections for.
 - **A carrier need**, `{carrier: natural_gas, outputs: [heater_fuel]}`, lowers to the provider's meter observing the
-  named outputs (§5.1); for electricity, to the check that exactly one grid connection exists, and no wire. A carrier
+  named outputs (§5.1); for electricity, to the check that exactly one grid connection exists, and no wire. A fuel's
+  need names at least one consuming output; an electricity need may name none (D32), as the energy manager's
+  `grid: {carrier: electricity, optional: true}`, whose meter observes the manager's balance. A carrier
   is an `lt.EnergyBalanceCarrier` value (`natural_gas`, `electricity`, `heating_oil`, `pellets`, …), the spelling an
   energy port serializes. The provider writes `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`, and
   the consumers' feeds land at the meter's `{$port: connection}` placeholder; an electricity provision names no
@@ -798,7 +800,8 @@ of that fact (it crosses by the bare-fact rule, §6, D29; `facts_needed` in `tes
 its carrier from the consumer partner beside it, and a second `energy_carrier` provider of any value is refused at
 sizing, §5.1, D30); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
 check and `i_doublecheck` on. The test partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
-consumer or fact, each naming the partners it requires. The run fails on an exception,
+consumer or fact, each naming the partners it requires; a requirement a member of the assembly has the class of is
+met by that member and does not join (D32). The run fails on an exception,
 a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below. The declared parameter box
 may contain combinations a member's component refuses at construction (`ConfigurationRefusedError`, such as a heat
 pump's W55 SCOP above its W35 SCOP, both in range); the harness counts such a refusal as handled, not failed, and drops
@@ -1302,6 +1305,17 @@ All by the owner on 2026-10-03.
   enum parameter selecting a variant (D26's substitute), which would duplicate the battery member to switch two
   fields between `AUTO` and a value; letting a stated capacity drive the power's law (0.5 C), which changes results
   of files that state one size and needs a law reading a sibling field.
+- **D32 — An electricity carrier need may name no consuming outputs (owner, 2026-10-21):** every bought carrier's
+  flow passes a meter (owner decision Q-J of `roadmap/complete_energy_sankeys_spec.md`), so the energy manager's
+  isolation system, whose residents' electricity reaches the grid meter only through the manager's balance, needs
+  the grid connection. `control/ems_self_consumption` therefore needs `grid: {carrier: electricity, optional: true}`.
+  The balance `TotalElectricityToOrFromGrid` is a controller's sum, not an energy port, so it cannot be a consuming
+  output (`EF-7M`); and electricity has no link, so its need only checks that the one connection exists. The reader
+  (`EF-07`) and the assembly schema keep requiring `outputs` for every other carrier, whose consumers' feeds land in
+  the meter. With it, the test harness counts a partner's `requires` as met by a member of the assembly under test
+  that has the required partner's class (§9.4): beside the manager under test, the grid meter observes it and no
+  second manager joins. Rejected: a second grid-meter partner for the manager (one partner per served thing), and
+  making the residents' partner require the grid (it would change every isolation system with residents).
 
 ### 14.2 Open
 

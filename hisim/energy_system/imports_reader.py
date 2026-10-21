@@ -250,7 +250,11 @@ class ImportsReader:
                     offending=str(block.get("carrier")),
                 )
             fields["carrier"] = block["carrier"]
-            if "outputs" in block or section == "needs":
+            # A need of a fuel names the outputs whose feeds land in its meter. Electricity has no link: its need
+            # only checks that the one connection exists, so it may name none (owner, 2026-10-21), as the energy
+            # manager's need for the grid whose meter observes its balance, which is no energy port.
+            outputs_required = section == "needs" and block["carrier"] != lt.EnergyBalanceCarrier.ELECTRICITY.value
+            if "outputs" in block or outputs_required:
                 items = block.get("outputs")
                 if not isinstance(items, list) or not items:
                     raise RawDocument.malformed(f"{location}.outputs", items, "a non-empty list of consuming outputs")

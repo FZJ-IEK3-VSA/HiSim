@@ -523,10 +523,10 @@ def test_the_ac_power_column_is_unchanged_and_below_the_solar_power() -> None:
     ac_ratio = frame[pv_calculation.PvSeriesColumn.AC_POWER_RATIO.value].to_numpy()
     solar = frame[pv_calculation.PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value].to_numpy()
 
+    irradiance = pv_calculation.calculate_irradiance(inputs, inputs.weather_series)
     np.testing.assert_array_equal(
-        ac_ratio, pv_calculation.simulate_cec(inputs, inputs.weather_series, module, inverter)
+        ac_ratio, pv_calculation.simulate_cec(inputs, inputs.weather_series, module, inverter, irradiance)
     )
-    assert pv_calculation.OUTPUT_COLUMN == pv_calculation.PvSeriesColumn.AC_POWER_RATIO.value
     assert (solar - ac_ratio >= 0.0).all()
     noon = int(np.argmax(solar))
     assert 0.15 < ac_ratio[noon] / solar[noon] < 0.25

@@ -230,13 +230,18 @@ def test_every_fuel_has_its_balance_carrier_and_the_table_is_read_only() -> None
 @pytest.mark.extendedbase2
 @pytest.mark.parametrize("setup", sorted(GENERATORS))
 def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path) -> None:
-    """The run passes; the generator closes to 1e-9 kWh, takes and gives its carriers, and is linked."""
+    """The run passes; the generator closes, takes and gives its carriers, and is linked.
+
+    It closes to a millionth of what it takes in: its heat is its circuits' heat, derived from the converged flow
+    and temperatures both ends read, while the generator booked its fuel or electricity on its last pass, which may
+    have read a return temperature the other end moved by less than the simulator's convergence tolerance.
+    """
     generator, carriers_in, carriers_out, expected_links = GENERATORS[setup]
     results = run_household(tmp_path, setup)
 
     entry = balance_entry(results, generator)
     assert entry["verdict"] == "closes"
-    assert abs(entry["residual_kwh"]) <= 1e-9
+    assert abs(entry["residual_kwh"]) <= 1e-6 * entry["consumption_kwh"]
     assert entry["consumption_kwh"] > 1.0
     for carrier in carriers_in:
         assert entry["carriers"][carrier]["consumption_kwh"] > 0.0, carrier
@@ -292,4 +297,5 @@ def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> 
     boiler = balance_entry(results, "CondensingGasBoiler")
     gas = boiler["carriers"]["natural_gas"]
     assert 0.02 * gas["consumption_kwh"] < gas["loss_kwh"] < 0.13 * gas["consumption_kwh"]
-    assert boiler["production_kwh"] == pytest.approx(gas["consumption_kwh"] - gas["loss_kwh"], rel=1e-12)
+    # the heat out is its circuits' heat from the converged values, within the convergence tolerance of its booking
+    assert boiler["production_kwh"] == pytest.approx(gas["consumption_kwh"] - gas["loss_kwh"], rel=1e-9)

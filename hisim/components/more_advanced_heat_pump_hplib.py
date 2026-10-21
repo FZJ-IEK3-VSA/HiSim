@@ -289,7 +289,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     machine does (:meth:`on_off_after_minimum_times`, the start-up ramp). The published track counts what the machine
     ran (:meth:`published_mode`): a space-heating step at a ratio of 0 runs nothing and is an off step there, so
     ``OnOffStateHeatpump`` is 0, ``TimeOff`` grows, ``TimeOnHeating`` restarts and the next charge counts as a new start
-    in ``CounterOnOff`` and ``CounterSwitchToSH`` and in the cycle and heating-time KPIs. The control track stays in
+    in ``CounterOnOff`` and ``CounterSwitchToSH`` and in the start and heating-time KPIs. The control track stays in
     space heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum
     running time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are
     the same.
@@ -2422,7 +2422,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         output_cooling_energy_in_kilowatt_hour: float = 0.0
         electrical_energy_for_heating_in_kilowatt_hour: float = 1.0
         electrical_energy_for_cooling_in_kilowatt_hour: float = 1.0
-        number_of_heat_pump_cycles: Optional[float] = None
+        number_of_heat_pump_starts: Optional[int] = None
+        number_of_space_heating_starts: Optional[int] = None
         seasonal_performance_factor: Optional[float] = None
         seasonal_energy_efficiency_ratio: Optional[float] = None
         total_electrical_energy_input_in_kilowatt_hour: Optional[float] = None
@@ -2437,8 +2438,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if output.field_name == self.TimeOff:
-                    # Counted from this one column only: every other output would give 0.
-                    number_of_heat_pump_cycles = self.get_heatpump_cycles(
+                    number_of_heat_pump_starts = self.get_heatpump_cycles(
+                        output=output, index=index, postprocessing_results=postprocessing_results
+                    )
+                elif output.field_name == self.HeatPumpOnOffState:
+                    number_of_space_heating_starts = self.get_space_heating_starts(
                         output=output, index=index, postprocessing_results=postprocessing_results
                     )
                 elif output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
@@ -2562,14 +2566,26 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
         list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
-        number_of_heat_pump_cycles_entry = KpiEntry(
-            name="Number of SH heat pump cycles",
+        # Every start of the machine, into space heating, hot water or cooling. It stays in the group of the
+        # component's other machine KPIs (heating and cooling hours, electrical input) rather than opening a group
+        # of its own.
+        number_of_heat_pump_starts_entry = KpiEntry(
+            name="Number of heat pump starts",
             unit="-",
-            value=number_of_heat_pump_cycles,
+            value=number_of_heat_pump_starts,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(number_of_heat_pump_cycles_entry)
+        list_of_kpi_entries.append(number_of_heat_pump_starts_entry)
+
+        number_of_space_heating_starts_entry = KpiEntry(
+            name="Number of space-heating starts",
+            unit="-",
+            value=number_of_space_heating_starts,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(number_of_space_heating_starts_entry)
 
         seasonal_performance_factor_entry = KpiEntry(
             name="Seasonal performance factor of SH heat pump",
@@ -2654,34 +2670,64 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         return list_of_kpi_entries
 
-    # make kpi entries and append to list
-    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> float:
+    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
         """Return the number of starts of the heat pump in the simulated period, counted in its ``TimeOff`` column.
 
-        A start is a step whose ``TimeOff`` is 0 after a step whose ``TimeOff`` is not: an idle period ended. For
-        example, the series 0, 60, 60, 0, 120, 0 holds two starts. A start in the first step of the simulation has
-        no idle step before it and is not counted, so the count is the published ``CounterOnOff`` at the end of the
-        run, less one if the machine ran in the first step. For any output other than ``TimeOff`` the count is 0.
+        A start is a step whose ``TimeOff`` is 0 after a step whose ``TimeOff`` is not: an idle period ended, and
+        the machine runs again, in space heating, hot water or cooling. For example, the series 0, 60, 60, 0, 120, 0
+        holds two starts. A start in the first step of the simulation has no idle step before it and is not counted,
+        so the count is the published ``CounterOnOff`` at the end of the run, less one if the machine ran in the first
+        step. The count is one vectorised comparison of the column with itself shifted by one step.
 
         Args:
-            output: The output whose column is read; only ``TimeOff`` is counted.
+            output: The output whose column is read; it must be ``TimeOff``.
             index: The position of that output's column in ``postprocessing_results``.
             postprocessing_results: The simulated values of all outputs, one column per output.
 
         Returns:
             The number of starts.
-        """
-        number_of_cycles = 0
-        if output.field_name == self.TimeOff:
-            for time_index, off_time in enumerate(postprocessing_results.iloc[:, index].values):
-                try:
-                    if off_time != 0 and postprocessing_results.iloc[:, index].values[time_index + 1] == 0:
-                        number_of_cycles = number_of_cycles + 1
-                except IndexError:
-                    # Expected on the last element: time_index + 1 is out of bounds.
-                    pass
 
-        return number_of_cycles
+        Raises:
+            ValueError: If ``output`` is not the ``TimeOff`` output: no other column holds the idle periods, and a
+                count read from it would be a silent 0.
+        """
+        if output.field_name != self.TimeOff:
+            raise ValueError(
+                f"The heat pump starts are counted in its {self.TimeOff} column, not in {output.field_name}."
+            )
+        time_off_in_seconds = postprocessing_results.iloc[:, index].to_numpy()
+        return int(np.count_nonzero((time_off_in_seconds[:-1] != 0) & (time_off_in_seconds[1:] == 0)))
+
+    def get_space_heating_starts(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
+        """Return the number of space-heating starts of the heat pump, counted in its published on/off state.
+
+        A space-heating start is a step whose ``OnOffStateHeatpump`` is 1 (space heating) after a step whose state
+        is 0 (off). Starts into hot water (2) or cooling (-1) are not counted, and neither is a switch from hot water
+        straight to space heating, since the machine did not stop. For example, the states 0, 1, 1, 0, 2, 0, 1, 2, 1
+        hold two space-heating starts and one hot-water start. As for :meth:`get_heatpump_cycles`, a start in the
+        first step has no step before it and is not counted. The state is the mode the heat pump ran in
+        (:meth:`published_mode`), the same track its ``TimeOff`` follows, so every space-heating start is also a start
+        in :meth:`get_heatpump_cycles`.
+
+        Args:
+            output: The output whose column is read; it must be ``OnOffStateHeatpump``.
+            index: The position of that output's column in ``postprocessing_results``.
+            postprocessing_results: The simulated values of all outputs, one column per output.
+
+        Returns:
+            The number of space-heating starts.
+
+        Raises:
+            ValueError: If ``output`` is not the ``OnOffStateHeatpump`` output, the only column that tells space
+                heating from hot water and off.
+        """
+        if output.field_name != self.HeatPumpOnOffState:
+            raise ValueError(
+                f"The space-heating starts are counted in the heat pump's {self.HeatPumpOnOffState} column, "
+                f"not in {output.field_name}."
+            )
+        mode = postprocessing_results.iloc[:, index].to_numpy()
+        return int(np.count_nonzero((mode[:-1] == 0) & (mode[1:] == 1)))
 
     def get_flow_and_return_temperatures(
         self,

@@ -2964,6 +2964,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     above the threshold with the buffer wired, the ratio becomes the ratio the heat pump reports it ran with
     (``PartLoadRatioRunSh``); otherwise it keeps the value of the last unforced pass
     (:meth:`hisim.part_load.StartOfStepPartLoadControl.publish_held`).
+
+    The controller keeps two modes ("heating", "cooling" or "off"). ``start_of_step_mode`` is the mode the step starts
+    with: every pass decides from it, and no pass changes it. ``end_of_step_mode`` is the mode the step ends with: every
+    unforced pass overwrites it with its decision, a forced pass leaves it alone, and ``i_restore_state`` does not reset
+    it. ``i_save_state`` makes it the next step's start. So the step ends with the decision of its last unforced pass,
+    which is the mode its held ``State_SH`` shows and the heat pump ran. For example, if the last unforced pass of a
+    forced step switches heating off, the next step starts off and the buffer coasts down to the switch-on point; when
+    the restore reset the mode instead, the next step started from heating and restarted the heat pump inside the
+    hysteresis band (hisim-component-physics-4g9.28).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -3085,8 +3094,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             target_output_name=self.TargetTemperatureShInCelsius,
         )
 
-        self.controller_heatpumpmode: Any
-        self.previous_heatpump_mode: Any
+        #: The mode the step starts with, which every pass decides from: "heating", "cooling" or "off".
+        self.start_of_step_mode: str
+        #: The mode the step ends with, the decision of its last unforced pass: "heating", "cooling" or "off".
+        self.end_of_step_mode: str
 
         self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -3230,8 +3241,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 f"{self.component_name}: the space-heating controller's mode 2 cools through the emitter, which only "
                 f"floor heating can do, but the emitter is {self.heat_distribution_system_type!r}."
             )
-        self.controller_heatpumpmode = "off"
-        self.previous_heatpump_mode = self.controller_heatpumpmode
+        self.start_of_step_mode = "off"
+        self.end_of_step_mode = self.start_of_step_mode
 
         # Configuration
         self.mode = mode
@@ -3247,12 +3258,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state."""
-        self.previous_heatpump_mode = self.controller_heatpumpmode
+        """Make the mode the step ends with, that of its last unforced pass, the next step's start."""
+        self.start_of_step_mode = self.end_of_step_mode
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_heatpumpmode = self.previous_heatpump_mode
+        """Restore nothing: a pass decides only from the start-of-step mode, which no pass changes.
+
+        The end-of-step mode is not reset either. An unforced pass overwrites it; under forced convergence the
+        controller holds its outputs, so the step ends with the mode of its last unforced pass, the mode its held
+        ``State_SH`` shows.
+        """
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -3323,11 +3338,11 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             else:
                 raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
 
-            if self.controller_heatpumpmode == "heating":
+            if self.end_of_step_mode == "heating":
                 state = 1
-            elif self.controller_heatpumpmode == "cooling":
+            elif self.end_of_step_mode == "cooling":
                 state = -1
-            elif self.controller_heatpumpmode == "off":
+            elif self.end_of_step_mode == "off":
                 state = 0
             else:
                 raise ValueError("Advanced HP Lib Controller State unknown.")
@@ -3391,7 +3406,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
-        """Set conditions for the heat pump controller mode."""
+        """Decide the mode-1 (on/off) controller's end-of-step mode from its start-of-step mode and the buffer.
+
+        Heating switches off above the switch-off point or outside the heating season; off switches to heating below
+        the switch-on point in the heating season (:meth:`heating_switch_temperatures_in_celsius`). Otherwise the step
+        ends in the mode it started with.
+        """
+        self.end_of_step_mode = self.start_of_step_mode
         switch_on_in_celsius, switch_off_in_celsius = self.heating_switch_temperatures_in_celsius(
             set_heating_flow_temperature_in_celsius,
             upper_temperature_offset_for_state_conditions_in_celsius,
@@ -3399,12 +3420,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             storage_temperature_modifier,
         )
 
-        if self.controller_heatpumpmode == "heating":
+        if self.start_of_step_mode == "heating":
             if water_temperature_input_in_celsius > switch_off_in_celsius or summer_heating_mode == "off":
-                self.controller_heatpumpmode = "off"
+                self.end_of_step_mode = "off"
                 return
 
-        elif self.controller_heatpumpmode == "off":
+        elif self.start_of_step_mode == "off":
             if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
                 return
 
@@ -3466,13 +3487,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         switch_on_temperature_in_celsius: float,
         summer_heating_mode: str,
     ) -> bool:
-        """Switch an idle machine to heating if the water is below the switch-on point in the heating season.
+        """Make the end-of-step mode heating if the water is below the switch-on point in the heating season.
 
         Returns:
             Whether the machine now heats.
         """
         if water_temperature_input_in_celsius < switch_on_temperature_in_celsius and summer_heating_mode == "on":
-            self.controller_heatpumpmode = "heating"
+            self.end_of_step_mode = "heating"
             return True
         return False
 
@@ -3486,7 +3507,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
-        """Set conditions for the heat pump controller mode according to the flow temperature."""
+        """Decide the mode-2 (heating, cooling, off) controller's end-of-step mode from its start-of-step mode.
+
+        Heating and off follow the band of :meth:`conditions_on_off`; cooling starts above the flow temperature plus
+        the upper offset and stops below it minus the lower offset, both only while ``summer_cooling_mode`` is "on".
+        Otherwise the step ends in the mode it started with.
+        """
+        self.end_of_step_mode = self.start_of_step_mode
         # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
         # Todo: Check if storage_temperature_modifier is neccessary for the switch-off point
@@ -3497,20 +3524,20 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             storage_temperature_modifier,
         )
 
-        if self.controller_heatpumpmode == "heating":
+        if self.start_of_step_mode == "heating":
             if water_temperature_input_in_celsius >= switch_off_in_celsius or summer_heating_mode == "off":
-                self.controller_heatpumpmode = "off"
+                self.end_of_step_mode = "off"
                 return
-        elif self.controller_heatpumpmode == "cooling":
+        elif self.start_of_step_mode == "cooling":
             if (
                 water_temperature_input_in_celsius
                 <= cooling_set_temperature - lower_temperature_offset_for_state_conditions_in_celsius
                 or summer_cooling_mode == "off"
             ):
-                self.controller_heatpumpmode = "off"
+                self.end_of_step_mode = "off"
                 return
 
-        elif self.controller_heatpumpmode == "off":
+        elif self.start_of_step_mode == "off":
             if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
                 return
 
@@ -3521,7 +3548,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 > (cooling_set_temperature + upper_temperature_offset_for_state_conditions_in_celsius)
                 and summer_cooling_mode == "on"
             ):
-                self.controller_heatpumpmode = "cooling"
+                self.end_of_step_mode = "cooling"
                 return
 
         else:

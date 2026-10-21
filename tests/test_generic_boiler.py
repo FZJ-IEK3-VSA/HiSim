@@ -55,7 +55,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
             "with_domestic_hot_water_preparation": True,
         }
     )
-    testee.controller_mode = operating_mode
+    testee.start_of_step_mode = operating_mode
     testee.warm_water_temperature_aim_in_celsius = 60
 
     is_heating_season = True
@@ -72,7 +72,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     )
 
     """ THEN """
-    assert testee.controller_mode == expected_mode
+    assert testee.end_of_step_mode == expected_mode
 
 
 def given_default_testee(

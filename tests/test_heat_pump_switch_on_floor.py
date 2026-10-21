@@ -31,7 +31,7 @@ def controller(mode: int = 1, state: str = "off") -> MoreAdvancedHeatPumpHPLibCo
     component = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
     )
-    component.controller_heatpumpmode = state
+    component.start_of_step_mode = state
     return component
 
 
@@ -46,7 +46,7 @@ def after(water: float, flow: float, state: str = "off", modifier: float = 0.0) 
         upper_temperature_offset_for_state_conditions_in_celsius=OFFSET,
         lower_temperature_offset_for_state_conditions_in_celsius=OFFSET,
     )
-    return str(component.controller_heatpumpmode)
+    return str(component.end_of_step_mode)
 
 
 def after_mode_2(water: float, flow: float, state: str = "off") -> str:
@@ -61,7 +61,7 @@ def after_mode_2(water: float, flow: float, state: str = "off") -> str:
         upper_temperature_offset_for_state_conditions_in_celsius=OFFSET,
         lower_temperature_offset_for_state_conditions_in_celsius=OFFSET,
     )
-    return str(component.controller_heatpumpmode)
+    return str(component.end_of_step_mode)
 
 
 def test_a_mild_day_s_floor_heating_starts_when_the_buffer_is_below_the_room_setpoint() -> None:

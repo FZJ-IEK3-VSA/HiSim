@@ -211,7 +211,7 @@ class ControllerStep:
         controller = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
         )
-        controller.controller_heatpumpmode = state
+        controller.start_of_step_mode = state
         unwired = {
             MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
             ControllerStep.WITHOUT_HEAT_PUMP,

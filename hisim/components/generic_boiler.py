@@ -2905,6 +2905,12 @@ class GenericBoilerController(L1ControllerComponent):
     not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time. These
     times act on the controller's mode; the burner's own minimum firing time and minimum pause, which act on whether
     it burns, are the boiler's (:class:`BurnerTimes`).
+
+    The controller keeps two modes (:class:`HeatingMode`). ``start_of_step_mode`` is the mode the step starts with:
+    every pass decides from it, and no pass changes it. ``end_of_step_mode`` is the mode the step ends with: every
+    unforced pass overwrites it with its decision, a forced pass leaves it alone, and ``i_restore_state`` does not reset
+    it. ``i_save_state`` makes it the next step's start. So the step ends with the decision of its last unforced pass,
+    the mode its held ``OperatingMode`` shows and the boiler ran (hisim-component-physics-4g9.28).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -3105,8 +3111,10 @@ class GenericBoilerController(L1ControllerComponent):
             ),
         )
 
-        self.controller_mode: HeatingMode
-        self.previous_controller_mode: HeatingMode
+        #: The mode the step starts with, which every pass decides from.
+        self.start_of_step_mode: HeatingMode
+        #: The mode the step ends with, the decision of its last unforced pass.
+        self.end_of_step_mode: HeatingMode
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
@@ -3243,25 +3251,30 @@ class GenericBoilerController(L1ControllerComponent):
         The function sets important constants and parameters for the calculations.
         """
         # Sth
-        self.controller_mode = HeatingMode.OFF
-        self.previous_controller_mode = self.controller_mode
+        self.start_of_step_mode = HeatingMode.OFF
+        self.end_of_step_mode = self.start_of_step_mode
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state: the mode, and the hot-water priority timer the step starts from.
+        """Make the step's end its next start: the mode of its last unforced pass, and the hot-water priority timer.
 
-        Every unforced pass decides the step from the timer saved here; a forced pass keeps the timer of the last
-        unforced pass, as it keeps that pass's outputs, so the timer always matches what the controller published.
+        Every unforced pass decides the step from the start-of-step mode and the timer saved here; a forced pass keeps
+        the mode and the timer of the last unforced pass, as it keeps that pass's outputs, so both always match what
+        the controller published.
         """
-        self.previous_controller_mode = self.controller_mode
+        self.start_of_step_mode = self.end_of_step_mode
         self.hot_water_priority_timer_at_start_of_step = self.hot_water_priority_timer
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_mode = self.previous_controller_mode
+        """Restore nothing: a pass decides only from the start-of-step mode, which no pass changes.
+
+        The end-of-step mode is not reset either. An unforced pass overwrites it; under forced convergence the
+        controller holds its outputs, so the step ends with the mode of its last unforced pass, the mode its held
+        ``OperatingMode`` shows.
+        """
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -3314,14 +3327,14 @@ class GenericBoilerController(L1ControllerComponent):
             )
 
             stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
-            stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
+            stsv.set_output_value(self.operating_mode_channel, self.end_of_step_mode.value)
             stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
             stsv.set_output_value(
                 self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
             )
             hot_water_ratio = self.dhw_part_load.publish(
                 stsv,
-                device_runs=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
+                device_runs=self.end_of_step_mode == HeatingMode.DOMESTIC_HOT_WATER,
                 start_temperature_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius or 0.0,
                 target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
             )
@@ -3368,7 +3381,7 @@ class GenericBoilerController(L1ControllerComponent):
         """
         part = self.space_heating_part_load
         remainder_signal, remainder_lift_in_kelvin = 0.0, 0.0
-        if self.controller_mode == HeatingMode.SPACE_HEATING:
+        if self.end_of_step_mode == HeatingMode.SPACE_HEATING:
             ratio = part.publish_raising(
                 stsv, device_runs=True, target_temperature_in_celsius=supply_temperature_set_in_celsius
             )
@@ -3380,7 +3393,7 @@ class GenericBoilerController(L1ControllerComponent):
                 )
         else:
             rest_of_a_hot_water_step = (
-                self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER
+                self.end_of_step_mode == HeatingMode.DOMESTIC_HOT_WATER
                 and part.runs_fractions()
                 and is_heating_season
                 and hot_water_ratio < 1.0
@@ -3408,15 +3421,18 @@ class GenericBoilerController(L1ControllerComponent):
         heating_flow_temperature_from_heat_distribution_system: float,
         timestep,
     ) -> Tuple[float, float]:
-        """Determine which operating mode to use in dual-circuit system."""
+        """Decide the end-of-step mode from the start-of-step mode, and return the control signal and the lift.
 
-        previous_controller_mode = self.controller_mode
+        The diverter valve decides the mode from the stores' start temperatures and the mode the step started with
+        (:meth:`DiverterValve.determine_operating_mode`); a hot-water charge its priority limit interrupted stays
+        latched (:meth:`limit_hot_water_priority`), and the minimum run and idle times may keep the start mode.
+        """
         timer = self.hot_water_priority_timer_at_start_of_step
-        self.controller_mode = DiverterValve.determine_operating_mode(
+        self.end_of_step_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             # an interrupted charge stays latched while space heating has the boiler, so it resumes after the interval
             current_controller_mode=(
-                HeatingMode.DOMESTIC_HOT_WATER if timer.charge_interrupted else previous_controller_mode
+                HeatingMode.DOMESTIC_HOT_WATER if timer.charge_interrupted else self.start_of_step_mode
             ),
             is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
@@ -3439,9 +3455,9 @@ class GenericBoilerController(L1ControllerComponent):
         )
 
         # Enforce minimum run and idle times (if necessary overwrites previously set mode)
-        self.enforce_minimum_run_and_idle_times(previous_controller_mode, timestep)
+        self.enforce_minimum_run_and_idle_times(self.start_of_step_mode, timestep)
 
-        if self.controller_mode == HeatingMode.SPACE_HEATING:
+        if self.end_of_step_mode == HeatingMode.SPACE_HEATING:
             # get a modulated control signal between 0 and 1
             if self.config.is_modulating is True:
                 control_signal = self.modulate_power(
@@ -3454,7 +3470,7 @@ class GenericBoilerController(L1ControllerComponent):
                 heating_flow_temperature_from_heat_distribution_system
                 - water_temperature_input_from_space_heating_water_storage_in_celsius
             )
-        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+        elif self.end_of_step_mode == HeatingMode.DOMESTIC_HOT_WATER:
             assert self.config.with_domestic_hot_water_preparation is not None
             assert water_temperature_input_from_dhw_water_storage_in_celsius is not None
             if self.config.is_modulating is True:
@@ -3469,7 +3485,7 @@ class GenericBoilerController(L1ControllerComponent):
                 - water_temperature_input_from_dhw_water_storage_in_celsius,
                 0,
             )
-        elif self.controller_mode == HeatingMode.OFF:
+        elif self.end_of_step_mode == HeatingMode.OFF:
             control_signal = 0
             temperature_delta = 0
         else:
@@ -3493,30 +3509,30 @@ class GenericBoilerController(L1ControllerComponent):
         """
         charges, self.hot_water_priority_timer = HotWaterPriorityLimit.decide(
             timer=timer,
-            charge_requested=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
+            charge_requested=self.end_of_step_mode == HeatingMode.DOMESTIC_HOT_WATER,
             space_heating_requested=space_heating_requested,
             maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
             space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
         )
-        if self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
-            self.controller_mode = HeatingMode.SPACE_HEATING
+        if self.end_of_step_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
+            self.end_of_step_mode = HeatingMode.SPACE_HEATING
 
-    def enforce_minimum_run_and_idle_times(self, previous_controller_mode: HeatingMode, timestep: int) -> None:
-        """Enforces minimum run and idle times."""
+    def enforce_minimum_run_and_idle_times(self, start_of_step_mode: HeatingMode, timestep: int) -> None:
+        """Keep the start-of-step mode in the end-of-step mode while a minimum run or idle time is not reached."""
         if (
-            previous_controller_mode != HeatingMode.OFF
+            start_of_step_mode != HeatingMode.OFF
             and self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep
-            and self.controller_mode == HeatingMode.OFF
+            and self.end_of_step_mode == HeatingMode.OFF
         ):
             # mandatory on, minimum runtime not reached
-            self.controller_mode = previous_controller_mode
+            self.end_of_step_mode = start_of_step_mode
         if (
-            previous_controller_mode == HeatingMode.OFF
+            start_of_step_mode == HeatingMode.OFF
             and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps > timestep
-            and self.controller_mode != HeatingMode.OFF
+            and self.end_of_step_mode != HeatingMode.OFF
         ):
-            self.controller_mode = HeatingMode.OFF
+            self.end_of_step_mode = HeatingMode.OFF
             # mandatory off, minimum resting time not reached
 
     def modulate_power(

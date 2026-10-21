@@ -82,7 +82,7 @@ class ControllerPass:
         controller = GenericBoilerController(
             SimulationParameters.one_day_only(2021, cls.SECONDS_PER_TIMESTEP), config, DisplayConfig()
         )
-        controller.controller_mode = mode
+        controller.start_of_step_mode = mode
         return controller
 
 

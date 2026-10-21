@@ -198,7 +198,8 @@ class CircuitRig:
             [[value for *_, value in columns]],
             index=pd.date_range("2021-01-01", periods=1, freq=f"{cls.SECONDS_PER_TIMESTEP}s"),
         )
-        wrapped = [SimpleNamespace(my_component=stand_in) for stand_in in cls.stand_ins(outputs, inputs, ends)]
+        stand_ins = cls.stand_ins(outputs, inputs, ends)
+        wrapped: List[Any] = [SimpleNamespace(my_component=stand_in) for stand_in in stand_ins]
         return EnergyBalanceReport(table, outputs, wrapped, cls.SECONDS_PER_TIMESTEP)
 
     @staticmethod
@@ -213,7 +214,9 @@ class CircuitRig:
 
     @staticmethod
     def stand_ins(
-        outputs: Sequence[cp.ComponentOutput], inputs: Dict[str, List[SimpleNamespace]], ends: Dict[str, List[CircuitEnd]]
+        outputs: Sequence[cp.ComponentOutput],
+        inputs: Dict[str, List[SimpleNamespace]],
+        ends: Dict[str, List[CircuitEnd]],
     ) -> List[Any]:
         """One stand-in per component of ``outputs``, in their order, carrying its wiring, outputs and circuit ends."""
         names: List[str] = []
@@ -248,7 +251,7 @@ class CircuitRig:
         ]
 
     @classmethod
-    def tank_inputs(cls, name: str = "Tank") -> List[SimpleNamespace]:
+    def tank_inputs(cls) -> List[SimpleNamespace]:
         """A tank's flow and supply inputs, connected to the boiler."""
         return [cls.wired("Flow", "Boiler", "Flow"), cls.wired("Supply", "Boiler", "Supply")]
 
@@ -300,7 +303,7 @@ def test_one_flow_read_by_two_ends_fails_the_run() -> None:
     inputs = {
         "Boiler": [CircuitRig.wired("Return", "Tank", "Return")],
         "Tank": CircuitRig.tank_inputs(),
-        "Twin": CircuitRig.tank_inputs("Twin"),
+        "Twin": CircuitRig.tank_inputs(),
     }
     ends = {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END], "Twin": [CircuitRig.RECEIVING_END]}
     report = CircuitRig.report(columns, inputs, ends)

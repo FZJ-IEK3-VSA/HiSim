@@ -11,11 +11,11 @@ check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcess
 only writes the files.
 
 Coverage: the heat generators, the electricity devices and the occupancy declare their ports, the meters their
-published exchanges; the water storages and the heat distribution system behind a buffer declare their water circuits
-as ``HydronicPort`` ends at both ends of each circuit (PR 3 of the spec's §9, hydronic stage E, hisim-hydronics-fxix.6).
-The building and the rest follow in the other PRs of §9, the distribution system without a buffer with hisim-pnw7;
-until then they are drawn as undeclared nodes. :meth:`ports.Wiring.refuse_a_broken_wiring` refuses a wiring that breaks
-a rule of the ports before the run simulates.
+published exchanges; the water storages and the heat distribution system behind a buffer declare their water
+circuits as ``HydronicPort`` ends at both ends of each circuit (PR 3 of the spec's §9, hydronic stage E,
+hisim-hydronics-fxix.6). The building and the rest follow in the other PRs of §9, the distribution system without a
+buffer with hisim-pnw7; until then they are drawn as undeclared nodes. :meth:`ports.Wiring.refuse_a_broken_wiring`
+refuses a wiring that breaks a rule of the ports before the run simulates.
 """
 
 from hisim.postprocessing.energy_balance.check import (

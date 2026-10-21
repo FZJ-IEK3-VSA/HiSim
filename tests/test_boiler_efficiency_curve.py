@@ -29,6 +29,8 @@ class Fuel:
     OIL = 37.682 / 35.358
     #: Wood pellets, TUeV SUeD report 2212100-1: 18.89 / 17.52 MJ/kg.
     PELLETS = 18.89 / 17.52
+    #: Wood chips at 15 % water, the spec's stated estimate (EN ISO 18125 Annex E): 17 000 / 15 522 J/g.
+    WOOD_CHIPS = 17000.0 / 15522.0
 
 
 def iwu(efficiency_at_20_kw: float, maximal_power_in_kilowatt: float) -> float:
@@ -165,7 +167,7 @@ def test_the_installation_year_picks_the_decade_row(installation_year: Optional[
 
 @pytest.mark.base
 @pytest.mark.parametrize(("energy_carrier", "boiler_type", "installation_year"), [row[:3] for row in SOURCE_POINTS])
-@pytest.mark.parametrize("seasonal_efficiency", [0.75, 0.90])
+@pytest.mark.parametrize("seasonal_efficiency", [0.75, 0.82])
 def test_a_stated_seasonal_efficiency_is_reproduced_by_the_ecodesign_weighting_less_the_correction(
     energy_carrier: lt.LoadTypes,
     boiler_type: BoilerType,
@@ -175,7 +177,9 @@ def test_a_stated_seasonal_efficiency_is_reproduced_by_the_ecodesign_weighting_l
     """The label's eta_s (GCV) is ``0.85 eta_30 + 0.15 eta_100 - F(1)``, F(1) = 3 % (2014/C 207/02, 2015/1189).
 
     The scaled curve keeps its type's shape: both test points scale by the same factor. A boiler booked on the NCV is
-    put on the GCV with its fuel's ratio before the comparison.
+    put on the GCV with its fuel's ratio before the comparison. 0.82 lies below every row's ceiling (the lowest, the
+    1970s conventional gas row at 20 kW, is 0.826); a row at its own ceiling is
+    :func:`test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_it_is_refused`.
     """
     unscaled = curve_of(energy_carrier, boiler_type, installation_year)
     scaled = curve_of(energy_carrier, boiler_type, installation_year, seasonal_efficiency=seasonal_efficiency)
@@ -198,6 +202,98 @@ def test_a_seasonal_efficiency_that_lifts_the_curve_above_1_on_the_gross_value_i
     """eta_s = 0.97 makes the active-mode efficiency 1, so the condensing curve's 30 % point lies above 1 (GCV)."""
     with pytest.raises(ValueError, match="above 1"):
         curve_of(lt.LoadTypes.GAS, BoilerType.CONDENSING, None, seasonal_efficiency=0.97)
+
+
+#: The ceilings of :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` of the current rows, as (fuel, type,
+#: ceiling), written out from the source rows: ``eta_son / (H k) - 0.03`` with ``eta_son = 0.85 eta_30 + 0.15
+#: eta_100``, ``H`` the curve's highest point and ``k`` the fuel's GCV/NCV for a boiler booked on the NCV.
+CURRENT_CEILINGS: Tuple[Tuple[lt.LoadTypes, BoilerType, float], ...] = (
+    # Vitodens, GCV: the 30 % point at the 30 °C return is the highest
+    (lt.LoadTypes.GAS, BoilerType.CONDENSING, (0.85 * 0.978 + 0.15 * 0.877) / 0.978 - 0.03),
+    # Logano plus GB125, GCV: full load at the 30 °C return, 0.910 + 0.0030 * 30 = 1.000, is the highest
+    (lt.LoadTypes.OIL, BoilerType.CONDENSING, (0.85 * 0.975 + 0.15 * 0.910) / (0.910 + 0.0030 * 30) - 0.03),
+    # Logano G125, NCV: 0.8682 for gas, 0.9050 for oil
+    (lt.LoadTypes.GAS, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.GAS) - 0.03),
+    (lt.LoadTypes.OIL, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.OIL) - 0.03),
+    # Froeling PE1 (GCV, booked on the NCV): the full-load point is the highest; 0.8678
+    (lt.LoadTypes.PELLETS, BoilerType.CONVENTIONAL, (0.85 * 0.845 + 0.15 * 0.878) / (0.878 * Fuel.PELLETS) - 0.03),
+    # Hargassner Eco-HK 20, NCV: 0.8624
+    (
+        lt.LoadTypes.WOOD_CHIPS,
+        BoilerType.CONVENTIONAL,
+        (0.85 * 0.914 + 0.15 * 0.939) / (0.939 * Fuel.WOOD_CHIPS) - 0.03,
+    ),
+)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("energy_carrier", "boiler_type", "ceiling"), CURRENT_CEILINGS)
+def test_the_highest_seasonal_efficiency_of_a_current_boiler_is_its_rows_closed_form(
+    energy_carrier: lt.LoadTypes, boiler_type: BoilerType, ceiling: float
+) -> None:
+    """Owner decision of 2026-10-21: a non-condensing boiler's ceiling keeps its curve at or below 1 on the NCV.
+
+    A product row does not follow IWU's size law, so its ceiling is the same at every size.
+    """
+    for maximal_power_in_kilowatt in (1.0, 12.0, 400.0):
+        highest = BoilerEfficiencySources.highest_seasonal_efficiency(
+            energy_carrier=energy_carrier,
+            boiler_type=boiler_type,
+            installation_year=None,
+            maximal_power_in_watt=maximal_power_in_kilowatt * 1000.0,
+        )
+        assert highest == pytest.approx(ceiling, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("energy_carrier", "boiler_type", "installation_year"), [row[:3] for row in SOURCE_POINTS])
+@pytest.mark.parametrize("maximal_power_in_kilowatt", [1.0, 20.0])
+def test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_it_is_refused(
+    energy_carrier: lt.LoadTypes,
+    boiler_type: BoilerType,
+    installation_year: Optional[int],
+    maximal_power_in_kilowatt: float,
+) -> None:
+    """The build refuses exactly what lies above the ceiling the RenoVisor request check names.
+
+    At the ceiling the scaled curve's highest point is 1 on the basis the boiler's fuel is booked on: the GCV for a
+    condensing gas, oil or hydrogen boiler, the NCV for every other one, where the combustion loss would otherwise
+    turn negative.
+    """
+    ceiling = BoilerEfficiencySources.highest_seasonal_efficiency(
+        energy_carrier=energy_carrier,
+        boiler_type=boiler_type,
+        installation_year=installation_year,
+        maximal_power_in_watt=maximal_power_in_kilowatt * 1000.0,
+    )
+    at_ceiling = curve_of(energy_carrier, boiler_type, installation_year, maximal_power_in_kilowatt, ceiling)
+    just_below = curve_of(energy_carrier, boiler_type, installation_year, maximal_power_in_kilowatt, ceiling - 1e-9)
+
+    assert at_ceiling.highest_efficiency() == pytest.approx(1.0, rel=1e-12)
+    assert just_below.highest_efficiency() < 1.0
+    basis = "net" if BoilerEfficiencySources.gross_to_booking_factor(energy_carrier, boiler_type) > 1.0 else "gross"
+    with pytest.raises(ValueError, match=f"above {ceiling:.4f}.*above 1 on the {basis} calorific value"):
+        curve_of(energy_carrier, boiler_type, installation_year, maximal_power_in_kilowatt, ceiling + 1e-9)
+
+
+@pytest.mark.base
+def test_the_ceiling_of_a_row_that_follows_the_size_law_rises_with_the_power() -> None:
+    """IWU eq. 2-1 adds the same correction to both points, so a smaller boiler's ceiling is lower.
+
+    The RenoVisor request check therefore checks at 1 kW: a figure that passes there passes at every larger size.
+    """
+    ceilings = [
+        BoilerEfficiencySources.highest_seasonal_efficiency(
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=BoilerType.CONVENTIONAL,
+            installation_year=1975,
+            maximal_power_in_watt=maximal_power_in_kilowatt * 1000.0,
+        )
+        for maximal_power_in_kilowatt in (1.0, 4.0, 20.0, 400.0)
+    ]
+    assert ceilings == sorted(ceilings) and ceilings[0] < ceilings[-1]
+    full_load, part_load = iwu(0.85, 1.0), iwu(0.80, 1.0)  # IWU 1970s "Gas-Spezialkessel" at 1 kW, NCV
+    assert ceilings[0] == pytest.approx((0.85 * part_load + 0.15 * full_load) / (full_load * Fuel.GAS) - 0.03)
 
 
 @pytest.mark.base

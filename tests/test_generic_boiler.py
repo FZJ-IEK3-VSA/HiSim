@@ -849,6 +849,45 @@ def test_a_boiler_without_a_finite_positive_maximal_power_is_refused_when_built(
 
 @pytest.mark.base
 @pytest.mark.parametrize(
+    "preset, boiler_type",
+    [
+        (generic_boiler.GenericBoilerConfig.preset_condensing_gas, generic_boiler.BoilerType.CONVENTIONAL),
+        (generic_boiler.GenericBoilerConfig.preset_oil, None),
+        (generic_boiler.GenericBoilerConfig.preset_pellets, None),
+        (generic_boiler.GenericBoilerConfig.preset_wood_chips, None),
+    ],
+)
+def test_a_non_condensing_boiler_above_its_ceiling_is_refused_when_built(
+    preset: Callable[[str], generic_boiler.GenericBoilerConfig], boiler_type: Optional[generic_boiler.BoilerType]
+) -> None:
+    """Owner decision of 2026-10-21: a boiler booked on the NCV never burns above 1 there, the backstop of RenoVisor.
+
+    Above :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` the scaled curve would make more heat than the
+    fuel booked for it, a negative combustion loss. Just below the ceiling the boiler builds.
+    """
+    config = preset("Boiler")
+    if boiler_type is not None:
+        config.boiler_type = boiler_type
+    config.maximal_thermal_power_in_watt = 12000.0
+    config.minimal_thermal_power_in_watt = 1000.0
+    ceiling = generic_boiler.BoilerEfficiencySources.highest_seasonal_efficiency(
+        energy_carrier=config.energy_carrier,
+        boiler_type=config.boiler_type,
+        installation_year=None,
+        maximal_power_in_watt=12000.0,
+    )
+    parameters = SimulationParameters.one_day_only(2021, 900)
+
+    config.seasonal_efficiency = ceiling - 1e-9
+    boiler = generic_boiler.GenericBoiler(parameters, config)
+    assert boiler.efficiency_curve.highest_efficiency() < 1.0
+    config.seasonal_efficiency = ceiling + 1e-9
+    with pytest.raises(ValueError, match="above 1 on the net calorific value"):
+        generic_boiler.GenericBoiler(parameters, config)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
     "preset",
     [
         generic_boiler.GenericBoilerConfig.preset_condensing_gas,

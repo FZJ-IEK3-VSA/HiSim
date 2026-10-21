@@ -27,6 +27,8 @@ efficiency onto the two ends of that line (`eff_th_max = value/100`, `eff_th_min
 | 2026-10-20 | owner | A: the 92/42 floor test checks only the 1990s rows (and current products), with a tolerance of 0.005: IWU prints two decimals and Art. 5(2) asks for "appropriate tolerances". Source values stay untouched. |
 | 2026-10-20 | owner | B: scaling to a stated `η_s` adds back only F(1) = 3 points; F(2) to F(4) are left out because HiSim models none of those losses. The resulting bias is stated (§4.5). |
 | 2026-10-20 | owner | C: a boiler with no installation year, or one from 2000 on, takes current product data (Vitodens for condensing gas, the same row on the GCV for hydrogen; a condensing-oil and a low-temperature datasheet sourced the same way). IWU's decade rows apply only to a stated year before 2000. |
+| 2026-10-21 | owner | Review item A: a condensing boiler stating an `η_s` above its own ceiling (§4.5) passes the request's 97 % check and is refused by its build (RenoVisor exit 5, not 2). Left as it is. |
+| 2026-10-21 | owner | Review item B: a boiler booked on the NCV (every non-condensing one, pellets, wood chips) stating an `η_s` whose scaled curve exceeds 1 on the NCV is refused, by the RenoVisor request check (exit 2, naming the ceiling) and by the build as the backstop. The frontend's 90 % default is then refused for most of them (§4.6). |
 
 ## 3. Terms
 
@@ -121,7 +123,25 @@ it from the config and sizes the pump on `P_max · η_100` (at the 60 °C test r
 `GenericBoilerConfig.seasonal_efficiency` (optional, a fraction): the curve is scaled by
 `s = (η_s + 0.03) · k / (0.85 η_30 + 0.15 η_100)`, with `k` the fuel's GCV/NCV for a boiler booked on the NCV and 1
 otherwise. The config refuses a value that is not finite or not in (0, 0.97] (`η_son ≤ 1` on the GCV); the build
-refuses a scaled curve above 1 anywhere on the GCV.
+refuses a stated value above the boiler's ceiling, `BoilerEfficiencySources.highest_seasonal_efficiency`: the scaled
+curve's highest point `s H` (`H` the unscaled curve's highest point on the booking basis) must stay at or below 1 on
+the basis the fuel is booked on, so `η_s ≤ η_son / (H k) − 0.03`. For a boiler booked on the GCV that is 1 on the GCV;
+for one booked on the NCV it is 1 on the NCV (owner decision B of 2026-10-21): above it the boiler would make more
+heat than the fuel booked for it, and its combustion loss would turn negative. The ceilings of the current rows,
+rounded down to a hundredth:
+
+| Boiler (no installation year) | Booked on | Ceiling `η_s` |
+|---|---|---|
+| Gas or hydrogen condensing | GCV | 95.45 % |
+| Oil condensing | GCV | 93.52 % (full load at a 30 °C return reaches 1.000 first, §4.3) |
+| Gas conventional | NCV | 86.82 % |
+| Oil conventional | NCV | 90.49 % |
+| Pellets | NCV | 86.78 % |
+| Wood chips | NCV | 86.23 % |
+
+The IWU rows: conventional gas 1990s 87.14 %, 1980s 86.26 to 86.30 %, 1970s 82.53 to 82.73 %; conventional oil
+1990s 90.83 %, 1980s 89.91 to 89.95 %, 1970s 85.97 to 86.19 %, each from 1 kW to 400 kW. Eq. 2-1 adds the same
+correction to both points of a row, so where the two differ the ceiling rises with the size.
 
 F(1) = 3 % is the correction for temperature controls (Commission communication 2014/C 207/02, point 4.4(a), for
 813/2013; Regulation (EU) 2015/1189, Annex IV, point 4(a)). F(2) auxiliary electricity
@@ -141,6 +161,15 @@ the formulas. The owner expected 0.5 to 1 point; for oil it is 3 to 4.
 - `house.heating.installation_year` of the existing boiler → `installation_year`. Its report line stays the economics
   stage's, its note says that it also picks the efficiency row. A `heating_system` measure removes the year with the
   generator, so a new boiler is a current one.
+- A request stating more than its boiler's ceiling (§4.5) for a boiler booked on the NCV -- `conventional_gas_heating`,
+  `conventional_lpg_heating`, `conventional_oil_heating`, `hvo_heating`, `pellet_heating`, `biomass_heating`,
+  `woodchip_heating` -- is refused (`range.exceeded`, the message naming the ceiling rounded down to a hundredth; owner
+  decision B of 2026-10-21). The check reads `SemanticChecks.BOILER_FUEL_AND_TYPE` (pinned to the translated twins by
+  a test) and the stated `installation_year`, and evaluates the ceiling at 1 kW, since the boiler is sized only when it
+  runs: a product row does not depend on the size, so the check refuses exactly what the build refuses; an IWU row's
+  ceiling is lowest at the smallest size, so the check refuses up to 0.2 points more than a larger boiler of that row
+  would take. The frontend's 90 % default is therefore refused for every such boiler but conventional oil and HVO from
+  1990 on or with no year. A condensing boiler above its ceiling is refused by its build only (decision A).
 - A request stating more than 97 % for a boiler is refused (`range.exceeded`, `SemanticChecks._boiler_seasonal_efficiency`):
   no label `η_s` exceeds it, and a figure like 104 % is on the NCV. Before, 400 % ran as `eff_th_max = 4.0`, a boiler
   that delivered four times its fuel. The capability probe at 400 % on the gas-boiler base is now refused; the
@@ -170,7 +199,9 @@ not come first: the curve is defined on the load ratio, which is the same whiche
 - `tests/test_boiler_efficiency_curve.py`: every source row is reproduced at both test points (20 rows); the
   return-temperature gain and its limits; flat below 30 % load; eq. 2-1 for IWU rows only; the year bands; a stated
   `η_s` of 0.75 and 0.90 is reproduced by `0.85 η_30 + 0.15 η_100 − 0.03` on the GCV for every row, the shape kept;
-  a scaled curve above 1 (GCV) refused; a fuel without a source refused; the 92/42 floor for the 1990s rows (tolerance
+  the ceiling of every row: at it the scaled curve's highest point is 1 on the booking basis, just above it the curve is
+  refused (also by `GenericBoiler.build` in `tests/test_generic_boiler.py`, and by the request check in
+  `tests/renovisor/test_request.py`, at the same boundary); a fuel without a source refused; the 92/42 floor for the 1990s rows (tolerance
   0.005) and the current products (no tolerance) at 10, 20, 50, 100 and 400 kW.
 - `tests/test_generic_boiler.py::test_a_condensing_gas_boiler_burns_at_its_ecodesign_test_points_not_on_the_old_linear_law`
   reads the efficiency off the boiler's published heat and fuel. On main it fails: 0.667 instead of 0.978 at 30 %

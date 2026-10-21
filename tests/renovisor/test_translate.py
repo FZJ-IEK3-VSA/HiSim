@@ -18,6 +18,7 @@ from typing import Any, Dict, Mapping, Optional
 
 import pytest
 
+from hisim.components.generic_boiler import BoilerType, GenericBoilerConfig
 from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.apply import SelectsNothing, apply
 from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
@@ -130,6 +131,20 @@ class TestEveryGenerator:
 
         config = config_of(system, BaseFiles.generator_component(system.base_file_name))
         assert config.get(Targets.BOILER_TYPE) == boiler_type
+
+    @pytest.mark.parametrize("generator", HeatGenerator.boilers())
+    def test_the_request_checks_boiler_table_is_the_translated_twins(self, generator: HeatGenerator) -> None:
+        """``SemanticChecks.BOILER_FUEL_AND_TYPE`` names the fuel and type the twin's boiler gets.
+
+        The request check needs them before anything is translated, to refuse a stated seasonal efficiency above
+        the boiler's own ceiling; read off the twin's preset and the re-typing, they must agree.
+        """
+        system = translate(baseline(heating__type_of_system=generator.value))
+
+        entry = _entry(system, BaseFiles.generator_component(system.base_file_name))
+        preset = getattr(GenericBoilerConfig, f"preset_{entry.preset}")("Boiler")
+        boiler_type = BoilerType(dict(entry.config).get(Targets.BOILER_TYPE, preset.boiler_type.value))
+        assert SemanticChecks.BOILER_FUEL_AND_TYPE[generator] == (preset.energy_carrier, boiler_type)
 
     def test_a_solar_thermal_house_runs_the_twin_that_wires_a_collector(self) -> None:
         """Only gas and the heat pump have one, which is why the others are on the list."""

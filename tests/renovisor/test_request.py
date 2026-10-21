@@ -498,8 +498,8 @@ class TestTheSemanticChecks:
     @pytest.mark.parametrize(
         "generator, stated, refused",
         [
-            ("conventional_gas_heating", 90, False),
-            ("conventional_gas_heating", 97, False),
+            ("condensing_gas_heating", 90, False),
+            ("condensing_gas_heating", 97, False),  # above the boiler's own ceiling: its build refuses it (exit 5)
             ("conventional_gas_heating", 97.5, True),
             ("condensing_oil_heating", 104, True),  # a German datasheet's figure on the net calorific value
             ("pellet_heating", 400, True),
@@ -533,6 +533,111 @@ class TestTheSemanticChecks:
 
         correction = BoilerEfficiencySources.TEMPERATURE_CONTROL_CORRECTION
         assert SemanticChecks.BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT == pytest.approx(100 * (1 - correction))
+
+    @pytest.mark.parametrize(
+        "generator, installation_year, ceiling_in_percent",
+        [
+            ("conventional_gas_heating", None, 86.82),
+            ("conventional_lpg_heating", None, 86.82),
+            ("conventional_oil_heating", None, 90.49),
+            ("hvo_heating", None, 90.49),
+            ("pellet_heating", None, 86.78),
+            ("biomass_heating", None, 86.78),
+            ("woodchip_heating", None, 86.23),
+            ("conventional_gas_heating", 1995, 87.14),
+            ("conventional_gas_heating", 1975, 82.53),
+            ("conventional_oil_heating", 1985, 89.91),
+        ],
+    )
+    def test_a_non_condensing_boiler_is_refused_above_its_own_ceiling(
+        self, generator: str, installation_year: Any, ceiling_in_percent: float
+    ) -> None:
+        """Owner decision of 2026-10-21: above its ceiling the boiler's curve exceeds 1 on the NCV, its booking basis.
+
+        The ceiling the message names (rounded down to a hundredth) passes, a hundredth more is refused, and the
+        frontend's 90 % default is refused for every one of them but oil, whose ceiling is 90.49 %.
+        """
+        path = "house.heating.seasonal_efficiency_in_percent"
+
+        def problems_at(stated: float) -> List[Any]:
+            document = mockup()
+            document["measures"] = []
+            heating: Dict[str, Any] = {"type_of_system": generator, "seasonal_efficiency_in_percent": stated}
+            if installation_year is not None:
+                heating["installation_year"] = installation_year
+            document["house"]["heating"] = heating
+            try:
+                Request.parse(document)
+            except RequestError as error:
+                return [problem for problem in error.problems if problem.path == path]
+            return []
+
+        assert problems_at(ceiling_in_percent) == []
+        refused = problems_at(round(ceiling_in_percent + 0.01, 2))
+        assert [problem.code for problem in refused] == [ProblemCode.RANGE_EXCEEDED]
+        assert f"at most {ceiling_in_percent:.2f} %" in refused[0].message
+        assert generator in refused[0].message and "net calorific value" in refused[0].message
+        assert (problems_at(90) == []) is (ceiling_in_percent >= 90)
+
+    @pytest.mark.parametrize("generator", ["condensing_gas_heating", "condensing_oil_heating", "hydrogen_heating"])
+    def test_a_condensing_boiler_is_left_to_its_build(self, generator: str) -> None:
+        """Owner decision of 2026-10-21: a boiler booked on the GCV is refused above its ceiling by its build only."""
+        document = mockup()
+        document["measures"] = []
+        document["house"]["heating"] = {"type_of_system": generator, "seasonal_efficiency_in_percent": 96.5}
+
+        assert codes_of(document) == []
+
+    @pytest.mark.parametrize(
+        "generator, installation_year",
+        [("conventional_gas_heating", None), ("pellet_heating", None), ("conventional_gas_heating", 1975)],
+    )
+    def test_the_request_ceiling_is_the_boilers_own(self, generator: str, installation_year: Any) -> None:
+        """Just below the ceiling the request and the boiler's curve pass, just above both refuse.
+
+        The check runs at 1 kW, where a 1970s row's ceiling is lowest; a product row does not depend on the size.
+        """
+        from hisim.components.generic_boiler import (  # pylint: disable=import-outside-toplevel
+            BoilerEfficiencySources,
+        )
+
+        path = "house.heating.seasonal_efficiency_in_percent"
+        energy_carrier, boiler_type = SemanticChecks.BOILER_FUEL_AND_TYPE[HeatGenerator(generator)]
+        power_in_watt = SemanticChecks.BOILER_POWER_OF_THE_CEILING_CHECK_IN_WATT
+        ceiling = BoilerEfficiencySources.highest_seasonal_efficiency(
+            energy_carrier=energy_carrier,
+            boiler_type=boiler_type,
+            installation_year=installation_year,
+            maximal_power_in_watt=power_in_watt,
+        )
+        for seasonal_efficiency, refused in ((ceiling - 1e-9, False), (ceiling + 1e-9, True)):
+            document = mockup()
+            document["measures"] = []
+            heating: Dict[str, Any] = {
+                "type_of_system": generator,
+                "seasonal_efficiency_in_percent": seasonal_efficiency * 100,
+            }
+            if installation_year is not None:
+                heating["installation_year"] = installation_year
+            document["house"]["heating"] = heating
+            assert ((path, ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)) is refused
+            stated = heating["seasonal_efficiency_in_percent"] / 100
+            arguments: Dict[str, Any] = {
+                "energy_carrier": energy_carrier,
+                "boiler_type": boiler_type,
+                "installation_year": installation_year,
+                "maximal_power_in_watt": power_in_watt,
+                "seasonal_efficiency": stated,
+            }
+            if refused:
+                with pytest.raises(ValueError, match="net calorific value"):
+                    BoilerEfficiencySources.curve(**arguments)
+            else:
+                assert BoilerEfficiencySources.curve(**arguments).highest_efficiency() <= 1.0
+
+    def test_every_boiler_generator_names_its_fuel_and_type(self) -> None:
+        """The ceiling check reads the table; a boiler generator missing from it would fail every request."""
+        assert set(SemanticChecks.BOILER_FUEL_AND_TYPE) == set(HeatGenerator.boilers())
 
     @pytest.mark.parametrize("living", [15, 300])
     def test_a_living_area_up_to_the_conditioned_floor_area_is_accepted(self, living: float) -> None:

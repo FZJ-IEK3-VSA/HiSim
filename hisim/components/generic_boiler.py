@@ -206,7 +206,9 @@ class GenericBoilerConfig(ConfigBase):
     #: oil, 2015/1189 for solid fuel), or ``None``. When stated, the boiler type's efficiency curve is scaled so that
     #: its ``0.85 eta_30 + 0.15 eta_100`` minus the 3 % temperature-control correction reproduces it
     #: (:meth:`BoilerEfficiencySources.curve`); when ``None``, the curve applies unscaled. For example, 0.90 for a
-    #: label stating 90 %.
+    #: label stating 90 %. The config refuses a value above 0.97; the build refuses one above the boiler's own
+    #: ceiling (:meth:`BoilerEfficiencySources.highest_seasonal_efficiency`), which keeps the scaled curve at or below
+    #: 1 on the basis its fuel is booked on, for example 0.8682 for a current conventional gas boiler (NCV).
     seasonal_efficiency: Optional[float] = None
     #: The year the boiler was installed, or ``None`` for a current boiler. A year before 2000 picks the IWU 2002 row
     #: of its decade for a gas or oil boiler; ``None`` or a later year takes a current product's data
@@ -922,6 +924,78 @@ class BoilerEfficiencySources:
         )
 
     @classmethod
+    def gross_to_booking_factor(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> float:
+        """Return the factor that puts an efficiency on the GCV onto the boiler's booking basis, dimensionless.
+
+        It is the fuel's GCV/NCV for a boiler booked on the NCV (:meth:`CalorificBasis.of_booking`) and 1 for one
+        booked on the GCV. Hydrogen takes the gas boiler's curve as it is, so it takes the gas factor as well. For
+        example, a conventional gas boiler gives 1.109, a condensing gas boiler 1, a pellet boiler 1.078.
+
+        Args:
+            energy_carrier: The fuel the boiler burns.
+            boiler_type: Condensing or conventional.
+
+        Returns:
+            ``eta_booking / eta_GCV``.
+        """
+        source_carrier = lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier
+        if CalorificBasis.of_booking(source_carrier, boiler_type) == CalorificBasis.NET:
+            return cls.gross_over_net(source_carrier)
+        return 1.0
+
+    @classmethod
+    def highest_seasonal_efficiency(
+        cls,
+        *,
+        energy_carrier: lt.LoadTypes,
+        boiler_type: BoilerType,
+        installation_year: Optional[int],
+        maximal_power_in_watt: float,
+    ) -> float:
+        """Return the highest stated seasonal efficiency ``eta_s`` (GCV) this boiler can take, dimensionless.
+
+        A stated ``eta_s`` scales the boiler's curve by ``s = (eta_s + 0.03) k / eta_son`` (:meth:`curve`), so the
+        curve's highest point becomes ``s H``, with ``eta_son = 0.85 eta_30 + 0.15 eta_100`` and ``H`` the highest
+        point of the unscaled curve, both on the booking basis, and ``k`` from :meth:`gross_to_booking_factor`. The
+        scaled curve must stay at or below 1 on the basis the boiler's fuel is booked on: above it, the heat exceeds
+        the fuel booked for it and the combustion loss turns negative. Solving ``s H <= 1`` gives the ceiling
+        ``eta_s <= eta_son / (H k) - 0.03``. For a condensing gas or oil boiler, booked on the GCV, that is 1 on the
+        GCV (current condensing gas 0.9545). A non-condensing boiler and every pellet and wood-chip boiler is booked
+        on the NCV, where a non-condensing boiler cannot reach 1 either, so its ceiling lies a fuel's GCV/NCV lower:
+        current conventional gas 0.8682, conventional oil 0.9050, pellets 0.8678, wood chips 0.8624. :meth:`curve`
+        refuses exactly what lies above it, and the RenoVisor request check calls it to refuse such a request
+        before anything runs.
+
+        Only the IWU rows whose two test points differ depend on the size, through eq. 2-1 (the 1990s and 1980s
+        condensing, the 1980s low-temperature and the 1970s standard rows): it adds the same correction to both
+        points, so their ceiling rises with the power, by 0.2 points for the 1970s conventional gas row between
+        1 kW (0.8253) and 400 kW (0.8274).
+
+        Args:
+            energy_carrier: The fuel the boiler burns.
+            boiler_type: Condensing or conventional.
+            installation_year: The year the boiler was installed, or ``None`` for a current boiler.
+            maximal_power_in_watt: The maximal burner power, in W, above 0.
+
+        Returns:
+            The highest ``eta_s`` on the GCV whose scaled curve stays at or below 1 on the booking basis.
+
+        Raises:
+            ValueError: If the power is not finite or not above 0 W, or no source covers the fuel.
+        """
+        unscaled = cls.unscaled_curve(
+            energy_carrier=energy_carrier,
+            boiler_type=boiler_type,
+            installation_year=installation_year,
+            maximal_power_in_watt=maximal_power_in_watt,
+        )
+        gross_to_booking = cls.gross_to_booking_factor(energy_carrier, boiler_type)
+        return (
+            unscaled.active_mode_seasonal_efficiency() / (unscaled.highest_efficiency() * gross_to_booking)
+            - cls.TEMPERATURE_CONTROL_CORRECTION
+        )
+
+    @classmethod
     def curve(
         cls,
         *,
@@ -936,8 +1010,9 @@ class BoilerEfficiencySources:
         Without a stated seasonal efficiency the curve is :meth:`unscaled_curve`. With one, the curve is scaled so
         that its active-mode seasonal efficiency minus :attr:`TEMPERATURE_CONTROL_CORRECTION`, on the GCV, is the
         stated value: ``s = (eta_s + 0.03) * k / (0.85 eta_30 + 0.15 eta_100)``, where ``k`` is the fuel's GCV/NCV
-        for a boiler booked on the NCV and 1 for one booked on the GCV. For example, a stated 0.90 on the current
-        condensing gas curve gives ``s = 0.93 / 0.963 = 0.966``.
+        for a boiler booked on the NCV and 1 for one booked on the GCV (:meth:`gross_to_booking_factor`). For
+        example, a stated 0.90 on the current condensing gas curve gives ``s = 0.93 / 0.963 = 0.966``. A stated value
+        above :meth:`highest_seasonal_efficiency` is refused: it would lift the curve above 1 on the booking basis.
 
         Args:
             energy_carrier: The fuel the boiler burns.
@@ -951,7 +1026,9 @@ class BoilerEfficiencySources:
             The curve on the boiler's booking basis.
 
         Raises:
-            ValueError: If the scaled curve exceeds 1 anywhere on the GCV, where no boiler can reach.
+            ValueError: If the stated value is above :meth:`highest_seasonal_efficiency`, so the scaled curve would
+                exceed 1 somewhere on the basis the boiler's fuel is booked on: the GCV for a condensing gas, oil or
+                hydrogen boiler, the NCV for every other one.
         """
         unscaled = cls.unscaled_curve(
             energy_carrier=energy_carrier,
@@ -961,20 +1038,32 @@ class BoilerEfficiencySources:
         )
         if seasonal_efficiency is None:
             return unscaled
-        source_carrier = lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier
-        booking = CalorificBasis.of_booking(source_carrier, boiler_type)
-        gross_over_net = cls.gross_over_net(source_carrier)
-        to_booking = gross_over_net if booking == CalorificBasis.NET else 1.0
-        target_on_booking_basis = (seasonal_efficiency + cls.TEMPERATURE_CONTROL_CORRECTION) * to_booking
-        scaled = unscaled.scaled(target_on_booking_basis / unscaled.active_mode_seasonal_efficiency())
-        highest_on_gross_basis = scaled.highest_efficiency() / to_booking
-        if highest_on_gross_basis > 1.0:
-            raise ValueError(
-                f"A seasonal efficiency of {seasonal_efficiency!r} scales the boiler's curve to "
-                f"{highest_on_gross_basis:.3f} on the gross calorific value, above 1: the stated value must be the "
-                "Ecodesign seasonal space heating efficiency eta_s of the energy label, on the gross calorific value."
+        gross_to_booking = cls.gross_to_booking_factor(energy_carrier, boiler_type)
+        highest_seasonal_efficiency = cls.highest_seasonal_efficiency(
+            energy_carrier=energy_carrier,
+            boiler_type=boiler_type,
+            installation_year=installation_year,
+            maximal_power_in_watt=maximal_power_in_watt,
+        )
+        if seasonal_efficiency > highest_seasonal_efficiency:
+            on_net_basis = CalorificBasis.of_booking(energy_carrier, boiler_type) == CalorificBasis.NET
+            basis = "net" if on_net_basis else "gross"
+            year = f"installed in {installation_year}" if installation_year is not None else "a current one"
+            hint = (
+                "the boiler's fuel is booked on the net calorific value, on which a boiler that does not condense "
+                "cannot exceed 1: its heat would exceed the fuel booked for it"
+                if on_net_basis
+                else "the stated value must be the Ecodesign seasonal space heating efficiency eta_s of the energy "
+                "label, on the gross calorific value"
             )
-        return scaled
+            raise ValueError(
+                f"A seasonal efficiency of {seasonal_efficiency!r} is above {highest_seasonal_efficiency:.4f}, the "
+                f"highest a {boiler_type.value} {energy_carrier.value} boiler of {maximal_power_in_watt:g} W "
+                f"({year}) can take: it would scale the boiler's curve above 1 on the {basis} calorific value; "
+                f"{hint}."
+            )
+        target_on_booking_basis = (seasonal_efficiency + cls.TEMPERATURE_CONTROL_CORRECTION) * gross_to_booking
+        return unscaled.scaled(target_on_booking_basis / unscaled.active_mode_seasonal_efficiency())
 
 
 @dataclass(frozen=True)

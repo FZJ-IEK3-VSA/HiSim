@@ -225,16 +225,17 @@ class GenericBoilerConfig(ConfigBase):
     #: curve's full-load efficiency ``eta_100``, over this rise: ``m_max = P_max eta_100 / (c rise)``; a condensing
     #: boiler on a colder return makes more heat and so rises slightly more. A lift the controller asks for that is
     #: smaller than the rise the commanded heat gives at that flow is raised to it, so the supply ends above the one
-    #: asked for. For example, a 12 kW boiler at 0.9 pumps at most 12000 * 0.9 / (4180 * 5) = 0.52 kg/s (1.9 m3/h)
-    #: and lifts its water by at least 5 K at full power and by about 2.5 K at half power. Why 5 K: it bounds the
-    #: flow of an on/off burner, or of one held at its minimal power, on a lift close to 0 K. A modulating controller
-    #: (the ``modulating`` preset) commands full power only on lifts of 5 K and more and a power proportional to the
-    #: lift below, so it reaches the bound only where it holds the burner at its minimal power: a 12 kW boiler with a
-    #: 1 kW minimum (the ``*_12kw`` presets) turns that into about 950 W, which the largest flow carries over about
-    #: 0.4 K, so a lift below that is raised. A boiler without a minimal power never
-    #: reaches it. A minimal lift above the controller's ``set_temperature_difference_for_full_power`` would raise
-    #: lifts on which that controller commands full power, so the supply would end above the one it asked for: keep
-    #: it at or below that threshold.
+    #: asked for. For example, a 12 kW current condensing gas boiler (``eta_100`` = 0.877) pumps at most
+    #: 12000 * 0.877 / (4180 * 5) = 0.50 kg/s (1.8 m3/h) and lifts its water by at least 5 K at full power and by
+    #: about 2.5 K at half power on a 60 °C return (6000 W at 0.885). Why 5 K: it bounds the flow of an on/off
+    #: burner, or of one held at its minimal power, on a lift close to 0 K. A modulating controller (the
+    #: ``modulating`` preset) commands full power only on lifts of 5 K and more and a power proportional to the lift
+    #: below, so it reaches the bound only where it holds the burner at its minimal power: a 12 kW boiler with a 1 kW
+    #: minimum (the ``*_12kw`` presets) turns that into 890 to 980 W (the gas curve's 30 % value on a 60 to a 30 °C
+    #: return), which the largest flow carries over about 0.45 K, so a lift below that is raised. A boiler without a
+    #: minimal power never reaches it. A minimal lift above the controller's
+    #: ``set_temperature_difference_for_full_power`` would raise lifts on which that controller commands full power,
+    #: so the supply would end above the one it asked for: keep it at or below that threshold.
     minimal_lift_at_maximal_power_in_kelvin: float = field(default=5.0, metadata={"unit": lt.Units.KELVIN})
     device_co2_footprint_in_kg: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
@@ -1141,7 +1142,8 @@ class BoilerPump:
     The boiler sizes its flow so that the commanded heat leaves at the lift its controller asks for,
     ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound: an on/off burner at full power would pump
     hundreds of kilograms a second through a household circuit, and one held at its minimal power tens (12 kW of
-    burner power at 0.9 over 0.01 K is 258 kg/s, a 1 kW minimum at 0.95 is 23 kg/s). The pump cannot, so
+    burner power at 0.877, the current condensing gas boiler's full-load efficiency, over 0.01 K is 252 kg/s, a 1 kW
+    minimum at its 30 % value 0.978 is 23 kg/s). The pump cannot, so
     the boiler raises such a lift to the rise its heat gives at the pump's largest flow (:meth:`lift_in_kelvin`) and
     the supply ends above the one asked for. For example, a pump of at most 0.5 kg/s carrying 10450 W lifts its water
     by at least 10450 / (4180 * 0.5) = 5 K, and a lift of 0.01 K asked for is raised to 5 K.

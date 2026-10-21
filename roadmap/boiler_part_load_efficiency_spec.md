@@ -37,7 +37,7 @@ efficiency onto the two ends of that line (`eff_th_max = value/100`, `eff_th_min
 - **Combustion efficiency** `η`: heat into the water over fuel power, on the calorific basis the boiler's fuel is
   booked on (§4.1).
 - **Load ratio** `β`: burner (fuel) power over maximal burner power. The standards' 30 % point is 30 % of the rated
-  heat output; the two ratios differ by `η_30 / η_100`, at most 11 %.
+  heat output; the two ratios differ by `η_30 / η_100`, at most 11.5 % (current gas condensing, 0.978 / 0.877).
 - **Test points**: `η_100` at full load and a 60 °C return (80/60 °C, 813/2013 Annex II Table 1 footnote; the 70 °C
   mean boiler temperature of 92/42 and IWU Tab. 2), `η_30` at 30 % load and a 30 °C return for a condensing boiler
   (same footnote; IWU Tab. 3 states a 30 °C mean boiler temperature, read as the return).

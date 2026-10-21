@@ -717,6 +717,15 @@ class TestTheBoilersInstallationYear:
         assert line.target == Translator.ECONOMICS_TARGET
         assert line.note is not None and "efficiency row" in line.note
 
+    @pytest.mark.parametrize("generator", ["pellet_heating", "biomass_heating", "woodchip_heating"])
+    def test_a_wood_boilers_line_says_the_year_does_not_change_its_efficiency(self, generator: str) -> None:
+        """A pellet or wood-chip boiler takes its product data whatever the year; no IWU decade row is claimed."""
+        system = translate(baseline(heating__type_of_system=generator, heating__installation_year=1995))
+
+        line = system.report.line(self.PATH)
+        assert line is not None and line.note is not None
+        assert "whatever the year" in line.note and "IWU" not in line.note
+
     def test_a_replaced_boiler_leaves_no_year_on_the_new_one(self) -> None:
         """A heating_system measure that installs a condensing gas boiler makes it a current boiler."""
         document = baseline(heating__installation_year=1995)

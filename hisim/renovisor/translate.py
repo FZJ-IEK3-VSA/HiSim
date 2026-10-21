@@ -30,6 +30,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from hisim import loadtypes as lt
 from hisim.components.weather.config import LocationEnum
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.loader import dump_energy_system, load_energy_system
@@ -557,7 +558,7 @@ class BaseFiles:
     #: The generators whose twin is a heat pump, which alone has a flow temperature to write.
     HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.heat_pumps()
 
-    #: The generators whose twin is a ``GenericBoiler``, which alone has efficiency bounds.
+    #: The generators whose twin is a ``GenericBoiler``, which alone takes a seasonal efficiency.
     BOILERS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.boilers()
 
     @classmethod
@@ -1812,7 +1813,7 @@ def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any
     ``GenericBoiler.config.seasonal_efficiency``, which scales the boiler type's sourced efficiency
     curve so that its ``0.85 eta_30 + 0.15 eta_100`` minus the 3 % temperature-control correction
     reproduces it (owner decision of 2026-10-20, hisim-component-physics-4g9.66). The installation
-    year of the existing boiler picks its IWU 2002 decade row (:func:`_boiler_installation_year`).
+    year of the existing gas or oil boiler picks its IWU 2002 decade row (:func:`_boiler_installation_year`).
     """
     _boiler_installation_year(state, generator)
     path = "house.heating.seasonal_efficiency_in_percent"
@@ -1852,11 +1853,12 @@ def _boiler_installation_year(state: _TranslationState, generator: HeatGenerator
     """Write the existing boiler's installation year, which picks its efficiency row.
 
     A gas or oil boiler installed before 2000 takes the IWU 2002 row of its decade; without a year,
-    or from 2000 on, it takes a current product's data (``BoilerVintage``). The renovated house
-    carries the year only for the boiler the request describes: a ``heating_system`` measure removes
-    it with the generator it dated, so a new boiler is a current one. The report line stays the
-    economics stage's (the year dates the boiler's register row as well); its note says that the
-    year also reaches the boiler.
+    or from 2000 on, it takes a current product's data (``BoilerVintage``). A pellet, log or
+    wood-chip boiler takes its product data whatever the year, since IWU's solid-fuel rows describe
+    log boilers: the year reaches it and changes nothing. The renovated house carries the year only
+    for the boiler the request describes: a ``heating_system`` measure removes it with the generator
+    it dated, so a new boiler is a current one. The report line stays the economics stage's (the
+    year dates the boiler's register row as well); its note says what the year does to the boiler.
     """
     year = state.raw.get("heating", {}).get("installation_year")
     if year is None or generator not in BaseFiles.BOILERS:
@@ -1871,18 +1873,20 @@ def _boiler_installation_year(state: _TranslationState, generator: HeatGenerator
     )
     path = "house.heating.installation_year"
     line = state.report.line(path)
-    if landed and line is not None:
-        state.report.field(
-            path,
-            line.status,
-            target=line.target,
-            value=line.value,
-            note=(
-                f"{line.note}; it also picks the boiler's efficiency row "
-                f"({Targets.describe(component, Targets.INSTALLATION_YEAR)}): the IWU 2002 decade "
-                "row before 2000, a current product's data from 2000 on"
-            ),
+    target = Targets.describe(component, Targets.INSTALLATION_YEAR)
+    energy_carrier, _ = SemanticChecks.BOILER_FUEL_AND_TYPE[generator]
+    if energy_carrier in (lt.LoadTypes.PELLETS, lt.LoadTypes.WOOD_CHIPS):
+        effect = (
+            f"it also reaches the boiler ({target}), whose efficiency does not depend on it: a pellet or "
+            "wood-chip boiler takes its product data whatever the year"
         )
+    else:
+        effect = (
+            f"it also picks the boiler's efficiency row ({target}): the IWU 2002 decade row before 2000, "
+            "a current product's data from 2000 on"
+        )
+    if landed and line is not None:
+        state.report.field(path, line.status, target=line.target, value=line.value, note=f"{line.note}; {effect}")
 
 
 def _hot_water(state: _TranslationState) -> None:

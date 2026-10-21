@@ -253,10 +253,11 @@ def test_heat_pump_hplib_new() -> None:
     # Check
     # hplib answers 10 kW with the flow its own 4200 J/(kg K) gives over 5 K, 10 kW / (4200 * 5) = 0.47619 kg/s;
     # the heat pump books the heat that flow carries at 4180 J/(kg K), 0.47619 * 4180 * 5 = 9952.38 W
-    # (10 kW * 4180 / 4200), and its electricity at hplib's COP.
+    # (10 kW * 4180 / 4200), and its electricity at the Carnot-efficiency COP, 0.451 * 325.15 / (59 + 4.45) = 2.3112
+    # (hplib's own COP plane gave 1.41 here).
     assert 9952.380952380952 == stsv.values[heatpump.p_th_space_heating.global_index]
-    assert 7040.347698931308 == stsv.values[heatpump.p_el_space_heating.global_index]
-    assert 1.4136206588052005 == stsv.values[heatpump.cop.global_index]
+    assert stsv.values[heatpump.p_el_space_heating.global_index] == pytest.approx(4306.24086122674)
+    assert stsv.values[heatpump.cop.global_index] == pytest.approx(2.311152876280536)
     assert t_out == stsv.values[heatpump.t_out_space_heating.global_index]
     assert 0.47619047619047616 == stsv.values[heatpump.m_dot_space_heating.global_index]
     assert 60 == stsv.values[heatpump.time_on_heating.global_index]

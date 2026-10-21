@@ -1,9 +1,11 @@
-"""The heat pump evaluates hplib at the return itself where its grid interpolation would straddle the heating-rod switch.
+"""hplib's heating-rod switch: the grid interpolation's guard, and the machine that no longer has the rod.
 
 hplib runs its heating rod alone once its fitted coefficient of performance falls to 1, and its thermal power jumps
-there. The heat pump caches hplib on a 0.1 K grid of the return temperature and interpolates between grid points; across
-the switch that interpolation turned the jump into a ramp of about 25 kW/K, which with the hot-water tank's step mean
-formed a loop contracting by only about 0.9 per pass.
+there. The heat pump caches its machine on a 0.1 K grid of the return temperature and interpolates between grid points;
+across hplib's switch that interpolation turned the jump into a ramp of about 25 kW/K, which with the hot-water tank's
+step mean formed a loop contracting by only about 0.9 per pass. Where two grid points straddle a switch, the heat pump
+evaluates the machine at the return itself. Since the Carnot-efficiency COP replaced hplib's COP plane
+(:class:`CarnotCopHeatPump`), the machine runs its compressor past hplib's switch and its thermal power has no jump.
 """
 
 from typing import Tuple
@@ -64,8 +66,8 @@ class TestTheSwitchBetweenTwoGridPoints:
 def air_water_heat_pump() -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib:
     """Build an 8 kW air-water heat pump with hot-water preparation, at 60 s steps.
 
-    At 0 °C outside its hplib model switches to the heating rod alone between a return of 64.0 and 64.1 °C: 4.8 kW
-    at a COP of 1.0033 below, the rod's 8.1 kW above.
+    At 0 °C outside hplib's own planes switch to the heating rod alone between a return of 64.0 and 64.1 °C: 4.8 kW
+    at a COP of 1.0033 below, the rod's 8.1 kW above. The machine keeps the compressor on both sides.
 
     Returns:
         The heat pump.
@@ -82,14 +84,14 @@ def air_water_heat_pump() -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpH
 def answers_at(
     heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib, return_temperature_in_celsius: float
 ) -> Tuple[HplibResult, HplibResult]:
-    """Return the heat pump's answer at a hot-water return at 0 °C outside, and hplib's own answer there.
+    """Return the heat pump's answer at a hot-water return at 0 °C outside, and the machine's own answer there.
 
     Args:
         heat_pump: The heat pump.
         return_temperature_in_celsius: The return temperature, in °C.
 
     Returns:
-        The heat pump's answer and hplib's answer computed at the return itself.
+        The heat pump's answer and the machine's answer computed at the return itself.
     """
     answer = heat_pump.get_cached_results_or_run_hplib_simulation(
         source_temperature_in_celsius=0.0,
@@ -110,11 +112,26 @@ def answers_at(
 
 
 @pytest.mark.parametrize("return_temperature_in_celsius", [64.01, 64.05, 64.09])
-def test_between_grid_points_across_the_switch_the_answer_is_hplibs_own(return_temperature_in_celsius: float) -> None:
-    """Catches an interpolation across the switch: its thermal power would lie between the compressor's and the rod's."""
-    answer, exact = answers_at(air_water_heat_pump(), return_temperature_in_celsius)
-    assert answer == exact
-    assert answer.thermal_power_in_watt < 5000.0 or answer.thermal_power_in_watt == pytest.approx(8135.03, abs=0.01)
+def test_across_hplibs_switch_the_compressor_runs_on_without_a_jump(return_temperature_in_celsius: float) -> None:
+    """Catches the rod coming back: its 8.1 kW at a COP of 1 would jump above the compressor's 4.8 kW.
+
+    Between the grid points at 64.0 and 64.1 °C the answer is the interpolation (no straddle), and its thermal power,
+    the compressor's 4.8 kW, lies within 0.5 % of the machine's exact answer: the compressor's power is continuous at
+    hplib's switch but has a kink there (4799 W at 64.0 °C, 4787 W at 64.05 °C, 4790 W at 64.1 °C). Its COP is the
+    Carnot law's 2.10.
+    """
+    heat_pump = air_water_heat_pump()
+    answer, exact = answers_at(heat_pump, return_temperature_in_celsius)
+    lower, _ = answers_at(heat_pump, 64.0)
+    upper, _ = answers_at(heat_pump, 64.1)
+    assert not HplibResult.straddle_the_heating_rod_switch(lower=lower, upper=upper)
+    assert answer == HplibResult.interpolated(
+        lower=lower, upper=upper, share_of_upper=answer_share(return_temperature_in_celsius)
+    )
+    assert answer.thermal_power_in_watt == pytest.approx(exact.thermal_power_in_watt, rel=5e-3)
+    assert abs(upper.thermal_power_in_watt - lower.thermal_power_in_watt) < 50.0
+    assert answer.thermal_power_in_watt == pytest.approx(4795.0, abs=10.0)
+    assert answer.cop == pytest.approx(2.10, abs=0.01)
 
 
 def test_away_from_the_switch_the_answer_is_still_interpolated() -> None:

@@ -1,10 +1,11 @@
-"""The hplib heat pump's model parts: the adapter to hplib, the SCOP calibration, and the values of one step.
+"""The hplib heat pump's model parts: the COP law, the adapter to hplib, the SCOP calibration, and one step's values.
 
 ``MoreAdvancedHeatPumpHPLib`` in ``hisim/components/more_advanced_heat_pump_hplib.py`` is the component; this module
-holds what it computes with and that needs no component: hplib's result as a typed value (:class:`HplibResult`) and
-its cache key (:class:`CalculationRequest`), the EN 14825 rating and the calibration to a datasheet SCOP
-(:class:`StandardizedSeasonalCop`, :class:`ScopCalibration`), and the frozen values one step of the heat pump passes
-between its pure functions (:class:`HeatPumpOperation` and its companions).
+holds what it computes with and that needs no component: the Carnot-efficiency COP law (:class:`CarnotEfficiencyCop`)
+and the machine that combines it with hplib's thermal power (:class:`CarnotCopHeatPump`), hplib's result as a typed
+value (:class:`HplibResult`) and its cache key (:class:`CalculationRequest`), the EN 14825 rating and the calibration
+to a datasheet SCOP (:class:`StandardizedSeasonalCop`, :class:`ScopCalibration`), and the frozen values one step of the
+heat pump passes between its pure functions (:class:`HeatPumpOperation` and its companions).
 """
 
 import math
@@ -23,12 +24,287 @@ class ScopApplication(str, Enum):
     W55 = "W55"
 
 
+@unique
+class HeatSourceType(str, Enum):
+    """The kind of heat source a heat pump draws from, which picks the parameters of its COP law.
+
+    Air for an air/water machine, brine for a brine/water (ground-source) machine. A water/water machine takes the
+    brine parameters (see :attr:`CarnotEfficiencyCop.SOURCE_TYPE_OF_HPLIB_GROUP`).
+    """
+
+    AIR = "air"
+    BRINE = "brine"
+
+
+class CarnotEfficiencyCop:
+    """The heat pump's coefficient of performance of heating as a constant share of the Carnot COP.
+
+    The law, with every temperature in °C and the lift in K::
+
+        cop = eta * (outlet + 273.15) / (max(outlet - source, MINIMAL_LIFT_IN_KELVIN) + d)
+
+    ``eta`` (:attr:`CARNOT_EFFICIENCY`) is the share of the ideal (Carnot) COP the machine reaches; ``d``
+    (:attr:`TEMPERATURE_OFFSET_IN_KELVIN`) adds the temperature differences in the condenser and the evaporator to
+    the lift between the water's outlet and the source. This is the constant-Carnot-effectiveness model of the IBPSA
+    and AixLib Modelica libraries and the principle of EN 15316-4-2. For example, an air/water machine at A-7/W52
+    gets ``0.451 * 325.15 / (59 + 4.45) = 2.31``, at A7/W35 ``4.28``.
+
+    Source of ``eta`` and ``d``: one pooled least-squares fit per source type of the relative error over the ten
+    EN 14825 / EN 14511 rating points (A-7/W34, A2/W30, A7/W27, A12/W24, A-7/W52, A2/W42, A7/W36, A12/W30 at part
+    load; A7/W35, A7/W55 at full load) of the Keymark-certified units in hplib's raw Keymark exports, 1,743 air/water
+    and 176 brine/water units (brine at 0 °C), evaluated in hisim-x2mu and hisim-heat-pump-model-rework-fpqz.1
+    (owner decision (2) of 2026-10-21; spec ``roadmap/heat_pump_model_rework_spec.md``). Calibrated to each unit's
+    own SCOP pair (:class:`ScopCalibration`), the law misses the certified points by 7.7 % (air) and 9.6 % (brine) on
+    average, where hplib's Generic plane missed by 12.2 % and 10.0 %; at A-7/W52 by +12 % instead of -33 %.
+
+    The law grows without bound as the lift shrinks and turns negative where the source is warmer than the outlet
+    (for example air at 30 °C and a 25 °C outlet). The lift is therefore held at no less than
+    :attr:`MINIMAL_LIFT_IN_KELVIN`, the smallest lift a certified rating point has (A12/W24, 12 K): below it the law
+    is not evidenced, and holding the lift keeps the COP at its value at the edge of the data (air: 8.15 at W24)
+    instead of extrapolating towards infinity.
+    """
+
+    #: The share of the Carnot COP the machine reaches, dimensionless, per source type: the pooled Keymark fit
+    #: (1,743 air/water units: 0.4515; 176 brine/water units: 0.5677).
+    CARNOT_EFFICIENCY: ClassVar[Dict[HeatSourceType, float]] = {HeatSourceType.AIR: 0.451, HeatSourceType.BRINE: 0.568}
+
+    #: The temperature differences of the condenser and the evaporator added to the lift, in K, per source type: the
+    #: same fit (air 4.454 K, brine 4.498 K).
+    TEMPERATURE_OFFSET_IN_KELVIN: ClassVar[Dict[HeatSourceType, float]] = {
+        HeatSourceType.AIR: 4.45,
+        HeatSourceType.BRINE: 4.50,
+    }
+
+    #: The smallest lift between outlet and source the law is evaluated at, in K: the lift of the EN 14825 A12/W24
+    #: point, the smallest of any certified rating point in the fit.
+    MINIMAL_LIFT_IN_KELVIN: ClassVar[float] = 12.0
+
+    #: The offset between °C and K.
+    ZERO_CELSIUS_IN_KELVIN: ClassVar[float] = 273.15
+
+    #: The source type of each hplib group: 1 and 4 air/water (regulated, on/off), 2 and 5 brine/water, 3 and 6
+    #: water/water. The Keymark data hold no water/water units; a water source is a liquid one like brine, so it
+    #: takes the brine parameters.
+    SOURCE_TYPE_OF_HPLIB_GROUP: ClassVar[Dict[int, HeatSourceType]] = {
+        1: HeatSourceType.AIR,
+        4: HeatSourceType.AIR,
+        2: HeatSourceType.BRINE,
+        5: HeatSourceType.BRINE,
+        3: HeatSourceType.BRINE,
+        6: HeatSourceType.BRINE,
+    }
+
+    @classmethod
+    def cop(
+        cls, source_type: HeatSourceType, source_temperature_in_celsius: float, outlet_temperature_in_celsius: float
+    ) -> float:
+        """Return the COP of heating at one source and one outlet temperature, dimensionless.
+
+        For example, ``cop(HeatSourceType.AIR, -7.0, 52.0)`` is 2.31 and ``cop(HeatSourceType.BRINE, 0.0, 35.0)``
+        4.43; ``cop(HeatSourceType.AIR, 30.0, 25.0)`` holds the lift at 12 K and gives 8.17.
+
+        Args:
+            source_type: The kind of heat source, which picks ``eta`` and ``d``.
+            source_temperature_in_celsius: The temperature of the source the machine draws from (the outdoor air,
+                the brine or the well water), in °C.
+            outlet_temperature_in_celsius: The temperature of the water leaving the machine, in °C.
+
+        Returns:
+            The coefficient of performance.
+        """
+        lift_in_kelvin = max(outlet_temperature_in_celsius - source_temperature_in_celsius, cls.MINIMAL_LIFT_IN_KELVIN)
+        return (
+            cls.CARNOT_EFFICIENCY[source_type]
+            * (outlet_temperature_in_celsius + cls.ZERO_CELSIUS_IN_KELVIN)
+            / (lift_in_kelvin + cls.TEMPERATURE_OFFSET_IN_KELVIN[source_type])
+        )
+
+    @classmethod
+    def source_type_of(cls, hplib_group: float) -> HeatSourceType:
+        """Return the source type of an hplib group (1 to 6).
+
+        For example, group 1 (regulated air/water) gives :attr:`HeatSourceType.AIR` and group 3 (water/water)
+        :attr:`HeatSourceType.BRINE`.
+
+        Args:
+            hplib_group: hplib's group of the machine.
+
+        Returns:
+            The source type whose parameters the machine's COP law takes.
+
+        Raises:
+            ValueError: For a group hplib does not define.
+        """
+        group = int(hplib_group)
+        if group not in cls.SOURCE_TYPE_OF_HPLIB_GROUP:
+            raise ValueError(f"hplib defines groups 1 to 6, and this heat pump is hplib group {hplib_group:g}.")
+        return cls.SOURCE_TYPE_OF_HPLIB_GROUP[group]
+
+
+class CarnotCopHeatPump:
+    """An hplib heat pump whose COP of heating is the Carnot-efficiency law and that has no heating rod.
+
+    hplib gives a heat pump's thermal power, outlet and mass flow from fitted planes; this machine keeps those and
+    replaces hplib's COP plane by :class:`CarnotEfficiencyCop` (step (a) of the heat pump rework, spec
+    ``roadmap/heat_pump_model_rework_spec.md``). Its :meth:`simulate` answers like ``hplib.HeatPump.simulate``, so the
+    EN 14825 rating and the SCOP calibration read it as they read hplib:
+
+    * The thermal power is hplib's compressor capacity, ``P_el,fit * COP_fit`` of hplib's own planes, raised to the
+      minimal thermal power where hplib's regulated compressor can reach it (hplib's own rule).
+    * The COP is the Carnot-efficiency law at the source and hplib's outlet, and the electrical power is the thermal
+      power over it; the mass flow carries the thermal power over hplib's lift, as hplib computes it.
+    * hplib's heating rod is gone. hplib runs its rod alone where its own COP plane falls to 1 (for an 8 kW Generic
+      air/water machine at about A-7/W65 and A0/W69, booking its 8.1 kW reference power at COP 1), and adds the rod to
+      the compressor where the compressor alone cannot reach the minimal power. Here the first is the compressor at
+      hplib's switch, ``P_el,fit`` (continuous there, so the 3.3 kW jump of hplib's switch is gone), and the second
+      the compressor at its maximum, ``P_el,ref * COP_fit``. The Carnot COP stays above 1 at every realistic lift
+      (air at A-15/W75: 1.66), so no rod is needed; a back-up heater is a component of its own.
+    * Cooling (mode 2) is hplib's own answer.
+
+    Attributes:
+        hplib_heat_pump: The wrapped ``hplib.HeatPump``.
+        source_type: The kind of source, from hplib's group.
+    """
+
+    #: The hplib groups whose compressor modulates (1 air, 2 brine, 3 water); 4 to 6 are on/off machines.
+    REGULATED_HPLIB_GROUPS: ClassVar[Tuple[int, ...]] = (1, 2, 3)
+
+    #: hplib's floor of the compressor's electricity, as a share of its electricity at the floor's outdoor
+    #: temperature, dimensionless; regulated groups only.
+    HPLIB_ELECTRICAL_FLOOR_SHARE: ClassVar[float] = 0.25
+
+    #: The outdoor temperature hplib evaluates that floor at (air: as the source, brine: as the ambient), in °C.
+    HPLIB_ELECTRICAL_FLOOR_OUTDOOR_TEMPERATURE_IN_CELSIUS: ClassVar[float] = -7.0
+
+    def __init__(self, hplib_heat_pump: Any) -> None:
+        """Wrap an ``hplib.HeatPump``; its group picks the source type of the COP law."""
+        self.hplib_heat_pump = hplib_heat_pump
+        self.source_type = CarnotEfficiencyCop.source_type_of(hplib_heat_pump.group_id)
+
+    @property
+    def group_id(self) -> float:
+        """Return hplib's group of the machine, 1 to 6."""
+        return float(self.hplib_heat_pump.group_id)
+
+    @property
+    def p_th_ref(self) -> float:
+        """Return hplib's reference thermal power, in W."""
+        return float(self.hplib_heat_pump.p_th_ref)
+
+    @property
+    def p_el_ref(self) -> float:
+        """Return hplib's reference electrical power, in W: the regulated compressor's maximum."""
+        return float(self.hplib_heat_pump.p_el_ref)
+
+    @property
+    def delta_t(self) -> float:
+        """Return the lift of the water across the machine that hplib computes the outlet and the flow with, in K."""
+        return float(self.hplib_heat_pump.delta_t)
+
+    @delta_t.setter
+    def delta_t(self, lift_in_kelvin: float) -> None:
+        """Set the lift of the water across the machine, in K, on the wrapped hplib heat pump."""
+        self.hplib_heat_pump.delta_t = lift_in_kelvin
+
+    def fitted_electrical_power_in_watt(
+        self,
+        source_temperature_in_celsius: float,
+        outlet_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+    ) -> float:
+        """Return the compressor's electricity from hplib's fitted plane, with hplib's floor, in W.
+
+        The same arithmetic as ``hplib.HeatPump.simulate`` in heating: ``P_el,ref * (p1 T_in + p2 T_out + p3 + p4
+        T_amb)``, with the ambient equal to the source for an air machine, and for a regulated machine at least a
+        quarter of that plane at -7 °C (air: source and ambient, brine: ambient). It is needed where hplib runs its
+        rod alone, because hplib then reports the rod's power instead of the compressor's. For example, the 8 kW
+        Generic air/water machine draws about 4.8 kW at 0 °C outside and a 69 °C outlet, hplib's switch.
+
+        Args:
+            source_temperature_in_celsius: The source temperature, in °C.
+            outlet_temperature_in_celsius: The outlet temperature, in °C.
+            ambient_temperature_in_celsius: The outdoor temperature, in °C; an air machine reads the source instead.
+
+        Returns:
+            The compressor's electrical power, in W.
+        """
+        heat_pump = self.hplib_heat_pump
+        group = int(heat_pump.group_id)
+        ambient_in_celsius = source_temperature_in_celsius if group in (1, 4) else ambient_temperature_in_celsius
+
+        def plane(source_in_celsius: float, outdoor_in_celsius: float) -> float:
+            """Return hplib's electrical plane at one source and outdoor temperature, in W."""
+            return float(heat_pump.p_el_ref) * float(
+                heat_pump.p1_p_el_h * source_in_celsius
+                + heat_pump.p2_p_el_h * outlet_temperature_in_celsius
+                + heat_pump.p3_p_el_h
+                + heat_pump.p4_p_el_h * outdoor_in_celsius
+            )
+
+        electrical_power_in_watt = plane(source_temperature_in_celsius, ambient_in_celsius)
+        if group not in self.REGULATED_HPLIB_GROUPS:
+            return electrical_power_in_watt
+        floor_in_celsius = self.HPLIB_ELECTRICAL_FLOOR_OUTDOOR_TEMPERATURE_IN_CELSIUS
+        if group == 1:
+            floor_in_watt = plane(floor_in_celsius, floor_in_celsius)
+        elif group == 2:
+            floor_in_watt = plane(source_temperature_in_celsius, floor_in_celsius)
+        else:
+            floor_in_watt = plane(source_temperature_in_celsius, ambient_in_celsius)
+        return max(electrical_power_in_watt, self.HPLIB_ELECTRICAL_FLOOR_SHARE * floor_in_watt)
+
+    def simulate(
+        self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int = 1, p_th_min: float = 0.0
+    ) -> Dict[str, Any]:
+        """Return the machine's answer at one operating point, with the keys and units of ``hplib.HeatPump.simulate``.
+
+        For example, an 8 kW Generic air/water machine at 2 °C outside and a 25 °C return (outlet 30 °C) keeps
+        hplib's 7.87 kW and gets the Carnot COP 4.21 instead of hplib's 4.73, so it draws 1.87 kW instead of 1.67 kW.
+
+        Args:
+            t_in_primary: The source temperature, in °C (outdoor air, brine or well water).
+            t_in_secondary: The return temperature of the water, in °C; the outlet is it plus :attr:`delta_t`.
+            t_amb: The outdoor temperature, in °C.
+            mode: 1 heating, 2 cooling.
+            p_th_min: The lowest thermal power the machine modulates down to, in W.
+
+        Returns:
+            ``T_in``, ``T_out``, ``T_amb``, ``COP``, ``EER``, ``P_el``, ``P_th`` and ``m_dot`` as hplib names them.
+        """
+        results: Dict[str, Any] = dict(
+            self.hplib_heat_pump.simulate(
+                t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, p_th_min=0.0
+            )
+        )
+        if mode != 1:
+            return results
+        outlet_in_celsius = float(results["T_out"])
+        hplib_cop = float(results["COP"])
+        if hplib_cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
+            # Where hplib runs its rod alone, the compressor continues as at hplib's switch, its plane's COP at 1.
+            compressor_cop = 1.0
+            thermal_power_in_watt = self.fitted_electrical_power_in_watt(t_in_primary, outlet_in_celsius, t_amb)
+        else:
+            compressor_cop = hplib_cop
+            thermal_power_in_watt = float(results["P_th"])
+        if thermal_power_in_watt < p_th_min and int(self.group_id) in self.REGULATED_HPLIB_GROUPS:
+            # hplib's rule: the compressor draws more to reach the minimum, as far as its maximum allows.
+            thermal_power_in_watt = min(p_th_min, self.p_el_ref * compressor_cop)
+        cop = CarnotEfficiencyCop.cop(self.source_type, t_in_primary, outlet_in_celsius)
+        results["COP"] = cop
+        results["P_th"] = thermal_power_in_watt
+        results["P_el"] = thermal_power_in_watt / cop
+        results["m_dot"] = abs(thermal_power_in_watt / (self.delta_t * float(self.hplib_heat_pump.cp)))
+        return results
+
+
 class StandardizedSeasonalCop:
-    """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
+    """The seasonal COP of a heat pump by the bin method of EN 14825, average climate.
 
     What a manufacturer states on the datasheet or ErP fiche is a SCOP rated this way, so
-    computing the same figure for hplib's curve fit is what lets the fit be calibrated to it
-    (:class:`ScopCalibration`). The method, in the simplified form the calibration needs:
+    computing the same figure for the simulated machine (:class:`CarnotCopHeatPump`: hplib's thermal
+    power, the Carnot-efficiency COP) is what lets it be calibrated to it (:class:`ScopCalibration`).
+    The method, in the simplified form the calibration needs:
 
     * the heating season is :attr:`BINS`, one outdoor temperature per bin with its hours;
     * the building's demand falls linearly from the design load at :attr:`DESIGN_TEMPERATURE` to
@@ -38,9 +314,9 @@ class StandardizedSeasonalCop:
       reference sizing has it);
     * the outlet temperature follows the application's line, :attr:`FLOW_LINES`, through two
       points and extended beyond them;
-    * the machine modulates at the COP hplib gives for the bin (hplib's own 25 % electrical floor
-      is the only part-load limit it knows), and whatever the demand exceeds its output is met by
-      an electric back-up heater at COP 1, as is a bin where hplib's COP is 1 or less.
+    * the machine modulates at the COP it has in the bin (hplib's own 25 % electrical floor is the
+      only part-load limit it knows), and whatever the demand exceeds its output is met by an
+      electric back-up heater at COP 1, as is a bin where the machine's COP is 1 or less.
 
     Source: EN 14825:2022, average climate (bins -10 to +15 °C, 4910 h) and the variable-outlet
     lines of its low- (W35) and medium-temperature (W55) applications. For a brine/water machine
@@ -49,7 +325,7 @@ class StandardizedSeasonalCop:
 
     Example::
 
-        StandardizedSeasonalCop.of(heatpump, ScopApplication.W55)   # 3.40 for hplib's generic air/water fit
+        StandardizedSeasonalCop.of(heatpump, ScopApplication.W55)   # 3.33 for the air/water Carnot law
     """
 
     #: Outdoor bin temperature in °C and its hours in the EN 14825 average heating season.
@@ -118,11 +394,12 @@ class StandardizedSeasonalCop:
     def of(
         cls, heatpump: Any, application: ScopApplication, calibration: Optional["ScopCalibration"] = None
     ) -> float:
-        """Return the seasonal COP of one hplib heat pump for one application.
+        """Return the seasonal COP of one heat pump for one application.
 
         Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 (air/water) or 2 (brine/water); it is only
-                read, through pure ``simulate`` calls.
+            heatpump: A machine of hplib group 1 (air/water) or 2 (brine/water) that answers
+                ``simulate`` as ``hplib.HeatPump`` does, in HiSim a :class:`CarnotCopHeatPump`; it is
+                only read, through pure ``simulate`` calls.
             application: The rating's application, which picks the outlet-temperature line.
             calibration: Applied to every call when given, so the calibrated machine is rated.
 
@@ -149,7 +426,7 @@ class StandardizedSeasonalCop:
                 p_th_min=0,
             )
             if calibration is not None:
-                result = calibration.apply(heatpump, result, 1)
+                result = calibration.apply(result, 1)
             return float(result["P_th"]), float(result["COP"])
 
         design_load, _cop = run(cls.SIZING_OUTDOOR_TEMPERATURE, cls.SIZING_FLOW_TEMPERATURE)
@@ -166,12 +443,12 @@ class StandardizedSeasonalCop:
 
 
 class ScopCalibration:
-    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
+    """Scales a heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
 
-    hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole
-    database group, so the simulated machine is the average unit of its group. A stated
-    standardised SCOP says how much better or worse the real unit is. Every heating call multiplies
-    hplib's COP by a factor for its own outlet temperature and divides the compressor's
+    The simulated machine's COP is the Carnot-efficiency law fitted to the whole Keymark population
+    of its source type (:class:`CarnotEfficiencyCop`), so uncalibrated it is the average certified
+    unit. A stated standardised SCOP says how much better or worse the real unit is. Every heating
+    call multiplies the COP by a factor for its own outlet temperature and divides the compressor's
     electricity by it; the thermal output is unchanged, so the building gets the same heat for
     less or more electricity. The factors are solved (:meth:`of`) so that the calibrated machine,
     rated by :class:`StandardizedSeasonalCop`, gives exactly the stated SCOPs.
@@ -183,8 +460,8 @@ class ScopCalibration:
       the 55 °C factor to 0.2–0.5 for wide pairs (decision with Noah, 2026-09-23; the check against
       measured units is hisim-x2mu).
     * One stated: its factor everywhere.
-    * The heating rod is never calibrated: a call where hplib runs the rod alone (COP 1) is left
-      as it is, and in hplib's compressor-plus-rod branch only the compressor's share is scaled.
+    * The machine has no heating rod (:class:`CarnotCopHeatPump`), so every heating call is the
+      compressor's and is scaled.
     * Cooling (mode 2) is out of scope and left as hplib returns it.
 
     What the solve rests on: each rating is continuous and non-decreasing in each factor (a bin
@@ -197,15 +474,15 @@ class ScopCalibration:
     Example::
 
         calibration = ScopCalibration.of(heatpump, scop_w35=4.6, scop_w55=3.4)
-        calibration.apply(heatpump, heatpump.simulate(...), mode=1)
+        calibration.apply(heatpump.simulate(...), mode=1)
     """
 
     #: How close the calibrated rating must come to the stated SCOP.
     TOLERANCE: ClassVar[float] = 1e-5
 
-    #: The factors the solve searches between. At 0.001 no hplib COP comes near 1, so every bin
+    #: The factors the solve searches between. At 0.001 no calibrated COP comes near 1, so every bin
     #: runs its back-up heater and the rating is 1; at 1000 the compressor draws a thousandth of
-    #: hplib's electricity, and the back-up heater's share is all that still bounds a rating.
+    #: its electricity, and the back-up heater's share is all that still bounds a rating.
     MINIMUM_FACTOR: ClassVar[float] = 1e-3
     MAXIMUM_FACTOR: ClassVar[float] = 1e3
 
@@ -225,25 +502,30 @@ class ScopCalibration:
 
     @classmethod
     def of(
-        cls, heatpump: Any, scop_w35: Optional[float], scop_w55: Optional[float], machine: str = "hplib's fit"
+        cls,
+        heatpump: Any,
+        scop_w35: Optional[float],
+        scop_w55: Optional[float],
+        machine: str = "the Carnot-efficiency COP",
     ) -> "ScopCalibration":
-        """Return the factors that bring the fit, rated by the bin method, to the stated SCOPs.
+        """Return the factors that bring the machine, rated by the bin method, to the stated SCOPs.
 
         One rating: its factor is the root of ``rated(factor) = stated`` (:meth:`solve`). Two
         ratings: for a given W55 factor the W35 factor that rates W35 exactly is solved, and the
         W55 rating of that pair rises with the W55 factor (the W55 factor moves the W55 line's hot
-        bins more than the W35 factor it displaces moves its mild ones; checked on the Generic
-        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range),
-        so the W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
+        bins more than the W35 factor it displaces moves its mild ones; checked on hplib's Generic
+        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range,
+        and on the Carnot-efficiency law of both source types for the pairs of the tests), so the
+        W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
         the back-up heater's share of the season is not scaled, and with two ratings each factor
         reaches into the other rating's line. A typical pair takes a few hundred ratings, some tens
         of milliseconds.
 
         Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 or 2, only read.
+            heatpump: A :class:`CarnotCopHeatPump` of hplib group 1 or 2, only read.
             scop_w35: The stated W35 rating, or ``None``.
             scop_w55: The stated W55 rating, or ``None``.
-            machine: How a refusal names the fit, e.g. "hplib's Generic air/water fit".
+            machine: How a refusal names the machine, e.g. "the air/water Carnot-efficiency COP".
 
         Raises:
             ValueError: When no factors between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`
@@ -264,6 +546,7 @@ class ScopCalibration:
             ((application, target),) = stated.items()
 
             def single(factor: float) -> float:
+                """Return the rating of this application with one factor."""
                 return StandardizedSeasonalCop.of(heatpump, application, cls({application: factor}))
 
             at_lowest, at_highest = single(lowest), single(highest)
@@ -409,26 +692,26 @@ class ScopCalibration:
             )
         )
 
-    def apply(self, heatpump: Any, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
-        """Return hplib's results for one call with the calibration applied (a new dictionary)."""
+    def apply(self, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
+        """Return a machine's results for one call with the calibration applied (a new dictionary).
+
+        In heating the COP is multiplied by the factor at the call's outlet and the electricity divided by it; the
+        thermal power stays. For example, a W55 factor of 0.8 turns a COP of 3.0 at 6 kW into 2.4, and 2.0 kW of
+        electricity into 2.5 kW. Without factors, and in cooling, the results are returned as they are.
+
+        Args:
+            results: A :class:`CarnotCopHeatPump`'s answer, with ``COP``, ``P_th``, ``P_el`` and ``T_out``.
+            mode: 1 heating, 2 cooling.
+
+        Returns:
+            The calibrated answer.
+        """
         if not self.factors or mode != 1:
             return results
-        cop = float(results["COP"])
-        if cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
-            return results
         factor = self.factor(float(results["T_out"]))
-        p_th = float(results["P_th"])
-        p_el = float(results["P_el"])
-        rod = float(heatpump.p_th_ref)
-        compressor = float(heatpump.p_el_ref)
-        if abs(p_el - (compressor + rod)) < 1e-6 * max(p_el, 1.0):
-            # hplib's compressor-plus-rod branch: only the compressor's share is calibrated.
-            calibrated_el = compressor / factor + rod
-        else:
-            calibrated_el = p_el / factor
         calibrated = dict(results)
-        calibrated["P_el"] = calibrated_el
-        calibrated["COP"] = p_th / calibrated_el
+        calibrated["P_el"] = float(results["P_el"]) / factor
+        calibrated["COP"] = float(results["COP"]) * factor
         return calibrated
 
 
@@ -450,9 +733,10 @@ class HeatingCircuitPowers:
 @dataclass(frozen=True)
 class HplibResult:
 
-    """hplib's answer at one operating point, the numbers the heat pump computes with.
+    """The machine's answer at one operating point, the numbers the heat pump computes with.
 
-    An adapter between hplib's result dictionary and the heat pump: the heat pump reads typed fields instead of
+    An adapter between the result dictionary of :class:`CarnotCopHeatPump` (hplib's keys: hplib's thermal power,
+    outlet and flow, the Carnot-efficiency COP) and the heat pump: the heat pump reads typed fields instead of
     dictionary keys, and the interpolation between two cached grid points is one pure function
     (:meth:`interpolated`).
     """
@@ -461,9 +745,9 @@ class HplibResult:
     outlet_temperature_in_celsius: float
     #: The secondary side's mass flow, in kg/s (hplib's ``m_dot``).
     mass_flow_in_kg_per_second: float
-    #: hplib's own thermal power, in W (``P_th``).
+    #: The machine's thermal power, hplib's compressor capacity, in W (``P_th``).
     thermal_power_in_watt: float
-    #: hplib's own electrical power, in W (``P_el``).
+    #: The machine's electrical power, the thermal power over the COP, in W (``P_el``).
     electrical_power_in_watt: float
     #: The coefficient of performance, dimensionless (``COP``).
     cop: float
@@ -490,7 +774,8 @@ class HplibResult:
         )
 
     #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
-    #: books its reference thermal power as both heat and electricity.
+    #: books its reference thermal power as both heat and electricity. :class:`CarnotCopHeatPump` reads hplib's
+    #: own COP against it and replaces such an answer by the compressor's.
     HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
 
     @staticmethod
@@ -501,6 +786,11 @@ class HplibResult:
         to 1, and its thermal power jumps there: for example, for one machine, from 5.0 kW (compressor at a COP of
         1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
         turns that jump into a ramp of about 25 kW/K over 0.1 K.
+
+        Since the Carnot-efficiency COP (:class:`CarnotCopHeatPump`) replaced hplib's COP plane, the heat pump's
+        answers have no heating rod and no jump: their COP stays above 1 at every realistic lift, so this check
+        finds no switch there. It remains as the guard of the interpolation should a result at a COP of 1 or less
+        reach it.
 
         Args:
             lower: hplib's result at the lower grid point.

@@ -1966,6 +1966,13 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.Units.KG_PER_SEC,
             True,
         )
+        # A cylinder charged only through its solar coil, the secondary one, leaves its primary coil open: the
+        # circuit then moves no water and the balance leaves it out (hisim-dhw-tank-one-return-7kq2).
+        for primary_coil_input in (
+            self.water_temperature_heat_generator_input_channel,
+            self.water_mass_flow_rate_heat_generator_input_channel,
+        ):
+            primary_coil_input.allow_unconnected_mandatory = True
 
         self.water_temperature_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,

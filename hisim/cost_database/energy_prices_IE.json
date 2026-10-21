@@ -27,8 +27,8 @@
       "carrier": "ELECTRICITY_FEED_IN",
       "year": 2026,
       "working_price_in_euro_per_kwh": {
-        "min": 0.1,
-        "best_estimate": 0.15,
+        "min": 0.1589,
+        "best_estimate": 0.19,
         "max": 0.2
       },
       "standing_charge_in_euro_per_year": 0,
@@ -38,9 +38,17 @@
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
       "source_ids": [
-        "src_ai_estimates"
+        "src_cru_202454_clean_export_guarantee",
+        "src_ie_ceg_electric_ireland_2026",
+        "src_ie_ceg_sse_airtricity_2026",
+        "src_ie_ceg_bord_gais_energy_2026",
+        "src_ie_ceg_energia_2026",
+        "src_ie_ceg_prepaypower_2026",
+        "src_ie_ceg_community_power_2026",
+        "src_ie_ceg_electric_ireland_cut_2024"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+      "notes": "Clean Export Guarantee (CEG): every Irish supplier pays its customers for exported microgeneration at a rate it sets itself and may change at any time; the CRU requires the rate to reflect the market value of the export and guarantees no duration (CRU202454), so the row is MARKET_LINKED: no fixed period, the rate escalates with the ELECTRICITY rate from year 1, as Electric Ireland cut its export rate together with its import prices on 1 November 2024. Standard rates read on the suppliers' own pages on 2026-10-21: Electric Ireland and SSE Airtricity 19.5c, Bord Gais Energy and Energia 18.5c, PrepayPower 15.89c (14c excluding VAT), Community Power 20c. min = the lowest standard rate (PrepayPower, inclusive figure), best_estimate = 19.0c, the midpoint of the four largest suppliers' rates (18.5c to 19.5c), max = the highest standard rate (Community Power). Two-year promotional premiums tied to an installer (SSE Airtricity Activ8, 32c then 27c) are left out. No later row: no source projects the CEG rate, so a later year follows the market-linked escalation (the former 2035 row, 0.05/0.08/0.12, was an unsourced AI estimate). Rates are as published; suppliers state some including and some excluding VAT.",
+      "feed_in_kind": "MARKET_LINKED"
     },
     {
       "carrier": "NATURAL_GAS",
@@ -204,25 +212,6 @@
       "emission_factor_in_kg_per_kwh": 0.1,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.15,
-      "quantity_unit": "kWh",
-      "source_ids": [
-        "src_ai_estimates"
-      ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
-    },
-    {
-      "carrier": "ELECTRICITY_FEED_IN",
-      "year": 2035,
-      "working_price_in_euro_per_kwh": {
-        "min": 0.05,
-        "best_estimate": 0.08,
-        "max": 0.12
-      },
-      "standing_charge_in_euro_per_year": 0,
-      "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.0,
-      "co2_price_exposure": 0.0,
-      "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
       "source_ids": [
         "src_ai_estimates"

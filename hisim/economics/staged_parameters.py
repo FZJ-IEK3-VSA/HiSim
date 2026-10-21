@@ -1430,14 +1430,15 @@ class StagedParameters:
             if spelling not in {member.value for member in EnergyCarrier}:
                 continue  # already refused as an unknown key, with the carriers that exist
             if spelling == EnergyCarrier.ELECTRICITY_FEED_IN.value:
-                # The per-carrier table is read for what a carrier *costs*; the feed-in
-                # remuneration escalates with `escalation.feed_in` once its fixed period is over,
-                # so a rate here would be accepted and never read.
+                # The per-carrier table is read for what a carrier *costs*; a fixed feed-in tariff
+                # escalates with `escalation.feed_in` once its fixed period is over, and a
+                # market-linked one with the ELECTRICITY rate, so a rate here would never be read.
                 energy.refuse(
                     spelling,
                     ParameterProblemCodes.INVALID,
-                    "the feed-in remuneration is never escalated at a per-carrier rate: it is held "
-                    "fixed for its contract period and then follows `escalation.feed_in`.",
+                    "the feed-in remuneration has no per-carrier rate of its own: a fixed tariff is held "
+                    "fixed for its contract period and then follows `escalation.feed_in`, and a "
+                    "market-linked rate (Ireland's Clean Export Guarantee) follows the ELECTRICITY rate.",
                 )
                 continue
             rate = energy.number(spelling, above=-1.0)

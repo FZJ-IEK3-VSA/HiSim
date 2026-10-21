@@ -647,6 +647,78 @@
       "retrieved": "2026-10-14",
       "kind": "MARKET_SURVEY",
       "notes": "Official German construction price index (table last changed 2026-10-09). Joinery (DIN 18355: wooden and plastic doors and windows) is the nearest finishing-works component to front doors; the table has no doors-and-windows series. February 2015 = 80.3 (Q1 2015, IWU's price level), August 2026 = 149.5 (latest published quarter), factor 1.8618. For comparison: Bauleistungen am Bauwerk 78.3 -> 141.7 (factor 1.8097), Metallbauarbeiten 77.3 -> 142.5 (factor 1.8435). The index with and without VAT is identical over this span (19 % throughout)."
+    },
+    {
+      "id": "src_cru_202454_clean_export_guarantee",
+      "citation": "Commission for Regulation of Utilities (CRU): Clean Export Guarantee - Enduring Arrangements to Remunerate Customers for Microgeneration Exports, Decision Paper CRU202454, published 18 June 2024",
+      "url": "https://cruie-live-96ca64acab2247eca8a850a7e54b-5b34f62.divio-media.com/documents/Clean_Export_Guarantee-Enduring_Arrangements_to_Remunerate_Customers_for_Microgenerati.pdf",
+      "publication_year": 2024,
+      "retrieved": "2026-10-21",
+      "kind": "STATUTE",
+      "notes": "The Irish regulator's decision on the Clean Export Guarantee (CEG), which builds on the interim arrangements of CRU21131 (December 2021, in force since 15 February 2022). Section 4.1: suppliers set their own competitive export tariffs; the CRU sets none, keeps a regulated zero floor, and requires that the payment 'is reflective of the value in the market'; the flat-rate CEG tariffs on offer 'have generally ranged from circa 16c/kWh to 25c/kWh'; the CRU may review the decision if rates cease to be consistent with market value. Source of HiSim's MARKET_LINKED feed-in kind for Ireland: no rate is guaranteed for any duration."
+    },
+    {
+      "id": "src_ie_ceg_electric_ireland_2026",
+      "citation": "Electric Ireland: Microgeneration (Clean Export Guarantee export rate), tariff page",
+      "url": "https://www.electricireland.ie/residential/products/microgeneration",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'a current Microgen export rate of 19.5c per kWh' (read 2026-10-21). Ireland's largest electricity supplier."
+    },
+    {
+      "id": "src_ie_ceg_electric_ireland_cut_2024",
+      "citation": "David Hurley, Kildare Now: 'Blow for homeowners with solar panels as Electric Ireland confirms rate cut', 4 November 2024",
+      "url": "https://www.kildarenow.com/news/national-news/1647009/blow-for-homeowners-with-solar-panels-as-electric-ireland-confirms-rate-cut.html",
+      "publication_year": 2024,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "Electric Ireland cut its export rate from 21c to 19.5c per kWh with effect from 1 November 2024, announced on the same day it implemented a cut of its import prices: the supplier moves the export rate with the electricity price, which is what the MARKET_LINKED kind models."
+    },
+    {
+      "id": "src_ie_ceg_sse_airtricity_2026",
+      "citation": "SSE Airtricity: Help centre, Microgeneration, 'What is the rate per kWh for the Clean Export Guarantee (CEG) Microgeneration?'",
+      "url": "https://www.sseairtricity.com/ie/home/help-centre/microgeneration",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'Eligible customers with Microgen will receive a clean export tariff of 19.5cent per kWh payable four times a year. This rate is subject to change.' (read 2026-10-21). The Activ8 premium (12.5c in year 1 and 7.5c in year 2 on top, only for installs by an Activ8 partner, two years only) is a promotion and is not part of HiSim's band."
+    },
+    {
+      "id": "src_ie_ceg_bord_gais_energy_2026",
+      "citation": "Bord Gais Energy: Microgeneration (Microgen Export Plan), tariff page",
+      "url": "https://www.bordgaisenergy.ie/home/microgeneration",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'18.5 cent per kWh for any excess electricity that they are microgenerating and exporting to the electricity grid under our Microgen Export Plan' (read 2026-10-21)."
+    },
+    {
+      "id": "src_ie_ceg_energia_2026",
+      "citation": "Energia: Energia Microgeneration Rate and Guide, tariff page",
+      "url": "https://www.energia.ie/microgeneration",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'Energia currently offers a competitive rate of 18.5 cent (18.5c/kWh) for every unit of surplus electricity you export back to the grid' (read 2026-10-21)."
+    },
+    {
+      "id": "src_ie_ceg_prepaypower_2026",
+      "citation": "PrepayPower: Support, Microgeneration, 'What rate will I get paid?'",
+      "url": "https://www.prepaypower.ie/support/microgeneration",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'PrepayPower currently offers a rate of 14c* (15.89 inc. VAT) per unit (kWh) exported to the grid' (read 2026-10-21); the lowest standard CEG rate found. The two figures do not reconcile at Ireland's 9 % VAT rate; HiSim takes the published inclusive figure, 15.89c, as the low end of its band."
+    },
+    {
+      "id": "src_ie_ceg_community_power_2026",
+      "citation": "Community Power: Frequently asked questions, 'What is the Rate per kWh for the Clean Energy Guarantee for Micro Generation?'",
+      "url": "https://communitypower.ie/frequently-asked-questions/",
+      "publication_year": 2026,
+      "retrieved": "2026-10-21",
+      "kind": "MARKET_SURVEY",
+      "notes": "'Community Power has set a rate of 20 cent per kWh produced effective from 1st July 2023' (read 2026-10-21); the highest standard CEG rate found, and the high end of HiSim's band. Flogas publishes the same figure including VAT (18.5c excluding it)."
     }
   ]
 }

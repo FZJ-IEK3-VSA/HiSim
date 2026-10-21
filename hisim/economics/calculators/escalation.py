@@ -4,7 +4,8 @@ Rates are nominal annual price-change rates as fractions (0.02 = 2 %/a); a negat
 Callers choose the exponent: year-anchored flows (a replacement in year t, the residual value, the anyway credit) use
 the year itself, while recurring payments quoted at year-1 prices (maintenance, energy, feed-in) use `year - 1`, so
 year 1 is unescalated. Discounting is not done here. Rate values live in `EconomicParameters` and
-`escalation_defaults_<COUNTRY>.json`.
+`escalation_defaults_<COUNTRY>.json`; which one a feed-in payment follows depends on its kind
+(`resolve_feed_in_escalation_rate`).
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.results import RateOrigin, ResolvedRate
+from hisim.economics.tariffs import FeedInKind, TariffContract
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
 
@@ -99,6 +101,31 @@ def resolve_carrier_escalation_rate(
     return ResolvedRate(
         rate=parameters.general_price_escalation_rate, origin=RateOrigin.GENERAL_FALLBACK
     )
+
+
+def resolve_feed_in_escalation_rate(
+    contract: TariffContract, parameters: EconomicParameters, database: CostDatabase
+) -> ResolvedRate:
+    """Return the rate a contract's feed-in revenue escalates with once its fixed period is over.
+
+    A MARKET_LINKED rate follows the electricity market, so it escalates with the escalation rate of the contract's
+    own carrier, resolved through :func:`resolve_carrier_escalation_rate`: for Ireland's Clean Export Guarantee that is
+    the ELECTRICITY rate of `escalation_defaults_IE.json` unless the run configures one. Every other kind escalates at
+    `EconomicParameters.feed_in_escalation_rate`, which an EEG tariff reaches only after its nominally fixed
+    `duration_in_years`. The energy calculator, the year-0 price shift and the assumptions table all call this, so they
+    escalate with the same rate.
+
+    Args:
+        contract: The contract the carrier was billed under, carrying the feed-in terms.
+        parameters: The run's economic parameters.
+        database: Loaded cost database, consulted for `escalation_defaults_<COUNTRY>.json`.
+
+    Returns:
+        The rate and the step of the fallback chain that produced it.
+    """
+    if contract.feed_in.kind is FeedInKind.MARKET_LINKED:
+        return resolve_carrier_escalation_rate(contract.carrier, parameters, database)
+    return ResolvedRate(rate=parameters.feed_in_escalation_rate, origin=RateOrigin.CONFIGURATION)
 
 
 def investment_escalation_rate(

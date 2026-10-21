@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import FeedInKind
 from hisim.economics.database import CostDataError, SourceRegistry
 from hisim.economics.facts import BillingDeterminants
 from hisim.economics.timeline import CostCategory
@@ -54,19 +55,6 @@ class CapacityChargeKind(str, enum.Enum):
     ANNUAL_PEAK = "ANNUAL_PEAK"
     MONTHLY_PEAK = "MONTHLY_PEAK"
     PEAK_WINDOW = "PEAK_WINDOW"
-
-
-class FeedInKind(str, enum.Enum):
-    """How exported energy is paid for.
-
-    A fixed statutory tariff stays nominally constant for its contract duration; spot-referenced direct marketing
-    follows the market. ``calculators/energy.py`` holds the year-1 revenue nominally fixed for ``duration_in_years``
-    and escalates it only afterwards.
-    """
-
-    NONE = "NONE"
-    FIXED_TARIFF = "FIXED_TARIFF"  # EEG, nominally constant for its duration
-    SPOT_REFERENCED = "SPOT_REFERENCED"  # direct marketing
 
 
 class ControllabilityKind(str, enum.Enum):
@@ -138,16 +126,29 @@ class CapacityCharge:
 class FeedIn:
     """Feed-in remuneration terms: what each sold kWh earns, for how long, and on what basis.
 
-    Under ``SPOT_REFERENCED`` the payment is `spot_factor` times the natively integrated spot revenue plus
-    `markup_in_euro_per_kwh` per kWh sold. The factor is the share of the spot proceeds the direct marketer passes on
-    (1.0 = all) and applies to the spot term only.
+    Under ``FIXED_TARIFF`` and ``MARKET_LINKED`` every kWh sold earns `rate_in_euro_per_kwh`; the two differ in how
+    `calculators/energy.py` projects the rate (see `FeedInKind`). Under ``SPOT_REFERENCED`` the payment is `spot_factor`
+    times the natively integrated spot revenue plus `markup_in_euro_per_kwh` per kWh sold. The factor is the share of
+    the spot proceeds the direct marketer passes on (1.0 = all) and applies to the spot term only.
     """
 
     kind: FeedInKind = FeedInKind.NONE
     rate_in_euro_per_kwh: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
-    duration_in_years: int = 20  # nominal-fixed period for FIXED_TARIFF (EEG convention)
+    duration_in_years: int = 20  # nominal-fixed period for FIXED_TARIFF (EEG convention); unused by MARKET_LINKED
     spot_factor: float = 1.0  # SPOT_REFERENCED: share of the spot proceeds paid out (1.0 = all)
     markup_in_euro_per_kwh: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
+
+    @property
+    def fixed_period_in_years(self) -> int:
+        """Return the number of years the year-1 revenue is held nominally constant before it escalates.
+
+        Example: an EEG tariff with `duration_in_years` 20 is held for 20 years; a MARKET_LINKED rate, which nothing
+        fixes, for none, so it escalates from year 2 on. The energy calculator and the year-0 price shift both read
+        this, so the two cannot disagree about when a feed-in payment starts to move.
+        """
+        if self.kind is FeedInKind.MARKET_LINKED:
+            return 0
+        return self.duration_in_years
 
 
 @dataclass
@@ -736,7 +737,7 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
 
     # Feed-in revenue (negative).
     if contract.feed_in.kind != FeedInKind.NONE and determinants.energy_sold_in_kwh > 0:
-        if contract.feed_in.kind == FeedInKind.FIXED_TARIFF:
+        if contract.feed_in.kind.pays_rate_per_kwh:
             revenue = contract.feed_in.rate_in_euro_per_kwh.scale(determinants.energy_sold_in_kwh)
         else:  # SPOT_REFERENCED
             if determinants.revenue_integrated_in_euro is not None:

@@ -88,10 +88,13 @@
           "properties": {
             "general": {"type": "number"},
             "investment": {"type": "number"},
-            "feed_in": {"type": "number"},
+            "feed_in": {
+              "type": "number",
+              "description": "The rate a fixed feed-in tariff (Germany's EEG) escalates with once its 20 nominally fixed years are over. A market-linked feed-in (Ireland's Clean Export Guarantee) has no fixed period and escalates with energy.ELECTRICITY from year 1 instead; this rate does not apply to it."
+            },
             "energy": {
               "type": "object",
-              "description": "The per-carrier energy price escalation rate each carrier was priced with, for every carrier a stage bills and every carrier the plan named; origins.escalation.energy says where each came from. As an input of `staged --parameters` a rate here is stated; ELECTRICITY_FEED_IN is refused, its remuneration follows feed_in.",
+              "description": "The per-carrier energy price escalation rate each carrier was priced with, for every carrier a stage bills and every carrier the plan named; origins.escalation.energy says where each came from. As an input of `staged --parameters` a rate here is stated; ELECTRICITY_FEED_IN is refused: a fixed feed-in tariff follows feed_in after its fixed period, a market-linked one follows ELECTRICITY.",
               "propertyNames": {"enum": ["ELECTRICITY", "ELECTRICITY_FEED_IN", "NATURAL_GAS", "HEATING_OIL", "PELLETS", "WOOD_CHIPS", "DISTRICT_HEATING", "HYDROGEN", "DIESEL"]},
               "additionalProperties": {"type": "number"}
             }

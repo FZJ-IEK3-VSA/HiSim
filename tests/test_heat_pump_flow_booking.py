@@ -643,6 +643,36 @@ def test_the_hot_water_controller_takes_every_transition_of_its_table(
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    ("state", "storage_temperature_in_celsius", "raise_in_kelvin", "expected"),
+    [
+        (HeatPumpDhwState.ON, 57.0, 0.0, HeatPumpDhwState.OFF),  # switch-off 3 K below 60 °C, not 2 K
+        (HeatPumpDhwState.OFF, 57.5, 10.0, HeatPumpDhwState.OFF),  # surplus switch-on stops 3 K below 60 °C
+    ],
+)
+def test_the_hot_water_controller_ends_a_charge_at_its_configured_distance_below_the_target(
+    state: HeatPumpDhwState, storage_temperature_in_celsius: float, raise_in_kelvin: float, expected: HeatPumpDhwState
+) -> None:
+    """With a 3 K charge end, the switch-off and the surplus switch-on both sit at 57 °C, not the default's 58 °C.
+
+    The table above runs the default 2 K only, so a 2 K written into
+    :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` in place of its argument would pass it; each row here
+    sits between 57 and 58 °C, where the two disagree.
+    """
+    assert (
+        MoreAdvancedHeatPumpHPLibControllerDHW.next_state(
+            state=state,
+            storage_temperature_in_celsius=storage_temperature_in_celsius,
+            raise_in_kelvin=raise_in_kelvin,
+            minimum_temperature_in_celsius=40.0,
+            maximum_temperature_in_celsius=60.0,
+            charge_end_below_target_in_kelvin=3.0,
+        )
+        == expected
+    )
+
+
+@pytest.mark.base
 def test_the_hot_water_charge_ends_two_kelvin_below_its_target_by_default() -> None:
     """A charge that runs on to within 0.5 K of its capped supply empties the space-heating buffer.
 

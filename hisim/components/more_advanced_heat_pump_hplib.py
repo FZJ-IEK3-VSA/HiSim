@@ -3602,13 +3602,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     #: How far below its target, ``t_max`` plus the energy manager's raise, a hot-water charge ends, in K: the charge
     #: ends once the tank's start-of-step temperature is at or above the target less this. The heat pump's hot-water
     #: supply is capped at the target, so the tank approaches it without reaching it and its last kelvins come slowly:
-    #: on household_heatpump_building_sizer (full year 2021, 900 s) a charge that ended 0.5 K below the target ran
-    #: 75 minutes in the median and up to 120, its last steps at 3.0, 1.5 and 0.9 kW, while the space-heating buffer
+    #: on household_heatpump_building_sizer (full year 2021, 900 s) a charge that ended 0.5 K below the target ran 75
+    #: minutes in the median and up to 195, its last steps at 3.0, 1.5 and 0.9 kW, while the space-heating buffer
     #: emptied. A real cylinder is charged through a coil that needs its flow some kelvins above the water to pass a
     #: useful power, so a charge whose flow is capped at the target stops a few kelvins short of it. 2 K is a stated
     #: default, not a manufacturer's value: the owner's decision of 2026-10-21 (hisim-room-air-dhw-dip-a5by), where it
-    #: cut the steps with a room-air drop above 1 K from 182 to 116. The surplus switch-on stops at the same distance
-    #: below ``t_max`` (:meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state`).
+    #: cut the quarter-hours with a room-air drop above 1 K during hot water from 160 to 101. The surplus switch-on
+    #: stops at the same distance below ``t_max`` (:meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state`).
     charge_end_below_target_in_kelvin: float = field(default=2.0, metadata={"unit": Units.KELVIN})
 
     def __post_init__(self) -> None:
@@ -3635,10 +3635,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
-        """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
+        """The fleet's hot-water controller, reheating the vessel from 40 °C until 2 K below its 60 °C set temperature.
 
-        The field defaults are that controller: the 40/60 °C band that keeps the vessel above the
-        legionella temperature without cycling the machine on every tap.
+        The field defaults are that controller: the 40/60 °C band, which keeps the machine from cycling on every tap,
+        and a charge that ends 2 K below the 60 °C set temperature (:attr:`charge_end_below_target_in_kelvin`).
 
         Args:
             name: Instance name of the controller in the simulation.

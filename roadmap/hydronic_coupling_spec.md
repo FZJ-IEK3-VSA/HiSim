@@ -281,7 +281,8 @@ dropped the cap). The district-heating substation throttles at its set temperatu
 step past it, which made the fuel and electricity depend on the step length (gas fuel +4.4 % at 3600 s against
 60 s over a year before the cap). This is an in-step supply cap at the controller's target, not a forecast: the
 controller still decides on `T0` (D4, §10). A supply capped at the set temperature brings the tank towards it but
-never past it, so the heat pump's hot-water controller ends a charge within 0.5 K of it (§5.5).
+never past it, so the heat pump's hot-water controller ends a charge `charge_end_below_target_in_kelvin` (2 K by
+default) below it (§5.5).
 
 ### 5.1 Boiler (D1: power control kept)
 
@@ -408,7 +409,7 @@ solar) and 607.2 → 1237.9 / 571.7 → 1229.7 kWh (heat pump + solar), the back
 solar, reaches 80.56 °C at 3600 s in heat pump + solar, and a 20 m² collector runs the year at 900 s (at most 80.05 °C)
 and at 3600 s (at most 83.63 °C), below the tank's 90 °C check. A tank above a backup's aim keeps that backup off,
 since each decides on `T0` against its own aim (§5.5): 60
-°C for the boiler, the district-heating substation and the electric heater, and for the heat pump 59.5 °C, or up to 69.5
+°C for the boiler, the district-heating substation and the electric heater, and for the heat pump 58 °C, or up to 68
 °C while the energy manager raises its set temperature on PV surplus, which still lies below the solar maximum. The
 larger standby loss of the hotter tank is accepted (owner: "more losses of solar heat really don't matter").
 
@@ -462,16 +463,20 @@ on/off controllers and no `DhwChargeYield`; #864's `StorageForecast` and `DhwCha
 priority stays in `DiverterValve` (`dual_circuit_system.py:108-112`), one circuit per step (D6). Whether
 heat-pump buffers run dry and underheat at coarse steps once the vessels conserve energy (hisim-6ehm) is a
 validation item (§9.4); if it returns, it is solved then. The heat pump's hot-water controller ends a charge when
-`T0 ≥ t_max + raise − 0.5 K` (owner,
-2026-10-09; since 2026-10-21 `MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin`,
-2 K by default, hisim-room-air-dhw-dip-a5by): its supply is capped at `t_max + raise` (§5.2), so the tank approaches that target without passing it,
-and with the former strict `T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at
-60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
-`t_max − 0.5 K` (owner decision, 2026-10-09): at `t_max`, a tank between `t_max − 0.5 K` and
-`t_max` would be switched on with the raise and off without it, and the raise follows the heat pump's draw, so it
-can come and go within a step (hisim-component-physics-4g9.28); with the stop at the same point the charge's state cannot toggle with
-it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on at `t_max`, 97983 with it at
-`t_max − 0.5 K`). The solar pump decided on the node's `T̄` from 2026-10-09 to
+`T0 ≥ t_max + raise − charge_end_below_target_in_kelvin`, with
+`MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin` 2 K by default (owner,
+2026-10-21, hisim-room-air-dhw-dip-a5by): 58 °C, or 68 °C under the energy manager's raise. Its supply is capped at
+`t_max + raise` (§5.2), so the tank approaches that target without passing it, and with the former strict
+`T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at 60 s). The owner's decision of
+2026-10-09 ended it at `t_max + raise − 0.5 K`; at 0.5 K the last kelvins came slowly (a charge ran 75 minutes in the
+median and up to 195 at 900 s) while the space-heating buffer emptied, which the 2 K of 2026-10-21 shortens. The
+energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
+`t_max − charge_end_below_target_in_kelvin` (owner decision, 2026-10-09, then at `t_max − 0.5 K`): at `t_max`, a
+tank between `t_max − charge_end_below_target_in_kelvin` and `t_max` would be switched on with the raise and off
+without it, and the raise follows the heat pump's draw, so it can come and go within a step
+(hisim-component-physics-4g9.28); with the stop at the same point the charge's state cannot toggle with it (forced
+steps of the heat-pump twin's year at 60 s, measured with the 0.5 K of 2026-10-09: 112312 with the switch-on at
+`t_max`, 97983 with it at `t_max − 0.5 K`). The solar pump decided on the node's `T̄` from 2026-10-09 to
 2026-10-11 and decides on `T0` since (§5.3). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
 `T̄`: the controller's set temperature is a constant, and the controller still switches on `T0`.
 
@@ -757,7 +762,8 @@ node's step mean `T̄` and the collector's answer there to switch the pump on (�
 `T0` like every other controller, on the collector's answer at `T0`. The in-step supply cap at the
 controller's set temperature (§5) relates to D4 as a limit, not a forecast: the generator stops its supply at the
 controller's target inside the step, while the controller still decides on `T0`; the heat pump's hot-water
-controller ends a charge within 0.5 K of its set temperature, since a capped supply never passes it (§5.5).
+controller ends a charge `charge_end_below_target_in_kelvin` (2 K by default) below its set temperature, since a
+capped supply never passes it (§5.5).
 *Amendment (owner, 2026-10-11):* the solar controller's full-tank stop is its own maximum storage temperature,
 80 °C, not the backups' 60 °C warm-water aim (§5.3, hisim-hydronics-fxix.22); every controller still decides on `T0` against
 its own temperature, and nothing ranks the collector against the backup.

@@ -2,17 +2,20 @@
 
 ``assemblies_spec.md`` §4.1-§4.3 and the lean v1 of §13.1. HiSim has no bus: a meter and an energy
 manager are dynamic components that declare in their constructor which outputs of which classes
-they take, with which tags and at which weight (``add_dynamic_default_connections``). ``observes:
-declared`` is what HiSim's ``connect_automatically`` makes of that declaration over the components
+they take, with which tags and at which weight (``add_dynamic_default_connections``); the
+electricity meter instead takes every electricity port any component declares, by the port's role.
+``observes: declared`` is what HiSim's ``connect_automatically`` makes of that declaration over the components
 present; a list of selectors filters it. So the selection runs where the observer exists, in the
 wiring planner, which plans the returned feeds like written ones; the realized record writes them
 into the observer's inputs, and a re-run selects nothing.
 
 **Candidates and order.** Every output of every other present component, in file order (site
 entries, then the imports, each instance as written), that the observer declares a feed from, in
-the order it declares them; an observer never matches its own outputs, and a declared output the
-constructed source does not have (a heat pump built without its DHW side) is no candidate. A selector that matches
-nothing is refused (``EF-7S``), as is an observer whose class declares no feeds at all.
+the order it declares them (``default_connections_for``: by the component's class, or, for the
+electricity meter, by the electricity ports the component declares); an observer never matches its own
+outputs, and a declared output the constructed source does not have (a heat pump built without its DHW side) is
+no candidate. A selector that matches nothing is refused (``EF-7S``), as is an observer whose class declares no
+feeds at all.
 
 **Control** (§4.4, D11, D21, D27). An observer whose class declares a feed at a weight other than
 the monitored-only weight (``FeedRequest.MONITORED_ONLY_WEIGHT``, 999) ranks it: a controller, the
@@ -205,7 +208,8 @@ class SelectionPlan:
         """One observer's feeds: its candidates, filtered by its selection, ranked."""
         target = components[observer.component]
         declared = getattr(target, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None) or {}
-        if not any(declared.values()):
+        declares = getattr(target, "declares_default_connections", None)
+        if not (declares() if callable(declares) else any(declared.values())):
             raise self.error(
                 EnergySystemErrorId.OBSERVER_SELECTION,
                 observer.component,
@@ -217,7 +221,7 @@ class SelectionPlan:
             DynamicConnectionResolver.feed_from_declaration(declaration, observer.component, name)
             for name, component in components.items()
             if name != observer.component
-            for declaration in declared.get(component.get_classname(), ())
+            for declaration in DynamicConnectionResolver.default_feeds_of(target, component)
             if declaration.source_component_field_name in outputs[name]
         ]
         listed = ", ".join(f"{feed.source}.{feed.output}" for feed in candidates) or "none"

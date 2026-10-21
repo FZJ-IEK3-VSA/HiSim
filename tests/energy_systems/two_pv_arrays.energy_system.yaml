@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=../../hisim/energy_system_v3.schema.json
 # Hand-written test fixture of tests/test_multiple_pv_arrays.py: a household with two PV arrays, a south one of 4 kWp
 # and a west one of 2 kWp, beside a battery sized to both and the energy manager maximising self-consumption. The
-# meter observes the manager's grid balance. Both arrays are ordinary PVSystem entries with names of their own;
-# the manager takes one production input per array.
+# meter reads every electricity port by its role, never the manager's grid balance. Both arrays are ordinary
+# PVSystem entries with names of their own; the manager and the meter take one production input per array.
 schema_version: 3
 name: two_pv_arrays
 description: A household with a south and a west array, a battery and the self-consumption manager.
@@ -33,9 +33,27 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
-      - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
+      - from: Battery.ChargingPower
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: Battery.DischargingPower
         tags:
           - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: PVSouth.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: PVWest.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999
   Battery:
     class: hisim.components.advanced_battery_bslib.Battery

@@ -106,4 +106,3 @@ imports:
   grid:
     order: 13
     assembly: supply/electricity_grid
-    observes: [{output: TotalElectricityToOrFromGrid}]      # the manager's grid balance only, never its flows twice

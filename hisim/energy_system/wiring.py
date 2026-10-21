@@ -374,7 +374,7 @@ class WiringPlanner:
         target = self.components_by_name[consumer]
         source_class = source.get_classname()
         static = target.default_connections.get(source_class) or []
-        dynamic = self.resolver.default_feeds_of(target, source_class)
+        dynamic = self.resolver.default_feeds_of(target, source)
         origin = f"the bare item '{item.source}' of '{consumer}'"
         if static and dynamic:
             raise EnergySystemWiringError(

@@ -63,7 +63,6 @@ components:
     preset: standard
     inputs:
       - from: SolarThermalSystem.ElectricityConsumptionOutput
-        component_type: SOLAR_THERMAL_SYSTEM
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999

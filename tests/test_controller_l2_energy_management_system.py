@@ -356,21 +356,11 @@ def test_house(
         src_object=loading_power_input_for_battery_in_watt,
     )
 
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Electricity Meter
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_electricity_controller.component_name,
-        source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=999,
-    )
-
     # =================================================================================================================================
     # Add Remaining Components to Simulation Parameters
 
-    my_sim.add_component(my_electricity_meter)
+    # the meter reads every electricity port by its role, never the energy manager's balance
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
@@ -800,15 +790,16 @@ def test_a_port_grown_while_wiring_becomes_a_result_column(tmp_path) -> None:
 
 
 @pytest.mark.base
-def test_a_meter_connected_automatically_beside_the_manager_reads_its_grid_balance_once(tmp_path) -> None:
-    """Catches the meter's declared feed from the manager's balance landing twice, or not at all.
+def test_a_meter_connected_automatically_beside_the_manager_reads_the_devices_not_the_balance(tmp_path) -> None:
+    """Catches the meter billing the manager's grid balance instead of the devices' electricity ports.
 
-    The real ``ElectricityMeter`` declares a dynamic default connection from the real manager's
-    ``TotalElectricityToOrFromGrid``; with both added with ``connect_automatically=True`` the
-    simulator resolves it to exactly one input of the meter.
+    A meter reads physics ports only (bead hisim-component-physics-4g9.39): with both added with
+    ``connect_automatically=True``, the meter reads each of the heat pump's electricity ports once and nothing of
+    the manager, whose ``TotalElectricityToOrFromGrid`` is a controller's sum for its own decisions.
     """
     my_sim = _simulator(str(tmp_path))
-    my_sim.add_component(_heat_pump("HeatPump"))
+    heat_pump = _heat_pump("HeatPump")
+    my_sim.add_component(heat_pump)
     manager = _energy_manager()
     my_sim.add_component(manager, connect_automatically=True)
     meter = electricity_meter.ElectricityMeter(
@@ -819,9 +810,15 @@ def test_a_meter_connected_automatically_beside_the_manager_reads_its_grid_balan
 
     my_sim.prepare_calculation()
 
-    balance = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.TotalElectricityToOrFromGrid
-    feeds = [item for item in meter.inputs if item.src_field_name == balance]
-    assert [(item.src_object_name, item.src_field_name) for item in feeds] == [(manager.component_name, balance)]
+    assert not [item for item in meter.inputs if item.src_object_name == manager.component_name]
+    heat_pump_reads = [
+        str(item.src_field_name) for item in meter.inputs if item.src_object_name == heat_pump.component_name
+    ]
+    assert sorted(heat_pump_reads) == [
+        "ElectricalInputPowerBrinePump",
+        "ElectricalInputPowerForCooling",
+        "ElectricalInputPowerSH",
+    ]
 
 
 @pytest.mark.base

@@ -51,6 +51,8 @@ components:
       - boiler_controller
       - input: WaterInputTemperatureSh
         from: hds.WaterTemperatureOutput
+      - input: WaterInputMassFlowSh
+        from: hds.WaterMassFlowHDS
   boiler_controller:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating

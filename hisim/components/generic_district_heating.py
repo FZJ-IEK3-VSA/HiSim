@@ -237,7 +237,6 @@ class DistrictHeating(PhysicsComponent):
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
-    WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
     # Output
     WaterOutputShTemperature = "WaterOutputShTemperature"
@@ -325,13 +324,6 @@ class DistrictHeating(PhysicsComponent):
                 DistrictHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
-                True,
-            )
-            self.water_input_mass_flow_rate_dhw_channel: ComponentInput = self.add_input(
-                self.component_name,
-                DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                LoadTypes.WARM_WATER,
-                Units.KG_PER_SEC,
                 True,
             )
 
@@ -485,8 +477,17 @@ class DistrictHeating(PhysicsComponent):
 
     def get_default_connections_from_simple_dhw_storage(
         self,
-    ):
-        """Get simple dhw storage default connections."""
+    ) -> List[ComponentConnection]:
+        """Return the default connection from the hot-water tank: the tank's step mean, the hot-water circuit's return.
+
+        The substation pumps the hot-water circuit itself and books its heat from its own flow, so it reads only the
+        temperature the tank sends back, not a flow of the tank. For example, a tank whose step mean is 50 °C sends
+        50 °C back to the substation, which heats that water to its hot-water supply temperature.
+
+        Returns:
+            The one connection from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
+            ``WaterInputTemperatureDhw``.
+        """
 
         component_class = SimpleDHWStorage
         connections = []
@@ -496,13 +497,6 @@ class DistrictHeating(PhysicsComponent):
                 DistrictHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
-            )
-        )
-        connections.append(
-            ComponentConnection(
-                DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                hws_classname,
-                component_class.WaterMassFlowRateOfDHW,
             )
         )
         return connections

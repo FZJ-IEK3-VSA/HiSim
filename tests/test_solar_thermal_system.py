@@ -17,10 +17,7 @@ from hisim.components import (
     weather,
 )
 from hisim.components.controller_l2_energy_management_system import EMSConfig
-from hisim.components.more_advanced_heat_pump_hplib import (
-    MoreAdvancedHeatPumpHPLibControllerDHW,
-    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
-)
+from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from tests import functions_for_testing as fft
@@ -863,8 +860,8 @@ class BackupAims:
     def heat_pump_raised_aim_in_celsius() -> float:
         """Return the tank temperature at which the heat pump ends a charge under the energy manager's full raise, °C.
 
-        The heat pump's controller ends a hot-water charge 0.5 K below its set temperature, and the energy manager
-        raises that set temperature by its hot-water offset (10 K) while PV surplus is available: 69.5 °C.
+        The heat pump's controller ends a hot-water charge its charge end (2 K) below its set temperature, and the
+        energy manager raises that set temperature by its hot-water offset (10 K) while PV surplus is available: 68 °C.
 
         Returns:
             The raised aim, in °C.
@@ -875,7 +872,7 @@ class BackupAims:
         return (
             config.t_max_dhw_storage_in_celsius
             + raise_in_kelvin
-            - MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
+            - config.charge_end_below_target_in_kelvin
         )
 
 
@@ -884,7 +881,7 @@ def test_the_solar_maximum_lies_above_the_warm_water_aim_of_every_backup() -> No
     """Catches a solar maximum storage temperature at or below a temperature a backup generator charges the tank to.
 
     The boiler, the district-heating substation and the electric heater charge to their 60 °C warm-water aim, the
-    heat pump to 59.5 °C and, under the energy manager's raise, to 69.5 °C. With the solar maximum at or below such an
+    heat pump to 58 °C and, under the energy manager's raise, to 68 °C. With the solar maximum at or below such an
     aim, the full-storage stop would hold the pump on sunny days while that backup supplies heat the sun could have
     delivered. The maximum stays within the 60 to 80 °C real solar controllers are set to.
     """
@@ -898,7 +895,7 @@ def test_the_solar_maximum_lies_above_the_warm_water_aim_of_every_backup() -> No
         "boiler": 60.0,
         "district heating": 60.0,
         "electric heater": 60.0,
-        "heat pump, raised": 69.5,
+        "heat pump, raised": 68.0,
     }
     assert max(aims_in_celsius.values()) < maximum_in_celsius <= 80.0
 

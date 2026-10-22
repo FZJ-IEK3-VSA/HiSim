@@ -6,7 +6,7 @@ Here we test the cluster household.
 import os
 import shutil
 from math import isclose, isnan
-from typing import Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple, Type
 from uuid import uuid4
 import pandas as pd
 import pytest
@@ -210,6 +210,151 @@ def test_values_are_same_order_of_magnitude(values: List, expected: bool) -> Non
 PATH = "../system_setups/household_test_timeresolutions.py"
 
 
+class StorageHeatBalance:
+    """The heat balance of the cluster house's two storages over the one-day run, a namespace.
+
+    A storage's yearly ``ThermalEnergyIncreaseInStorage`` is a state difference, not a flow: its sum over the run is the
+    heat capacity times the temperature at the end of the run less the one at its start, ``C (T_end - T_start)``. It
+    depends on where the tank stands in its charge cycle at the end of the day, so its ratio across step lengths means
+    nothing: with the heat pump's charge ending 2 K below its target (PR #1098) the hot-water tank's increase was 40.6 /
+    2512.9 / 2791.0 Wh at 15 / 30 / 60 min. The test compares the flow instead, the heat the tank passed on: the heat
+    charged less the stored increase, which is the tap's heat (or the heat distribution's draw) plus the standby loss,
+    13203 / 13283 / 12912 Wh for the hot-water tank there. The balance itself, charged less drawn less lost equals the
+    stored increase, is checked per run, so a storage that loses or creates heat still fails;
+    tests/test_dhw_chain_time_resolution.py compares the same flow.
+
+    Each entry of ``STORAGES`` names the storage's class and the yearly-result output through which heat leaves the
+    storage other than its standby loss, with the sign that makes it a heat leaving: the hot-water tank's
+    ``ThermalEnergyConsumptionDHW`` is positive, the buffer's ``ThermalEnergyFromHeatDistribution`` negative.
+    """
+
+    #: The storages' configured names in :func:`run_cluster_house`, each with its class, its draw and the draw's sign.
+    STORAGES: ClassVar[Dict[str, Tuple[Type[simple_water_storage.SimpleWaterStorage], str, float]]] = {
+        "DHWStorage": (
+            simple_water_storage.SimpleDHWStorage,
+            simple_water_storage.SimpleDHWStorage.ThermalEnergyConsumptionDHW,
+            1.0,
+        ),
+        "SimpleHotWaterStorage": (
+            simple_water_storage.SimpleHotWaterStorage,
+            simple_water_storage.SimpleHotWaterStorage.ThermalEnergyFromHeatDistribution,
+            -1.0,
+        ),
+    }
+    #: The length of the run of :func:`run_cluster_house` (``SimulationParameters.one_day_only``), in h; the yearly
+    #: value of the standby loss is its mean power in W, so the run's loss in Wh is that power times this.
+    RUN_DURATION_IN_HOURS: float = 24.0
+    #: How far the balance of one run may miss, in Wh: the yearly values are sums of floats, nothing else.
+    BALANCE_ABSOLUTE_TOLERANCE_IN_WATT_HOUR: float = 1e-3
+    #: How far the heat passed on may differ across the step lengths, relative; :func:`values_are_similar`'s 5 %.
+    PASSED_ON_RELATIVE_TOLERANCE: float = 0.05
+
+    @staticmethod
+    def key(storage_name: str, field_name: str) -> str:
+        """Return the yearly-result key of a storage's heating output, e.g. ``DHWStorage|Heating|StandbyHeatLoss``.
+
+        Args:
+            storage_name: The storage's configured name.
+            field_name: The output's field name.
+
+        Returns:
+            The key of the output in the yearly-results CSV.
+        """
+        return f"{storage_name}|Heating|{field_name}"
+
+    @classmethod
+    def is_stored_heat(cls, key: str) -> bool:
+        """Return whether a yearly-result key is a storage's stored-heat increase, which the ratio check skips.
+
+        Args:
+            key: A key of the yearly-results CSV.
+
+        Returns:
+            True for ``<storage>|Heating|ThermalEnergyIncreaseInStorage`` of either storage, else False.
+        """
+        storage_class: Any
+        for storage_name, (storage_class, _, _) in cls.STORAGES.items():
+            if key == cls.key(storage_name, storage_class.ThermalEnergyIncreaseInStorage):
+                return True
+        return False
+
+    @classmethod
+    def values(cls, result_dict: Dict, storage_name: str, field_name: str) -> List[float]:
+        """Return one heating output of a storage, one value per run, as floats.
+
+        Args:
+            result_dict: The yearly results, each key with one value per step length.
+            storage_name: The storage's configured name.
+            field_name: The output's field name.
+
+        Returns:
+            One value per run, in the output's yearly unit (Wh for an energy, W for a power).
+        """
+        return [float(value) for value in result_dict[cls.key(storage_name, field_name)]]
+
+    @classmethod
+    def charged_in_watt_hour(cls, result_dict: Dict, storage_name: str) -> List[float]:
+        """Return the heat the storage's generators charged it with, the primary's plus the secondary's, per run, in Wh.
+
+        Args:
+            result_dict: The yearly results, each key with one value per step length.
+            storage_name: The storage's configured name.
+
+        Returns:
+            One value per run.
+        """
+        storage_class: Any = cls.STORAGES[storage_name][0]
+        primary = cls.values(result_dict, storage_name, storage_class.ThermalEnergyFromHeatGenerator)
+        secondary = cls.values(result_dict, storage_name, storage_class.ThermalEnergyFromSecondaryHeatGenerator)
+        return [a + b for a, b in zip(primary, secondary)]
+
+    @classmethod
+    def passed_on_in_watt_hour(cls, result_dict: Dict, storage_name: str) -> List[float]:
+        """Return the heat the storage passed on, charged less stored, per run, in Wh: the draw plus the loss.
+
+        Args:
+            result_dict: The yearly results, each key with one value per step length.
+            storage_name: The storage's configured name.
+
+        Returns:
+            One value per run.
+        """
+        storage_class: Any = cls.STORAGES[storage_name][0]
+        charged = cls.charged_in_watt_hour(result_dict, storage_name)
+        stored = cls.values(result_dict, storage_name, storage_class.ThermalEnergyIncreaseInStorage)
+        return [heat_in - increase for heat_in, increase in zip(charged, stored)]
+
+    @classmethod
+    def assert_balanced(cls, result_dict: Dict, storage_name: str) -> None:
+        """Assert per run that the heat charged less the heat drawn less the standby loss is the stored increase.
+
+        For example, the hot-water tank's 15-minute run on the branch of PR #1098: 13243.8 Wh charged less 12655.5 Wh
+        drawn at the tap less 22.8 W of standby loss over 24 h (547.6 Wh) is the 40.6 Wh the stored heat rose by.
+
+        Args:
+            result_dict: The yearly results, each key with one value per step length.
+            storage_name: The storage's configured name.
+
+        Raises:
+            AssertionError: If a run's balance misses by more than ``BALANCE_ABSOLUTE_TOLERANCE_IN_WATT_HOUR``.
+        """
+        storage_class: Any
+        storage_class, draw_field_name, draw_sign = cls.STORAGES[storage_name]
+        for charged, draw, loss_power_in_watt, stored in zip(
+            cls.charged_in_watt_hour(result_dict, storage_name),
+            cls.values(result_dict, storage_name, draw_field_name),
+            cls.values(result_dict, storage_name, storage_class.StandbyHeatLoss),
+            cls.values(result_dict, storage_name, storage_class.ThermalEnergyIncreaseInStorage),
+        ):
+            drawn_in_watt_hour = draw_sign * draw
+            lost_in_watt_hour = loss_power_in_watt * cls.RUN_DURATION_IN_HOURS
+            balance_in_watt_hour = charged - drawn_in_watt_hour - lost_in_watt_hour
+            assert balance_in_watt_hour == pytest.approx(stored, abs=cls.BALANCE_ABSOLUTE_TOLERANCE_IN_WATT_HOUR), (
+                f"{storage_name}: charged {charged} Wh less drawn {drawn_in_watt_hour} Wh less lost "
+                f"{lost_in_watt_hour} Wh is {balance_in_watt_hour} Wh, but the stored heat rose by {stored} Wh."
+            )
+
+
 @utils.measure_execution_time
 @pytest.mark.extendedbase
 def test_cluster_house_for_several_time_resolutions():
@@ -264,6 +409,11 @@ def test_cluster_house_for_several_time_resolutions():
         # its yearly cell is NaN at every resolution, which is the same result each time.
         if all(isnan(float(value)) for value in values):
             continue
+        # A storage's stored-heat increase is a state difference over the run, not a flow; the heat passed on and
+        # the balance are checked below instead (StorageHeatBalance).
+        if StorageHeatBalance.is_stored_heat(key):
+            print(key, values, "(a state difference, checked through the storage's heat balance)")
+            continue
         is_invariant = False
         # for these components the outputs must be identical as they are predefined input data
         for component_name in invariant_yearly_component_names:
@@ -291,6 +441,16 @@ def test_cluster_house_for_several_time_resolutions():
         f"Expected invariant yearly-result components {sorted(missing_invariant_yearly_components)} not found in "
         f"yearly results; available keys: {list(result_dict)}."
     )
+    for storage_name in StorageHeatBalance.STORAGES:
+        StorageHeatBalance.assert_balanced(result_dict, storage_name)
+        passed_on_in_watt_hour = StorageHeatBalance.passed_on_in_watt_hour(result_dict, storage_name)
+        print(storage_name, "heat passed on in Wh", passed_on_in_watt_hour)
+        assert values_are_similar(
+            lst=passed_on_in_watt_hour, relative_tolerance=StorageHeatBalance.PASSED_ON_RELATIVE_TOLERANCE
+        ), (
+            f"{storage_name}: the heat passed on, charged less stored, {passed_on_in_watt_hour} Wh, differs by more "
+            f"than {StorageHeatBalance.PASSED_ON_RELATIVE_TOLERANCE:.0%} across time resolutions."
+        )
     # go through all opex consumptions and compare if results are all the same
     print("\n")
     print("Opex consumptions in kWh")

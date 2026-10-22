@@ -3582,7 +3582,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
 
     The hysteresis in front of the machine's hot-water side: it switches the machine on
     when the DHW vessel has cooled to :attr:`t_min_dhw_storage_in_celsius` and off again
-    when it has reached :attr:`t_max_dhw_storage_in_celsius`. The named default is
+    when it has come within :attr:`charge_end_below_target_in_kelvin` of
+    :attr:`t_max_dhw_storage_in_celsius` (58 °C by default). The named default is
     :meth:`preset_standard`, the 40/60 °C band the fleet runs::
 
         MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
@@ -3598,14 +3599,46 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     t_min_dhw_storage_in_celsius: float = 40.0
     #: upper set temperature of DHW Storage, given in °C
     t_max_dhw_storage_in_celsius: float = 60.0
+    #: How far below its target, ``t_max`` plus the energy manager's raise, a hot-water charge ends, in K: the charge
+    #: ends once the tank's start-of-step temperature is at or above the target less this. The heat pump's hot-water
+    #: supply is capped at the target, so the tank approaches it without reaching it and its last kelvins come slowly:
+    #: on household_heatpump_building_sizer (full year 2021, 900 s) a charge that ended 0.5 K below the target ran 75
+    #: minutes in the median and up to 195, its last steps at 3.0, 1.5 and 0.9 kW, while the space-heating buffer
+    #: emptied. A real cylinder is charged through a coil that needs its flow some kelvins above the water to pass a
+    #: useful power, so a charge whose flow is capped at the target stops a few kelvins short of it. 2 K is a stated
+    #: default, not a manufacturer's value: the owner's decision of 2026-10-21 (hisim-room-air-dhw-dip-a5by), where it
+    #: cut the quarter-hours with a room-air drop above 1 K during hot water from 160 to 101. The surplus switch-on
+    #: stops at the same distance below ``t_max`` (:meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state`).
+    charge_end_below_target_in_kelvin: float = field(default=2.0, metadata={"unit": Units.KELVIN})
+
+    def __post_init__(self) -> None:
+        """Refuse a charge end that is not above 0 K or not below the band, naming the field and the value.
+
+        For example, the default 2 K with the 40/60 °C band is accepted; 0 K is refused, since the capped supply never
+        brings the tank to its target and a charge would not end, and 20 K is refused, since the charge would end at
+        or below the 40 °C switch-on point and start and end on the same reading.
+
+        Raises:
+            ValueError: If ``charge_end_below_target_in_kelvin`` is not a finite number above 0 K and below
+                ``t_max_dhw_storage_in_celsius - t_min_dhw_storage_in_celsius``.
+        """
+        band_in_kelvin = self.t_max_dhw_storage_in_celsius - self.t_min_dhw_storage_in_celsius
+        end_in_kelvin = self.charge_end_below_target_in_kelvin
+        if not math.isfinite(end_in_kelvin) or not 0.0 < end_in_kelvin < band_in_kelvin:
+            raise ValueError(
+                f"The heat pump's hot-water controller needs charge_end_below_target_in_kelvin above 0 K and below "
+                f"its {band_in_kelvin} K band (t_max_dhw_storage_in_celsius - t_min_dhw_storage_in_celsius), got "
+                f"{end_in_kelvin!r} K: at 0 K the capped supply never brings the tank to the end of the charge, and "
+                "at the band or above the charge ends where it starts."
+            )
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
-        """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
+        """The fleet's hot-water controller, reheating the vessel from 40 °C until 2 K below its 60 °C set temperature.
 
-        The field defaults are that controller: the 40/60 °C band that keeps the vessel above the
-        legionella temperature without cycling the machine on every tap.
+        The field defaults are that controller: the 40/60 °C band, which keeps the machine from cycling on every tap,
+        and a charge that ends 2 K below the 60 °C set temperature (:attr:`charge_end_below_target_in_kelvin`).
 
         Args:
             name: Instance name of the controller in the simulation.
@@ -3648,14 +3681,6 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
-
-    #: How far below its set temperature the tank's start temperature may stay for the charge to end, K. The heat
-    #: pump's hot-water supply stops at the set temperature (``t_max`` plus the energy manager's raise), so the tank
-    #: approaches it but never passes it; the charge ends once the tank is within 0.5 K of it, as a boiler's charge
-    #: ends at its target. The surplus switch-on stops at the same point below ``t_max``: were it at ``t_max``, a tank
-    #: between ``t_max - 0.5 K`` and ``t_max`` would be switched on by the raise and off without it, and the energy
-    #: manager's raise, which follows the heat pump's draw, would toggle it within a step.
-    SWITCH_OFF_TOLERANCE_IN_KELVIN: ClassVar[float] = 0.5
 
     def __init__(
         self,
@@ -3718,8 +3743,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
             Units.CELSIUS,
             output_description=(
                 "The hot-water supply temperature the controller aims at, t_max plus the energy manager's raise "
-                "(60 °C by default). The heat pump's hot-water supply stops at it, so a charge ends at its target "
-                "inside the step."
+                "(60 °C by default). The heat pump's hot-water supply stops at it, and a charge ends once the tank "
+                "is within the controller's charge end (2 K by default) of it."
             ),
         )
 
@@ -3815,6 +3840,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
         raise_in_kelvin: float,
         minimum_temperature_in_celsius: float,
         maximum_temperature_in_celsius: float,
+        charge_end_below_target_in_kelvin: float,
     ) -> "HeatPumpDhwState":
         """Return the hot-water state after one decision on the tank's start-of-step temperature.
 
@@ -3823,13 +3849,18 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
         | condition | next state |
         |---|---|
         | the tank is below ``minimum_temperature_in_celsius`` | ON |
-        | the tank is at or above ``maximum + raise - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | OFF |
-        | a raise above 0 and the tank below ``maximum - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | ON |
+        | the tank is at or above ``maximum + raise - charge_end_below_target_in_kelvin`` | OFF |
+        | a raise above 0 and the tank below ``maximum - charge_end_below_target_in_kelvin`` | ON |
         | none of these | the state as it was |
 
         The raise is the energy manager's increase of the set temperature while it has surplus electricity. For
-        example, with the 40/60 °C band and no raise a tank at 50 °C keeps its state, one at 39 °C switches on and
-        one at 59.5 °C switches off; with a 10 K raise, a tank at 59 °C switches on and charges until 69.5 °C.
+        example, with the 40/60 °C band, the default 2 K charge end and no raise, a tank at 50 °C keeps its state, one
+        at 39 °C switches on and one at 58 °C switches off; with a 10 K raise, a tank at 57 °C switches on and charges
+        until 68 °C.
+
+        Why the surplus switch-on stops at the charge end below ``maximum`` and not at ``maximum``: a tank between the
+        two would be switched on by the raise and off without it, and the energy manager's raise, which follows the
+        heat pump's draw, can come and go within a step, so the charge would toggle with it.
 
         Args:
             state: The state before the decision.
@@ -3837,6 +3868,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
             raise_in_kelvin: The energy manager's raise of the set temperature, in K, 0 or more.
             minimum_temperature_in_celsius: The tank temperature below which a charge starts, in °C.
             maximum_temperature_in_celsius: The set temperature without a raise, in °C.
+            charge_end_below_target_in_kelvin: How far below the target, ``maximum + raise``, a charge ends, in K
+                (:attr:`MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin`).
 
         Returns:
             The state after the decision.
@@ -3844,14 +3877,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
         next_state = state
         if storage_temperature_in_celsius < minimum_temperature_in_celsius:
             next_state = HeatPumpDhwState.ON
-        switch_off_tolerance_in_kelvin = MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
         if storage_temperature_in_celsius >= (
-            maximum_temperature_in_celsius + raise_in_kelvin - switch_off_tolerance_in_kelvin
+            maximum_temperature_in_celsius + raise_in_kelvin - charge_end_below_target_in_kelvin
         ):
-            # the tank has reached its target, to which the heat pump's supply is capped
+            # the tank has come as close to its target, to which the heat pump's supply is capped, as a charge goes
             next_state = HeatPumpDhwState.OFF
         if raise_in_kelvin > 0 and storage_temperature_in_celsius < (
-            maximum_temperature_in_celsius - switch_off_tolerance_in_kelvin
+            maximum_temperature_in_celsius - charge_end_below_target_in_kelvin
         ):
             # on with surplus electricity, below where the unraised charge ends, so a raise that comes and goes
             # within a step cannot switch the charge on and off
@@ -3882,6 +3914,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
                 raise_in_kelvin=raise_in_kelvin,
                 minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
                 maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+                charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
             )
 
         self.previous_state_dhw = self.state_dhw

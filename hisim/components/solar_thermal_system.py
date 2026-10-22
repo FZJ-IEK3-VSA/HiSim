@@ -1451,14 +1451,14 @@ class SolarThermalSystemController(L1ControllerComponent):
     SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN: ClassVar[float] = 3.0
 
     #: The maximum storage temperature: the storage temperature above which the pump stops, in °C. It is the solar
-    #: controller's own limit, above the 60 °C warm-water aim the backup generators (boiler, heat pump, district
-    #: heating, electric heater) charge to, and above the 69.5 °C the heat pump charges to while the energy manager
+    #: controller's own limit, above the 60 °C warm-water aim the backup generators (boiler, district heating, electric
+    #: heater) charge to, above the 58 °C the heat pump charges to and the 68 °C it charges to while the energy manager
     #: raises its set temperature on PV surplus. Solar controllers let the sun heat the tank past the backup's set point
-    #: up to a maximum storage temperature that installers set between about 60 and 80 °C; a thermostatic mixing
-    #: valve at the tap keeps the water drawn at the tap temperature, so a hotter tank does not scald and delivers
-    #: the same heat to the tap. With a maximum equal to the backup's aim the tank waits just below 60 °C on sunny
-    #: days and the backup supplies what the sun could have. The owner chose 80 °C, the upper end, on 2026-10-11: the
-    #: larger standby loss of the hotter tank is accepted.
+    #: up to a maximum storage temperature that installers set between about 60 and 80 °C; a thermostatic mixing valve
+    #: at the tap keeps the water drawn at the tap temperature, so a hotter tank does not scald and delivers the same
+    #: heat to the tap. With a maximum equal to the backup's aim the tank waits just below 60 °C on sunny days and the
+    #: backup supplies what the sun could have. The owner chose 80 °C, the upper end, on 2026-10-11: the larger standby
+    #: loss of the hotter tank is accepted.
     MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 80.0
 
     #: How far below the maximum storage temperature the storage must start a step before a pump the full storage

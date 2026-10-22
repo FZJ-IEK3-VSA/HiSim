@@ -245,7 +245,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 | Device | Controller (owner of the PLR and the target) | Target | Booking below PLR 1 |
 |---|---|---|---|
 | `GenericBoiler`, hot water, every fuel | `GenericBoilerController` | its warm-water aim, 60 °C (the charge ends at `T0 ≥ 60 °C`) | `PLR m_full` at the full-load supply; heat `m c (T_sup − T_ret)`; fuel `PLR · fuel_full` |
-| `MoreAdvancedHeatPumpHPLib`, hot water (parked, #916) | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less the 0.5 K switch-off tolerance | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
+| `MoreAdvancedHeatPumpHPLib`, hot water (parked, #916) | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less `charge_end_below_target_in_kelvin`, 2 K by default (the charge ends at `T0 ≥ 58 °C`, 68 °C under the raise) | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
 | `ElectricHeating`, hot water (parked, #916) | `ElectricHeatingController` | the 60 °C warm-water aim, where the diverter valve ends a charge alone and beside space heating (its parallel mode latches like the hot-water mode) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
 | `SolarThermalSystem`, pump (#917) | `SolarThermalSystemController` | its maximum storage temperature, 80 °C since 2026-10-11 (the pump stops at `T0 > 80 °C` and restarts at `T0 ≤ 77 °C`); 60 °C, the backups' warm-water aim, before | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
 
@@ -270,7 +270,7 @@ the rule to the same end temperature, each with its own ratio run and target, an
 - with equal targets (gas boiler and collector, both 60 °C until 2026-10-11) the rule scales both ratios by the same
   factor, so the store's rise follows the same line as with one device and lands as fast; the split is the one the
   two ratios had when they started, not a unique one;
-- with different targets (heat pump: 59.5 °C, 69.5 °C under the energy manager's raise; boiler: 60 °C; collector:
+- with different targets (heat pump: 58 °C, 68 °C under the energy manager's raise; boiler: 60 °C; collector:
   80 °C since 2026-10-11, owner decision, hisim-hydronics-fxix.22) the device with the lower target sees the store above its
   band once the other reaches its own aim, and its ratio decays geometrically towards 0, by the factor
   `(T_aim,low − T_start) / (T_end − T_start)` per pass, without swinging back; it reaches 0 only in the limit, so such

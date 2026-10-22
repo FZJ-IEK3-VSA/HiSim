@@ -55,6 +55,18 @@ class MixedNodeStepTooLongError(ValueError):
     """
 
 
+class CoilWiredByHalfError(ValueError):
+    """A storage whose secondary charging circuit has only one of its two inputs wired: its flow or its supply temperature.
+
+    A charging circuit (a coil) brings heat into a storage as its mass flow times water's specific heat times the
+    difference between its supply temperature and the storage's return. With the supply temperature wired and the
+    flow not, the unwired flow reads 0 kg/s: the generator books heat that the storage never receives. With the flow
+    wired and the temperature not, the storage mixes in water at 0 °C. Raised by :class:`SimpleHotWaterStorage` and
+    :class:`SimpleDHWStorage` when they are prepared, before the first step
+    (:meth:`SimpleWaterStorage.refuse_a_coil_wired_by_half`).
+    """
+
+
 @unique
 class HotWaterStorageSizingEnum(str, Enum):
     """Set Simple Hot Water Storage sizing options.
@@ -366,6 +378,43 @@ class SimpleWaterStorage(cp.PhysicsComponent):
                 f"The water temperature in the {storage_label} is with {mean_water_temperature_in_celsius}°C"
                 " way too high or too low."
             )
+
+    @staticmethod
+    def refuse_a_coil_wired_by_half(
+        *, component_name: str, mass_flow_input: ComponentInput, temperature_input: ComponentInput
+    ) -> None:
+        """Refuse a charging circuit of which only the mass flow or only the supply temperature is wired.
+
+        A storage books a charging circuit from two inputs, its mass flow in kg/s and its supply temperature in °C,
+        and an input that is not wired reads 0. Both wired is a circuit, neither wired is no circuit; one of the two
+        is a wiring error that would silently lose or invent heat. For example, a hot-water tank whose
+        ``WaterTemperatureFromSecondaryHeatGenerator`` is wired to a solar collector's supply while
+        ``WaterMassFlowRateFromSecondaryHeatGenerator`` is not wired never receives the heat the collector books.
+
+        Called from ``i_prepare_simulation``, which the simulator runs after this component's explicit and default
+        wires are made, so the check runs once before the first step and not in the step loop. It reads the source
+        an input was wired to (``src_object_name``); the source output itself is resolved only after every component
+        has been prepared.
+
+        Args:
+            component_name: The storage's name, for the message.
+            mass_flow_input: The circuit's mass-flow input, in kg/s.
+            temperature_input: The circuit's supply-temperature input, in °C.
+
+        Raises:
+            CoilWiredByHalfError: If exactly one of the two inputs is wired.
+        """
+        mass_flow_is_wired = mass_flow_input.src_object_name is not None
+        temperature_is_wired = temperature_input.src_object_name is not None
+        if mass_flow_is_wired == temperature_is_wired:
+            return
+        wired, unwired = (mass_flow_input, temperature_input) if mass_flow_is_wired else (temperature_input, mass_flow_input)
+        raise CoilWiredByHalfError(
+            f"The storage '{component_name}' has its input '{wired.field_name}' wired to "
+            f"'{wired.src_object_name}.{wired.src_field_name}' but its input '{unwired.field_name}' not wired. A "
+            f"charging circuit needs both '{mass_flow_input.field_name}' and '{temperature_input.field_name}': wire "
+            f"'{unwired.field_name}' to the same generator's matching output, or wire neither."
+        )
 
     def calculate_masses_of_water_flows(
         self,
@@ -751,7 +800,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.WaterMassFlowRateFromHeatDistributionSystem,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
-            False,
+            True,
         )
 
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
@@ -768,7 +817,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 self.WaterMassFlowRateFromHeatGenerator,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
-                False,
+                True,
             )
             self.water_temperature_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
@@ -1063,8 +1112,24 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
 
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
-        pass
+        """Refuse a secondary generator circuit that is wired by half, before the first step.
+
+        A buffer parallel to its heat source books its secondary generator's circuit from two optional inputs, the
+        circuit's mass flow and its supply temperature. A buffer without a secondary generator wires neither; one
+        wired without the other loses or invents heat, so it is refused here
+        (:meth:`SimpleWaterStorage.refuse_a_coil_wired_by_half`). For example, a gas boiler's supply temperature
+        wired to ``WaterTemperatureFromSecondaryHeatGenerator`` without its mass flow is refused. A buffer in series
+        with its heat source has no generator inputs and nothing to check.
+
+        Raises:
+            CoilWiredByHalfError: If only one of the secondary circuit's two inputs is wired.
+        """
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
+            self.refuse_a_coil_wired_by_half(
+                component_name=self.component_name,
+                mass_flow_input=self.water_mass_flow_rate_secondary_heat_generator_input_channel,
+                temperature_input=self.water_temperature_secondary_heat_generator_input_channel,
+            )
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
@@ -2307,8 +2372,22 @@ class SimpleDHWStorage(SimpleWaterStorage):
             )
 
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
-        pass
+        """Refuse a secondary charging coil that is wired by half, before the first step.
+
+        The tank books its secondary coil, such as a solar collector's circuit, from two optional inputs, the coil's
+        mass flow and its supply temperature. A tank without a secondary coil wires neither; one wired without the
+        other loses or invents heat, so it is refused here (:meth:`SimpleWaterStorage.refuse_a_coil_wired_by_half`).
+        For example, a solar collector's supply temperature wired to ``WaterTemperatureFromSecondaryHeatGenerator``
+        without its mass flow is refused.
+
+        Raises:
+            CoilWiredByHalfError: If only one of the secondary coil's two inputs is wired.
+        """
+        self.refuse_a_coil_wired_by_half(
+            component_name=self.component_name,
+            mass_flow_input=self.water_mass_flow_rate_secondary_heat_generator_input_channel,
+            temperature_input=self.water_temperature_secondary_heat_generator_input_channel,
+        )
 
     def write_to_report(self) -> List[str]:
         """Write a report."""

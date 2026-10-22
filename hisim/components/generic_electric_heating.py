@@ -187,7 +187,6 @@ class ElectricHeating(PhysicsComponent):
     #: The hot-water supply temperature the controller aims at: the heater's hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
-    WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
     #: The lift at which the hot-water side runs at its maximal power, in K: it regulates its power as
     #: ``P = P_max lift / 100 K``, so a 25 K lift draws a quarter of the maximal power.
@@ -270,13 +269,6 @@ class ElectricHeating(PhysicsComponent):
                 ElectricHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
-                True,
-            )
-            self.water_input_mass_flow_rate_dhw_channel: ComponentInput = self.add_input(
-                self.component_name,
-                ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                LoadTypes.WARM_WATER,
-                Units.KG_PER_SEC,
                 True,
             )
 
@@ -423,8 +415,17 @@ class ElectricHeating(PhysicsComponent):
 
     def get_default_connections_from_simple_dhw_storage(
         self,
-    ):
-        """Get simple dhw storage default connections."""
+    ) -> List[ComponentConnection]:
+        """Return the default connection from the hot-water tank: the tank's step mean, the hot-water circuit's return.
+
+        The heater pumps the hot-water circuit itself and books its heat from its own flow, so it reads only the
+        temperature the tank sends back, not a flow of the tank. For example, a tank whose step mean is 50 °C sends
+        50 °C back to the heater, which heats that water to its hot-water supply temperature.
+
+        Returns:
+            The one connection from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
+            ``WaterInputTemperatureDhw``.
+        """
 
         component_class = SimpleDHWStorage
         hws_classname = component_class.get_classname()
@@ -433,11 +434,6 @@ class ElectricHeating(PhysicsComponent):
                 ElectricHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
-            ),
-            ComponentConnection(
-                ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                hws_classname,
-                component_class.WaterMassFlowRateOfDHW,
             ),
         ]
 

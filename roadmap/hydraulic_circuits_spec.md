@@ -1,7 +1,7 @@
 # Spec: named hydraulic circuits — every water loop has an id, one declared pump owner and a conservation check in every step
 
-Status: draft; the owner's five decisions of 2026-10-22 are recorded (§2), the open questions Q0 to Q6 (§5) wait
-for the owner. Nothing is built. Owner: Noah. Epic: hisim-hydraulic-circuits-wci7 (`owner-decision`). Builds on:
+Status: draft; the owner's six decisions of 2026-10-22 are recorded (§2: D1 to D5, and D7 after the first draft's review),
+the open questions Q0 to Q6 (§5) wait for the owner. Nothing is built. Owner: Noah. Epic: hisim-hydraulic-circuits-wci7 (`owner-decision`). Builds on:
 `roadmap/hydronic_coupling_spec.md` (§3 circuits and pump owners, §3.5 `HydronicPort`, §4.6 D25 with its amendment
 of 2026-10-22, D1 with its exception of 2026-10-22), #1117 (the boiler without a buffer heats the flow the heat
 distribution system pumps), #1119 (a storage reads the flow of every circuit whose temperature it reads), the open
@@ -63,9 +63,10 @@ The owner's decisions of 2026-10-22 (Noah), verbatim. Numbers are never reused; 
 |---|---|---|---|
 | D1 | **Fluid circuits with an id.** Every device connected to a circuit has, per circuit, a mass-flow input, a mass-flow output, a temperature input and a temperature output (one such set per circuit, so a buffer or tank on several circuits has several sets). | owner, 2026-10-22 | A loop is a named thing in the model, and every member publishes what left it, not only what it decided. Today's three quantities per loop become four per member (§4.1); every receiver gains a mass-flow output and every pump owner a mass-flow input. |
 | D2 | **Detection, not prevention.** No shared circuit-level flow value. Each device publishes its own outputs through ports (black boxes). A violation fails hard. Owner: "why prevent? what advantage do we gain with the added complexity?" | owner, 2026-10-22 | The circuit holds no value and computes nothing (§4.2). The components stay black boxes that talk through ports; a device that breaks conservation is caught, not corrected. |
-| D3 | **The pump owner is explicit.** No implicit pumps or roles derived from positioning, list order or position enums. Owner: "that is not salient and usually a bad design choice." Each circuit has exactly one explicitly declared pump owner, checked at build. The `PositionHotWaterStorageInSystemSetup` enums (three of them) then go. | owner, 2026-10-22 | Who pumps is written in the system description, once per circuit (§4.3, Q3). The build refuses a circuit with zero or two pump owners. The three enums are removed (§7; the HDS's lag half of its enum goes with hisim-pnw7). |
+| D3 | **The pump owner is explicit.** No implicit pumps or roles derived from positioning, list order or position enums. Owner: "that is not salient and usually a bad design choice." Each circuit has exactly one explicitly declared pump owner, checked at build. The `PositionHotWaterStorageInSystemSetup` enums (three of them) then go. | owner, 2026-10-22 | Who pumps is stated by the pump owner's own port set, in code or in its configuration (§4.3, Q3; D7). The build refuses a loop with zero or two pumping port sets. The three enums are removed (§7; the HDS's lag half of its enum goes with hisim-pnw7). |
 | D4 | **The check runs every step, in the pump component:** `if abs(massflow_in - massflow_out) > tolerance: raise CircuitError(...)`. It goes in `i_doublecheck`, which the simulator calls once per step after convergence (`simulator.py:503`), not in `i_simulate`, which runs every pass, where the returning flow can lag a pass. The error names the circuit, the device, the step and both flows. | owner, 2026-10-22 | `Component.i_doublecheck` gets its first production use (§4.4). The check costs one subtraction per circuit per step, outside the convergence loop. |
 | D5 | **Forced steps need no exception.** Only controllers are forced; physics always converges (a physics non-convergence aborts at 100 passes). Mass flows and temperatures are physics outputs, so they are converged in every step. | owner, 2026-10-22 | The check has no "forced" branch and no tolerance widening for forced steps (§4.4). |
+| D7 | **No top-level declaration.** Owner, verbatim: "no top level declaration. the ports themselves should declare that they belong to a fluid loop". That is: no top-level `circuits:` block in the energy-system YAML, no `Simulator.add_circuit`, no assembly-level circuit declaration. A component's port set itself declares that it belongs to a fluid loop. | owner, 2026-10-22 | A loop is what the wiring connects: the build finds it by following the port sets' wires from member to member (§4.3), and refuses a loop that does not close, a port set wired outside a loop, or a flow read by two loops. The loop's id is derived from its pump owner's component and port-set name (§4.3). Nothing is told to a component at build; whether a port set pumps is stated in code or in the component's configuration (Q3). The first draft's `circuits:` block, `add_circuit`, `pump: true` on assembly ends and `join_circuit` are withdrawn. D1 to D5, Q0, Q1, Q2, Q5 and the dry run (§6) are unchanged by it. |
 
 *Proposed, not decided (agent, 2026-10-22; the owner's confirmation is Q0):* **D6 — HiSim keeps "no buses"; a named
 circuit is not one.** A bus balances: it takes several contributions and solves for what is missing. A named circuit
@@ -80,9 +81,14 @@ messages go. Deleting a bus changes results.
   returns to the first. Recorded systems have only two-member loops (a generator and a store, a store and the HDS, a
   generator and the HDS, a collector and a tank). A buffer in series with its heat source (`SERIES_TO_HEAT_SOURCE`,
   no recorded system) is a three-member loop: generator → HDS → buffer → generator.
-- **Circuit id**: the name the system description gives one circuit (`space_heating`, `dhw`, `solar_dhw`,
-  `buffer_to_distribution`). It is unique within one energy system and appears in every error that concerns the loop.
-  Assemblies already use these ids for their circuit ends (`energy_systems/assemblies/`, `{circuit: dhw, member: …}`).
+- **Circuit id**: the name of one loop, derived at build from its pump owner's component name and port-set role
+  (`hds.distribution`, `CondensingGasBoiler.dhw`, `SolarThermalSystem.solar_dhw`; §4.3), never written in a file (D7).
+  It is unique within one energy system, because a component name is and a component pumps each of its port sets at
+  most once, and it appears in every error that concerns the loop. The assemblies' circuit names (`{circuit: dhw,
+  member: …}` in `energy_systems/assemblies/`) are a binding-time vocabulary of the assembly format and stay what they
+  are; they are not this id.
+- **Loop discovery**: how the build finds a loop from the wiring alone (§4.3): from any port set, its flow-out output
+  is read by exactly one other port set's flow-in input; follow it, and repeat, until the start is reached again.
 - **Member**: a device connected to a circuit. A device may be a member of several circuits (a buffer: its generator
   circuit, its distribution circuit, a secondary generator circuit; a boiler: `space_heating` and `dhw`).
 - **Circuit port set** (D1): the four quantities one member has per circuit: `mass_flow_in_kg_per_second` in (the
@@ -139,7 +145,7 @@ A port set is declared in `__init__` beside the channels it groups, with the cir
 by (a boiler's `space_heating` and `dhw`, a buffer's `generator`, `distribution` and `secondary_generator`), and
 whether the component *can* pump that circuit (a buffer never; the HDS, the boiler and the substation's space-heating
 side either way; the heat pump, the electric heater and the collector only as pump owner today). The role is the
-component's own vocabulary; the circuit *id* is the system's (§4.3). The existing output names stay as they are, since
+component's own vocabulary; the loop's *id* is derived from the pump owner's component name and role at build (§4.3). The existing output names stay as they are, since
 they are addresses in energy-system files and goldens (`system_docs/results_and_interfaces.md`); the new flow outputs
 are named in the components' own idiom (`WaterMassFlowRateToHeatGenerator` on the buffer, `WaterMassFlowOutput` on the
 HDS, …) and each description states that it is the circuit's flow passed through.
@@ -150,9 +156,10 @@ HiSim has no bus and no implicit balancing junction, by owner decision (`roadmap
 2026-10-20), and this spec keeps it so (Q0).
 What the named circuit is:
 
-- **A name.** The ends of one loop share an id, so the build can say "the circuit `space_heating` between `boiler`
-  and `hds`" and the step check can name the loop whose water does not add up.
-- **A declaration of the one pump owner** (D3), written in the system description, read at build.
+- **A name.** The loop the wiring connects gets an id from its pump owner's port set (D7, §4.3), so the build can say
+  "the loop `hds.distribution` between `boiler` and `hds`" and the step check can name the loop whose water does not add
+  up.
+- **A declaration of the one pump owner** (D3), made by the pump owner's own port set (D7, Q3), read at build.
 - **A conservation check** (D4) of the values the members published on their own: at the pump owner, the flow that
   came back equals the flow it sent; with Q1, at every member, the flow that left equals the flow that arrived; with
   Q2, at every member, the heat it booked equals the heat its own flow and temperatures carry.
@@ -165,39 +172,53 @@ What it is not:
 - **It computes nothing.** No mixing, no remainder, no reconciliation. If two members disagree, nobody is corrected;
   the run fails and the error names them (D2). A split of a flow into two branches is a valve component with one
   circuit per branch (`hydronic_coupling_spec.md` §3.5), not a junction.
-- **It changes no result.** A system with the declarations removed and the checks switched off simulates
-  bit-identically. The declaration is metadata about the wiring, like the energy ports of #1109, and the checks read
-  published outputs after the fact.
+- **It changes no result.** A system with the port sets' declarations removed and the checks switched off simulates
+  bit-identically. The declaration is metadata on the component's own channels, like the energy ports of #1109, and
+  the checks read published outputs after the fact.
 
 The distinction matters for the owner's "no buses" rule: a bus is an invisible component with its own law (a
 balance), which hides who decided what. A circuit adds no law; it makes a wiring fact nameable and checkable.
 
-### 4.3 The pump owner is declared, told, and checked at build
+### 4.3 The pump owner is declared by its port set, the loop is found through the wiring, both are checked at build
 
-The pump owner is written in the system description, once per circuit, beside the circuit's id and members (how, per
-input mode, is Q3). Three things follow at build:
+There is no declaration of a loop anywhere but at the components (D7). Each port set says, when it is declared in
+`__init__`, whether it pumps: fixed in code for a component that can only pump or never pumps, from the component's
+configuration for one that can do either (Q3). The loop itself is what the wiring connects, and the build finds it
+(`Simulator.run_all_timesteps`, after `connect_all_components`, where #1109's `refuse_a_broken_wiring` runs) without
+being told:
 
-1. **Exactly one pump owner per circuit.** Zero or two is refused, naming the circuit and the members
-   (`CircuitDeclarationError`).
-2. **Each member is told its role.** Before `i_prepare_simulation`, the simulator hands every member its circuit id
-   and whether it pumps (`Component.join_circuit(circuit_id, role, pumps)`, Q3c). A member refuses a role it cannot
-   play: a buffer told to pump, a heat pump told to pass through (until it has a heater-on-flow mode like the boiler's
-   of #1117). This replaces the position enums: the HDS no longer reads `PARALLEL` or `NO_STORAGE_MASS_FLOW_FIX` to
-   know whether it pumps; it is told. The boiler no longer infers from a wired input whether it heats someone else's
-   flow (`GenericBoiler.space_heating_runs_on_distribution_flow`, #1117); it is told, and the build refuses the flow
-   input unwired when it is told to pass through.
-3. **The declaration agrees with the wires.** For every pair of consecutive members, the second's flow in and
-   temperature in are wired to the first's flow out and temperature out, and the loop closes back to the first. A
-   member's port set that is wired to a component outside the circuit, a port set the declaration does not list, or a
-   loop that does not close is refused, naming the circuit, both members and the channel. The same flow output read by
-   members of two circuits is refused (one flow delivers its heat once).
+1. **Loop discovery.** Every port set's flow-out output is connected to the flow-in input of exactly one other port
+   set (the wiring index of #1109's `Wiring`, `readers` and `source_outputs`, already answers who reads what). Starting
+   at any port set not yet assigned to a loop, follow flow out → flow in to the next member, and on, until the start is
+   reached: that sequence of port sets is one loop. The temperature wires must follow the same path (each member's
+   temperature in comes from the previous member's temperature out). In a two-member loop this is the four-wire
+   picture of §4.1; in a three-member loop (a series buffer) each member's flow in comes from the previous member and
+   its flow out goes to the next.
+2. **What is refused** (`CircuitWiringError`, naming every port set involved by component and role, and the channel):
+   a loop that does not close (the path reaches a port set already on another path, or a flow-out output that nobody
+   reads, or a flow-in input that is not connected, while the set is wired at all); a port set wired by half (some of
+   its four channels connected, others not — the #1119 rule for the storages' coils, generalised; a port set with none
+   of its four channels connected is idle and allowed, like the boiler's hot-water side in
+   `basic_household_only_heating`); a flow-out output read by two port sets (one flow delivers its heat once; a split
+   is a valve component with one loop per branch); a temperature wire that does not follow the flow wire.
+3. **Exactly one pumping port set per loop.** Zero (two pass-through members, nobody moves water) or two (the
+   pre-#1117 `gas_boiler_household`: the boiler's `space_heating` set and the HDS's `distribution` set both pumping)
+   is refused, naming the loop's members and which of them pump.
 
-In a two-member loop this is the four-wire picture of §4.1; in a three-member loop (a series buffer) each member's
-flow in comes from the previous member and its flow out goes to the next.
+**The loop's id** is `<pump owner's component name>.<its port-set role>`: `hds.distribution`,
+`CondensingGasBoiler.space_heating`, `MoreAdvancedHeatPumpHPLib.dhw`, `SolarThermalSystem.solar_dhw`. A component
+name is unique in a run and a component pumps each of its port sets at most once, so the id is unique. A loop that is
+refused in rule 3 has no pump owner to name it by, so that message lists the members instead:
+"the loop (boiler.space_heating, hds.distribution) has 2 pumping port sets, boiler.space_heating and
+hds.distribution; exactly one member of a loop pumps". The id is derived at build and kept on each member's port set,
+so `i_doublecheck` (§4.4) can put it in its error without any lookup.
 
-Why the owner is *told* and not left to infer: in the four-wire design every member has a wired flow in, so "my flow
-input is wired" no longer distinguishes the pump owner from a pass-through member, as it did for the boiler in
-#1117. The one place the fact is written is the circuit declaration; the simulator carries it to the component.
+What this replaces: the HDS no longer reads `PARALLEL` or `NO_STORAGE_MASS_FLOW_FIX` to know whether it pumps; its
+port set states it (Q3). The boiler no longer infers from a wired input whether it heats someone else's flow
+(`GenericBoiler.space_heating_runs_on_distribution_flow`, #1117); its port set states it, and the build refuses the
+set wired by half. In the four-wire design every member has a wired flow in, so "my flow input is wired" could not
+distinguish the pump owner from a pass-through member anyway (D3 forbids inferring it; D7 forbids writing it anywhere
+but at the port).
 
 ### 4.4 The step check in `i_doublecheck`
 
@@ -213,9 +234,9 @@ def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
                                mass_flow_out_in_kg_per_second=..., mass_flow_in_in_kg_per_second=...)
 ```
 
-The message: `Circuit 'space_heating': the pump owner 'hds' sent 0.270 kg/s in step 1234 (2021-01-13 20:30) and
-0.359 kg/s came back. Some member of the circuit changed the flow; every member but the pump owner passes the flow
-through unchanged.` With Q1 the member that changed it is named instead.
+The message: `Loop 'hds.distribution' (boiler.space_heating, hds.distribution): the pump owner 'hds' sent 0.270 kg/s
+in step 1234 (2021-01-13 20:30) and 0.359 kg/s came back. Some member of the loop changed the flow; every member but
+the pump owner passes the flow through unchanged.` With Q1 the member that changed it is named instead.
 
 Why `i_doublecheck` and not `i_simulate` (D4): `i_simulate` runs in every pass of the step, and in the first pass of
 a step the pass-through member has not yet seen the pump owner's new flow, so the returning flow lags a pass and a
@@ -237,16 +258,17 @@ hot path (`simulator-hot-path`: components about 80 %, `is_close_enough` about 3
 `CircuitError(HydronicsError)` in `hisim/hydronics.py` (where every hydronic refusal lives), a `ValueError` like
 them, raised from the member's `i_doublecheck` and left to propagate: the run fails with the circuit, the device,
 the step and both values in the message (D4), and `hisim_main` reports it as it reports any component exception.
-`CircuitDeclarationError(HydronicsError)` is the build-time twin for a declaration that is wrong (§4.3). Q5 discusses
-whether a code (`EC-1`, `EC-2`, as the energy-system format numbers its refusals `EF-…`) is wanted.
+`CircuitWiringError(HydronicsError)` is the build-time twin for a wiring that is no loop or a loop with no or two
+pump owners (§4.3), beside #1109's `EnergyPortWiringError`. Q5 discusses whether a code (as the energy-system format
+numbers its refusals `EF-…`) is wanted.
 
 ### 4.6 The checks in one table
 
 | Check | When | Where | Catches | Decided? |
 |---|---|---|---|---|
-| exactly one pump owner per circuit | build | simulator, from the declaration | an undeclared or a doubly declared pump | D3 |
-| each member accepts its role | build | `Component.join_circuit` | a buffer told to pump; a boiler told to pass through with its flow input unwired | D3 (Q3c for the mechanism) |
-| declaration agrees with the wires | build | simulator, from the declaration and the inputs | a flow wired across circuits; a loop that does not close; a port set outside any circuit | D3 |
+| every port set is wired whole or not at all, and its wires close a loop | build | simulator, by following the port sets' wires (§4.3, rules 1 and 2) | a loop that does not close; a half-wired set; a flow-out output nobody reads; a temperature wire that does not follow the flow | D7 |
+| a flow is read by one loop | build | the same walk | a flow-out output read by two port sets (a split without a valve) | D3, D7 |
+| exactly one pumping port set per loop | build | the same walk, counting the sets that declare they pump (Q3) | nobody pumps; two pump (the pre-#1117 `gas_boiler_household`) | D3 |
 | flow back = flow sent, at the pump owner | every step | `i_doublecheck` of the pump owner | any member that changed the flow (named only as "some member") | D4 |
 | flow out = flow in, at every member | every step | `i_doublecheck` of every member | the member that changed the flow, by name | Q1 |
 | booked heat = `m c (T_out − T_in)`, at every member | every step | `i_doublecheck` of every member | a member booking with a flow or a temperature it did not publish; the HDS's one-step lag without a buffer | Q2 |
@@ -262,10 +284,10 @@ HiSim's rule is: no buses, no implicit balancing junctions; a new modelling conc
 named circuit is a new concept. §4.2 argues it is not a bus, because it holds no value, computes nothing and changes
 no result.
 
-- **Option a — confirm D6 as proposed:** HiSim keeps "no buses" and adds the named circuit as a declaration plus
-  checks. The guideline `system_docs/component_design_principles.md` gets one sentence under B4: "A water loop is a
-  named circuit with one declared pump owner; every member passes the flow through and the pump owner checks that it
-  came back."
+- **Option a — confirm D6 as proposed:** HiSim keeps "no buses" and adds the named circuit as port sets that declare
+  themselves plus checks. The guideline `system_docs/component_design_principles.md` gets one sentence under B4: "A
+  water loop is a named circuit with one declared pump owner; every member passes the flow through and the pump owner
+  checks that it came back."
 - **Option b — reject the concept:** keep the rules of #1109 (ports paired through the wiring) and the build rule of
   hisim-energy-sankeys-9uoo.20 (a pumping end whose flow nobody reads is refused). This catches the `gas_boiler_household`
   wiring but not a receiver that reads the flow and books with another (the pre-#1117 HDS read nothing; a future one
@@ -317,104 +339,108 @@ district-heating translation) stop running.
 Recommendation: b, staged after hisim-pnw7 (§7). Until then the energy check is built behind the mass check and
 switched on when pnw7 closes the lag; the two systems it would fail are the two pnw7 is measured on.
 
-### Q3. How a circuit is declared
+### Q3. How a port set says that it pumps
 
-Three input modes write a system: the energy-system YAML (schema v3 for the recorded files, v4 for the composed
-files, `hisim/energy_system/`), Python setups (`system_setups/*.py`, `Simulator`), and assemblies
-(`energy_systems/assemblies/`, `hisim/energy_system/assemblies/binding.py`). Three sub-questions.
+D7 settles where a loop is declared: nowhere but at the components' port sets; the loop is what the wiring connects
+(§4.3). The wires themselves stay as they are written today: bare-name items that expand to the classes' default
+connections (`inputs: [HeatDistributionSystem, CondensingGasBoiler]` on the buffer), an explicit `input:/from:` pair
+only where no default connection exists (`boiler.WaterInputMassFlowSh <- hds.WaterMassFlowHDS` in
+`gas_boiler_household`), `connect_automatically=True` in Python setups, the circuit ends of the assembly format
+(`{circuit: dhw, member: Boiler}`), which the binding lowers to bare names. The fourth wire, the returning flow, comes
+through the classes' default connections like the other three, so no recorded file, setup or assembly gains an input
+item for it.
 
-**Q3a. Does the declaration wire the four inputs, or do the wires stay explicit and the declaration is checked
-against them?**
+What remains open is how a port set states, **explicitly**, that it pumps — never inferred from where a storage sits,
+from list order, from a position enum, or from "my flow input is wired" (D3).
 
-How the recorded files wire hydronics today: almost entirely through bare-name items that expand to the classes'
-default connections (`inputs: [HeatDistributionSystem, CondensingGasBoiler]` on the buffer), with an explicit
-`input:/from:` pair only where a default connection does not exist (`boiler.WaterInputMassFlowSh <- hds.WaterMassFlowHDS`
-in `gas_boiler_household`). Python setups do the same with `connect_automatically=True`. So "explicit wires" in HiSim
-means "declared by class default connection and expanded by the loader", not a wire per channel.
+**Fixed in code, where the component has no choice.** A port set whose component can only pump its loop declares
+`pumps=True` in `__init__`: the hplib heat pump (both circuits; hplib's flow is authoritative, D2 of the hydronic
+coupling spec), the electric heater, the solar collector, the district-heating substation's hot-water side, the
+boiler's hot-water side. A port set whose component never pumps declares `pumps=False`: the buffer (every circuit) and
+the hot-water tank (every coil); they hold water and move none. Nothing is configured, because nothing can vary.
 
-- **Option a — the declaration wires.** A top-level block names the circuit, its members in loop order with the port
-  set each uses, and the pump owner; the loader connects the four channels of each consecutive pair itself, and the
-  members' `inputs:` lists carry no hydronic items:
+**Stated by the configuration, where the component can do either.** Four port sets can pump or pass through,
+depending on the system: the HDS's `distribution` set (it pumps its design flow behind a buffer, beside a substation
+and beside a boiler; it would pass a heat pump's flow through without a buffer), the boiler's `space_heating` set (it
+pumps into a buffer; it heats the HDS's flow without one, #1117), the substation's `space_heating` set (it passes the
+HDS's flow through today; a substation with a pump of its own would pump) and `SimpleHeatSource`'s brine set. These
+need a stated source:
 
-  ```yaml
-  circuits:
-    space_heating:
-      pump: hds
-      loop: [{boiler: space_heating}, {hds: distribution}]
-  ```
+- **Option a — an explicit boolean field on the component's configuration**, named for the fact it states:
+  `pumps_space_heating_circuit: true` on the boiler and the substation, `pumps_the_circuit: true` on the HDS,
+  `pumps_the_brine_circuit` on `SimpleHeatSource`. The port set reads it at construction; the build check (§4.3, rule 3)
+  refuses a loop in which the booleans add up to no or two pump owners, naming both. The field has a default where one
+  role is the usual one (HDS `true`: it pumps in every recorded system; boiler `true`: the buffered boiler pumps;
+  substation `false`: HiSim's substation has never pumped), so a recorded file writes it only where the system departs
+  from the usual (`gas_boiler_household` and its two copies: `pumps_space_heating_circuit: false` on the boiler; nothing
+  on the HDS). For: one field, one fact, visible in the file where it matters, checked against the loop so a wrong
+  value is a named refusal, not a silent 33 %. Against: a default is a value the file does not show; the check is what
+  makes that safe, and a reviewer who wants every value written can set the field without a default (option d).
+- **Option b — inferred from the wiring** ("my flow input is wired, so someone else pumps"), the boiler's rule since
+  #1117. Rejected by D3, and impossible once every member has a wired flow in (§4.1).
+- **Option c — two presets or two classes per either-way component** (`HeatDistribution.preset_pumping` and
+  `preset_on_generator_flow`; or `HeatDistributionPumped` beside `HeatDistributionOnGeneratorFlow`). A preset is a
+  configuration under a name, so it is option a written as a preset; two classes split one device's physics in two
+  files for one boolean's worth of difference (and `MAIN_CLASS` addresses in every recorded file change).
+- **Option d — option a without a default**: the field is required on every either-way component, so every HDS in
+  32 recorded files, every buffered boiler and every substation writes its boolean. Nothing is hidden, at the cost of a
+  line in every hydronic file and setup that today needs none.
 
-  For: one place states the loop, the wires cannot disagree with it, no fourth-wire boilerplate, three lines per
-  circuit. Against: the water wires vanish from the `inputs:` lists a reader scans; a second wiring mechanism beside
-  bare names and `input:/from:`; the recorder (`hisim/energy_system/recording/`) must emit the block from the wires it
-  observed; the owner dislikes behaviour the file does not show.
-- **Option b — the wires stay, the declaration is checked.** The `inputs:` items stay as they are (bare names; the
-  fourth wire, the returning flow, comes from the classes' default connections like the other three, so the recorded
-  files need no new input items). The block above is still written, and at build the simulator checks it against the
-  wires (§4.3, rule 3): every consecutive pair wired, loop closed, no cross-circuit reader, every port set in some
-  circuit. For: nothing hidden, each fact visible where it is used today, a disagreement is a named build error.
-  Against: the same topology stated twice (the wires and the block); 37 recorded files gain a block (§7).
-- **Option c — no block; the pump owner is a component setting.** `pumps_circuit: true` in the HDS's config, and the
-  circuit id derived from the wiring. Rejected by D3: a role carried as a per-component site setting is the position
-  enum again under another name, and the id would be implicit.
+**How this differs from the position enums.** `PositionHotWaterStorageInSystemSetup` described *where a storage
+sits* (`PARALLEL`, `SERIES`, `NO_STORAGE_*`), on three components at once, and each component *inferred* from that
+whether it pumps, whether its outputs lag, and which inputs it has, with nothing checking that the three agreed. The
+boolean says directly *that this device pumps this loop*, on the one device it concerns, and the loop check compares
+every member's answer. The enum was a topology description used as a role; the boolean is the role. What the enum also
+carried — the HDS's one-step lag without a buffer and the heat pump's fixed flow without one — is not a pumping fact and
+is not replaced by the boolean: the lag goes with hisim-pnw7 (§7, stage 3), the heat pump's fixed flow stays its own
+configuration until it gets a heater-on-flow mode.
 
-Recommendation: b. It fits "explicit wires plus a check" and today's files; the redundancy is what the check is for.
+**Nothing is told at build.** With the role in code or in the configuration, the first draft's `join_circuit` has no
+purpose and is dropped (D7). The build check is: discover every loop by following the wires, and refuse a loop that
+does not have exactly one pumping port set (§4.3).
 
-**Q3b. Where the block goes, per input mode.**
-
-- *Energy-system YAML (v3 and v4):* a top-level `circuits:` key beside `components:`, `imports:`, `groups:`,
-  `variants:` (`hisim/energy_system_v3.schema.json`), one entry per circuit as above; `pump:` names a component key
-  (or a composed member address `heating-Buffer`), `loop:` lists `{component: port_set}` pairs in the water's order.
-  The loader validates it (`hisim/energy_system/validation.py`), the wiring checks hand it to the simulator, and the
-  recorder writes it back (`recording/`), so every recorded twin carries it.
-- *Python setups:* `my_sim.add_circuit(Circuit(id="space_heating", pump=my_hds, loop=[(my_boiler, "space_heating"),
-  (my_hds, "distribution")]))` after the components are added; `Simulator.run_all_timesteps` runs the same build
-  checks on it. The 22 setups with a recorded twin get one call per circuit.
-- *Assemblies:* the circuit end `{circuit: c, member: X}` already exists on `provides:` and `serves:`; it gains
-  `pump: true` on exactly one end (`serves: {circuit: space_heating, other_end: [SimpleHotWaterStorage], pump: true}`
-  on the site's HDS; `provides: dhw: {circuit: dhw, member: Boiler, pump: true}` on the boiler assembly). The binding
-  (`binding.py`, `_lower_circuit`) lowers the joined ends to the composed file's `circuits:` block and refuses a circuit
-  with no or two `pump: true` ends (a new `EF-7M`). The composed file then carries the block explicitly like any other
-  file, so expansion changes nothing about Q3a.
-
-**Q3c. How a member learns its role.**
-
-- **Option a — the simulator tells it** (`Component.join_circuit(circuit_id, role, pumps)` before
-  `i_prepare_simulation`; §4.3 rule 2). One source, the declaration; the component refuses a role it cannot play.
-- **Option b — the component infers it from its wiring**, as the boiler does since #1117 ("my flow input is wired, so
-  someone else pumps"). Fails in the four-wire design, where every member's flow in is wired (§4.3).
-- **Option c — a config field** (`pumps_the_circuit`) that must agree with the declaration. Two places for one fact;
-  D3 names such settings as the design to leave.
-
-Recommendation: a. It is one new lifecycle call, and the only option consistent with D3 and D1 together.
+Recommendation: a. It is D3's "explicit" in the one place a device's own facts live, its configuration; the loop
+check turns a wrong or forgotten value into a refusal that names both candidates; and the usual-case defaults keep the
+recorded files as they are except in the three buffer-less boiler files. If the owner prefers every value written,
+d is the same design with the defaults removed.
 
 ### Q4. Relation to #1109's `HydronicPort` and to beads R1, pnw7, g2mx, fxix.15
 
 #1109 (`origin/sankey-pr3-storages`, open) gives the storages and generators a `HydronicPort`: the three output
 names of a circuit (`mass_flow`, `supply_temperature`, `return_temperature`), a role (`IN`/`OUT`) and a carrier, and
 `Wiring.circuits` / `refuse_a_broken_wiring` pair the ends through the wiring at build (`ports.py:757-900` on that
-branch). It serves the post-run energy balance and the Sankey. It names no circuit id and no pump owner, declares the
-HDS only behind a buffer, and knows three quantities, not four.
+branch). It serves the post-run energy balance and the Sankey. With D7 the two designs are the same shape: a port
+that a component declares on its own channels, paired with its other end through the wiring, with no declaration
+anywhere else. What #1109 does not have: the fourth quantity (the returning flow), a pumping flag, a loop walked to
+closure (it pairs two ends through the one flow wire), a loop id, and the HDS without a buffer (its docstring exempts
+that position, citing pnw7 and g2mx).
 
-- **Option a — merge #1109, then build on it.** The circuit port set of §4.1 *contains* a `HydronicPort`: its three
-  names are the pump owner's flow out (or the pass-through's flow in, which resolves to the same column) and the two
-  temperatures. `Component.add_hydronic_port` (`component.py:498` on the branch) becomes `add_circuit_port_set`, which
-  takes the fourth channel and the role and still registers the `HydronicPort` for the balance check. `Wiring.circuits`
-  keeps pairing by the wiring for the post-run check and additionally reads the declaration for the build check of §4.3.
-  Nothing of #1109 is thrown away; its 1,500 lines of tests keep running.
+- **Option a — merge #1109, then extend `HydronicPort` into the circuit port set.** The port set *is* a `HydronicPort`
+  plus two things: a second mass-flow channel (`mass_flow_in` and `mass_flow_out` instead of one `mass_flow`; for the
+  pump owner the out channel is the circuit's flow and the in channel the returning one, for a pass-through member the
+  in channel is the circuit's flow and the out channel its copy) and `pumps: bool`. `Component.add_hydronic_port`
+  (`component.py:498` on the branch) grows those two arguments and keeps its name and its `CircuitEnd`; `role` (`IN`
+  for the receiver, `OUT` for the supply owner) and `carrier` stay for the balance check and the Sankey, since "pumps"
+  and "supplies the heat" are different facts (the HDS pumps its loop and receives its heat). `Wiring.circuits`
+  (`ports.py:757`) already indexes who reads which output and pairs ends through the flow wire; it is extended to walk
+  the loop to closure, to check the temperature wires follow, and to count the pumping ends (§4.3), and
+  `refuse_a_broken_wiring` raises `CircuitWiringError` beside its `EnergyPortWiringError`. The post-run balance keeps
+  deriving `m c (T_sup − T_ret)` from the same three columns as today. Nothing of #1109 is thrown away; its 1,500 lines
+  of tests keep running, and its HDS exemption goes once pnw7 lands.
 - **Option b — replace #1109.** Close it; the circuit port set alone feeds both the step check and the post-run
   balance. Loses a reviewed PR that is nearly ready and the Sankey work that depends on it (hisim-energy-sankeys-9uoo).
 
-Recommendation: a. The two agree on the three quantities and on "the ends pair through the wiring"; this spec adds the
-id, the pump owner, the fourth quantity and the step check.
+Recommendation: a. After D7 this spec is #1109's `HydronicPort` plus the returning flow, the pumping flag, the walk to
+closure, the loop id and the step check; building it anywhere else would duplicate `Wiring`.
 
 The beads:
 
 | Bead | What it covers | This spec |
 |---|---|---|
-| hisim-energy-sankeys-9uoo.20 (R1, P2) | build rule: refuse a pumping end whose flow nobody reads while another component reads its supply | **superseded**: §4.3 rule 3 (every consecutive pair wired, loop closed) refuses the same wiring and more, from the declaration instead of a heuristic over readers. Close it when §4.3 lands, citing this spec. |
+| hisim-energy-sankeys-9uoo.20 (R1, P2) | build rule: refuse a pumping end whose flow nobody reads while another component reads its supply | **superseded**: §4.3 rules 2 and 3 (every port set wired whole, the loop walked to closure, exactly one pumping set) refuse the same wiring and more, by walking the loop instead of a heuristic over readers of the supply temperature. Close it when §4.3 lands, citing this spec. |
 | hisim-boiler-circuit-flow-gap-g2mx (P1) | the gas boiler's flow gap; a2 built in #1117; keeps the per-step closure, the thermostat-driven flow (hisim-component-physics-4g9.37) and the HDS enum removal | **partly absorbed**: the enum removal moves here (D3, §7); the per-step closure stays with pnw7; the thermostat-driven flow stays with 4g9.37. Re-rate as its note says. |
-| hisim-pnw7 (P3) | the HDS's pipe water as a start-of-step node; D25's flow ownership; the HDS enum; district heating's bill | **a dependency and a partner**: pnw7 keeps the node and the bill; the enum removal and D25's "who pumps" move here (the declaration replaces inference). The energy check of Q2 is switched on after pnw7 (§7, stage 4). |
-| hisim-hydronics-fxix.15 (P3) | design how a component learns its hydraulic topology, replacing the three enums | **absorbed**: §4.3 and Q3c are that design. Close it when the owner decides Q3; its text points here. |
+| hisim-pnw7 (P3) | the HDS's pipe water as a start-of-step node; D25's flow ownership; the HDS enum; district heating's bill | **a dependency and a partner**: pnw7 keeps the node and the bill; the enum removal and D25's "who pumps" move here (the port set's own declaration replaces inference from the circuit). The energy check of Q2 is switched on after pnw7 (§7, stage 4). |
+| hisim-hydronics-fxix.15 (P3) | design how a component learns its hydraulic topology, replacing the three enums | **absorbed**: §4.3 and Q3 are that design — a component learns nothing about its topology; it states whether it pumps, and the loop is found through the wiring. Close it when the owner decides Q3; its text points here. |
 | hisim-hydronics-fxix.6 (P?) | stage E, `HydronicPort` on every circuit in the balance check | unchanged; #1109 is its PR; this spec builds on it (Q4 a). |
 
 ### Q5. Tolerance, error type and code
@@ -438,10 +464,12 @@ per-step tolerance is `max(1e-6 kWh, 0.1 %)` of the step's throughput (`modellin
 1e-4 K = 0.11 W). 1 W is the floor; the dry run of §6 used the balance check's tolerance and found the same failures.
 
 Error type: `CircuitError(HydronicsError)` in `hisim/hydronics.py`, beside `NegativeMassFlowError` and the other
-hydronic refusals, a `ValueError` like them; a build-time `CircuitDeclarationError(HydronicsError)`. A code: the
-energy-system format numbers its refusals (`EF-09`, `EF-7A`); a run-time component error has no code today.
-Recommendation: b for the mass check, `max(1 W, 0.1 %)` for the energy check, the two exception types above, a code
-only for the loader's refusal of a bad `circuits:` block (the next free `EF-` number), none for the step check.
+hydronic refusals, a `ValueError` like them; a build-time `CircuitWiringError(HydronicsError)` (§4.3). A code: the
+energy-system format numbers its refusals (`EF-09`, `EF-7A`) because a file author looks them up; a build refusal
+raised by the simulator over the connected components (#1109's `EnergyPortWiringError`) and a run-time component error
+have no code today, and with D7 there is no file block whose refusal would need one.
+Recommendation: b for the mass check, `max(1 W, 0.1 %)` for the energy check, the two exception types above, no
+codes.
 
 ### Q6. Migration and rollout
 
@@ -449,40 +477,43 @@ What changes, counted on main at 635404f30 (details in §7):
 
 - **Components (9):** `GenericBoiler`, `MoreAdvancedHeatPumpHPLib`, `DistrictHeating`, `ElectricHeating`,
   `SolarThermalSystem`, `SimpleHotWaterStorage` (buffer), `SimpleDHWStorage` (tank), `HeatDistribution`,
-  `SimpleHeatSource`. Each declares its port sets; pass-through members gain a flow output per circuit, pump owners a
-  flow input per circuit; default connections gain the fourth wire; the three enums go.
-- **Recorded files (37):** the 35 `energy_systems/*.energy_system.yaml` with a water circuit (every file but the 9
-  without one: `air_conditioned_house`, `basic_household`, `default_connections`, `dynamic_components`,
-  `electrolyzer_with_renewables`, the two `simple_air_conditioner_*`, the two `simple_system_setup_*`),
-  `roadmap/declarative_energy_systems/energy_system_mockup_minimal.yaml` and `tests/energy_systems/uc1.realized.energy_system.yaml`;
-  each gains a `circuits:` block, and the 6 that carry a `position_hot_water_storage_in_system` line
-  (`gas_boiler_household`, the three district-heating files, the mockup, `uc1.realized`) lose it. Plus the 22 Python
-  setups' `add_circuit` calls (the district-heating setup also loses its enum line) and the assemblies' `pump: true`
-  (the 10 heating assemblies, the dhw cylinder assembly, `test_partners.yaml`, which also carries an enum line, and the
-  mockup assembly `roadmap/declarative_energy_systems/assemblies_mockup/heating/air_source_heat_pump_direct.assembly.yaml`).
+  `SimpleHeatSource`. Each declares its port sets with their pumping flag (Q3); pass-through members gain a flow
+  output per circuit, pump owners a flow input per circuit; default connections gain the fourth wire; the three enums
+  go.
+- **Recorded files:** nothing is added to any file (D7). Of the 35 `energy_systems/*.energy_system.yaml` with a water
+  circuit (every file but the 9 without one: `air_conditioned_house`, `basic_household`, `default_connections`,
+  `dynamic_components`, `electrolyzer_with_renewables`, the two `simple_air_conditioner_*`, the two
+  `simple_system_setup_*`), plus `roadmap/declarative_energy_systems/energy_system_mockup_minimal.yaml` and
+  `tests/energy_systems/uc1.realized.energy_system.yaml`, only those change whose lines go or come: the 6 that carry a
+  `position_hot_water_storage_in_system` line (`gas_boiler_household`, the three district-heating files, the mockup,
+  `uc1.realized`) lose it, and under Q3 option a the three buffer-less boiler files (`gas_boiler_household`, the mockup,
+  `uc1.realized`) gain `pumps_space_heating_circuit: false` on the boiler (under option d every either-way component in
+  every hydronic file gains its boolean). The 22 Python setups change nowhere but the district-heating setup's enum
+  line (and the boiler's boolean where a setup has a buffer-less boiler: none today). The assemblies change nowhere
+  but the two enum lines (`test_partners.yaml`, the mockup assembly
+  `roadmap/declarative_energy_systems/assemblies_mockup/heating/air_source_heat_pump_direct.assembly.yaml`); the
+  circuit-end binding of `binding.py` stays as it is.
 - **RenoVisor:** the translator runs the grouped twins (`hisim/renovisor/translate.py`, `BY_GENERATOR`,
   `WITH_SOLAR_THERMAL`: gas, oil, pellets, wood chips, hydrogen, heat pump, electric, district heating, and the two
-  solar twins), all among the 35; it names no hydronic input and no position enum, so it changes only if the grouped
-  files it copies change — they do (the block), and the re-record is a routine one. No result moves, so no
-  renovisorissues announcement for the declaration; the enum removal of the district-heating twin is a file-format
-  change RenoVisor sees only through the base files it ships with.
-- **Goldens:** compare KPIs only (`golden_references/README.md`); new flow-out columns and the declaration move no
-  KPI. Expected bit-identical everywhere, except where a check finds a real fault, which on today's main is nowhere
-  for the mass checks (§6) and the two buffer-less HDS twins for the energy check (Q2), which is why that check
-  waits for pnw7.
+  solar twins), all among the 35; it names no hydronic input and no position enum, so it changes only where a grouped
+  file it copies changes: the district-heating twin's enum line in stage 3. No result moves; the heads-up on
+  renovisorissues is for that one dropped line, since the base files RenoVisor ships change shape.
+- **Goldens:** compare KPIs only (`golden_references/README.md`); new flow-out columns and the port sets move no KPI.
+  Expected bit-identical everywhere, except where a check finds a real fault, which on today's main is nowhere for the
+  mass checks (§6) and the two buffer-less HDS twins for the energy check (Q2), which is why that check waits for pnw7.
 - **Staging into PRs** (one fix per PR, stacked):
-  1. *Declaration and build check*: `Circuit`, the port set, `add_circuit`/`circuits:`/`pump: true`, `join_circuit`,
-     the build rules of §4.3, the 37 blocks, the 22 calls; no new channels yet; bit-identical. Depends on #1109 merged
-     (Q4 a).
-  2. *The fourth wire and the mass check*: the flow outputs and inputs, the default connections, D4's check in the
-     pump owners (and Q1's in every member); bit-identical, new result columns only.
+  1. *Port sets, the fourth wire and the build check*: `HydronicPort` grows into the port set (two flow channels and
+     `pumps`, Q4 a), the new flow channels and their default connections, the pumping flags (in code; the config
+     booleans of Q3 with their defaults), the loop walk and the refusals of §4.3, the three boiler lines; bit-identical,
+     new result columns only. Depends on #1109 merged.
+  2. *The mass check*: D4's check in the pump owners (and Q1's in every member) in `i_doublecheck`, `CircuitError`;
+     bit-identical.
   3. *The enums go*: `PositionHotWaterStorageInSystemSetup` × 3 removed, the HDS's and the heat pump's flow source
-     from their role; the 6 recorded lines, the two assembly lines, the setup line and the 13 code and test files that
-     name an enum; bit-identical.
+     from their pumping flag; the 6 recorded lines, the two assembly lines, the setup line and the 13 code and test
+     files that name an enum; bit-identical.
      Depends on hisim-pnw7 for the HDS's lag half (today `PARALLEL` also decides whether the HDS publishes this step's
-     or last step's values, `heat_distribution_system.py:510-530`); until pnw7 lands, that half becomes the HDS's own
-     question "do I sit behind a store", answered by the simulator from the circuit (its other member declares a
-     store's port set) — or PR 3 waits for pnw7. Recommendation: wait; pnw7 is where the lag goes.
+     or last step's values, `heat_distribution_system.py:510-530`); that half is not a pumping fact and no port set
+     states it. Recommendation: wait; pnw7 is where the lag goes.
   4. *The energy check* (Q2), after pnw7: switched on in every member; fails nothing on the then-current main.
 
 ## 6. Dry run
@@ -528,39 +559,44 @@ step's flow (hisim-pnw7). Everything else closes to 0.0 W in every step, forced 
 
 | Component | Port sets (role: can pump?) | Gains | Loses |
 |---|---|---|---|
-| `GenericBoiler` | `space_heating`: either; `dhw`: pump owner | flow in on `dhw`; the flow in on `space_heating` exists (`WaterInputMassFlowSh`, #1117) and becomes the circuit's | `space_heating_runs_on_distribution_flow` inferred from wiring (told instead, Q3c) |
+| `GenericBoiler` | `space_heating`: either (`pumps_space_heating_circuit`, default true, Q3); `dhw`: pump owner | flow in on `dhw`; the flow in on `space_heating` exists (`WaterInputMassFlowSh`, #1117) and becomes the circuit's | `space_heating_runs_on_distribution_flow` inferred from wiring (the port set's flag instead, Q3) |
 | `MoreAdvancedHeatPumpHPLib` | `space_heating`, `dhw`: pump owner (no heater-on-flow mode yet) | flow in on both | `PositionHotWaterStorageInSystemSetup` (`PARALLEL`/`SERIES`/`NO_STORAGE`); `m_dot_ref` stays as the fixed flow of a heater-on-flow mode if one is built later |
-| `DistrictHeating` | `space_heating`: either (pass-through today); `dhw`: pump owner | flow in on `dhw`; the space-heating pair exists | — |
+| `DistrictHeating` | `space_heating`: either (`pumps_space_heating_circuit`, default false, Q3); `dhw`: pump owner | flow in on `dhw`; the space-heating pair exists | — |
 | `ElectricHeating` | `dhw`: pump owner | flow in | — |
 | `SolarThermalSystem` | `solar_dhw`: pump owner | flow in | — |
 | `SimpleHotWaterStorage` (buffer) | `generator`, `secondary_generator`, `distribution`: never pumps | flow out on each (pass-through) | `PositionHotWaterStorageInSystemSetup` (`PARALLEL_TO_HEAT_SOURCE`/`SERIES_TO_HEAT_SOURCE`): a series buffer is a three-member circuit |
 | `SimpleDHWStorage` (tank) | `generator`, `secondary_generator`: never pumps | flow out on each | — |
-| `HeatDistribution` | `distribution`: either | flow out (pass-through when behind a pump owner); flow in in every role | `PositionHotWaterStorageInSystemSetup` (4 members); `pumps_its_design_flow` from the enum (told instead); the lag half goes with pnw7 |
-| `SimpleHeatSource` | brine circuit: either | flow out | `use_external_massflow_as_signal_input_for_nominal_massflow` (a second pump owner by another name) |
+| `HeatDistribution` | `distribution`: either (`pumps_the_circuit`, default true, Q3) | flow out (pass-through when behind a pump owner); flow in in every role | `PositionHotWaterStorageInSystemSetup` (4 members); `pumps_its_design_flow` from the enum (from the port set's flag instead); the lag half goes with pnw7 |
+| `SimpleHeatSource` | brine circuit: either (`pumps_the_brine_circuit`, Q3) | flow out | `use_external_massflow_as_signal_input_for_nominal_massflow` (a second pump owner by another name) |
 
-**Results.** No KPI moves in any stage (the declaration is metadata; the pass-through outputs are copies; the enums
-are replaced by the same facts told at build). New result columns: one flow-out per pass-through member and
-circuit (about 2 to 4 per system). Stage 4 (the energy check) fails nothing once pnw7 has landed.
+**Results.** No KPI moves in any stage (the port sets are metadata on existing and new channels; the pass-through
+outputs are copies; the enums are replaced by a flag that states the same fact). New result columns: one flow-out per
+pass-through member and circuit (about 2 to 4 per system). Stage 4 (the energy check) fails nothing once pnw7 has
+landed.
 
-**Public interfaces.** New: the `circuits:` block (schema v3 and v4), `Simulator.add_circuit`, the assembly end's
-`pump: true`, the new flow channels (addresses in files), `CircuitError`, `CircuitDeclarationError`. Removed: the
-three `PositionHotWaterStorageInSystemSetup` enums and their config field (6 recorded lines, 13 code and test files),
-`SimpleHeatSource.use_external_massflow_as_signal_input_for_nominal_massflow`. RenoVisor: the grouped twins it copies
-change (the block, the dropped line); a heads-up on renovisorissues when the enum line leaves the district-heating
-twin, since the translator's base files change shape (`system_docs/results_and_interfaces.md` §5), no result changes.
+**Public interfaces.** New: the new flow channels (addresses in files), the config booleans of the four either-way
+port sets (Q3), `CircuitError`, `CircuitWiringError`. Removed: the three `PositionHotWaterStorageInSystemSetup` enums
+and their config field (6 recorded lines, 13 code and test files),
+`SimpleHeatSource.use_external_massflow_as_signal_input_for_nominal_massflow`. No file format changes: no new
+top-level key, no new assembly syntax, no new `Simulator` method (D7). RenoVisor: a heads-up on renovisorissues when
+the enum line leaves the district-heating twin it copies, since the translator's base files change shape
+(`system_docs/results_and_interfaces.md` §5); no result changes.
 
-**Goldens and twins.** Goldens compare KPIs only and stay bit-identical in every stage. The 37 recorded files, the
-22 setups and the assemblies are re-recorded in stage 1 (the block) and stage 3 (the enum line); `tests/assemblies/`
-twin gates and `tests/test_energy_system_*` parity tests are the gate.
+**Goldens and twins.** Goldens compare KPIs only and stay bit-identical in every stage. Re-recorded: the three
+buffer-less boiler files in stage 1 (the boiler's boolean), the 6 files, the setup and the two assembly files with an
+enum line in stage 3; everything else stays byte-identical. `tests/assemblies/` twin gates and
+`tests/test_energy_system_*` parity tests are the gate.
 
-**Verification per stage.** Stage 1: a test that declares two pump owners, none, a loop that does not close, a flow
-wired across circuits, a buffer told to pump, each refused with the circuit and members named; every recorded file
-builds. Stage 2: a test that wires a receiver which publishes a flow of its own on a circuit it does not pump and
-asserts `CircuitError` in its `i_doublecheck` with the step and both flows (the pre-#1117 `gas_boiler_household`
-wiring rebuilt as a fixture, with the HDS pumping 0.27 kg/s and a boiler pumping 0.359 kg/s); every recorded twin runs
-the January week with zero errors; the `test_*_time_resolution` and twin tests bit-identical. Stage 3: every test that
-named an enum rewritten against the declaration; the 5 recorded lines gone. Stage 4: the energy check on every
-recorded twin, zero errors, after pnw7.
+**Verification per stage.** Stage 1: a test that wires two pumping port sets on one loop, none, a loop that does not
+close, a port set wired by half, a flow read by two port sets, a temperature wire that does not follow the flow, each
+refused with the loop's members and the channel named; every recorded file builds and every loop gets the expected
+id. Stage 2: a test that wires a receiver which publishes a flow of its own on a loop it does not pump and asserts
+`CircuitError` in its `i_doublecheck` with the loop id, the step and both flows (the pre-#1117 `gas_boiler_household`
+wiring rebuilt as a fixture, with the HDS pumping 0.27 kg/s and a boiler pumping 0.359 kg/s — which stage 1's build
+check already refuses, so the fixture declares the boiler as pass-through and makes it publish 0.359 kg/s anyway);
+every recorded twin runs the January week with zero errors; the `test_*_time_resolution` and twin tests
+bit-identical. Stage 3: every test that named an enum rewritten against the pumping flag; the 6 recorded lines gone.
+Stage 4: the energy check on every recorded twin, zero errors, after pnw7.
 
 ## 8. Beads
 
@@ -569,9 +605,9 @@ filed when the owner has decided, one per stage of Q6; the related beads and wha
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-hydraulic-circuits-wci7 (P2, epic, `owner-decision`) | this spec; the owner's decisions D1 to D5; the questions Q0 to Q6 | this PR |
+| hisim-hydraulic-circuits-wci7 (P2, epic, `owner-decision`) | this spec; the owner's decisions D1 to D5 and D7; the questions Q0 to Q6 | #1122 |
 | hisim-energy-sankeys-9uoo.20 (P2) | R1, the build rule for a pumping end whose flow nobody reads | superseded by stage 1 (Q4) |
 | hisim-boiler-circuit-flow-gap-g2mx (P1) | the gas boiler's flow gap; a2 built | #1117; its enum half moves to stage 3 (Q4) |
 | hisim-pnw7 (P3) | the pipe-water node and district heating's bill | partner of stages 3 and 4 (Q4) |
-| hisim-hydronics-fxix.15 (P3) | how a component learns its topology | absorbed by §4.3 and Q3c (Q4) |
+| hisim-hydronics-fxix.15 (P3) | how a component learns its topology | absorbed by §4.3 and Q3 (Q4) |
 | hisim-hydronics-fxix.6 | stage E, `HydronicPort` in the balance check | #1109, built on (Q4) |

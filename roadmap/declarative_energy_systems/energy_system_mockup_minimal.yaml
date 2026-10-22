@@ -53,7 +53,7 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     config:
-      position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # no buffer in this house
+      position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # no buffer: the hds pumps its design flow
     inputs:
       - building
       - hds_controller
@@ -67,6 +67,8 @@ components:
       - boiler_controller
       - input: WaterInputTemperatureSh        # the circuit's return, no buffer in between
         from: hds.WaterTemperatureOutput
+      - input: WaterInputMassFlowSh           # the hds pumps the circuit; the boiler heats that flow (D25)
+        from: hds.WaterMassFlowHDS
 
   boiler_controller:
     class: hisim.components.generic_boiler.GenericBoilerController

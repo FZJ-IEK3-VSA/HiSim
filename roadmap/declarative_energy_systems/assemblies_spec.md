@@ -1243,6 +1243,9 @@ All by the owner on 2026-10-03.
   the buffer, so the HDS keeps the enum's default `PARALLEL` and no import sets it; the direct assembly waits for
   stage D. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
   HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
+  *Amended for boilers (owner, 2026-10-22, hisim-boiler-circuit-flow-gap-g2mx):* a boiler without a buffer does not
+  pump its circuit; it heats the distribution system's flow, like a substation without a pump, so the HDS pumps its
+  design flow beside a boiler too, and the boiler reads that flow (`roadmap/hydronic_coupling_spec.md` §4.6, §5.1).
 
 - **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1. Revised 2026-10-07
   after the review of this PR: a flat integer `order:` on site entries and imports returns (the twin's sequence

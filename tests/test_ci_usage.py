@@ -17,6 +17,7 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import email.message
 import importlib.util
 import io
 import json
@@ -695,7 +696,12 @@ class TestReportRendering:
         assert list(reloaded.values())[0]["peak_memory_bytes"] == 2 * 1024 ** 3
 
 
-class _ScriptedApi(collector.GitHubApi):
+#: The collector's GitHub client as a base class. The collector module is loaded from its file at run time
+#: (``_load``), so mypy cannot resolve its classes; the alias states that the base is only known then.
+_GitHubApi: Any = collector.GitHubApi
+
+
+class _ScriptedApi(_GitHubApi):
     """A GitHubApi whose network answers come from a script, one answer per attempt.
 
     Only the network call is replaced, so the retries, the backoff and the error handling under
@@ -716,12 +722,12 @@ class _ScriptedApi(collector.GitHubApi):
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return bytes(answer)
 
     @staticmethod
     def server_error() -> Exception:
         """Return the HTTP 500 the failed ci-usage runs died of."""
-        return urllib.error.HTTPError("https://api.github.com/x", 500, "Internal Server Error", None, None)
+        return urllib.error.HTTPError("https://api.github.com/x", 500, "Internal Server Error", email.message.Message(), None)
 
     @staticmethod
     def body(document: Dict[str, Any]) -> bytes:

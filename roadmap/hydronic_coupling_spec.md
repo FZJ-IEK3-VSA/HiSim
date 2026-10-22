@@ -6,7 +6,8 @@ hisim-component-physics-4g9.22, hisim-energy-sankeys-9uoo.12, hisim-energy-sanke
 space-heating chain on start-of-step values instead of the step-mean node, and above 600 s the boiler and heat-pump
 chain runs a fraction of the step at both ends of the buffer (owner, 2026-10-15; §12). A chain without a buffer
 (district heating) keeps whole steps. Stage D closes with the buffer chain; the chain without a buffer is split out
-to bead hisim-pnw7 (owner, 2026-10-16; §12).**
+to bead hisim-pnw7 (owner, 2026-10-16; §12). A boiler without a buffer heats the distribution system's flow
+instead of pumping its own: D25 amended for boilers, with an exception to D1 (owner, 2026-10-22; §4.6, §5.1, §10).**
 
 All `file:line` citations are against `origin/main` at fca81ba0. Code on the #864 branch (`fix/storage-energy`)
 is cited by name only.
@@ -245,16 +246,40 @@ it, with the pipe water's `ΔU` in between (§10, D3).
 
 **Who pumps follows from the circuit (owner, 2026-10-04, assemblies D25).** In stage D the HDS stops being told its
 position by `position_hot_water_storage_in_system`: if the component at the other end of its space-heating circuit
-publishes `MassFlowSpaceHeating` (a heat pump, a boiler, a substation with a pump), the HDS reads that flow through its
-default connections from that class; otherwise (a buffer in front of it, or a substation without a pump, today's
-`NO_STORAGE_MASS_FLOW_FIX`) the HDS pumps with its design flow. The enum is removed with the re-record of this stage, so
-a heating assembly with or without a buffer (two assemblies, no parameter) needs no site setting to agree with.
+publishes `MassFlowSpaceHeating` (a heat pump, a substation with a pump), the HDS reads that flow through its
+default connections from that class; otherwise (a buffer in front of it, a substation without a pump, today's
+`NO_STORAGE_MASS_FLOW_FIX`, or a boiler, as amended below) the HDS pumps with its design flow. The enum is removed with
+the re-record of this stage, so a heating assembly with or without a buffer (two assemblies, no parameter) needs no
+site setting to agree with. *(As first written, a boiler was among the components whose flow the HDS reads.)*
+
+**D25 amended for boilers (owner, 2026-10-22, hisim-boiler-circuit-flow-gap-g2mx).** A boiler without a buffer is a
+heater on the distribution system's flow, like a substation without a pump: the HDS pumps its design flow (today's
+`NO_STORAGE_MASS_FLOW_FIX`), and the boiler reads that flow through its optional input `WaterInputMassFlowSh` and heats
+it, holding a power rather than a lift (§5.1, the exception to D1 in §10). The boiler's `WaterOutputMassFlowSh` is then
+the flow it read, so nothing reads it back. Why the HDS and not the boiler pumps, measured on `gas_boiler_household`,
+full year 2021 (hisim-boiler-flow-mismatch-4awa):
+
+| Who pumps | Booked minus delivered space heat at 60 / 900 / 3600 s | Gas at 60 / 900 / 3600 s, kWh |
+|---|---|---|
+| both, before the fix: the boiler books its own pump's 0.359 kg/s, the HDS pumps 0.27 kg/s | +33.0 / +33.0 / +33.1 % | 15,289 / 15,274 / 15,248 |
+| the boiler, D25 as first written (the HDS reads the boiler's flow) | +0.41 / +3.36 / +12.9 % | 11,527 / 11,864 / 12,968 |
+| the HDS, the boiler heats its flow (this amendment) | +0.001 / +0.021 / +0.085 % | 11,479 / 11,470 / 11,456 |
+
+With the boiler pumping, the circuit stands still whenever the boiler idles, the HDS's free convection cools the
+published return, and the boiler restarts on that stale return for a whole step; with the HDS pumping, the circuit runs
+whenever the room asks for heat. What remains is the HDS's one-step lag of its return, which closes over the year but
+not per step; the pipe-water node that closes it per step, the removal of the enum and district heating's bill stay
+with hisim-pnw7, which builds on this ownership. For the HDS the rule now reads: it reads the flow of a heat pump or of
+a substation with a pump, and pumps its design flow behind a buffer, beside a substation without a pump and beside a
+boiler.
 
 ## 5. Generators
 
 Every generator reads its node's return temperature and answers, within its limits, with a supply temperature
 and (as pump owner) a mass flow. Its heat is `Q = m c (T_sup − T_ret) dt` (§3.5); its fuel or electricity follows
-from its own model, which at the converged iterate carries exactly that heat.
+from its own model, which at the converged iterate carries exactly that heat. The one generator that is not a pump
+owner is a boiler without a buffer: it heats the distribution system's flow and publishes that flow (owner,
+2026-10-22; §4.6, §5.1).
 
 **Maximum supply temperature (owner, 2026-10-09).** Every generator that holds a lift (the boiler, the electric
 heater's hot-water side, the heat pump's hot-water side) has a maximum supply temperature and throttles like the
@@ -313,6 +338,19 @@ A hot-water step whose controller asks for no lift moves no water, so the boiler
 2026-10-09); the same holds for a space-heating step without a lift, which booked the burner's heat at zero flow
 before (owner, 2026-10-10). A boiler that does not fire publishes zero fuel power (`TotalFuelConsumption`); before
 2026-10-10 it published its commanded burner power while off.
+
+**A boiler without a buffer heats the distribution system's flow (owner, 2026-10-22; D25 as amended in §4.6, the
+exception to D1 in §10).** With `WaterInputMassFlowSh` wired to the HDS's `WaterMassFlowHDS`, the space-heating circuit
+holds the power its control signal commands, not a lift: `T_sup = T_ret + P_th/(m c)` with `m` the flow it reads,
+throttled at `T_max` as above; the heat is `m c (T_sup − T_ret)` with that flow; the fuel is the commanded power, or on a
+throttled step the heat over the efficiency at the commanded power (`GenericBoiler.fired_on_distribution_flow`). The
+controller's lift only says whether to fire. At `m = 0` the boiler does not fire, like a boiler's flow switch: no fuel
+and no heat on that circuit (before, the household's boiler fired into a standing circuit in 205 steps of 2021 at
+900 s). The published `WaterOutputMassFlowSh` is the flow it reads in every step, firing or not; a part-load ratio below
+1, which the controller sends only with a buffer wired, keeps that flow and scales the heat and the fuel. Unwired, the
+boiler pumps its own flow exactly as before, and every boiler with a buffer, RenoVisor's included, leaves the input
+unwired. No default connection wires it: a boiler with a buffer also sits beside an HDS, and a default connection from
+the HDS class would wire it there too.
 
 ### 5.2 Heat pump (D2: hplib's flow is authoritative)
 
@@ -733,6 +771,11 @@ firing boiler step is the power-limited pure-port case of §7 (≈11 iterations 
 `force_convergence` limit), so the node acceleration (removed on 2026-10-11; the forced charges are accepted,
 hisim-component-physics-4g9.50) and the iteration histogram test cover the boiler setups explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
 
+*Exception (owner, 2026-10-22, hisim-boiler-circuit-flow-gap-g2mx).* A boiler without a buffer, on the distribution
+system's flow (D25 as amended in §4.6), holds a power, not a lift: `T_sup = T_ret + P_th/(m c)` with the flow `m` it
+reads, throttled at `T_max`; heat `m c (T_sup − T_ret)` with that flow; fuel the commanded power, or on a throttled step
+the heat over the efficiency at the commanded power; no fire at `m = 0` (§5.1). Every other boiler keeps D1.
+
 *Amendment (owner, 2026-10-09).* Every fixed-lift generator (boiler, electric heater's DHW side, heat pump's DHW
 side) has a maximum supply temperature and throttles to it when `T_ret + ΔT` would exceed it (§5); on a throttled
 step the heat is `m c (T_max − T_ret)` and the fuel or electricity follows from it through the generator's own
@@ -1015,7 +1058,9 @@ and reach 0.0 degree-hours instead of 16.9, 21.2 and 21.2.
 - *Stage D closes with the buffer chain.* The chain without a buffer (district heating, `gas_boiler_household`) is
   split out of stage D into bead hisim-pnw7: the pipe-water node of §4.6 as a start-of-step node, S10's flow
   ownership (D25: the distribution system learns from the circuit who pumps, and its position enum
-  `PositionHotWaterStorageInSystemSetup` goes) and district heating's bill (hisim-energy-sankeys-9uoo.12). The district-heating twin
+  `PositionHotWaterStorageInSystemSetup` goes) and district heating's bill (hisim-energy-sankeys-9uoo.12). *Since
+  2026-10-22 (owner) the boiler's half of that ownership is decided ahead of hisim-pnw7: the distribution system pumps
+  and the boiler heats its flow (§4.6, §5.1); hisim-pnw7 keeps the node, the enum and the bill.* The district-heating twin
   forces no steps and its results did not move in stage D, so this half does not block stage D's merge.
 - *S9 amended: stage D asserts the delivered heat within 1 % of the 60 s run at 900 s*, RenoVisor's step length, for
   the four twins with a buffer: gas, pellets, heat pump, and heat pump + solar thermal (−0.13, −0.09, −0.70 and

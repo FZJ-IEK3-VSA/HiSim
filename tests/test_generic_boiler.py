@@ -365,8 +365,12 @@ class BoilerStep:
     UNLIMITING_SET_TEMPERATURE_IN_CELSIUS = 80.0
 
     @staticmethod
-    def build() -> Tuple[Any, Any, List[Any]]:
-        """Return the boiler, the step values and its fakes in :attr:`INPUT_ORDER`."""
+    def build(*, space_heating_flow_is_wired: bool = False) -> Tuple[Any, Any, List[Any]]:
+        """Return the boiler, the step values and its fakes in :attr:`INPUT_ORDER`.
+
+        With ``space_heating_flow_is_wired`` the boiler's optional space-heating flow input reads one more fake, the
+        last in the list, as it does on a heat distribution system's flow; otherwise that input stays unwired.
+        """
         from hisim import component as cp  # pylint: disable=import-outside-toplevel  # keeps the test module light
         from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel  # as above
 
@@ -387,6 +391,8 @@ class BoilerStep:
             (boiler.control_signal_for_space_heating_remainder_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
             (boiler.temperature_delta_for_space_heating_remainder_channel, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
         ]
+        if space_heating_flow_is_wired:
+            channels.append((boiler.water_input_mass_flow_sh_channel, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC))
         fakes = []
         for number, (channel, load_type, unit) in enumerate(channels):
             fake = cp.ComponentOutput(
@@ -399,13 +405,20 @@ class BoilerStep:
         return boiler, stsv, fakes
 
     @staticmethod
-    def run(**inputs: float) -> Tuple[Any, Callable[[Any], float]]:
+    def run(
+        *, space_heating_flow_in_kg_per_second: Optional[float] = None, **inputs: float
+    ) -> Tuple[Any, Callable[[Any], float]]:
         """Step a fresh boiler once with these inputs (see :attr:`INPUT_ORDER`), return it and a reader of outputs.
 
         A missing return is 0 °C, a missing set temperature :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS`, a missing
-        part-load ratio 1, the whole step.
+        part-load ratio 1, the whole step. A space-heating flow wires the boiler's optional flow input to it, the way
+        a heat distribution system that pumps the circuit does; without one the input stays unwired.
         """
-        boiler, stsv, fakes = BoilerStep.build()
+        boiler, stsv, fakes = BoilerStep.build(
+            space_heating_flow_is_wired=space_heating_flow_in_kg_per_second is not None
+        )
+        if space_heating_flow_in_kg_per_second is not None:
+            stsv.set_output_value(fakes[-1], space_heating_flow_in_kg_per_second)
         values = {
             "set": BoilerStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
             "ratio": 1.0,
@@ -1312,3 +1325,235 @@ def test_a_condensing_gas_boiler_burns_at_its_ecodesign_test_points_not_on_the_o
 
     assert fuel_power_in_watt == pytest.approx(20000.0 * control_signal, rel=1e-12)
     assert heat_in_watt / fuel_power_in_watt == pytest.approx(expected_efficiency, rel=1e-12)
+
+
+class DistributionFlowCase:
+    """The flow and the burner of the distribution-flow tests, a namespace for their expected values.
+
+    The heat distribution system pumps the boiler's space-heating circuit at its design flow, here the 0.27 kg/s of
+    ``gas_boiler_household`` (load / (c 7 K)), and the boiler heats that flow (``WaterInputMassFlowSh`` wired). The
+    burner runs at full signal, 20 kW, on a 35 °C return, where the current condensing gas curve gives
+    0.877 + 0.0030 * (60 - 35) = 0.952, so its heat is 19040 W.
+    """
+
+    #: The distribution system's design flow, in kg/s.
+    MASS_FLOW_IN_KG_PER_SECOND = 0.27
+
+    #: The space-heating return, in °C.
+    RETURN_TEMPERATURE_IN_CELSIUS = 35.0
+
+    #: The burner's heat at full signal on that return, in W, written out by hand from the curve.
+    HEAT_IN_WATT = 20000.0 * (0.877 + 0.0030 * (60.0 - 35.0))
+
+
+@pytest.mark.base
+def test_a_boiler_on_the_distribution_flow_books_the_heat_that_flow_carries() -> None:
+    """A boiler that booked its own pump's flow on a circuit the distribution system pumps booked heat nobody got.
+
+    ``gas_boiler_household`` booked 14,905 kWh of space heating for 11,205 kWh delivered in 2021 at 900 s, because the
+    boiler booked its pump's 0.359 kg/s while the distribution system pumped 0.27 kg/s
+    (hisim-boiler-circuit-flow-gap-g2mx). On the flow it reads the boiler holds its power: the supply is the return
+    plus P_th / (m c), the heat is m c (T_sup - T_ret) with the flow read, the fuel the commanded power, and the
+    flow it publishes is the flow it read. The lift the controller asks for does not set the flow.
+    """
+    boiler, output = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=5.0,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+        hot_water_return=50.0,
+    )
+    mass_flow_in_kg_per_second = DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND
+    supply_temperature_in_celsius = output(boiler.water_output_temperature_sh_channel)
+    assert output(boiler.water_output_mass_flow_sh_channel) == mass_flow_in_kg_per_second
+    assert supply_temperature_in_celsius == pytest.approx(
+        DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
+        + DistributionFlowCase.HEAT_IN_WATT / (mass_flow_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K),
+        rel=1e-12,
+    )
+    booked_power_in_watt = output(boiler.thermal_output_power_sh_channel)
+    assert booked_power_in_watt == hydronics.circuit_power_w(
+        mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+        t_supply_c=supply_temperature_in_celsius,
+        t_return_c=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+    )
+    assert booked_power_in_watt == pytest.approx(DistributionFlowCase.HEAT_IN_WATT, rel=1e-12)
+    assert output(boiler.total_fuel_input_power_channel) == 20000.0
+    assert output(boiler.energy_demand_sh_channel) == pytest.approx(20000.0 * 900 / 3600)
+    assert output(boiler.combustion_heat_loss_channel) == pytest.approx(20000.0 - booked_power_in_watt)
+
+
+@pytest.mark.base
+def test_a_boiler_on_a_standing_distribution_flow_does_not_fire() -> None:
+    """A boiler that fired into a standing circuit would burn fuel and book heat no water carries away.
+
+    The distribution system stops its pump while its valve is shut; the boiler's flow switch then keeps the burner
+    out although the controller asks for full power: no fuel, no heat, no loss, the supply at the return, and the
+    flow it publishes is the 0 kg/s it read. On main the gas household fired into a standing circuit in 205 steps of
+    2021 at 900 s.
+    """
+    boiler, output = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=0.0,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=5.0,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+        hot_water_return=50.0,
+    )
+    for channel in (
+        boiler.water_output_mass_flow_sh_channel,
+        boiler.thermal_output_power_sh_channel,
+        boiler.thermal_output_energy_sh_channel,
+        boiler.energy_demand_sh_channel,
+        boiler.combustion_heat_loss_channel,
+        boiler.total_fuel_input_power_channel,
+    ):
+        assert output(channel) == 0.0, channel.field_name
+    assert output(boiler.water_output_temperature_sh_channel) == DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
+    assert boiler.burner_state.is_lit is False
+
+
+@pytest.mark.base
+def test_a_boiler_on_the_distribution_flow_is_throttled_and_burns_what_its_heat_needs() -> None:
+    """A throttled boiler that burnt its commanded fuel would bill heat the distribution system's flow does not carry.
+
+    On a 70 °C return the burner's full-load heat, 20000 * 0.877 = 17540 W (no condensing gain above 60 °C), would
+    raise 0.27 kg/s by 15.5 K to 85.5 °C. The supply stops at the 80 °C maximum, so the flow carries
+    0.27 * 4180 * 10 = 11286 W, and the burner, cycling at its commanded power, burns that heat over 0.877.
+    """
+    boiler, output = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=5.0,
+        space_heating_return=70.0,
+        hot_water_return=50.0,
+    )
+    booked_power_in_watt = output(boiler.thermal_output_power_sh_channel)
+    assert output(boiler.water_output_temperature_sh_channel) == 80.0
+    assert output(boiler.water_output_mass_flow_sh_channel) == DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND
+    assert booked_power_in_watt == pytest.approx(
+        DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 10.0, rel=1e-12
+    )
+    assert output(boiler.total_fuel_input_power_channel) == pytest.approx(booked_power_in_watt / 0.877, rel=1e-12)
+    assert output(boiler.combustion_heat_loss_channel) == pytest.approx(
+        booked_power_in_watt / 0.877 - booked_power_in_watt, rel=1e-12
+    )
+
+
+@pytest.mark.base
+def test_an_idle_boiler_on_the_distribution_flow_passes_that_flow_at_its_return() -> None:
+    """The space-heating circuit's published flow is the flow the boiler reads, also while the burner is off.
+
+    The distribution system keeps pumping while the boiler idles, so the water passes the boiler at its return: no
+    heat, no fuel, and the flow read.
+    """
+    boiler, output = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND,
+        control_signal=0.0,
+        operating_mode=HeatingMode.OFF.value,
+        lift=0.0,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+        hot_water_return=50.0,
+    )
+    assert output(boiler.water_output_mass_flow_sh_channel) == DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND
+    assert output(boiler.water_output_temperature_sh_channel) == DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
+    for channel in (
+        boiler.thermal_output_power_sh_channel,
+        boiler.energy_demand_sh_channel,
+        boiler.total_fuel_input_power_channel,
+        boiler.combustion_heat_loss_channel,
+    ):
+        assert output(channel) == 0.0, channel.field_name
+
+
+@pytest.mark.base
+def test_a_boiler_on_the_distribution_flow_at_part_load_keeps_that_flow() -> None:
+    """A part-loaded boiler that scaled the flow it reads would publish a flow the circuit does not carry.
+
+    The distribution system pumps the whole step, so at a ratio of 0.25 the flow stays 0.27 kg/s, the heat and the
+    fuel are a quarter of the whole step's, and the supply averaged over the step lies a quarter of the rise above
+    the return.
+    """
+    full_boiler, full = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=5.0,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+    )
+    boiler, part = BoilerStep.run(
+        space_heating_flow_in_kg_per_second=DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND,
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=5.0,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+        space_heating_ratio=0.25,
+    )
+    assert part(boiler.water_output_mass_flow_sh_channel) == DistributionFlowCase.MASS_FLOW_IN_KG_PER_SECOND
+    for name in ("thermal_output_power_sh_channel", "total_fuel_input_power_channel"):
+        assert part(getattr(boiler, name)) == pytest.approx(0.25 * full(getattr(full_boiler, name)), rel=1e-12), name
+    rise_in_kelvin = (
+        full(full_boiler.water_output_temperature_sh_channel) - DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
+    )
+    assert part(boiler.water_output_temperature_sh_channel) == pytest.approx(
+        DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS + 0.25 * rise_in_kelvin, rel=1e-12
+    )
+    assert part(boiler.space_heating_part_load_command.ratio_run_channel) == 0.25
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("operating_mode", "control_signal", "lift_in_kelvin", "space_heating_ratio"),
+    [
+        (HeatingMode.SPACE_HEATING, 1.0, 5.0, 1.0),
+        (HeatingMode.SPACE_HEATING, 0.5, 3.0, 1.0),
+        (HeatingMode.SPACE_HEATING, 1.0, 0.01, 0.25),
+        (HeatingMode.DOMESTIC_HOT_WATER, 1.0, 20.0, 1.0),
+        (HeatingMode.OFF, 0.0, 0.0, 1.0),
+    ],
+)
+def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_before(
+    operating_mode: HeatingMode, control_signal: float, lift_in_kelvin: float, space_heating_ratio: float
+) -> None:
+    """Every boiler that charges a buffer leaves the flow input unwired; its outputs must not move by a bit.
+
+    Unwired, every output equals the one the boiler's own pump law gives: the space-heating circuit's firing is
+    :meth:`GenericBoiler.fired_circuit` at the lift the pump raises the asked one to, part-loaded by
+    :meth:`GenericBoiler.part_loaded_firing`, compared exactly, not approximately.
+    """
+    boiler, output = BoilerStep.run(
+        control_signal=control_signal,
+        operating_mode=operating_mode.value,
+        lift=lift_in_kelvin,
+        space_heating_return=DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS,
+        hot_water_return=50.0,
+        space_heating_ratio=space_heating_ratio,
+    )
+    assert boiler.space_heating_runs_on_distribution_flow() is False
+    if operating_mode != HeatingMode.SPACE_HEATING:
+        assert output(boiler.water_output_mass_flow_sh_channel) == 0.0
+        assert output(boiler.thermal_output_power_sh_channel) == 0.0
+        return
+    burner = boiler.burner
+    return_in_celsius = DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
+    lift_run_in_kelvin = boiler.pump.lift_in_kelvin(
+        asked_lift_in_kelvin=lift_in_kelvin,
+        heat_power_in_watt=burner.heat_power_in_watt(burner.commanded_power_in_watt(control_signal), return_in_celsius),
+    )
+    expected = generic_boiler.GenericBoiler.part_loaded_firing(
+        generic_boiler.GenericBoiler.fired_circuit(
+            burner=burner,
+            control_signal=control_signal,
+            lift_in_kelvin=lift_run_in_kelvin,
+            return_temperature_in_celsius=return_in_celsius,
+            supply_temperature_in_celsius=return_in_celsius + lift_run_in_kelvin,
+        ),
+        part_load_ratio=space_heating_ratio,
+        return_temperature_in_celsius=return_in_celsius,
+    )
+    assert output(boiler.water_output_mass_flow_sh_channel) == expected.mass_flow_in_kg_per_second
+    assert output(boiler.water_output_temperature_sh_channel) == expected.supply_temperature_in_celsius
+    assert output(boiler.thermal_output_power_sh_channel) == expected.thermal_power_in_watt
+    assert output(boiler.total_fuel_input_power_channel) == expected.fuel_power_in_watt

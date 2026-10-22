@@ -1460,6 +1460,15 @@ class GenericBoiler(PhysicsComponent):
     sends for it (``ControlSignalForSpaceHeatingRemainder``, ``TemperatureDeltaForSpaceHeatingRemainderInKelvin``),
     and the fuel of both adds up.
 
+    Without a buffer the space-heating circuit may run on the heat distribution system's flow: the distribution system
+    pumps its design flow and the boiler, wired to it through ``WaterInputMassFlowSh``, is a heater on that flow, like
+    a district-heating substation without a pump (``roadmap/hydronic_coupling_spec.md``, D25 as amended on 2026-10-22).
+    It then holds the commanded power instead of the controller's lift: the supply is the return plus the rise that
+    power's heat gives at the flow it reads, throttled at the maximal flow temperature, and it books the heat with that
+    flow, so both ends of the circuit book the same water. With no flow it does not fire, like a boiler's flow switch.
+    The space-heating circuit then publishes the flow it reads in every step, firing or not
+    (:meth:`fired_on_distribution_flow`). Unwired, the boiler pumps its own flow as before.
+
     A pellet or wood-chip burner keeps its minimum firing time and minimum pause (:class:`BurnerTimes`), the device's
     protection against short cycling: lit, it burns on although its controller asks it to stop, sending the heat to the
     space-heating buffer; out, it stays out although asked to burn. The burner's state, lit or out and since when, is
@@ -1482,6 +1491,9 @@ class GenericBoiler(PhysicsComponent):
     ControlSignalForSpaceHeatingRemainder = "ControlSignalForSpaceHeatingRemainder"
     TemperatureDeltaForSpaceHeatingRemainderInKelvin = "TemperatureDeltaForSpaceHeatingRemainderInKelvin"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
+    #: The space-heating circuit's mass flow, in kg/s, when the component at its other end pumps it: a heat
+    #: distribution system that pumps its design flow, with no buffer in between. Optional; unwired, the boiler pumps.
+    WaterInputMassFlowSh = "WaterInputMassFlowSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
     # Output
@@ -1595,12 +1607,22 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.CELSIUS,
             True,
         )
+        self.water_input_mass_flow_sh_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.WaterInputMassFlowSh,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            False,
+        )
         self.water_output_mass_flow_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
             GenericBoiler.WaterOutputMassFlowSh,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
-            output_description=f"here a description for {self.WaterOutputMassFlowSh} will follow.",
+            output_description=(
+                "The space-heating circuit's mass flow, kg/s: the flow the boiler's pump runs while it fires and 0 "
+                "while it idles, or, with WaterInputMassFlowSh wired, the flow it reads there, in every step."
+            ),
         )
         self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1912,9 +1934,12 @@ class GenericBoiler(PhysicsComponent):
         step (:meth:`whole_step_firing` with a lift of 0 K). For example, a pellet burner whose controller switched to
         off burns at its minimal power, a twelfth of its maximal one, and one whose controller still names space heating
         with the buffer above its set temperature burns at full power. A burner out for less than its minimum pause
-        stays out. Out, no circuit moves water and no fuel is burnt. The decision reads only this step's inputs and the
-        burner's state committed at the end of the previous step, so every pass of a step decides the same way on the
-        same inputs.
+        stays out. Out, no circuit moves water and no fuel is burnt, except that a space-heating circuit on the
+        distribution system's flow (``WaterInputMassFlowSh`` wired) carries that flow at its return. On that flow the
+        space-heating circuit fires on the flow it reads, not on the lift, and a burner held lit sends its heat into
+        that flow; with no flow it does not fire (:meth:`fired_on_distribution_flow`). The decision reads only this
+        step's inputs and the burner's state committed at the end of the previous step, so every pass of a step decides
+        the same way on the same inputs.
 
         The burner counts as lit in a step when it burns fuel (:attr:`BurnerState.is_lit`). A held burner whose
         space-heating return is already at the maximal flow temperature carries no heat, so it burns no fuel: it
@@ -2011,11 +2036,21 @@ class GenericBoiler(PhysicsComponent):
     ) -> None:
         """Publish both circuits, each firing or idle, and the boiler's fuel power and combustion loss over both.
 
+        A space-heating circuit on the distribution system's flow carries that flow while it idles too, at its return
+        temperature and with no heat and no fuel, so its published flow is the flow it reads in every step.
+
         Args:
             stsv: The step's values.
             space_heating: The space-heating circuit's firing, or None while it idles.
             hot_water: The hot-water circuit's firing, or None while it idles.
         """
+        if space_heating is None and self.space_heating_runs_on_distribution_flow():
+            space_heating = BoilerFiring(
+                fuel_power_in_watt=0.0,
+                thermal_power_in_watt=0.0,
+                mass_flow_in_kg_per_second=stsv.get_input_value(self.water_input_mass_flow_sh_channel),
+                supply_temperature_in_celsius=stsv.get_input_value(self.water_input_temperature_sh_channel),
+            )
         fuel_power_in_watt, combustion_loss_in_watt = 0.0, 0.0
         for circuit, firing in ((self.space_heating_circuit, space_heating), (self.hot_water_circuit, hot_water)):
             if firing is None:
@@ -2041,7 +2076,8 @@ class GenericBoiler(PhysicsComponent):
         (:class:`BoilerPump`), so the flow stays one a household circuit carries and the supply ends above the one
         asked for. The hot-water supply stops at the controller's set temperature and both supplies at the maximal
         flow temperature. Each circuit runs the part-load ratio the controller commands for it
-        (:meth:`part_loaded_firing`) on the circuit's whole-step firing (:meth:`whole_step_firing`).
+        (:meth:`part_loaded_firing`) on the circuit's whole-step firing (:meth:`whole_step_firing`); a space-heating
+        circuit on the distribution system's flow keeps that flow (:meth:`part_loaded_firing_on_distribution_flow`).
 
         Args:
             stsv: The step's values, read for the circuit's return, the hot-water set temperature and the ratio.
@@ -2058,6 +2094,11 @@ class GenericBoiler(PhysicsComponent):
             self.dhw_part_load_command if fired is self.hot_water_circuit else self.space_heating_part_load_command
         )
         ratio_run = command.ratio(stsv)
+        if fired is self.space_heating_circuit and self.space_heating_runs_on_distribution_flow():
+            firing = self.part_loaded_firing_on_distribution_flow(
+                firing, part_load_ratio=ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
+            )
+            return firing, ratio_run
         firing = self.part_loaded_firing(
             firing, part_load_ratio=ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
         )
@@ -2078,10 +2119,13 @@ class GenericBoiler(PhysicsComponent):
         the maximal flow temperature. A burner its minimum firing time holds lit although no fire is asked for fires
         the space-heating circuit this way with a lift of 0 K, so it runs at the pump's largest flow for the whole
         step: it is not part-loaded, since the controller that asked it to stop may command a space-heating ratio of
-        0 above 600 s, and the burner would then go out before its minimum firing time.
+        0 above 600 s, and the burner would then go out before its minimum firing time. A space-heating circuit on the
+        distribution system's flow (``WaterInputMassFlowSh`` wired) ignores the lift and fires on the flow it reads
+        (:meth:`fired_on_distribution_flow`).
 
         Args:
-            stsv: The step's values, read for the circuit's return and the hot-water set temperature.
+            stsv: The step's values, read for the circuit's return, the hot-water set temperature and, on the
+                distribution system's flow, that flow.
             fired: The circuit that fires.
             control_signal: The share of the maximal burner power the controller commands, 0 to 1.
             lift_in_kelvin: The lift the controller asks for, in K; 0 for a burner held lit.
@@ -2091,6 +2135,14 @@ class GenericBoiler(PhysicsComponent):
         """
         commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
+        if fired is self.space_heating_circuit and self.space_heating_runs_on_distribution_flow():
+            return self.fired_on_distribution_flow(
+                burner=self.burner,
+                control_signal=control_signal,
+                mass_flow_in_kg_per_second=stsv.get_input_value(self.water_input_mass_flow_sh_channel),
+                return_temperature_in_celsius=return_temperature_in_celsius,
+                maximal_supply_temperature_in_celsius=self.maximal_flow_temperature_in_celsius,
+            )
         lift_in_kelvin = self.pump.lift_in_kelvin(
             asked_lift_in_kelvin=lift_in_kelvin,
             heat_power_in_watt=self.burner.heat_power_in_watt(commanded_power_in_watt, return_temperature_in_celsius),
@@ -2114,6 +2166,95 @@ class GenericBoiler(PhysicsComponent):
             control_signal=control_signal,
             lift_in_kelvin=lift_in_kelvin,
             return_temperature_in_celsius=return_temperature_in_celsius,
+            supply_temperature_in_celsius=supply_temperature_in_celsius,
+        )
+
+    def space_heating_runs_on_distribution_flow(self) -> bool:
+        """Return whether the space-heating circuit runs on the flow another component pumps: its flow input is wired.
+
+        A boiler without a buffer between it and the heat distribution system is wired to the distribution system's
+        flow (``WaterInputMassFlowSh``), since the distribution system pumps that circuit; every other boiler leaves
+        the input unwired and pumps its own flow. For example, ``gas_boiler_household.energy_system.yaml`` wires it,
+        and every boiler that charges a buffer does not. Read from the wiring in every call, which is one attribute
+        lookup, so a test that wires the input after building the boiler sees it.
+
+        Returns:
+            True when the flow input is wired.
+        """
+        return self.water_input_mass_flow_sh_channel.source_output is not None
+
+    @staticmethod
+    def fired_on_distribution_flow(
+        *,
+        burner: "BurnerModulation",
+        control_signal: float,
+        mass_flow_in_kg_per_second: float,
+        return_temperature_in_celsius: float,
+        maximal_supply_temperature_in_celsius: float,
+    ) -> "BoilerFiring":
+        """Return the fuel, heat and supply of a space-heating circuit that heats a flow another component pumps.
+
+        The heat distribution system pumps the circuit, so the boiler holds a power, not a lift: the burner burns at
+        the power the control signal commands, and its heat raises the flow it reads by ``P_th / (m c)``. The supply
+        is the return plus that rise, throttled at the maximal supply temperature
+        (:func:`hydronics.throttled_supply_temperature_c`). The heat is what the flow carries,
+        ``m c (T_sup - T_ret)``, booked with the flow read, so the boiler books the heat the distribution system
+        receives. Unthrottled, the fuel is the commanded power; throttled, the burner cycles at its commanded power
+        and the fuel is the heat over the efficiency at that power. With no flow (0 kg/s or less) the burner does not
+        fire, the way a boiler's flow switch keeps it out: no fuel, no heat, and the supply at the return. The flow
+        the circuit publishes is the flow read, in every case.
+
+        Example: 0.27 kg/s returning at 27 °C and a burner at 10 kW with an efficiency of 0.95 there rise by
+        9500 / (0.27 * 4180) = 8.42 K to 35.42 °C, carry 9500 W and burn 10 kW. On a 76 °C return, where the
+        efficiency is 0.88, the 8800 W would rise by 7.80 K to 83.80 °C; the supply stops at 80 °C, the flow carries
+        0.27 * 4180 * 4 = 4514.4 W and the burner burns 4514.4 / 0.88 = 5130 W.
+
+        Why the boiler takes the distribution system's flow rather than the other way round: with the boiler pumping,
+        its circuit would stop whenever it idles and it would restart on a stale return; with the distribution system
+        pumping, the circuit runs whenever the room asks for heat (``roadmap/hydronic_coupling_spec.md``, D25 as
+        amended on 2026-10-22).
+
+        Args:
+            burner: The burner's power band and efficiency law.
+            control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
+            mass_flow_in_kg_per_second: The circuit's flow the distribution system pumps, in kg/s.
+            return_temperature_in_celsius: The circuit's return temperature, in °C.
+            maximal_supply_temperature_in_celsius: The highest supply temperature the boiler delivers, in °C.
+
+        Returns:
+            The fuel power, the heat, the mass flow (the one read) and the supply temperature of the circuit.
+        """
+        if mass_flow_in_kg_per_second <= 0.0:
+            return BoilerFiring(
+                fuel_power_in_watt=0.0,
+                thermal_power_in_watt=0.0,
+                mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+                supply_temperature_in_celsius=return_temperature_in_celsius,
+            )
+        commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
+        rise_in_kelvin = burner.heat_power_in_watt(commanded_power_in_watt, return_temperature_in_celsius) / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * mass_flow_in_kg_per_second
+        )
+        unthrottled_supply_in_celsius = return_temperature_in_celsius + rise_in_kelvin
+        supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
+            unthrottled_supply_c=unthrottled_supply_in_celsius,
+            return_c=return_temperature_in_celsius,
+            supply_limit_c=maximal_supply_temperature_in_celsius,
+        )
+        thermal_power_in_watt = hydronics.circuit_power_w(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=supply_temperature_in_celsius,
+            t_return_c=return_temperature_in_celsius,
+        )
+        fuel_power_in_watt = commanded_power_in_watt
+        if supply_temperature_in_celsius < unthrottled_supply_in_celsius:
+            fuel_power_in_watt = thermal_power_in_watt / burner.efficiency_at(
+                commanded_power_in_watt, return_temperature_in_celsius
+            )
+        return BoilerFiring(
+            fuel_power_in_watt=fuel_power_in_watt,
+            thermal_power_in_watt=thermal_power_in_watt,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             supply_temperature_in_celsius=supply_temperature_in_celsius,
         )
 
@@ -2250,6 +2391,42 @@ class GenericBoiler(PhysicsComponent):
             ),
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             supply_temperature_in_celsius=full_load.supply_temperature_in_celsius,
+        )
+
+    @staticmethod
+    def part_loaded_firing_on_distribution_flow(
+        full_load: "BoilerFiring", *, part_load_ratio: float, return_temperature_in_celsius: float
+    ) -> "BoilerFiring":
+        """Return a firing on the distribution system's flow when the burner runs only a fraction of the step.
+
+        The distribution system pumps the circuit for the whole step, so the flow stays the one read; the burner
+        fires the ratio's fraction of the step, so the heat and the fuel are the ratio times the full-load ones, and
+        the supply averaged over the step lies the ratio's share of the full-load rise above the return. A ratio of 1
+        returns the full-load firing unchanged; a ratio of 0 carries the flow at the return, with no heat and no
+        fuel. Example: 0.27 kg/s from 27 to 35 °C with 9028.8 W of heat and 9500 W of fuel at a ratio of 0.25 gives
+        0.27 kg/s at 29 °C, 2257.2 W of heat and 2375 W of fuel.
+
+        Why it exists beside :meth:`part_loaded_firing`, whose averaged flow is the full-load flow times the ratio:
+        here the flow is the distribution system's, not the boiler's, so scaling it would publish a flow the circuit
+        does not carry. The controller commands whole steps to a boiler without a buffer, so a ratio below 1 reaches
+        this law only from a controller wired to a buffer.
+
+        Args:
+            full_load: The circuit's firing over the whole step (:meth:`fired_on_distribution_flow`).
+            part_load_ratio: The fraction of the step the burner runs, from 0 to 1.
+            return_temperature_in_celsius: The circuit's return temperature, in °C.
+
+        Returns:
+            The circuit's firing at that ratio.
+        """
+        if part_load_ratio >= 1.0:
+            return full_load
+        return BoilerFiring(
+            fuel_power_in_watt=part_load_ratio * full_load.fuel_power_in_watt,
+            thermal_power_in_watt=part_load_ratio * full_load.thermal_power_in_watt,
+            mass_flow_in_kg_per_second=full_load.mass_flow_in_kg_per_second,
+            supply_temperature_in_celsius=return_temperature_in_celsius
+            + part_load_ratio * (full_load.supply_temperature_in_celsius - return_temperature_in_celsius),
         )
 
     @staticmethod

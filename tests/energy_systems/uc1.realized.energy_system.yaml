@@ -146,6 +146,8 @@ components:
       - boiler_controller
       - input: WaterInputTemperatureSh
         from: hds.WaterTemperatureOutput
+      - input: WaterInputMassFlowSh
+        from: hds.WaterMassFlowHDS
     sizing_sources:
       heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
       number_of_apartments: building.number_of_apartments # unique provider, written for re-execution

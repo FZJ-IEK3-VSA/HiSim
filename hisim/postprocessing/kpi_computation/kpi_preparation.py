@@ -5,12 +5,13 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 """
 
 import os
-from typing import Any, List, Tuple, Dict, Optional
+from types import MappingProxyType
+from typing import Any, ClassVar, List, Mapping, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
-from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
+from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames, Units
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -20,6 +21,13 @@ from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFind
 
 class KpiPreparation:
     """Class for generating and calculating key performance indicators."""
+
+    #: The factor from each unit a power column flagged for the electricity KPIs may carry into watt.
+    WATT_PER_POWER_UNIT: ClassVar[Mapping[Units, float]] = MappingProxyType({Units.WATT: 1.0, Units.KILOWATT: 1000.0})
+    #: The factor from each unit a stored-energy-increase column may carry into watt-hours.
+    WATT_HOUR_PER_ENERGY_UNIT: ClassVar[Mapping[Units, float]] = MappingProxyType(
+        {Units.WATT_HOUR: 1.0, Units.KWH: 1000.0}
+    )
 
     def __init__(
         self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list
@@ -77,6 +85,11 @@ class KpiPreparation:
         consumption is flagged with either InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED or InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
         storage charge/discharge is flagged with InandOutputType.CHARGE_DISCHARGE. For batteries to be considered as wished, they additionally need the
         Component itself as postprocesessing flag: ComponentType.CAR_BATTERY or ComponentType.BATTERY
+
+        Every power column is converted from the unit its output declares into W before the columns are summed
+        (``WATT_PER_POWER_UNIT``), and every stored-energy column into Wh (``WATT_HOUR_PER_ENERGY_UNIT``), so a
+        component publishing kW, such as the transformer, counts at its true size. An output in any other unit
+        is refused.
         """
 
         # initialize columns consumption, production, battery_charge, battery_discharge, storage
@@ -151,31 +164,22 @@ class KpiPreparation:
             battery_charge_discharge_ids=battery_charge_discharge_ids,
             battery_stored_energy_increase_ids=battery_stored_energy_increase_ids,
         )
+
+        def in_watt(column_ids: List[int]) -> pd.DataFrame:
+            """Return the columns at these positions, each converted from its declared power unit into W."""
+            return self._columns_in_unit(results, all_outputs, column_ids, self.WATT_PER_POWER_UNIT, "W")
+
         result_dataframe = pd.DataFrame()
-        result_dataframe["total_consumption"] = (
-            pd.DataFrame(results.iloc[:, total_consumption_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["building_consumption"] = (
-            pd.DataFrame(results.iloc[:, buildings_consumption_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["total_production"] = (
-            pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["building_production"] = (
-            pd.DataFrame(results.iloc[:, buildings_production_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["pv_production"] = pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
-        result_dataframe["windturbine_production"] = (
-            pd.DataFrame(results.iloc[:, windturbine_production_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["battery_charge"] = (
-            pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
-        )
-        result_dataframe["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(
-            upper=0
-        ).sum(axis=1) * (-1)
-        result_dataframe["battery_stored_energy_increase_in_watt_hour"] = pd.DataFrame(
-            results.iloc[:, battery_stored_energy_increase_ids]
+        result_dataframe["total_consumption"] = in_watt(total_consumption_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["building_consumption"] = in_watt(buildings_consumption_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["total_production"] = in_watt(total_production_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["building_production"] = in_watt(buildings_production_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["pv_production"] = in_watt(pv_production_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["windturbine_production"] = in_watt(windturbine_production_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["battery_charge"] = in_watt(battery_charge_discharge_ids).clip(lower=0).sum(axis=1)
+        result_dataframe["battery_discharge"] = in_watt(battery_charge_discharge_ids).clip(upper=0).sum(axis=1) * (-1)
+        result_dataframe["battery_stored_energy_increase_in_watt_hour"] = self._columns_in_unit(
+            results, all_outputs, battery_stored_energy_increase_ids, self.WATT_HOUR_PER_ENERGY_UNIT, "Wh"
         ).sum(axis=1)
 
         return result_dataframe
@@ -211,6 +215,47 @@ class KpiPreparation:
                 f"Charging power only: {sorted(charging_batteries - storing_batteries)}; stored energy only: "
                 f"{sorted(storing_batteries - charging_batteries)}."
             )
+
+    @staticmethod
+    def _columns_in_unit(
+        results: pd.DataFrame,
+        all_outputs: List,
+        column_ids: List[int],
+        factor_per_unit: Mapping[Units, float],
+        target_unit_symbol: str,
+    ) -> pd.DataFrame:
+        """Return the chosen result columns, each converted from the unit its output declares into one unit.
+
+        The KPI sums add the flagged columns of different components and then integrate them as watt (or
+        watt-hour) series. A column published in kW, such as the transformer's output, has to be scaled by
+        1000 first; summed as it stands it would count 1000 times too little. Example: a transformer column of
+        10 (kW) with ``WATT_PER_POWER_UNIT`` becomes 10 000 (W).
+
+        Args:
+            results: The per-timestep values of every output of the run.
+            all_outputs: Every output of the run, in column order; each one's ``unit`` gives its factor.
+            column_ids: The positions of the columns to convert.
+            factor_per_unit: The factor from each accepted unit into the target unit.
+            target_unit_symbol: The target unit's symbol, named in the error message.
+
+        Returns:
+            The selected columns in the target unit, in the order of ``column_ids``.
+
+        Raises:
+            ValueError: If an output declares a unit the mapping has no factor for: its column cannot be added
+                to the others without guessing its scale.
+        """
+        factors = []
+        for index in column_ids:
+            output = all_outputs[index]
+            if output.unit not in factor_per_unit:
+                raise ValueError(
+                    f"The output {output.full_name} counts in the electricity KPIs but is published in "
+                    f"{output.unit}, which has no conversion to {target_unit_symbol}; accepted units: "
+                    f"{sorted(unit.value for unit in factor_per_unit)}."
+                )
+            factors.append(factor_per_unit[output.unit])
+        return pd.DataFrame(results.iloc[:, column_ids]) * factors
 
     def compute_total_energy_from_power_timeseries(
         self, power_timeseries_in_watt: pd.Series, timeresolution: int

@@ -282,7 +282,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 168.5887808675523
+    "value": 168588.78086755233
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -394,7 +394,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 168.6
+    "value": 168588.8
   },
   "BUI1.General.Total energy self-suffiency rate": {
     "building": "BUI1",

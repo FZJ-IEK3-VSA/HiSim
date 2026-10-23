@@ -35,6 +35,9 @@ class ComponentWrapper:
         # self.cachedict: = {}
         self.is_cachable: bool = is_cachable
         self.connect_automatically: bool = connect_automatically
+        #: Whether the component is a controller (kind L1 or L2), which the simulator does not restore in a forced pass
+        #: (:meth:`restore_state`). Decided once here, so the convergence loop does no per-pass type lookup.
+        self.holds_state_when_forced: bool = isinstance(component, (cp.L1ControllerComponent, cp.L2ControllerComponent))
 
     def clear(self) -> None:
         """Clears properties to help with saving memory."""
@@ -187,9 +190,17 @@ class ComponentWrapper:
         self.my_component.i_doublecheck(timestep, single_time_step_values)
 
     def restore_state(self) -> None:
-        """Wrapper for i_restore_state.
+        """Reset the component to the state it saved at the start of the step, by calling its ``i_restore_state``.
 
-        Gets called at the beginning of every iteration to return to the state at the beginning of the iteration.
+        The simulator calls it at the beginning of every pass, so every pass starts from the state of the start of the
+        step, with one exception: a forced controller holds its last free pass, its outputs and its state. Under
+        ``force_convergence`` a controller (kind L1 or L2, :attr:`holds_state_when_forced`) does not decide; it
+        republishes the outputs of its last unforced pass and leaves its state as it is. So its state at the start
+        of the first forced pass is that of its last free pass, the state that belongs to the outputs it holds, and
+        the simulator does not call this method for it in a forced pass: that state survives to the end of the step,
+        where the next step's ``i_save_state`` caches it. With the reset, the step would commit the start-of-step
+        state while the devices ran the held decision (hisim-component-physics-4g9.28). Every other component is
+        restored in every pass, forced or not; ``i_save_state`` and ``i_restore_state`` keep their meaning.
         """
         self.my_component.i_restore_state()
 

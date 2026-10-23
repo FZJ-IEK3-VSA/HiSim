@@ -433,7 +433,9 @@ class Simulator:
         Firstly, their previously converged state is saved as the current timestep state.
         Following up, all components have their states restored and simulated respectively.
         Convergence is dependent on the i_restore and i_simulate of the components and how they
-        are connected to each other.
+        are connected to each other. After more than 10 passes the step is forced: a forced controller
+        (kind L1 or L2) holds its last free pass, its outputs and its state, so it is not restored in a
+        forced pass (:meth:`ComponentWrapper.restore_state`); every other component still is.
 
         ``previous_stsv`` is the vector the previous step converged to (all zeros at step 0), so
         the first pass reads the previous step's value from every output computed later in the
@@ -468,8 +470,11 @@ class Simulator:
         while continue_calculation:
             # Loops through components
             for wrapped_component in evaluation_plan:
-                # Executes restore state for each component
-                wrapped_component.restore_state()
+                # Every pass starts from the state saved at the start of the step, except a controller's in a forced
+                # pass: a forced controller holds its last free pass, its outputs and its state, so the step commits
+                # the state belonging to what it published (ComponentWrapper.restore_state).
+                if not (force_convergence and wrapped_component.holds_state_when_forced):
+                    wrapped_component.restore_state()
                 # Executes i_simulate for component
                 wrapped_component.calculate_component(timestep, stsv, force_convergence)
 

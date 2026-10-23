@@ -871,6 +871,11 @@ class L2ControllerComponent(Component):
     L2 controllers after the data sources and before the L1 controllers, so a signal reaches the L1 controllers in
     the same pass, and each L2 controller after the L2 controllers it reads (:class:`hisim.evaluation_order.L2Order`).
 
+    A forced controller holds its last free pass: its outputs and its state. When the simulator forces a step
+    (``force_convergence``), the controller does not decide; it republishes the outputs of its last unforced pass and
+    must not change its state, and the simulator does not call its ``i_restore_state`` in a forced pass, so the step
+    commits the state that belongs to the outputs it held (:meth:`hisim.component_wrapper.ComponentWrapper.restore_state`).
+
     The class adds no attribute and no method: inheriting it is the declaration of the kind, which
     :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
     """
@@ -885,6 +890,11 @@ class L1ControllerComponent(Component):
     The name differs from :class:`hisim.components.controller_l1_generic_ev_charge.L1Controller`, the electric car's
     charge controller, which is one such class. The simulator evaluates the L1 controllers after the L2 controllers
     and before the physics, so a command reaches its device in the same pass.
+
+    A forced controller holds its last free pass: its outputs and its state. When the simulator forces a step
+    (``force_convergence``), the controller does not decide; it republishes the outputs of its last unforced pass and
+    must not change its state, and the simulator does not call its ``i_restore_state`` in a forced pass, so the step
+    commits the state that belongs to the outputs it held (:meth:`hisim.component_wrapper.ComponentWrapper.restore_state`).
 
     The class adds no attribute and no method: inheriting it is the declaration of the kind, which
     :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.

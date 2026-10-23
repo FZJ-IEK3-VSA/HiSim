@@ -172,3 +172,9 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
   holds everything the cached result depends on. Why: the heat pump sets its minimum thermal power to 0 in hot-water
   mode and never restores it, and the hplib cache key does not contain it, so results depend on when the first
   hot-water charge happens (bead hisim-component-physics-4g9.26).
+- **A forced controller holds its last free pass: its outputs and its state.** Under `force_convergence` an L1 or L2
+  controller republishes the outputs of its last unforced pass and changes no state of its own; the simulator does
+  not call its `i_restore_state` in a forced pass, so the step commits the state that belongs to the outputs it held.
+  Physics is restored in every pass. Why: with the restore, the heat pump's space-heating controller committed its
+  start-of-step mode while the heat pump ran the held one, 185 times a year at 900 s (owner, 2026-10-23,
+  bead hisim-component-physics-4g9.28; `roadmap/hydronic_coupling_spec.md` D7).

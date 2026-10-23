@@ -11,7 +11,9 @@ First divergence: one heat-pump SH on/off decision resolving the other way (step
    "storage sends zero" workaround (more_advanced_heat_pump_hplib.py:3357-3362) and the minimum of 3 passes follow.
    *Fixed 2026-10-09 (hisim-component-physics-4g9.23):* the simulator now starts every step from the previous step's converged values
    (warm start); only step 0 starts from zeros. The heat pump's workaround stays as a step-0 guard until defect 2 is
-   fixed (hisim-component-physics-4g9.28), because the controller's restore latches a decision taken on the 0.
+   fixed (hisim-component-physics-4g9.24), because the controller's restore latches a decision taken on the 0. The
+   simulator rule of 2026-10-23 (no restore of a controller in a forced pass, hisim-component-physics-4g9.28) does
+   not change that (`roadmap/hydronic_coupling_spec.md` D7).
 2. DHW controller i_restore_state (:3333-3338) overwrites its saved state -> restores the previous PASS, not the step start.
 3. HeatDistributionController i_restore_state assigns the mode to itself (heat_distribution_system.py:1178-1180): no restore.
 4. Heat pump sets self.minimum_thermal_output_power = 0.0 on any pass with on_off==2 (:1649), never restored.

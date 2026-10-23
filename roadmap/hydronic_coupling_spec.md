@@ -525,7 +525,8 @@ The simulator iterates every component in order until no output changes by more 
 `Simulator.process_one_timestep` in `hisim/simulator.py`); after 10 tries it sets `force_convergence`, which
 freezes controllers, and after 100 it aborts (the same loop). D7: the iteration is not changed; since the
 D7 amendment (owner, 2026-10-09) every step starts from the values the previous step converged to, and only step 0
-from zeros. Since 2026-10-12 (owner) a pass evaluates the components kind by kind (data sources, L2 controllers, L1
+from zeros. Since the D7 amendment of 2026-10-23 (owner) the simulator does not restore a controller in a forced
+pass: a forced controller holds its last free pass, its outputs and its state. Since 2026-10-12 (owner) a pass evaluates the components kind by kind (data sources, L2 controllers, L1
 controllers, physics, meters; each class inherits its kind base class from `hisim/component.py`), in the order they
 were added within one kind, except that an L2 controller reading another L2 controller (the heating curve reading the
 energy manager's raise) follows it, and that every device an L1 controller commands goes before the other physics the
@@ -820,7 +821,7 @@ energy-balance check (#870) rather than hidden (§4.5).
 charge takes whole steps; within a step every flow is constant, as §4.1 assumes.
 
 **D7 — Simulator: no change.** (As first decided; the amendments below change it: the simulator warm-starts every
-step and, since 2026-10-11, accelerates nothing.) Node-side acceleration and the iteration histogram test only; the
+step, since 2026-10-11 accelerates nothing, and since 2026-10-23 does not restore a controller in a forced pass.) Node-side acceleration and the iteration histogram test only; the
 convergence burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
 *Amendment (owner, 2026-10-10):* the iteration memory moves out of the nodes. The simulator accelerates the outputs
 a component declares accelerated (§6) and starts every step from the previous step's converged values (the warm
@@ -833,9 +834,33 @@ forced steps (3937 instead of 7909); its energies move by up to 2 % (grid energy
 and its underheating below the set temperature by -4 %. The gas twin needs 4.10 passes instead of 5.01, with no
 forced steps either way and KPIs equal to float noise (3e-12); the electric-heating twin needs 6.16 instead of 6.95,
 its KPIs equal to 1e-7. On main, before stage B, the verification also measured the order sensitivity of the
-heat-pump twin's annual KPIs: it fell 3-7x. The heat pump's DHW zero guard stays as a step-0 guard until the
-controller restore fix (hisim-component-physics-4g9.28).
+heat-pump twin's annual KPIs: it fell 3-7x. The heat pump's DHW zero guard stays as a step-0 guard (its fate since
+2026-10-23: the last amendment below).
 *Amendment (owner, 2026-10-11):* the acceleration is removed again (§6); the simulator only iterates.
+*Amendment (owner, 2026-10-23):* the simulator does not restore a controller in a forced pass. A forced controller
+holds its last free pass: its outputs and its state. Under `force_convergence` a controller (kind L1 or L2) decides
+nothing and republishes the outputs of its last unforced pass, so its state at the start of the first forced pass is
+that of its last free pass, the state that belongs to the outputs it holds; without the restore that state survives
+to the end of the step, and the next step's `i_save_state` caches it. Before, the restore before every forced pass
+reset the state to the start of the step while the outputs still showed the last free pass, and the step committed a
+state that differed from what it published: the heat pump's space-heating controller then started the next step in
+the other mode and skipped its hysteresis band (hisim-component-physics-4g9.28). `i_save_state` and
+`i_restore_state` keep their meaning, and physics is restored in every pass as before. The owner chose this rule over
+a start- and end-of-step mode in each affected controller (the first fix of #1100), which emptied `i_restore_state`
+silently and fixed two controllers only; the rule covers every controller. Its precondition, that no controller
+changes its own state in a forced pass, holds for all 21 controllers on main (the audit in #1100).
+Measured on main 634be6052, full year 2021, local occupancy: the heat-pump twin's committed space-heating mode
+differed from its held `State_SH` in 138 steps at 900 s and 142 at 60 s, and now in none; its forced steps go from
+2038 to 2053 (900 s) and from 2588 to 2668 (60 s), its space-heating electricity moves by +0.005 % (900 s) and
++0.09 % (60 s), its grid import by −0.02 % and −0.09 %. The gas twin's boiler controller committed another mode than
+it held in 27 of its 68 forced steps at 900 s, and now in none (gas use +0.004 %); it has no forced step at 60 s. The
+district-heating and electric-heating twins have no forced step at 900 s or 60 s and are bit-identical.
+The rule changes nothing for the heat pump's DHW zero guard. The hot-water controller decides nothing in a forced
+pass, and its restore puts back the previous pass's state, not the start of the step, because every pass, free or
+forced, copies its state into the saved one (hisim-component-physics-4g9.24, open); so skipping that restore in a
+forced pass changes nothing, and in the free passes a decision taken on step 0's zeroed tank temperature would still
+latch. The guard therefore stays until 4g9.24 is fixed; the 4g9.28 verification measured removing it together with a
+restoring hot-water controller as worse (14 % more forced steps at 900 s, larger comfort tails).
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:
 goldens and RenoVisor results move in several steps, and each stage that changes results is announced on

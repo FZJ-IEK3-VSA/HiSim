@@ -1162,6 +1162,36 @@
     "unit": "-",
     "value": 0.0
   },
+  "BUI1.Heat Pump For Space Heating.Number of heat pump starts (MoreAdvancedHeatPumpHPLib)": {
+    "building": "BUI1",
+    "name": "Number of heat pump starts",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "MoreAdvancedHeatPumpHPLib",
+      "name": "MoreAdvancedHeatPumpHPLib",
+      "path": []
+    },
+    "tag": "Heat Pump For Space Heating",
+    "unit": "-",
+    "value": 1664.0
+  },
+  "BUI1.Heat Pump For Space Heating.Number of space-heating starts (MoreAdvancedHeatPumpHPLib)": {
+    "building": "BUI1",
+    "name": "Number of space-heating starts",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "MoreAdvancedHeatPumpHPLib",
+      "name": "MoreAdvancedHeatPumpHPLib",
+      "path": []
+    },
+    "tag": "Heat Pump For Space Heating",
+    "unit": "-",
+    "value": 1307.0
+  },
   "BUI1.Heat Pump For Space Heating.Seasonal energy efficiency ratio of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
     "name": "Seasonal energy efficiency ratio of SH heat pump",

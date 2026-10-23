@@ -17,10 +17,12 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import email.message
 import importlib.util
 import io
 import json
 import sys
+import urllib.error
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -692,6 +694,138 @@ class TestReportRendering:
         assert payload["watermark"] is not None
         reloaded = collector.UsageIndex.load(str(path))
         assert list(reloaded.values())[0]["peak_memory_bytes"] == 2 * 1024 ** 3
+
+
+#: The collector's GitHub client as a base class. The collector module is loaded from its file at run time
+#: (``_load``), so mypy cannot resolve its classes; the alias states that the base is only known then.
+_GitHubApi: Any = collector.GitHubApi
+
+
+class _ScriptedApi(_GitHubApi):
+    """A GitHubApi whose network answers come from a script, one answer per attempt.
+
+    Only the network call is replaced, so the retries, the backoff and the error handling under
+    test are the real client's. An answer is either the response body or the exception the
+    attempt raises; the waits between attempts are recorded instead of slept.
+    """
+
+    def __init__(self, answers: List[Any]) -> None:
+        super().__init__("owner/repo", token=None, max_requests=100)
+        self.answers = list(answers)
+        self.urls: List[str] = []
+        self.waits_seconds: List[float] = []
+        self.sleep = self.waits_seconds.append
+
+    def _fetch(self, request: Any, opener: Any) -> bytes:  # pylint: disable=unused-argument
+        """Return or raise the next scripted answer."""
+        self.urls.append(request.full_url)
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return bytes(answer)
+
+    @staticmethod
+    def server_error() -> Exception:
+        """Return the HTTP 500 the failed ci-usage runs died of."""
+        return urllib.error.HTTPError("https://api.github.com/x", 500, "Internal Server Error", email.message.Message(), None)
+
+    @staticmethod
+    def body(document: Dict[str, Any]) -> bytes:
+        """Return ``document`` as a JSON response body."""
+        return json.dumps(document).encode("utf-8")
+
+    @classmethod
+    def run_listing(cls) -> bytes:
+        """Return a run listing with one finished run, run 7."""
+        created = collector.Timestamps.format(collector.Timestamps.now())
+        return cls.body({"workflow_runs": [{"id": 7, "status": "completed", "created_at": created,
+                                            "name": "tests", "path": ".github/workflows/tests.yml"}]})
+
+    @classmethod
+    def job_listing(cls) -> bytes:
+        """Return the job listing of run 7, one job of two minutes."""
+        return cls.body({"jobs": [{"id": 70, "name": "pytest (base)", "conclusion": "success",
+                                   "started_at": "2026-10-14T10:00:00Z", "completed_at": "2026-10-14T10:02:00Z"}]})
+
+
+class TestTransientApiErrors:
+    """hisim-v511: one GitHub API error is retried with backoff, and a lasting one only skips a part."""
+
+    def test_a_500_followed_by_a_200_is_retried_after_a_backoff(self) -> None:
+        """Catches the client giving up, or retrying without waiting, on one HTTP 500."""
+        api = _ScriptedApi([_ScriptedApi.server_error(), _ScriptedApi.body({"jobs": []})])
+
+        assert api.get("actions/runs/7/jobs") == {"jobs": []}
+        assert api.requests_made == 2
+        assert len(api.waits_seconds) == 1
+        assert collector.GitHubApi.BACKOFF_BASE_SECONDS / 2 <= api.waits_seconds[0] <= api.BACKOFF_BASE_SECONDS
+
+    def test_the_waits_grow_until_the_last_attempt_fails(self) -> None:
+        """Catches a retry loop without exponential backoff, or one that swallows the last failure."""
+        api = _ScriptedApi([urllib.error.URLError("connection reset")] * collector.GitHubApi.MAX_ATTEMPTS)
+
+        with pytest.raises(collector.ApiRequestFailed, match="connection reset"):
+            api.get("actions/runs")
+        assert len(api.waits_seconds) == collector.GitHubApi.MAX_ATTEMPTS - 1
+        ceilings = [min(api.BACKOFF_CAP_SECONDS, api.BACKOFF_BASE_SECONDS * 2 ** n)
+                    for n in range(len(api.waits_seconds))]
+        assert all(ceiling / 2 <= wait <= ceiling for wait, ceiling in zip(api.waits_seconds, ceilings))
+
+    def test_a_retried_job_listing_is_recorded(self) -> None:
+        """Catches a transient error on a job listing losing the run's jobs."""
+        api = _ScriptedApi([_ScriptedApi.run_listing(), _ScriptedApi.server_error(), _ScriptedApi.job_listing()])
+        sweep = collector.UsageCollector(api, collector.UsageIndex())
+
+        sweep.sweep_runs(collector.Timestamps.now() - timedelta(hours=1))
+
+        assert sweep.diagnostics["jobs_recorded"] == 1
+        assert sweep.diagnostics["skipped"] == []
+        assert not sweep.diagnostics["partial"]
+
+    def test_a_job_listing_that_keeps_failing_is_skipped_and_named(self) -> None:
+        """Catches one permanently failing page failing the whole sweep, as in the runs of 2026-10-13/14."""
+        failures = [_ScriptedApi.server_error()] * collector.GitHubApi.MAX_ATTEMPTS
+        api = _ScriptedApi([_ScriptedApi.run_listing()] + failures)
+        sweep = collector.UsageCollector(api, collector.UsageIndex())
+
+        sweep.sweep_runs(collector.Timestamps.now() - timedelta(hours=1))
+
+        assert len(sweep.diagnostics["skipped"]) == 1
+        assert sweep.diagnostics["skipped"][0].startswith("the jobs of run 7: failed 5 times")
+        assert not sweep.diagnostics["partial"]
+
+    def test_the_report_names_what_was_skipped_and_exits_0(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Catches a sweep with a failed run listing exiting non-zero or writing no overview."""
+        api = _ScriptedApi([_ScriptedApi.server_error()] * collector.GitHubApi.MAX_ATTEMPTS)
+        monkeypatch.setattr(collector, "GitHubApi", lambda repository, token, max_requests: api)
+        monkeypatch.setenv("GH_TOKEN", "test-token")
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+        report_path = tmp_path / "report.md"
+        arguments = collector.build_parser().parse_args(
+            ["--index", str(tmp_path / "index.json"), "--out", str(report_path)])
+
+        assert collector.ReportCommand(arguments).run() == 0
+        rendered = report_path.read_text(encoding="utf-8")
+        assert "skipped because an API request failed after its retries: 1" in rendered
+        assert "the rest of the run listing: failed 5 times, last with HTTP Error 500" in rendered
+        assert "partial sweep" in rendered
+
+    def test_a_sweep_stops_after_too_many_failed_requests(self) -> None:
+        """Catches a sweep during an outage waiting through the retries of every run in turn."""
+        cap = collector.UsageCollector.MAX_FAILED_REQUESTS
+        created = collector.Timestamps.format(collector.Timestamps.now())
+        runs = [{"id": run_id, "status": "completed", "created_at": created} for run_id in range(cap + 5)]
+        failures = [_ScriptedApi.server_error()] * (collector.GitHubApi.MAX_ATTEMPTS * cap)
+        api = _ScriptedApi([_ScriptedApi.body({"workflow_runs": runs})] + failures)
+        sweep = collector.UsageCollector(api, collector.UsageIndex())
+
+        sweep.sweep_runs(collector.Timestamps.now() - timedelta(hours=1))
+
+        assert len(sweep.diagnostics["skipped"]) == cap
+        assert sweep.diagnostics["partial"]
+        assert api.answers == []
 
 
 class TestTimestamps:

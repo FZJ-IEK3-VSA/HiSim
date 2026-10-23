@@ -143,6 +143,16 @@ When the budget runs out mid-sweep the report says so under **Collection** and c
 than its window claims. That is deliberate: a partial report is worth having, and a scheduled
 job that goes red because GitHub was busy trains everyone to ignore it.
 
+The same holds for API errors. A transient one (HTTP 500, 502, 503 or 504, a refused or reset
+connection, a timeout) is retried up to five attempts in all, with exponential backoff and
+jitter (`GitHubApi.backoff_seconds`, waits of 1-2, 2-4, 4-8 and 8-16 s). A request that still
+fails skips only what it was for: the jobs of one run, one artifact, or the rest of a listing.
+**Collection** names every skipped part, and the sweep goes on with the rest. The next sweep
+reads a skipped run again when it lies within its eight-hour overlap, which in an hourly sweep
+it does. After ten failed requests the sweep stops
+and is reported as partial (`UsageCollector.MAX_FAILED_REQUESTS`), so a GitHub outage does not
+keep the job waiting through retries for most of an hour. The job exits 0 either way.
+
 ## Known limits
 
 - The measurement starts at checkout, so the runner booting and the container image being

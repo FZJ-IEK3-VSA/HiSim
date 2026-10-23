@@ -44,7 +44,9 @@ Steps to build a component, in the order they appear below:
      raises rather than doing nothing, so a component that has nothing to prepare still
      has to define it — see the no-op below.
    * ``i_save_state``: caches the current state at the start of a timestep.
-   * ``i_restore_state``: puts that cached state back at the start of every iteration.
+   * ``i_restore_state``: puts that cached state back at the start of every iteration, except
+     a controller's in a forced iteration: a forced controller holds its last free pass, its
+     outputs and its state, so under ``force_convergence`` it must change no state.
    * ``i_doublecheck``: optional check once a timestep has converged.
    * ``i_simulate``: one iteration — read the inputs, write the outputs.
 

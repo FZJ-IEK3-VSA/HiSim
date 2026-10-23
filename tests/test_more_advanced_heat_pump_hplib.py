@@ -1,6 +1,5 @@
 """Test for advanced heat pump hplib."""
 
-import numpy as np
 import pandas as pd
 import pytest
 from tests import functions_for_testing as fft
@@ -265,11 +264,11 @@ def test_heat_pump_hplib_new() -> None:
 
 @pytest.mark.base
 def test_get_heatpump_cycles_counts_transitions() -> None:
-    """get_heatpump_cycles counts off->on transitions and tolerates the last-element boundary.
+    """get_heatpump_cycles counts off->on transitions and refuses any column other than TimeOff.
 
-    A cycle is registered when the current ``TimeOff`` value is non-zero and the
-    following value is zero (i.e. the heat pump turns back on). The trailing
-    element has no successor and must not raise.
+    A start is registered when the current ``TimeOff`` value is non-zero and the
+    following value is zero (i.e. the heat pump turns back on). A one-step series
+    has no transition. Any other output raises instead of counting a silent 0.
     """
     simpars = SimulationParameters.one_day_only(2017, 60)
     config = _eight_kilowatt_heat_pump_config()
@@ -299,7 +298,7 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     )
     assert cycles == 2
 
-    # Single-element series: the only element has no successor; must not raise.
+    # Single-element series: the only element has no successor, so no start.
     single = pd.DataFrame({heatpump.TimeOff: [60]})
     assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=single) == 0
 
@@ -307,10 +306,60 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     always_on_then_off = pd.DataFrame({heatpump.TimeOff: [0, 60, 60, 60]})
     assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=always_on_then_off) == 0
 
-    # When the output field is not TimeOff, the method short-circuits to 0.
-    assert (
-        heatpump.get_heatpump_cycles(output=other_output, index=0, postprocessing_results=postprocessing_results) == 0
+    # Any output other than TimeOff is refused: it would otherwise count a silent 0.
+    with pytest.raises(ValueError, match="TimeOff"):
+        heatpump.get_heatpump_cycles(output=other_output, index=1, postprocessing_results=postprocessing_results)
+
+
+@pytest.mark.base
+def test_the_start_kpis_count_every_start_and_the_space_heating_starts_whatever_output_comes_after_them() -> None:
+    """Catches a start KPI that ends as the count of the component's last output, or counts hot-water starts as SH.
+
+    The KPI entries walk every output of the heat pump. The cycle count used to be assigned for each of them, and every
+    output but ``TimeOff`` counted 0, so the KPI read 0 whenever an output came after ``TimeOff``, which it does in
+    every simulation. The published modes 0, 1, 1, 0, 2, 2, 0, 1, 2, 1, 0, -1, 0, 1 (1 space heating, 2 hot water,
+    -1 cooling, 0 off) hold five starts: into space heating at steps 1, 7 and 13, into hot water at step 4 and into
+    cooling at step 11. The switch from hot water to space heating at step 9 is no start: the machine did not stop.
+    The ``TimeOff`` column follows the same modes, so "Number of heat pump starts" is 5 and "Number of space-heating
+    starts" is 3.
+    """
+    simpars = SimulationParameters.one_day_only(2017, 60)
+    heatpump = MoreAdvancedHeatPumpHPLib(config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=simpars)
+    published_modes = [0, 1, 1, 0, 2, 2, 0, 1, 2, 1, 0, -1, 0, 1]
+    time_off_in_seconds = []
+    off_streak_in_seconds = 0
+    for mode in published_modes:
+        off_streak_in_seconds = off_streak_in_seconds + 60 if mode == 0 else 0
+        time_off_in_seconds.append(off_streak_in_seconds)
+    postprocessing_results = pd.DataFrame(
+        {
+            heatpump.HeatPumpOnOffState: published_modes,
+            heatpump.TimeOff: time_off_in_seconds,
+            heatpump.TimeOnHeating: [60 if mode in (1, 2) else 0 for mode in published_modes],
+        }
     )
+
+    kpi_entries = heatpump.get_component_kpi_entries(
+        all_outputs=[heatpump.heatpump_state, heatpump.time_off, heatpump.time_on_heating],
+        postprocessing_results=postprocessing_results,
+    )
+
+    values = {entry.name: entry.value for entry in kpi_entries}
+    assert values["Number of heat pump starts"] == 5
+    assert values["Number of space-heating starts"] == 3
+    assert "Number of SH heat pump cycles" not in values
+
+
+@pytest.mark.base
+def test_get_space_heating_starts_refuses_any_column_but_the_published_state() -> None:
+    """Catches the space-heating start count reading a column that cannot tell space heating from hot water."""
+    simpars = SimulationParameters.one_day_only(2017, 60)
+    heatpump = MoreAdvancedHeatPumpHPLib(config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=simpars)
+    postprocessing_results = pd.DataFrame({heatpump.TimeOff: [60, 0, 0]})
+    with pytest.raises(ValueError, match="OnOffStateHeatpump"):
+        heatpump.get_space_heating_starts(
+            output=heatpump.time_off, index=0, postprocessing_results=postprocessing_results
+        )
 
 
 def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) -> list:
@@ -354,29 +403,3 @@ def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(i
     expected_hours = sum(is_active_profile) * simpars.seconds_per_timestep / 3600
     assert heating_hours == pytest.approx(expected_hours)
     assert cooling_hours == pytest.approx(expected_hours)
-
-
-@pytest.mark.base
-def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
-    """get_heatpump_cycles no longer swallows non-IndexError exceptions.
-
-    Before narrowing the ``except`` clause to ``IndexError``, any exception
-    (including ``ValueError``/``TypeError`` from unexpected data) was silently
-    swallowed. Such errors must now propagate so real bugs surface rather than
-    being masked as a silently-wrong cycle count.
-    """
-    simpars = SimulationParameters.one_day_only(2017, 60)
-    config = _eight_kilowatt_heat_pump_config()
-    heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
-
-    time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("HeatPump")
-    )
-    # A numpy array as an element makes ``off_time != 0`` return an array whose
-    # truth value is ambiguous, raising ValueError — a non-IndexError that the
-    # old broad ``except Exception`` would have swallowed.
-    bad_series = [60, np.array([1, 2])]
-    postprocessing_results = pd.DataFrame({heatpump.TimeOff: bad_series})
-
-    with pytest.raises(ValueError):
-        heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=postprocessing_results)

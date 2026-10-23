@@ -1252,9 +1252,24 @@
     "unit": "\u00b0C",
     "value": 0.0
   },
-  "BUI1.Heat Pump For Space Heating.Number of SH heat pump cycles (MoreAdvancedHeatPumpHPLib)": {
+  "BUI1.Heat Pump For Space Heating.Number of heat pump starts (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
-    "name": "Number of SH heat pump cycles",
+    "name": "Number of heat pump starts",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "MoreAdvancedHeatPumpHPLib",
+      "name": "MoreAdvancedHeatPumpHPLib",
+      "path": []
+    },
+    "tag": "Heat Pump For Space Heating",
+    "unit": "-",
+    "value": 18.0
+  },
+  "BUI1.Heat Pump For Space Heating.Number of space-heating starts (MoreAdvancedHeatPumpHPLib)": {
+    "building": "BUI1",
+    "name": "Number of space-heating starts",
     "source": {
       "assembly": null,
       "import": null,

@@ -1064,3 +1064,89 @@ def test_a_knob_adding_a_field_writes_it_in_the_configuration_class_field_order(
 
     assert list(document["components"]["pv"]["config"]) == ["location", "power_in_watt"]
     assert realizer.text("relocated", "") == matrix.recordings["relocated"].text
+
+
+class BlocklessEntry:
+    """Two worlds differing in one configuration field of an entry whose baseline has no block.
+
+    The fixture exists for one property: a knob may set a field of an entry that carries no
+    ``config`` block at all. A recorded entry that names a preset leaves the block out when the
+    preset or a sizing law answers every field, so a column that sets one of them produces a
+    difference at the path ``config`` itself, and re-applying it adds the whole block to the entry
+    rather than a key to the block. This is the heat distribution controller of the heat-pump
+    sizer's ``radiator`` column, reduced to an array that stands somewhere else.
+
+    The array also reads the weather, so the entry has an ``inputs`` block for the added ``config``
+    block to land on the wrong side of: the emitter writes ``config`` before ``inputs``.
+    """
+
+    #: The baseline world, whose array the preset answers completely.
+    BASELINE: ClassVar[str] = """
+schema_version: 3
+name: blockless_entry
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    preset: aachen
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    inputs:
+      - weather
+"""
+
+    #: The other world, whose array states the one field the preset does not give it.
+    RELOCATED: ClassVar[str] = """
+schema_version: 3
+name: blockless_entry
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    preset: aachen
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    config:
+      location: Munich
+    inputs:
+      - weather
+"""
+
+    @classmethod
+    def matrix(cls) -> ProbeMatrix:
+        """Builds the three-state table of the two hand-written worlds.
+
+        Returns:
+            The matrix, baseline first.
+        """
+        recordings = {
+            column: Fork.recording(column, text)
+            for column, text in (("baseline", cls.BASELINE), ("relocated", cls.RELOCATED))
+        }
+        return ProbeMatrix.of(
+            dataclasses.replace(ProbeList.read(SparseBlock.PROBES), origin="energy_systems/sparse_block.probes.yaml"),
+            recordings,
+        )
+
+
+@pytest.mark.base
+def test_a_knob_adding_a_whole_config_block_writes_it_before_the_inputs() -> None:
+    """Catches a realization that appends a knob's ``config`` block after the entry's ``inputs``.
+
+    Applying a difference at the path ``config`` to an entry that has no such key adds it last, and
+    a mapping keeps keys in insertion order. The flat recording of the column carries the block
+    where the emitter writes it, before ``inputs``, so the column failed to reproduce (EF-R10) over
+    key order alone. That is what refused every re-recording of the heat-pump sizer's grouped file
+    once its distribution controller's baseline block became empty. Both halves are asserted: the
+    order of the realized entry, and the byte equality that order is needed for.
+    """
+    matrix = BlocklessEntry.matrix()
+    decision = SparseBlock.decision()
+    check_grouping(decision, matrix)
+    builder = GroupedSystemBuilder(decision, matrix)
+    realizer = ColumnRealizer(builder.build(), builder)
+
+    document = realizer.document("relocated")
+
+    assert list(document["components"]["pv"]) == ["class", "preset", "config", "inputs"]
+    assert realizer.text("relocated", "") == matrix.recordings["relocated"].text

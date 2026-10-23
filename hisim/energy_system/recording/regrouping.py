@@ -302,9 +302,10 @@ class ColumnRealizer:
 
     Realizing is the format's own expansion followed by three steps the format does not have:
     enabled groups are dissolved into the top level, because a flat recording has no groups to
-    compare against, the column's knobs are applied, and every block a knob touched is put back into
-    the key order a writer would have emitted it in. All three are part of what "the same system"
-    means when a structured file and a flat recording are held against each other.
+    compare against, the column's knobs are applied, and every entry a knob touched is put back into
+    the key order a writer would have emitted it in, both its own keys and those of its ``config``
+    block. All three are part of what "the same system" means when a structured file and a flat
+    recording are held against each other.
 
     The result is the document rather than the model, because the comparison is on bytes and going
     back through the model would only add a conversion that could differ from the one the recorder
@@ -383,9 +384,38 @@ class ColumnRealizer:
         for component in list(entries):
             differences = self.builder.differences(component, column)
             if differences:
-                patched = DocumentDifference.apply(entries[component], differences)
+                patched = self.in_entry_order(DocumentDifference.apply(entries[component], differences))
                 entries[component] = self.in_field_order(component, model.components.get(component), patched)
         return document
+
+    @classmethod
+    def in_entry_order(cls, document: Dict[str, Any]) -> Dict[str, Any]:
+        """Restores one patched entry's own keys to the order the emitter writes them in.
+
+        A knob may introduce a whole block the entry does not carry. The baseline entry of a
+        component whose every configuration field the preset or a sizing law answers has no
+        ``config`` block at all, so a column that sets one of those fields - the heat distribution
+        controller's ``heating_system`` in a radiator column - produces a difference at the path
+        ``config``, and re-applying it adds that key after ``inputs``. The emitter writes ``config``
+        before ``inputs``, so the flat recording of that column carries it there, and the column
+        would fail to reproduce over key order alone (EF-R10), with every value correct.
+
+        Example: an entry ``{class, preset, inputs}`` patched with ``config: {heating_system:
+        RADIATOR}`` becomes ``{class, preset, config, inputs}``.
+
+        The canonical order is :attr:`ComponentEntry.ENTRY_KEYS`, the one the emitter follows. Any
+        other key (the site keys of schema version 4, which a recording never writes) keeps its place
+        after those, in the order the document already had it.
+
+        Args:
+            document: The patched entry document.
+
+        Returns:
+            A new document with the same keys and values, the entry keys in the emitter's order.
+        """
+        ordered = {key: document[key] for key in ComponentEntry.ENTRY_KEYS if key in document}
+        ordered.update({key: value for key, value in document.items() if key not in ordered})
+        return ordered
 
     @classmethod
     def in_field_order(cls, name: str, entry: Optional[ComponentEntry], document: Dict[str, Any]) -> Dict[str, Any]:

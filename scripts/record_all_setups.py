@@ -6,6 +6,13 @@ it, produced by running the setup and writing down what it built. This script is
 them, and with ``--check`` it is what proves they are still what the setups build — the freshness
 job runs exactly that and fails on any difference, so a setup can never change without its twin.
 
+A setup with a committed grouping decision, ``energy_systems/<stem>.grouping.yaml``, also has a
+grouped twin, ``<stem>.grouped.energy_system.yaml``, the file RenoVisor's translator starts from.
+The script records that one too, through ``hisim energy-system record --grouping``: every probe of
+the decision's probe list is recorded and the grouped file is proven against each of them before it
+is written. ``--check`` compares it with the committed one like any other twin, so a change that
+breaks the grouping pass, or moves a grouped twin, fails the freshness job as well.
+
 A twin is an authored file rather than a transcript (A-P3.1): a field a sizing law computed, whose
 facts the recorded system itself declares a provider for, is left out of the twin's ``config``
 block altogether, so the preset's own ``AUTO`` answers it and the file re-sizes for another
@@ -84,6 +91,14 @@ class Paths:
     #: Suffix of a recorded energy-system file.
     RECORDED_SUFFIX = ".energy_system.yaml"
 
+    #: Suffix of a committed grouping decision; a setup with one also has a grouped twin.
+    GROUPING_SUFFIX = ".grouping.yaml"
+
+    #: What a grouped twin's name adds to its setup's stem before :attr:`RECORDED_SUFFIX`, so that
+    #: ``household_gas_building_sizer.grouped`` names ``household_gas_building_sizer.grouped.energy_system.yaml``
+    #: and the comparison treats a grouped twin like any other recorded file.
+    GROUPED_MARK = ".grouped"
+
     #: Glob matching the shared simulation-parameters files.
     PARAMETERS_PATTERN = "*.simulation.yaml"
 
@@ -95,6 +110,29 @@ class Paths:
     #: to the directory holding it: recording into a temporary directory anywhere else would
     #: produce a different first line and report every setup as changed.
     CHECK_PREFIX = ".record-check-"
+
+
+@dataclass(frozen=True)
+class Recording:
+    """One file the run records: the setup it comes from and, for a grouped twin, the decision.
+
+    A setup yields one recording for its twin and, when a grouping decision is committed for it, a
+    second one for its grouped twin. Both go through the same child recorder and the same
+    comparison, so the only difference between them is the extra ``--grouping`` argument and the
+    name of the file that comes out.
+    """
+
+    setup: Path
+    grouping: Optional[Path] = None
+
+    @property
+    def stem(self) -> str:
+        """The name of the recorded file without :attr:`Paths.RECORDED_SUFFIX`.
+
+        Returns:
+            The setup's stem for a twin, the stem plus :attr:`Paths.GROUPED_MARK` for a grouped twin.
+        """
+        return self.setup.stem + (Paths.GROUPED_MARK if self.grouping is not None else "")
 
 
 @dataclass
@@ -183,6 +221,29 @@ class SetupDiscovery:
             raise SystemExit(f"--only names not found as setups: {sorted(missing)}")
         return chosen
 
+    @classmethod
+    def recordings(cls, setups: Sequence[Path]) -> List[Recording]:
+        """Every file a run over these setups records: each twin, then each grouped twin.
+
+        The grouped twins are found from the committed decisions rather than listed, for the same
+        reason the setups are: a setup grouped tomorrow is covered the day its decision is
+        committed, and the only way to leave it out is to delete the decision.
+
+        Args:
+            setups: The selected setups.
+
+        Returns:
+            One twin recording per setup in the setups' order, followed by one grouped recording
+            per setup that has a committed grouping decision, in the same order.
+        """
+        twins = [Recording(setup) for setup in setups]
+        grouped = [
+            Recording(setup, Paths.ENERGY_SYSTEMS / f"{setup.stem}{Paths.GROUPING_SUFFIX}")
+            for setup in setups
+            if (Paths.ENERGY_SYSTEMS / f"{setup.stem}{Paths.GROUPING_SUFFIX}").exists()
+        ]
+        return twins + grouped
+
 
 class Recorder:
     """Runs one setup's recording in its own interpreter and reports what came back.
@@ -201,46 +262,56 @@ class Recorder:
     DEFAULT_JOBS: ClassVar[int] = min(4, os.cpu_count() or 1)
 
     @classmethod
-    def record(cls, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
-        """Records one setup in a subprocess.
+    def record(
+        cls, setup: Path, parameters: Path, out_dir: Path, python: str, grouping: Optional[Path] = None
+    ) -> SetupOutcome:
+        """Records one setup in a subprocess, as its twin or, given a decision, as its grouped twin.
 
         Args:
             setup: The setup module to record.
             parameters: The simulation-parameters file the setup is started from.
             out_dir: Where the recorded file goes.
             python: The interpreter to run the recorder with.
+            grouping: The setup's committed grouping decision, to record its grouped twin instead
+                of its twin; ``None`` records the twin.
 
         Returns:
-            The outcome, carrying the child's output when it failed.
+            The outcome, named by :attr:`Recording.stem`, carrying the child's output when it failed.
         """
-        completed = ChildRecorder.run(
-            [str(setup), str(parameters), "--out", str(out_dir)],
-            python=python,
-            cwd=Paths.REPO_ROOT,
-        )
+        recording = Recording(setup, grouping)
+        arguments = [str(setup), str(parameters), "--out", str(out_dir)]
+        if grouping is not None:
+            arguments += ["--grouping", str(grouping)]
+        completed = ChildRecorder.run(arguments, python=python, cwd=Paths.REPO_ROOT)
         if completed.returncode == 0:
-            return SetupOutcome(stem=setup.stem, ok=True)
-        return SetupOutcome(
-            stem=setup.stem,
-            ok=False,
-            message=(
+            return SetupOutcome(stem=recording.stem, ok=True)
+        if grouping is not None:
+            message = (
+                f"the grouping pass exited with {completed.returncode}; it writes the grouped file only "
+                "after every probe column reproduced, so nothing was written"
+            )
+        else:
+            message = (
                 f"the recorder exited with {completed.returncode}; the file it named below was "
                 "left behind for inspection and must not be committed"
-            ),
-            log=cls.tail(completed.stdout + completed.stderr),
+            )
+        return SetupOutcome(
+            stem=recording.stem, ok=False, message=message, log=cls.tail(completed.stdout + completed.stderr)
         )
 
     @classmethod
     def record_all(
         cls, setups: Sequence[Path], parameters: Path, out_dir: Path, python: str, jobs: int = 0
     ) -> List[SetupOutcome]:
-        """Records every setup, a few at a time, printing each verdict as it arrives.
+        """Records every setup's twin and grouped twin, a few at a time, printing each verdict as it arrives.
 
-        Parallel across setups because nothing the children share is order-dependent (see the
+        Parallel across recordings because nothing the children share is order-dependent (see the
         module header), and printing as it goes rather than at the end because a fleet-wide run
-        takes minutes per setup and a caller watching it needs to see progress. The returned list
-        keeps the setups' own order, so the summary reads the same however the children were
-        scheduled.
+        takes minutes per setup and a caller watching it needs to see progress. The grouped twins
+        are started first: each records every probe of its list one after the other, so it is the
+        longest child of the run, and starting it last would leave the pool waiting on it alone.
+        The returned list keeps the order of :meth:`SetupDiscovery.recordings`, so the summary reads
+        the same however the children were scheduled.
 
         Args:
             setups: The setups to record.
@@ -250,22 +321,31 @@ class Recorder:
             jobs: How many children run at once; ``0`` means :attr:`DEFAULT_JOBS`.
 
         Returns:
-            One outcome per setup, in the setups' order.
+            One outcome per twin in the setups' order, then one per grouped twin in the same order.
         """
         workers = jobs or cls.DEFAULT_JOBS
-        results: List[Optional[SetupOutcome]] = [None] * len(setups)
+        recordings = SetupDiscovery.recordings(setups)
+        results: List[Optional[SetupOutcome]] = [None] * len(recordings)
+        started_first = sorted(range(len(recordings)), key=lambda position: recordings[position].grouping is None)
         finished = 0
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
-                pool.submit(cls.record, setup, parameters, out_dir, python): position
-                for position, setup in enumerate(setups)
+                pool.submit(
+                    cls.record,
+                    recordings[position].setup,
+                    parameters,
+                    out_dir,
+                    python,
+                    grouping=recordings[position].grouping,
+                ): position
+                for position in started_first
             }
             for future in as_completed(futures):
                 outcome = future.result()
                 results[futures[future]] = outcome
                 finished += 1
                 status = "OK  " if outcome.ok else "FAIL"
-                print(f"[{finished}/{len(setups)}] {status} {outcome.stem}", flush=True)
+                print(f"[{finished}/{len(recordings)}] {status} {outcome.stem}", flush=True)
         return [outcome for outcome in results if outcome is not None]
 
     @classmethod
@@ -499,9 +579,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         raise SystemExit("--jobs must be at least 1")
 
     setups = SetupDiscovery.select(arguments.only)
-    print(f"Setups to record ({len(setups)}):")
-    for setup in setups:
-        print(f"  - {setup.stem}")
+    recordings = SetupDiscovery.recordings(setups)
+    print(f"Files to record ({len(recordings)}, from {len(setups)} setups):")
+    for recording in recordings:
+        print(f"  - {recording.stem}")
     print()
 
     if arguments.check:

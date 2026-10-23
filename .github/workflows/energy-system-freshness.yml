@@ -8,8 +8,10 @@
 # changes without the twin being re-recorded.
 #
 # This job re-records *every* setup into a throwaway directory and fails unless
-# each fresh recording is byte-identical to the committed twin. It catches four
-# problems:
+# each fresh recording is byte-identical to the committed twin. A setup with a
+# committed '<setup>.grouping.yaml' also has its grouped twin re-recorded
+# ('hisim energy-system record --grouping', every probe of its list) and
+# compared the same way. It catches four problems:
 #   - stale twins    -- committed content differs from a fresh recording;
 #   - missing twins  -- a '.py' with no committed '.energy_system.yaml' at all;
 #   - broken setups  -- a '.py' that cannot be recorded (the recorder refuses);

@@ -55,7 +55,8 @@ tests:
     - {output: PVSystem.SolarPowerOnModulesInWatt, unit: WATT, min: 0, max: 180000}
     - {output: PVSystem.ModuleAndInverterLossInWatt, unit: WATT, min: 0, max: 180000}
       # the sun on the modules: the box's 30 kWp are 136 m² of 1.98 m² modules of 435 W, under at most about
-      # 1200 W/m² on the plane of the array, 164 kW; the loss is that minus the AC power, and at night the standby
+      # 1200 W/m² on the plane of the array, 164 kW; the loss is that minus the AC power, and at night it is the
+      # inverter's standby draw, a few watts, by which the AC power is below zero
   monotone:
     - {parameter: power_in_watt, kpi: PV production, direction: increasing}
       # more peak power, more yield on the same weather; PV production is a derived KPI (no member, spec §9.4)

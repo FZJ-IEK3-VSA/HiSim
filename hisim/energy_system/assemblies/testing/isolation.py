@@ -8,8 +8,8 @@ circuit end of the assembly brings, as the cylinder a collector charges is the o
 reads, the engine's default rule binding the one candidate in scope), a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
-it observes, and a ``controllable: {target_input}`` output the controller ranking it. A partner a partner requires
-does not join when a member of the assembly has its class: the member meets the requirement
+it observes, and a ``controllable: {target_input}`` output the controller ranking it. A partner that another
+partner requires does not join when a member of the assembly has its class: the member meets the requirement
 (:meth:`~.partners.TestPartnerRegistry.closure`), as the energy manager under test is the one the grid meter
 observes. A sizing fact
 a member's class reads that no member provides and no fact port names crosses the boundary by the

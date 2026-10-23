@@ -1143,7 +1143,7 @@ start; §14.1's D7 and D23 are superseded by D26 for v1.
 
 ### 14.1 Decided
 
-All by the owner on 2026-10-03.
+By the owner, each on the date it names (D1-D24 on 2026-10-03).
 
 - **D1 — Interface:** explicit ports in the assembly file, lowered to default connections, tags and units HiSim
   already has; no connector types (§3.2). The contract test ties each port to the default connections its members'

@@ -469,13 +469,24 @@ class HplibResult:
     cop: float
     #: The energy efficiency ratio of cooling, dimensionless (``EER``).
     eer: float
+    #: Whether hplib itself runs its heating rod alone at this operating point: its own, uncalibrated coefficient of
+    #: performance of heating is at most :attr:`HEATING_ROD_ALONE_MAXIMAL_COP`. A stated SCOP's calibration scales the
+    #: compressor's COP (:class:`ScopCalibration`), so the calibrated :attr:`cop` can fall below 1 while hplib still
+    #: runs the compressor; this flag keeps hplib's verdict. Always False for cooling.
+    heating_rod_alone: bool
 
     @staticmethod
-    def from_hplib(results: Mapping[str, Any]) -> "HplibResult":
-        """Return the fields of an hplib result dictionary, as floats.
+    def from_hplib(results: Mapping[str, Any], *, heating_rod_alone: bool) -> "HplibResult":
+        """Return the fields of an hplib result dictionary, as floats, with hplib's verdict on its heating rod.
+
+        For example, a calibrated compressor result next to the switch has a COP of 0.88 and
+        ``heating_rod_alone=False``, because hplib's own COP there is 1.0033. The flag is not read from ``results``,
+        because those may be calibrated (:meth:`runs_the_heating_rod_alone` reads hplib's own result).
 
         Args:
-            results: hplib's result, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``, ``COP`` and ``EER``.
+            results: hplib's result, calibrated or not, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``,
+                ``COP`` and ``EER``.
+            heating_rod_alone: Whether hplib itself runs its heating rod alone at this operating point.
 
         Returns:
             The typed result.
@@ -487,7 +498,25 @@ class HplibResult:
             electrical_power_in_watt=float(results["P_el"]),
             cop=float(results["COP"]),
             eer=float(results["EER"]),
+            heating_rod_alone=heating_rod_alone,
         )
+
+    @staticmethod
+    def runs_the_heating_rod_alone(hplib_results: Mapping[str, Any], mode: int) -> bool:
+        """Return whether hplib runs its heating rod alone, read from its own, uncalibrated result.
+
+        hplib heats with its rod alone where its fitted coefficient of performance is at most 1; it then reports a COP
+        of exactly 1. For example, hplib's result at a COP of 1.0 in heating mode gives True, one at 1.0033 False.
+        Cooling (mode 2) has no heating rod and gives False.
+
+        Args:
+            hplib_results: hplib's own result, before any calibration, with the key ``COP``.
+            mode: hplib's mode, 1 heating, 2 cooling.
+
+        Returns:
+            Whether hplib's heating rod alone delivers the heat.
+        """
+        return mode == 1 and float(hplib_results["COP"]) <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
 
     #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
     #: books its reference thermal power as both heat and electricity.
@@ -502,6 +531,11 @@ class HplibResult:
         1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
         turns that jump into a ramp of about 25 kW/K over 0.1 K.
 
+        The check compares hplib's own verdicts (:attr:`heating_rod_alone`), not the COPs: a stated SCOP below
+        hplib's fit calibrates the compressor's COP next to the switch below 1 (1.0033 x 0.876 = 0.879), and a
+        comparison of the calibrated COPs would count both points as the rod's and interpolate across the jump
+        (hisim-g0dp).
+
         Args:
             lower: hplib's result at the lower grid point.
             upper: hplib's result at the upper grid point.
@@ -509,15 +543,15 @@ class HplibResult:
         Returns:
             Whether one result is the heating rod's and the other is not.
         """
-        limit = HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
-        return (lower.cop <= limit) != (upper.cop <= limit)
+        return lower.heating_rod_alone != upper.heating_rod_alone
 
     @staticmethod
     def interpolated(*, lower: "HplibResult", upper: "HplibResult", share_of_upper: float) -> "HplibResult":
         """Return the linear interpolation between hplib's results at two neighbouring return temperatures.
 
-        Every field is ``lower + share_of_upper (upper - lower)``. For example, a return of 47.04 °C on the 0.1 K
-        grid takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C.
+        Every numeric field is ``lower + share_of_upper (upper - lower)``; :attr:`heating_rod_alone` is the lower
+        point's, because two points interpolated lie on one side of the switch and share it. For example, a return of
+        47.04 °C on the 0.1 K grid takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C.
 
         Args:
             lower: The result at the lower grid point.
@@ -541,6 +575,7 @@ class HplibResult:
             electrical_power_in_watt=between(lower.electrical_power_in_watt, upper.electrical_power_in_watt),
             cop=between(lower.cop, upper.cop),
             eer=between(lower.eer, upper.eer),
+            heating_rod_alone=lower.heating_rod_alone,
         )
 
 

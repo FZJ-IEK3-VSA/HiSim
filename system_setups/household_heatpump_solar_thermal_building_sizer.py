@@ -559,7 +559,8 @@ def setup_function(
     my_heatpump_controller_sh.connect_only_predefined_connections(
         my_heating_curve, my_weather, my_simple_water_storage, my_heatpump
     )
-    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage)
+    # the space-heating controller's signal tells the hot-water controller whether space heating waits for the heat pump
+    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage, my_heatpump_controller_sh)
     my_sim.add_component(my_heatpump_controller_sh)
     my_sim.add_component(my_heatpump_controller_dhw)
 

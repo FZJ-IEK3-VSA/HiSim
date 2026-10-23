@@ -1438,7 +1438,8 @@ scenario / RenoVisor request:
     "billing_interval_in_minutes": 15        // peaks measured as 15-min mean power, not instantaneous
   },
   "feed_in": {
-    // FIXED_TARIFF (EEG, nominally constant for its duration) | SPOT_REFERENCED (direct marketing)
+    // FIXED_TARIFF (EEG, nominally constant for its duration) | MARKET_LINKED (supplier-set, escalates with
+    // the carrier rate from year 1, e.g. the Irish Clean Export Guarantee) | SPOT_REFERENCED (direct marketing)
     "kind": "FIXED_TARIFF", "rate_in_euro_per_kwh": 0.081, "duration_in_years": 20
   },
   "controllability_discount": {

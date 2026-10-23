@@ -1,14 +1,16 @@
 """Row types of the cost database: one dataclass per data-file entry.
 
 Holds `CostDataError`, the dataclasses mirroring one row of `devices_*.json`, `energy_prices_*.json`,
-`co2_price_paths.json` and `escalation_defaults_*.json`, the resolved wrappers carrying a row's provenance ids, and the
-parsing helpers. Only single-row derivations live here; picking the entry for a year, overlays and caching are
-`database.py`'s job. It imports nothing from `sources` or `database`; both import from here.
+`co2_price_paths.json` and `escalation_defaults_*.json`, `FeedInKind` (which a feed-in row declares and a tariff
+contract carries), the resolved wrappers carrying a row's provenance ids, and the parsing helpers. Only single-row
+derivations live here; picking the entry for a year, overlays and caching are `database.py`'s job. It imports nothing
+from `sources` or `database`; both import from here.
 """
 
 from __future__ import annotations
 
 import copy
+import enum
 import os
 from dataclasses import dataclass, field
 from typing import ClassVar, Dict, List, Optional, Tuple
@@ -186,6 +188,37 @@ class DeviceEntry:
         return f"{stem}.{self.component_type.name}@{self.valid_from_year}"
 
 
+class FeedInKind(str, enum.Enum):
+    """How exported electricity is paid for, and so how the engine projects the payment over the horizon.
+
+    - FIXED_TARIFF: a statutory rate fixed for a contract duration, such as the German EEG tariff. The engine holds
+      the year-1 revenue nominally constant for `FeedIn.duration_in_years` and escalates it afterwards at
+      `EconomicParameters.feed_in_escalation_rate`.
+    - MARKET_LINKED: a rate the supplier sets and may change at any time, but which must reflect the market value of
+      the exported electricity, such as Ireland's Clean Export Guarantee (CRU decision CRU202454). Nothing holds it
+      fixed, so the engine escalates it from year 1 with the electricity price, at the escalation rate of the
+      contract's carrier.
+    - SPOT_REFERENCED: direct marketing, a share of the spot proceeds plus a markup.
+
+    A price entry may declare FIXED_TARIFF or MARKET_LINKED for its country's feed-in row
+    (`EnergyPriceEntry.feed_in_kind`); a tariff contract may declare any kind.
+    """
+
+    NONE = "NONE"
+    FIXED_TARIFF = "FIXED_TARIFF"  # EEG, nominally constant for its duration
+    SPOT_REFERENCED = "SPOT_REFERENCED"  # direct marketing
+    MARKET_LINKED = "MARKET_LINKED"  # supplier-set, follows the electricity market (IE Clean Export Guarantee)
+
+    @property
+    def pays_rate_per_kwh(self) -> bool:
+        """Return whether every kWh sold earns the contract's flat rate.
+
+        True for FIXED_TARIFF and MARKET_LINKED, the two kinds a price entry can declare; they differ only in how the
+        rate evolves over the horizon. SPOT_REFERENCED pays from the spot price, NONE pays nothing.
+        """
+        return self in (FeedInKind.FIXED_TARIFF, FeedInKind.MARKET_LINKED)
+
+
 @dataclass(frozen=True)
 class EnergyContent:
     """How many kWh one native billing unit (a ton, a litre) of a solid or liquid fuel holds.
@@ -234,6 +267,9 @@ class EnergyPriceEntry:
     data_file: str = ""
     #: Set on the EUR/kWh copy handed out by the database; None on an as-shipped or kWh-quoted row.
     converted_from: Optional[EnergyContent] = None
+    #: How the remuneration of an `ELECTRICITY_FEED_IN` row is paid: FIXED_TARIFF (the default, the EEG
+    #: convention) or MARKET_LINKED. Only a feed-in row may state it; the loader refuses it anywhere else.
+    feed_in_kind: FeedInKind = FeedInKind.FIXED_TARIFF
 
     @property
     def entry_key(self) -> str:

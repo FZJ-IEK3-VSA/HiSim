@@ -49,6 +49,7 @@ from hisim.economics.calculators.escalation import (
     carrier_escalation_rate,
     escalation_factor,
     resolve_carrier_escalation_rate,
+    resolve_feed_in_escalation_rate,
     resolve_investment_escalation_rate,
 )
 from hisim.economics.calculators.investment import build_investment_schedule
@@ -95,7 +96,7 @@ from hisim.economics.subsidies import (
     SubsidyDecision,
     SubsidyPackageContext,
 )
-from hisim.economics.tariffs import TariffContract
+from hisim.economics.tariffs import FeedInKind, TariffContract
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
@@ -451,7 +452,8 @@ class YearZeroPriceLevel:
     - a like-for-like anyway credit: the replaced asset's investment rate;
     - maintenance, fixed operation and the standing charge: the general rate; the capacity charge: the grid-fee rate;
       the working price: the carrier rate on the volume and the spread rate on the flexibility correction; feed-in
-      revenue: the feed-in rate once its fixed-price period is over;
+      revenue: the feed-in rate once its fixed-price period is over (a market-linked rate has none and moves with
+      the electricity rate);
     - the CO2 price: the price path is read `years` later; the CO2 damage cost: unchanged.
 
     Not shifted: a stated purchase price (a reader's quote) and the residual value and credit computed from it.
@@ -469,7 +471,7 @@ class YearZeroPriceLevel:
         stated: Subjects whose year-0 purchase is a stated price, never shifted.
         stated_residuals: Subjects whose residual value is written down from that stated price.
         carriers: Carrier subject -> (carrier rate, spread rate, flexibility value in euro).
-        feed_in: Revenue subject -> (feed-in rate, fixed-price duration in years).
+        feed_in: Revenue subject -> (feed-in escalation rate, fixed-price period in years; 0 for a market-linked rate).
     """
 
     #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh): a
@@ -553,8 +555,10 @@ class YearZeroPriceLevel:
             spread = params.spread_escalation_rate if params.spread_escalation_rate is not None else rate
             flexibility = max(0.0, flexibility_by_carrier.get(carrier.value, 0.0))
             self.carriers[carrier.value] = (rate, spread, flexibility)
-            duration = contract.feed_in.duration_in_years
-            self.feed_in[revenue_subject(carrier)] = (params.feed_in_escalation_rate, duration)
+            self.feed_in[revenue_subject(carrier)] = (
+                resolve_feed_in_escalation_rate(contract, params, self.database).rate,
+                contract.feed_in.fixed_period_in_years,
+            )
 
     def timeline(self, timeline: CashFlowTimeline) -> CashFlowTimeline:
         """The timeline with every entry in year-0 money; the same object when nothing shifts."""
@@ -1299,6 +1303,10 @@ class EconomicEvaluator:
             ),
             "feed-in": ResolvedRate(rate=params.feed_in_escalation_rate, origin=RateOrigin.CONFIGURATION),
         }
+        for contract in build.tariffs_applied:
+            if contract.feed_in.kind is FeedInKind.MARKET_LINKED:
+                # The rate a market-linked feed-in actually escalated with, not the configured one it ignores.
+                rates["feed-in"] = resolve_feed_in_escalation_rate(contract, params, self.database)
         for determinants in inputs.billing:
             carrier = determinants.carrier
             rates[f"energy:{carrier.value}"] = resolve_carrier_escalation_rate(

@@ -165,8 +165,8 @@ on its own schedule at the price its own stage paid. Per-kWh subsidies pay each 
 share of the energy sold (5/8 and 3/8), each at its own scheme's terms; an increment a later stage
 removes again earns no residual value. The document gives the increment a `by_subject` row of its
 own under the enlarged subject's measure. `escalation.energy` names a
-per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
-then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
+per-carrier rate (`ELECTRICITY_FEED_IN` is refused: a fixed tariff is held for 20 years and
+then follows `escalation.feed_in`, and a market-linked one follows `ELECTRICITY`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —
 `{"ELECTRICITY": {"working_price_in_euro_per_kwh": 0.31, "standing_charge_in_euro_per_year": 180},
 "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.08}}`, each value a number or a band
@@ -176,8 +176,9 @@ books a carbon price separately (`co2_price_exposure > 0`: in the shipped data I
 oil and district heating, and Germany's from its 2026 rows on) the engine subtracts the year-1 carbon price and keeps the CO2 path for later years, so
 year 1 costs exactly the stated price, and a stated price below that carbon price is refused.
 From year 2 the working price escalates at the carrier's rate, the standing charge (which replaces
-the fixed annual charge) at `general`; the feed-in price is the electricity contract's fixed rate
-for 20 years. The plan's reference and every stage are priced with it; a carrier some stage bills
+the fixed annual charge) at `general`; the feed-in price is the electricity contract's feed-in
+rate, paid the way the country's feed-in row says (fixed for 20 years in Germany, market-linked in
+Ireland). The plan's reference and every stage are priced with it; a carrier some stage bills
 under an explicit contract cannot be given a stated price. The provenance ledger records each
 stated term as a `REQUEST` record, "stated in the economics plan (parameters.energy_prices)".
 The document echoes the rates and prices *actually used* — for every carrier a stage bills and
@@ -560,7 +561,12 @@ for pellets and wood chips, as the cited sources publish them. Nothing is billed
 carrier's lower heating value (from `PhysicsConfig`) and hands out an entry in EUR/kWh and
 kg/kWh, recording the division in the provenance detail (decision D26). Quantities are kWh
 everywhere, so the `*_per_kwh` field names are literally true by the time anything reads them.
-The `ELECTRICITY_FEED_IN` carrier holds the feed-in remuneration as its working price.
+The `ELECTRICITY_FEED_IN` carrier holds the feed-in remuneration as its working price. Its row
+may state `feed_in_kind`: `FIXED_TARIFF` (the default, Germany's EEG: nominal for 20 years, then
+`feed_in_escalation_rate`) or `MARKET_LINKED` (Ireland's Clean Export Guarantee, a supplier-set rate
+that must reflect the market value of the export, CRU decision CRU202454: no fixed period, it
+escalates with the `ELECTRICITY` rate from year 1). The revenue cites the row's working price and
+its `feed_in_kind`, each with the row's sources, and the annualized energy sold.
 
 ### 3.4 `co2_price_paths.json` — carbon price trajectories
 
@@ -663,7 +669,8 @@ sweepable, and neither is the retired `legacy_flat_subsidy_share` shim field (§
 - **Energy projection** (§8.5): year-1 bills are decomposed into volume effect (escalated with
   the carrier rate), flexibility value (spread escalation rate, default = carrier rate),
   standing charges (general rate), capacity charges (grid-fee rate) and the CO2-price component
-  (from the trajectory). EEG-style feed-in stays nominally fixed for its contract duration.
+  (from the trajectory). EEG-style feed-in stays nominally fixed for its contract duration; a
+  market-linked feed-in (Ireland) escalates with the electricity rate.
   Simulations shorter than a year are annualized linearly with a warning.
 - **Uncertainty = envelope, not confidence interval** (§3.9): LOW/HIGH are fully correlated
   cheap/expensive worlds. Physical quantities, economic *rates*, service lives and emission

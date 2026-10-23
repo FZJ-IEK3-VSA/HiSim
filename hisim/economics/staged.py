@@ -82,7 +82,6 @@ from hisim.economics.staged_parameters import (
     PlanYearBounds,
 )
 from hisim.economics.subsidies import PayoutKind, SubsidyCatalog
-from hisim.economics.tariffs import FeedInKind
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
@@ -1170,7 +1169,7 @@ class StagedEvaluator:
             )
         elif EnergyCarrier.ELECTRICITY in prices:
             contract = priced_contract(EnergyCarrier.ELECTRICITY, price_basis_year, self.database, parameters)
-            if contract.feed_in.kind == FeedInKind.FIXED_TARIFF:
+            if contract.feed_in.kind.pays_rate_per_kwh:
                 prices[feed_in] = EchoedPrice(
                     working_price_in_euro_per_kwh=contract.feed_in.rate_in_euro_per_kwh,
                     working_price_origin=EchoOrigin.DATABASE,

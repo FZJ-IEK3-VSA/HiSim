@@ -23,6 +23,7 @@ from hisim.economics.catalog_entries import (
     EnergyContent,
     EnergyPriceEntry,
     EscalationDefaults,
+    FeedInKind,
     ResolvedDeviceEntry,
     ResolvedPriceEntry,
     _band,
@@ -81,6 +82,43 @@ def _energy_carrier_from_name(name: Any, context: str) -> EnergyCarrier:
             return member
     known = ", ".join(member.value for member in EnergyCarrier)
     raise CostDataError(f"{context}: unknown carrier {name!r} (known carriers: {known}).")
+
+
+def _feed_in_kind_of_row(item: Dict[str, Any], carrier: EnergyCarrier, context: str) -> FeedInKind:
+    """Return the remuneration structure an energy price row declares, FIXED_TARIFF when it declares none.
+
+    Example: Ireland's `ELECTRICITY_FEED_IN` row states `"feed_in_kind": "MARKET_LINKED"` (the Clean Export
+    Guarantee), Germany's states nothing and is an EEG fixed tariff. Only the two kinds that pay a flat rate per kWh
+    can be declared by a price row; a spot-referenced remuneration needs a tariff contract with its spot series.
+
+    Args:
+        item: The raw JSON object of the row.
+        carrier: The row's carrier, already resolved.
+        context: The `file:carrier@year` location string, quoted in the error.
+
+    Returns:
+        The declared kind, or FIXED_TARIFF.
+
+    Raises:
+        CostDataError: If a row of another carrier than ELECTRICITY_FEED_IN states a kind, or the kind is not one a
+            price row can declare.
+    """
+    raw = item.get("feed_in_kind")
+    if raw is None:
+        return FeedInKind.FIXED_TARIFF
+    if carrier != EnergyCarrier.ELECTRICITY_FEED_IN:
+        raise CostDataError(
+            f"{context}: feed_in_kind is stated on a {carrier.value} row; only an ELECTRICITY_FEED_IN row is paid "
+            "for exported electricity."
+        )
+    admissible = [kind for kind in FeedInKind if kind.pays_rate_per_kwh]
+    for kind in admissible:
+        if raw == kind.value:
+            return kind
+    raise CostDataError(
+        f"{context}: feed_in_kind {raw!r} is not one a price row can declare "
+        f"({', '.join(kind.value for kind in admissible)}); a spot-referenced remuneration needs a tariff contract."
+    )
 
 
 class CostDatabase:
@@ -222,9 +260,9 @@ class CostDatabase:
         """Parse one ``energy_prices_<COUNTRY>.json`` into `EnergyPriceEntry` rows.
 
         Each row holds a working price and a standing charge, the emission factor and `co2_price_exposure` for the CO2
-        accounting, `tax_and_levy_share` for the macroeconomic view, and `quantity_unit`, since a price
-        may be quoted per liter or per ton. The rule that a working price excludes the explicit carbon price is not
-        checked here.
+        accounting, `tax_and_levy_share` for the macroeconomic view, and `quantity_unit`, since a price may be quoted
+        per liter or per ton. A feed-in row may also state its `feed_in_kind`. The rule that a working price excludes
+        the explicit carbon price is not checked here.
 
         Args:
             path: Absolute path of the file.
@@ -234,7 +272,8 @@ class CostDatabase:
             The entries in file order; the `(carrier, year)` lookup selects between them.
 
         Raises:
-            CostDataError: On an unknown carrier, a missing or unresolvable source, or a malformed band.
+            CostDataError: On an unknown carrier, a missing or unresolvable source, a malformed band, or a
+                `feed_in_kind` a row cannot state.
         """
         with open(path, encoding="utf-8") as file:
             raw = json.load(file)
@@ -246,9 +285,10 @@ class CostDatabase:
             field_sources = {key: tuple(value) for key, value in (item.get("field_sources") or {}).items()}
             for ids in field_sources.values():
                 self.sources.resolve(ids, context)
+            carrier = _energy_carrier_from_name(item.get("carrier"), context)
             entries.append(
                 EnergyPriceEntry(
-                    carrier=_energy_carrier_from_name(item.get("carrier"), context),
+                    carrier=carrier,
                     year=int(item["year"]),
                     working_price_in_euro_per_kwh=_band(item, "working_price_in_euro_per_kwh", context),
                     standing_charge_in_euro_per_year=_band(item, "standing_charge_in_euro_per_year", context, 0.0),
@@ -261,6 +301,7 @@ class CostDatabase:
                     field_sources=field_sources,
                     notes=item.get("notes"),
                     data_file=file_name,
+                    feed_in_kind=_feed_in_kind_of_row(item, carrier, context),
                 )
             )
         return entries
@@ -610,10 +651,13 @@ class CostDatabase:
         """Add a DATABASE_ENTRY provenance record for one field of an energy price entry and return its id.
 
         Same `field_sources` rule and return value as :meth:`provenance_for_device`. The record's `detail` describes
-        the unit conversion of a row quoted per ton or per liter (:meth:`conversion_detail`).
+        the unit conversion of a row quoted per ton or per liter (:meth:`conversion_detail`). The feed-in kind is
+        recorded as its plain string, e.g. "MARKET_LINKED".
         """
         source_ids = entry.field_sources.get(parameter_field, entry.source_ids)
         value: Any = getattr(entry, parameter_field, None)
+        if isinstance(value, FeedInKind):
+            value = value.value
         if not isinstance(value, (UncertainValue, float, str)):
             value = str(value)
         return ledger.record(

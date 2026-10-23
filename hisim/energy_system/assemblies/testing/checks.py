@@ -48,7 +48,7 @@ import numpy as np
 import pandas as pd
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentInput
+from hisim.component import Component, ServedHeatInputs
 from hisim.components.building.building import Building
 from hisim.energy_system.assemblies.describe import band
 from hisim.energy_system.assemblies.model import (
@@ -405,15 +405,18 @@ def check_member_contract(run: IsolationRun, tests: TestContract) -> None:
         raise failure(run.label, "member contract", "the constructed members", "; ".join(found))
 
 
-class HeatDelivery:
+class HeatDelivery(ServedHeatInputs):
     """Whether the heat an isolation system makes reaches what it heats (checks ``heat delivered``, ``room heated``).
 
-    A component's heat input (load type ``HEATING``) is *served* by every other component of the system whose class
-    its class's default connections name for that input. A served input left unconnected loses that heat. Example:
-    beside ``heating/electric_resistive`` the ``Building``'s optional ``ThermalPowerDelivered`` is served by the
-    subject's heater (``ElectricHeating.ThermalOutputShPower``); unconnected, the heater follows the building's demand
-    all day while the room air falls from 20.7 to 8.9 °C (hisim-fob3). Because the input is optional, nothing else
-    refuses that system.
+    The rule for lost heat is the simulator's own (:class:`~hisim.component.ServedHeatInputs`, which a run applies
+    when it connects the components): a component's heat input (load type ``HEATING``) is *served* by every other
+    component of the system whose class its class's default connections name for that input. A served input left
+    unconnected loses that heat. Example: beside ``heating/electric_resistive`` the ``Building``'s optional
+    ``ThermalPowerDelivered`` is served by the subject's heater (``ElectricHeating.ThermalOutputShPower``);
+    unconnected, the heater follows the building's demand all day while the room air falls from 20.7 to 8.9 °C
+    (hisim-fob3). Because the input is optional, the mandatory-input check does not refuse that system; the run
+    refuses it when it connects the components (:class:`~hisim.component.LostHeatError`), which the ``run`` check
+    names, and this check applies the same rule to the components of a run that finished.
 
     A building is *heated* when its heat input is connected or served. At the defaults (the members sized for the
     house) its room air averaged over the day lies within :attr:`TOLERANCE_IN_KELVIN` of its set heating
@@ -425,63 +428,6 @@ class HeatDelivery:
     #: How far the day's mean room air may lie from the set heating temperature: the building's own tolerance of
     #: underheating (1 K), below which its comfort KPI counts the hours as cold.
     TOLERANCE_IN_KELVIN: ClassVar[float] = Building.UNDERHEATING_TOLERANCE_IN_KELVIN
-
-    @staticmethod
-    def by_class(components: Mapping[str, Component]) -> Dict[str, List[str]]:
-        """The runtime names of the components, by the class name default connections use (``get_classname``)."""
-        names: Dict[str, List[str]] = {}
-        for name, component in components.items():
-            names.setdefault(type(component).get_classname(), []).append(name)
-        return names
-
-    @staticmethod
-    def sources(
-        name: str, component: Component, item: ComponentInput, by_class: Mapping[str, Sequence[str]]
-    ) -> List[str]:
-        """The other components that serve one input of a component, each as ``name (Class.Output)``.
-
-        Args:
-            name: The component's runtime name.
-            component: The component.
-            item: One of its inputs.
-            by_class: The runtime names of the system's components by class name (:meth:`by_class`).
-
-        Returns:
-            Every component whose class the component's default connections name for the input, in their order.
-        """
-        return [
-            f"{other} ({connection.source_class_name}.{connection.source_output_name})"
-            for connections in component.default_connections.values()
-            for connection in connections
-            if connection.target_input_name == item.field_name
-            for other in by_class.get(connection.source_class_name, ())
-            if other != name
-        ]
-
-    @classmethod
-    def lost(cls, components: Mapping[str, Component]) -> List[str]:
-        """Every served heat input that is not connected, each named with the components that serve it.
-
-        Args:
-            components: The constructed and wired components of a system, by runtime name.
-
-        Returns:
-            One sentence per lost input: ``Building.ThermalPowerDelivered is not connected, although subject-Heater
-            (ElectricHeating.ThermalOutputShPower) serves it by default``; empty when no heat is lost.
-        """
-        by_class = cls.by_class(components)
-        found: List[str] = []
-        for name, component in components.items():
-            for item in component.inputs:
-                if item.loadtype != lt.LoadTypes.HEATING or item.src_object_name is not None:
-                    continue
-                sources = cls.sources(name, component, item, by_class)
-                if sources:
-                    found.append(
-                        f"{name}.{item.field_name} is not connected, although {' and '.join(sources)} serves it by "
-                        "default"
-                    )
-        return found
 
     @classmethod
     def heated_buildings(cls, components: Mapping[str, Component]) -> List[str]:

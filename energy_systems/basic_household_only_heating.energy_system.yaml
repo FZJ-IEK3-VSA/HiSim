@@ -57,6 +57,7 @@ components:
     inputs:
       - Weather
       - UTSPConnector
+      - HeatDistributionSystem
   Weather:
     class: hisim.components.weather.Weather
     preset: aachen

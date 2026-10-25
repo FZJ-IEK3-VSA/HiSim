@@ -1,4 +1,4 @@
-"""The circulation pump's five flow laws, its clamping and the settings it refuses when it is built.
+"""The circulation pump's five flow laws, its clamping, its supply law and the settings it refuses when it is built.
 
 :class:`hisim.subcomponents.pumps.CirculationPump` is the one pump law of every device that pumps its own loop
 (``system_docs/component_design_principles.md``, section C). Each test states the law of one mode and checks it on
@@ -80,19 +80,6 @@ def test_a_fixed_lift_pump_given_heat_taken_out_stands_at_its_smallest_flow_of_z
     assert pump.operating_point(heat_power_in_watt=-500.0, return_temperature_in_celsius=40.0) == (0.0, 40.0, True)
 
 
-def test_a_fixed_lift_pump_per_area_has_its_bounds_for_the_whole_field() -> None:
-    """Bounds per m² and hour become bounds in kg/s for the field: 5 to 40 kg/(m² h) on 4 m² are 0.0056 to 0.0444."""
-    pump = CirculationPump.flow_matches_fixed_lift_per_area(
-        target_lift_in_kelvin=20.0,
-        minimal_mass_flow_in_kg_per_hour_per_m2=5.0,
-        maximal_mass_flow_in_kg_per_hour_per_m2=40.0,
-        area_m2=4.0,
-    )
-    assert pump.mode is PumpMode.FLOW_MATCHES_FIXED_LIFT
-    assert pump.minimal_mass_flow_in_kg_per_second == 5.0 * 4.0 / 3600.0
-    assert pump.maximal_mass_flow_in_kg_per_second == 40.0 * 4.0 / 3600.0
-
-
 def test_a_controller_lift_pump_carries_the_heat_over_the_lift_asked_for() -> None:
     """Unclamped, a controller-lift pump runs ``Q / (c lift)`` and supplies the return plus the lift asked for."""
     pump = CirculationPump.flow_matches_controller_lift()
@@ -141,7 +128,7 @@ def test_a_controller_lift_pump_lowers_a_large_lift_to_the_rise_at_its_smallest_
 
 def test_a_target_supply_temperature_pump_brings_its_return_up_to_the_set_temperature() -> None:
     """Within its bounds the pump runs ``Q / (c (T_set - T_ret))`` and the water leaves exactly at the set temperature."""
-    pump = CirculationPump.flow_matches_target_supply_temperature(maximal_mass_flow_in_kg_per_second=0.5)
+    pump = CirculationPump(PumpMode.FLOW_MATCHES_TARGET_SUPPLY_TEMPERATURE, maximal_mass_flow_in_kg_per_second=0.5)
     point = pump.operating_point(
         heat_power_in_watt=8360.0, return_temperature_in_celsius=40.0, supply_set_temperature_in_celsius=60.0
     )
@@ -158,8 +145,10 @@ def test_a_target_supply_temperature_pump_that_cannot_reach_the_set_temperature_
     heat_power_in_watt: float, return_temperature_in_celsius: float, expected_mass_flow_in_kg_per_second: float
 ) -> None:
     """At a bound the flow is exactly that bound, the supply follows the heat, and the result says so."""
-    pump = CirculationPump.flow_matches_target_supply_temperature(
-        minimal_mass_flow_in_kg_per_second=0.05, maximal_mass_flow_in_kg_per_second=0.5
+    pump = CirculationPump(
+        PumpMode.FLOW_MATCHES_TARGET_SUPPLY_TEMPERATURE,
+        minimal_mass_flow_in_kg_per_second=0.05,
+        maximal_mass_flow_in_kg_per_second=0.5,
     )
     point = pump.operating_point(
         heat_power_in_watt=heat_power_in_watt,
@@ -176,9 +165,11 @@ def test_a_target_supply_temperature_pump_that_cannot_reach_the_set_temperature_
 
 def test_a_target_supply_temperature_pump_without_heat_runs_its_smallest_flow_at_the_return() -> None:
     """Without heat the water cannot reach the set temperature at any flow; the pump stands at its smallest flow."""
-    standing = CirculationPump.flow_matches_target_supply_temperature(maximal_mass_flow_in_kg_per_second=0.5)
-    running = CirculationPump.flow_matches_target_supply_temperature(
-        minimal_mass_flow_in_kg_per_second=0.05, maximal_mass_flow_in_kg_per_second=0.5
+    standing = CirculationPump(PumpMode.FLOW_MATCHES_TARGET_SUPPLY_TEMPERATURE, maximal_mass_flow_in_kg_per_second=0.5)
+    running = CirculationPump(
+        PumpMode.FLOW_MATCHES_TARGET_SUPPLY_TEMPERATURE,
+        minimal_mass_flow_in_kg_per_second=0.05,
+        maximal_mass_flow_in_kg_per_second=0.5,
     )
     arguments = {"heat_power_in_watt": 0.0, "return_temperature_in_celsius": 40.0, "supply_set_temperature_in_celsius": 60.0}
     assert standing.operating_point(**arguments) == (0.0, 40.0, False)
@@ -193,7 +184,7 @@ def test_an_external_signal_pump_runs_the_share_of_its_largest_flow(
     signal: float, expected_mass_flow_in_kg_per_second: float, expected_clamped: bool
 ) -> None:
     """The controller's signal is the share of the largest flow; outside 0 to 1 it is kept there and reported."""
-    pump = CirculationPump.external_signal(maximal_mass_flow_in_kg_per_second=0.5)
+    pump = CirculationPump(PumpMode.EXTERNAL_SIGNAL, maximal_mass_flow_in_kg_per_second=0.5)
     point = pump.operating_point(heat_power_in_watt=2090.0, return_temperature_in_celsius=40.0, signal=signal)
     assert point.mass_flow_in_kg_per_second == pytest.approx(expected_mass_flow_in_kg_per_second, rel=1e-15)
     assert point.flow_is_clamped is expected_clamped
@@ -206,9 +197,27 @@ def test_an_external_signal_pump_runs_the_share_of_its_largest_flow(
         assert point.supply_temperature_in_celsius == 40.0
 
 
-def test_a_standing_pump_moves_no_water_and_leaves_it_at_the_return() -> None:
-    """The standing point is the one a device without heat at its pump's bound reports: no flow, no lift."""
-    assert PumpOperatingPoint.standing(return_temperature_in_celsius=45.0) == (0.0, 45.0, False)
+@pytest.mark.parametrize(
+    ("heat_power_in_watt", "mass_flow_in_kg_per_second", "expected_supply_temperature_in_celsius"),
+    [
+        (1672.0, 0.02, 40.0 + 1672.0 / (0.02 * Water.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN)),
+        (-836.0, 0.02, 40.0 - 836.0 / (0.02 * Water.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN)),
+        (0.0, 0.02, 40.0),
+        (1672.0, 0.0, 40.0),
+        (1672.0, -0.01, 40.0),
+    ],
+    ids=["heat put in", "heat taken out", "no heat", "no flow", "negative flow"],
+)
+def test_the_supply_is_the_return_plus_the_heat_over_the_flow_and_the_return_without_flow(
+    heat_power_in_watt: float, mass_flow_in_kg_per_second: float, expected_supply_temperature_in_celsius: float
+) -> None:
+    """A supply law that divided by a flow of 0 kg/s would publish an infinite or NaN outlet for a standing pump."""
+    supply_temperature_in_celsius = CirculationPump.supply_temperature_in_celsius(
+        heat_power_in_watt=heat_power_in_watt,
+        return_temperature_in_celsius=40.0,
+        mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+    )
+    assert supply_temperature_in_celsius == expected_supply_temperature_in_celsius
 
 
 def test_the_result_is_a_named_tuple_and_the_pump_a_frozen_subcomponent() -> None:

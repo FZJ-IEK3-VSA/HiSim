@@ -507,13 +507,13 @@ class SolarThermalSystem(PhysicsComponent):
             a_1_in_watt_per_m2_per_kelvin=config.a_1_w_m2_k,
             a_2_in_watt_per_m2_per_kelvin_squared=config.a_2_w_m2_k,
         )
-        #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift whose bounds
-        #: are the configured specific flows times the collector area.
-        self.pump = CirculationPump.flow_matches_fixed_lift_per_area(
+        #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift. Its bounds are
+        #: rated per m² of collector and per hour, so collector fields of any size run alike per m²; the pump's bounds
+        #: are for the whole field, in kg/s.
+        self.pump = CirculationPump.flow_matches_fixed_lift(
             target_lift_in_kelvin=config.pump_target_lift_in_kelvin,
-            minimal_mass_flow_in_kg_per_hour_per_m2=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
-            maximal_mass_flow_in_kg_per_hour_per_m2=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
-            area_m2=self.area_m2,
+            minimal_mass_flow_in_kg_per_second=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
+            maximal_mass_flow_in_kg_per_second=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
         )
         # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
         # the weather it came from: its irradiance and its sun. It depends on the weather alone, not
@@ -990,6 +990,8 @@ class SolarThermalSystem(PhysicsComponent):
         """
         self.plane_of_array_key = None
 
+    #: Seconds in an hour, to turn the pump's flows per hour into flows per second.
+    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
     #: The electricity of the solar pump while it runs, in W, for a current high-efficiency circulator.
     PUMP_POWER_IN_WATT: ClassVar[float] = 10.0
     #: The electricity of an old, uncontrolled solar pump while it runs, in W.
@@ -1051,17 +1053,9 @@ class SolarThermalSystem(PhysicsComponent):
     def operating_point(
         self, *, inlet_temperature_in_celsius: float, ambient_temperature_in_celsius: float
     ) -> PumpOperatingPoint:
-        """Return the flow and the supply the collector field runs at with its pump, at an inlet in this step's sun.
+        """Return this collector's :meth:`collector_operating_point` (flow in kg/s, supply in °C) for an inlet and air in °C.
 
-        It is :meth:`collector_operating_point` with the collector's pump, curve and area at the irradiance on the
-        collector plane of the step last calculated (:attr:`plane_of_array_irradiance_w_m2`).
-
-        Args:
-            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
-            ambient_temperature_in_celsius: The outside air temperature, in °C.
-
-        Returns:
-            The operating point.
+        The irradiance is the plane-of-array irradiance of the step last calculated, in W/m².
         """
         return self.collector_operating_point(
             pump=self.pump,
@@ -1089,7 +1083,7 @@ class SolarThermalSystem(PhysicsComponent):
         the point, and the supply is the inlet plus the target lift. Outside them the pump runs the nearer bound, and
         the collector's heat depends on its own outlet, so the collector evaluates its lift again at that flow
         (:meth:`FlatPlateCollectorCurve.lift_at_mass_flow_in_kelvin`): below the target lift at the smallest flow,
-        above it at the largest. Without heat even at the bound the pump stands (:meth:`PumpOperatingPoint.standing`).
+        above it at the largest. Without heat even at the bound the pump stands: no flow, the water at the inlet.
         The heat is what the water carries, ``c m (T_sup - T_in)``. For example, 4 m² of the flat-plate preset at a
         45 °C inlet in 20 °C air with a 20 K target lift and 5 to 40 kg/(m² h) run 0.0236 kg/s to 65 °C (1975 W) at
         800 W/m², and the smallest flow, 0.0056 kg/s, with an 8.5 K lift (198 W) at 200 W/m².
@@ -1126,7 +1120,7 @@ class SolarThermalSystem(PhysicsComponent):
             mass_flow_in_kg_per_second_per_m2=point.mass_flow_in_kg_per_second / area_m2,
         )
         if lift_in_kelvin <= 0.0:
-            return PumpOperatingPoint.standing(return_temperature_in_celsius=inlet_temperature_in_celsius)
+            return PumpOperatingPoint(0.0, inlet_temperature_in_celsius, False)
         return PumpOperatingPoint(point.mass_flow_in_kg_per_second, inlet_temperature_in_celsius + lift_in_kelvin, True)
 
     def sensor_temperature_at_start_of_step_in_celsius(

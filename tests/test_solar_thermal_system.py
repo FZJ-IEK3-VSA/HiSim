@@ -541,13 +541,12 @@ class CollectorPhysics:
             area_m2: The collector area, in m².
 
         Returns:
-            The pump, its bounds for the whole field.
+            The pump, its bounds for the whole field in kg/s.
         """
-        return CirculationPump.flow_matches_fixed_lift_per_area(
+        return CirculationPump.flow_matches_fixed_lift(
             target_lift_in_kelvin=cls.CONFIG.pump_target_lift_in_kelvin,
-            minimal_mass_flow_in_kg_per_hour_per_m2=cls.CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
-            maximal_mass_flow_in_kg_per_hour_per_m2=cls.CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
-            area_m2=area_m2,
+            minimal_mass_flow_in_kg_per_second=cls.CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
+            maximal_mass_flow_in_kg_per_second=cls.CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
         )
 
     @classmethod
@@ -673,7 +672,7 @@ def test_the_pump_runs_the_target_lift_within_its_bounds_and_its_water_carries_t
         area_m2=area_m2,
     )
     if point.mass_flow_in_kg_per_second == 0.0:
-        assert point == PumpOperatingPoint.standing(return_temperature_in_celsius=tank_c)
+        assert point == PumpOperatingPoint(0.0, tank_c, False)
         return
     least_kg_s = pump.minimal_mass_flow_in_kg_per_second
     most_kg_s = pump.maximal_mass_flow_in_kg_per_second
@@ -730,11 +729,10 @@ def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradi
 
     A constant-flow pump that still ran the target lift's flow would ignore its own speed.
     """
-    pump = CirculationPump.flow_matches_fixed_lift_per_area(
+    pump = CirculationPump.flow_matches_fixed_lift(
         target_lift_in_kelvin=20.0,
-        minimal_mass_flow_in_kg_per_hour_per_m2=30.0,
-        maximal_mass_flow_in_kg_per_hour_per_m2=30.0,
-        area_m2=6.0,
+        minimal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
+        maximal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
     )
     point = CollectorPhysics.point(
         inlet_temperature_in_celsius=40.0,
@@ -744,6 +742,25 @@ def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradi
         pump=pump,
     )
     assert point.mass_flow_in_kg_per_second == pytest.approx(30.0 * 6.0 / 3600, rel=1e-12)
+
+
+@pytest.mark.base
+def test_the_collector_s_pump_has_its_bounds_per_m2_and_hour_for_the_whole_field() -> None:
+    """A collector whose pump bounds ignored its area, or the hour, would run a 12 m² field at a 1 m² field's flow.
+
+    The flat-plate preset rates its pump at 5 to 40 kg/(m² h); on the 12 m² of three dwellings that is 0.0167 to
+    0.1333 kg/s, at the configured 20 K target lift.
+    """
+    config = CollectorPhysics.CONFIG.resolve(SizingContext(number_of_apartments=3))
+    collector = solar_thermal_system.SolarThermalSystem(
+        config=config, my_simulation_parameters=sim.SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    )
+    assert collector.area_m2 == 12.0
+    assert collector.pump == CirculationPump.flow_matches_fixed_lift(
+        target_lift_in_kelvin=20.0,
+        minimal_mass_flow_in_kg_per_second=5.0 * 12.0 / 3600.0,
+        maximal_mass_flow_in_kg_per_second=40.0 * 12.0 / 3600.0,
+    )
 
 
 @pytest.mark.base
@@ -1023,7 +1040,7 @@ def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the
     if heat_in_watt > 0:
         point = PumpOperatingPoint(0.025, 60.0, False)
     else:
-        point = PumpOperatingPoint.standing(return_temperature_in_celsius=40.0)
+        point = PumpOperatingPoint(0.0, 40.0, False)
     circuit = solar_thermal_system.SolarThermalSystem.collector_circuit(
         operating_point=point, inlet_temperature_in_celsius=40.0, pump_runs=pump_runs
     )

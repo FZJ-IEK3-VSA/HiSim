@@ -1,4 +1,4 @@
-"""The circulation pump every device that pumps its own water loop runs: one flow law, in four modes.
+"""The circulation pump every device that pumps its own water loop runs: one flow law, in five modes.
 
 A boiler, a solar collector, a district-heating substation, an electric heater, a heat pump in its fixed-flow mode and
 the heat distribution system each move the water of a loop they own. Each holds a :class:`CirculationPump` and asks
@@ -64,25 +64,10 @@ class PumpOperatingPoint(NamedTuple):
     supply_temperature_in_celsius: float
     flow_is_clamped: bool
 
-    @classmethod
-    def standing(cls, *, return_temperature_in_celsius: float) -> "PumpOperatingPoint":
-        """Return the point of a pump that stands: no flow, and the water at the return temperature.
-
-        For example, a solar collector without heat at its pump's smallest flow does not run its pump, and its point
-        is ``standing(return_temperature_in_celsius=45.0)``, that is ``(0.0, 45.0, False)``.
-
-        Args:
-            return_temperature_in_celsius: The return temperature, in °C.
-
-        Returns:
-            The standing point.
-        """
-        return cls(0.0, return_temperature_in_celsius, False)
-
 
 @dataclass(frozen=True)
 class CirculationPump(Subcomponent):
-    """A circulation pump: the flow it runs for the heat its device puts into the water, in one of four modes.
+    """A circulation pump: the flow it runs for the heat its device puts into the water, in one of five modes.
 
     The device calls :meth:`operating_point` with the heat it adds, the return temperature and, for a controller lift,
     the lift its controller asks for; the pump answers with the flow and the supply temperature. The controlled modes
@@ -91,12 +76,11 @@ class CirculationPump(Subcomponent):
     pump reports a clamp, it does not refuse one. A device whose heat depends on its own outlet (a solar collector)
     evaluates its heat again at the clamped flow; the pump never needs the device's physics.
 
-    Built through the classmethod factories (:meth:`constant_flow`, :meth:`flow_matches_fixed_lift`,
-    :meth:`flow_matches_fixed_lift_per_area`, :meth:`flow_matches_controller_lift`,
-    :meth:`flow_matches_controller_lift_sized_for`, :meth:`flow_matches_target_supply_temperature`,
-    :meth:`external_signal`), which a device feeds from its own configuration fields. For example, a solar pump with
-    a 20 K target lift and 5 to 40 kg/(m² h) on 4 m² is ``CirculationPump.flow_matches_fixed_lift_per_area(target_lift_in_kelvin=
-    20.0, minimal_mass_flow_in_kg_per_hour_per_m2=5.0, maximal_mass_flow_in_kg_per_hour_per_m2=40.0, area_m2=4.0)``.
+    A device builds it from its own configuration fields: from its mode and the fields that mode reads, or through
+    the factory of a mode several devices run (:meth:`constant_flow`, :meth:`flow_matches_fixed_lift`,
+    :meth:`flow_matches_controller_lift`). For example, a solar pump with a 20 K target lift and 0.0056 to 0.0444 kg/s
+    is ``CirculationPump.flow_matches_fixed_lift(target_lift_in_kelvin=20.0, minimal_mass_flow_in_kg_per_second=0.0056,
+    maximal_mass_flow_in_kg_per_second=0.0444)``.
 
     Attributes:
         mode: How the pump decides its flow.
@@ -116,8 +100,6 @@ class CirculationPump(Subcomponent):
 
     #: The specific heat of the water the pump moves, in J/(kg K).
     SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN: ClassVar[float] = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
-    #: Seconds in an hour, to turn a flow per hour into one per second.
-    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
 
     def __post_init__(self) -> None:
         """Refuse a setting the mode cannot run, so a bad pump fails when its device is built.
@@ -153,7 +135,12 @@ class CirculationPump(Subcomponent):
             )
         largest = self.maximal_mass_flow_in_kg_per_second
         if mode is PumpMode.CONSTANT_FLOW:
-            self.check_that_a_constant_flow_pump_has_no_bounds()
+            if self.minimal_mass_flow_in_kg_per_second != 0.0 or largest != math.inf:
+                raise ValueError(
+                    "A constant-flow pump does not read a smallest or a largest flow, got "
+                    f"minimal_mass_flow_in_kg_per_second={self.minimal_mass_flow_in_kg_per_second!r} and "
+                    f"maximal_mass_flow_in_kg_per_second={largest!r}; it runs its design flow."
+                )
             design = self.design_mass_flow_in_kg_per_second
             if not math.isfinite(design) or design <= 0.0:
                 raise ValueError(
@@ -185,23 +172,6 @@ class CirculationPump(Subcomponent):
                     "flow when the heat cannot reach the set temperature."
                 )
 
-    def check_that_a_constant_flow_pump_has_no_bounds(self) -> None:
-        """Refuse a smallest or largest flow on a constant pump, which runs its design flow and nothing else.
-
-        For example, a constant pump of 0.3 kg/s with a largest flow of 0.5 kg/s is refused: the bound would never
-        act, and a reader would think it did.
-
-        Raises:
-            ValueError: If either bound is not its default, 0 and infinity.
-        """
-        if self.minimal_mass_flow_in_kg_per_second != 0.0 or self.maximal_mass_flow_in_kg_per_second != math.inf:
-            raise ValueError(
-                "A constant-flow pump does not read a smallest or a largest flow, got "
-                f"minimal_mass_flow_in_kg_per_second={self.minimal_mass_flow_in_kg_per_second!r} and "
-                f"maximal_mass_flow_in_kg_per_second={self.maximal_mass_flow_in_kg_per_second!r}; it runs its "
-                "design flow."
-            )
-
     def check_the_bounds_of_a_controlled_mode(self) -> None:
         """Refuse bounds a controlled mode cannot keep its flow between: ``0 <= m_min <= m_max``, ``m_max > 0``.
 
@@ -230,20 +200,7 @@ class CirculationPump(Subcomponent):
 
     @classmethod
     def constant_flow(cls, *, design_mass_flow_in_kg_per_second: float) -> "CirculationPump":
-        """Return a pump that runs its design flow, whatever the heat.
-
-        For example, the heat distribution system's pump of a floor heating designed for 7000 W over 7 K runs
-        ``constant(design_mass_flow_in_kg_per_second=0.24)``.
-
-        Args:
-            design_mass_flow_in_kg_per_second: The flow, in kg/s, finite and above 0.
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the design flow is not finite or not above 0 kg/s.
-        """
+        """Return a pump that runs its design flow, in kg/s, whatever the heat."""
         return cls(mode=PumpMode.CONSTANT_FLOW, design_mass_flow_in_kg_per_second=design_mass_flow_in_kg_per_second)
 
     @classmethod
@@ -254,22 +211,7 @@ class CirculationPump(Subcomponent):
         minimal_mass_flow_in_kg_per_second: float = 0.0,
         maximal_mass_flow_in_kg_per_second: float = math.inf,
     ) -> "CirculationPump":
-        """Return a temperature-sensor pump: the flow that carries the heat over a fixed lift, within bounds.
-
-        For example, a district-heating substation's hot-water pump that carries its connected load over 100 K is
-        ``flow_matches_fixed_lift(target_lift_in_kelvin=100.0)``, without bounds.
-
-        Args:
-            target_lift_in_kelvin: The lift the pump holds, in K, finite and above 0.
-            minimal_mass_flow_in_kg_per_second: The smallest flow, in kg/s, 0 or more.
-            maximal_mass_flow_in_kg_per_second: The largest flow, in kg/s, infinity for none.
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the lift is not finite or not above 0 K, or the bounds are invalid.
-        """
+        """Return a temperature-sensor pump: the flow that carries the heat over a fixed lift in K, within bounds in kg/s."""
         return cls(
             mode=PumpMode.FLOW_MATCHES_FIXED_LIFT,
             target_lift_in_kelvin=target_lift_in_kelvin,
@@ -278,56 +220,10 @@ class CirculationPump(Subcomponent):
         )
 
     @classmethod
-    def flow_matches_fixed_lift_per_area(
-        cls,
-        *,
-        target_lift_in_kelvin: float,
-        minimal_mass_flow_in_kg_per_hour_per_m2: float,
-        maximal_mass_flow_in_kg_per_hour_per_m2: float,
-        area_m2: float,
-    ) -> "CirculationPump":
-        """Return a temperature-sensor pump whose bounds are given per m² of the area it serves, per hour.
-
-        A solar collector's pump is rated this way, so collector fields of any size run alike per m². The bounds are
-        ``specific flow * area / 3600``. For example, 5 to 40 kg/(m² h) on 4 m² give 0.0056 to 0.0444 kg/s.
-
-        Args:
-            target_lift_in_kelvin: The lift the pump holds, in K, finite and above 0.
-            minimal_mass_flow_in_kg_per_hour_per_m2: The smallest flow per m², in kg/(m² h).
-            maximal_mass_flow_in_kg_per_hour_per_m2: The largest flow per m², in kg/(m² h).
-            area_m2: The area the pump serves, in m².
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the lift or the bounds in kg/s are invalid.
-        """
-        return cls.flow_matches_fixed_lift(
-            target_lift_in_kelvin=target_lift_in_kelvin,
-            minimal_mass_flow_in_kg_per_second=minimal_mass_flow_in_kg_per_hour_per_m2 * area_m2 / cls.SECONDS_PER_HOUR,
-            maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_hour_per_m2 * area_m2 / cls.SECONDS_PER_HOUR,
-        )
-
-    @classmethod
     def flow_matches_controller_lift(
         cls, *, minimal_mass_flow_in_kg_per_second: float = 0.0, maximal_mass_flow_in_kg_per_second: float = math.inf
     ) -> "CirculationPump":
-        """Return a controller-lift pump: the flow that carries the heat over the lift the controller asks for.
-
-        For example, an electric heater's hot-water pump, which carries whatever power the heater regulates over the
-        lift its controller asks for, is ``flow_matches_controller_lift()``, without bounds.
-
-        Args:
-            minimal_mass_flow_in_kg_per_second: The smallest flow, in kg/s, 0 or more.
-            maximal_mass_flow_in_kg_per_second: The largest flow, in kg/s, infinity for none.
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the bounds are invalid.
-        """
+        """Return a controller-lift pump: the flow that carries the heat over the lift in K the controller asks for, within bounds in kg/s."""
         return cls(
             mode=PumpMode.FLOW_MATCHES_CONTROLLER_LIFT,
             minimal_mass_flow_in_kg_per_second=minimal_mass_flow_in_kg_per_second,
@@ -366,49 +262,6 @@ class CirculationPump(Subcomponent):
                 "be finite and above 0."
             )
         return cls.flow_matches_controller_lift(maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_second)
-
-    @classmethod
-    def flow_matches_target_supply_temperature(
-        cls, *, maximal_mass_flow_in_kg_per_second: float, minimal_mass_flow_in_kg_per_second: float = 0.0
-    ) -> "CirculationPump":
-        """Return a pump that brings the device's return up to a supply set temperature it is given in each call.
-
-        For example, ``flow_matches_target_supply_temperature(maximal_mass_flow_in_kg_per_second=0.5)`` carrying 8360 W from a 40 °C
-        return to a 60 °C set temperature runs 0.1 kg/s. The bounds are flows, so a clamp keeps the flow exactly at
-        the bound and the supply misses the set temperature.
-
-        Args:
-            maximal_mass_flow_in_kg_per_second: The largest flow, in kg/s, finite and above 0.
-            minimal_mass_flow_in_kg_per_second: The smallest flow, in kg/s, 0 or more.
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the bounds are invalid or the largest flow is not finite.
-        """
-        return cls(
-            mode=PumpMode.FLOW_MATCHES_TARGET_SUPPLY_TEMPERATURE,
-            minimal_mass_flow_in_kg_per_second=minimal_mass_flow_in_kg_per_second,
-            maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_second,
-        )
-
-    @classmethod
-    def external_signal(cls, *, maximal_mass_flow_in_kg_per_second: float) -> "CirculationPump":
-        """Return a pump whose flow a controller decides as a share of its largest flow.
-
-        For example, ``external_signal(maximal_mass_flow_in_kg_per_second=0.5)`` runs 0.2 kg/s at a signal of 0.4.
-
-        Args:
-            maximal_mass_flow_in_kg_per_second: The flow at a signal of 1, in kg/s, finite and above 0.
-
-        Returns:
-            The pump.
-
-        Raises:
-            ValueError: If the largest flow is not finite or not above 0 kg/s.
-        """
-        return cls(mode=PumpMode.EXTERNAL_SIGNAL, maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_second)
 
     def operating_point(  # pylint: disable=too-many-return-statements  # one return per mode and clamp, no extra call in the hot path
         self,
@@ -540,18 +393,10 @@ class CirculationPump(Subcomponent):
     def supply_temperature_in_celsius(
         cls, *, heat_power_in_watt: float, return_temperature_in_celsius: float, mass_flow_in_kg_per_second: float
     ) -> float:
-        """Return the temperature water leaves at after a heat raised it at a flow: ``T_ret + Q / (m c)``.
+        """Return the temperature in °C water leaves at after a heat in W raised it at a flow in kg/s, ``T_ret + Q / (m c)``.
 
-        Without flow (0 kg/s) the water does not move and leaves at the return. For example, 1672 W at 0.02 kg/s from
-        40 °C supply 60 °C.
-
-        Args:
-            heat_power_in_watt: The heat put into the water, in W.
-            return_temperature_in_celsius: The temperature the water enters at, in °C.
-            mass_flow_in_kg_per_second: The flow, in kg/s, 0 or more.
-
-        Returns:
-            The supply temperature, in °C.
+        Without flow (0 kg/s or less) the water does not move and leaves at the return. For example, 1672 W at 0.02 kg/s
+        from 40 °C supply 60 °C.
         """
         if mass_flow_in_kg_per_second <= 0.0:
             return return_temperature_in_celsius

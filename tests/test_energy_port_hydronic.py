@@ -35,6 +35,34 @@ def test_the_heat_is_the_library_s_circuit_heat() -> None:
 
 
 @pytest.mark.parametrize(
+    ("mass_flow_in_kg_per_second", "supply_temperature_in_celsius", "return_temperature_in_celsius", "seconds_per_timestep"),
+    [(0.4, 35.0, 30.04, 900.0), (0.333, 7.0, 12.3, 60.0), (0.0, 55.0, 45.0, 3600.0), (1.7, 40.1, 40.1, 1.0)],
+)
+def test_the_heat_is_the_circuit_power_times_the_step_to_the_last_bit(
+    mass_flow_in_kg_per_second: float,
+    supply_temperature_in_celsius: float,
+    return_temperature_in_celsius: float,
+    seconds_per_timestep: float,
+) -> None:
+    """A booked power and a derived heat evaluated in another order would differ in the last bits and unbalance."""
+    power_in_watt = hydronics.circuit_power_w(
+        mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+        t_supply_c=supply_temperature_in_celsius,
+        t_return_c=return_temperature_in_celsius,
+    )
+    assert power_in_watt == mass_flow_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * (
+        supply_temperature_in_celsius - return_temperature_in_celsius
+    )
+    heat_in_kilowatt_hour = HydronicPort.heat_in_kilowatt_hour(
+        mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+        supply_temperature_in_celsius=supply_temperature_in_celsius,
+        return_temperature_in_celsius=return_temperature_in_celsius,
+        seconds_per_timestep=seconds_per_timestep,
+    )
+    assert heat_in_kilowatt_hour == power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR
+
+
+@pytest.mark.parametrize(
     ("mass_flow_in_kg_per_second", "supply_temperature_in_celsius", "seconds_per_timestep", "error"),
     [
         (-0.1, 60.0, 900.0, hydronics.NegativeMassFlowError),

@@ -13,7 +13,7 @@ import dataclasses
 import math
 import random
 from decimal import Decimal, localcontext
-from typing import Callable, Iterator, List, Tuple
+from typing import Iterator, List, Tuple
 
 import pytest
 
@@ -393,33 +393,8 @@ class Circuit:
 
     """Keyword arguments of one valid circuit, the base the circuit tests vary, a namespace."""
 
-    #: 0.1 kg/s from 50 to 60 °C for 900 s.
-    GOOD = {"mass_flow_kg_per_s": 0.1, "t_supply_c": 60.0, "t_return_c": 50.0, "dt_s": 900.0}
-
-
-def test_circuit_heat_is_m_c_delta_t_dt() -> None:
-    """0.1 kg/s, 10 K, one hour is 15.048 MJ or 4.18 kWh; another specific heat or unit factor would fail."""
-    hour = {**Circuit.GOOD, "dt_s": 3600.0}
-    assert hydronics.circuit_heat_j(**hour) == pytest.approx(15.048e6, rel=1e-15)
-    assert hydronics.circuit_heat_kwh(**hour) == pytest.approx(4.18, rel=1e-15)
-
-
-@pytest.mark.parametrize(
-    ("mass_flow_kg_per_s", "t_supply_c", "t_return_c", "dt_s"),
-    [(0.4, 35.0, 30.04, 900.0), (0.333, 7.0, 12.3, 60.0), (0.0, 55.0, 45.0, 3600.0), (1.7, 40.1, 40.1, 1.0)],
-)
-def test_circuit_heat_is_the_circuit_power_times_the_step_to_the_last_bit(
-    mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float
-) -> None:
-    """A booked power and a derived heat evaluated in another order would differ in the last bits and unbalance."""
-    power_w = hydronics.circuit_power_w(
-        mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c
-    )
-    assert power_w == mass_flow_kg_per_s * Sweep.C_WATER * (t_supply_c - t_return_c)
-    heat_j = hydronics.circuit_heat_j(
-        mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c, dt_s=dt_s
-    )
-    assert heat_j == power_w * dt_s
+    #: 0.1 kg/s from 50 to 60 °C.
+    GOOD = {"mass_flow_kg_per_s": 0.1, "t_supply_c": 60.0, "t_return_c": 50.0}
 
 
 def test_circuit_power_is_m_c_delta_t_and_refuses_a_negative_flow() -> None:
@@ -439,18 +414,18 @@ def test_a_nan_passes_through_the_circuit_power_into_its_output() -> None:
     )
 
 
-def test_circuit_heat_kwh_sign_rule() -> None:
+def test_circuit_power_sign_rule() -> None:
     """Heating is positive, cooling negative, no flow or no lift zero; a mirrored or clipped heat would fail."""
 
-    def heat_kwh(**changes: float) -> float:
-        """Return the circuit heat in kWh of the good circuit with these changes."""
-        return hydronics.circuit_heat_kwh(**dict(Circuit.GOOD, **changes))
+    def power_w(**changes: float) -> float:
+        """Return the circuit power in W of the good circuit with these changes."""
+        return hydronics.circuit_power_w(**dict(Circuit.GOOD, **changes))
 
-    assert heat_kwh() > 0.0
-    assert heat_kwh(t_supply_c=7.0, t_return_c=12.0) < 0.0
-    assert heat_kwh(t_supply_c=7.0, t_return_c=12.0) == -heat_kwh(t_supply_c=12.0, t_return_c=7.0)
-    assert heat_kwh(mass_flow_kg_per_s=0.0) == 0.0
-    assert heat_kwh(t_supply_c=50.0) == 0.0
+    assert power_w() > 0.0
+    assert power_w(t_supply_c=7.0, t_return_c=12.0) < 0.0
+    assert power_w(t_supply_c=7.0, t_return_c=12.0) == -power_w(t_supply_c=12.0, t_return_c=7.0)
+    assert power_w(mass_flow_kg_per_s=0.0) == 0.0
+    assert power_w(t_supply_c=50.0) == 0.0
 
 
 def test_node_heat_equals_circuit_heat_with_the_step_mean_as_return() -> None:
@@ -463,7 +438,7 @@ def test_node_heat_equals_circuit_heat_with_the_step_mean_as_return() -> None:
         dt_s=900.0,
         heat_capacity_j_per_k=300.0 * Sweep.C_WATER,
     )
-    circuit = hydronics.circuit_heat_j(mass_flow_kg_per_s=0.2, t_supply_c=60.0, t_return_c=result.t_mean_c, dt_s=900.0)
+    circuit = hydronics.circuit_power_w(mass_flow_kg_per_s=0.2, t_supply_c=60.0, t_return_c=result.t_mean_c) * 900.0
     assert result.heat_in_j_per_inflow[0] == pytest.approx(circuit, rel=1e-15)
 
 
@@ -471,6 +446,21 @@ def test_an_idle_circuit_moves_no_water_and_supplies_its_return() -> None:
     """An idle circuit with a flow or a supply off its return would carry heat nobody booked."""
     idle = hydronics.CircuitStep.idle(t_return_c=47.5)
     assert idle == hydronics.CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=47.5, power_w=0.0)
+
+
+def test_a_carrying_circuit_books_the_heat_its_flow_carries() -> None:
+    """0.025 kg/s at 60 °C over a 40 °C return carry 2090 W; a step booking another heat would unbalance the circuit.
+
+    The power must be the bits :func:`hydronics.circuit_power_w` gives for the same three values, which the receiver
+    derives; a negative flow must be refused rather than book a finite wrong heat.
+    """
+    step = hydronics.CircuitStep.carrying(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
+    assert step.mass_flow_kg_per_s == 0.025
+    assert step.t_supply_c == 60.0
+    assert step.power_w == hydronics.circuit_power_w(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
+    assert step.power_w == pytest.approx(2090.0, rel=1e-12)
+    with pytest.raises(hydronics.NegativeMassFlowError):
+        hydronics.CircuitStep.carrying(mass_flow_kg_per_s=-0.01, t_supply_c=60.0, t_return_c=40.0)
 
 
 def test_a_circuit_at_part_load_carries_the_averaged_flow_at_its_full_load_supply() -> None:
@@ -582,14 +572,7 @@ class Valve:
     @staticmethod
     def demand_heat_w(demand_kg_per_s: float) -> float:
         """Return the heat flow the household asks for, ``m_d c (T_warm - T_cold)``, in W."""
-        return hydronics.hot_water_demand_power_w(
-            demand_kg_per_s=demand_kg_per_s, t_warm_c=Valve.T_WARM_C, t_cold_c=Valve.T_COLD_C
-        )
-
-
-def test_the_demand_heat_is_m_c_times_the_span() -> None:
-    """0.05 kg/s from 10 to 40 °C ask for 6270 W; another span or specific heat would mis-book the unmet heat."""
-    assert Valve.demand_heat_w(0.05) == pytest.approx(0.05 * 4180.0 * 30.0, rel=1e-15)
+        return hydronics.circuit_power_w(mass_flow_kg_per_s=demand_kg_per_s, t_supply_c=Valve.T_WARM_C, t_return_c=Valve.T_COLD_C)
 
 
 def test_valve_draws_the_demanded_heat_above_t_warm() -> None:
@@ -653,9 +636,6 @@ def test_a_node_s_range_spans_its_start_its_flowing_inflows_and_its_fixed_temper
         t0_c=50.0, inflows=[Inflow(0.2, 70.0), Inflow(0.0, 95.0)], fixed_temperatures_c=(10.0, 20.0)
     )
     assert mixed_range == hydronics.TemperatureRange(low_c=10.0, high_c=70.0)
-    assert mixed_range.clamped_c(75.0) == 70.0
-    assert mixed_range.clamped_c(5.0) == 10.0
-    assert mixed_range.clamped_c(42.0) == 42.0
 
 
 def test_the_bracketed_solve_finds_the_fixed_point_of_a_contraction() -> None:
@@ -753,20 +733,6 @@ def test_a_node_step_reads_its_inflows_once() -> None:
     by_generator = step_with(one_shot())
     assert by_generator == step_with(inflows)
     assert len(by_generator.heat_in_j_per_inflow) == 2
-
-
-@pytest.mark.parametrize(
-    ("changes", "error"),
-    [
-        ({"mass_flow_kg_per_s": -0.1}, hydronics.NegativeMassFlowError),
-        ({"dt_s": 0.0}, hydronics.NonPositiveTimestepError),
-    ],
-)
-@pytest.mark.parametrize("function", [hydronics.circuit_heat_j, hydronics.circuit_heat_kwh])
-def test_circuit_heat_refusals(function: Callable[..., float], changes: dict, error: type) -> None:
-    """A circuit heat that accepted a negative flow or an empty step would book a finite wrong heat."""
-    with pytest.raises(error):
-        function(**dict(Circuit.GOOD, **changes))
 
 
 @pytest.mark.parametrize(

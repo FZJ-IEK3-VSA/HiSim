@@ -2527,7 +2527,9 @@ class SimpleDHWStorage(SimpleWaterStorage):
         """Publish the tank's temperatures and every heat of one step, all from the same node step.
 
         The circuits' heats are the node's inflow heats, the tap's the refill's heat with its sign turned, so that a
-        heat the tap draws is positive; the unmet heat is the unmet share of the demand's heat.
+        heat the tap draws is positive; the unmet heat is the unmet share of the demand's heat. The demand's heat is
+        ``m_d c (T_tap - T_mains) dt``, the heat that warms the demanded water from the mains to the tap temperature,
+        computed as a circuit with the tap temperature as its supply and the mains temperature as its return.
         """
         node = tank_step.node
         heat_primary_in_joule, heat_secondary_in_joule, heat_refill_in_joule = node.heat_in_j_per_inflow
@@ -2536,10 +2538,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         heat_capacity_in_joule_per_kelvin = self.tank.heat_capacity_in_joule_per_kelvin
         demand_heat_in_joule = (
-            hydronics.hot_water_demand_power_w(
-                demand_kg_per_s=demand_in_kg_per_second,
-                t_warm_c=self.tank.tap_temperature_in_celsius,
-                t_cold_c=self.tank.mains_water_temperature_in_celsius,
+            hydronics.circuit_power_w(
+                mass_flow_kg_per_s=demand_in_kg_per_second,
+                t_supply_c=self.tank.tap_temperature_in_celsius,
+                t_return_c=self.tank.mains_water_temperature_in_celsius,
             )
             * dt_in_seconds
         )

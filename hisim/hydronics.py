@@ -8,7 +8,7 @@ exchange heat through water publish only these port quantities, and the heat is 
 functions here, so both ends of a circuit book the same number.
 
 The module lives in ``hisim/`` rather than ``hisim/components/``: :class:`hisim.energy_port.HydronicPort` derives
-a circuit's energy with :func:`circuit_heat_kwh`, and ``hisim/energy_port.py`` is imported by
+a circuit's energy from :func:`circuit_power_w`, and ``hisim/energy_port.py`` is imported by
 ``hisim/component.py``, the base of every component, which must not import the component package built on it.
 The module imports nothing from HiSim.
 
@@ -23,16 +23,16 @@ an infinity passes through their arithmetic into the outputs that publish the re
 every result column after the run (:mod:`hisim.postprocessing.finite_results`) then names the column and its first
 bad step.
 
-Names keep this module's short unit suffixes: ``_w`` (W), ``_c`` (°C), ``_j`` (J), ``_kwh`` (kWh), ``_s`` (s),
+Names keep this module's short unit suffixes: ``_w`` (W), ``_c`` (°C), ``_j`` (J), ``_s`` (s),
 ``_kg_per_s`` (kg/s), ``_w_per_k`` (W/K), ``_j_per_k`` (J/K).
 
 Circuits
 --------
 
-A circuit's heat flow is ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`) and its heat over a step of ``dt``
-seconds ``m c (T_sup - T_ret) dt`` (:func:`circuit_heat_j`, :func:`circuit_heat_kwh`). It is positive when the
-supply owner heats the receiving side and negative for a cooling circuit with ``T_sup < T_ret``; the direction is
-the circuit's topology, so a mass flow is never negative and nothing is mirrored.
+A circuit's heat flow is ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`), and its heat over a step of ``dt``
+seconds is that heat flow times ``dt``. It is positive when the supply owner heats the receiving side and negative
+for a cooling circuit with ``T_sup < T_ret``; the direction is the circuit's topology, so a mass flow is never
+negative and nothing is mirrored.
 
 A generator that holds a lift ``dT`` supplies ``T_ret + dT`` up to a supply limit; above the limit the supply stops
 at the limit, or at the return if that is hotter (:func:`throttled_supply_temperature_c`). A hot-water circuit's
@@ -68,7 +68,7 @@ The start-of-step node
 A start-of-step node (:meth:`StartOfStepNode.step`) is also fully mixed, but it books every circuit on its
 temperature at the start of the step, ``T0``, instead of on its step mean. It publishes ``T0`` as the return of the
 circuits that charge it and as the supply of the circuits it feeds, so each inflow brings ``m_i c (T_i - T0) dt``
-(:func:`circuit_heat_j` with ``T0`` as the return), the loss is ``UA (T0 - T_amb) dt``, and a heat ``Q_drawn`` taken
+(:func:`circuit_power_w` with ``T0`` as the return, times ``dt``), the loss is ``UA (T0 - T_amb) dt``, and a heat ``Q_drawn`` taken
 out directly, not by a stream, is subtracted. The node ends the step at
 ``T_end = T0 + (sum_i m_i c (T_i - T0) dt - UA (T0 - T_amb) dt - Q_drawn) / C``. Nothing it publishes moves while a
 step iterates, so its circuits need no fixed-point solve. Unlike the mixed node, its end temperature can leave the
@@ -239,8 +239,8 @@ def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c:
 
     This is the thermal power a component books for a circuit it owns: the heat its water carries, nothing else.
     It is negative for a cooling circuit, whose supply is colder than its return. For example, 0.4 kg/s leaving at
-    35.0 °C with a return of 30.04 °C carries ``0.4 * 4180 * 4.96 = 8293.12`` W. :func:`circuit_heat_j` is this
-    power times the step, evaluated in the same order, so the power a component books and the heat an energy
+    35.0 °C with a return of 30.04 °C carries ``0.4 * 4180 * 4.96 = 8293.12`` W. A circuit's heat over a step is this
+    power times the step duration, evaluated in that order, so the power a component books and the heat an energy
     balance derives from the same three values agree to the last bit.
 
     Args:
@@ -259,64 +259,14 @@ def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c:
     return mass_flow_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K * (t_supply_c - t_return_c)
 
 
-def circuit_heat_j(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:
-    """Return the heat a circuit's water carries over one step, ``m c (T_sup - T_ret) dt``, in J.
-
-    It is :func:`circuit_power_w` times the step duration, negative for a cooling circuit. For example, 0.1 kg/s
-    over 10 K for one hour carries ``4180 * 0.1 * 10 * 3600 = 15.048`` MJ.
-
-    Args:
-        mass_flow_kg_per_s: The circuit's mass flow, in kg/s, at least 0.
-        t_supply_c: The supply temperature, in °C.
-        t_return_c: The return temperature, in °C.
-        dt_s: The step duration, in s.
-
-    Returns:
-        The heat, in J.
-
-    Raises:
-        NegativeMassFlowError: If the mass flow is negative.
-        NonPositiveTimestepError: If ``dt_s`` is not positive.
-    """
-    if dt_s <= 0.0:
-        raise NonPositiveTimestepError(f"dt_s must be > 0 s, got {dt_s!r}.")
-    power_w = circuit_power_w(mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c)
-    return power_w * dt_s
-
-
-def circuit_heat_kwh(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:
-    """Return the heat a circuit's water carries over one step, in kWh, the unit of the energy balance.
-
-    It is :func:`circuit_heat_j` divided by ``UnitConversion.JOULES_PER_KILOWATT_HOUR``. For example, 0.1 kg/s
-    over 10 K for one hour carries 4.18 kWh.
-
-    Args:
-        mass_flow_kg_per_s: The circuit's mass flow, in kg/s, at least 0.
-        t_supply_c: The supply temperature, in °C.
-        t_return_c: The return temperature, in °C.
-        dt_s: The step duration, in s.
-
-    Returns:
-        The heat, in kWh.
-
-    Raises:
-        NegativeMassFlowError: If the mass flow is negative.
-        NonPositiveTimestepError: If ``dt_s`` is not positive.
-    """
-    heat_j = circuit_heat_j(
-        mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c, dt_s=dt_s
-    )
-    return heat_j / UnitConversion.JOULES_PER_KILOWATT_HOUR
-
-
 @dataclass(frozen=True)
 class CircuitStep:
 
     """What the owner of a circuit publishes for one step: its mass flow, its supply and the heat its water carries.
 
     A value object, so a flow and a temperature cannot be swapped by position. ``power_w`` is
-    :func:`circuit_power_w` of the flow, the supply and the return the owner read; an idle circuit has no flow, and
-    its supply is its return.
+    :func:`circuit_power_w` of the flow, the supply and the return the owner read (:meth:`carrying`); an idle circuit
+    has no flow, and its supply is its return (:meth:`idle`).
     """
 
     #: The circuit's mass flow, in kg/s.
@@ -337,6 +287,31 @@ class CircuitStep:
             The idle step.
         """
         return CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=t_return_c, power_w=0.0)
+
+    @staticmethod
+    def carrying(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> "CircuitStep":
+        """Return the step of a circuit that moves a flow at a supply temperature, with the heat its water carries.
+
+        ``power_w`` is :func:`circuit_power_w` of the flow, the supply and the return, so an owner that builds its step
+        here books exactly the heat the receiver derives from the same three values. For example, 0.025 kg/s supplied
+        at 60 °C with a 40 °C return carry 2090 W.
+
+        Args:
+            mass_flow_kg_per_s: The circuit's mass flow, in kg/s, at least 0.
+            t_supply_c: The supply temperature, the water leaving the owner, in °C.
+            t_return_c: The return temperature the owner read, in °C.
+
+        Returns:
+            The step with that flow, that supply and the heat the flow carries.
+
+        Raises:
+            NegativeMassFlowError: If the mass flow is negative.
+        """
+        return CircuitStep(
+            mass_flow_kg_per_s=mass_flow_kg_per_s,
+            t_supply_c=t_supply_c,
+            power_w=circuit_power_w(mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c),
+        )
 
     def at_part_load(self, *, part_load_ratio: float, t_return_c: float) -> "CircuitStep":
         """Return this full-load step of a circuit when its generator runs only a fraction of the step.
@@ -478,7 +453,7 @@ class TemperatureRange:
 
     A fully mixed node relaxes towards a weighted mean of its inflow and ambient temperatures, so its step mean and
     its end temperature never leave the range of those and its start temperature. The range brackets a node's
-    fixed-point solves and bounds what a node publishes. For example, a tank at 50 °C charged at 70 °C, refilled at
+    fixed-point solves. For example, a tank at 50 °C charged at 70 °C, refilled at
     10 °C and losing heat to a 20 °C room mixes temperatures from 10 to 70 °C.
     """
 
@@ -508,19 +483,6 @@ class TemperatureRange:
             inflow.temperature_c for inflow in inflows if inflow.mass_flow_kg_per_s > 0.0
         ]
         return TemperatureRange(low_c=min(temperatures_c), high_c=max(temperatures_c))
-
-    def clamped_c(self, temperature_c: float) -> float:
-        """Return ``temperature_c`` moved into the range, in °C.
-
-        For example, 75 °C in the range 10 to 70 °C becomes 70 °C; 50 °C stays.
-
-        Args:
-            temperature_c: The temperature to bound, in °C.
-
-        Returns:
-            The temperature, at least ``low_c`` and at most ``high_c``.
-        """
-        return min(max(temperature_c, self.low_c), self.high_c)
 
 
 class MixedNode:
@@ -646,7 +608,7 @@ class StartOfStepNode:
 
     The node publishes its start temperature ``T0`` as the return of the circuits that charge it and as the supply of
     the circuits it feeds. Every circuit end then derives its heat from ``T0``: a stream entering at ``T_i`` with flow
-    ``m_i`` brings ``m_i c (T_i - T0) dt`` (:func:`circuit_heat_j`, which the node calls too), and the node loses
+    ``m_i`` brings ``m_i c (T_i - T0) dt`` (:func:`circuit_power_w` times ``dt``, which the node computes too), and the node loses
     ``UA (T0 - T_amb) dt``. The node adds up these heats and ends the step at
     ``T_end = T0 + (sum of heats - loss - heat drawn) / C``. Nothing the node publishes changes while a step
     iterates, so the circuits do not iterate against the node; the balance closes on every step whatever the step
@@ -697,15 +659,10 @@ class StartOfStepNode:
 
         Raises:
             NegativeMassFlowError: If an inflow's mass flow is negative.
-            NonPositiveTimestepError: If ``dt_s`` is not positive and the node has an inflow.
         """
         heat_in = tuple(
-            circuit_heat_j(
-                mass_flow_kg_per_s=inflow.mass_flow_kg_per_s,
-                t_supply_c=inflow.temperature_c,
-                t_return_c=t0_c,
-                dt_s=dt_s,
-            )
+            circuit_power_w(mass_flow_kg_per_s=inflow.mass_flow_kg_per_s, t_supply_c=inflow.temperature_c, t_return_c=t0_c)
+            * dt_s
             for inflow in inflows
         )
         loss = ua_w_per_k * (t0_c - t_amb_c) * dt_s
@@ -771,24 +728,6 @@ def mixing_valve_draw(*, t_tank_c: float, t_warm_c: float, t_cold_c: float, dema
     if t_tank_c > t_cold_c:
         return ValveDraw(hot_water_kg_per_s=demand_kg_per_s, unmet_fraction=(t_warm_c - t_tank_c) / span)
     return ValveDraw(hot_water_kg_per_s=0.0, unmet_fraction=1.0)
-
-
-def hot_water_demand_power_w(*, demand_kg_per_s: float, t_warm_c: float, t_cold_c: float) -> float:
-    """Return the heat flow a hot-water demand asks for, ``m_d c (T_warm - T_cold)``, in W.
-
-    It is the heat that warms the demanded water from the mains temperature to the tap temperature, the heat
-    :func:`mixing_valve_draw` delivers in full while the tank is above the tap temperature. For example, 0.05 kg/s
-    at 40 °C from 10 °C mains water ask for ``0.05 * 4180 * 30 = 6270`` W.
-
-    Args:
-        demand_kg_per_s: The warm water the household asks for, in kg/s.
-        t_warm_c: The temperature the household asks for, in °C.
-        t_cold_c: The mains water temperature, in °C.
-
-    Returns:
-        The heat flow, in W.
-    """
-    return demand_kg_per_s * Water.SPECIFIC_HEAT_J_PER_KG_K * (t_warm_c - t_cold_c)
 
 
 SolveResultT = TypeVar("SolveResultT")

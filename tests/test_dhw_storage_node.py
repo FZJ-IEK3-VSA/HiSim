@@ -188,10 +188,10 @@ def test_the_tap_draws_exactly_the_demand_above_the_tap_temperature(seconds_per_
         storage, 60.0, [hydronics.Inflow(0.0, 60.0), hydronics.Inflow(0.0, 60.0)], demand_in_kg_per_second
     )
     demand_heat_in_joule = (
-        hydronics.hot_water_demand_power_w(
-            demand_kg_per_s=demand_in_kg_per_second,
-            t_warm_c=storage.tank.tap_temperature_in_celsius,
-            t_cold_c=storage.tank.mains_water_temperature_in_celsius,
+        hydronics.circuit_power_w(
+            mass_flow_kg_per_s=demand_in_kg_per_second,
+            t_supply_c=storage.tank.tap_temperature_in_celsius,
+            t_return_c=storage.tank.mains_water_temperature_in_celsius,
         )
         * seconds_per_timestep
     )
@@ -211,10 +211,10 @@ def test_the_tap_passes_the_demand_unmixed_below_the_tap_temperature_and_books_t
         storage, 35.0, [hydronics.Inflow(0.0, 35.0), hydronics.Inflow(0.0, 35.0)], demand_in_kg_per_second
     )
     demand_heat_in_joule = (
-        hydronics.hot_water_demand_power_w(
-            demand_kg_per_s=demand_in_kg_per_second,
-            t_warm_c=storage.tank.tap_temperature_in_celsius,
-            t_cold_c=storage.tank.mains_water_temperature_in_celsius,
+        hydronics.circuit_power_w(
+            mass_flow_kg_per_s=demand_in_kg_per_second,
+            t_supply_c=storage.tank.tap_temperature_in_celsius,
+            t_return_c=storage.tank.mains_water_temperature_in_celsius,
         )
         * 900
     )
@@ -307,7 +307,7 @@ def test_the_tank_publishes_its_step_mean_to_the_circuits_and_its_start_temperat
     assert storage.state.temperature_at_start_of_step_in_celsius == step.node.t_end_c
     heat_in_watt_hour = Tank.output(stsv, storage.thermal_energy_from_heat_generator_channel)
     assert heat_in_watt_hour * hydronics.UnitConversion.JOULES_PER_WATT_HOUR == pytest.approx(
-        hydronics.circuit_heat_j(mass_flow_kg_per_s=0.2, t_supply_c=70.0, t_return_c=step.node.t_mean_c, dt_s=900),
+        hydronics.circuit_power_w(mass_flow_kg_per_s=0.2, t_supply_c=70.0, t_return_c=step.node.t_mean_c) * 900,
         rel=1e-12,
     )
 

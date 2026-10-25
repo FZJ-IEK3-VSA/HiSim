@@ -45,7 +45,7 @@ Hydronic circuits
 
 A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
 its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
-derives the heat with :func:`hisim.hydronics.circuit_heat_kwh`, the one rule. Both ends of a circuit declare the
+derives the heat from :func:`hisim.hydronics.circuit_power_w`, the one rule. Both ends of a circuit declare the
 same port, the supply owner with role ``OUT`` and the receiver with role ``IN``, so a circuit balances by
 construction. No component declares one yet, and the balance check does not read them yet. The contract the
 balance check is to implement:
@@ -421,8 +421,9 @@ class HydronicPort:
         """Return the heat a circuit's water carries over one step, ``m c (T_sup - T_ret) dt``, in kWh.
 
         The balance check applies it to the three outputs the port names, so both ends of a circuit derive the same
-        number. For example, 0.1 kg/s over 10 K for one hour carries 4.18 kWh. It delegates to
-        :func:`hisim.hydronics.circuit_heat_kwh`.
+        number. For example, 0.1 kg/s over 10 K for one hour carries 4.18 kWh. The heat is
+        :func:`hisim.hydronics.circuit_power_w` times the step, converted from J to kWh in that order, so it agrees to
+        the last bit with the power a component books for the same three values.
 
         Args:
             mass_flow_in_kg_per_second: The circuit's mass flow, in kg/s, at least 0.
@@ -434,12 +435,14 @@ class HydronicPort:
             The heat, in kWh; negative for a cooling circuit.
 
         Raises:
-            HydronicsError: If the flow is negative or the step is not positive, as
-                :func:`hisim.hydronics.circuit_heat_kwh` raises it.
+            NonPositiveTimestepError: If the step is not positive.
+            NegativeMassFlowError: If the flow is negative.
         """
-        return hydronics.circuit_heat_kwh(
+        if seconds_per_timestep <= 0.0:
+            raise hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
+        power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,
-            dt_s=seconds_per_timestep,
         )
+        return power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR

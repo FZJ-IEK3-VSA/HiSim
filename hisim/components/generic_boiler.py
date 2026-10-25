@@ -52,7 +52,7 @@ from hisim.config import (
 )
 from hisim.energy_port import EnergyPort
 from hisim.subcomponents.base import Subcomponent
-from hisim.subcomponents.pumps import ControllerLiftPump
+from hisim.subcomponents.pumps import ControllerLiftPump, PumpOperatingPoint
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HotWaterPriorityLimit,
@@ -2086,25 +2086,23 @@ class GenericBoiler(PhysicsComponent):
             return_temperature_in_celsius=return_temperature_in_celsius,
             lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
         )
-        unthrottled_supply_in_celsius = pumped.supply_temperature_in_celsius
         if fired is self.hot_water_circuit:
             supply_temperature_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
-                unthrottled_supply_c=unthrottled_supply_in_celsius,
+                unthrottled_supply_c=pumped.supply_temperature_in_celsius,
                 return_c=return_temperature_in_celsius,
                 maximal_supply_c=self.maximal_flow_temperature_in_celsius,
                 set_supply_c=stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel),
             )
         else:
             supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
-                unthrottled_supply_c=unthrottled_supply_in_celsius,
+                unthrottled_supply_c=pumped.supply_temperature_in_celsius,
                 return_c=return_temperature_in_celsius,
                 supply_limit_c=self.maximal_flow_temperature_in_celsius,
             )
         return self.fired_circuit(
             burner=self.burner,
             control_signal=control_signal,
-            mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
-            unthrottled_supply_temperature_in_celsius=unthrottled_supply_in_celsius,
+            pumped=pumped,
             return_temperature_in_celsius=return_temperature_in_celsius,
             supply_temperature_in_celsius=supply_temperature_in_celsius,
         )
@@ -2203,8 +2201,7 @@ class GenericBoiler(PhysicsComponent):
         *,
         burner: "BurnerModulation",
         control_signal: float,
-        mass_flow_in_kg_per_second: float,
-        unthrottled_supply_temperature_in_celsius: float,
+        pumped: PumpOperatingPoint,
         return_temperature_in_celsius: float,
         supply_temperature_in_celsius: float,
     ) -> "BoilerFiring":
@@ -2222,9 +2219,8 @@ class GenericBoiler(PhysicsComponent):
         Args:
             burner: The burner subcomponent: its power band and efficiency curve.
             control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
-            mass_flow_in_kg_per_second: The flow the boiler's pump runs for the burner's heat, in kg/s, above 0.
-            unthrottled_supply_temperature_in_celsius: The supply the pump's flow carries the heat to, in °C: the
-                return plus the lift the circuit runs at.
+            pumped: The boiler pump's operating point for the burner's heat: its flow, in kg/s, above 0, and the
+                unthrottled supply that flow carries the heat to, in °C, the return plus the lift the circuit runs at.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
             supply_temperature_in_celsius: The circuit's supply temperature after any throttling, in °C, at most the
                 unthrottled supply.
@@ -2235,16 +2231,16 @@ class GenericBoiler(PhysicsComponent):
         commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
         efficiency = burner.efficiency_at(commanded_power_in_watt, return_temperature_in_celsius)
         thermal_power_in_watt = hydronics.circuit_power_w(
-            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            mass_flow_kg_per_s=pumped.mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,
         )
-        is_throttled = supply_temperature_in_celsius < unthrottled_supply_temperature_in_celsius
+        is_throttled = supply_temperature_in_celsius < pumped.supply_temperature_in_celsius
         fuel_power_in_watt = thermal_power_in_watt / efficiency if is_throttled else commanded_power_in_watt
         return BoilerFiring(
             fuel_power_in_watt=fuel_power_in_watt,
             thermal_power_in_watt=thermal_power_in_watt,
-            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
             supply_temperature_in_celsius=supply_temperature_in_celsius,
         )
 

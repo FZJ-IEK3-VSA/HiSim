@@ -16,6 +16,7 @@ from hisim.components.generic_boiler import (
 )
 from hisim.config import ComponentID, DisplayConfig, SizingContext
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import PumpOperatingPoint
 
 
 @pytest.mark.base
@@ -769,8 +770,7 @@ def test_a_fired_circuit_books_the_heat_its_pump_s_water_carries_and_the_fuel_fo
     firing = generic_boiler.GenericBoiler.fired_circuit(
         burner=burner,
         control_signal=1.0,
-        mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-        unthrottled_supply_temperature_in_celsius=100.0,
+        pumped=PumpOperatingPoint(mass_flow_in_kg_per_second=mass_flow_in_kg_per_second, supply_temperature_in_celsius=100.0, flow_is_clamped=False),
         return_temperature_in_celsius=70.0,
         supply_temperature_in_celsius=supply_temperature_in_celsius,
     )
@@ -1582,8 +1582,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         generic_boiler.GenericBoiler.fired_circuit(
             burner=burner,
             control_signal=control_signal,
-            mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
-            unthrottled_supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
+            pumped=pumped,
             return_temperature_in_celsius=return_in_celsius,
             supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
         ),

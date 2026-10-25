@@ -204,7 +204,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    # The building reads the heat the distribution system delivers (ThermalPowerDelivered); without it the boiler
+    # heats a buffer whose heat reaches no room.
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy, my_heat_distribution_system)
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

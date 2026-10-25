@@ -36,6 +36,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 from hisim.config import ComponentID
 from hisim.energy_system.executor import run_energy_system
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import CirculationPump
 from tests import functions_for_testing as fft
 
 
@@ -433,6 +434,37 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
     # 5 K at the nominal flow, ramped up after ten minutes of running: (1 - e^(-600/360)) of 6959.7 W.
     assert booked_power_in_watt == pytest.approx(0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0)), rel=1e-12)
     assert outputs[electrical] == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("lift_in_kelvin", "time_on_heating_in_seconds", "expected_heat_power_in_watt"),
+    [
+        (5.0, 1e9, 0.333 * 4180.0 * 5.0),
+        (5.0, 600.0, 0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0))),
+        (0.5, 1e9, 1800.0),
+        (5.0, 0.0, 0.0),
+    ],
+    ids=["running at the lift", "starting up for ten minutes", "below the minimal power", "just switched on"],
+)
+def test_the_fixed_flow_operating_point_runs_the_nominal_flow_and_the_outlet_follows_the_started_up_power(
+    lift_in_kelvin: float, time_on_heating_in_seconds: float, expected_heat_power_in_watt: float
+) -> None:
+    """A fixed-flow step that ignored the minimal power, the start-up ramp or the nominal flow would set a wrong outlet.
+
+    At 0.333 kg/s the heat pump aims at the power that flow carries over the lift, 6959.7 W over 5 K, at least its
+    1800 W minimum, and delivers ``1 - e^(-t / 360 s)`` of it; the outlet is the return plus that power over ``m c``.
+    """
+    point = MoreAdvancedHeatPumpHPLib.fixed_flow_operating_point(
+        pump=CirculationPump.constant_flow(design_mass_flow_in_kg_per_second=0.333),
+        return_temperature_in_celsius=40.0,
+        lift_in_kelvin=lift_in_kelvin,
+        minimal_thermal_power_in_watt=1800.0,
+        time_on_heating_in_seconds=time_on_heating_in_seconds,
+    )
+    assert point.mass_flow_in_kg_per_second == 0.333
+    assert not point.flow_is_clamped
+    assert point.supply_temperature_in_celsius == pytest.approx(40.0 + expected_heat_power_in_watt / (0.333 * 4180.0), rel=1e-12)
 
 
 @pytest.mark.base

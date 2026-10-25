@@ -36,7 +36,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 from hisim.config import ComponentID
 from hisim.energy_system.executor import run_energy_system
 from hisim.simulationparameters import SimulationParameters
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import ConstantFlowPump
 from tests import functions_for_testing as fft
 
 
@@ -456,7 +456,7 @@ def test_the_fixed_flow_operating_point_runs_the_nominal_flow_and_the_outlet_fol
     1800 W minimum, and delivers ``1 - e^(-t / 360 s)`` of it; the outlet is the return plus that power over ``m c``.
     """
     point = MoreAdvancedHeatPumpHPLib.fixed_flow_operating_point(
-        pump=CirculationPump.constant_flow(design_mass_flow_in_kg_per_second=0.333),
+        pump=ConstantFlowPump(design_mass_flow_in_kg_per_second=0.333),
         return_temperature_in_celsius=40.0,
         lift_in_kelvin=lift_in_kelvin,
         minimal_thermal_power_in_watt=1800.0,

@@ -20,7 +20,7 @@ from hisim.components.controller_l2_energy_management_system import EMSConfig
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
-from hisim.subcomponents.pumps import CirculationPump, PumpOperatingPoint
+from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
 from tests import functions_for_testing as fft
 from tests.part_load_rigs import AllInputsRig, CollectorRig, Parameters, SolarControllerRig
 
@@ -534,7 +534,7 @@ class CollectorPhysics:
     )
 
     @classmethod
-    def pump_for(cls, area_m2: float) -> CirculationPump:
+    def pump_for(cls, area_m2: float) -> FixedLiftPump:
         """Return the preset's pump for a collector field: 20 K target lift, 5 to 40 kg/(m² h) times the area.
 
         Args:
@@ -543,7 +543,7 @@ class CollectorPhysics:
         Returns:
             The pump, its bounds for the whole field in kg/s.
         """
-        return CirculationPump.flow_matches_fixed_lift(
+        return FixedLiftPump(
             target_lift_in_kelvin=cls.CONFIG.pump_target_lift_in_kelvin,
             minimal_mass_flow_in_kg_per_second=cls.CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
             maximal_mass_flow_in_kg_per_second=cls.CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
@@ -557,7 +557,7 @@ class CollectorPhysics:
         ambient_temperature_in_celsius: float,
         irradiance_in_watt_per_m2: float,
         area_m2: float,
-        pump: Optional[CirculationPump] = None,
+        pump: Optional[FixedLiftPump] = None,
     ) -> PumpOperatingPoint:
         """Return the operating point of the preset's collector field, with the preset's pump unless one is given.
 
@@ -729,7 +729,7 @@ def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradi
 
     A constant-flow pump that still ran the target lift's flow would ignore its own speed.
     """
-    pump = CirculationPump.flow_matches_fixed_lift(
+    pump = FixedLiftPump(
         target_lift_in_kelvin=20.0,
         minimal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
         maximal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
@@ -756,7 +756,7 @@ def test_the_collector_s_pump_has_its_bounds_per_m2_and_hour_for_the_whole_field
         config=config, my_simulation_parameters=sim.SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     )
     assert collector.area_m2 == 12.0
-    assert collector.pump == CirculationPump.flow_matches_fixed_lift(
+    assert collector.pump == FixedLiftPump(
         target_lift_in_kelvin=20.0,
         minimal_mass_flow_in_kg_per_second=5.0 * 12.0 / 3600.0,
         maximal_mass_flow_in_kg_per_second=40.0 * 12.0 / 3600.0,

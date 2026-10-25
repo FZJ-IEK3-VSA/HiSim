@@ -125,7 +125,7 @@ class SubcomponentCensus:
     def holders_of_subcomponents(cls, components: List[Component]) -> Dict[int, List[str]]:
         """Return, for every subcomponent instance the components hold, the names of the components that hold it.
 
-        For example, a gas boiler's ``CirculationPump`` maps to ``["CondensingGasBoiler"]``.
+        For example, a gas boiler's ``ControllerLiftPump`` maps to ``["CondensingGasBoiler"]``.
 
         Args:
             components: The components of one built system.
@@ -144,7 +144,8 @@ class SubcomponentCensus:
 def test_the_subcomponent_classes_are_found() -> None:
     """Catches the discovery below finding no subcomponent, which would let every check pass on an empty list."""
     names = {subclass.__name__ for subclass in SubcomponentCensus.subcomponent_classes()}
-    assert {"CirculationPump", "BurnerModulation", "EmitterDesign", "ScopCalibration", "DiverterValve", "FlatPlateCollectorCurve"} <= names
+    pumps = {"ConstantFlowPump", "FixedLiftPump", "ControllerLiftPump", "TargetSupplyTemperaturePump"}
+    assert pumps | {"BurnerModulation", "EmitterDesign", "ScopCalibration", "DiverterValve", "FlatPlateCollectorCurve"} <= names
 
 
 @pytest.mark.parametrize("subclass", SubcomponentCensus.subcomponent_classes(), ids=lambda subclass: subclass.__name__)

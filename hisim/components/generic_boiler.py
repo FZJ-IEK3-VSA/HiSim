@@ -52,7 +52,7 @@ from hisim.config import (
 )
 from hisim.energy_port import EnergyPort
 from hisim.subcomponents.base import Subcomponent
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import ControllerLiftPump
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HotWaterPriorityLimit,
@@ -1138,7 +1138,7 @@ class BurnerModulation(Subcomponent):
         """Return the heat the burner turns a burner power into, in W: the power times :meth:`efficiency_at`.
 
         The one home of the burner's heat, which both sizes the boiler's flow (:meth:`GenericBoiler.fired_circuit`)
-        and sets the rise the pump raises a lift to (:meth:`CirculationPump.operating_point`), so the two cannot
+        and sets the rise the pump raises a lift to (:meth:`ControllerLiftPump.operating_point`), so the two cannot
         drift apart. For example, a burner at 11 kW and an efficiency of 0.95 there turns it into 10450 W.
 
         Args:
@@ -1796,7 +1796,7 @@ class GenericBoiler(PhysicsComponent):
         #: ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound (12 kW at 0.877 over 0.01 K is
         #: 252 kg/s), so the largest flow carries the maximal heat over ``minimal_lift_at_maximal_power_in_kelvin`` and
         #: a smaller lift is raised to the rise the heat gives at that flow; the supply then ends above the one asked for.
-        self.pump: CirculationPump = CirculationPump.flow_matches_controller_lift_sized_for(
+        self.pump: ControllerLiftPump = ControllerLiftPump.sized_for(
             maximal_heat_power_in_watt=self.maximal_thermal_power_in_watt * self.efficiency_curve.efficiency_at_full_load,
             minimal_lift_at_maximal_heat_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,
         )

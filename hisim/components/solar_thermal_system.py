@@ -32,7 +32,7 @@ from hisim import hydronics, loadtypes
 from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.subcomponents.base import Subcomponent
-from hisim.subcomponents.pumps import CirculationPump, PumpOperatingPoint
+from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -419,7 +419,7 @@ class SolarThermalSystem(PhysicsComponent):
     This class represents a solar thermal system that can be used
     for warm water and space heating.
 
-    The solar pump is speed-controlled, a temperature-sensor :class:`~hisim.subcomponents.pumps.CirculationPump`: it
+    The solar pump is speed-controlled, a temperature-sensor pump (:class:`~hisim.subcomponents.pumps.FixedLiftPump`): it
     runs the flow that lifts the water by its target lift, within a minimum and a maximum flow per m² of collector, and
     the outlet is the inlet plus the lift the collector heat gives at that flow (:meth:`operating_point`).
 
@@ -510,7 +510,7 @@ class SolarThermalSystem(PhysicsComponent):
         #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift. Its bounds are
         #: rated per m² of collector and per hour, so collector fields of any size run alike per m²; the pump's bounds
         #: are for the whole field, in kg/s.
-        self.pump = CirculationPump.flow_matches_fixed_lift(
+        self.pump: FixedLiftPump = FixedLiftPump(
             target_lift_in_kelvin=config.pump_target_lift_in_kelvin,
             minimal_mass_flow_in_kg_per_second=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
             maximal_mass_flow_in_kg_per_second=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
@@ -1069,7 +1069,7 @@ class SolarThermalSystem(PhysicsComponent):
     @staticmethod
     def collector_operating_point(
         *,
-        pump: CirculationPump,
+        pump: FixedLiftPump,
         curve: FlatPlateCollectorCurve,
         inlet_temperature_in_celsius: float,
         ambient_temperature_in_celsius: float,
@@ -1079,7 +1079,7 @@ class SolarThermalSystem(PhysicsComponent):
         """Return the flow and the supply of a collector field and its temperature-sensor pump, at an inlet.
 
         First the pump's target lift: the collector heat at a mean temperature half the target lift above the inlet,
-        and the pump's flow for that heat (:meth:`CirculationPump.operating_point`). Within the pump's bounds that is
+        and the pump's flow for that heat (:meth:`FixedLiftPump.operating_point`). Within the pump's bounds that is
         the point, and the supply is the inlet plus the target lift. Outside them the pump runs the nearer bound, and
         the collector's heat depends on its own outlet, so the collector evaluates its lift again at that flow
         (:meth:`FlatPlateCollectorCurve.lift_at_mass_flow_in_kelvin`): below the target lift at the smallest flow,

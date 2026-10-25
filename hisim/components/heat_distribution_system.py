@@ -36,7 +36,7 @@ from hisim.config import (
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import ConstantFlowPump
 
 
 @unique
@@ -199,8 +199,8 @@ class HeatDistribution(cp.PhysicsComponent):
         self.refuse_a_design_flow_that_moves_no_water()
         #: The circuit's own pump, a constant pump at the design flow, where it pumps that flow itself; None where it
         #: reads the flow its heat generator pumps.
-        self.pump: Optional[CirculationPump] = (
-            CirculationPump.constant_flow(
+        self.pump: Optional[ConstantFlowPump] = (
+            ConstantFlowPump(
                 design_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )
             if self.pumps_its_design_flow

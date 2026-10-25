@@ -50,7 +50,7 @@ from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import ControllerLiftPump
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
@@ -228,7 +228,7 @@ class ElectricHeating(PhysicsComponent):
         #: The hot-water circuit's pump: it carries the power the heater regulates over the lift the controller asks
         #: for, ``m = P / (c lift)``, without bounds. For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s. The rooms
         #: are heated directly, without a pump.
-        self.hot_water_pump: CirculationPump = CirculationPump.flow_matches_controller_lift()
+        self.hot_water_pump: ControllerLiftPump = ControllerLiftPump()
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -596,7 +596,7 @@ class ElectricHeating(PhysicsComponent):
         supply_temperature_set_in_celsius: float,
         maximal_supply_temperature_in_celsius: float,
         maximal_power_in_watt: float,
-        pump: CirculationPump,
+        pump: ControllerLiftPump,
     ) -> hydronics.CircuitStep:
         """Return the electric heater's hot-water circuit for one step: its flow, its supply and the heat it carries.
 

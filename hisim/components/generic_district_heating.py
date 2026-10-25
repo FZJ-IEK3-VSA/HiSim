@@ -55,7 +55,7 @@ from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import FixedLiftPump
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
@@ -278,7 +278,7 @@ class DistrictHeating(PhysicsComponent):
         #: ``m = Q / (c 100 K)``, without bounds. The substation gives it its connected load, so the flow is constant:
         #: for example, 15 kW pump 0.0359 kg/s. The space-heating circuit has no pump of its own, it reads the heat
         #: distribution system's flow.
-        self.hot_water_pump: CirculationPump = CirculationPump.flow_matches_fixed_lift(target_lift_in_kelvin=self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
+        self.hot_water_pump: FixedLiftPump = FixedLiftPump(target_lift_in_kelvin=self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -704,7 +704,7 @@ class DistrictHeating(PhysicsComponent):
         lift_in_kelvin: float,
         supply_temperature_set_in_celsius: float,
         connected_load_in_watt: float,
-        pump: CirculationPump,
+        pump: FixedLiftPump,
     ) -> hydronics.CircuitStep:
         """Return the substation's hot-water circuit for one step: its flow, its supply and the heat it carries.
 

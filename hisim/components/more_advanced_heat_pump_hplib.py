@@ -71,7 +71,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
-from hisim.subcomponents.pumps import CirculationPump, PumpOperatingPoint
+from hisim.subcomponents.pumps import ConstantFlowPump, PumpedWater, PumpOperatingPoint
 from hisim.components.more_advanced_heat_pump_hplib_model import (
     CalculationRequest,
     HeatingCircuitPowers,
@@ -437,8 +437,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 )
         #: The secondary side's pump in the fixed-flow modes (a storage in series, or none): a constant pump at the
         #: nominal flow; None for a machine without a nominal flow, which runs hplib's flow only.
-        self.fixed_flow_pump: Optional[CirculationPump] = (
-            CirculationPump.constant_flow(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
+        self.fixed_flow_pump: Optional[ConstantFlowPump] = (
+            ConstantFlowPump(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
         )
 
         self.fluid_primary_side = config.fluid_primary_side
@@ -1294,7 +1294,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     @staticmethod
     def fixed_flow_operating_point(
         *,
-        pump: CirculationPump,
+        pump: ConstantFlowPump,
         return_temperature_in_celsius: float,
         lift_in_kelvin: float,
         minimal_thermal_power_in_watt: float,
@@ -1306,7 +1306,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         aims at the power that flow carries over the lift, at least its minimal thermal power. While the machine
         starts, it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it
         has been heating. The outlet is the return plus that power over ``m c``
-        (:meth:`CirculationPump.operating_point`). For example, 0.333 kg/s over a 5 K lift aims at 6959.7 W; after ten
+        (:meth:`ConstantFlowPump.operating_point`). For example, 0.333 kg/s over a 5 K lift aims at 6959.7 W; after ten
         minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
 
         Args:
@@ -1320,7 +1320,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             The nominal flow and the outlet temperature.
         """
         thermal_power_at_lift_in_watt = (
-            pump.design_mass_flow_in_kg_per_second * CirculationPump.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * lift_in_kelvin
+            pump.design_mass_flow_in_kg_per_second * PumpedWater.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * lift_in_kelvin
         )
         if thermal_power_at_lift_in_watt <= minimal_thermal_power_in_watt:
             target_power_in_watt = minimal_thermal_power_in_watt

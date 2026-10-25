@@ -13,8 +13,8 @@ class Subcomponent:
     ``tests/subcomponents/`` can find every subcomponent. For example::
 
         @dataclass(frozen=True)
-        class CirculationPump(Subcomponent):
-            mode: PumpMode
+        class FixedLiftPump(Subcomponent):
+            target_lift_in_kelvin: float
             maximal_mass_flow_in_kg_per_second: float
 
     Inheriting it changes nothing about a dataclass: the fields, the equality, the hash and the frozenness stay those

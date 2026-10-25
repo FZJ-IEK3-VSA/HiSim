@@ -13,7 +13,7 @@ from hisim.components.generic_district_heating import (
 )
 from hisim import hydronics
 from hisim import simulator as sim
-from hisim.subcomponents.pumps import CirculationPump
+from hisim.subcomponents.pumps import FixedLiftPump
 from tests.part_load_rigs import AllInputsRig
 
 
@@ -109,7 +109,7 @@ def test_the_hot_water_circuit_reaches_the_set_temperature_within_the_connected_
         lift_in_kelvin=lift_in_kelvin,
         supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
         connected_load_in_watt=connected_load_in_watt,
-        pump=CirculationPump.flow_matches_fixed_lift(target_lift_in_kelvin=100.0),
+        pump=FixedLiftPump(target_lift_in_kelvin=100.0),
     )
     assert circuit.power_w == pytest.approx(expected_power_in_watt, rel=1e-12, abs=1e-9)
     assert circuit.t_supply_c == pytest.approx(expected_supply_temperature_in_celsius, rel=1e-15)

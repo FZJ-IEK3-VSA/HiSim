@@ -195,15 +195,15 @@ class ElectricHeating(PhysicsComponent):
 
     @classmethod
     def hot_water_circulation_pump(cls) -> CirculationPump:
-        """Return the heater's hot-water pump: a matched flow without bounds.
+        """Return the heater's hot-water pump: a commanded lift without bounds.
 
         It carries the power the heater regulates over the lift the controller asks for, ``m = P / (c lift)``
-        (``TARGET_SUPPLY_TEMPERATURE``). For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s.
+        (``COMMANDED_LIFT``). For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s.
 
         Returns:
             The pump.
         """
-        return CirculationPump.target_supply_temperature()
+        return CirculationPump.commanded_lift()
 
     # Output
     ThermalOutputShPower = "ThermalOutputShPower"

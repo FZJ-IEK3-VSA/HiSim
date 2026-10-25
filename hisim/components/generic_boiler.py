@@ -2113,10 +2113,10 @@ class GenericBoiler(PhysicsComponent):
         efficiency_at_full_load: float,
         minimal_lift_at_maximal_power_in_kelvin: float,
     ) -> CirculationPump:
-        """Return the boiler's circulation pump, built from its configuration: a matched flow with a largest flow.
+        """Return the boiler's circulation pump, built from its configuration: a commanded lift with a largest flow.
 
         The boiler sizes its flow so that the commanded heat leaves at the lift its controller asks for,
-        ``m = P_th / (c lift)`` (``TARGET_SUPPLY_TEMPERATURE``). On a lift close to 0 K that flow has no bound: an
+        ``m = P_th / (c lift)`` (``COMMANDED_LIFT``). On a lift close to 0 K that flow has no bound: an
         on/off burner at full power would pump hundreds of kilograms a second through a household circuit, and one
         held at its minimal power tens (12 kW of burner power at 0.877, the current condensing gas boiler's full-load
         efficiency, over 0.01 K is 252 kg/s, a 1 kW minimum at its 30 % value 0.978 is 23 kg/s). The pump cannot, so
@@ -2145,7 +2145,7 @@ class GenericBoiler(PhysicsComponent):
                 f"the full-load efficiency, got {maximal_heat_power_in_watt!r}: a boiler without power has no largest "
                 "flow."
             )
-        return CirculationPump.target_supply_temperature_sized_for(
+        return CirculationPump.commanded_lift_sized_for(
             maximal_heat_power_in_watt=maximal_heat_power_in_watt,
             minimal_lift_at_maximal_heat_in_kelvin=minimal_lift_at_maximal_power_in_kelvin,
         )

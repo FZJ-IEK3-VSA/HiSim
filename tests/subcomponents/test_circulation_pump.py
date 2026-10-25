@@ -93,23 +93,23 @@ def test_a_target_lift_pump_per_area_has_its_bounds_for_the_whole_field() -> Non
     assert pump.maximal_mass_flow_in_kg_per_second == 40.0 * 4.0 / 3600.0
 
 
-def test_a_matched_flow_pump_carries_the_heat_over_the_lift_asked_for() -> None:
-    """Unclamped, a matched-flow pump runs ``Q / (c lift)`` and supplies the return plus the lift asked for."""
-    pump = CirculationPump.target_supply_temperature()
+def test_a_commanded_lift_pump_carries_the_heat_over_the_lift_asked_for() -> None:
+    """Unclamped, a commanded-lift pump runs ``Q / (c lift)`` and supplies the return plus the lift asked for."""
+    pump = CirculationPump.commanded_lift()
     point = pump.operating_point(
         heat_power_in_watt=1500.0, return_temperature_in_celsius=50.0, lift_to_supply_set_temperature_in_kelvin=25.0
     )
     assert point == PumpOperatingPoint(1500.0 / (Water.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * 25.0), 75.0, False)
 
 
-def test_a_matched_flow_pump_raises_a_small_lift_to_the_rise_at_its_largest_flow() -> None:
+def test_a_commanded_lift_pump_raises_a_small_lift_to_the_rise_at_its_largest_flow() -> None:
     """A lift close to 0 K would ask for an unbounded flow; the pump runs its largest and the supply ends higher.
 
     The pump clamps the lift, the variable this mode holds: the rise is ``Q / (c m_max)``, the flow the heat over that
     rise, which is the largest flow to within rounding. This is the boiler's arithmetic, so its results stay bit for
     bit what they were.
     """
-    pump = CirculationPump.target_supply_temperature_sized_for(
+    pump = CirculationPump.commanded_lift_sized_for(
         maximal_heat_power_in_watt=10450.0, minimal_lift_at_maximal_heat_in_kelvin=5.0
     )
     largest_in_kg_per_second = 10450.0 / (Water.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * 5.0)
@@ -128,9 +128,9 @@ def test_a_matched_flow_pump_raises_a_small_lift_to_the_rise_at_its_largest_flow
     assert unclamped == PumpOperatingPoint(10450.0 / (Water.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * 8.0), 48.0, False)
 
 
-def test_a_matched_flow_pump_lowers_a_large_lift_to_the_rise_at_its_smallest_flow() -> None:
+def test_a_commanded_lift_pump_lowers_a_large_lift_to_the_rise_at_its_smallest_flow() -> None:
     """A lift so large that the flow would fall below the smallest flow is lowered to the rise that flow carries."""
-    pump = CirculationPump.target_supply_temperature(minimal_mass_flow_in_kg_per_second=0.1)
+    pump = CirculationPump.commanded_lift(minimal_mass_flow_in_kg_per_second=0.1)
     point = pump.operating_point(
         heat_power_in_watt=2090.0, return_temperature_in_celsius=40.0, lift_to_supply_set_temperature_in_kelvin=30.0
     )
@@ -198,8 +198,8 @@ def test_the_result_is_a_named_tuple_and_the_pump_a_frozen_subcomponent() -> Non
             "minimal_mass_flow_in_kg_per_second": 0.5,
             "maximal_mass_flow_in_kg_per_second": 0.1,
         },
-        {"mode": PumpMode.TARGET_SUPPLY_TEMPERATURE, "target_lift_in_kelvin": 5.0},
-        {"mode": PumpMode.TARGET_SUPPLY_TEMPERATURE, "maximal_mass_flow_in_kg_per_second": math.nan},
+        {"mode": PumpMode.COMMANDED_LIFT, "target_lift_in_kelvin": 5.0},
+        {"mode": PumpMode.COMMANDED_LIFT, "maximal_mass_flow_in_kg_per_second": math.nan},
         {"mode": PumpMode.EXTERNAL_SIGNAL},
         {"mode": PumpMode.EXTERNAL_SIGNAL, "maximal_mass_flow_in_kg_per_second": 0.0},
         {"mode": PumpMode.EXTERNAL_SIGNAL, "maximal_mass_flow_in_kg_per_second": 0.5, "minimal_mass_flow_in_kg_per_second": 0.1},
@@ -211,9 +211,9 @@ def test_a_pump_with_a_setting_its_mode_cannot_run_is_refused_when_built(fields:
         CirculationPump(**fields)
 
 
-def test_a_matched_flow_pump_sized_for_no_heat_is_refused() -> None:
+def test_a_commanded_lift_pump_sized_for_no_heat_is_refused() -> None:
     """A boiler of 0 W would size a pump of no largest flow, which the flow law divides by."""
     with pytest.raises(ValueError, match="largest flow above 0"):
-        CirculationPump.target_supply_temperature_sized_for(
+        CirculationPump.commanded_lift_sized_for(
             maximal_heat_power_in_watt=0.0, minimal_lift_at_maximal_heat_in_kelvin=5.0
         )

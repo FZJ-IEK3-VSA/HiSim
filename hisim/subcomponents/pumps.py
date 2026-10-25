@@ -22,21 +22,22 @@ from hisim.subcomponents.base import Subcomponent
 class PumpMode(enum.Enum):
     """How a circulation pump decides its flow.
 
-    For example, a solar collector's pump runs ``TARGET_LIFT`` at 20 K, a boiler's ``TARGET_SUPPLY_TEMPERATURE``, and
+    For example, a solar collector's pump runs ``TARGET_LIFT`` at 20 K, a boiler's ``COMMANDED_LIFT``, and
     the heat distribution system's ``CONSTANT`` at its design flow.
 
     * ``CONSTANT``: the design flow, ``m = m_design``, whatever the heat.
     * ``TARGET_LIFT``: the "temperature-sensor pump", the flow that carries the heat over a fixed lift,
       ``m = Q / (c dT_target)``.
-    * ``TARGET_SUPPLY_TEMPERATURE``: the "matched flow", the flow that carries the heat over the lift to the supply set
-      temperature, ``m = Q / (c lift)``, the lift as the device's controller asks for it.
+    * ``COMMANDED_LIFT``: the flow that carries the heat over the lift the device's controller asks for in each step,
+      ``m = Q / (c lift)``; the controller computes the lift as its supply set temperature minus the temperature it
+      reads.
     * ``EXTERNAL_SIGNAL``: a share of the largest flow that a controller decides, ``m = signal m_max``, the way a
       PWM or 0-10 V input drives a pump.
     """
 
     CONSTANT = "constant"
     TARGET_LIFT = "target_lift"
-    TARGET_SUPPLY_TEMPERATURE = "target_supply_temperature"
+    COMMANDED_LIFT = "commanded_lift"
     EXTERNAL_SIGNAL = "external_signal"
 
 
@@ -79,15 +80,15 @@ class PumpOperatingPoint(NamedTuple):
 class CirculationPump(Subcomponent):
     """A circulation pump: the flow it runs for the heat its device puts into the water, in one of four modes.
 
-    The device calls :meth:`operating_point` with the heat it adds, the return temperature and, for the matched flow,
+    The device calls :meth:`operating_point` with the heat it adds, the return temperature and, for a commanded lift,
     the lift its controller asks for; the pump answers with the flow and the supply temperature. The controlled modes
-    (``TARGET_LIFT``, ``TARGET_SUPPLY_TEMPERATURE``) keep the flow between their smallest and largest flow; at a bound,
+    (``TARGET_LIFT``, ``COMMANDED_LIFT``) keep the flow between their smallest and largest flow; at a bound,
     the outlet is the return plus the heat over ``c`` times that bound, and the result says ``flow_is_clamped``. The
     pump reports a clamp, it does not refuse one. A device whose heat depends on its own outlet (a solar collector)
     evaluates its heat again at the clamped flow; the pump never needs the device's physics.
 
     Built through the classmethod factories (:meth:`constant`, :meth:`target_lift`,
-    :meth:`target_lift_per_area`, :meth:`target_supply_temperature`, :meth:`target_supply_temperature_sized_for`,
+    :meth:`target_lift_per_area`, :meth:`commanded_lift`, :meth:`commanded_lift_sized_for`,
     :meth:`external_signal`), which a device feeds from its own configuration fields. For example, a solar pump with
     a 20 K target lift and 5 to 40 kg/(m² h) on 4 m² is ``CirculationPump.target_lift_per_area(target_lift_in_kelvin=
     20.0, minimal_mass_flow_in_kg_per_hour_per_m2=5.0, maximal_mass_flow_in_kg_per_hour_per_m2=40.0, area_m2=4.0)``.
@@ -294,13 +295,13 @@ class CirculationPump(Subcomponent):
         )
 
     @classmethod
-    def target_supply_temperature(
+    def commanded_lift(
         cls, *, minimal_mass_flow_in_kg_per_second: float = 0.0, maximal_mass_flow_in_kg_per_second: float = math.inf
     ) -> "CirculationPump":
-        """Return a matched-flow pump: the flow that carries the heat over the lift the controller asks for.
+        """Return a commanded-lift pump: the flow that carries the heat over the lift the controller asks for.
 
         For example, an electric heater's hot-water pump, which carries whatever power the heater regulates over the
-        lift its controller asks for, is ``target_supply_temperature()``, without bounds.
+        lift its controller asks for, is ``commanded_lift()``, without bounds.
 
         Args:
             minimal_mass_flow_in_kg_per_second: The smallest flow, in kg/s, 0 or more.
@@ -313,18 +314,18 @@ class CirculationPump(Subcomponent):
             ValueError: If the bounds are invalid.
         """
         return cls(
-            mode=PumpMode.TARGET_SUPPLY_TEMPERATURE,
+            mode=PumpMode.COMMANDED_LIFT,
             minimal_mass_flow_in_kg_per_second=minimal_mass_flow_in_kg_per_second,
             maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_second,
         )
 
     @classmethod
-    def target_supply_temperature_sized_for(
+    def commanded_lift_sized_for(
         cls, *, maximal_heat_power_in_watt: float, minimal_lift_at_maximal_heat_in_kelvin: float
     ) -> "CirculationPump":
-        """Return a matched-flow pump whose largest flow carries a maximal heat over a minimal lift.
+        """Return a commanded-lift pump whose largest flow carries a maximal heat over a minimal lift.
 
-        ``m_max = Q_max / (c lift_min)``. A boiler's pump is sized this way: on a lift close to 0 K the matched flow
+        ``m_max = Q_max / (c lift_min)``. A boiler's pump is sized this way: on a lift close to 0 K the commanded-lift flow
         would have no bound, so the pump stops at the flow that carries the full heat over 5 K. For example, 10800 W
         over 5 K give a largest flow of 0.517 kg/s.
 
@@ -338,7 +339,7 @@ class CirculationPump(Subcomponent):
         Raises:
             ValueError: If the resulting largest flow is not finite or not above 0 kg/s.
         """
-        return cls.target_supply_temperature(
+        return cls.commanded_lift(
             maximal_mass_flow_in_kg_per_second=maximal_heat_power_in_watt
             / (cls.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * minimal_lift_at_maximal_heat_in_kelvin)
         )
@@ -375,7 +376,7 @@ class CirculationPump(Subcomponent):
         * ``CONSTANT``: ``m = m_design``, supply ``T_ret + Q / (m c)``.
         * ``TARGET_LIFT``: ``m = Q / (c dT_target)``, supply ``T_ret + dT_target``. Outside the bounds the flow is the
           nearer bound and the supply ``T_ret + Q / (c m)``.
-        * ``TARGET_SUPPLY_TEMPERATURE``: the lift is the one asked for, kept between the lifts the heat gives at the
+        * ``COMMANDED_LIFT``: the lift is the one asked for, kept between the lifts the heat gives at the
           largest and the smallest flow, ``Q / (c m_max)`` and ``Q / (c m_min)``; ``m = Q / (c lift)``, supply
           ``T_ret + lift``. A clamped lift gives the bound's flow to within rounding. The pump clamps the lift rather
           than the flow because that is the variable this mode holds; it also keeps the boiler's results bit for bit.
@@ -388,7 +389,7 @@ class CirculationPump(Subcomponent):
         Args:
             heat_power_in_watt: The heat the device puts into the water, in W; negative for heat it takes out.
             return_temperature_in_celsius: The temperature the water enters the device at, in °C.
-            lift_to_supply_set_temperature_in_kelvin: ``TARGET_SUPPLY_TEMPERATURE`` only: the lift to the supply set
+            lift_to_supply_set_temperature_in_kelvin: ``COMMANDED_LIFT`` only: the lift to the supply set
                 temperature the device's controller asks for, in K, above 0. Not read by the other modes.
             signal: ``EXTERNAL_SIGNAL`` only: the share of the largest flow, dimensionless, 0 to 1. Not read by the
                 other modes.
@@ -398,7 +399,7 @@ class CirculationPump(Subcomponent):
         """
         specific_heat = self.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN
         mode = self.mode
-        if mode is PumpMode.TARGET_SUPPLY_TEMPERATURE:
+        if mode is PumpMode.COMMANDED_LIFT:
             lift_in_kelvin = max(
                 lift_to_supply_set_temperature_in_kelvin,
                 heat_power_in_watt / (specific_heat * self.maximal_mass_flow_in_kg_per_second),

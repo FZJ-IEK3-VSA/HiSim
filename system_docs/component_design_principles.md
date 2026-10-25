@@ -116,7 +116,7 @@ boiler's circulation pump, a collector's efficiency curve, an emitter's design p
   (`heat_power_in_watt=...`). No `SingleTimeStepValues`, no `ComponentInput` or `ComponentOutput`, no simulation
   parameters object: the component reads its inputs and passes the values.
 - **Built once, checked when built.** A component builds its subcomponents once, through classmethod factories, from
-  values it got from its configuration or a sizing rule (`CirculationPump.target_supply_temperature_sized_for(...)`). `__post_init__` refuses an
+  values it got from its configuration or a sizing rule (`CirculationPump.commanded_lift_sized_for(...)`). `__post_init__` refuses an
   invalid setting, so a bad subcomponent fails when its component is built, not in the first step.
 - **Stateless.** A subcomponent holds no state across steps. State that changes from step to step stays in the
   component's state dataclass, and the component passes it in.

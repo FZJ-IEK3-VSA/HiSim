@@ -28,7 +28,7 @@ import math
 import pkgutil
 import typing
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Set, Tuple
 
 import numpy as np
 import pytest
@@ -162,10 +162,11 @@ class ControllerRuns:
         """Import every module of ``hisim.components`` and return each L1 and L2 controller class, sorted by full name."""
         for module in pkgutil.walk_packages(hisim.components.__path__, "hisim.components."):
             importlib.import_module(module.name)
-        found = set()
+        found: Set[type] = set()
         unvisited: List[type] = [cp.L1ControllerComponent, cp.L2ControllerComponent]
         while unvisited:
-            for subclass in unvisited.pop().__subclasses__():
+            subclasses: List[type] = unvisited.pop().__subclasses__()
+            for subclass in subclasses:
                 unvisited.append(subclass)
                 if subclass.__module__.startswith("hisim.components."):
                     found.add(subclass)
@@ -281,8 +282,11 @@ def fixture_controller_runs(tmp_path_factory: pytest.TempPathFactory) -> Control
 
 @pytest.mark.parametrize("controller_class", ControllerRuns.controller_classes(), ids=lambda controller_class: controller_class.__name__)
 def test_a_second_forced_pass_changes_no_state(controller_runs: ControllerRuns, controller_class: type) -> None:
-    """Catches a controller whose state advances with every forced pass, so a forced step that is not restored commits
-    it advanced once per forced pass."""
+    """Catches a controller whose state advances with every forced pass.
+
+    The simulator does not restore a controller in a forced pass, so such a state would be committed advanced once per
+    forced pass.
+    """
     changes = controller_runs.changes(controller_class)
 
     assert not changes, f"{controller_class.__name__} advanced its state in a second forced pass, first steps: {changes[:3]}"

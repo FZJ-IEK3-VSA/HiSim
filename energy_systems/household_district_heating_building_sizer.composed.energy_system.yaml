@@ -56,8 +56,8 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - HeatingCurveController
       - HeatDistributionSystem
+      - HeatingCurveController
       - Building
   HeatingCurveController:
     order: 6

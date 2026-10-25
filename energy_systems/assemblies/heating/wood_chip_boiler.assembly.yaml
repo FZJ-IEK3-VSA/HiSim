@@ -54,8 +54,8 @@ components:
       minimum_runtime_in_seconds: {$param: minimum_runtime_in_seconds}
       minimum_resting_time_in_seconds: {$param: minimum_resting_time_in_seconds}
     inputs:
-      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - Boiler                                              # ActualPartLoadRatioDhw, the actual ratio the hot-water charge ran
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
   Buffer:

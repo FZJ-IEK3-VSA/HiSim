@@ -36,9 +36,9 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
+      - HeatPump                                            # ActualPartLoadRatioSh
       - {$port: weather}                                    # DailyAverageOutsideTemperature
       - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
-      - HeatPump                                            # ActualPartLoadRatioSh
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   HeatPump:

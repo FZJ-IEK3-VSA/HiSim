@@ -39,8 +39,8 @@ components:
     config:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
     inputs:
-      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - Boiler                                              # ActualPartLoadRatioDhw, the actual ratio the hot-water charge ran
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
   Buffer:

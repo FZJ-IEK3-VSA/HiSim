@@ -294,19 +294,48 @@ class PartLoadControl:
             The published requested ratio, from 0 to 1.
         """
         stsv.set_output_value(self.target_channel, target_temperature_in_celsius)
-        if not device_runs:
-            requested_ratio = 0.0
-        elif not self.runs_part_load:
-            requested_ratio = 1.0
-        else:
-            requested_ratio = PartLoadRule.next_part_load_ratio(
-                actual_ratio=self.actual_ratio(stsv),
-                start_temperature_in_celsius=start_temperature_in_celsius,
-                end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
-                target_temperature_in_celsius=target_temperature_in_celsius,
-            )
+        requested_ratio = self.next_requested_ratio(
+            stsv,
+            device_runs=device_runs,
+            start_temperature_in_celsius=start_temperature_in_celsius,
+            target_temperature_in_celsius=target_temperature_in_celsius,
+        )
         stsv.set_output_value(self.requested_ratio_channel, requested_ratio)
         return requested_ratio
+
+    def next_requested_ratio(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        device_runs: bool,
+        start_temperature_in_celsius: float,
+        target_temperature_in_celsius: float,
+    ) -> float:
+        """Return the requested ratio of an unforced pass without publishing it; :meth:`publish` publishes it.
+
+        A controller that keeps its decision in a state (:class:`hisim.explicit_state_controller.ExplicitStateController`)
+        computes the requested ratio here in its ``decide`` and writes it in its ``publish``. The requested ratio is the
+        one :meth:`publish` describes; for example 0.0 while the device does not run.
+
+        Args:
+            stsv: The step's values, to read the inputs from.
+            device_runs: Whether the controller has its device running in this pass.
+            start_temperature_in_celsius: The store's temperature at the start of the step, in °C.
+            target_temperature_in_celsius: The store temperature at which the controller ends the charge, in °C.
+
+        Returns:
+            The requested ratio, from 0 to 1.
+        """
+        if not device_runs:
+            return 0.0
+        if not self.runs_part_load:
+            return 1.0
+        return PartLoadRule.next_part_load_ratio(
+            actual_ratio=self.actual_ratio(stsv),
+            start_temperature_in_celsius=start_temperature_in_celsius,
+            end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
+            target_temperature_in_celsius=target_temperature_in_celsius,
+        )
 
     def publish_held(self, stsv: SingleTimeStepValues) -> None:
         """Publish the requested-ratio output of a forced pass: above the threshold, the actual ratio.
@@ -661,21 +690,48 @@ class StartOfStepPartLoadControl:
         """
         if self.target_channel is not None:
             stsv.set_output_value(self.target_channel, target_temperature_in_celsius)
-        requested_ratio = 0.0
-        if device_runs:
-            requested_ratio = 1.0
-            if self.runs_fractions():
-                requested_ratio = StartOfStepPartLoadRule.raising_ratio(
-                    actual_ratio=self.actual_ratio(stsv),
-                    end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
-                    end_temperature_without_circuit_in_celsius=stsv.get_input_value(
-                        self.end_temperature_without_circuit_channel
-                    ),
-                    target_temperature_in_celsius=target_temperature_in_celsius,
-                )
-            requested_ratio = min(requested_ratio, PartLoadRule.validated_ratio(budget, "The part-load budget"))
+        requested_ratio = self.next_requested_raising_ratio(
+            stsv, device_runs=device_runs, target_temperature_in_celsius=target_temperature_in_celsius, budget=budget
+        )
         stsv.set_output_value(self.requested_ratio_channel, requested_ratio)
         return requested_ratio
+
+    def next_requested_raising_ratio(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        device_runs: bool,
+        target_temperature_in_celsius: float,
+        budget: float = 1.0,
+    ) -> float:
+        """Return the requested ratio of a device that raises the store, without publishing it (:meth:`publish_raising`).
+
+        A controller that keeps its decision in a state (:class:`hisim.explicit_state_controller.ExplicitStateController`)
+        computes the requested ratio here in its ``decide`` and writes it in its ``publish``. For example, a device that
+        does not run gets 0.0, and one that runs whole steps gets 1.0, at most ``budget``.
+
+        Args:
+            stsv: The step's values, to read the inputs from.
+            device_runs: Whether the controller has its device running in this pass.
+            target_temperature_in_celsius: The store temperature at which the controller ends the charge, in °C.
+            budget: The largest fraction of the step left to this device, from 0 to 1.
+
+        Returns:
+            The requested ratio, from 0 to 1.
+        """
+        if not device_runs:
+            return 0.0
+        requested_ratio = 1.0
+        if self.runs_fractions():
+            requested_ratio = StartOfStepPartLoadRule.raising_ratio(
+                actual_ratio=self.actual_ratio(stsv),
+                end_temperature_in_celsius=stsv.get_input_value(self.end_temperature_channel),
+                end_temperature_without_circuit_in_celsius=stsv.get_input_value(
+                    self.end_temperature_without_circuit_channel
+                ),
+                target_temperature_in_celsius=target_temperature_in_celsius,
+            )
+        return min(requested_ratio, PartLoadRule.validated_ratio(budget, "The part-load budget"))
 
     def publish_lowering(
         self, stsv: SingleTimeStepValues, *, device_runs: bool, floor_temperature_in_celsius: float

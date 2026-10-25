@@ -259,9 +259,17 @@ def test_a_pump_with_a_setting_its_mode_cannot_run_is_refused_when_built(fields:
         CirculationPump(**fields)
 
 
-def test_a_controller_lift_pump_sized_for_no_heat_is_refused() -> None:
-    """A boiler of 0 W would size a pump of no largest flow, which the flow law divides by."""
-    with pytest.raises(ValueError, match="largest flow above 0"):
+@pytest.mark.parametrize(
+    ("maximal_heat_power_in_watt", "minimal_lift_at_maximal_heat_in_kelvin"),
+    [(0.0, 5.0), (math.inf, 5.0), (math.nan, 5.0), (10800.0, 0.0)],
+    ids=["no heat", "infinite heat", "NaN heat", "no lift"],
+)
+def test_a_controller_lift_pump_sized_for_a_heat_and_lift_without_a_finite_largest_flow_is_refused(
+    maximal_heat_power_in_watt: float, minimal_lift_at_maximal_heat_in_kelvin: float
+) -> None:
+    """A boiler of 0 W or of infinite power would size a pump without a usable largest flow, which the flow law needs."""
+    with pytest.raises(ValueError, match="finite largest flow above 0"):
         CirculationPump.flow_matches_controller_lift_sized_for(
-            maximal_heat_power_in_watt=0.0, minimal_lift_at_maximal_heat_in_kelvin=5.0
+            maximal_heat_power_in_watt=maximal_heat_power_in_watt,
+            minimal_lift_at_maximal_heat_in_kelvin=minimal_lift_at_maximal_heat_in_kelvin,
         )

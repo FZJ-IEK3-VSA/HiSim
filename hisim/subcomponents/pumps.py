@@ -352,12 +352,20 @@ class CirculationPump(Subcomponent):
             The pump.
 
         Raises:
-            ValueError: If the resulting largest flow is not finite or not above 0 kg/s.
+            ValueError: If the lift is not above 0 K, or the resulting largest flow is not finite or not above 0 kg/s.
         """
-        return cls.flow_matches_controller_lift(
-            maximal_mass_flow_in_kg_per_second=maximal_heat_power_in_watt
-            / (cls.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * minimal_lift_at_maximal_heat_in_kelvin)
+        maximal_mass_flow_in_kg_per_second = (
+            maximal_heat_power_in_watt / (cls.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * minimal_lift_at_maximal_heat_in_kelvin)
+            if minimal_lift_at_maximal_heat_in_kelvin > 0.0
+            else math.nan
         )
+        if not math.isfinite(maximal_mass_flow_in_kg_per_second) or maximal_mass_flow_in_kg_per_second <= 0.0:
+            raise ValueError(
+                f"A controller-lift pump sized for {maximal_heat_power_in_watt!r} W over {minimal_lift_at_maximal_heat_in_kelvin!r} K "
+                f"has no finite largest flow above 0 kg/s, got {maximal_mass_flow_in_kg_per_second!r}: the heat and the lift must "
+                "be finite and above 0."
+            )
+        return cls.flow_matches_controller_lift(maximal_mass_flow_in_kg_per_second=maximal_mass_flow_in_kg_per_second)
 
     @classmethod
     def flow_matches_target_supply_temperature(

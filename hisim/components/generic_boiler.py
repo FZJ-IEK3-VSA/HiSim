@@ -2135,18 +2135,11 @@ class GenericBoiler(PhysicsComponent):
             The pump.
 
         Raises:
-            ValueError: If the maximal heat, the power times the full-load efficiency, is not finite or not above 0 W:
-                a boiler without power has no largest flow.
+            ValueError: If the maximal heat, the power times the full-load efficiency, gives no finite largest flow
+                above 0 kg/s: a boiler without power has no largest flow.
         """
-        maximal_heat_power_in_watt = maximal_thermal_power_in_watt * efficiency_at_full_load
-        if not math.isfinite(maximal_heat_power_in_watt) or maximal_heat_power_in_watt <= 0.0:
-            raise ValueError(
-                f"The boiler's pump needs a finite maximal heat above 0 W, maximal_thermal_power_in_watt times "
-                f"the full-load efficiency, got {maximal_heat_power_in_watt!r}: a boiler without power has no largest "
-                "flow."
-            )
         return CirculationPump.flow_matches_controller_lift_sized_for(
-            maximal_heat_power_in_watt=maximal_heat_power_in_watt,
+            maximal_heat_power_in_watt=maximal_thermal_power_in_watt * efficiency_at_full_load,
             minimal_lift_at_maximal_heat_in_kelvin=minimal_lift_at_maximal_power_in_kelvin,
         )
 

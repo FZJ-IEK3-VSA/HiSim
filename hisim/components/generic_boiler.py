@@ -1792,15 +1792,10 @@ class GenericBoiler(PhysicsComponent):
             maximal_power_in_watt=self.maximal_thermal_power_in_watt,
             efficiency_curve=self.efficiency_curve,
         )
-        #: The boiler's circulation pump: it sizes its flow so that the commanded heat leaves at the lift the controller
-        #: asks for, ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound: an on/off burner at full
-        #: power would pump hundreds of kilograms a second through a household circuit, and one held at its minimal
-        #: power tens (12 kW of burner power at 0.877, the current condensing gas boiler's full-load efficiency, over
-        #: 0.01 K is 252 kg/s). The pump cannot, so its largest flow carries the maximal heat over the configured
-        #: ``minimal_lift_at_maximal_power_in_kelvin``, ``m_max = P_max eta_100 / (c rise)``, and it raises a smaller
-        #: lift to the rise the heat gives at that flow, so the supply ends above the one asked for. For example, 12 kW
-        #: at 0.877 over 5 K give a largest flow of 0.50 kg/s, and a lift of 0.01 K asked for is raised to 5 K. A
-        #: boiler without power has no largest flow and is refused.
+        #: The boiler's circulation pump: the flow that carries the commanded heat over the lift the controller asks for,
+        #: ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound (12 kW at 0.877 over 0.01 K is
+        #: 252 kg/s), so the largest flow carries the maximal heat over ``minimal_lift_at_maximal_power_in_kelvin`` and
+        #: a smaller lift is raised to the rise the heat gives at that flow; the supply then ends above the one asked for.
         self.pump: CirculationPump = CirculationPump.flow_matches_controller_lift_sized_for(
             maximal_heat_power_in_watt=self.maximal_thermal_power_in_watt * self.efficiency_curve.efficiency_at_full_load,
             minimal_lift_at_maximal_heat_in_kelvin=self.config.minimal_lift_at_maximal_power_in_kelvin,

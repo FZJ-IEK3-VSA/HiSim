@@ -746,6 +746,41 @@ def test_a_burner_with_a_single_power_burns_at_its_full_load_efficiency() -> Non
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    ("supply_temperature_in_celsius", "expected_thermal_power_in_watt", "expected_fuel_power_in_watt"),
+    [(100.0, 17540.0, 20000.0), (80.0, 17540.0 / 3, 20000.0 / 3), (70.0, 0.0, 0.0)],
+    ids=["unthrottled", "throttled to a third of the lift", "throttled to the return"],
+)
+def test_a_fired_circuit_books_the_heat_its_pump_s_water_carries_and_the_fuel_for_it(
+    supply_temperature_in_celsius: float, expected_thermal_power_in_watt: float, expected_fuel_power_in_watt: float
+) -> None:
+    """A circuit that booked the burner's heat while throttled, or billed full fuel for it, would invent heat or fuel.
+
+    A 20 kW burner at full signal on a 70 °C return burns at 0.877 and turns 20000 W into 17540 W; its pump carries
+    that over 30 K. Unthrottled the water carries all of it and the fuel is the commanded power; throttled to 80 °C
+    the same flow carries a third, and the burner cycles at its commanded power, so it burns a third of its fuel.
+    """
+    burner = generic_boiler.BurnerModulation(
+        minimal_power_in_watt=2000.0,
+        maximal_power_in_watt=20000.0,
+        efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.877, 0.978, 0.0030),
+    )
+    mass_flow_in_kg_per_second = 17540.0 / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 30.0)
+    firing = generic_boiler.GenericBoiler.fired_circuit(
+        burner=burner,
+        control_signal=1.0,
+        mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+        unthrottled_supply_temperature_in_celsius=100.0,
+        return_temperature_in_celsius=70.0,
+        supply_temperature_in_celsius=supply_temperature_in_celsius,
+    )
+    assert firing.mass_flow_in_kg_per_second == mass_flow_in_kg_per_second
+    assert firing.supply_temperature_in_celsius == supply_temperature_in_celsius
+    assert firing.thermal_power_in_watt == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
+    assert firing.fuel_power_in_watt == pytest.approx(expected_fuel_power_in_watt, rel=1e-12, abs=1e-9)
+
+
+@pytest.mark.base
 def test_the_controller_states_its_hot_water_set_temperature() -> None:
     """A controller that published another set temperature than it charges to would cap the boiler elsewhere.
 

@@ -16,6 +16,7 @@ from hisim.components.generic_boiler import (
 )
 from hisim.config import ComponentID, DisplayConfig, SizingContext
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import PumpOperatingPoint
 
 
 @pytest.mark.base
@@ -743,6 +744,40 @@ def test_a_burner_with_a_single_power_burns_at_its_full_load_efficiency() -> Non
         efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.92, 0.92),
     )
     assert burner.efficiency_at(10000.0, 50.0) == pytest.approx(0.92, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("supply_temperature_in_celsius", "expected_thermal_power_in_watt", "expected_fuel_power_in_watt"),
+    [(100.0, 17540.0, 20000.0), (80.0, 17540.0 / 3, 20000.0 / 3), (70.0, 0.0, 0.0)],
+    ids=["unthrottled", "throttled to a third of the lift", "throttled to the return"],
+)
+def test_a_fired_circuit_books_the_heat_its_pump_s_water_carries_and_the_fuel_for_it(
+    supply_temperature_in_celsius: float, expected_thermal_power_in_watt: float, expected_fuel_power_in_watt: float
+) -> None:
+    """A circuit that booked the burner's heat while throttled, or billed full fuel for it, would invent heat or fuel.
+
+    A 20 kW burner at full signal on a 70 °C return burns at 0.877 and turns 20000 W into 17540 W; its pump carries
+    that over 30 K. Unthrottled the water carries all of it and the fuel is the commanded power; throttled to 80 °C
+    the same flow carries a third, and the burner cycles at its commanded power, so it burns a third of its fuel.
+    """
+    burner = generic_boiler.BurnerModulation(
+        minimal_power_in_watt=2000.0,
+        maximal_power_in_watt=20000.0,
+        efficiency_curve=generic_boiler.CombustionEfficiencyCurve(0.877, 0.978, 0.0030),
+    )
+    mass_flow_in_kg_per_second = 17540.0 / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 30.0)
+    firing = generic_boiler.GenericBoiler.fired_circuit(
+        burner=burner,
+        control_signal=1.0,
+        pumped=PumpOperatingPoint(mass_flow_in_kg_per_second=mass_flow_in_kg_per_second, supply_temperature_in_celsius=100.0, flow_is_clamped=False),
+        return_temperature_in_celsius=70.0,
+        supply_temperature_in_celsius=supply_temperature_in_celsius,
+    )
+    assert firing.mass_flow_in_kg_per_second == mass_flow_in_kg_per_second
+    assert firing.supply_temperature_in_celsius == supply_temperature_in_celsius
+    assert firing.thermal_power_in_watt == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
+    assert firing.fuel_power_in_watt == pytest.approx(expected_fuel_power_in_watt, rel=1e-12, abs=1e-9)
 
 
 @pytest.mark.base
@@ -1520,7 +1555,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
     """Every boiler that charges a buffer leaves the flow input unwired; its outputs must not move by a bit.
 
     Unwired, every output equals the one the boiler's own pump subcomponent gives: the space-heating circuit's firing is
-    :meth:`GenericBoiler.fired_circuit` at the lift the pump raises the asked one to, part-loaded by
+    :meth:`GenericBoiler.fired_circuit` on the flow and supply of the boiler's pump, part-loaded by
     :meth:`GenericBoiler.part_loaded_firing`, compared exactly, not approximately.
     """
     boiler, output = BoilerStep.run(
@@ -1538,17 +1573,18 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         return
     burner = boiler.burner
     return_in_celsius = DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
-    lift_run_in_kelvin = boiler.pump.lift_in_kelvin(
-        asked_lift_in_kelvin=lift_in_kelvin,
+    pumped = boiler.pump.operating_point(
         heat_power_in_watt=burner.heat_power_in_watt(burner.commanded_power_in_watt(control_signal), return_in_celsius),
+        return_temperature_in_celsius=return_in_celsius,
+        lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
     )
     expected = generic_boiler.GenericBoiler.part_loaded_firing(
         generic_boiler.GenericBoiler.fired_circuit(
             burner=burner,
             control_signal=control_signal,
-            lift_in_kelvin=lift_run_in_kelvin,
+            pumped=pumped,
             return_temperature_in_celsius=return_in_celsius,
-            supply_temperature_in_celsius=return_in_celsius + lift_run_in_kelvin,
+            supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
         ),
         part_load_ratio=space_heating_ratio,
         return_temperature_in_celsius=return_in_celsius,

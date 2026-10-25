@@ -240,7 +240,7 @@ class TestSubcomponentsImportOnlyTheirLayer:
             ("from hisim import component", "hisim.component"),
             ("from hisim import hydronics, log", "hisim.log"),
             ("import hisim", "hisim"),
-            ("from hisim.components.generic_boiler import BoilerPump", "hisim.components.generic_boiler"),
+            ("from hisim.components.generic_boiler import GenericBoiler", "hisim.components.generic_boiler"),
             ("from .. import simulator", "hisim.simulator"),
             ("from ..energy_system import model", "hisim.energy_system"),
             ("import pandas as pd", "pandas"),

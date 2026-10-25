@@ -50,6 +50,7 @@ from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import ControllerLiftPump
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
@@ -224,6 +225,10 @@ class ElectricHeating(PhysicsComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
+        #: The hot-water circuit's pump: it carries the power the heater regulates over the lift the controller asks
+        #: for, ``m = P / (c lift)``, without bounds. For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s. The rooms
+        #: are heated directly, without a pump.
+        self.hot_water_pump: ControllerLiftPump = ControllerLiftPump()
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -503,6 +508,7 @@ class ElectricHeating(PhysicsComponent):
             ),
             maximal_supply_temperature_in_celsius=self.config.maximal_dhw_supply_temperature_in_celsius,
             maximal_power_in_watt=concrete(self.config.maximum_electric_power_w),
+            pump=self.hot_water_pump,
         )
 
     def space_heating_delivery(
@@ -590,13 +596,14 @@ class ElectricHeating(PhysicsComponent):
         supply_temperature_set_in_celsius: float,
         maximal_supply_temperature_in_celsius: float,
         maximal_power_in_watt: float,
+        pump: ControllerLiftPump,
     ) -> hydronics.CircuitStep:
         """Return the electric heater's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
         The heater holds the lift its controller asks for and regulates its power as
-        ``P = P_max lift / REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN``, at most ``P_max``; it pumps
-        ``m = P / (c lift)`` and supplies the return plus the lift, capped at the lower of its maximal supply
-        temperature and the controller's set temperature
+        ``P = P_max lift / REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN``, at most ``P_max``; its pump
+        (:attr:`hot_water_pump`) runs ``m = P / (c lift)`` and the heater supplies the return plus the
+        lift, capped at the lower of its maximal supply temperature and the controller's set temperature
         (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`). The heat is what the water carries,
         ``m c (T_sup - T_ret)``, which is ``P`` while nothing caps the supply. Without a lift the circuit moves no
         water. For example, a 6 kW heater asked for a 25 K lift on a 50 °C return heats with 1.5 kW at
@@ -608,6 +615,7 @@ class ElectricHeating(PhysicsComponent):
             supply_temperature_set_in_celsius: The supply temperature the controller aims at, in °C.
             maximal_supply_temperature_in_celsius: The heater's maximal hot-water supply temperature, in °C.
             maximal_power_in_watt: The heater's maximal electric power, in W.
+            pump: The heater's hot-water pump, :attr:`hot_water_pump`.
 
         Returns:
             The circuit's mass flow, supply temperature and heat.
@@ -618,11 +626,14 @@ class ElectricHeating(PhysicsComponent):
             maximal_power_in_watt * lift_in_kelvin / ElectricHeating.REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN,
             maximal_power_in_watt,
         )
-        mass_flow_in_kg_per_second = regulated_power_in_watt / (
-            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
+        pumped = pump.operating_point(
+            heat_power_in_watt=regulated_power_in_watt,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
         )
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
         supply_temperature_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
-            unthrottled_supply_c=return_temperature_in_celsius + lift_in_kelvin,
+            unthrottled_supply_c=pumped.supply_temperature_in_celsius,
             return_c=return_temperature_in_celsius,
             maximal_supply_c=maximal_supply_temperature_in_celsius,
             set_supply_c=supply_temperature_set_in_celsius,

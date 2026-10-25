@@ -55,6 +55,7 @@ from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import FixedLiftPump
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
@@ -273,6 +274,11 @@ class DistrictHeating(PhysicsComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
+        #: The hot-water circuit's pump: it carries the heat it is given over :attr:`DHW_PUMP_DESIGN_LIFT_IN_KELVIN`,
+        #: ``m = Q / (c 100 K)``, without bounds. The substation gives it its connected load, so the flow is constant:
+        #: for example, 15 kW pump 0.0359 kg/s. The space-heating circuit has no pump of its own, it reads the heat
+        #: distribution system's flow.
+        self.hot_water_pump: FixedLiftPump = FixedLiftPump(target_lift_in_kelvin=self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -576,6 +582,7 @@ class DistrictHeating(PhysicsComponent):
                 self.supply_temperature_set_for_dhw_in_celsius_channel
             ),
             connected_load_in_watt=concrete(self.config.connected_load_in_w),
+            pump=self.hot_water_pump,
         )
 
     def space_heating_circuit_of_step(
@@ -697,14 +704,15 @@ class DistrictHeating(PhysicsComponent):
         lift_in_kelvin: float,
         supply_temperature_set_in_celsius: float,
         connected_load_in_watt: float,
+        pump: FixedLiftPump,
     ) -> hydronics.CircuitStep:
         """Return the substation's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
         The substation is a power-limited heat exchanger. While the controller asks for hot water (a positive lift),
-        its pump runs at ``m = P_connected / (c DHW_PUMP_DESIGN_LIFT_IN_KELVIN)`` and it supplies the return plus
-        the design lift, which is what the connected load can carry at that flow, throttled at the controller's set
-        temperature (:func:`hisim.hydronics.throttled_supply_temperature_c`) and never below the return. A connected
-        load of 0 W therefore pumps no water and carries no heat. The heat it
+        its pump (:attr:`hot_water_pump`) runs at ``m = P_connected / (c DHW_PUMP_DESIGN_LIFT_IN_KELVIN)``
+        and it supplies the return plus the design lift, which is what the connected load can carry at that flow,
+        throttled at the controller's set temperature (:func:`hisim.hydronics.throttled_supply_temperature_c`) and
+        never below the return. A connected load of 0 W therefore pumps no water and carries no heat. The heat it
         books, and the network bills, is what that water carries, ``m c (T_sup - T_ret)``. Without a request the
         circuit moves no water. For example, a 15 kW connection with a 50 °C return and a 70 °C set temperature pumps
         0.0359 kg/s, supplies 70 °C and delivers 3 kW.
@@ -714,18 +722,19 @@ class DistrictHeating(PhysicsComponent):
             lift_in_kelvin: The lift the controller asks for, in K; 0 or less asks for no hot water.
             supply_temperature_set_in_celsius: The supply temperature the controller aims at, in °C.
             connected_load_in_watt: The substation's connected load, in W.
+            pump: The substation's hot-water pump, :attr:`hot_water_pump`.
 
         Returns:
             The circuit's mass flow, supply temperature and heat.
         """
         if lift_in_kelvin <= 0:
             return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
-        specific_heat_in_joule_per_kg_per_kelvin = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
-        mass_flow_in_kg_per_second = connected_load_in_watt / (
-            specific_heat_in_joule_per_kg_per_kelvin * DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN
+        pumped = pump.operating_point(
+            heat_power_in_watt=connected_load_in_watt, return_temperature_in_celsius=return_temperature_in_celsius
         )
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
         supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
-            unthrottled_supply_c=return_temperature_in_celsius + DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN,
+            unthrottled_supply_c=pumped.supply_temperature_in_celsius,
             return_c=return_temperature_in_celsius,
             supply_limit_c=supply_temperature_set_in_celsius,
         )

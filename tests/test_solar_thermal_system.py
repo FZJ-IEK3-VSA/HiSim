@@ -1,7 +1,7 @@
 """Tests for the solar thermal system component."""
 
 import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 import pvlib
@@ -20,6 +20,7 @@ from hisim.components.controller_l2_energy_management_system import EMSConfig
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
+from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
 from tests import functions_for_testing as fft
 from tests.part_load_rigs import AllInputsRig, CollectorRig, Parameters, SolarControllerRig
 
@@ -532,12 +533,69 @@ class CollectorPhysics:
         a_2_in_watt_per_m2_per_kelvin_squared=CONFIG.a_2_w_m2_k,
     )
 
-    #: The preset's pump: 20 K target lift, 5 to 40 kg/(m² h).
-    PUMP = solar_thermal_system.SpeedControlledSolarPump(
-        target_lift_in_kelvin=CONFIG.pump_target_lift_in_kelvin,
-        minimum_mass_flow_in_kg_per_hour_per_m2=CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
-        maximum_mass_flow_in_kg_per_hour_per_m2=CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
-    )
+    @classmethod
+    def pump_for(cls, area_m2: float) -> FixedLiftPump:
+        """Return the preset's pump for a collector field: 20 K target lift, 5 to 40 kg/(m² h) times the area.
+
+        Args:
+            area_m2: The collector area, in m².
+
+        Returns:
+            The pump, its bounds for the whole field in kg/s.
+        """
+        return FixedLiftPump(
+            target_lift_in_kelvin=cls.CONFIG.pump_target_lift_in_kelvin,
+            minimal_mass_flow_in_kg_per_second=cls.CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
+            maximal_mass_flow_in_kg_per_second=cls.CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600.0,
+        )
+
+    @classmethod
+    def point(
+        cls,
+        *,
+        inlet_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        irradiance_in_watt_per_m2: float,
+        area_m2: float,
+        pump: Optional[FixedLiftPump] = None,
+    ) -> PumpOperatingPoint:
+        """Return the operating point of the preset's collector field, with the preset's pump unless one is given.
+
+        Args:
+            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
+            area_m2: The collector area, in m².
+            pump: The pump, the preset's for that area when None.
+
+        Returns:
+            The operating point (:meth:`SolarThermalSystem.collector_operating_point`).
+        """
+        return solar_thermal_system.SolarThermalSystem.collector_operating_point(
+            pump=cls.pump_for(area_m2) if pump is None else pump,
+            curve=cls.CURVE,
+            inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+            irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
+            area_m2=area_m2,
+        )
+
+    @staticmethod
+    def heat_in_watt(point: PumpOperatingPoint, inlet_temperature_in_celsius: float) -> float:
+        """Return the heat an operating point's water carries, ``c m (T_sup - T_in)``, in W.
+
+        Args:
+            point: The operating point.
+            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+
+        Returns:
+            The heat, in W.
+        """
+        return hydronics.circuit_power_w(
+            mass_flow_kg_per_s=point.mass_flow_in_kg_per_second,
+            t_supply_c=point.supply_temperature_in_celsius,
+            t_return_c=inlet_temperature_in_celsius,
+        )
 
     #: Tank (inlet) temperatures, °C.
     TANKS_IN_CELSIUS = (20.0, 45.0, 60.0)
@@ -605,35 +663,34 @@ def test_the_pump_runs_the_target_lift_within_its_bounds_and_its_water_carries_t
     follows from the heat, and the water carries the curve's heat at half that lift above the inlet. A pump that broke
     its bounds, or a heat that did not match its lift, would book heat the collector cannot give.
     """
-    pump = CollectorPhysics.PUMP
     area_m2 = 4.0
-    point = pump.operating_point(
-        curve=CollectorPhysics.CURVE,
+    pump = CollectorPhysics.pump_for(area_m2)
+    point = CollectorPhysics.point(
         inlet_temperature_in_celsius=tank_c,
         ambient_temperature_in_celsius=air_c,
         irradiance_in_watt_per_m2=irradiance_w_m2,
         area_m2=area_m2,
     )
-    if point.heat_in_watt == 0.0:
-        assert point == solar_thermal_system.CollectorOperatingPoint.idle()
+    if point.mass_flow_in_kg_per_second == 0.0:
+        assert point == PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=tank_c, flow_is_clamped=False)
         return
-    least_kg_s = pump.minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600
-    most_kg_s = pump.maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / 3600
+    least_kg_s = pump.minimal_mass_flow_in_kg_per_second
+    most_kg_s = pump.maximal_mass_flow_in_kg_per_second
     assert least_kg_s * (1 - 1e-12) <= point.mass_flow_in_kg_per_second <= most_kg_s * (1 + 1e-12)
-    assert point.heat_in_watt == pytest.approx(
-        hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * point.mass_flow_in_kg_per_second * point.lift_in_kelvin, rel=1e-12
-    )
+    lift_in_kelvin = point.supply_temperature_in_celsius - tank_c
     heat_at_the_mean_w = area_m2 * CollectorPhysics.CURVE.heat_in_watt_per_m2(
         inlet_temperature_in_celsius=tank_c,
-        inlet_to_mean_temperature_difference_in_kelvin=point.lift_in_kelvin / 2,
+        inlet_to_mean_temperature_difference_in_kelvin=lift_in_kelvin / 2,
         ambient_temperature_in_celsius=air_c,
         irradiance_in_watt_per_m2=irradiance_w_m2,
     )
-    assert point.heat_in_watt == pytest.approx(heat_at_the_mean_w, rel=1e-9)
+    assert CollectorPhysics.heat_in_watt(point, tank_c) == pytest.approx(heat_at_the_mean_w, rel=1e-9)
     if least_kg_s < point.mass_flow_in_kg_per_second < most_kg_s:
-        assert point.lift_in_kelvin == pump.target_lift_in_kelvin
+        assert not point.flow_is_clamped
+        assert lift_in_kelvin == pytest.approx(pump.target_lift_in_kelvin, rel=1e-12)
     elif point.mass_flow_in_kg_per_second == least_kg_s:
-        assert point.lift_in_kelvin < pump.target_lift_in_kelvin
+        assert point.flow_is_clamped
+        assert lift_in_kelvin < pump.target_lift_in_kelvin
 
 
 @pytest.mark.base
@@ -644,7 +701,7 @@ def test_a_collector_without_heat_at_the_target_lift_still_gives_heat_at_the_min
     but the minimum flow lifts the water by a few kelvin and carries heat. A model that idled here would switch the
     pump on at 7 K and off again in the next step.
     """
-    curve, pump = CollectorPhysics.CURVE, CollectorPhysics.PUMP
+    curve = CollectorPhysics.CURVE
     excess_k = 45.0 + 9.0 - 20.0
     irradiance_w_m2 = (3.2 * excess_k + 0.015 * excess_k**2) / 0.78
     at_target = curve.heat_in_watt_per_m2(
@@ -654,16 +711,15 @@ def test_a_collector_without_heat_at_the_target_lift_still_gives_heat_at_the_min
         irradiance_in_watt_per_m2=irradiance_w_m2,
     )
     assert at_target == 0.0
-    point = pump.operating_point(
-        curve=curve,
+    point = CollectorPhysics.point(
         inlet_temperature_in_celsius=45.0,
         ambient_temperature_in_celsius=20.0,
         irradiance_in_watt_per_m2=irradiance_w_m2,
         area_m2=4.0,
     )
     assert point.mass_flow_in_kg_per_second == pytest.approx(5.0 * 4.0 / 3600, rel=1e-12)
-    assert 3.0 < point.lift_in_kelvin < 9.0
-    assert point.heat_in_watt > 0.0
+    assert 3.0 < point.supply_temperature_in_celsius - 45.0 < 9.0
+    assert CollectorPhysics.heat_in_watt(point, 45.0) > 0.0
 
 
 @pytest.mark.base
@@ -673,21 +729,37 @@ def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradi
 
     A constant-flow pump that still ran the target lift's flow would ignore its own speed.
     """
-    pump = solar_thermal_system.SpeedControlledSolarPump(
+    pump = FixedLiftPump(
         target_lift_in_kelvin=20.0,
-        minimum_mass_flow_in_kg_per_hour_per_m2=30.0,
-        maximum_mass_flow_in_kg_per_hour_per_m2=30.0,
+        minimal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
+        maximal_mass_flow_in_kg_per_second=30.0 * 6.0 / 3600,
     )
-    point = pump.operating_point(
-        curve=CollectorPhysics.CURVE,
+    point = CollectorPhysics.point(
         inlet_temperature_in_celsius=40.0,
         ambient_temperature_in_celsius=15.0,
         irradiance_in_watt_per_m2=irradiance_w_m2,
         area_m2=6.0,
+        pump=pump,
     )
     assert point.mass_flow_in_kg_per_second == pytest.approx(30.0 * 6.0 / 3600, rel=1e-12)
-    assert point.heat_in_watt == pytest.approx(
-        hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * point.mass_flow_in_kg_per_second * point.lift_in_kelvin, rel=1e-12
+
+
+@pytest.mark.base
+def test_the_collector_s_pump_has_its_bounds_per_m2_and_hour_for_the_whole_field() -> None:
+    """A collector whose pump bounds ignored its area, or the hour, would run a 12 m² field at a 1 m² field's flow.
+
+    The flat-plate preset rates its pump at 5 to 40 kg/(m² h); on the 12 m² of three dwellings that is 0.0167 to
+    0.1333 kg/s, at the configured 20 K target lift.
+    """
+    config = CollectorPhysics.CONFIG.resolve(SizingContext(number_of_apartments=3))
+    collector = solar_thermal_system.SolarThermalSystem(
+        config=config, my_simulation_parameters=sim.SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    )
+    assert collector.area_m2 == 12.0
+    assert collector.pump == FixedLiftPump(
+        target_lift_in_kelvin=20.0,
+        minimal_mass_flow_in_kg_per_second=5.0 * 12.0 / 3600.0,
+        maximal_mass_flow_in_kg_per_second=40.0 * 12.0 / 3600.0,
     )
 
 
@@ -701,8 +773,7 @@ def test_the_pump_runs_every_collector_area_alike_per_m2(tank_c: float, irradian
     a large field at other irradiances than a small one.
     """
     points = [
-        CollectorPhysics.PUMP.operating_point(
-            curve=CollectorPhysics.CURVE,
+        CollectorPhysics.point(
             inlet_temperature_in_celsius=tank_c,
             ambient_temperature_in_celsius=10.0,
             irradiance_in_watt_per_m2=irradiance_w_m2,
@@ -711,9 +782,11 @@ def test_the_pump_runs_every_collector_area_alike_per_m2(tank_c: float, irradian
         for area_m2 in (4.0, 24.0)
     ]
     small, large = points
-    assert large.lift_in_kelvin == pytest.approx(small.lift_in_kelvin, rel=1e-12, abs=1e-12)
+    assert large.supply_temperature_in_celsius == pytest.approx(small.supply_temperature_in_celsius, rel=1e-12, abs=1e-12)
     assert large.mass_flow_in_kg_per_second == pytest.approx(6 * small.mass_flow_in_kg_per_second, rel=1e-12)
-    assert large.heat_in_watt == pytest.approx(6 * small.heat_in_watt, rel=1e-12)
+    assert CollectorPhysics.heat_in_watt(large, tank_c) == pytest.approx(
+        6 * CollectorPhysics.heat_in_watt(small, tank_c), rel=1e-12, abs=1e-9
+    )
 
 
 @pytest.mark.base
@@ -734,14 +807,13 @@ def test_at_the_switch_on_difference_the_preset_pump_lifts_by_more_than_the_swit
     irradiance_w_m2 = (
         curve.a_1_in_watt_per_m2_per_kelvin * excess_k + curve.a_2_in_watt_per_m2_per_kelvin_squared * excess_k**2
     ) / curve.eta_0
-    point = CollectorPhysics.PUMP.operating_point(
-        curve=curve,
+    point = CollectorPhysics.point(
         inlet_temperature_in_celsius=tank_c,
         ambient_temperature_in_celsius=air_c,
         irradiance_in_watt_per_m2=irradiance_w_m2,
         area_m2=4.0,
     )
-    assert point.lift_in_kelvin > controller.SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN
+    assert point.supply_temperature_in_celsius - tank_c > controller.SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN
 
 
 class PumpTransitions:
@@ -966,11 +1038,9 @@ def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the
 ) -> None:
     """A circuit that moved water without heat, or with the pump off, would cool the tank or book phantom heat."""
     if heat_in_watt > 0:
-        point = solar_thermal_system.CollectorOperatingPoint(
-            heat_in_watt=heat_in_watt, mass_flow_in_kg_per_second=0.025, lift_in_kelvin=20.0
-        )
+        point = PumpOperatingPoint(mass_flow_in_kg_per_second=0.025, supply_temperature_in_celsius=60.0, flow_is_clamped=False)
     else:
-        point = solar_thermal_system.CollectorOperatingPoint.idle()
+        point = PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=40.0, flow_is_clamped=False)
     circuit = solar_thermal_system.SolarThermalSystem.collector_circuit(
         operating_point=point, inlet_temperature_in_celsius=40.0, pump_runs=pump_runs
     )

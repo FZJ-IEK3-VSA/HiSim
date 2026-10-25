@@ -277,6 +277,7 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
         supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
         maximal_supply_temperature_in_celsius=80.0,
         maximal_power_in_watt=maximal_power_in_watt,
+        pump=ElectricHeating.hot_water_circulation_pump(),
     )
     assert circuit.t_supply_c == pytest.approx(expected_supply_temperature_in_celsius, rel=1e-15)
     assert circuit.power_w == pytest.approx(expected_power_share * maximal_power_in_watt, rel=1e-12, abs=1e-9)

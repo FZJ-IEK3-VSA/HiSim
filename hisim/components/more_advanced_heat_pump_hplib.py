@@ -71,6 +71,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.subcomponents.pumps import CirculationPump, PumpOperatingPoint
 from hisim.components.more_advanced_heat_pump_hplib_model import (
     CalculationRequest,
     HeatingCircuitPowers,
@@ -434,6 +435,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                     thermal power of the heat pump must be given an integer value due to constant massflow
                     of water pump."""
                 )
+        #: The secondary side's pump in the fixed-flow modes (a storage in series, or none): a constant pump at the
+        #: nominal flow; None for a machine without a nominal flow, which runs hplib's flow only.
+        self.fixed_flow_pump: Optional[CirculationPump] = (
+            CirculationPump.constant(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
+        )
 
         self.fluid_primary_side = config.fluid_primary_side
 
@@ -483,8 +489,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         self.heatpump = hpl.HeatPump(self.parameters)
         self.heatpump.delta_t = 5
         self.scop_calibration = self.calibration_of(config, self.heatpump)
-
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
 
         # protect erros for Water/Water Heatpumps
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
@@ -1288,36 +1292,35 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[float] = 0.0
 
     @staticmethod
-    def fixed_flow_outlet_temperature_in_celsius(
+    def fixed_flow_operating_point(
         *,
+        pump: CirculationPump,
         return_temperature_in_celsius: float,
         lift_in_kelvin: float,
-        mass_flow_in_kg_per_second: float,
         minimal_thermal_power_in_watt: float,
         time_on_heating_in_seconds: float,
-        specific_heat_capacity_in_joule_per_kg_per_kelvin: float,
-    ) -> float:
-        """Return the outlet temperature of a circuit the heat pump runs at a fixed flow, in °C.
+    ) -> PumpOperatingPoint:
+        """Return the flow and the outlet temperature of a circuit the heat pump runs at a fixed flow.
 
-        In the fixed-flow mode (a storage in series, or none) the pump runs the nominal flow and the heat pump aims
-        at the power that flow carries over the lift, at least its minimal thermal power. While the machine starts,
-        it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it has
-        been heating. The outlet is the return plus that power over ``m c``. For example, 0.333 kg/s over a 5 K lift
-        aims at 6959.7 W; after ten minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
+        In the fixed-flow mode (a storage in series, or none) the constant pump runs the nominal flow and the heat pump
+        aims at the power that flow carries over the lift, at least its minimal thermal power. While the machine
+        starts, it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it
+        has been heating. The outlet is the return plus that power over ``m c``
+        (:meth:`CirculationPump.operating_point`). For example, 0.333 kg/s over a 5 K lift aims at 6959.7 W; after ten
+        minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
 
         Args:
+            pump: The heat pump's constant secondary-side pump, at the nominal flow.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
             lift_in_kelvin: The lift the heat pump aims at, in K.
-            mass_flow_in_kg_per_second: The fixed flow, in kg/s, above 0.
             minimal_thermal_power_in_watt: The lowest thermal power the machine modulates down to, in W.
             time_on_heating_in_seconds: How long the machine has been heating before this step, in s.
-            specific_heat_capacity_in_joule_per_kg_per_kelvin: The specific heat of the circuit's water, in J/(kg K).
 
         Returns:
-            The outlet temperature, in °C.
+            The nominal flow and the outlet temperature.
         """
         thermal_power_at_lift_in_watt = (
-            mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin * lift_in_kelvin
+            pump.design_mass_flow_in_kg_per_second * CirculationPump.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * lift_in_kelvin
         )
         if thermal_power_at_lift_in_watt <= minimal_thermal_power_in_watt:
             target_power_in_watt = minimal_thermal_power_in_watt
@@ -1326,9 +1329,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         target_power_in_watt = target_power_in_watt * (
             1 - np.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
         )
-        return float(
-            return_temperature_in_celsius
-            + target_power_in_watt / (mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin)
+        return pump.operating_point(
+            heat_power_in_watt=float(target_power_in_watt), return_temperature_in_celsius=return_temperature_in_celsius
         )
 
     @staticmethod
@@ -1727,12 +1729,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Return a space-heating step in the fixed-flow mode: the nominal flow, the outlet from the target power.
 
         The heat pump aims at the lift to its space-heating set temperature, at most 5 K, and its outlet follows from
-        that power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`); it books the heat that
-        flow carries.
+        that power at the nominal flow (:meth:`fixed_flow_operating_point`); it books the heat that flow carries.
         """
         assert conditions.space_heating_set_temperature_in_celsius is not None
+        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
-        mass_flow_in_kg_per_second = self.m_dot_ref
         self.heatpump.delta_t = min(
             conditions.space_heating_set_temperature_in_celsius - return_in_celsius, self.NOMINAL_LIFT_IN_KELVIN
         )
@@ -1745,16 +1746,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             operation_mode="heating_building",
             minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
-        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+        pumped = self.fixed_flow_operating_point(
+            pump=self.fixed_flow_pump,
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
-            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            ),
         )
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
+        outlet_in_celsius = pumped.supply_temperature_in_celsius
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,
@@ -1826,11 +1826,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     ) -> "HeatPumpOperation":
         """Return a hot-water step in the fixed-flow mode: the nominal flow, a 5 K target lift, the outlet capped.
 
-        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`)
-        and is capped (:meth:`capped_hot_water_outlet_in_celsius`); the heat pump books the heat the flow carries.
+        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_operating_point`) and is
+        capped (:meth:`capped_hot_water_outlet_in_celsius`); the heat pump books the heat the flow carries.
         """
+        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
-        mass_flow_in_kg_per_second = self.m_dot_ref
         results = self.hplib_result(
             conditions,
             return_temperature_in_celsius=return_in_celsius,
@@ -1838,17 +1838,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             operation_mode="heating_dhw",
             minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
-        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+        pumped = self.fixed_flow_operating_point(
+            pump=self.fixed_flow_pump,
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
-            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            ),
         )
-        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, outlet_in_celsius)
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
+        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, pumped.supply_temperature_in_celsius)
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,

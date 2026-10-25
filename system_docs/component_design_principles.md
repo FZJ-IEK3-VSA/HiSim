@@ -106,7 +106,7 @@ boiler's circulation pump, a collector's efficiency curve, an emitter's design p
 - **Not a sizing law.** A sizing law (`hisim/config/laws.py`: `SizingLaw`, the `*_LAW` constants) says how a
   configuration value follows from the surrounding system before the run. It is a different concept and keeps its
   name.
-- **Not every helper class is a subcomponent.** Per-step results (`BoilerFiring`, `CollectorOperatingPoint`,
+- **Not every helper class is a subcomponent.** Per-step results (`BoilerFiring`, `PumpOperatingPoint`,
   `HplibResult`), state records (`HotWaterPriorityTimer`, `HeatPumpRunTimers`), cache keys and input bundles
   (`PvSeriesInputs`), channel groups (`BoilerCircuitChannels`) and infrastructure (`PylpgWorkspace`) are not.
 
@@ -116,7 +116,7 @@ boiler's circulation pump, a collector's efficiency curve, an emitter's design p
   (`heat_power_in_watt=...`). No `SingleTimeStepValues`, no `ComponentInput` or `ComponentOutput`, no simulation
   parameters object: the component reads its inputs and passes the values.
 - **Built once, checked when built.** A component builds its subcomponents once, through classmethod factories, from
-  values it got from its configuration or a sizing rule (`BoilerPump.sized_for(...)`). `__post_init__` refuses an
+  values it got from its configuration or a sizing rule (`CirculationPump.target_supply_temperature_sized_for(...)`). `__post_init__` refuses an
   invalid setting, so a bad subcomponent fails when its component is built, not in the first step.
 - **Stateless.** A subcomponent holds no state across steps. State that changes from step to step stays in the
   component's state dataclass, and the component passes it in.

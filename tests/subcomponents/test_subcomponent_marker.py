@@ -52,7 +52,7 @@ class SubcomponentCensus:
     def subcomponent_classes(cls) -> List[Type[Subcomponent]]:
         """Return every subclass of :class:`Subcomponent`, after importing every module of ``hisim.components``.
 
-        For example, the list holds ``BoilerPump`` from ``hisim.components.generic_boiler``. Importing every module
+        For example, the list holds ``BurnerModulation`` from ``hisim.components.generic_boiler``. Importing every module
         first makes the list complete: a class is a subclass only once its module has run.
 
         Returns:
@@ -125,7 +125,7 @@ class SubcomponentCensus:
     def holders_of_subcomponents(cls, components: List[Component]) -> Dict[int, List[str]]:
         """Return, for every subcomponent instance the components hold, the names of the components that hold it.
 
-        For example, a gas boiler's ``BoilerPump`` maps to ``["CondensingGasBoiler"]``.
+        For example, a gas boiler's ``CirculationPump`` maps to ``["CondensingGasBoiler"]``.
 
         Args:
             components: The components of one built system.
@@ -144,7 +144,7 @@ class SubcomponentCensus:
 def test_the_subcomponent_classes_are_found() -> None:
     """Catches the discovery below finding no subcomponent, which would let every check pass on an empty list."""
     names = {subclass.__name__ for subclass in SubcomponentCensus.subcomponent_classes()}
-    assert {"BoilerPump", "EmitterDesign", "ScopCalibration", "DiverterValve", "FlatPlateCollectorCurve"} <= names
+    assert {"CirculationPump", "BurnerModulation", "EmitterDesign", "ScopCalibration", "DiverterValve", "FlatPlateCollectorCurve"} <= names
 
 
 @pytest.mark.parametrize("subclass", SubcomponentCensus.subcomponent_classes(), ids=lambda subclass: subclass.__name__)

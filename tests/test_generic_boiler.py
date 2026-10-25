@@ -1520,7 +1520,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
     """Every boiler that charges a buffer leaves the flow input unwired; its outputs must not move by a bit.
 
     Unwired, every output equals the one the boiler's own pump subcomponent gives: the space-heating circuit's firing is
-    :meth:`GenericBoiler.fired_circuit` at the lift the pump raises the asked one to, part-loaded by
+    :meth:`GenericBoiler.fired_circuit` on the flow and supply of the boiler's pump, part-loaded by
     :meth:`GenericBoiler.part_loaded_firing`, compared exactly, not approximately.
     """
     boiler, output = BoilerStep.run(
@@ -1538,17 +1538,19 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         return
     burner = boiler.burner
     return_in_celsius = DistributionFlowCase.RETURN_TEMPERATURE_IN_CELSIUS
-    lift_run_in_kelvin = boiler.pump.lift_in_kelvin(
-        asked_lift_in_kelvin=lift_in_kelvin,
+    pumped = boiler.pump.operating_point(
         heat_power_in_watt=burner.heat_power_in_watt(burner.commanded_power_in_watt(control_signal), return_in_celsius),
+        return_temperature_in_celsius=return_in_celsius,
+        lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
     )
     expected = generic_boiler.GenericBoiler.part_loaded_firing(
         generic_boiler.GenericBoiler.fired_circuit(
             burner=burner,
             control_signal=control_signal,
-            lift_in_kelvin=lift_run_in_kelvin,
+            mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
+            unthrottled_supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
             return_temperature_in_celsius=return_in_celsius,
-            supply_temperature_in_celsius=return_in_celsius + lift_run_in_kelvin,
+            supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
         ),
         part_load_ratio=space_heating_ratio,
         return_temperature_in_celsius=return_in_celsius,

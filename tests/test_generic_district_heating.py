@@ -108,6 +108,7 @@ def test_the_hot_water_circuit_reaches_the_set_temperature_within_the_connected_
         lift_in_kelvin=lift_in_kelvin,
         supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
         connected_load_in_watt=connected_load_in_watt,
+        pump=DistrictHeating.hot_water_circulation_pump(),
     )
     assert circuit.power_w == pytest.approx(expected_power_in_watt, rel=1e-12, abs=1e-9)
     assert circuit.t_supply_c == pytest.approx(expected_supply_temperature_in_celsius, rel=1e-15)

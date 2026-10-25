@@ -36,6 +36,7 @@ from hisim.config import (
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.subcomponents.pumps import CirculationPump
 
 
 @unique
@@ -196,6 +197,15 @@ class HeatDistribution(cp.PhysicsComponent):
             self.position_hot_water_storage_in_system in self.POSITIONS_PUMPING_THE_DESIGN_FLOW
         )
         self.refuse_a_design_flow_that_moves_no_water()
+        #: The circuit's own pump, a constant pump at the design flow, where it pumps that flow itself; None where it
+        #: reads the flow its heat generator pumps.
+        self.pump: Optional[CirculationPump] = (
+            CirculationPump.constant(
+                design_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
+            )
+            if self.pumps_its_design_flow
+            else None
+        )
 
         self.build()
 
@@ -449,13 +459,12 @@ class HeatDistribution(cp.PhysicsComponent):
         )
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        pump_stands = self.pumps_its_design_flow and self.pump_stopped_by_the_valve(state_controller)
+        pump_stands = self.pump is not None and self.pump_stopped_by_the_valve(state_controller)
         if pump_stands:
             water_mass_flow_rate_in_kg_per_second = 0.0
-        elif self.pumps_its_design_flow:
-            water_mass_flow_rate_in_kg_per_second = (
-                self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
-            )
+        elif self.pump is not None:
+            # a constant pump: its flow is its design flow, whatever heat the circuit carries
+            water_mass_flow_rate_in_kg_per_second = self.pump.design_mass_flow_in_kg_per_second
         else:
             # important for heating system without buffer storage
             if self.water_mass_flow_rate_hp_in_kg_per_second_channel is None:

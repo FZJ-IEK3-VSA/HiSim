@@ -32,6 +32,7 @@ from hisim import hydronics, loadtypes
 from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.subcomponents.base import Subcomponent
+from hisim.subcomponents.pumps import CirculationPump, PumpOperatingPoint
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -242,121 +243,6 @@ class FlatPlateCollectorCurve(Subcomponent):
         return ambient_temperature_in_celsius + excess_in_kelvin
 
 
-@dataclass(frozen=True)
-class CollectorOperatingPoint:
-    """What a collector field with its pump running does in one step: its heat, the flow and the lift.
-
-    The water carries the heat, ``heat = c m lift``. A collector without heat has no operating point to run at: its
-    point is :meth:`idle`, no heat, no flow, no lift.
-    """
-
-    #: The heat of the whole collector field, in W.
-    heat_in_watt: float
-    #: The flow through the whole collector field, in kg/s.
-    mass_flow_in_kg_per_second: float
-    #: The lift from collector inlet to outlet, in K.
-    lift_in_kelvin: float
-
-    @staticmethod
-    def idle() -> "CollectorOperatingPoint":
-        """Return the point of a collector without heat: no heat, no flow, no lift.
-
-        Returns:
-            The idle operating point.
-        """
-        return CollectorOperatingPoint(heat_in_watt=0.0, mass_flow_in_kg_per_second=0.0, lift_in_kelvin=0.0)
-
-
-@dataclass(frozen=True)
-class SpeedControlledSolarPump(Subcomponent):
-    """The solar circuit's speed-controlled pump: the flow it runs for a collector, per m² of collector.
-
-    The pump runs the flow that lifts the water by its target lift, ``Q / (c lift)`` with ``Q`` the collector heat at
-    that lift, as long as that flow lies between its minimum and its maximum specific flow times the collector area.
-    Otherwise it runs the nearer bound, and the lift follows from the collector at that flow: below the target lift at
-    the minimum, above it at the maximum. For example, a 4 m² collector at 45 °C in 20 °C air with a 20 K target lift
-    and 5 to 40 kg/(m² h) runs 0.0236 kg/s (20 K) at 800 W/m², and the minimum, 0.0056 kg/s, at 200 W/m², where the
-    lift is 8.5 K. A constant-flow pump has its minimum equal to its maximum. Every bound is per m², so collector
-    fields of any size run alike per m².
-    """
-
-    #: The lift from the collector inlet to its outlet the pump aims at, in K.
-    target_lift_in_kelvin: float
-    #: The smallest flow the pump runs, per m² of collector, in kg/(m² h).
-    minimum_mass_flow_in_kg_per_hour_per_m2: float
-    #: The largest flow the pump runs, per m² of collector, in kg/(m² h).
-    maximum_mass_flow_in_kg_per_hour_per_m2: float
-
-    #: Seconds in an hour, to turn the specific flows per hour into flows per second.
-    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
-
-    def operating_point(
-        self,
-        *,
-        curve: FlatPlateCollectorCurve,
-        inlet_temperature_in_celsius: float,
-        ambient_temperature_in_celsius: float,
-        irradiance_in_watt_per_m2: float,
-        area_m2: float,
-    ) -> CollectorOperatingPoint:
-        """Return the heat, the flow and the lift of a collector field this pump runs, at an inlet temperature.
-
-        First the target lift: the heat at a mean temperature half the target lift above the inlet, and the flow that
-        carries it over the target lift. If that flow lies within the bounds, that is the point. Otherwise the pump
-        runs the nearer bound and the lift follows from the collector at that flow
-        (:meth:`FlatPlateCollectorCurve.lift_at_mass_flow_in_kelvin`). Without heat even at the bound the point is
-        idle. For example, 4 m² of the flat-plate preset at a 45 °C inlet in 20 °C air with a 20 K target lift and 5
-        to 40 kg/(m² h) give 1975 W at 0.0236 kg/s at 800 W/m², and 198 W at the minimum, 0.0056 kg/s, with an 8.5 K
-        lift at 200 W/m².
-
-        Args:
-            curve: The collector's efficiency curve.
-            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
-            ambient_temperature_in_celsius: The outside air temperature, in °C.
-            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
-            area_m2: The collector area, in m².
-
-        Returns:
-            The operating point.
-        """
-        specific_heat = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
-        heat_in_watt = (
-            curve.heat_in_watt_per_m2(
-                inlet_temperature_in_celsius=inlet_temperature_in_celsius,
-                inlet_to_mean_temperature_difference_in_kelvin=self.target_lift_in_kelvin / 2,
-                ambient_temperature_in_celsius=ambient_temperature_in_celsius,
-                irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
-            )
-            * area_m2
-        )
-        mass_flow_in_kg_per_second = max(heat_in_watt, 0.0) / (specific_heat * self.target_lift_in_kelvin)
-        least_in_kg_per_second = self.minimum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / self.SECONDS_PER_HOUR
-        most_in_kg_per_second = self.maximum_mass_flow_in_kg_per_hour_per_m2 * area_m2 / self.SECONDS_PER_HOUR
-        if heat_in_watt > 0 and least_in_kg_per_second <= mass_flow_in_kg_per_second <= most_in_kg_per_second:
-            return CollectorOperatingPoint(
-                heat_in_watt=heat_in_watt,
-                mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-                lift_in_kelvin=self.target_lift_in_kelvin,
-            )
-        if mass_flow_in_kg_per_second > most_in_kg_per_second:
-            bound_in_kg_per_second = most_in_kg_per_second
-        else:
-            bound_in_kg_per_second = least_in_kg_per_second
-        lift_in_kelvin = curve.lift_at_mass_flow_in_kelvin(
-            inlet_temperature_in_celsius=inlet_temperature_in_celsius,
-            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
-            irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
-            mass_flow_in_kg_per_second_per_m2=bound_in_kg_per_second / area_m2,
-        )
-        if lift_in_kelvin <= 0.0:
-            return CollectorOperatingPoint.idle()
-        return CollectorOperatingPoint(
-            heat_in_watt=specific_heat * bound_in_kg_per_second * lift_in_kelvin,
-            mass_flow_in_kg_per_second=bound_in_kg_per_second,
-            lift_in_kelvin=lift_in_kelvin,
-        )
-
-
 @dataclass_json
 @dataclass
 class SolarThermalSystemConfig(ConfigBase):
@@ -533,9 +419,9 @@ class SolarThermalSystem(PhysicsComponent):
     This class represents a solar thermal system that can be used
     for warm water and space heating.
 
-    The solar pump is speed-controlled (:class:`SpeedControlledSolarPump`): it runs the flow that lifts the water by
-    its target lift, within a minimum and a maximum flow per m² of collector, and the outlet is the inlet plus the lift
-    the collector heat gives at that flow.
+    The solar pump is speed-controlled, a temperature-sensor :class:`~hisim.subcomponents.pumps.CirculationPump`: it
+    runs the flow that lifts the water by its target lift, within a minimum and a maximum flow per m² of collector, and
+    the outlet is the inlet plus the lift the collector heat gives at that flow (:meth:`operating_point`).
 
     The pump runs the part-load ratio its controller commands (``PartLoadRatio``): 1, the whole step, at and below the
     part-load threshold, and above it the fraction of the step that ends the tank at the controller's target. Below 1
@@ -621,10 +507,13 @@ class SolarThermalSystem(PhysicsComponent):
             a_1_in_watt_per_m2_per_kelvin=config.a_1_w_m2_k,
             a_2_in_watt_per_m2_per_kelvin_squared=config.a_2_w_m2_k,
         )
-        self.pump = SpeedControlledSolarPump(
+        #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift whose bounds
+        #: are the configured specific flows times the collector area.
+        self.pump = CirculationPump.target_lift_per_area(
             target_lift_in_kelvin=config.pump_target_lift_in_kelvin,
-            minimum_mass_flow_in_kg_per_hour_per_m2=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
-            maximum_mass_flow_in_kg_per_hour_per_m2=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
+            minimal_mass_flow_in_kg_per_hour_per_m2=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
+            maximal_mass_flow_in_kg_per_hour_per_m2=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
+            area_m2=self.area_m2,
         )
         # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
         # the weather it came from: its irradiance and its sun. It depends on the weather alone, not
@@ -1129,46 +1018,43 @@ class SolarThermalSystem(PhysicsComponent):
     @staticmethod
     def collector_circuit(
         *,
-        operating_point: CollectorOperatingPoint,
+        operating_point: PumpOperatingPoint,
         inlet_temperature_in_celsius: float,
         pump_runs: bool,
     ) -> hydronics.CircuitStep:
         """Return the collector circuit of one step: its flow, its supply and the heat its water carries.
 
-        While the pump runs and the collector has heat, the circuit runs the operating point's flow and supplies the
-        inlet plus the operating point's lift, so its water carries exactly the collector heat. Otherwise it moves no
-        water. For example, 2090 W at 0.025 kg/s with a 20 K lift at a 40 °C inlet supply 60 °C.
+        While the pump runs and the collector has heat (its operating point has a flow), the circuit runs the operating
+        point's flow and supplies its supply temperature, so its water carries exactly the collector heat. Otherwise
+        it moves no water. For example, 0.025 kg/s supplied at 60 °C from a 40 °C inlet carry 2090 W.
 
         Args:
-            operating_point: The heat, flow and lift the collector runs at with its pump running
-                (:meth:`SpeedControlledSolarPump.operating_point`).
+            operating_point: The flow and supply the collector runs at with its pump running (:meth:`operating_point`).
             inlet_temperature_in_celsius: The collector's inlet temperature, the storage's step mean, in °C.
             pump_runs: Whether the controller runs the solar pump.
 
         Returns:
             The circuit's mass flow, supply temperature and heat.
         """
-        if not pump_runs or operating_point.heat_in_watt <= 0:
+        if not pump_runs or operating_point.mass_flow_in_kg_per_second <= 0:
             return hydronics.CircuitStep.idle(t_return_c=inlet_temperature_in_celsius)
-        supply_temperature_in_celsius = inlet_temperature_in_celsius + operating_point.lift_in_kelvin
         return hydronics.CircuitStep(
             mass_flow_kg_per_s=operating_point.mass_flow_in_kg_per_second,
-            t_supply_c=supply_temperature_in_celsius,
+            t_supply_c=operating_point.supply_temperature_in_celsius,
             power_w=hydronics.circuit_power_w(
                 mass_flow_kg_per_s=operating_point.mass_flow_in_kg_per_second,
-                t_supply_c=supply_temperature_in_celsius,
+                t_supply_c=operating_point.supply_temperature_in_celsius,
                 t_return_c=inlet_temperature_in_celsius,
             ),
         )
 
     def operating_point(
         self, *, inlet_temperature_in_celsius: float, ambient_temperature_in_celsius: float
-    ) -> CollectorOperatingPoint:
-        """Return the heat, flow and lift the collector field runs at with its pump, at an inlet in this step's sun.
+    ) -> PumpOperatingPoint:
+        """Return the flow and the supply the collector field runs at with its pump, at an inlet in this step's sun.
 
-        It is :meth:`SpeedControlledSolarPump.operating_point` with the collector's curve and area at the irradiance
-        on the collector plane of the step last calculated (:attr:`plane_of_array_irradiance_w_m2`). Without heat the
-        point is idle, and the circuit then moves no water.
+        It is :meth:`collector_operating_point` with the collector's pump, curve and area at the irradiance on the
+        collector plane of the step last calculated (:attr:`plane_of_array_irradiance_w_m2`).
 
         Args:
             inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
@@ -1177,13 +1063,71 @@ class SolarThermalSystem(PhysicsComponent):
         Returns:
             The operating point.
         """
-        return self.pump.operating_point(
+        return self.collector_operating_point(
+            pump=self.pump,
             curve=self.collector_curve,
             inlet_temperature_in_celsius=inlet_temperature_in_celsius,
             ambient_temperature_in_celsius=ambient_temperature_in_celsius,
             irradiance_in_watt_per_m2=float(self.plane_of_array_irradiance_w_m2),
             area_m2=self.area_m2,
         )
+
+    @staticmethod
+    def collector_operating_point(
+        *,
+        pump: CirculationPump,
+        curve: FlatPlateCollectorCurve,
+        inlet_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        irradiance_in_watt_per_m2: float,
+        area_m2: float,
+    ) -> PumpOperatingPoint:
+        """Return the flow and the supply of a collector field and its temperature-sensor pump, at an inlet.
+
+        First the pump's target lift: the collector heat at a mean temperature half the target lift above the inlet,
+        and the pump's flow for that heat (:meth:`CirculationPump.operating_point`). Within the pump's bounds that is
+        the point, and the supply is the inlet plus the target lift. Outside them the pump runs the nearer bound, and
+        the collector's heat depends on its own outlet, so the collector evaluates its lift again at that flow
+        (:meth:`FlatPlateCollectorCurve.lift_at_mass_flow_in_kelvin`): below the target lift at the smallest flow,
+        above it at the largest. Without heat even at the bound the pump stands (:meth:`PumpOperatingPoint.standing`).
+        The heat is what the water carries, ``c m (T_sup - T_in)``. For example, 4 m² of the flat-plate preset at a
+        45 °C inlet in 20 °C air with a 20 K target lift and 5 to 40 kg/(m² h) run 0.0236 kg/s to 65 °C (1975 W) at
+        800 W/m², and the smallest flow, 0.0056 kg/s, with an 8.5 K lift (198 W) at 200 W/m².
+
+        Args:
+            pump: The collector's pump, a temperature-sensor pump whose bounds are for the whole field.
+            curve: The collector's efficiency curve.
+            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
+            area_m2: The collector area, in m².
+
+        Returns:
+            The operating point.
+        """
+        heat_in_watt = (
+            curve.heat_in_watt_per_m2(
+                inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+                inlet_to_mean_temperature_difference_in_kelvin=pump.target_lift_in_kelvin / 2,
+                ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+                irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
+            )
+            * area_m2
+        )
+        point = pump.operating_point(
+            heat_power_in_watt=max(heat_in_watt, 0.0), return_temperature_in_celsius=inlet_temperature_in_celsius
+        )
+        if not point.flow_is_clamped:
+            return point
+        lift_in_kelvin = curve.lift_at_mass_flow_in_kelvin(
+            inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+            irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
+            mass_flow_in_kg_per_second_per_m2=point.mass_flow_in_kg_per_second / area_m2,
+        )
+        if lift_in_kelvin <= 0.0:
+            return PumpOperatingPoint.standing(return_temperature_in_celsius=inlet_temperature_in_celsius)
+        return PumpOperatingPoint(point.mass_flow_in_kg_per_second, inlet_temperature_in_celsius + lift_in_kelvin, True)
 
     def sensor_temperature_at_start_of_step_in_celsius(
         self,
@@ -1220,7 +1164,7 @@ class SolarThermalSystem(PhysicsComponent):
             inlet_temperature_in_celsius=inlet_temperature_at_start_of_step_in_celsius,
             ambient_temperature_in_celsius=ambient_temperature_in_celsius,
         )
-        return inlet_temperature_at_start_of_step_in_celsius + operating_point.lift_in_kelvin
+        return operating_point.supply_temperature_in_celsius
 
     def i_simulate(
         self,

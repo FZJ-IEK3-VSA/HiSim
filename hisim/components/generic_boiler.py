@@ -51,6 +51,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim.energy_port import EnergyPort
+from hisim.subcomponents.base import Subcomponent
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HotWaterPriorityLimit,
@@ -539,7 +540,7 @@ class EfficiencyTestPoints:
 
 
 @dataclass(frozen=True)
-class CombustionEfficiencyCurve:
+class CombustionEfficiencyCurve(Subcomponent):
     """A boiler's combustion efficiency over its load and its return temperature, on its booking basis.
 
     The combustion efficiency is the heat into the water over the fuel power, on the calorific basis the boiler's
@@ -1082,13 +1083,13 @@ class BoilerEfficiencySources:
 
 
 @dataclass(frozen=True)
-class BurnerModulation:
+class BurnerModulation(Subcomponent):
     """A boiler burner's power band and its combustion efficiency across it.
 
     The burner modulates between a minimal and a maximal power. Its combustion efficiency, the share of the fuel
     power that becomes heat, follows the boiler's :class:`CombustionEfficiencyCurve` over the load ratio, the burner
-    power over the maximal power, and the return temperature of the circuit it fires. A value object built once from
-    the boiler's configuration, so the burner's laws are pure functions of their arguments. For example, a 2-20 kW
+    power over the maximal power, and the return temperature of the circuit it fires. A subcomponent built once from
+    the boiler's configuration, so its methods are pure functions of their arguments. For example, a 2-20 kW
     band on the current condensing gas curve burns at 0.945 at 10 kW on a 40 °C return.
     """
 
@@ -1150,7 +1151,7 @@ class BurnerModulation:
 
 
 @dataclass(frozen=True)
-class BoilerPump:
+class BoilerPump(Subcomponent):
     """The boiler's circulation pump: the largest water flow it moves through either of the boiler's circuits.
 
     The boiler sizes its flow so that the commanded heat leaves at the lift its controller asks for,
@@ -1278,7 +1279,7 @@ class BurnerState:
 
 
 @dataclass(frozen=True)
-class BurnerTimes:
+class BurnerTimes(Subcomponent):
     """A burner's minimum firing time and minimum pause: the device's protection against short cycling.
 
     A wood pellet or wood chip burner cannot simply switch off: once lit it runs through ignition, a stabilisation of
@@ -2217,7 +2218,7 @@ class GenericBoiler(PhysicsComponent):
         amended on 2026-10-22).
 
         Args:
-            burner: The burner's power band and efficiency law.
+            burner: The burner subcomponent: its power band and efficiency curve.
             control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
             mass_flow_in_kg_per_second: The circuit's flow the distribution system pumps, in kg/s.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
@@ -2281,7 +2282,7 @@ class GenericBoiler(PhysicsComponent):
         third of its heat and burns a third of its fuel.
 
         Args:
-            burner: The burner's power band and efficiency law.
+            burner: The burner subcomponent: its power band and efficiency curve.
             control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
             lift_in_kelvin: The lift the circuit runs at, in K, above 0: the one the controller asks for, raised by
                 :meth:`BoilerPump.lift_in_kelvin` to the rise the heat gives at the pump's largest flow, so the flow

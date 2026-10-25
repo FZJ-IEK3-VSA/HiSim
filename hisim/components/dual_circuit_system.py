@@ -6,6 +6,7 @@ import math
 from typing import ClassVar, Optional, Tuple
 
 from hisim.component import ComponentInput, SingleTimeStepValues
+from hisim.subcomponents.base import Subcomponent
 
 
 class HeatingMode(enum.Enum):
@@ -30,7 +31,7 @@ class SetTemperatureConfig:
     hysteresis_water_temperature_offset_in_celsius: Optional[float]
 
 
-class DiverterValve:
+class DiverterValve(Subcomponent):
     """Diverter valve for dual-circuit system.
 
     Diverter valve to switch between space heating and
@@ -224,7 +225,7 @@ class HotWaterPriorityTimer:
     charge_interrupted: bool = False
 
 
-class HotWaterPriorityLimit:
+class HotWaterPriorityLimit(Subcomponent):
 
     """The maximum time a hot-water charge has priority over space heating, and the space-heating interval after it.
 
@@ -339,7 +340,7 @@ class HotWaterPriorityLimit:
             )
 
 
-class DualCircuitHotWater:
+class DualCircuitHotWater(Subcomponent):
 
     """The hot-water rules a dual-circuit generator and its controller share: the lift a charge asks for, and the return.
 

@@ -47,6 +47,7 @@ from hisim.config import (
 from hisim.economics.facts import CostRelevance
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.base import Subcomponent
 
 
 @unique
@@ -64,7 +65,7 @@ class HeatDistributionSystemType(str, Enum):
 
 
 @dataclass(frozen=True)
-class EmitterDesign:
+class EmitterDesign(Subcomponent):
     """The design point of an emitter type: its supply and return temperatures on the coldest day, and its exponent.
 
     The emitter is what hands the circuit's heat to the room: a floor heating or a radiator. At the heating reference

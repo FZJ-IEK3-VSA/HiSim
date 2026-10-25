@@ -78,3 +78,58 @@ component whose class inherits none or more than one.
     are next touched.
 11. **A component's KPIs come from its own outputs and its own configuration.** A KPI does not re-derive another
     component's physics or repeat its constants; it reads that component's outputs or KPIs instead.
+
+## C. Subcomponents
+
+A **subcomponent** is a plain class that models part of a device's behaviour: a burner's modulation band, a
+boiler's circulation pump, a collector's efficiency curve, an emitter's design point. Agreed with the owner on
+2026-10-23 (bead hisim-repo-cleanup-o6a.28).
+
+- **Used inside a component.** A component builds its subcomponents from its own configuration and calls them in
+  its own code, in `i_simulate` and its helpers. A subcomponent has no ports and no lifecycle, and the simulator
+  never sees it, so it costs no convergence pass. It is tested alone, without building a simulation.
+- **Hierarchy: assembly -> component -> subcomponent.** An assembly wires components, a component owns its
+  subcomponents. A subcomponent never holds or calls a component.
+- **Classes are shared, instances are not.** Any component may use a subcomponent class: one circulation pump
+  class can serve the boiler, the heat pump, the solar collector and the heat distribution system. Each component
+  builds its own instances; an instance is never reachable from two components. Two components that must agree on
+  a value do so through the same configuration value, a sizing rule or a port, never through a shared object.
+- **Marked.** Every subcomponent class inherits `hisim.subcomponents.base.Subcomponent`, a marker without behaviour.
+  `tests/subcomponents/` checks that no subcomponent is also a component and that no instance is shared.
+- **Location.** A subcomponent used by two or more components lives in the package `hisim/subcomponents/`. One
+  used by a single component stays in that component's module and moves into the package when a second user
+  appears. `hisim/hydronics.py` stays where it is: plain physics functions and constants that subcomponents use.
+- **Imports.** A module in `hisim/subcomponents/` imports only the standard library, numpy, `hisim.config`,
+  `hisim.hydronics`, `hisim.loadtypes`, `hisim.units` and other subcomponent modules; never `hisim.component`,
+  `hisim.components`, the simulator, post-processing, `hisim.energy_system` or `hisim.renovisor`.
+  `tests/test_subcomponent_import_lint.py` checks it.
+- **Not a sizing law.** A sizing law (`hisim/config/laws.py`: `SizingLaw`, the `*_LAW` constants) says how a
+  configuration value follows from the surrounding system before the run. It is a different concept and keeps its
+  name.
+- **Not every helper class is a subcomponent.** Per-step results (`BoilerFiring`, `CollectorOperatingPoint`,
+  `HplibResult`), state records (`HotWaterPriorityTimer`, `HeatPumpRunTimers`), cache keys and input bundles
+  (`PvSeriesInputs`), channel groups (`BoilerCircuitChannels`) and infrastructure (`PylpgWorkspace`) are not.
+
+### Interface
+
+- **Plain values in.** Arguments are plain values, keyword-only, with their units in their names
+  (`heat_power_in_watt=...`). No `SingleTimeStepValues`, no `ComponentInput` or `ComponentOutput`, no simulation
+  parameters object: the component reads its inputs and passes the values.
+- **Built once, checked when built.** A component builds its subcomponents once, through classmethod factories, from
+  values it got from its configuration or a sizing rule (`BoilerPump.sized_for(...)`). `__post_init__` refuses an
+  invalid setting, so a bad subcomponent fails when its component is built, not in the first step.
+- **Stateless.** A subcomponent holds no state across steps. State that changes from step to step stays in the
+  component's state dataclass, and the component passes it in.
+
+### Performance
+
+A subcomponent is called in every pass of every step, so its result objects are part of the hot path. Measured on
+2026-10-23 with Python 3.12, the cost per call of returning a three-field result on top of a pump-sized law of
+179 ns: a tuple +28 ns, a slots dataclass +110 ns, a `NamedTuple` +152 ns, a frozen dataclass +271 ns, a frozen
+dataclass built with keywords +361 ns (its `__init__` goes through `object.__setattr__`). Hence:
+
+1. **Instances are frozen dataclasses.** They are built once, so their construction cost does not matter.
+2. **Per-call results in the hot path are `NamedTuple`s**: immutable, named and typed, at about half the cost of a
+   frozen dataclass. A single value is returned as a plain float, its unit in the method name
+   (`lift_in_kelvin(...)`).
+3. **No frozen dataclass is constructed per call in an `i_simulate` path** (`coding_style.md`, §2 rule 12).

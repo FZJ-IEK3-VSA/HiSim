@@ -31,6 +31,7 @@ from hisim.config import (
 from hisim import hydronics, loadtypes
 from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, PartLoadControl
+from hisim.subcomponents.base import Subcomponent
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -104,13 +105,13 @@ def flat_plate_collector_heat_w_m2(
 
 
 @dataclass(frozen=True)
-class FlatPlateCollectorCurve:
+class FlatPlateCollectorCurve(Subcomponent):
 
-    """A flat-plate collector's efficiency curve, the law that turns irradiance into heat at a mean temperature.
+    """A flat-plate collector's efficiency curve, the subcomponent that turns irradiance into heat at a mean temperature.
 
     The efficiency is ``eta_0 - a_1 dT / G - a_2 dT^2 / G`` with ``dT`` the collector's mean temperature (the inlet
     plus the inlet-to-mean difference, half the lift from inlet to outlet) above the air and ``G`` the irradiance on
-    its plane; a value object built once from the configuration, so the law is a pure function of its arguments.
+    its plane; a subcomponent built once from the configuration, so each method is a pure function of its arguments.
     """
 
     #: The optical efficiency, dimensionless.
@@ -267,7 +268,7 @@ class CollectorOperatingPoint:
 
 
 @dataclass(frozen=True)
-class SpeedControlledSolarPump:
+class SpeedControlledSolarPump(Subcomponent):
     """The solar circuit's speed-controlled pump: the flow it runs for a collector, per m² of collector.
 
     The pump runs the flow that lifts the water by its target lift, ``Q / (c lift)`` with ``Q`` the collector heat at

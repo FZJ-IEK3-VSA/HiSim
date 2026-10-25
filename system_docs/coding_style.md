@@ -28,9 +28,9 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
   Reuse alone does not justify a function: a single call with renamed or filled-in arguments stays a wrapper,
   however many callers it has. An expression a reader understands at a glance stays inline where it is used: a
   comparison, a sum or a product, a rounding, a single call with renamed arguments, one object built by a
-  factory. It gets a comment if the reason is not obvious, and it is tested
-  through the function that uses it. `i_simulate` does not have to read as a list of calls. A function is never
-  split off only so that a test can reach it, or only to meet the line limit (§2, rule 1).
+  factory. It gets a comment if the reason is not obvious, and it is tested through the function that uses it.
+  `i_simulate` does not have to read as a list of calls. A function is never split off only so that a test can
+  reach it, or only to meet the line limit (§2, rule 1).
 
   ```python
   # Not like this: a function, used once, whose docstring is twelve times longer than its code

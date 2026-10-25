@@ -509,7 +509,7 @@ class SolarThermalSystem(PhysicsComponent):
         )
         #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift whose bounds
         #: are the configured specific flows times the collector area.
-        self.pump = CirculationPump.target_lift_per_area(
+        self.pump = CirculationPump.flow_matches_fixed_lift_per_area(
             target_lift_in_kelvin=config.pump_target_lift_in_kelvin,
             minimal_mass_flow_in_kg_per_hour_per_m2=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
             maximal_mass_flow_in_kg_per_hour_per_m2=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2,

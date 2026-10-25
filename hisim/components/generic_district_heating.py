@@ -265,7 +265,7 @@ class DistrictHeating(PhysicsComponent):
         Returns:
             The pump.
         """
-        return CirculationPump.target_lift(target_lift_in_kelvin=cls.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
+        return CirculationPump.flow_matches_fixed_lift(target_lift_in_kelvin=cls.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
 
     def __init__(
         self,

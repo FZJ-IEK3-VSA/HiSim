@@ -200,7 +200,7 @@ class HeatDistribution(cp.PhysicsComponent):
         #: The circuit's own pump, a constant pump at the design flow, where it pumps that flow itself; None where it
         #: reads the flow its heat generator pumps.
         self.pump: Optional[CirculationPump] = (
-            CirculationPump.constant(
+            CirculationPump.constant_flow(
                 design_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )
             if self.pumps_its_design_flow

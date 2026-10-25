@@ -438,7 +438,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         #: The secondary side's pump in the fixed-flow modes (a storage in series, or none): a constant pump at the
         #: nominal flow; None for a machine without a nominal flow, which runs hplib's flow only.
         self.fixed_flow_pump: Optional[CirculationPump] = (
-            CirculationPump.constant(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
+            CirculationPump.constant_flow(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
         )
 
         self.fluid_primary_side = config.fluid_primary_side

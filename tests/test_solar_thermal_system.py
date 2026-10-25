@@ -543,7 +543,7 @@ class CollectorPhysics:
         Returns:
             The pump, its bounds for the whole field.
         """
-        return CirculationPump.target_lift_per_area(
+        return CirculationPump.flow_matches_fixed_lift_per_area(
             target_lift_in_kelvin=cls.CONFIG.pump_target_lift_in_kelvin,
             minimal_mass_flow_in_kg_per_hour_per_m2=cls.CONFIG.pump_minimum_mass_flow_in_kg_per_hour_per_m2,
             maximal_mass_flow_in_kg_per_hour_per_m2=cls.CONFIG.pump_maximum_mass_flow_in_kg_per_hour_per_m2,
@@ -730,7 +730,7 @@ def test_a_constant_flow_pump_runs_one_flow_and_its_lift_follows_the_heat(irradi
 
     A constant-flow pump that still ran the target lift's flow would ignore its own speed.
     """
-    pump = CirculationPump.target_lift_per_area(
+    pump = CirculationPump.flow_matches_fixed_lift_per_area(
         target_lift_in_kelvin=20.0,
         minimal_mass_flow_in_kg_per_hour_per_m2=30.0,
         maximal_mass_flow_in_kg_per_hour_per_m2=30.0,

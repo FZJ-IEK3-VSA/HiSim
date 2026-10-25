@@ -24,9 +24,11 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
 
 - **A function of its own only for something worth testing.** A calculation becomes a function of its own, a
   static function above all, only when it has something worth testing on its own -- more than one step, a branch,
-  a clamp, an edge case -- or when it is used in two or more places. An expression a reader understands at a
-  glance stays inline where it is used: a comparison, a sum or a product, a rounding, a single call with renamed
-  arguments, one object built by a factory. It gets a comment if the reason is not obvious, and it is tested
+  a clamp, an edge case -- or when it holds knowledge that two or more places use: a formula, a check, a constant.
+  Reuse alone does not justify a function: a single call with renamed or filled-in arguments stays a wrapper,
+  however many callers it has. An expression a reader understands at a glance stays inline where it is used: a
+  comparison, a sum or a product, a rounding, a single call with renamed arguments, one object built by a
+  factory. It gets a comment if the reason is not obvious, and it is tested
   through the function that uses it. `i_simulate` does not have to read as a list of calls. A function is never
   split off only so that a test can reach it, or only to meet the line limit (§2, rule 1).
 
@@ -171,6 +173,7 @@ the class docstring ("Strategy for the heating curve: ..."), so readers and auto
 | **Temporal coupling** | Methods that only work if called in a particular order | The building postpones its weather setup to the first `i_simulate`, because most setups add it before the weather |
 | **Speculative generality** | Options, hooks and layers without a current user | (YAGNI, §1) |
 | **Hidden control flow** | Imports and calls by string | `importlib.import_module` in 8 component modules |
+| **Mode flag with sentinel fields** | One class serves several modes through an Enum: fields only some modes read (NaN or None for "not used"), a constructor check of which field belongs to which mode, optional arguments only some modes read, and an `if`/`elif` over the mode in every call. A missing argument then gives NaN instead of an error. One class per mode instead (Strategy): each has only its own fields and required arguments, and what they share sits in one helper | (2026-10-25) `CirculationPump` with `PumpMode` in #1141 before its rework |
 | **Trivial wrapper** | A function used once whose body is one expression or one call, with a docstring many times longer than its code: the reader jumps away and reads a dozen lines to learn one (§1) | (2026-10-25) `pump_ran_as_reported` (`return ratio_run > 0.0`) in `solar_thermal_system.py`, `pump_stopped_by_the_valve` (`return valve_state == 0`) in `heat_distribution_system.py` |
 
 ### Testing state machines

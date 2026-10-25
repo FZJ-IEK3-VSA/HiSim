@@ -6,12 +6,11 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
 
 ## 1. Design: testable, clean and simple
 
-- **Business logic goes into pure functions.** A calculation -- a physical law, a control rule, a cost formula, a
-  unit conversion -- lives in a function whose result depends only on its arguments: a `@staticmethod` on the
+- **Business logic goes into pure functions.** A calculation with logic of its own -- a physical law, a control
+  rule, a cost formula -- lives in a function whose result depends only on its arguments: a `@staticmethod` on the
   class it belongs to, or a function in a library module such as `hisim/hydronics.py`. It reads no `self` state,
-  no `stsv`, no file and no `SimRepository`, and it changes nothing. A component's `i_simulate` only gathers its
-  inputs and state, calls these functions and publishes their results. Each such function is tested in a unit
-  test, edge cases and invalid input included, without building a simulation.
+  no `stsv`, no file and no `SimRepository`, and it changes nothing. A component's `i_simulate` gathers its inputs
+  and state, calls these functions and publishes their results.
 
   ```python
   def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
@@ -23,12 +22,40 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
       stsv.set_output_value(self.end_temperature_channel, end_temperature_in_celsius)
   ```
 
+- **A function of its own only for something worth testing.** A calculation becomes a function of its own, a
+  static function above all, only when it has something worth testing on its own -- more than one step, a branch,
+  a clamp, an edge case -- or when it holds knowledge that two or more places use: a formula, a check, a constant.
+  Reuse alone does not justify a function: a single call with renamed or filled-in arguments stays a wrapper,
+  however many callers it has. An expression a reader understands at a glance stays inline where it is used: a
+  comparison, a sum or a product, a rounding, a single call with renamed arguments, one object built by a
+  factory. It gets a comment if the reason is not obvious, and it is tested through the function that uses it.
+  `i_simulate` does not have to read as a list of calls. A function is never split off only so that a test can
+  reach it, or only to meet the line limit (§2, rule 1).
+
+  ```python
+  # Not like this: a function, used once, whose docstring is twelve times longer than its code
+  @staticmethod
+  def pump_stopped_by_the_valve(valve_state: float) -> bool:
+      """Return whether the controller's valve state stops the circuit's own pump. (... 12 lines ...)"""
+      return valve_state == 0
+
+  # Like this, inline where it is used
+  pump_runs = valve_state != 0  # the controller publishes 0 for a shut valve
+  ```
+
+- **Every static function has tests of its own.** In balance with the rule above: a static function exists because
+  something in it is worth testing, so it has unit tests that call it directly -- the normal case, its edges and
+  its invalid input -- without building a simulation. A static function without such tests is either missing its
+  tests or should not be a function; a review asks for one or the other.
+
 - **Part of a device's behaviour is a subcomponent.** A burner's modulation, a pump's largest flow or a collector's
   efficiency curve is a plain class the component builds once from its configuration and calls in `i_simulate`,
   marked by inheriting `hisim.subcomponents.base.Subcomponent`. It takes plain values, keyword-only, with units in
   their names, holds no state across steps and is tested alone. The definition, its location and its import and
   performance rules are in `component_design_principles.md`, section C.
-- **Clean Code.** A function does one thing, at one level of abstraction, and is short enough to read at once.
+- **Clean Code.** A function does one thing, at one level of abstraction, and is short enough to read at once. A
+  comparison or a product next to method calls is not a lower level of abstraction that needs a function of its
+  own.
   Names reveal intent. No flag argument that switches between two behaviours: write two functions. A function
   whose name says it returns something does not also change state. Early returns instead of deep nesting.
 - **SOLID**, as far as it is reasonable:
@@ -64,6 +91,8 @@ violations are fixed bead by bead, never in one big rewrite.
 1. **Small units.** A function has at most about 50 lines of code (hard limit 100), a file at most 750 lines of
    code, and a function takes at most 6 arguments; more arguments become a parameter object (a dataclass). Only
    code counts: comments, docstrings and blank lines do not, so documentation is never cut to meet a limit.
+   Splitting off a function only to meet the limit is no fix: the part split off must make sense on its own and be
+   worth testing (§1).
    A 468-line `i_simulate` can neither be unit-tested nor reviewed. CI: a code-line count and pylint's argument
    and branch checks, with a baseline (hisim-repo-cleanup-o6a.12).
 2. **Leave it better (the boy-scout rule).** Whoever changes a function leaves it cleaner than they found it:
@@ -144,6 +173,8 @@ the class docstring ("Strategy for the heating curve: ..."), so readers and auto
 | **Temporal coupling** | Methods that only work if called in a particular order | The building postpones its weather setup to the first `i_simulate`, because most setups add it before the weather |
 | **Speculative generality** | Options, hooks and layers without a current user | (YAGNI, §1) |
 | **Hidden control flow** | Imports and calls by string | `importlib.import_module` in 8 component modules |
+| **Mode flag with sentinel fields** | One class serves several modes through an Enum: fields only some modes read (NaN or None for "not used"), a constructor check of which field belongs to which mode, optional arguments only some modes read, and an `if`/`elif` over the mode in every call. A missing argument then gives NaN instead of an error. One class per mode instead (Strategy): each has only its own fields and required arguments, and what they share sits in one helper | (2026-10-25) `CirculationPump` with `PumpMode` in #1141 before its rework |
+| **Trivial wrapper** | A function used once whose body is one expression or one call, with a docstring many times longer than its code: the reader jumps away and reads a dozen lines to learn one (§1) | (2026-10-25) `pump_ran_as_reported` (`return ratio_run > 0.0`) in `solar_thermal_system.py`, `pump_stopped_by_the_valve` (`return valve_state == 0`) in `heat_distribution_system.py` |
 
 ### Testing state machines
 
@@ -227,8 +258,11 @@ The order:
 4. **Why**: one or two short sentences, if the reason is not obvious.
 5. **Args / Returns / Raises**: plain facts, one consequence each.
 
-Together that is at least two to three sentences for every class and function: enough to state its full
-purpose and how it fits in.
+Together that is at least two to three sentences for every class and for every function with logic of its own:
+enough to state its full purpose and how it fits in. A short function that is still justified -- a property, a
+predicate used in several places, a lifecycle hook -- gets one plain sentence with its units; the example and the
+Args section are left out where the signature already says everything. A docstring many times longer than the
+code it describes is a sign that the function should not exist (§1).
 
 Rules:
 

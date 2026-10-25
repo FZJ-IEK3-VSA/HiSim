@@ -1120,8 +1120,10 @@ class SolarThermalSystem(PhysicsComponent):
             mass_flow_in_kg_per_second_per_m2=point.mass_flow_in_kg_per_second / area_m2,
         )
         if lift_in_kelvin <= 0.0:
-            return PumpOperatingPoint(0.0, inlet_temperature_in_celsius, False)
-        return PumpOperatingPoint(point.mass_flow_in_kg_per_second, inlet_temperature_in_celsius + lift_in_kelvin, True)
+            return PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=inlet_temperature_in_celsius, flow_is_clamped=False)
+        return PumpOperatingPoint(
+            mass_flow_in_kg_per_second=point.mass_flow_in_kg_per_second, supply_temperature_in_celsius=inlet_temperature_in_celsius + lift_in_kelvin, flow_is_clamped=True
+        )
 
     def sensor_temperature_at_start_of_step_in_celsius(
         self,

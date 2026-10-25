@@ -672,7 +672,7 @@ def test_the_pump_runs_the_target_lift_within_its_bounds_and_its_water_carries_t
         area_m2=area_m2,
     )
     if point.mass_flow_in_kg_per_second == 0.0:
-        assert point == PumpOperatingPoint(0.0, tank_c, False)
+        assert point == PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=tank_c, flow_is_clamped=False)
         return
     least_kg_s = pump.minimal_mass_flow_in_kg_per_second
     most_kg_s = pump.maximal_mass_flow_in_kg_per_second
@@ -1038,9 +1038,9 @@ def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the
 ) -> None:
     """A circuit that moved water without heat, or with the pump off, would cool the tank or book phantom heat."""
     if heat_in_watt > 0:
-        point = PumpOperatingPoint(0.025, 60.0, False)
+        point = PumpOperatingPoint(mass_flow_in_kg_per_second=0.025, supply_temperature_in_celsius=60.0, flow_is_clamped=False)
     else:
-        point = PumpOperatingPoint(0.0, 40.0, False)
+        point = PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=40.0, flow_is_clamped=False)
     circuit = solar_thermal_system.SolarThermalSystem.collector_circuit(
         operating_point=point, inlet_temperature_in_celsius=40.0, pump_runs=pump_runs
     )

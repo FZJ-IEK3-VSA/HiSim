@@ -13,7 +13,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 from dataclasses import dataclass, field
 import math
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import ClassVar, Dict, List, NamedTuple, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -21,6 +21,7 @@ from dataclasses_json import dataclass_json
 from hisim import hydronics
 from hisim import log
 from hisim import loadtypes as lt
+from hisim.explicit_state_controller import ExplicitStateController
 from hisim.part_load import PartLoadCommand, PartLoadControl, StartOfStepPartLoadControl
 from hisim.components.configuration import (
     PhysicsConfig,
@@ -2722,47 +2723,43 @@ class GenericBoilerControllerConfig(ConfigBase):
         )
 
 
-class GenericBoilerControllerState:
-    """Data class that saves the state of the controller."""
+class GenericBoilerControllerState(NamedTuple):
+    """The whole memory of the boiler's controller: its decision, the timers it carries and the outputs it publishes.
 
-    def __init__(
-        self,
-        on_off: int,
-        activation_time_step: int,
-        deactivation_time_step: int,
-        percentage: float,
-    ) -> None:
-        """Initializes the heat pump controller state."""
-        self.on_off: int = on_off
-        self.activation_time_step: int = activation_time_step
-        self.deactivation_time_step: int = deactivation_time_step
-        self.percentage: float = percentage
+    :class:`GenericBoilerController` keeps nothing else between passes or steps
+    (:class:`hisim.explicit_state_controller.ExplicitStateController`). For example, a controller that has run a hot-water charge at
+    full power for one 900 s step holds ``mode=HeatingMode.DOMESTIC_HOT_WATER``, ``control_signal=1.0`` and a
+    priority timer with ``charge_time_in_seconds=900.0``. It is a NamedTuple, so a pass builds a new state instead of
+    changing the old one, and building it costs about as much as a tuple.
+    """
 
-    def clone(self) -> "GenericBoilerControllerState":
-        """Copies the current instance."""
-        return GenericBoilerControllerState(
-            on_off=self.on_off,
-            activation_time_step=self.activation_time_step,
-            deactivation_time_step=self.deactivation_time_step,
-            percentage=self.percentage,
-        )
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
-
-    def activate(self, timestep: int) -> None:
-        """Activates the heat pump and remembers the time step."""
-        self.on_off = 1
-        self.activation_time_step = timestep
-
-    def deactivate(self, timestep: int) -> None:
-        """Deactivates the heat pump and remembers the time step."""
-        self.on_off = 0
-        self.deactivation_time_step = timestep
+    #: The operating mode: off, space heating or a hot-water charge.
+    mode: HeatingMode
+    #: Where a hot-water charge stands against its maximum priority time (:class:`HotWaterPriorityLimit`).
+    hot_water_priority_timer: HotWaterPriorityTimer
+    #: The step the burner was last switched on, from which the minimum running time counts. Nothing sets it yet: the
+    #: controller this one replaces never switched its old state on or off, so it stays at 0 and the minimum times act
+    #: only at the start of a run. Kept as it was so that this change moves only the forced steps.
+    activation_timestep: int
+    #: The step the burner was last switched off, from which the minimum resting time counts; 0 for the same reason.
+    deactivation_timestep: int
+    #: The control signal to the boiler: the fraction of its maximal thermal power, from 0 to 1.
+    control_signal: float
+    #: The lift the boiler is asked for, in K.
+    temperature_delta_in_kelvin: float
+    #: The fraction of the step the hot-water charge runs, from 0 to 1.
+    requested_part_load_ratio_dhw: float
+    #: The fraction of the step the space-heating charge runs, from 0 to 1.
+    requested_part_load_ratio_sh: float
+    #: The buffer temperature a space-heating charge aims at, the heating curve's supply temperature, in °C.
+    target_temperature_sh_in_celsius: float
+    #: The control signal of a space-heating charge in the rest of a hot-water step, from 0 to 1.
+    control_signal_for_space_heating_remainder: float
+    #: The lift of that charge, in K.
+    temperature_delta_for_space_heating_remainder_in_kelvin: float
 
 
-class GenericBoilerController(L1ControllerComponent):
+class GenericBoilerController(ExplicitStateController[GenericBoilerControllerState], L1ControllerComponent):
     """Generic Boiler Controller.
 
     It takes data from other
@@ -2789,6 +2786,11 @@ class GenericBoilerController(L1ControllerComponent):
     boiler does not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time.
     These times act on the controller's mode; the burner's own minimum firing time and minimum pause, which act on
     whether it burns, are the boiler's (:class:`BurnerTimes`).
+
+    The controller keeps its whole memory in one :class:`GenericBoilerControllerState` and leaves saving, restoring
+    and forcing to :class:`hisim.explicit_state_controller.ExplicitStateController`: :meth:`decide` returns the state of a pass,
+    :meth:`publish` writes its outputs, and a forced pass republishes the state of the last unforced pass
+    (:meth:`publish_forced`), which is also the state the step commits.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -2874,13 +2876,6 @@ class GenericBoilerController(L1ControllerComponent):
         self.minimum_resting_time_in_timesteps = self.whole_timesteps(
             "minimum_resting_time_in_seconds", self.config.minimum_resting_time_in_seconds
         )
-
-        self.state: GenericBoilerControllerState = GenericBoilerControllerState(0, 0, 0, 0)
-        # the hot-water priority timer at the end of the last unforced pass, and at the start of the step
-        self.hot_water_priority_timer = HotWaterPriorityTimer()
-        self.hot_water_priority_timer_at_start_of_step = HotWaterPriorityTimer()
-
-        self.build()
 
         # input channel
         self.water_temperature_space_heating_input_channel: ComponentInput = self.add_input(
@@ -2990,9 +2985,6 @@ class GenericBoilerController(L1ControllerComponent):
                 "the step."
             ),
         )
-
-        self.controller_mode: HeatingMode
-        self.previous_controller_mode: HeatingMode
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
@@ -3121,33 +3113,29 @@ class GenericBoilerController(L1ControllerComponent):
             ),
         ]
 
-    def build(
-        self,
-    ) -> None:
-        """Build function.
+    def initial_state(self) -> GenericBoilerControllerState:
+        """Return the state before the first step: off, an idle priority timer and every output 0.
 
-        The function sets important constants and parameters for the calculations.
+        Returns:
+            The initial state.
         """
-        # Sth
-        self.controller_mode = HeatingMode.OFF
-        self.previous_controller_mode = self.controller_mode
+        return GenericBoilerControllerState(
+            mode=HeatingMode.OFF,
+            hot_water_priority_timer=HotWaterPriorityTimer(),
+            activation_timestep=0,
+            deactivation_timestep=0,
+            control_signal=0.0,
+            temperature_delta_in_kelvin=0.0,
+            requested_part_load_ratio_dhw=0.0,
+            requested_part_load_ratio_sh=0.0,
+            target_temperature_sh_in_celsius=0.0,
+            control_signal_for_space_heating_remainder=0.0,
+            temperature_delta_for_space_heating_remainder_in_kelvin=0.0,
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
-
-    def i_save_state(self) -> None:
-        """Save the current state: the mode, and the hot-water priority timer the step starts from.
-
-        Every unforced pass decides the step from the timer saved here; a forced pass keeps the timer of the last
-        unforced pass, as it keeps that pass's outputs, so the timer always matches what the controller published.
-        """
-        self.previous_controller_mode = self.controller_mode
-        self.hot_water_priority_timer_at_start_of_step = self.hot_water_priority_timer
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_mode = self.previous_controller_mode
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -3159,79 +3147,133 @@ class GenericBoilerController(L1ControllerComponent):
         """Write important variables to report."""
         return self.config.get_string_dict()
 
-    def i_simulate(
-        self,
-        timestep: int,
-        stsv: SingleTimeStepValues,
-        force_convergence: bool,
-    ) -> None:
-        """Decide the boiler's mode and power on the stores' start temperatures, and its requested part-load ratios.
+    def decide(
+        self, *, timestep: int, stsv: SingleTimeStepValues, state: GenericBoilerControllerState
+    ) -> GenericBoilerControllerState:
+        """Decide the boiler's mode and power on the stores' start temperatures, and the part-load ratios of both charges.
 
-        Under ``force_convergence`` every output keeps the value of the last pass, except the requested part-load
-        ratios above the threshold (the space-heating one only with the buffer wired): each port then carries the
-        actual ratio the boiler reports it ran with, so the charge stops changing (``publish_held``). At and below the
-        threshold the requested ratios keep their last values too.
+        For example, a tank that starts at 45 °C, below its 50 °C switch-on point, gives a hot-water charge at the
+        lift to the 70 °C supply set temperature. The decision is returned as a new state and published by
+        :meth:`publish`; a forced pass publishes the state of the last unforced pass (:meth:`publish_forced`).
+
+        Args:
+            timestep: The step.
+            stsv: The step's values, to read the inputs from.
+            state: The state at the start of the step.
+
+        Returns:
+            The new state.
         """
+        buffer_start_temperature_in_celsius = stsv.get_input_value(self.water_temperature_space_heating_input_channel)
+        tank_start_temperature_in_celsius: Optional[float] = None
+        if self.config.with_domestic_hot_water_preparation:
+            tank_start_temperature_in_celsius = stsv.get_input_value(self.water_temperature_dhw_input_channel)
+        supply_temperature_set_in_celsius = stsv.get_input_value(self.supply_temperature_set_channel)
+        is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
 
-        if force_convergence:
-            self.dhw_part_load.publish_held(stsv)
-            self.space_heating_part_load.publish_held(stsv)
-        else:
-            # Retrieves inputs
-            water_temperature_input_from_space_heating_water_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_space_heating_input_channel
-            )
-
-            water_temperature_input_from_dhw_water_storage_in_celsius = None
-            if self.config.with_domestic_hot_water_preparation:
-                water_temperature_input_from_dhw_water_storage_in_celsius = stsv.get_input_value(
-                    self.water_temperature_dhw_input_channel
-                )
-
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.supply_temperature_set_channel
-            )
-
-            control_signal, temperature_delta = self.determine_operating_mode(
-                stsv.get_input_value(self.heating_season_channel) > 0.5,
-                water_temperature_input_from_space_heating_water_storage_in_celsius,
-                water_temperature_input_from_dhw_water_storage_in_celsius,
-                heating_flow_temperature_from_heat_distribution_system,
-                timestep,
-            )
-
-            stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
-            stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
-            stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
-            stsv.set_output_value(
-                self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
-            )
-            requested_hot_water_ratio = self.dhw_part_load.publish(
+        mode, timer = self.determine_operating_mode(
+            state,
+            timestep=timestep,
+            is_heating_season=is_heating_season,
+            buffer_start_temperature_in_celsius=buffer_start_temperature_in_celsius,
+            tank_start_temperature_in_celsius=tank_start_temperature_in_celsius,
+            supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
+        )
+        control_signal, temperature_delta_in_kelvin = self.burner_command(
+            mode,
+            buffer_start_temperature_in_celsius=buffer_start_temperature_in_celsius,
+            tank_start_temperature_in_celsius=tank_start_temperature_in_celsius,
+            supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
+        )
+        requested_hot_water_ratio = self.dhw_part_load.next_requested_ratio(
+            stsv,
+            device_runs=mode == HeatingMode.DOMESTIC_HOT_WATER,
+            start_temperature_in_celsius=tank_start_temperature_in_celsius or 0.0,
+            target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+        )
+        requested_space_heating_ratio, control_signal, temperature_delta_in_kelvin, remainder_signal, remainder_lift_in_kelvin = (
+            self.space_heating_charge(
                 stsv,
-                device_runs=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
-                start_temperature_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius or 0.0,
-                target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
-            )
-            self.publish_space_heating_part_load(
-                stsv,
-                is_heating_season=stsv.get_input_value(self.heating_season_channel) > 0.5,
-                buffer_start_temperature_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-                supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                mode=mode,
+                is_heating_season=is_heating_season,
+                buffer_start_temperature_in_celsius=buffer_start_temperature_in_celsius,
+                supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
                 requested_hot_water_ratio=requested_hot_water_ratio,
-                temperature_delta_in_kelvin=temperature_delta,
+                control_signal=control_signal,
+                temperature_delta_in_kelvin=temperature_delta_in_kelvin,
             )
+        )
+        return GenericBoilerControllerState(
+            mode=mode,
+            hot_water_priority_timer=timer,
+            activation_timestep=state.activation_timestep,
+            deactivation_timestep=state.deactivation_timestep,
+            control_signal=control_signal,
+            temperature_delta_in_kelvin=temperature_delta_in_kelvin,
+            requested_part_load_ratio_dhw=requested_hot_water_ratio,
+            requested_part_load_ratio_sh=requested_space_heating_ratio,
+            target_temperature_sh_in_celsius=supply_temperature_set_in_celsius,
+            control_signal_for_space_heating_remainder=remainder_signal,
+            temperature_delta_for_space_heating_remainder_in_kelvin=remainder_lift_in_kelvin,
+        )
 
-    def publish_space_heating_part_load(
+    def publish(self, *, stsv: SingleTimeStepValues, state: GenericBoilerControllerState) -> None:
+        """Write the outputs that belong to ``state``: the boiler's commands, both part-load ratios and their targets.
+
+        The hot-water supply set temperature and the hot-water target are fixed by the configuration, so they are
+        not part of the state.
+
+        Args:
+            stsv: The step's values, to write the outputs to.
+            state: The state whose outputs are written.
+        """
+        stsv.set_output_value(self.control_signal_to_generic_boiler_channel, state.control_signal)
+        stsv.set_output_value(self.operating_mode_channel, state.mode.value)
+        stsv.set_output_value(self.temperature_delta_channel, state.temperature_delta_in_kelvin)
+        stsv.set_output_value(
+            self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
+        )
+        stsv.set_output_value(self.dhw_part_load.requested_ratio_channel, state.requested_part_load_ratio_dhw)
+        stsv.set_output_value(self.dhw_part_load.target_channel, self.warm_water_temperature_aim_in_celsius)
+        stsv.set_output_value(self.space_heating_part_load.requested_ratio_channel, state.requested_part_load_ratio_sh)
+        if self.space_heating_part_load.target_channel is not None:
+            stsv.set_output_value(self.space_heating_part_load.target_channel, state.target_temperature_sh_in_celsius)
+        stsv.set_output_value(
+            self.control_signal_for_space_heating_remainder_channel, state.control_signal_for_space_heating_remainder
+        )
+        stsv.set_output_value(
+            self.temperature_delta_for_space_heating_remainder_channel,
+            state.temperature_delta_for_space_heating_remainder_in_kelvin,
+        )
+
+    def publish_forced(self, *, stsv: SingleTimeStepValues, state: GenericBoilerControllerState) -> None:
+        """Write the outputs of a forced pass: those of ``state``, except the part-load ratios above the threshold.
+
+        Above the threshold each ratio becomes the ratio the boiler reports it ran with (the space-heating one only
+        with the buffer wired), so the charge stops changing; the state keeps the ratio its pass decided. At and below
+        the threshold the ratios are the state's, like every other output.
+
+        Args:
+            stsv: The step's values.
+            state: The state of the last unforced pass.
+        """
+        self.publish(stsv=stsv, state=state)
+        self.dhw_part_load.publish_held(stsv)
+        self.space_heating_part_load.publish_held(stsv)
+
+    def space_heating_charge(
         self,
         stsv: SingleTimeStepValues,
         *,
+        mode: HeatingMode,
         is_heating_season: bool,
         buffer_start_temperature_in_celsius: float,
         supply_temperature_set_in_celsius: float,
         requested_hot_water_ratio: float,
+        control_signal: float,
         temperature_delta_in_kelvin: float,
-    ) -> None:
-        """Publish the requested space-heating ratio, and the commands of its two special cases.
+    ) -> Tuple[float, float, float, float, float]:
+        """Return the fraction of the step the space-heating charge runs, and the commands of its two special cases.
 
         At and below the part-load threshold, or without a buffer, a space-heating step runs whole, as always. Above it
         the fraction ends the buffer at the heating curve's supply temperature
@@ -3246,33 +3288,37 @@ class GenericBoilerController(L1ControllerComponent):
           at full power, with the lift to the supply temperature.
 
         Args:
-            stsv: The step's values.
+            stsv: The step's values, to read the part-load inputs from.
+            mode: The operating mode decided in this pass.
             is_heating_season: Whether the heating curve names a heating day.
             buffer_start_temperature_in_celsius: The buffer's start-of-step temperature, in °C.
             supply_temperature_set_in_celsius: The heating curve's supply temperature, the charge's target, in °C.
-            requested_hot_water_ratio: The requested hot-water ratio published in this pass, from 0 to 1.
-            temperature_delta_in_kelvin: The lift :meth:`determine_operating_mode` asked for, in K.
+            requested_hot_water_ratio: The hot-water part-load ratio decided in this pass, from 0 to 1.
+            control_signal: The control signal :meth:`burner_command` gave, from 0 to 1.
+            temperature_delta_in_kelvin: The lift :meth:`burner_command` asked for, in K.
+
+        Returns:
+            The space-heating ratio, the control signal and the lift for the boiler (full power and the small lift for a
+            charge above the target, else the ones given), and the remainder's control signal and lift in K.
         """
         part = self.space_heating_part_load
         remainder_signal, remainder_lift_in_kelvin = 0.0, 0.0
-        if self.controller_mode == HeatingMode.SPACE_HEATING:
-            requested_space_heating_ratio = part.publish_raising(
+        if mode == HeatingMode.SPACE_HEATING:
+            requested_space_heating_ratio = part.next_requested_raising_ratio(
                 stsv, device_runs=True, target_temperature_in_celsius=supply_temperature_set_in_celsius
             )
             charges_a_buffer_at_its_target = temperature_delta_in_kelvin <= 0.0
             if part.runs_fractions() and requested_space_heating_ratio > 0.0 and charges_a_buffer_at_its_target:
-                stsv.set_output_value(self.control_signal_to_generic_boiler_channel, 1.0)
-                stsv.set_output_value(
-                    self.temperature_delta_channel, self.ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN
-                )
+                control_signal = 1.0
+                temperature_delta_in_kelvin = self.ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN
         else:
             rest_of_a_hot_water_step = (
-                self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER
+                mode == HeatingMode.DOMESTIC_HOT_WATER
                 and part.runs_fractions()
                 and is_heating_season
                 and requested_hot_water_ratio < 1.0
             )
-            requested_space_heating_ratio = part.publish_raising(
+            requested_space_heating_ratio = part.next_requested_raising_ratio(
                 stsv,
                 device_runs=rest_of_a_hot_water_step,
                 target_temperature_in_celsius=supply_temperature_set_in_celsius,
@@ -3284,87 +3330,117 @@ class GenericBoilerController(L1ControllerComponent):
                     supply_temperature_set_in_celsius - buffer_start_temperature_in_celsius,
                     self.ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN,
                 )
-        stsv.set_output_value(self.control_signal_for_space_heating_remainder_channel, remainder_signal)
-        stsv.set_output_value(self.temperature_delta_for_space_heating_remainder_channel, remainder_lift_in_kelvin)
+        return requested_space_heating_ratio, control_signal, temperature_delta_in_kelvin, remainder_signal, remainder_lift_in_kelvin
 
     def determine_operating_mode(
         self,
+        state: GenericBoilerControllerState,
+        *,
+        timestep: int,
         is_heating_season: bool,
-        water_temperature_input_from_space_heating_water_storage_in_celsius: float,
-        water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
-        heating_flow_temperature_from_heat_distribution_system: float,
-        timestep,
-    ) -> Tuple[float, float]:
-        """Determine which operating mode to use in dual-circuit system."""
+        buffer_start_temperature_in_celsius: float,
+        tank_start_temperature_in_celsius: Optional[float],
+        supply_temperature_set_in_celsius: float,
+    ) -> Tuple[HeatingMode, HotWaterPriorityTimer]:
+        """Return the operating mode of the step and the hot-water priority timer at its end.
 
-        previous_controller_mode = self.controller_mode
-        timer = self.hot_water_priority_timer_at_start_of_step
-        self.controller_mode = DiverterValve.determine_operating_mode(
+        The diverter valve picks the mode from the two stores' start temperatures and the mode at the start of the
+        step; the hot-water priority limit may hand a hot-water step to space heating; the minimum running and resting
+        times may hold the mode at the start of the step. For example, a controller that was off, with the buffer at
+        40 °C below a 55 °C supply temperature and the tank at its aim, returns space heating.
+
+        Args:
+            state: The state at the start of the step.
+            timestep: The step.
+            is_heating_season: Whether the heating curve names a heating day.
+            buffer_start_temperature_in_celsius: The buffer's start-of-step temperature, in °C.
+            tank_start_temperature_in_celsius: The hot-water tank's start-of-step temperature, in °C; None without
+                hot-water preparation.
+            supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
+
+        Returns:
+            The mode and the timer.
+        """
+        timer = state.hot_water_priority_timer
+        requested_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             # an interrupted charge stays latched while space heating has the boiler, so it resumes after the interval
-            current_controller_mode=(
-                HeatingMode.DOMESTIC_HOT_WATER if timer.charge_interrupted else previous_controller_mode
-            ),
+            current_controller_mode=HeatingMode.DOMESTIC_HOT_WATER if timer.charge_interrupted else state.mode,
             is_heating_season=is_heating_season,
-            water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-            water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
+            water_temperature_input_sh_in_celsius=buffer_start_temperature_in_celsius,
+            water_temperature_input_dhw_in_celsius=tank_start_temperature_in_celsius,
             set_temperatures=SetTemperatureConfig(
-                set_temperature_space_heating_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                set_temperature_space_heating_in_celsius=supply_temperature_set_in_celsius,
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
             ),
             parallel_space_heating_and_dhw_option=False,
         )
-        self.limit_hot_water_priority(
+        mode, timer = self.limit_hot_water_priority(
             timer,
+            requested_mode=requested_mode,
             space_heating_requested=DiverterValve.space_heating_needed(
                 is_heating_season=is_heating_season,
-                water_temperature_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-                set_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                water_temperature_in_celsius=buffer_start_temperature_in_celsius,
+                set_temperature_in_celsius=supply_temperature_set_in_celsius,
                 hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
             ),
         )
+        return self.enforce_minimum_run_and_idle_times(state, mode, timestep), timer
 
-        # Enforce minimum run and idle times (if necessary overwrites previously set mode)
-        self.enforce_minimum_run_and_idle_times(previous_controller_mode, timestep)
+    def burner_command(
+        self,
+        mode: HeatingMode,
+        *,
+        buffer_start_temperature_in_celsius: float,
+        tank_start_temperature_in_celsius: Optional[float],
+        supply_temperature_set_in_celsius: float,
+    ) -> Tuple[float, float]:
+        """Return the control signal and the lift the boiler is commanded in ``mode``.
 
-        if self.controller_mode == HeatingMode.SPACE_HEATING:
-            # get a modulated control signal between 0 and 1
+        Space heating lifts to the heating curve's supply temperature, a hot-water charge to the hot-water supply set
+        temperature (at least 0 K); a modulating controller scales the signal with the distance to that temperature
+        (:meth:`modulate_power`), an on/off one sends 1. Off sends 0 and 0 K.
+
+        Args:
+            mode: The operating mode.
+            buffer_start_temperature_in_celsius: The buffer's start-of-step temperature, in °C.
+            tank_start_temperature_in_celsius: The hot-water tank's start-of-step temperature, in °C, or None.
+            supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
+
+        Returns:
+            The control signal, from 0 to 1, and the lift, in K.
+
+        Raises:
+            ValueError: If the mode is none of the three.
+        """
+        if mode == HeatingMode.SPACE_HEATING:
+            control_signal = 1.0
             if self.config.is_modulating is True:
                 control_signal = self.modulate_power(
-                    water_temperature_input_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    water_temperature_input_in_celsius=buffer_start_temperature_in_celsius,
+                    set_heating_flow_temperature_in_celsius=supply_temperature_set_in_celsius,
                 )
-            else:
-                control_signal = 1
-            temperature_delta = (
-                heating_flow_temperature_from_heat_distribution_system
-                - water_temperature_input_from_space_heating_water_storage_in_celsius
-            )
-        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+            return control_signal, supply_temperature_set_in_celsius - buffer_start_temperature_in_celsius
+        if mode == HeatingMode.DOMESTIC_HOT_WATER:
             assert self.config.with_domestic_hot_water_preparation is not None
-            assert water_temperature_input_from_dhw_water_storage_in_celsius is not None
+            assert tank_start_temperature_in_celsius is not None
+            control_signal = 1.0
             if self.config.is_modulating is True:
                 control_signal = self.modulate_power(
-                    water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
+                    water_temperature_input_in_celsius=tank_start_temperature_in_celsius,
                     set_heating_flow_temperature_in_celsius=self.hot_water_supply_temperature_set_in_celsius,
                 )
-            else:
-                control_signal = 1
-            temperature_delta = max(
-                self.hot_water_supply_temperature_set_in_celsius
-                - water_temperature_input_from_dhw_water_storage_in_celsius,
-                0,
+            return control_signal, max(
+                self.hot_water_supply_temperature_set_in_celsius - tank_start_temperature_in_celsius, 0.0
             )
-        elif self.controller_mode == HeatingMode.OFF:
-            control_signal = 0
-            temperature_delta = 0
-        else:
-            raise ValueError("Controller mode unknown.")
+        if mode == HeatingMode.OFF:
+            return 0.0, 0.0
+        raise ValueError("Controller mode unknown.")
 
-        return control_signal, temperature_delta
-
-    def limit_hot_water_priority(self, timer: HotWaterPriorityTimer, *, space_heating_requested: bool) -> None:
+    def limit_hot_water_priority(
+        self, timer: HotWaterPriorityTimer, *, requested_mode: HeatingMode, space_heating_requested: bool
+    ) -> Tuple[HeatingMode, HotWaterPriorityTimer]:
         """Hand a hot-water step to space heating once the charge has had priority for its maximum time.
 
         The diverter valve's mode is the request; :meth:`HotWaterPriorityLimit.decide` says whether the charge runs
@@ -3375,36 +3451,56 @@ class GenericBoilerController(L1ControllerComponent):
 
         Args:
             timer: The hot-water priority timer at the start of the step.
+            requested_mode: The mode the diverter valve picked.
             space_heating_requested: Whether the space-heating circuit asks for heat in this step
                 (:meth:`DiverterValve.space_heating_needed`).
+
+        Returns:
+            The mode after the limit and the timer at the end of the step.
         """
-        charges, self.hot_water_priority_timer = HotWaterPriorityLimit.decide(
+        charges, timer = HotWaterPriorityLimit.decide(
             timer=timer,
-            charge_requested=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
+            charge_requested=requested_mode == HeatingMode.DOMESTIC_HOT_WATER,
             space_heating_requested=space_heating_requested,
             maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
             space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
         )
-        if self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
-            self.controller_mode = HeatingMode.SPACE_HEATING
+        if requested_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
+            return HeatingMode.SPACE_HEATING, timer
+        return requested_mode, timer
 
-    def enforce_minimum_run_and_idle_times(self, previous_controller_mode: HeatingMode, timestep: int) -> None:
-        """Enforces minimum run and idle times."""
+    def enforce_minimum_run_and_idle_times(
+        self, state: GenericBoilerControllerState, mode: HeatingMode, timestep: int
+    ) -> HeatingMode:
+        """Return ``mode``, or the mode at the start of the step while a minimum running or resting time holds it.
+
+        A burner that ran keeps running until :attr:`minimum_runtime_in_timesteps` after its activation; one that was
+        off stays off until :attr:`minimum_resting_time_in_timesteps` after its deactivation.
+
+        Args:
+            state: The state at the start of the step, with its mode and its switching steps.
+            mode: The mode decided so far.
+            timestep: The step.
+
+        Returns:
+            The mode of the step.
+        """
         if (
-            previous_controller_mode != HeatingMode.OFF
-            and self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep
-            and self.controller_mode == HeatingMode.OFF
+            state.mode != HeatingMode.OFF
+            and state.activation_timestep + self.minimum_runtime_in_timesteps > timestep
+            and mode == HeatingMode.OFF
         ):
             # mandatory on, minimum runtime not reached
-            self.controller_mode = previous_controller_mode
+            return state.mode
         if (
-            previous_controller_mode == HeatingMode.OFF
-            and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps > timestep
-            and self.controller_mode != HeatingMode.OFF
+            state.mode == HeatingMode.OFF
+            and state.deactivation_timestep + self.minimum_resting_time_in_timesteps > timestep
+            and mode != HeatingMode.OFF
         ):
-            self.controller_mode = HeatingMode.OFF
             # mandatory off, minimum resting time not reached
+            return HeatingMode.OFF
+        return mode
 
     def modulate_power(
         self,

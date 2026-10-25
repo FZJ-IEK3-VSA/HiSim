@@ -2,8 +2,9 @@
 
 :class:`hisim.part_load.StartOfStepPartLoadRule` reads the store's end temperature, its end temperature without the
 circuit and the ratio the circuit ran. The tests check every row of both tables, then iterate both rules together
-against a real :class:`hisim.hydronics.StartOfStepNode` with a generator and a distribution circuit, as the simulator's
-passes would: each pass reads only the values the store published in the pass before.
+against a real start-of-step node (:meth:`SimpleHotWaterStorage.start_of_step_node_step`) with a generator and a
+distribution circuit, as the simulator's passes would: each pass reads only the values the store published in the
+pass before.
 """
 
 from typing import ClassVar, List, Tuple
@@ -11,6 +12,7 @@ from typing import ClassVar, List, Tuple
 import pytest
 
 from hisim import hydronics
+from hisim.components.simple_water_storage import SimpleHotWaterStorage
 from hisim.part_load import PartLoadRule, StartOfStepPartLoadRule
 
 pytestmark = pytest.mark.base
@@ -38,7 +40,7 @@ class Store:
         cls, *, start_in_celsius: float, generator_ratio: float, distribution_ratio: float, drop_in_kelvin: float
     ) -> Tuple[float, float, float]:
         """Return the store's end temperature, and its end temperatures without the generator and the distribution."""
-        node = hydronics.StartOfStepNode.step(
+        node = SimpleHotWaterStorage.start_of_step_node_step(
             t0_c=start_in_celsius,
             inflows=[
                 hydronics.Inflow(

@@ -11,7 +11,8 @@ from typing import Any, ClassVar, Dict, List, Tuple
 import pytest
 
 from hisim import hydronics
-from hisim.hydronics import Inflow, MixedNode, StartOfStepNode, Water
+from hisim.components.simple_water_storage import SimpleHotWaterStorage
+from hisim.hydronics import Inflow, MixedNode, Water
 
 pytestmark = pytest.mark.base
 
@@ -61,7 +62,7 @@ class StartNodeSweep:
 def test_the_balance_closes_on_every_step_whatever_the_step_length() -> None:
     """The inflow heats less loss and draw equal the change of stored heat, to a 1e-9 share of the largest term."""
     for t0, inflows, ua, t_amb, dt, capacity, drawn_w in StartNodeSweep.cases():
-        step = StartOfStepNode.step(
+        step = SimpleHotWaterStorage.start_of_step_node_step(
             t0_c=t0, inflows=inflows, ua_w_per_k=ua, t_amb_c=t_amb, dt_s=dt, heat_capacity_j_per_k=capacity,
             heat_drawn_w=drawn_w,
         )
@@ -77,7 +78,7 @@ def test_every_circuit_is_booked_on_the_start_temperature() -> None:
     Every twelfth case is checked, 500 in all, so each of the three step lengths contributes about 167.
     """
     for t0, inflows, ua, t_amb, dt, capacity, drawn_w in StartNodeSweep.cases()[::12]:
-        step = StartOfStepNode.step(
+        step = SimpleHotWaterStorage.start_of_step_node_step(
             t0_c=t0, inflows=inflows, ua_w_per_k=ua, t_amb_c=t_amb, dt_s=dt, heat_capacity_j_per_k=capacity,
             heat_drawn_w=drawn_w,
         )
@@ -94,7 +95,7 @@ def test_every_circuit_is_booked_on_the_start_temperature() -> None:
 
 def test_the_worked_example_of_the_docstring() -> None:
     """170 kg at 40 °C charged with 0.3 kg/s at 45 °C for 900 s, losing 3.6 W/K to 20 °C, ends at 47.85 °C."""
-    step = StartOfStepNode.step(
+    step = SimpleHotWaterStorage.start_of_step_node_step(
         t0_c=40.0, inflows=[Inflow(0.3, 45.0)], ua_w_per_k=3.6, t_amb_c=20.0, dt_s=900.0,
         heat_capacity_j_per_k=170.0 * Water.SPECIFIC_HEAT_J_PER_KG_K,
     )
@@ -117,10 +118,10 @@ def test_a_short_step_agrees_with_the_mixed_node() -> None:
         "t_amb_c": 20.0,
         "heat_capacity_j_per_k": 300.0 * Water.SPECIFIC_HEAT_J_PER_KG_K,
     }
-    short_start = StartOfStepNode.step(dt_s=10.0, **arguments)
+    short_start = SimpleHotWaterStorage.start_of_step_node_step(dt_s=10.0, **arguments)
     short_mixed = MixedNode.step(dt_s=10.0, **arguments)
     assert short_start.t_end_c == pytest.approx(short_mixed.t_end_c, abs=1e-4)
-    long_start = StartOfStepNode.step(dt_s=3600.0, **arguments)
+    long_start = SimpleHotWaterStorage.start_of_step_node_step(dt_s=3600.0, **arguments)
     long_mixed = MixedNode.step(dt_s=3600.0, **arguments)
     assert abs(long_start.t_end_c - long_mixed.t_end_c) > 1.0
 
@@ -139,8 +140,8 @@ def test_a_negative_draw_puts_heat_into_the_node() -> None:
         "dt_s": 900.0,
         "heat_capacity_j_per_k": 1e6,
     }
-    warmed = StartOfStepNode.step(heat_drawn_w=-1000.0, **arguments)
-    cooled = StartOfStepNode.step(heat_drawn_w=1000.0, **arguments)
+    warmed = SimpleHotWaterStorage.start_of_step_node_step(heat_drawn_w=-1000.0, **arguments)
+    cooled = SimpleHotWaterStorage.start_of_step_node_step(heat_drawn_w=1000.0, **arguments)
     assert warmed.heat_drawn_j == -9e5
     assert warmed.t_end_c == pytest.approx(18.9)
     assert cooled.t_end_c == pytest.approx(17.1)
@@ -148,7 +149,7 @@ def test_a_negative_draw_puts_heat_into_the_node() -> None:
 
 def test_a_node_without_flow_loss_or_draw_keeps_its_temperature() -> None:
     """No flow, no loss and no draw leave the node where it started, with zero heats."""
-    step = StartOfStepNode.step(
+    step = SimpleHotWaterStorage.start_of_step_node_step(
         t0_c=55.0, inflows=[Inflow(0.0, 80.0)], ua_w_per_k=0.0, t_amb_c=20.0, dt_s=900.0, heat_capacity_j_per_k=1e6
     )
     assert step.t_end_c == 55.0
@@ -164,14 +165,14 @@ def test_a_negative_inflow_is_refused() -> None:
     the run names its column.
     """
     with pytest.raises(hydronics.NegativeMassFlowError):
-        StartOfStepNode.step(
+        SimpleHotWaterStorage.start_of_step_node_step(
             t0_c=40.0, inflows=[Inflow(-0.1, 50.0)], ua_w_per_k=2.0, t_amb_c=20.0, dt_s=900.0, heat_capacity_j_per_k=1e6
         )
 
 
 def test_a_nan_passes_through_into_the_end_temperature() -> None:
     """Catches a per-call finiteness check returning: a NaN start reaches the result instead of being refused here."""
-    step = StartOfStepNode.step(
+    step = SimpleHotWaterStorage.start_of_step_node_step(
         t0_c=float("nan"), inflows=[Inflow(0.1, 50.0)], ua_w_per_k=2.0, t_amb_c=20.0, dt_s=900.0,
         heat_capacity_j_per_k=1e6,
     )

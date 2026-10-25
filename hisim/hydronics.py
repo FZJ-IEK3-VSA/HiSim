@@ -13,10 +13,10 @@ a circuit's energy from :func:`circuit_power_w`, and ``hisim/energy_port.py`` is
 The module imports nothing from HiSim.
 
 The functions refuse, with a :class:`HydronicsError` subclass (a ``ValueError``), the values that would give a
-wrong but finite result: a negative mass flow, a negative hot-water demand, a valve whose warm temperature is not
-above its cold one, a negative relaxation exponent. A node's constants (its loss coefficient, its heat capacity and
-the step length) are checked once, when the component that owns the node is built
-(:meth:`MixedNode.check_constants`), not on every step. Nothing is clipped.
+wrong but finite result: a negative mass flow, a negative relaxation exponent, a hot-water set temperature above the
+generator's maximum supply. A node's constants (its loss coefficient, its heat capacity and the step length) are
+checked once, when the component that owns the node is built (:meth:`MixedNode.check_constants`), not on every
+step. Nothing is clipped.
 
 The functions do not check that their values are finite. They run on every pass of every time step, and a NaN or
 an infinity passes through their arithmetic into the outputs that publish the result; the simulator's check of
@@ -50,44 +50,25 @@ and the same mass leaves at the node's temperature. With ``G = sum_i m_i c + UA`
 * ``T_end = T_inf + (T0 - T_inf) e^(-a)``
 * ``T_mean = T_inf + (T0 - T_inf) (1 - e^(-a)) / a``
 
-:meth:`MixedNode.step` evaluates both through ``phi(a) = (1 - e^(-a)) / a`` (:func:`relaxation_mean_factor`) as
-``T_mean = T_inf + (T0 - T_inf) phi`` and ``T_end = T0 + (T_inf - T0) a phi``; the second form keeps the change
-``T_end - T0`` free of cancellation when ``a`` is small. ``phi`` is ``-expm1(-a) / a`` for
-``a >= MixedNode.SMALL_A_THRESHOLD`` (1e-4) and the Taylor polynomial ``1 - a/2 + a^2/6 - a^3/24`` below it, so
-``a = 0`` (no flow and no loss: ``G = 0``) gives ``phi = 1`` and ``T_mean = T_end = T0`` without a division. The
-Taylor remainder below the threshold is at most ``a^4/120 < 8.4e-19``, under a fortieth of an ulp of ``phi ~ 1``.
+:meth:`MixedNode.step` evaluates both through ``phi(a) = (1 - e^(-a)) / a``
+(:meth:`MixedNode.relaxation_mean_factor`) as ``T_mean = T_inf + (T0 - T_inf) phi`` and
+``T_end = T0 + (T_inf - T0) a phi``; the second form keeps the change ``T_end - T0`` free of cancellation when ``a``
+is small. ``phi`` is ``-expm1(-a) / a`` for ``a >= MixedNode.SMALL_A_THRESHOLD`` (1e-4) and the Taylor polynomial
+``1 - a/2 + a^2/6 - a^3/24`` below it, so ``a = 0`` (no flow and no loss: ``G = 0``) gives ``phi = 1`` and
+``T_mean = T_end = T0`` without a division. The Taylor remainder below the threshold is at most
+``a^4/120 < 8.4e-19``, under a fortieth of an ulp of ``phi ~ 1``.
 
 The heat each inflow brings is ``m_i c (T_i - T_mean) dt`` and the loss ``UA (T_mean - T_amb) dt``; their
 difference is ``C (T_end - T0)`` exactly, and ``T_mean`` and ``T_end`` never leave the range of ``T0``, the inflow
 temperatures and ``T_amb``. A mixed node therefore publishes ``T_mean`` as the return of the circuits it receives:
 the heat a circuit brings, derived from its flow, its supply and that return, is then the heat the node integrated.
-
-The start-of-step node
-----------------------
-
-A start-of-step node (:meth:`StartOfStepNode.step`) is also fully mixed, but it books every circuit on its
-temperature at the start of the step, ``T0``, instead of on its step mean. It publishes ``T0`` as the return of the
-circuits that charge it and as the supply of the circuits it feeds, so each inflow brings ``m_i c (T_i - T0) dt``
-(:func:`circuit_power_w` with ``T0`` as the return, times ``dt``), the loss is ``UA (T0 - T_amb) dt``, and a heat ``Q_drawn`` taken
-out directly, not by a stream, is subtracted. The node ends the step at
-``T_end = T0 + (sum_i m_i c (T_i - T0) dt - UA (T0 - T_amb) dt - Q_drawn) / C``. Nothing it publishes moves while a
-step iterates, so its circuits need no fixed-point solve. Unlike the mixed node, its end temperature can leave the
-range of ``T0``, the inflow temperatures and ``T_amb`` over a long step; whoever runs a circuit into it limits the
-circuit to a fraction of the step.
-
-The tap valve
--------------
-
-:func:`mixing_valve_draw` is a thermostatic mixing valve's arithmetic for a hot-water demand ``m_d`` at ``T_warm``
-from a tank at ``T`` refilled with mains water at ``T_cold``. Because the hot water it lets out depends on the
-tank's step mean, a tank solves the valve on its own step mean with :func:`solve_bracketed_fixed_point`.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Iterable, NamedTuple, Tuple, TypeVar
+from typing import ClassVar, Iterable, NamedTuple, Tuple
 
 
 class UnitConversion:
@@ -174,23 +155,6 @@ class NonPositiveTimestepError(HydronicsError):
     """
 
 
-class ValveTemperatureOrderError(HydronicsError):
-
-    """A mixing valve's warm temperature is not above its cold one.
-
-    The valve blends tank water with mains water to reach the warm temperature, which is only possible when the
-    warm temperature lies above the mains temperature.
-    """
-
-
-class NegativeDemandError(HydronicsError):
-
-    """A hot-water demand is negative.
-
-    A demand is the warm water the household asks for, which is never negative.
-    """
-
-
 class SetTemperatureAboveMaximumError(HydronicsError):
 
     """A hot-water controller's set temperature lies above its generator's maximum supply temperature.
@@ -198,40 +162,6 @@ class SetTemperatureAboveMaximumError(HydronicsError):
     The generator's supply is capped at its maximum, so a tank charged towards a set temperature above it never
     reaches the set temperature and the charge never ends; the configuration of the pair is refused instead.
     """
-
-
-class FixedPointNotFoundError(HydronicsError):
-
-    """A bracketed fixed-point solve did not converge within its evaluation budget.
-
-    The solve stops with this error rather than returning a guess, so a tank never books heat from an
-    unconverged step mean.
-    """
-
-
-def relaxation_mean_factor(a: float) -> float:
-    """Return ``phi(a) = (1 - e^(-a)) / a``, the share of a node's start deviation left in its step mean.
-
-    ``a = k dt`` is the node's dimensionless relaxation exponent over the step. ``phi`` is 1 at ``a = 0`` (a node
-    that exchanges nothing keeps its start temperature as its mean) and falls towards ``1 / a`` for a large ``a``.
-    For example, ``phi(1) = 0.632``. Below ``MixedNode.SMALL_A_THRESHOLD`` the Taylor polynomial
-    ``1 - a/2 + a^2/6 - a^3/24`` is used (remainder at most ``a^4/120``), otherwise ``-expm1(-a) / a``; neither
-    divides by a vanishing ``a``.
-
-    Args:
-        a: The relaxation exponent, dimensionless, 0 or more.
-
-    Returns:
-        The factor ``phi``, dimensionless, in (0, 1].
-
-    Raises:
-        HydronicsError: If ``a`` is negative; a NaN passes through as a NaN factor.
-    """
-    if a < 0.0:
-        raise HydronicsError(f"The relaxation exponent a = k dt must be >= 0, got {a!r}.")
-    if a < MixedNode.SMALL_A_THRESHOLD:
-        return 1.0 - a / 2.0 * (1.0 - a / 3.0 * (1.0 - a / 4.0))
-    return -math.expm1(-a) / a
 
 
 def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> float:
@@ -446,50 +376,11 @@ class NodeStep:
     loss_j: float
 
 
-@dataclass(frozen=True)
-class TemperatureRange:
-
-    """The range of the temperatures a node mixes over one step, in °C.
-
-    A fully mixed node relaxes towards a weighted mean of its inflow and ambient temperatures, so its step mean and
-    its end temperature never leave the range of those and its start temperature. The range brackets a node's
-    fixed-point solves. For example, a tank at 50 °C charged at 70 °C, refilled at
-    10 °C and losing heat to a 20 °C room mixes temperatures from 10 to 70 °C.
-    """
-
-    #: The lowest temperature the node mixes, in °C.
-    low_c: float
-    #: The highest temperature the node mixes, in °C.
-    high_c: float
-
-    @staticmethod
-    def of_node(
-        *, t0_c: float, inflows: Iterable[Inflow], fixed_temperatures_c: Iterable[float]
-    ) -> "TemperatureRange":
-        """Return the range of a node's start temperature, its flowing inflows and fixed temperatures, in °C.
-
-        An inflow without flow brings no water, so its temperature is left out. The fixed temperatures are those
-        the node mixes whatever the flows are, such as its ambient temperature and a tap's mains refill.
-
-        Args:
-            t0_c: The node's start temperature, in °C.
-            inflows: The streams entering the node.
-            fixed_temperatures_c: Further temperatures the node mixes, in °C.
-
-        Returns:
-            The range from the lowest to the highest of these temperatures.
-        """
-        temperatures_c = [t0_c, *fixed_temperatures_c] + [
-            inflow.temperature_c for inflow in inflows if inflow.mass_flow_kg_per_s > 0.0
-        ]
-        return TemperatureRange(low_c=min(temperatures_c), high_c=max(temperatures_c))
-
-
 class MixedNode:
 
     """A fully mixed water node, integrated over one step in closed form without sub-stepping.
 
-    A namespace for the node step and its numerical threshold. The step solves
+    A namespace for the node step, its relaxation mean factor and their numerical threshold. The step solves
     ``C dT/dt = sum_i m_i c (T_i - T) - UA (T - T_amb)`` exactly for constant inflow temperatures, so its result does
     not depend on the step length and its heat balance closes to float precision.
     """
@@ -497,6 +388,31 @@ class MixedNode:
     #: Below this relaxation exponent ``a = k dt`` the relaxation mean factor is the Taylor polynomial, at or above
     #: it ``-expm1(-a)/a``; at it, the polynomial's remainder ``a^4/120`` is under a fortieth of an ulp of 1.
     SMALL_A_THRESHOLD: ClassVar[float] = 1e-4
+
+    @staticmethod
+    def relaxation_mean_factor(a: float) -> float:
+        """Return ``phi(a) = (1 - e^(-a)) / a``, the share of a node's start deviation left in its step mean.
+
+        ``a = k dt`` is the node's dimensionless relaxation exponent over the step. ``phi`` is 1 at ``a = 0`` (a node
+        that exchanges nothing keeps its start temperature as its mean) and falls towards ``1 / a`` for a large ``a``.
+        For example, ``phi(1) = 0.632``. Below ``MixedNode.SMALL_A_THRESHOLD`` the Taylor polynomial
+        ``1 - a/2 + a^2/6 - a^3/24`` is used (remainder at most ``a^4/120``), otherwise ``-expm1(-a) / a``; neither
+        divides by a vanishing ``a``.
+
+        Args:
+            a: The relaxation exponent, dimensionless, 0 or more.
+
+        Returns:
+            The factor ``phi``, dimensionless, in (0, 1].
+
+        Raises:
+            HydronicsError: If ``a`` is negative; a NaN passes through as a NaN factor.
+        """
+        if a < 0.0:
+            raise HydronicsError(f"The relaxation exponent a = k dt must be >= 0, got {a!r}.")
+        if a < MixedNode.SMALL_A_THRESHOLD:
+            return 1.0 - a / 2.0 * (1.0 - a / 3.0 * (1.0 - a / 4.0))
+        return -math.expm1(-a) / a
 
     @staticmethod
     def check_constants(*, ua_w_per_k: float, dt_s: float, heat_capacity_j_per_k: float) -> None:
@@ -574,238 +490,9 @@ class MixedNode:
         else:
             t_inf = t0_c
             a = 0.0
-        phi = relaxation_mean_factor(a)
+        phi = MixedNode.relaxation_mean_factor(a)
         t_mean = t_inf + (t0_c - t_inf) * phi
         t_end = t0_c + (t_inf - t0_c) * (a * phi)
         heat_in = tuple(g * (inflow.temperature_c - t_mean) * dt_s for g, inflow in zip(conductances, inflows))
         loss = ua_w_per_k * (t_mean - t_amb_c) * dt_s
         return NodeStep(t_end_c=t_end, t_mean_c=t_mean, heat_in_j_per_inflow=heat_in, loss_j=loss)
-
-
-@dataclass(frozen=True)
-class StartOfStepNodeStep:
-
-    """The result of one step of a node whose circuits are booked on its start temperature.
-
-    ``heat_in_j_per_inflow[i]`` is ``m_i c (T_i - T0) dt``, in the order of the inflows; ``loss_j`` is
-    ``UA (T0 - T_amb) dt``; ``heat_drawn_j`` is the heat taken out directly; and
-    ``sum(heat_in_j_per_inflow) - loss_j - heat_drawn_j`` equals ``C (t_end_c - T0)`` to float precision.
-    """
-
-    #: The node's temperature at the end of the step, its start temperature for the next step, in °C.
-    t_end_c: float
-    #: The heat each inflow brought over the step, in J, in the order of the inflows.
-    heat_in_j_per_inflow: Tuple[float, ...]
-    #: The heat the node lost to its surroundings over the step, in J.
-    loss_j: float
-    #: The heat taken out of the node directly over the step, in J; negative when heat was put in.
-    heat_drawn_j: float
-
-
-class StartOfStepNode:
-
-    """A water node whose every circuit is booked on the node's temperature at the start of the step.
-
-    The node publishes its start temperature ``T0`` as the return of the circuits that charge it and as the supply of
-    the circuits it feeds. Every circuit end then derives its heat from ``T0``: a stream entering at ``T_i`` with flow
-    ``m_i`` brings ``m_i c (T_i - T0) dt`` (:func:`circuit_power_w` times ``dt``, which the node computes too), and the node loses
-    ``UA (T0 - T_amb) dt``. The node adds up these heats and ends the step at
-    ``T_end = T0 + (sum of heats - loss - heat drawn) / C``. Nothing the node publishes changes while a step
-    iterates, so the circuits do not iterate against the node; the balance closes on every step whatever the step
-    length.
-
-    The price is that the node does not see its own temperature change inside the step: a circuit holding a lift
-    keeps bringing the same heat however far the node has risen, so a long step can carry the node past a target or,
-    with a large draw, below the temperature of every stream entering it and of its surroundings. The node neither
-    clips nor refuses such an end temperature: whoever runs a circuit limits it to the fraction of the step that keeps
-    the node within its own aim.
-
-    Example: 170 kg of water at 40 °C, charged for 900 s with 0.3 kg/s at 45 °C and losing 3.6 W/K to a 20 °C room,
-    gains 5.643 MJ and loses 64.8 kJ, and ends at 47.85 °C.
-    """
-
-    @staticmethod
-    def step(
-        *,
-        t0_c: float,
-        inflows: Iterable[Inflow],
-        ua_w_per_k: float,
-        t_amb_c: float,
-        dt_s: float,
-        heat_capacity_j_per_k: float,
-        heat_drawn_w: float = 0.0,
-    ) -> StartOfStepNodeStep:
-        """Return the end temperature, the inflow heats, the loss and the heat drawn of one start-of-step node step.
-
-        The loss coefficient, the step duration and the heat capacity are constant over a run; the component that
-        owns the node checks them once with :meth:`MixedNode.check_constants`, as for a mixed node. Nor are the values
-        checked to be finite; a NaN passes through into the result, where the check of the results after the run
-        names it.
-
-        Args:
-            t0_c: The node's temperature at the start of the step, in °C.
-            inflows: Every stream entering the node; read once, so any iterable will do.
-            ua_w_per_k: The loss coefficient to ``t_amb_c``, in W/K, at least 0.
-            t_amb_c: The temperature the node loses heat to, in °C.
-            dt_s: The step duration, in s, above 0.
-            heat_capacity_j_per_k: The node's heat capacity ``C = M c``, in J/K, above 0.
-            heat_drawn_w: Heat taken out of the node directly, not by a stream, in W; for example what the emitters
-                of a distribution system without a buffer hand to the rooms from the pipe water. It is signed like a
-                circuit's heat and the loss: a negative value puts heat into the node, such as the room heat that the
-                emitters of a cooling distribution system hand to the pipe water.
-
-        Returns:
-            The end temperature, the heat of each inflow, the loss and the heat drawn.
-
-        Raises:
-            NegativeMassFlowError: If an inflow's mass flow is negative.
-        """
-        heat_in = tuple(
-            circuit_power_w(mass_flow_kg_per_s=inflow.mass_flow_kg_per_s, t_supply_c=inflow.temperature_c, t_return_c=t0_c)
-            * dt_s
-            for inflow in inflows
-        )
-        loss = ua_w_per_k * (t0_c - t_amb_c) * dt_s
-        drawn = heat_drawn_w * dt_s
-        t_end = t0_c + math.fsum(heat_in + (-loss, -drawn)) / heat_capacity_j_per_k
-        return StartOfStepNodeStep(t_end_c=t_end, heat_in_j_per_inflow=heat_in, loss_j=loss, heat_drawn_j=drawn)
-
-
-@dataclass(frozen=True)
-class ValveDraw:
-
-    """What a thermostatic tap valve lets out of a tank for one hot-water demand.
-
-    ``hot_water_kg_per_s`` is the tank water the valve lets out, which the same mass of mains water refills;
-    ``unmet_fraction`` is the share of the demand's heat the valve cannot deliver because the tank is too cold. A
-    value object, so the flow and the fraction cannot be swapped by position.
-    """
-
-    #: The tank water the valve lets out, in kg/s, between 0 and the demand.
-    hot_water_kg_per_s: float
-    #: The share of the demand's heat left unmet, dimensionless, between 0 and 1.
-    unmet_fraction: float
-
-
-def mixing_valve_draw(*, t_tank_c: float, t_warm_c: float, t_cold_c: float, demand_kg_per_s: float) -> ValveDraw:
-    """Return the hot water a thermostatic tap valve draws from a tank, and the share of the demand left unmet.
-
-    The household asks for ``demand_kg_per_s`` of warm water at ``t_warm_c``; the valve blends tank water with
-    mains water at ``t_cold_c``, which also refills the tank with the mass drawn.
-
-    * ``T > T_warm``: ``m_hot = m_d (T_warm - T_cold) / (T - T_cold)``, nothing unmet; the heat drawn
-      ``m_hot c (T - T_cold)`` equals the demand's ``m_d c (T_warm - T_cold)``.
-    * ``T_cold < T <= T_warm``: all of ``m_d`` passes unmixed; the unmet fraction is
-      ``(T_warm - T) / (T_warm - T_cold)``, so the two branches meet at ``T = T_warm``.
-    * ``T <= T_cold``: nothing is drawn and the unmet fraction is 1.
-
-    For example, 0.05 kg/s at 40 °C from a 55 °C tank refilled at 10 °C lets out 0.0333 kg/s of tank water. The
-    unmet fraction is a property of the temperatures; with no demand it multiplies a zero heat.
-
-    Args:
-        t_tank_c: The tank temperature the valve sees, in °C.
-        t_warm_c: The temperature the household asks for, in °C.
-        t_cold_c: The mains water temperature, in °C, below ``t_warm_c``.
-        demand_kg_per_s: The warm water the household asks for, in kg/s, at least 0.
-
-    Returns:
-        The hot water let out and the unmet fraction.
-
-    Raises:
-        ValveTemperatureOrderError: If ``t_warm_c <= t_cold_c``.
-        NegativeDemandError: If ``demand_kg_per_s`` is negative.
-    """
-    if t_warm_c <= t_cold_c:
-        raise ValveTemperatureOrderError(
-            f"A mixing valve's warm temperature must be above its cold one, got t_warm_c={t_warm_c!r}, "
-            f"t_cold_c={t_cold_c!r}."
-        )
-    if demand_kg_per_s < 0.0:
-        raise NegativeDemandError(f"demand_kg_per_s must be >= 0, got {demand_kg_per_s!r}.")
-    span = t_warm_c - t_cold_c
-    if t_tank_c > t_warm_c:
-        return ValveDraw(hot_water_kg_per_s=demand_kg_per_s * span / (t_tank_c - t_cold_c), unmet_fraction=0.0)
-    if t_tank_c > t_cold_c:
-        return ValveDraw(hot_water_kg_per_s=demand_kg_per_s, unmet_fraction=(t_warm_c - t_tank_c) / span)
-    return ValveDraw(hot_water_kg_per_s=0.0, unmet_fraction=1.0)
-
-
-SolveResultT = TypeVar("SolveResultT")
-
-
-class IllinoisSide:
-
-    """Which end of the bracket the Illinois method moved last: a namespace of the two sides and of none.
-
-    The Illinois variant of regula falsi halves the residual kept at one end of the bracket when the other end
-    moved twice in a row, which keeps a convex residual from stalling the method at one end.
-    """
-
-    #: No end has moved yet.
-    NONE: ClassVar[int] = 0
-    #: The low end moved last.
-    LOW: ClassVar[int] = -1
-    #: The high end moved last.
-    HIGH: ClassVar[int] = 1
-
-
-def solve_bracketed_fixed_point(
-    *,
-    evaluate: Callable[[float], SolveResultT],
-    image_c: Callable[[SolveResultT], float],
-    low_c: float,
-    high_c: float,
-    tolerance_k: float,
-    maximum_evaluations: int,
-) -> SolveResultT:
-    """Return the evaluation at the fixed point ``x = g(x)`` of a temperature map inside a bracket.
-
-    ``evaluate(x)`` computes a result for an assumed temperature ``x``, and ``image_c(result)`` is ``g(x)``, the
-    temperature that result implies. The bracket must hold the fixed point: ``g`` maps it into itself, so
-    ``g(low) - low >= 0 >= g(high) - high``. The method is the Illinois variant of regula falsi on the residual
-    ``g(x) - x``; it needs no start value from an earlier iteration and returns the evaluation whose residual is at
-    most ``tolerance_k``, or whose bracket has shrunk below it. For example, a tank whose step mean depends on the
-    hot water its tap valve lets out, which depends on that step mean, solves its step mean this way within a few
-    evaluations.
-
-    Args:
-        evaluate: The computation at an assumed temperature in °C.
-        image_c: The temperature an evaluation implies, in °C.
-        low_c: The low end of the bracket, in °C.
-        high_c: The high end of the bracket, in °C, at least ``low_c``.
-        tolerance_k: The largest residual accepted, in K.
-        maximum_evaluations: The most evaluations inside the bracket before the solve fails.
-
-    Returns:
-        The evaluation at the fixed point.
-
-    Raises:
-        FixedPointNotFoundError: If the solve has not converged within ``maximum_evaluations`` evaluations.
-    """
-    low_result, high_result = evaluate(low_c), evaluate(high_c)
-    low_residual_k = image_c(low_result) - low_c
-    high_residual_k = image_c(high_result) - high_c
-    if low_residual_k <= tolerance_k:
-        return low_result
-    if high_residual_k >= -tolerance_k:
-        return high_result
-    moved_last = IllinoisSide.NONE
-    for _ in range(maximum_evaluations):
-        assumed_c = (low_c * high_residual_k - high_c * low_residual_k) / (high_residual_k - low_residual_k)
-        candidate = evaluate(assumed_c)
-        residual_k = image_c(candidate) - assumed_c
-        if abs(residual_k) <= tolerance_k or high_c - low_c <= tolerance_k:
-            return candidate
-        if residual_k > 0.0:
-            low_c, low_residual_k = assumed_c, residual_k
-            if moved_last == IllinoisSide.LOW:
-                high_residual_k /= 2.0
-            moved_last = IllinoisSide.LOW
-        else:
-            high_c, high_residual_k = assumed_c, residual_k
-            if moved_last == IllinoisSide.HIGH:
-                low_residual_k /= 2.0
-            moved_last = IllinoisSide.HIGH
-    raise FixedPointNotFoundError(
-        f"The fixed point did not converge within {maximum_evaluations} evaluations (bracket {low_c} to {high_c} °C)."
-    )

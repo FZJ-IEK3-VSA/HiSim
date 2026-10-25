@@ -162,7 +162,7 @@ def test_the_tank_never_leaves_the_range_of_what_it_mixes(
     storage = Tank.build(seconds_per_timestep)
     inflows = [hydronics.Inflow(*primary), hydronics.Inflow(*secondary)]
     step = Tank.step(storage, start_temperature_in_celsius, inflows, demand_in_kg_per_second)
-    mixed_range = hydronics.TemperatureRange.of_node(
+    mixed_range = simple_water_storage.TemperatureRange.of_node(
         t0_c=start_temperature_in_celsius,
         inflows=inflows,
         fixed_temperatures_c=(

@@ -75,6 +75,13 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
   point, a conversion. Before writing a function, search for one with the same purpose (the purpose sentence
   below makes that possible) and generalise it rather than adding a second. Two pieces of code that look alike
   but stand for different knowledge are not duplicates.
+- **A shared module holds only what more than one caller uses.** A shared module -- `hisim/hydronics.py`,
+  `hisim/part_load.py`, the subcomponents, the utilities -- holds a function, a class or a constant only when more
+  than one production caller uses it; tests do not count. Code with one caller lives in that caller's class, as a
+  static method, or beside it in the caller's module, and moves into the shared module when a second caller
+  appears. A reader then finds the code where it is used, and the shared module shows what really is shared. For
+  example, the tap valve's arithmetic is `SimpleDHWStorage.mixing_valve_draw`, since only the hot-water tank has a
+  tap.
 - **Every function states its purpose in its first docstring sentence**, precisely enough that two functions
   with the same or a similar purpose can be found by comparing these sentences -- by a reviewer, or by an
   automated LLM check across the repository. The sentence says what the function computes or does, from what,

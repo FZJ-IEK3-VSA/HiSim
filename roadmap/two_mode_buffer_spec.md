@@ -327,7 +327,7 @@ carry $T_0$ too). The generator supplies $T_0 + \mathrm{lift}$ and books $\dot{m
 controller commands; the distribution returns $T_0 - \mathrm{drop}$ and books $\dot{m}\,c\,\mathrm{drop}$ on its ratio;
 the buffer computes `StartOfStepNode.step` and publishes $T_0$ on the circuit ports, $T_{\mathrm{end}}$, and
 $T_{\mathrm{end}}$ without each circuit; the two part-load controls read $T_{\mathrm{end}}$, $T_{\mathrm{end}}$-without
-and the ratio run and publish the next ratio. Nothing the buffer publishes depends on what it reads except
+and the actual ratio and publish the next ratio. Nothing the buffer publishes depends on what it reads except
 $T_{\mathrm{end}}$ and the $T_{\mathrm{end}}$-without values, and the rules read those linearly, so the ratios land in
 one pass.
 
@@ -379,18 +379,18 @@ if end_temperature_without_circuit_in_celsius >= target_temperature_in_celsius:
     return 0.0                                   # the store ends above target on its own
 deviation_in_kelvin = end_temperature_in_celsius - target_temperature_in_celsius
 if 0.0 <= deviation_in_kelvin <= PartLoadRule.TARGET_BAND_IN_KELVIN:
-    return ratio_run                             # inside the band: keep
+    return actual_ratio                          # inside the band: keep
 rise_in_kelvin = end_temperature_in_celsius - end_temperature_without_circuit_in_celsius
-if ratio_run == 0.0 or rise_in_kelvin <= 0.0:
+if actual_ratio == 0.0 or rise_in_kelvin <= 0.0:
     return 1.0
 needed_in_kelvin = aim - end_temperature_without_circuit_in_celsius
-return min(1.0, max(0.0, ratio_run * needed_in_kelvin / rise_in_kelvin))
+return min(1.0, max(0.0, actual_ratio * needed_in_kelvin / rise_in_kelvin))
 ```
 
-Outside the band, with $r_{\mathrm{run}}$ the ratio run and $T_{\mathrm{aim}}$ the aim:
+Outside the band, with $r_{\mathrm{actual}}$ the actual ratio and $T_{\mathrm{aim}}$ the aim:
 
 $$
-r = \min\Bigl(1, \max\bigl(0, r_{\mathrm{run}}\,\frac{T_{\mathrm{aim}} - T_{\mathrm{end}}^{\neg i}}{T_{\mathrm{end}} - T_{\mathrm{end}}^{\neg i}}\bigr)\Bigr), \qquad
+r = \min\Bigl(1, \max\bigl(0, r_{\mathrm{actual}}\,\frac{T_{\mathrm{aim}} - T_{\mathrm{end}}^{\neg i}}{T_{\mathrm{end}} - T_{\mathrm{end}}^{\neg i}}\bigr)\Bigr), \qquad
 r = 1 \cdot \frac{38.025 - 25.9677}{39.4677 - 25.9677} = \frac{12.057}{13.5} = 0.8931.
 $$
 
@@ -607,19 +607,19 @@ five end-temperature outputs, no `heat_capacity_in_joule_per_kelvin`, no `circui
 ### 5.2 Heat distribution system, `heat_distribution_system.py`
 
 No change against stageD-9. Its same-step booking behind a buffer (stageD-5, identical to `38f755ee`'s hunk at line
-476), its room clamp on `Building.TemperatureIndoorAirAtStartOfStepInCelsius` (#1008), its ratio run
+476), its room clamp on `Building.TemperatureIndoorAirAtStartOfStepInCelsius` (#1008), its actual ratio
 (`heat_distribution_system.py:506–515`) and its controller's floor rule (1185–1223) all work with the iterated buffer at
 a ratio of 1:
 
 ```python
 # hisim/components/heat_distribution_system.py:506-515 (origin/stageD-9-close-out)
-ratio_run = 1.0 if water_mass_flow_rate_in_kg_per_second > 0 else 0.0
+actual_ratio = 1.0 if water_mass_flow_rate_in_kg_per_second > 0 else 0.0
 if (self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
         and water_mass_flow_rate_in_kg_per_second > 0):
-    ratio_run = self.part_load_command.ratio(stsv)       # 1 at and below the threshold
-    water_mass_flow_rate_in_kg_per_second *= ratio_run
-    thermal_power_delivered_in_watt *= ratio_run
-self.part_load_command.publish_ratio_run(stsv, ratio_run)
+    actual_ratio = self.part_load_command.requested_ratio(stsv)  # 1 at and below the threshold
+    water_mass_flow_rate_in_kg_per_second *= actual_ratio
+    thermal_power_delivered_in_watt *= actual_ratio
+self.part_load_command.publish_actual_ratio(stsv, actual_ratio)
 ```
 
 Against main: main publishes the previous step's heat and temperatures (`self.state.*`, the one-step lag of
@@ -787,7 +787,7 @@ buffer unchanged.
 | pass-by-pass unit test of the iterated buffer | the example of §3.1: five passes at 60 s to 1e-4 K, contraction 0.111 ± 0.01; 20 passes at 600 s, contraction 0.621 ± 0.01; the fixed-point heats 752.40 / −501.60 kJ; $T_{\mathrm{end}}$ 35.29782 °C | new `tests/test_space_heating_buffer_mixed_node.py` | `base`, < 1 s |
 | the threshold switch | a buffer built at 600 s publishes $\bar{T}$ on the circuit ports and $T_0$ on the sensor; at 601 s it publishes $T_0$ on all; `runs_part_load()` decides; with `part_load_above_seconds = 300`, a 600 s buffer runs the start-of-step buffer | same new file | `base` |
 | the refusal | 900 s with threshold 900 or 1800 refused; 900 and 3600 s with the default accepted; 60 and 600 s with any threshold from 0 to 3600 accepted; never a buffer without its exchanger (exists, #1035; messages re-asserted) | `tests/test_space_heating_buffer_whole_step_refusal.py` | `base`, ≈ 1 s |
-| part-load controls inert with the iterated buffer | at 600 s every `PartLoadRatio*` output is exactly 1 while the device runs and 0 while it is off. **Owner decision 2026-10-19:** no `base` unit test; T2's twin test stands in for it, `test_at_the_threshold_every_part_load_ratio_is_0_or_1_and_1_while_the_generator_heats_its_buffer` in `tests/test_space_heating_buffer_twins.py`, which runs the gas and the heat-pump twins at 600 s with their real controllers in the full system and which CI runs on every PR | `tests/test_space_heating_buffer_twins.py` | `extendedbase2` |
+| part-load controls inert with the iterated buffer | at 600 s every `RequestedPartLoadRatio*` and `ActualPartLoadRatio*` output is exactly 1 while the device runs and 0 while it is off. **Owner decision 2026-10-19:** no `base` unit test; T2's twin test stands in for it, `test_at_the_threshold_every_part_load_ratio_is_0_or_1_and_1_while_the_generator_heats_its_buffer` in `tests/test_space_heating_buffer_twins.py`, which runs the gas and the heat-pump twins at 600 s with their real controllers in the full system and which CI runs on every PR | `tests/test_space_heating_buffer_twins.py` | `extendedbase2` |
 | convergence without abort, iterated buffer | the four twins finish the full year 2021 at 60 s (the golden gate's own runs are this test), and at 300 and 600 s one January week and one July week each with the largest pass count recorded and asserted below 50 (measured maxima 26–35) | new `tests/test_space_heating_time_resolution.py` cases, or the nightly tier | `system_setups`; a week at 300 s ≈ 2000 steps |
 | convergence without abort, start-of-step buffer | the gas and heat-pump twins at 900, 1800 and 3600 s finish a January week; maxima recorded (exists in spirit in #1035's 900 s runs; 3600 s added) | same | `system_setups` |
 | 900 s against 60 s | #1035's assertion unchanged (delivered within 1 % of the committed `full_year_60s` golden), **re-measured against the M2 goldens**; the recorded (not asserted) booked heat, fuel and electricity updated to the new reference | `tests/test_space_heating_time_resolution.py` | `system_setups`, 18–41 s per twin (its docstring) |

@@ -66,8 +66,8 @@ Owner, 2026-10-10, replacing the controller's search over the simulator's passes
 Illinois estimates that counted passes and was reset in `i_save_state`), which broke component design principle 5:
 
 11. **A memoryless rule** (§4.2). The controller computes the next ratio from its inputs only:
-    `r_next = r_run · (T_aim − T_start) / (T_end − T_start)`, clamped to [0, 1], with the degenerate cases decided
-    explicitly. Inside the target band it publishes `r_run` unchanged.
+    `r_next = r_actual · (T_aim − T_start) / (T_end − T_start)`, clamped to [0, 1], with the degenerate cases decided
+    explicitly. Inside the target band it publishes `r_actual` unchanged.
 12. **The device reports the ratio it ran with** as an ordinary output (`Units.FRACTION`), and the controller reads it
     as an input: a port quantity, not memory.
 13. **Plain iteration.** No acceleration (`is_accelerated`) and no other convergence aid on the ratio.
@@ -142,8 +142,10 @@ results at the threshold itself, a step length nobody runs.
 
 - **Part-load ratio (PLR)**: the fraction of a step a device runs at full load, `0 ≤ PLR ≤ 1`, a dimensionless
   output with `Units.FRACTION` (averaged by the post-processing, never summed). `PLR = 1` is the whole step.
-- **Ratio run** (`r_run`): the PLR the device reports it ran with in a pass: the commanded ratio while it follows its
-  controller, 1 for a whole step it runs on its own against its controller (a minimum running time kept inside the
+- **Requested ratio**: the PLR the controller commands its device to run in a pass, published on the controller's
+  `RequestedPartLoadRatio*` output. Under `force_convergence` that output carries the actual ratio instead (§4.1).
+- **Actual ratio** (`r_actual`): the PLR the device reports it ran with in a pass, on its `ActualPartLoadRatio*` output:
+  the requested ratio while it follows its controller, 1 for a whole step it runs on its own against its controller (a minimum running time kept inside the
   device, as the parked heat pump's), 0 while it does not run. A minimum running time the controller keeps, as the
   boiler's controller does, is not such a run: the step stays in the mode and gets the rule's ratio, 0 for a store
   that starts at or above the target, so the boiler does not fire on it while a 60 s run keeps firing (the gas twin's
@@ -174,20 +176,20 @@ results at the threshold itself, a step length nobody runs.
 
 - 0 while the controller does not run its device;
 - exactly 1 at and below the threshold whenever the device runs, so a 60 s run computes what it did before;
-- above the threshold, `PartLoadRule.next_part_load_ratio(r_run, T_start, T_end, target)`;
-- under `force_convergence`, above the threshold, the ratio run (`publish_held`); at and below it the ratio keeps the
+- above the threshold, `PartLoadRule.next_part_load_ratio(r_actual, T_start, T_end, target)`;
+- under `force_convergence`, above the threshold, the actual ratio (`publish_held`); at and below it the ratio keeps the
   value of the last unforced pass, as every other output of the controller does.
 
 Neither part keeps state; nothing is reset in `i_save_state`. A run that the device enforces itself against its
 controller (a minimum running time kept inside the device) runs the whole step and reports 1; a minimum running time
-kept by the controller is cut to the rule's ratio (§3, "Ratio run").
+kept by the controller is cut to the rule's ratio (§3, "Actual ratio").
 
 ### 4.2 The rule
 
 The store's start temperature `T_start` stands in for its end temperature at ratio 0, so the line from `(0, T_start)`
-through `(r_run, T_end)` meets the aim at
+through `(r_actual, T_end)` meets the aim at
 
-`r_next = r_run · (T_aim − T_start) / (T_end − T_start)`, clamped to [0, 1].
+`r_next = r_actual · (T_aim − T_start) / (T_end − T_start)`, clamped to [0, 1].
 
 Its fixed point is `T_end = T_aim` whatever `T_start` is; `T_start` changes how fast the iteration gets there. For a
 store whose end temperature rises in proportion to the ratio and that loses nothing to a draw, the line is exact and
@@ -196,9 +198,9 @@ the second pass lands. The cases the line cannot answer, decided in this order (
 | case | `r_next` |
 |---|---|
 | the store starts at or above the target (`T_start ≥ target`) | 0: it needs no heat |
-| the store ends in the band (`target ≤ T_end ≤ target + 0.05 K`) | `r_run` unchanged |
+| the store ends in the band (`target ≤ T_end ≤ target + 0.05 K`) | `r_actual` unchanged |
 | the store ends at or below its start (`T_end ≤ T_start`): the draw takes more than the device brings | 1 |
-| the device ran nothing and the store ends below the target (`r_run = 0`, `T_end < target`) | 1, so the rule cannot stay at 0 |
+| the device ran nothing and the store ends below the target (`r_actual = 0`, `T_end < target`) | 1, so the rule cannot stay at 0 |
 | otherwise | the line, clamped to [0, 1] |
 
 A device that ran nothing while another device heats the store past the band gets 0 from the line, which is right:
@@ -213,7 +215,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   tank's tap valve keeps the draw's effect smaller than this estimate
   (`test_a_tank_with_a_tap_draw_ends_in_the_band_and_the_draw_raises_the_ratio`: a 30 l draw at 57 °C lands in nine
   passes).
-- **The evaluation order.** The controller pairs the ratio run with the end temperature it reads in the same pass.
+- **The evaluation order.** The controller pairs the actual ratio with the end temperature it reads in the same pass.
   The two belong to the same run only in the cyclic order controller → device → store. In the order device →
   controller → store, which the boiler and the collector have in their recorded twins, the device has already run
   the controller's newer ratio when the controller reads the store's answer to the older one. The iteration then
@@ -249,7 +251,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 | `ElectricHeating`, hot water (parked, #916) | `ElectricHeatingController` | the 60 °C warm-water aim, where the diverter valve ends a charge alone and beside space heating (its parallel mode latches like the hot-water mode) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
 | `SolarThermalSystem`, pump (#917) | `SolarThermalSystemController` | its maximum storage temperature, 80 °C since 2026-10-11 (the pump stops at `T0 > 80 °C` and restarts at `T0 ≤ 77 °C`); 60 °C, the backups' warm-water aim, before | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
 
-Each device publishes its ratio run (`PartLoadRatioRunDhw`, the solar pump `PartLoadRatioRun`), and its controller
+Each device publishes its actual ratio (`ActualPartLoadRatioDhw`, the solar pump `ActualPartLoadRatio`), and its controller
 reads it. A device whose target is where its controller ends the charge, rather than its supply set temperature
 (70 °C for the boiler), lands the store where the controller's next decision ends the charge: a supply capped at the
 set temperature never lands the store on that temperature. Cycling losses are not modelled (open point 3).
@@ -265,7 +267,7 @@ The space-heating buffer (`SimpleHotWaterStorage`) follows once it is a node (st
 ## 7. Two devices on one store
 
 The gas + solar and heat pump + solar twins charge one cylinder with a collector and a backup. Both controllers apply
-the rule to the same end temperature, each with its own ratio run and target, and nothing ranks them (decision 9):
+the rule to the same end temperature, each with its own actual ratio and target, and nothing ranks them (decision 9):
 
 - with equal targets (gas boiler and collector, both 60 °C until 2026-10-11) the rule scales both ratios by the same
   factor, so the store's rise follows the same line as with one device and lands as fast; the split is the one the

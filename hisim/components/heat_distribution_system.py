@@ -137,8 +137,9 @@ class HeatDistribution(cp.PhysicsComponent):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
-    #: The fraction of the step the circuit runs, commanded by the heat distribution controller.
-    PartLoadRatio = "PartLoadRatio"
+    #: The requested part-load ratio: the fraction of the step the heat distribution controller commands the circuit to
+    #: run.
+    RequestedPartLoadRatio = "RequestedPartLoadRatio"
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -146,8 +147,8 @@ class HeatDistribution(cp.PhysicsComponent):
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
     WaterMassFlowHDS = "WaterMassFlowHDS"
-    #: The fraction of the step the circuit ran, reported back to the controller.
-    PartLoadRatioRun = "PartLoadRatioRun"
+    #: The actual part-load ratio: the fraction of the step the circuit ran, reported back to the controller.
+    ActualPartLoadRatio = "ActualPartLoadRatio"
 
     #: The positions in which the heat distribution system pumps its own design flow, because the component at the
     #: other end of its circuit (a buffer, or a district-heating substation without a pump) moves no water itself.
@@ -295,8 +296,8 @@ class HeatDistribution(cp.PhysicsComponent):
 
         self.part_load_command = PartLoadCommand(
             self,
-            input_name=self.PartLoadRatio,
-            ratio_run_output_name=self.PartLoadRatioRun,
+            requested_ratio_input_name=self.RequestedPartLoadRatio,
+            actual_ratio_output_name=self.ActualPartLoadRatio,
             device_description="the heat distribution system's circuit",
         )
 
@@ -322,9 +323,9 @@ class HeatDistribution(cp.PhysicsComponent):
         )
         connections.append(
             cp.ComponentConnection(
-                HeatDistribution.PartLoadRatio,
+                HeatDistribution.RequestedPartLoadRatio,
                 heat_distribution_controller_classname,
-                HeatDistributionController.PartLoadRatio,
+                HeatDistributionController.RequestedPartLoadRatio,
             )
         )
         return connections
@@ -448,8 +449,9 @@ class HeatDistribution(cp.PhysicsComponent):
         return is clamped at the room temperature the building reports at the start of the step: while heating it does
         not fall below it, while cooling it does not rise above it. A supply on the wrong side of that temperature, for
         example 16 °C while heating a room at 20 °C, returns unchanged and delivers no heat. Behind a buffer the
-        circuit runs the fraction of the step its controller commands (``PartLoadRatio``): it publishes that fraction
-        of its flow and of its heat, and reports the fraction it ran (``PartLoadRatioRun``).
+        circuit runs the requested ratio, the fraction of the step its controller commands (``RequestedPartLoadRatio``):
+        it publishes that fraction of its flow and of its heat, and reports the actual ratio, the fraction it ran
+        (``ActualPartLoadRatio``).
         """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
@@ -515,16 +517,16 @@ class HeatDistribution(cp.PhysicsComponent):
             else:
                 raise ValueError("unknown hds controller mode")
 
-        ratio_run = 1.0 if water_mass_flow_rate_in_kg_per_second > 0 else 0.0
+        actual_ratio = 1.0 if water_mass_flow_rate_in_kg_per_second > 0 else 0.0
         if (
             self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
             and water_mass_flow_rate_in_kg_per_second > 0
         ):
-            # the circuit runs the fraction of the step its controller commands: the averaged flow and its heat
-            ratio_run = self.part_load_command.ratio(stsv)
-            water_mass_flow_rate_in_kg_per_second *= ratio_run
-            thermal_power_delivered_in_watt *= ratio_run
-        self.part_load_command.publish_ratio_run(stsv, ratio_run)
+            # the circuit runs the requested ratio its controller commands: the averaged flow and its heat
+            actual_ratio = self.part_load_command.requested_ratio(stsv)
+            water_mass_flow_rate_in_kg_per_second *= actual_ratio
+            thermal_power_delivered_in_watt *= actual_ratio
+        self.part_load_command.publish_actual_ratio(stsv, actual_ratio)
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
@@ -1018,12 +1020,12 @@ class HeatDistributionController(cp.L1ControllerComponent):
     1 for heating, -1 for cooling, and 0 for a closed valve or for a valve open for heating outside the heating season.
 
     Behind a space-heating buffer, above the part-load threshold, the controller also sets the fraction of the step the
-    circuit runs while it heats (``PartLoadRatio``): the largest fraction that keeps the buffer's end temperature at or
-    above the room's start-of-step temperature (:meth:`hisim.part_load.StartOfStepPartLoadRule.lowering_ratio`). Above
-    the threshold the buffer is a start-of-step node: it is booked on its start temperature and does not see its own
-    fall within the step, so a whole step of the building's demand could draw it far below the room. Without a
-    buffer, at and below the threshold (where the buffer is an iterated mixed node that sees its own fall), and while
-    it cools, the circuit runs the whole step.
+    circuit runs while it heats, its requested ratio (``RequestedPartLoadRatio``): the largest fraction that keeps the
+    buffer's end temperature at or above the room's start-of-step temperature
+    (:meth:`hisim.part_load.StartOfStepPartLoadRule.lowering_ratio`). Above the threshold the buffer is a start-of-step
+    node: it is booked on its start temperature and does not see its own fall within the step, so a whole step of the
+    building's demand could draw it far below the room. Without a buffer, at and below the threshold (where the buffer
+    is an iterated mixed node that sees its own fall), and while it cools, the circuit runs the whole step.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1038,13 +1040,13 @@ class HeatDistributionController(cp.L1ControllerComponent):
     WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius = (
         "WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius"
     )
-    #: The fraction of the step the circuit ran, as the heat distribution system reports it.
-    PartLoadRatioRun = "PartLoadRatioRun"
+    #: The actual part-load ratio: the fraction of the step the circuit ran, as the heat distribution system reports it.
+    ActualPartLoadRatio = "ActualPartLoadRatio"
 
     # Outputs
     State = "State"
-    #: The fraction of the step the circuit runs.
-    PartLoadRatio = "PartLoadRatio"
+    #: The requested part-load ratio: the fraction of the step the circuit is to run.
+    RequestedPartLoadRatio = "RequestedPartLoadRatio"
 
     @utils.measure_execution_time
     def __init__(
@@ -1092,8 +1094,8 @@ class HeatDistributionController(cp.L1ControllerComponent):
             end_temperature_without_circuit_input_name=(
                 self.WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius
             ),
-            ratio_run_input_name=self.PartLoadRatioRun,
-            ratio_output_name=self.PartLoadRatio,
+            actual_ratio_input_name=self.ActualPartLoadRatio,
+            requested_ratio_output_name=self.RequestedPartLoadRatio,
             device_description="the heat distribution system's circuit",
         )
         # Outputs
@@ -1166,16 +1168,16 @@ class HeatDistributionController(cp.L1ControllerComponent):
 
     @staticmethod
     def get_default_connections_from_heat_distribution() -> List[cp.ComponentConnection]:
-        """Return the connection of the fraction of the step the circuit reports it ran.
+        """Return the connection of the actual ratio, the fraction of the step the circuit reports it ran.
 
         Returns:
             The one connection.
         """
         return [
             cp.ComponentConnection(
-                HeatDistributionController.PartLoadRatioRun,
+                HeatDistributionController.ActualPartLoadRatio,
                 HeatDistribution.get_classname(),
-                HeatDistribution.PartLoadRatioRun,
+                HeatDistribution.ActualPartLoadRatio,
             )
         ]
 
@@ -1241,7 +1243,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
         self.publish_fraction(stsv, state)
 
     def publish_fraction(self, stsv: cp.SingleTimeStepValues, state: int) -> None:
-        """Publish the fraction of the step the circuit runs, for the valve state of this pass.
+        """Publish the requested ratio, the fraction of the step the circuit is to run, for this pass's valve state.
 
         Heating (1): the largest fraction that keeps the buffer at or above the room's start-of-step temperature.
         Cooling (-1): the whole step, since a cooling circuit raises the buffer. Shut (0): nothing.
@@ -1251,7 +1253,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
             state: The valve state: 1 heating, -1 cooling, 0 shut.
         """
         if state == -1:
-            stsv.set_output_value(self.part_load.ratio_channel, 1.0)
+            stsv.set_output_value(self.part_load.requested_ratio_channel, 1.0)
             return
         self.part_load.publish_lowering(
             stsv,

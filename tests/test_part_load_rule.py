@@ -2,7 +2,7 @@
 
 :meth:`hisim.part_load.PartLoadRule.next_part_load_ratio` is a pure function of the ratio the device ran with and the
 store's start and end temperatures. These tests check it case by case from its table, then iterate it as the simulator
-does (each pass reads only the ratio run and the store's end temperature of the pass before) against synthetic stores
+does (each pass reads only the actual ratio and the store's end temperature of the pass before) against synthetic stores
 with one and with two heating devices, and against a real hot-water tank with a tap draw.
 """
 
@@ -25,10 +25,10 @@ class RuleIteration:
     AIM_IN_CELSIUS: float = TARGET_IN_CELSIUS + PartLoadRule.TARGET_BAND_IN_KELVIN / 2.0
 
     @staticmethod
-    def next_ratio(ratio_run: float, *, start_in_celsius: float, end_in_celsius: float, target_in_celsius: float) -> float:
+    def next_ratio(actual_ratio: float, *, start_in_celsius: float, end_in_celsius: float, target_in_celsius: float) -> float:
         """Return the rule's next ratio for one device, with keyword arguments spelled as the rule's."""
         return PartLoadRule.next_part_load_ratio(
-            ratio_run=ratio_run,
+            actual_ratio=actual_ratio,
             start_temperature_in_celsius=start_in_celsius,
             end_temperature_in_celsius=end_in_celsius,
             target_temperature_in_celsius=target_in_celsius,
@@ -81,7 +81,7 @@ class RuleIteration:
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    "case, ratio_run, start_in_celsius, end_in_celsius, expected",
+    "case, actual_ratio, start_in_celsius, end_in_celsius, expected",
     [
         ("the store starts at the target", 0.5, 60.0, 61.0, 0.0),
         ("the store starts above the target", 1.0, 61.0, 59.0, 0.0),
@@ -98,43 +98,43 @@ class RuleIteration:
     ],
 )
 def test_every_case_of_the_rules_table_gives_its_ratio(
-    case: str, ratio_run: float, start_in_celsius: float, end_in_celsius: float, expected: float
+    case: str, actual_ratio: float, start_in_celsius: float, end_in_celsius: float, expected: float
 ) -> None:
     """Each row of the rule's table, at its edges: a wrong order of the cases or a wrong edge fails one row."""
     ratio = RuleIteration.next_ratio(
-        ratio_run, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0
+        actual_ratio, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0
     )
     assert ratio == pytest.approx(expected, rel=1e-12, abs=0.0), case
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    "ratio_run, start_in_celsius, end_in_celsius",
+    "actual_ratio, start_in_celsius, end_in_celsius",
     [(-0.1, 50.0, 60.0), (1.5, 50.0, 60.0)],
 )
 def test_a_ratio_outside_zero_to_one_is_refused(
-    ratio_run: float, start_in_celsius: float, end_in_celsius: float
+    actual_ratio: float, start_in_celsius: float, end_in_celsius: float
 ) -> None:
-    """A ratio run outside [0, 1] is a device or wiring error that would give a finite wrong ratio; it is refused."""
+    """An actual ratio outside [0, 1] is a device or wiring error that would give a finite wrong ratio; it is refused."""
     with pytest.raises(ValueError, match="part-load rule"):
         RuleIteration.next_ratio(
-            ratio_run, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0
+            actual_ratio, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0
         )
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("ratio_run", [0.1, 0.37, 1.0])
-def test_the_aim_is_the_fixed_point_wherever_the_store_started(ratio_run: float) -> None:
-    """A store that ends at the aim keeps the ratio run, whatever its start temperature: the start sets no answer."""
+@pytest.mark.parametrize("actual_ratio", [0.1, 0.37, 1.0])
+def test_the_aim_is_the_fixed_point_wherever_the_store_started(actual_ratio: float) -> None:
+    """A store that ends at the aim keeps the actual ratio, whatever its start temperature: the start sets no answer."""
     for start_in_celsius in (40.0, 55.0, 59.9):
         assert (
             RuleIteration.next_ratio(
-                ratio_run,
+                actual_ratio,
                 start_in_celsius=start_in_celsius,
                 end_in_celsius=RuleIteration.AIM_IN_CELSIUS,
                 target_in_celsius=RuleIteration.TARGET_IN_CELSIUS,
             )
-            == ratio_run
+            == actual_ratio
         )
 
 

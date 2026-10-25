@@ -6,7 +6,7 @@ output holding a hand-chosen value, and check the ratio, signal and lift they pu
 
 * the boiler controller's raising ratio, the fraction of the step that ends the buffer at the aim (the heating
   curve's supply temperature plus half the 0.05 K target band);
-* its steady charge: a buffer at its target whose end temperature lies inside the target band keeps the ratio run,
+* its steady charge: a buffer at its target whose end temperature lies inside the target band keeps the actual ratio,
   and the charge runs at full signal with the 0.1 K lift of a charge above the target;
 * the rest of a hot-water step: in the heating season the space-heating charge runs the raising ratio, at most the
   1 − hot-water ratio left of the step, at full signal with the lift to the supply temperature;
@@ -114,13 +114,13 @@ def test_the_boiler_controller_commands_the_ratio_that_ends_the_buffer_at_the_ai
             Boiler.C.WaterTemperatureInputFromWaterStorage: 30.0,
             Boiler.C.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius: 38.0,
             Boiler.C.WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius: 26.0,
-            Boiler.C.PartLoadRatioRunSh: 1.0,
+            Boiler.C.ActualPartLoadRatioSh: 1.0,
             Boiler.C.SpaceHeatingSupplyTemperatureSetInCelsius: Boiler.SUPPLY_TEMPERATURE_IN_CELSIUS,
             Boiler.C.HeatingSeason: 1.0,
         },
     )
     assert outputs[Boiler.C.OperatingMode] == HeatingMode.SPACE_HEATING.value
-    assert outputs[Boiler.C.PartLoadRatioSh] == pytest.approx(9.025 / 12.0)
+    assert outputs[Boiler.C.RequestedPartLoadRatioSh] == pytest.approx(9.025 / 12.0)
     assert outputs[Boiler.C.TargetTemperatureShInCelsius] == Boiler.SUPPLY_TEMPERATURE_IN_CELSIUS
     assert outputs[Boiler.C.ControlSignalToGenericBoiler] == 1.0
     assert outputs[Boiler.C.TemperatureDelta] == pytest.approx(5.0)
@@ -131,7 +131,7 @@ def test_the_boiler_controller_commands_the_ratio_that_ends_the_buffer_at_the_ai
 def test_the_boiler_controller_keeps_a_steady_charge_inside_the_target_band() -> None:
     """A buffer at its 35 °C target that ends at 35.02 °C after a 0.4 charge keeps 0.4, at signal 1 and 0.1 K lift.
 
-    35.02 °C lies inside the band from 35 to 35.05 °C, so the ratio run stays. The buffer starts at its target, so
+    35.02 °C lies inside the band from 35 to 35.05 °C, so the actual ratio stays. The buffer starts at its target, so
     the controller's own lift is 0; a charge above the target asks for the 0.1 K lift that makes the boiler fire, at
     full signal, so the pump's largest flow sets the rise.
     """
@@ -142,13 +142,13 @@ def test_the_boiler_controller_keeps_a_steady_charge_inside_the_target_band() ->
             Boiler.C.WaterTemperatureInputFromWaterStorage: 35.0,
             Boiler.C.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius: 35.02,
             Boiler.C.WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius: 33.0,
-            Boiler.C.PartLoadRatioRunSh: 0.4,
+            Boiler.C.ActualPartLoadRatioSh: 0.4,
             Boiler.C.SpaceHeatingSupplyTemperatureSetInCelsius: Boiler.SUPPLY_TEMPERATURE_IN_CELSIUS,
             Boiler.C.HeatingSeason: 1.0,
         },
     )
     assert outputs[Boiler.C.OperatingMode] == HeatingMode.SPACE_HEATING.value
-    assert outputs[Boiler.C.PartLoadRatioSh] == 0.4
+    assert outputs[Boiler.C.RequestedPartLoadRatioSh] == 0.4
     assert outputs[Boiler.C.ControlSignalToGenericBoiler] == 1.0
     assert (
         outputs[Boiler.C.TemperatureDelta] == GenericBoilerController.ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN
@@ -156,18 +156,18 @@ def test_the_boiler_controller_keeps_a_steady_charge_inside_the_target_band() ->
 
 
 @pytest.mark.parametrize(
-    ("hot_water_ratio_run", "expected_space_heating_ratio"),
+    ("actual_hot_water_ratio", "expected_space_heating_ratio"),
     [
         (0.5, 0.25625),  # the raising ratio, 0.5 (35.025 − 34) / (36 − 34), fits into the 0.5 left
         (0.8, 0.2),  # the raising ratio does not fit: the 0.2 left of the step
     ],
 )
 def test_the_rest_of_a_hot_water_step_charges_the_buffer_within_the_budget(
-    hot_water_ratio_run: float, expected_space_heating_ratio: float
+    actual_hot_water_ratio: float, expected_space_heating_ratio: float
 ) -> None:
     """A hot-water step whose charge ends at the tank's aim leaves 1 − r_hw of the step to the space-heating charge.
 
-    The tank starts at 50 °C and ends at 60.03 °C, inside its band, so the hot-water ratio keeps its ratio run. The
+    The tank starts at 50 °C and ends at 60.03 °C, inside its band, so the hot-water ratio keeps its actual ratio. The
     buffer starts at 30 °C; after a 0.5 charge it ends at 36 °C, at 34 °C without the boiler, so the raising ratio is
     ``0.5 (35.025 − 34) / (36 − 34) = 0.25625``, limited to the rest of the step. The remainder runs at signal 1 with
     the 5 K lift from the buffer's 30 °C to the 35 °C supply temperature.
@@ -177,18 +177,18 @@ def test_the_rest_of_a_hot_water_step_charges_the_buffer_within_the_budget(
         {
             Boiler.C.WaterTemperatureInputFromDHWStorage: 50.0,
             Boiler.C.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius: 60.03,
-            Boiler.C.PartLoadRatioRunDhw: hot_water_ratio_run,
+            Boiler.C.ActualPartLoadRatioDhw: actual_hot_water_ratio,
             Boiler.C.WaterTemperatureInputFromWaterStorage: 30.0,
             Boiler.C.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius: 36.0,
             Boiler.C.WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius: 34.0,
-            Boiler.C.PartLoadRatioRunSh: 0.5,
+            Boiler.C.ActualPartLoadRatioSh: 0.5,
             Boiler.C.SpaceHeatingSupplyTemperatureSetInCelsius: Boiler.SUPPLY_TEMPERATURE_IN_CELSIUS,
             Boiler.C.HeatingSeason: 1.0,
         },
     )
     assert outputs[Boiler.C.OperatingMode] == HeatingMode.DOMESTIC_HOT_WATER.value
-    assert outputs[Boiler.C.PartLoadRatioDhw] == hot_water_ratio_run
-    assert outputs[Boiler.C.PartLoadRatioSh] == pytest.approx(expected_space_heating_ratio)
+    assert outputs[Boiler.C.RequestedPartLoadRatioDhw] == actual_hot_water_ratio
+    assert outputs[Boiler.C.RequestedPartLoadRatioSh] == pytest.approx(expected_space_heating_ratio)
     assert outputs[Boiler.C.ControlSignalForSpaceHeatingRemainder] == 1.0
     assert outputs[Boiler.C.TemperatureDeltaForSpaceHeatingRemainderInKelvin] == pytest.approx(5.0)
 
@@ -214,8 +214,8 @@ def test_the_distribution_controller_cuts_the_draw_at_the_room_temperature() -> 
             controller_class.TemperatureIndoorAirAtStartOfStepInCelsius: 20.0,
             controller_class.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius: 12.0,
             controller_class.WaterTemperatureAtEndOfStepWithoutHeatDistributionFromWaterStorageInCelsius: 30.0,
-            controller_class.PartLoadRatioRun: 1.0,
+            controller_class.ActualPartLoadRatio: 1.0,
         },
     )
     assert outputs[controller_class.State] == 1
-    assert outputs[controller_class.PartLoadRatio] == pytest.approx(10.0 / 18.0)
+    assert outputs[controller_class.RequestedPartLoadRatio] == pytest.approx(10.0 / 18.0)

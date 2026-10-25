@@ -40,7 +40,7 @@ components:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
     inputs:
       - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
-      - Boiler                                              # PartLoadRatioRunDhw, the ratio the hot-water charge ran
+      - Boiler                                              # ActualPartLoadRatioDhw, the actual ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
   Buffer:
@@ -88,19 +88,19 @@ tests:
       # the controller's hot-water target, its aim plus its hysteresis (70 °C by default)
     - {output: Controller.TargetTemperatureDhwInCelsius, unit: CELSIUS, min: 40, max: 80}
       # the tank temperature at which the controller ends a hot-water charge, its 60 °C warm-water aim
-    - {output: Controller.PartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
+    - {output: Controller.RequestedPartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
     - {output: Controller.TargetTemperatureShInCelsius, unit: CELSIUS, min: 0, max: 100}
       # the heating curve's supply temperature, at which the space-heating charge ends the buffer
-    - {output: Controller.PartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
+    - {output: Controller.RequestedPartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the space-heating charge runs: 1 at and below the part-load threshold
     - {output: Controller.ControlSignalForSpaceHeatingRemainder, unit: PERCENT, min: 0, max: 1}
       # the signal of that charge: 1 (full power) while the buffer gets one, else 0
     - {output: Controller.TemperatureDeltaForSpaceHeatingRemainderInKelvin, unit: KELVIN, min: 0, max: 80}
       # the lift of a space-heating charge in the rest of a hot-water step: 0 without one, else at least 0.1 K
-    - {output: Boiler.PartLoadRatioRunSh, unit: FRACTION, min: 0, max: 1}
+    - {output: Boiler.ActualPartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the space-heating charge ran, reported back to the controller
-    - {output: Boiler.PartLoadRatioRunDhw, unit: FRACTION, min: 0, max: 1}
+    - {output: Boiler.ActualPartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the hot-water charge ran, reported back to the controller
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}

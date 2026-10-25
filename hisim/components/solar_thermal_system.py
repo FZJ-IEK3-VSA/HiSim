@@ -423,12 +423,12 @@ class SolarThermalSystem(PhysicsComponent):
     runs the flow that lifts the water by its target lift, within a minimum and a maximum flow per m² of collector, and
     the outlet is the inlet plus the lift the collector heat gives at that flow (:meth:`operating_point`).
 
-    The pump runs the part-load ratio its controller commands (``PartLoadRatio``): 1, the whole step, at and below the
-    part-load threshold, and above it the fraction of the step that ends the tank at the controller's target. Below 1
-    the collector publishes the averaged flow at its full-load outlet temperature and books the heat that flow carries;
-    the pump draws the ratio of its electricity. At a commanded ratio of 0 the collector circuit is idle even while the
-    pump signal is on: no flow, and the outlet at the inlet temperature. The collector reports the ratio its pump ran
-    (``PartLoadRatioRun``): the commanded ratio while the pump runs, 0 otherwise.
+    The pump runs the requested part-load ratio its controller commands (``RequestedPartLoadRatio``): 1, the whole step,
+    at and below the part-load threshold, and above it the fraction of the step that ends the tank at the controller's
+    target. Below 1 the collector publishes the averaged flow at its full-load outlet temperature and books the heat
+    that flow carries; the pump draws the ratio of its electricity. At a requested ratio of 0 the collector circuit is
+    idle even while the pump signal is on: no flow, and the outlet at the inlet temperature. The collector reports the
+    actual ratio its pump ran (``ActualPartLoadRatio``): the requested ratio while the pump runs, 0 otherwise.
 
     The collector carries the sensor its controller switches the pump on
     (``CollectorSensorTemperatureAtStartOfStepInCelsius``), read at the start of the step: while the pump stood in the
@@ -451,12 +451,12 @@ class SolarThermalSystem(PhysicsComponent):
     #: pass of the step moves.
     TemperatureCollectorInletAtStartOfStepInCelsius: ClassVar[str] = "TemperatureCollectorInletAtStartOfStepInCelsius"
     ControlSignal: ClassVar[str] = "ControlSignal"
-    #: The fraction of the step the pump runs, commanded by the controller.
-    PartLoadRatio: ClassVar[str] = "PartLoadRatio"
+    #: The requested part-load ratio: the fraction of the step the controller commands the pump to run.
+    RequestedPartLoadRatio: ClassVar[str] = "RequestedPartLoadRatio"
 
     # Outputs
-    #: The fraction of the step the pump ran, reported back to the controller.
-    PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
+    #: The actual part-load ratio: the fraction of the step the pump ran, reported back to the controller.
+    ActualPartLoadRatio: ClassVar[str] = "ActualPartLoadRatio"
     ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
     ThermalEnergyOutput: ClassVar[str] = "ThermalEnergyOutput"
     #: The temperature the collector's sensor reads at the start of the step (°C), on which the controller switches
@@ -586,8 +586,8 @@ class SolarThermalSystem(PhysicsComponent):
         )
         self.part_load_command = PartLoadCommand(
             self,
-            input_name=SolarThermalSystem.PartLoadRatio,
-            ratio_run_output_name=SolarThermalSystem.PartLoadRatioRun,
+            requested_ratio_input_name=SolarThermalSystem.RequestedPartLoadRatio,
+            actual_ratio_output_name=SolarThermalSystem.ActualPartLoadRatio,
             device_description="the solar pump",
         )
 
@@ -956,9 +956,9 @@ class SolarThermalSystem(PhysicsComponent):
         )
         connections.append(
             ComponentConnection(
-                SolarThermalSystem.PartLoadRatio,
+                SolarThermalSystem.RequestedPartLoadRatio,
                 l1_controller_classname,
-                component_class.PartLoadRatio,
+                component_class.RequestedPartLoadRatio,
             )
         )
         return connections
@@ -1229,12 +1229,13 @@ class SolarThermalSystem(PhysicsComponent):
             inlet_temperature_in_celsius=temperature_collector_inlet_deg_c,
             pump_runs=pump_runs,
         )
-        pump_ratio_run = 0.0
+        # the actual ratio: the requested one while the pump runs, 0 while it stands
+        pump_actual_ratio = 0.0
         if pump_runs:
-            pump_ratio_run = self.part_load_command.ratio(stsv)
-            circuit = circuit.at_part_load(part_load_ratio=pump_ratio_run, t_return_c=temperature_collector_inlet_deg_c)
-        self.part_load_command.publish_ratio_run(stsv, pump_ratio_run)
-        self.state = SolarThermalSystemState(pump_ran=pump_ratio_run > 0.0)
+            pump_actual_ratio = self.part_load_command.requested_ratio(stsv)
+            circuit = circuit.at_part_load(part_load_ratio=pump_actual_ratio, t_return_c=temperature_collector_inlet_deg_c)
+        self.part_load_command.publish_actual_ratio(stsv, pump_actual_ratio)
+        self.state = SolarThermalSystemState(pump_ran=pump_actual_ratio > 0.0)
         thermal_power_output_w = circuit.power_w
         thermal_energy_output_wh: float = (
             thermal_power_output_w
@@ -1242,7 +1243,7 @@ class SolarThermalSystem(PhysicsComponent):
             / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         )
         # the solar pump draws its electricity for the part of the step it runs
-        electric_power_demand_solar_pump_w = pump_ratio_run * self.pump_power_in_watt(
+        electric_power_demand_solar_pump_w = pump_actual_ratio * self.pump_power_in_watt(
             pump_runs=pump_runs, is_old_pump=self.config.old_solar_pump
         )
         water_temperature_output_deg_c = circuit.t_supply_c
@@ -1328,13 +1329,14 @@ class SolarThermalSystemController(L1ControllerComponent):
     (1) SolarThermalSystem (control_signal)
 
     The controller also owns how much of a step the pump runs (:class:`hisim.part_load.PartLoadControl`): it switches
-    the pump on and off as before, and commands the part-load ratio ``PartLoadRatio`` with it. At and below the
-    part-load threshold the ratio is 1 whenever the pump runs. Above it the ratio follows
-    :class:`hisim.part_load.PartLoadRule` from the ratio the collector reports its pump ran (``PartLoadRatioRun``) and
-    the storage's start and end temperatures, so that the storage ends the step at its maximum storage temperature, the
-    temperature above which it stops the pump (``TargetTemperatureInCelsius``, 80 °C). Nothing ranks it against a
-    backup charging the same storage: each controller aims at its own target, and the backups' 60 °C warm-water aim
-    lies below the solar maximum, so the sun may heat the storage above the temperature the backups stop at.
+    the pump on and off as before, and commands the requested part-load ratio ``RequestedPartLoadRatio`` with it. At and
+    below the part-load threshold the requested ratio is 1 whenever the pump runs. Above it the requested ratio follows
+    :class:`hisim.part_load.PartLoadRule` from the actual ratio the collector reports its pump ran
+    (``ActualPartLoadRatio``) and the storage's start and end temperatures, so that the storage ends the step at its
+    maximum storage temperature, the temperature above which it stops the pump (``TargetTemperatureInCelsius``, 80 °C).
+    Nothing ranks it against a backup charging the same storage: each controller aims at its own target, and the
+    backups' 60 °C warm-water aim lies below the solar maximum, so the sun may heat the storage above the temperature
+    the backups stop at.
 
     It is a differential controller: the on/off decision compares two temperatures its sensors read at the start of
     the step, as a real solar controller decides on the temperatures it measures at that moment. They are the
@@ -1363,18 +1365,18 @@ class SolarThermalSystemController(L1ControllerComponent):
     # Inputs
     #: The storage's start-of-step temperature, on which the pump stops once the storage is full.
     StorageTemperatureAtStartOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtStartOfStepInCelsius"
-    #: The storage's temperature at the end of the step, which the part-load ratio is set against.
+    #: The storage's temperature at the end of the step, which the requested part-load ratio is set against.
     StorageTemperatureAtEndOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtEndOfStepInCelsius"
-    #: The fraction of the step the pump ran, as the collector reports it.
-    PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
+    #: The actual part-load ratio: the fraction of the step the pump ran, as the collector reports it.
+    ActualPartLoadRatio: ClassVar[str] = "ActualPartLoadRatio"
     #: The temperature the collector's sensor reads at the start of the step, which the pump switches on against the
     #: storage's.
     CollectorSensorTemperatureAtStartOfStepInCelsius: ClassVar[str] = "CollectorSensorTemperatureAtStartOfStepInCelsius"
 
     # Outputs
     ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
-    #: The fraction of the step the pump runs.
-    PartLoadRatio: ClassVar[str] = "PartLoadRatio"
+    #: The requested part-load ratio: the fraction of the step the pump is to run.
+    RequestedPartLoadRatio: ClassVar[str] = "RequestedPartLoadRatio"
     #: The storage temperature above which the controller stops the pump, its maximum storage temperature.
     TargetTemperatureInCelsius: ClassVar[str] = "TargetTemperatureInCelsius"
 
@@ -1445,8 +1447,8 @@ class SolarThermalSystemController(L1ControllerComponent):
         self.part_load = PartLoadControl(
             self,
             end_temperature_input_name=self.StorageTemperatureAtEndOfStepInCelsius,
-            ratio_run_input_name=self.PartLoadRatioRun,
-            ratio_output_name=self.PartLoadRatio,
+            actual_ratio_input_name=self.ActualPartLoadRatio,
+            requested_ratio_output_name=self.RequestedPartLoadRatio,
             target_output_name=self.TargetTemperatureInCelsius,
             device_description="the solar pump",
         )
@@ -1495,7 +1497,7 @@ class SolarThermalSystemController(L1ControllerComponent):
     def get_default_connections_from_solar_thermal_system(
         self,
     ) -> List[ComponentConnection]:
-        """Return the connections from the collector: its sensor temperature at the step start and its pump's ratio run.
+        """Return the connections from the collector: its sensor temperature at the step start and its pump's actual ratio.
 
         Returns:
             The connection list.
@@ -1512,9 +1514,9 @@ class SolarThermalSystemController(L1ControllerComponent):
         )
         connections.append(
             ComponentConnection(
-                SolarThermalSystemController.PartLoadRatioRun,
+                SolarThermalSystemController.ActualPartLoadRatio,
                 collector_classname,
-                SolarThermalSystem.PartLoadRatioRun,
+                SolarThermalSystem.ActualPartLoadRatio,
             )
         )
         return connections
@@ -1524,7 +1526,7 @@ class SolarThermalSystemController(L1ControllerComponent):
 
         The simulator calls this at the start of every step, so the saved state is whether the pump ran and whether
         the full-storage stop held in the previous step: the two hysteresis bands of :meth:`pump_runs` and
-        :meth:`full_storage_stop_holds` read it. The pump counts as having run only if the collector ran a part-load
+        :meth:`full_storage_stop_holds` read it. The pump counts as having run only if the collector ran an actual
         ratio above 0, which is what the collector reports and what a forced pass keeps.
         """
         self.previous_state = dataclasses.replace(self.state)
@@ -1548,12 +1550,13 @@ class SolarThermalSystemController(L1ControllerComponent):
         The full-storage stop follows :meth:`full_storage_stop_holds` from the storage's start-of-step temperature and
         whether the stop held in the previous step. In an unforced pass the pump's on/off decision follows
         :meth:`pump_runs` from the collector's sensor and the storage's start-of-step temperature, the full-storage
-        stop and whether the pump ran in the previous step; the state saves the pump as running only with a ratio
-        above 0, as the collector will report it. Under ``force_convergence`` the controller keeps the pump as the
-        collector reports it ran (:meth:`pump_ran_as_reported`) and its part-load ratio becomes the ratio run, so the
-        device keeps running what it ran and the iteration stops moving. All of it reads only inputs and the saved
-        state. The inputs are start-of-step quantities, so from the second pass on an unforced pass decides as the
-        pass before it; the first pass, which reads the previous step's sensors, may decide differently.
+        stop and whether the pump ran in the previous step; the state saves the pump as running only with a requested
+        ratio above 0, as the collector will report it. Under ``force_convergence`` the controller keeps the pump as
+        the collector reports it ran (:meth:`pump_ran_as_reported`) and its requested-ratio port carries the actual
+        ratio (:meth:`hisim.part_load.PartLoadControl.publish_held`), so the device keeps running what it ran and the
+        iteration stops moving. All of it reads only inputs and the saved state. The inputs are start-of-step
+        quantities, so from the second pass on an unforced pass decides as the pass before it; the first pass, which
+        reads the previous step's sensors, may decide differently.
         """
         storage_temperature_at_start_in_celsius = stsv.get_input_value(
             self.storage_temperature_at_start_deg_c_input_channel
@@ -1563,7 +1566,7 @@ class SolarThermalSystemController(L1ControllerComponent):
             stop_held_in_previous_step=self.previous_state.full_storage_stop_holds,
         )
         if force_convergence:
-            pump_runs = self.pump_ran_as_reported(ratio_run=self.part_load.ratio_run(stsv))
+            pump_runs = self.pump_ran_as_reported(actual_ratio=self.part_load.actual_ratio(stsv))
             stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
             self.part_load.publish_held(stsv)
             pump_ran = pump_runs
@@ -1577,13 +1580,13 @@ class SolarThermalSystemController(L1ControllerComponent):
                 pump_ran_in_previous_step=self.previous_state.pump_runs,
             )
             stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
-            ratio = self.part_load.publish(
+            requested_ratio = self.part_load.publish(
                 stsv,
                 device_runs=pump_runs,
                 start_temperature_in_celsius=storage_temperature_at_start_in_celsius,
                 target_temperature_in_celsius=self.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS,
             )
-            pump_ran = pump_runs and ratio > 0.0
+            pump_ran = pump_runs and requested_ratio > 0.0
         self.state = SolarThermalSystemControllerState(
             pump_runs=pump_ran, full_storage_stop_holds=full_storage_stop_holds
         )
@@ -1653,20 +1656,20 @@ class SolarThermalSystemController(L1ControllerComponent):
         return difference_in_kelvin > least_difference_in_kelvin
 
     @staticmethod
-    def pump_ran_as_reported(*, ratio_run: float) -> bool:
-        """Return whether the pump ran in this pass, from the part-load ratio the collector reports its pump ran with.
+    def pump_ran_as_reported(*, actual_ratio: float) -> bool:
+        """Return whether the pump ran in this pass, from the actual ratio the collector reports its pump ran with.
 
         The collector reports the fraction of the step its pump ran: 0 while it stood, more than 0 while it ran. A
         forced pass keeps the pump as it ran, so the on/off signal stops changing without the controller remembering
-        an earlier pass. For example, a reported ratio of 0.42 means the pump ran.
+        an earlier pass. For example, a reported actual ratio of 0.42 means the pump ran.
 
         Args:
-            ratio_run: The part-load ratio the collector reports, from 0 to 1.
+            actual_ratio: The actual part-load ratio the collector reports, from 0 to 1.
 
         Returns:
             True if the pump ran.
         """
-        return ratio_run > 0.0
+        return actual_ratio > 0.0
 
     def get_cost_opex(
         self,

@@ -63,7 +63,7 @@ class Store:
 
 
 @pytest.mark.parametrize(
-    ("ratio_run", "end", "without", "expected"),
+    ("actual_ratio", "end", "without", "expected"),
     [
         (1.0, 38.0, 32.0, 0.0),  # the store reaches the target without the circuit
         (1.0, 40.0, 32.0, 0.0),  # exactly at the target without it: still 0
@@ -74,10 +74,10 @@ class Store:
         (0.2, 27.0, 26.0, 1.0),  # the line clamped to 1
     ],
 )
-def test_the_raising_ratio_follows_its_table(ratio_run: float, end: float, without: float, expected: float) -> None:
+def test_the_raising_ratio_follows_its_table(actual_ratio: float, end: float, without: float, expected: float) -> None:
     """Every case of the generator's rule, with a 32 °C target."""
     assert StartOfStepPartLoadRule.raising_ratio(
-        ratio_run=ratio_run,
+        actual_ratio=actual_ratio,
         end_temperature_in_celsius=end,
         end_temperature_without_circuit_in_celsius=without,
         target_temperature_in_celsius=32.0,
@@ -87,7 +87,7 @@ def test_the_raising_ratio_follows_its_table(ratio_run: float, end: float, witho
 def test_a_store_starting_above_its_target_is_charged_when_its_draw_would_take_it_below() -> None:
     """The rule reads no start temperature: a store at 33 °C that its draw would leave at 26 °C still gets charged."""
     ratio = StartOfStepPartLoadRule.raising_ratio(
-        ratio_run=1.0,
+        actual_ratio=1.0,
         end_temperature_in_celsius=38.0,
         end_temperature_without_circuit_in_celsius=26.0,
         target_temperature_in_celsius=32.0,
@@ -96,7 +96,7 @@ def test_a_store_starting_above_its_target_is_charged_when_its_draw_would_take_i
 
 
 @pytest.mark.parametrize(
-    ("ratio_run", "end", "without", "expected"),
+    ("actual_ratio", "end", "without", "expected"),
     [
         (1.0, 25.0, 20.0, 0.0),  # without the circuit the store already ends at the floor
         (1.0, 25.0, 19.0, 0.0),  # or below it
@@ -107,10 +107,10 @@ def test_a_store_starting_above_its_target_is_charged_when_its_draw_would_take_i
         (0.5, 21.0, 30.0, 0.5 * 10.0 / 9.0),  # the line from a part ratio
     ],
 )
-def test_the_lowering_ratio_follows_its_table(ratio_run: float, end: float, without: float, expected: float) -> None:
+def test_the_lowering_ratio_follows_its_table(actual_ratio: float, end: float, without: float, expected: float) -> None:
     """Every case of the distribution's rule, with a 20 °C floor."""
     assert StartOfStepPartLoadRule.lowering_ratio(
-        ratio_run=ratio_run,
+        actual_ratio=actual_ratio,
         end_temperature_in_celsius=end,
         end_temperature_without_circuit_in_celsius=without,
         floor_temperature_in_celsius=20.0,
@@ -121,15 +121,15 @@ def test_the_lowering_ratio_follows_its_table(ratio_run: float, end: float, with
     ("rule", "name"),
     [(StartOfStepPartLoadRule.raising_ratio, "target"), (StartOfStepPartLoadRule.lowering_ratio, "floor")],
 )
-def test_a_ratio_run_outside_zero_to_one_is_refused(rule, name: str) -> None:
-    """A ratio run outside [0, 1] is refused by both rules.
+def test_an_actual_ratio_outside_zero_to_one_is_refused(rule, name: str) -> None:
+    """An actual ratio outside [0, 1] is refused by both rules.
 
     A non-finite temperature is not checked here: the rules run on every pass, and a NaN or infinite value is caught
     once after the run by the check of the result columns (hisim/postprocessing/finite_results.py).
     """
     limit = {f"{name}_temperature_in_celsius": 20.0}
     with pytest.raises(ValueError):
-        rule(ratio_run=1.5, end_temperature_in_celsius=30.0, end_temperature_without_circuit_in_celsius=25.0, **limit)
+        rule(actual_ratio=1.5, end_temperature_in_celsius=30.0, end_temperature_without_circuit_in_celsius=25.0, **limit)
 
 
 @pytest.mark.parametrize(
@@ -166,13 +166,13 @@ def test_both_rules_together_settle_within_a_few_passes_inside_the_store_s_range
         )
         generator_ratio, distribution_ratio = (
             StartOfStepPartLoadRule.raising_ratio(
-                ratio_run=generator_ratio,
+                actual_ratio=generator_ratio,
                 end_temperature_in_celsius=end,
                 end_temperature_without_circuit_in_celsius=without_generator,
                 target_temperature_in_celsius=target_in_celsius,
             ),
             StartOfStepPartLoadRule.lowering_ratio(
-                ratio_run=distribution_ratio,
+                actual_ratio=distribution_ratio,
                 end_temperature_in_celsius=end,
                 end_temperature_without_circuit_in_celsius=without_distribution,
                 floor_temperature_in_celsius=floor_in_celsius,

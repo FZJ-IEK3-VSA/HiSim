@@ -406,7 +406,7 @@ def test_at_60_s_the_twins_close_their_iterated_buffer_and_agree_on_both_circuit
 def test_at_the_threshold_every_part_load_ratio_is_0_or_1_and_1_while_the_generator_heats_its_buffer(
     name: str, device_on_column: str, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """At 600 s every part-load ratio, commanded or run, is exactly 0 or 1, and 1 in every step the generator charges.
+    """At 600 s every part-load ratio, requested or actual, is exactly 0 or 1, and 1 in every step the generator charges.
 
     With the iterated buffer the part-load controls publish 1 while their device runs, so a generator never runs a
     fraction of a step. That is what keeps the heat pump's two tracks of its mode (its control track and the published
@@ -417,16 +417,20 @@ def test_at_the_threshold_every_part_load_ratio_is_0_or_1_and_1_while_the_genera
     Fails if any ratio column holds a fraction, or if a generator charged its buffer at a ratio other than 1.
     """
     results, *_ = BufferTwins.run(name, str(tmp_path_factory.mktemp(name)), BufferTwins.THRESHOLD_SECONDS_PER_TIMESTEP)
-    ratios = [column for column in results.columns if " - PartLoadRatio" in column]
+    ratios = [
+        column
+        for column in results.columns
+        if " - RequestedPartLoadRatio" in column or " - ActualPartLoadRatio" in column
+    ]
     assert len(ratios) >= 3, ratios
     for column in ratios:
         values = results[column].to_numpy(dtype=float)
         assert np.all((values == 0.0) | (values == 1.0)), (column, sorted(set(values.tolist()))[:5])
     generator = device_on_column.split(" - ", 1)[0]
-    ratio_run = BufferTwins.column(results, f"{generator} - PartLoadRatioRunSh")
+    actual_ratio = BufferTwins.column(results, f"{generator} - ActualPartLoadRatioSh")
     charging = BufferTwins.column(results, device_on_column) > 0.0
     assert np.any(charging), "the generator never charged the buffer in the window"
-    assert np.all(ratio_run[charging] == 1.0)
+    assert np.all(actual_ratio[charging] == 1.0)
     if generator == "MoreAdvancedHeatPumpHPLib":
         published_space_heating = BufferTwins.column(results, f"{generator} - OnOffStateHeatpump") == 1.0
-        assert np.array_equal(published_space_heating, ratio_run == 1.0)
+        assert np.array_equal(published_space_heating, actual_ratio == 1.0)

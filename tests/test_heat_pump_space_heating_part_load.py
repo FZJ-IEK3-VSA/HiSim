@@ -101,11 +101,11 @@ class HeatPumpStep:
 
 
 def test_the_heat_pump_runs_the_commanded_ratio_of_a_space_heating_step_and_reports_it() -> None:
-    """At a commanded ratio of 0.5 the flow and the heat are half the whole step's, and the ratio run is 0.5."""
-    whole = HeatPumpStep.outputs(PartLoadRatioSh=1.0)
-    half = HeatPumpStep.outputs(PartLoadRatioSh=0.5)
-    assert whole[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 1.0
-    assert half[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 0.5
+    """At a commanded ratio of 0.5 the flow and the heat are half the whole step's, and the actual ratio is 0.5."""
+    whole = HeatPumpStep.outputs(RequestedPartLoadRatioSh=1.0)
+    half = HeatPumpStep.outputs(RequestedPartLoadRatioSh=0.5)
+    assert whole[MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh] == 1.0
+    assert half[MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh] == 0.5
     assert half[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] == pytest.approx(
         0.5 * whole[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH]
     )
@@ -130,11 +130,11 @@ def test_a_ratio_of_zero_is_published_off_and_does_not_start_the_minimum_idle_ti
     heat_pump = SingleStep.heat_pump(
         PositionHotWaterStorageInSystemSetup.PARALLEL, seconds_per_timestep=900, cycling_mode=True
     )
-    idle = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.0})
+    idle = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "RequestedPartLoadRatioSh": 0.0})
     assert idle[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 0
     assert idle[MoreAdvancedHeatPumpHPLib.TimeOff] == 900
     assert idle[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 0
-    assert idle[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 0.0
+    assert idle[MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal] == 0.0
@@ -143,8 +143,8 @@ def test_a_ratio_of_zero_is_published_off_and_does_not_start_the_minimum_idle_ti
     assert idle[MoreAdvancedHeatPumpHPLib.COP] == 0.0
     assert idle[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 0
 
-    charge = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.5})
-    assert charge[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 0.5
+    charge = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "RequestedPartLoadRatioSh": 0.5})
+    assert charge[MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh] == 0.5
     assert charge[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] > 0.0
     assert charge[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 1
     assert charge[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 900
@@ -152,7 +152,7 @@ def test_a_ratio_of_zero_is_published_off_and_does_not_start_the_minimum_idle_ti
     assert charge[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 1
     assert charge[MoreAdvancedHeatPumpHPLib.CounterSwitchToSH] == 1
 
-    fraction = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "PartLoadRatioSh": 0.3})
+    fraction = SingleStep.step(heat_pump, {**HeatPumpStep.SPACE_HEATING, "RequestedPartLoadRatioSh": 0.3})
     assert fraction[MoreAdvancedHeatPumpHPLib.HeatPumpOnOffState] == 1
     assert fraction[MoreAdvancedHeatPumpHPLib.TimeOnHeating] == 1800
     assert fraction[MoreAdvancedHeatPumpHPLib.CounterOnOff] == 1
@@ -171,10 +171,10 @@ def test_a_ratio_of_zero_is_published_off_and_does_not_start_the_minimum_idle_ti
 
 
 def test_a_hot_water_step_runs_whole_and_reports_no_space_heating_ratio() -> None:
-    """In a hot-water step the space-heating ratio does nothing: the hot-water charge runs whole, the ratio run is 0."""
-    whole = HeatPumpStep.outputs(OnOffSwitchDHW=2, PartLoadRatioSh=1.0)
-    commanded = HeatPumpStep.outputs(OnOffSwitchDHW=2, PartLoadRatioSh=0.3)
-    assert commanded[MoreAdvancedHeatPumpHPLib.PartLoadRatioRunSh] == 0.0
+    """In a hot-water step the space-heating ratio does nothing: the hot-water charge runs whole, the actual ratio is 0."""
+    whole = HeatPumpStep.outputs(OnOffSwitchDHW=2, RequestedPartLoadRatioSh=1.0)
+    commanded = HeatPumpStep.outputs(OnOffSwitchDHW=2, RequestedPartLoadRatioSh=0.3)
+    assert commanded[MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh] == 0.0
     assert commanded[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] == whole[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW]
 
 
@@ -194,7 +194,7 @@ class ControllerStep:
         MoreAdvancedHeatPumpHPLibControllerSpaceHeating.DailyAverageOutsideTemperature: 0.0,
         MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius: 38.0,
         WITHOUT_HEAT_PUMP: 30.0,
-        MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioRunSh: 1.0,
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ActualPartLoadRatioSh: 1.0,
     }
 
     @staticmethod
@@ -242,13 +242,13 @@ def test_the_controller_sets_the_ratio_that_ends_the_buffer_half_the_upper_offse
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH] == 1
     assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius] == 37.5
     expected = StartOfStepPartLoadRule.raising_ratio(
-        ratio_run=1.0,
+        actual_ratio=1.0,
         end_temperature_in_celsius=38.0,
         end_temperature_without_circuit_in_celsius=30.0,
         target_temperature_in_celsius=37.5,
     )
     assert 0.0 < expected < 1.0
-    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh] == pytest.approx(expected)
+    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.RequestedPartLoadRatioSh] == pytest.approx(expected)
 
 
 def test_the_energy_manager_s_raise_lifts_the_target() -> None:
@@ -275,12 +275,12 @@ def test_the_target_follows_the_configured_upper_offset() -> None:
 def test_a_buffer_at_its_target_that_its_draw_would_empty_is_charged() -> None:
     """A buffer at 38 °C, above the 37.5 °C target, that would end at 30 °C without the heat pump gets a charge."""
     outputs = ControllerStep.outputs(WaterTemperatureInput=38.0)
-    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh] > 0.0
+    assert outputs[MoreAdvancedHeatPumpHPLibControllerSpaceHeating.RequestedPartLoadRatioSh] > 0.0
 
 
 def test_without_a_buffer_off_and_in_a_forced_pass_the_ratio_follows_its_other_rules() -> None:
     """No buffer wired: the whole step. Off: nothing. A forced pass: the ratio the heat pump reports it ran."""
-    ratio = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.PartLoadRatioSh
+    ratio = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.RequestedPartLoadRatioSh
     assert ControllerStep.outputs(wired=False)[ratio] == 1.0
     assert ControllerStep.outputs(state="off", WaterTemperatureInput=40.0)[ratio] == 0.0
-    assert ControllerStep.outputs(force_convergence=True, PartLoadRatioRunSh=0.4)[ratio] == 0.4
+    assert ControllerStep.outputs(force_convergence=True, ActualPartLoadRatioSh=0.4)[ratio] == 0.4

@@ -82,12 +82,9 @@ class DhwTwins:
     #: The kinds of derived file run beside the recorded twins: the grouped twins and the composed files.
     DERIVED_KINDS: Tuple[str, ...] = ("grouped", "composed")
 
-    #: The prefix of every controller's part-load ratio output; the ratios its devices report ran start with
-    #: :attr:`PART_LOAD_RATIO_RUN_PREFIX`.
-    PART_LOAD_RATIO_PREFIX: str = "PartLoadRatio"
-
-    #: The prefix of the part-load ratio a device reports it ran with.
-    PART_LOAD_RATIO_RUN_PREFIX: str = "PartLoadRatioRun"
+    #: The prefix of every controller's requested part-load ratio output. The actual ratios its devices report start
+    #: with ``ActualPartLoadRatio`` and so do not match it.
+    REQUESTED_PART_LOAD_RATIO_PREFIX: str = "RequestedPartLoadRatio"
 
     #: The car twin reads the generator's driving profile, which a predefined profile does not carry.
     NEEDS_THE_LOAD_PROFILE_GENERATOR: Tuple[str, ...] = ("household_heatpump_car_building_sizer",)
@@ -336,15 +333,15 @@ def record_histogram(name: str, passes: Tuple[int, ...], forced: Tuple[bool, ...
 def partial_part_load_steps(results: pd.DataFrame) -> np.ndarray:
     """Return, per step, whether some controller ran its device at a part-load ratio strictly between 0 and 1 on it.
 
-    Every controller that sets a part-load ratio publishes it under a field name starting with ``PartLoadRatio``; the
-    devices' reports of the ratio they ran start with ``PartLoadRatioRun`` and are left out. A ratio of 1 is a
-    whole-step charge, which the part-load rule does not iterate, so it does not count.
+    Every controller that sets a part-load ratio publishes its requested ratio under a field name starting with
+    ``RequestedPartLoadRatio``; the devices' reports of the actual ratio they ran start with ``ActualPartLoadRatio``
+    and are left out. A ratio of 1 is a whole-step charge, which the part-load rule does not iterate, so it does not
+    count.
     """
     columns = [
         column
         for column in results.columns
-        if column.split(" - ", 1)[-1].startswith(DhwTwins.PART_LOAD_RATIO_PREFIX)
-        and not column.split(" - ", 1)[-1].startswith(DhwTwins.PART_LOAD_RATIO_RUN_PREFIX)
+        if column.split(" - ", 1)[-1].startswith(DhwTwins.REQUESTED_PART_LOAD_RATIO_PREFIX)
     ]
     running: np.ndarray = np.zeros(len(results), dtype=bool)
     for column in columns:

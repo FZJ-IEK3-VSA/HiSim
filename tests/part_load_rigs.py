@@ -124,7 +124,7 @@ class TankRig:
         Each pass restores the tank to the step start, applies the rule to the ratio the heater ran in the previous
         pass and the tank's end temperature for it, and steps the tank with the averaged flow at the new ratio:
         controller, device and tank in that order. The first pass starts from the whole step, as a heater that ran
-        nothing before does under the rule. Nothing but the ratio run and the end temperature carries from one pass to
+        nothing before does under the rule. Nothing but the actual ratio and the end temperature carries from one pass to
         the next, as in the simulator.
 
         Args:
@@ -144,18 +144,18 @@ class TankRig:
         stsv.set_output_value(fakes[0], draw_in_liter_per_step)
         stsv.set_output_value(fakes[1], supply_temperature_in_celsius)
         end_temperature_in_celsius = start_temperature_in_celsius
-        ratio_run = 0.0
+        actual_ratio = 0.0
         ratios: List[float] = []
         for _ in range(passes):
             tank.i_restore_state()
-            ratio_run = PartLoadRule.next_part_load_ratio(
-                ratio_run=ratio_run,
+            actual_ratio = PartLoadRule.next_part_load_ratio(
+                actual_ratio=actual_ratio,
                 start_temperature_in_celsius=start_temperature_in_celsius,
                 end_temperature_in_celsius=end_temperature_in_celsius,
                 target_temperature_in_celsius=target_temperature_in_celsius,
             )
-            ratios.append(ratio_run)
-            stsv.set_output_value(fakes[2], ratio_run * full_load_mass_flow_in_kg_per_second)
+            ratios.append(actual_ratio)
+            stsv.set_output_value(fakes[2], actual_ratio * full_load_mass_flow_in_kg_per_second)
             tank.i_simulate(0, stsv, False)
             end_temperature_in_celsius = Rig.output(stsv, tank.water_temperature_at_end_of_step_in_celsius_channel)
         return ratios, end_temperature_in_celsius
@@ -192,7 +192,7 @@ class BoilerRig:
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
             ),
-            "ratio": (boiler.dhw_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            "requested_ratio": (boiler.dhw_part_load_command.requested_ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
             "return_sh_c": (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             "return_dhw_c": (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
         }
@@ -201,13 +201,13 @@ class BoilerRig:
 
     @classmethod
     def charge(
-        cls, seconds_per_timestep: int, ratio: float, mode: HeatingMode = HeatingMode.DOMESTIC_HOT_WATER
+        cls, seconds_per_timestep: int, requested_ratio: float, mode: HeatingMode = HeatingMode.DOMESTIC_HOT_WATER
     ) -> Dict[str, float]:
         """Return the booked outputs of one step at full signal from a 55 °C tank mean, 15 K lift and 70 °C cap.
 
         Args:
             seconds_per_timestep: The step length, s.
-            ratio: The part-load ratio the controller commands.
+            requested_ratio: The requested part-load ratio the controller commands.
             mode: The operating mode the controller commands.
 
         Returns:
@@ -220,7 +220,7 @@ class BoilerRig:
             ("mode", mode.value),
             ("lift_k", 15.0),
             ("set_c", 70.0),
-            ("ratio", ratio),
+            ("requested_ratio", requested_ratio),
             ("return_sh_c", 40.0),
             ("return_dhw_c", 55.0),
         ):
@@ -232,7 +232,7 @@ class BoilerRig:
             "heat_w": Rig.output(stsv, boiler.thermal_output_power_dhw_channel),
             "fuel_w": Rig.output(stsv, boiler.total_fuel_input_power_channel),
             "fuel_wh": Rig.output(stsv, boiler.energy_demand_dhw_channel),
-            "ratio_run": Rig.output(stsv, boiler.dhw_part_load_command.ratio_run_channel),
+            "actual_ratio": Rig.output(stsv, boiler.dhw_part_load_command.actual_ratio_channel),
             "space_heating_heat_w": Rig.output(stsv, boiler.thermal_output_power_sh_channel),
         }
 
@@ -270,7 +270,7 @@ class BoilerControllerRig:
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
             ),
-            "ratio_run": (controller.dhw_part_load.ratio_run_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            "actual_ratio": (controller.dhw_part_load.actual_ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
             "flow_set_c": (controller.supply_temperature_set_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             "heating_season": (controller.heating_season_channel, lt.LoadTypes.ANY, lt.Units.ANY),
         }
@@ -279,22 +279,22 @@ class BoilerControllerRig:
 
     @staticmethod
     def set_inputs(
-        stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float, ratio_run: float = 1.0
+        stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float, actual_ratio: float = 1.0
     ) -> None:
-        """Write a heating-season step with a warm buffer, the given tank temperatures and the boiler's ratio run.
+        """Write a heating-season step with a warm buffer, the given tank temperatures and the boiler's actual ratio.
 
         Args:
             stsv: The controller's step values.
             fakes: The fakes by name.
             tank_start_c: The tank's start-of-step temperature, °C.
             tank_end_c: The tank's end-of-step temperature, °C.
-            ratio_run: The part-load ratio the boiler reports it ran with, from 0 to 1.
+            actual_ratio: The part-load ratio the boiler reports it ran with, from 0 to 1.
         """
         for name, value in (
             ("buffer_c", 60.0),
             ("tank_start_c", tank_start_c),
             ("tank_end_c", tank_end_c),
-            ("ratio_run", ratio_run),
+            ("actual_ratio", actual_ratio),
             ("flow_set_c", 40.0),
             ("heating_season", 1.0),
         ):
@@ -371,7 +371,7 @@ class CollectorRig:
     @staticmethod
     def charge(
         seconds_per_timestep: int,
-        ratio: float,
+        requested_ratio: float,
         control_signal: float = 1.0,
         *,
         inlet_at_start_of_step_c: float = 45.0,
@@ -383,7 +383,7 @@ class CollectorRig:
 
         Args:
             seconds_per_timestep: The step length, s.
-            ratio: The part-load ratio the controller commands.
+            requested_ratio: The requested part-load ratio the controller commands.
             control_signal: The controller's pump signal, 1 for running.
             inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C; by default the
                 step mean.
@@ -411,7 +411,7 @@ class CollectorRig:
                 system.Azimuth: 180.0,
                 system.TemperatureCollectorInletDegC: 45.0,
                 system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
-                system.PartLoadRatio: ratio,
+                system.RequestedPartLoadRatio: requested_ratio,
             },
         )
 
@@ -442,10 +442,10 @@ class SolarControllerRig:
         *,
         start_c: float,
         end_c: Optional[float] = None,
-        ratio_run: float = 1.0,
+        actual_ratio: float = 1.0,
         collector_above_storage_in_kelvin: float = 20.0,
     ) -> Dict[str, float]:
-        """Return the controller's inputs: the storage's temperatures, the collector's sensor and the pump's ratio run.
+        """Return the controller's inputs: the storage's temperatures, the collector's sensor and the pump's actual ratio.
 
         By default the collector is sunny, its sensor 20 K above the storage's start-of-step temperature, and the
         storage ends the step where it started.
@@ -453,7 +453,7 @@ class SolarControllerRig:
         Args:
             start_c: The storage's start-of-step temperature, °C.
             end_c: The storage's end-of-step temperature, °C; ``start_c`` when omitted.
-            ratio_run: The part-load ratio the collector reports its pump ran with.
+            actual_ratio: The part-load ratio the collector reports its pump ran with.
             collector_above_storage_in_kelvin: How far the collector's sensor reads above ``start_c``, K.
 
         Returns:
@@ -465,5 +465,5 @@ class SolarControllerRig:
             controller_class.StorageTemperatureAtEndOfStepInCelsius: start_c if end_c is None else end_c,
             controller_class.CollectorSensorTemperatureAtStartOfStepInCelsius: start_c
             + collector_above_storage_in_kelvin,
-            controller_class.PartLoadRatioRun: ratio_run,
+            controller_class.ActualPartLoadRatio: actual_ratio,
         }

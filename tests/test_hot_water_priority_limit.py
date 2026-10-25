@@ -237,7 +237,7 @@ class BoilerControllerSteps:
                     GenericBoilerController.WaterTemperatureInputFromWaterStorage: 30.0,
                     GenericBoilerController.WaterTemperatureInputFromDHWStorage: tank_in_celsius,
                     GenericBoilerController.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius: tank_in_celsius,
-                    GenericBoilerController.PartLoadRatioRunDhw: 1.0,
+                    GenericBoilerController.ActualPartLoadRatioDhw: 1.0,
                     GenericBoilerController.SpaceHeatingSupplyTemperatureSetInCelsius: 40.0,
                     GenericBoilerController.HeatingSeason: 1.0 if heating_season else 0.0,
                 },

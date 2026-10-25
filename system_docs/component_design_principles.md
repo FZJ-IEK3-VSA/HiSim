@@ -90,8 +90,8 @@ boiler's circulation pump, a collector's efficiency curve, an emitter's design p
   never sees it, so it costs no convergence pass. It is tested alone, without building a simulation.
 - **Hierarchy: assembly -> component -> subcomponent.** An assembly wires components, a component owns its
   subcomponents. A subcomponent never holds or calls a component.
-- **Classes are shared, instances are not.** Any component may use a subcomponent class: one circulation pump
-  class can serve the boiler, the heat pump, the solar collector and the heat distribution system. Each component
+- **Classes are shared, instances are not.** Any component may use a subcomponent class: one pump class
+  (`FixedLiftPump`) serves the solar collector and district heating's hot water. Each component
   builds its own instances; an instance is never reachable from two components. Two components that must agree on
   a value do so through the same configuration value, a sizing rule or a port, never through a shared object.
 - **Marked.** Every subcomponent class inherits `hisim.subcomponents.base.Subcomponent`, a marker without behaviour.
@@ -115,9 +115,15 @@ boiler's circulation pump, a collector's efficiency curve, an emitter's design p
 - **Plain values in.** Arguments are plain values, keyword-only, with their units in their names
   (`heat_power_in_watt=...`). No `SingleTimeStepValues`, no `ComponentInput` or `ComponentOutput`, no simulation
   parameters object: the component reads its inputs and passes the values.
-- **Built once, checked when built.** A component builds its subcomponents once, through classmethod factories, from
-  values it got from its configuration or a sizing rule (`CirculationPump.flow_matches_controller_lift_sized_for(...)`). `__post_init__` refuses an
-  invalid setting, so a bad subcomponent fails when its component is built, not in the first step.
+- **Built once, checked when built.** A component builds its subcomponents once, through their constructors or a
+  classmethod that holds a sizing formula, from values it got from its configuration or a sizing rule
+  (`ControllerLiftPump.sized_for(...)`). `__post_init__` refuses an invalid setting, so a bad subcomponent fails when
+  its component is built, not in the first step.
+- **One class per law.** Interchangeable laws of one part are one class each, with only their own fields and a
+  method that takes exactly the values that law reads (a strategy, `coding_style.md` §3): the pumps
+  `ConstantFlowPump`, `FixedLiftPump`, `ControllerLiftPump` and `TargetSupplyTemperaturePump`. Not one class with a
+  mode Enum, fields that only some modes read and a branch over the mode in every call. Agreed with the owner on
+  2026-10-25.
 - **Stateless.** A subcomponent holds no state across steps. State that changes from step to step stays in the
   component's state dataclass, and the component passes it in.
 

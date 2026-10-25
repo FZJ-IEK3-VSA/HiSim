@@ -42,7 +42,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": 1.8
+    "value": 1.9
   },
   "BUI1.Air Conditioner.OPEX - CO2 Footprint (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -57,7 +57,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 0.738
+    "value": 0.7789999999999999
   },
   "BUI1.Air Conditioner.OPEX - Electricity costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -72,7 +72,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 0.5409
+    "value": 0.57095
   },
   "BUI1.Air Conditioner.OPEX - Maintenance costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -102,7 +102,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": -53.9
+    "value": -43.6
   },
   "BUI1.Air Conditioner.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -117,7 +117,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 0.8658538812785388
+    "value": 0.9068538812785387
   },
   "BUI1.Air Conditioner.Total Costs (CAPEX for simulated period + OPEX energy and maintenance) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -132,7 +132,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 2.4587082191780825
+    "value": 2.488758219178082
   },
   "BUI1.Battery.Battery charging energy": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.0
+    "value": 0.03802979500681912
   },
   "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 24.83860803354775
+    "value": 26.183047341089207
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -336,7 +336,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.0
+    "value": 2.3936812652807506
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -4.6992793922181875
+    "value": -15.85878853034839
   },
   "BUI1.Building.Theoretical heating demand (Building)": {
     "building": "BUI1",

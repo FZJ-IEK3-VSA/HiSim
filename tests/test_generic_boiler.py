@@ -640,7 +640,7 @@ def test_a_lift_close_to_zero_runs_the_pumps_largest_flow_and_books_the_burners_
     :attr:`PumpCase.MAXIMAL_MASS_FLOW_IN_KG_PER_SECOND`, so a 0.01 K lift is raised to the rise the heat gives at that
     flow: about 5 K at full power, about 0.5 K at the 2 kW minimum. The heat the boiler books is the heat that flow
     carries, which is the burner's heat, and the fuel the commanded power. The expected heats are written out by hand,
-    not read from the burner's efficiency law, so a fault in that law fails here too.
+    not read from the burner subcomponent's efficiency curve, so a fault in that curve fails here too.
     """
     heat_in_watt = heat_in_watt_per_circuit[circuit]
     mode, space_heating_return_in_celsius, hot_water_return_in_celsius = PumpCase.CIRCUITS[circuit]
@@ -1519,7 +1519,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
 ) -> None:
     """Every boiler that charges a buffer leaves the flow input unwired; its outputs must not move by a bit.
 
-    Unwired, every output equals the one the boiler's own pump law gives: the space-heating circuit's firing is
+    Unwired, every output equals the one the boiler's own pump subcomponent gives: the space-heating circuit's firing is
     :meth:`GenericBoiler.fired_circuit` at the lift the pump raises the asked one to, part-loaded by
     :meth:`GenericBoiler.part_loaded_firing`, compared exactly, not approximately.
     """

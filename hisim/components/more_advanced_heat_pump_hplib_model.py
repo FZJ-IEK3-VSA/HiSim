@@ -14,6 +14,8 @@ from typing import Any, Callable, ClassVar, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
+from hisim.subcomponents.base import Subcomponent
+
 
 @unique
 class ScopApplication(str, Enum):
@@ -23,7 +25,7 @@ class ScopApplication(str, Enum):
     W55 = "W55"
 
 
-class StandardizedSeasonalCop:
+class StandardizedSeasonalCop(Subcomponent):
     """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
 
     What a manufacturer states on the datasheet or ErP fiche is a SCOP rated this way, so
@@ -165,7 +167,7 @@ class StandardizedSeasonalCop:
         return heat / electricity
 
 
-class ScopCalibration:
+class ScopCalibration(Subcomponent):
     """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
 
     hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole

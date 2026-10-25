@@ -23,6 +23,11 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
       stsv.set_output_value(self.end_temperature_channel, end_temperature_in_celsius)
   ```
 
+- **Part of a device's behaviour is a subcomponent.** A burner's modulation, a pump's largest flow or a collector's
+  efficiency curve is a plain class the component builds once from its configuration and calls in `i_simulate`,
+  marked by inheriting `hisim.subcomponents.base.Subcomponent`. It takes plain values, keyword-only, with units in
+  their names, holds no state across steps and is tested alone. The definition, its location and its import and
+  performance rules are in `component_design_principles.md`, section C.
 - **Clean Code.** A function does one thing, at one level of abstraction, and is short enough to read at once.
   Names reveal intent. No flag argument that switches between two behaviours: write two functions. A function
   whose name says it returns something does not also change state. Early returns instead of deep nesting.
@@ -93,10 +98,17 @@ violations are fixed bead by bead, never in one big rewrite.
 10. **Composition over inheritance.** A class hierarchy is flat: one kind base class (`DataSourceComponent`,
     `L2ControllerComponent`, `L1ControllerComponent`, `PhysicsComponent` or `MeterComponent`, which carry no state
     and no behaviour), then the concrete class; `DynamicComponent` or `StatelessComponent` may stand beside the kind
-    base. No mixins that carry state. Shared behaviour sits in a helper that is passed in or called, not in a base
-    class.
+    base; a subcomponent inherits only the `Subcomponent` marker. No mixins that carry state. Shared behaviour sits
+    in a helper that is passed in or called, not in a base class.
 11. **Duplicates are searched for.** A regular job compares the first docstring sentences of all functions (§1)
     and files the candidates for merging as beads (hisim-repo-cleanup-o6a.17).
+12. **No frozen dataclass is constructed per call in an `i_simulate` path.** Building a frozen dataclass costs
+    about 270 ns per call on top of the calculation (360 ns with keywords; Python 3.12, measured on 2026-10-23),
+    and code on the `i_simulate` path runs in every pass of every step. A per-call result with several values is a
+    `NamedTuple` (about 150 ns), a single value is a plain float with its unit in the name. Frozen dataclasses stay
+    the rule (rule 3) for what is built once or once per step outside `i_simulate`: configurations, subcomponent
+    instances, the state committed in `i_save_state`. Existing per-call dataclasses are replaced when their code
+    is next touched.
 
 ## 3. Design patterns
 

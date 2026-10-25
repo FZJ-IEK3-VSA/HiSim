@@ -8,8 +8,8 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
     inputs:
-      - HeatingCurveController
       - CondensingGasBoiler
+      - HeatingCurveController
       - SimpleHotWaterStorage
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
@@ -17,8 +17,8 @@ components:
     config:
       heating_system: RADIATOR
     inputs:
-      - HeatingCurveController
       - HeatDistributionSystem
+      - HeatingCurveController
       - Building
       - SimpleHotWaterStorage
   HeatingCurveController:

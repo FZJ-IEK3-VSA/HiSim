@@ -164,6 +164,34 @@ def test_missing_golden_bails_before_running(tmp_path: Path) -> None:
     assert report["pairs"][0]["status"] == "missing_golden"
 
 
+def test_a_shard_with_one_pair_missing_its_golden_fails_before_running_any(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A new parameter set before its first bless: its pair fails the shard, and nothing runs.
+
+    The shard holds a 60 s pair that has its golden and a 900 s pair that has none yet, as every golden-check
+    shard did when the 900 s sets joined the config (hisim-repo-cleanup-o6a.35). Catches the check passing on
+    the pairs it can compare and leaving the new one out, which would pass a gate that checks nothing at 900 s.
+    """
+    config = _config_dict()
+    config["parameter_sets"].append({**config["parameter_sets"][0], "id": "one_week_900s", "seconds_per_timestep": 900})
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config))
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, general({"a": 1.0}))
+
+    def run_fn_must_not_run(*_a, **_k):  # pragma: no cover
+        raise AssertionError("must not run simulations when a golden is missing")
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=tmp_path,
+        run_fn=run_fn_must_not_run, pairs=[("setup_a", "one_week_60s"), ("setup_a", "one_week_900s")],
+    )
+
+    assert rc == 1
+    report = _read_report(tmp_path)
+    assert [(p["parameter_set_id"], p["status"]) for p in report["pairs"]] == [("one_week_900s", "missing_golden")]
+    assert "[MISSING GOLDEN] setup_a / one_week_900s" in capsys.readouterr().out
+
+
 def test_run_error_is_failure(tmp_path: Path) -> None:
     """A run that reports an error is surfaced as a ``run_error`` failure."""
     config_path = _write_config(tmp_path)

@@ -12,7 +12,10 @@
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
 #
 # A bless regenerates the goldens of golden_config.json's entries, every pair in all three horizons:
-# 23 January-week, 23 July-week and 23 full-year pairs. The entries are the Python setups and the
+# 46 January-week pairs (23 at 60 s, 23 at 900 s), 23 July-week pairs and 46 full-year pairs (23 at
+# 60 s, 23 at 900 s). A pair without a golden yet, such as a new setup's or a new parameter set's,
+# gets one: golden_update.py writes the fresh leaves when it finds no file to merge onto. The entries
+# are the Python setups and the
 # energy-system file gas_boiler_household. The YAML twins and the composed files have no goldens of
 # their own; the gates hold them to the Python setup's.
 #
@@ -31,8 +34,8 @@
 # shards of four pairs at once, and the July week pairs in four shards of their own: they weigh 5 to
 # 254 s each, the shards 140 to 254 s of busiest lane, and a week shard took 4 to 5 minutes, well
 # inside the slowest full-year job. A job per week pair would not shorten the bless and would pay 18
-# more container starts, checkouts and installs of about a minute each. That makes 31 regenerate
-# jobs on the 56 runners, the full-year jobs listed first and heaviest first. The price is runner
+# more container starts, checkouts and installs of about a minute each. That makes 54 regenerate
+# jobs on the 56 runners (46 full-year jobs, the 900 s years among them, and eight week shards), the full-year jobs listed first and heaviest first. The price is runner
 # time: a job per full-year pair pays its own start and no longer shares a runner with a second
 # pair, about 140 runner-minutes per bless against about 80 in shards. Each job uploads exactly its
 # own goldens under a name of its own (golden-<cell name>); collect merges them all and checks that

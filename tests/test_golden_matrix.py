@@ -90,18 +90,19 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     The expected counts are hand-written truths about the shipped config — twenty-three entries (the
     twenty-two Python setups and the energy-system file ``gas_boiler_household``) run the week, and all
     of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
-    decision 2026-10-11), and all of them the July week (hisim-midyear-windows-9g2.8, the electrolyzer since hisim-xgzf)
-    — rather than re-derived through the very predicate under test, which would
+    decision 2026-10-11), and all of them the July week (hisim-midyear-windows-9g2.8, the electrolyzer since hisim-xgzf).
+    The week and the year each run at 60 s and at 900 s (hisim-repo-cleanup-o6a.35), so those horizons
+    hold two pairs per entry — rather than re-derived through the very predicate under test, which would
     reproduce any logic error on both sides of the assertion. A new setup joining the config moves
     these literals on purpose: the reviewer of that change should see the gate grow.
     """
     config = json.loads(REAL_CONFIG.read_text())
 
     assert len(config["setups"]) == 23
-    assert len(build_matrix(config, horizon="week")["include"]) == 23
+    assert len(build_matrix(config, horizon="week")["include"]) == 46
     assert len(build_matrix(config, horizon="july_week")["include"]) == 23
-    assert len(build_matrix(config, horizon="year")["include"]) == 23
-    assert len(build_matrix(config)["include"]) == 69
+    assert len(build_matrix(config, horizon="year")["include"]) == 46
+    assert len(build_matrix(config)["include"]) == 115
 
 
 def test_every_shipped_setup_runs_the_july_week() -> None:
@@ -128,24 +129,61 @@ def test_every_shipped_setup_has_a_weighted_full_year_golden() -> None:
 
     Catches a setup slipping back to the week alone (owner decision 2026-10-11: every system setup
     has a full-year golden, because the first week of January never runs a solar collector's pump),
-    a full-year pair weighing the 120 s default, which would pack several real one-to-twelve
-    minute runs onto one lane of a shard, and a full-year weight below the week's, which no
-    measurement gives. The only setups excused are those of :data:`CANNOT_RUN_A_FULL_YEAR`, and
-    only while they are restricted to the week; they need no full-year weight.
+    and a full-year weight below the week's of the same step length, which no measurement gives. Both
+    step lengths are held to it, 60 s and 900 s; that every pair has a weight at all is
+    :func:`test_every_shipped_pair_has_a_measured_weight`. The only setups excused are those of
+    :data:`CANNOT_RUN_A_FULL_YEAR`, and only while they are restricted to the week.
     """
     config = json.loads(REAL_CONFIG.read_text())
     year_runners = [s for s in config["setups"] if s["id"] not in CANNOT_RUN_A_FULL_YEAR]
+    year_sets = [p for p in config["parameter_sets"] if p["factory"] == "full_year"]
+    week_set_of_step = {p["seconds_per_timestep"]: p["id"] for p in config["parameter_sets"] if p["factory"] == "one_week_only"}
 
     year_setups = {pair["setup"] for pair in build_matrix(config, horizon="year")["include"]}
-    unweighted = [s["id"] for s in year_runners if "full_year_60s" not in s.get("seconds", {})]
     lighter_than_their_week = [
-        s["id"] for s in year_runners
-        if s.get("seconds", {}).get("full_year_60s", 0) < s.get("seconds", {}).get("one_week_60s", 0)
+        (s["id"], p["id"]) for s in year_runners for p in year_sets
+        if s.get("seconds", {}).get(p["id"], 0) < s.get("seconds", {}).get(week_set_of_step[p["seconds_per_timestep"]], 0)
     ]
 
+    assert {p["id"] for p in year_sets} == {"full_year_60s", "full_year_900s"}
     assert year_setups == {s["id"] for s in year_runners}
-    assert not unweighted, f"setups without a full_year_60s weight: {unweighted}"
     assert not lighter_than_their_week, f"full-year weight below the week's: {lighter_than_their_week}"
+
+
+def test_every_shipped_pair_has_a_measured_weight() -> None:
+    """Every pair of the shipped config carries its measured ``seconds``, at 60 s and at 900 s alike.
+
+    Catches a pair weighing the 120 s default: the 900 s pairs run a few seconds to a few minutes, the 60 s
+    full-year pairs up to twelve minutes, so a defaulted weight misplaces a pair in the shard balance and
+    sets the timeout of its child (``ChildRuns.timeout_in_seconds``) from a guess.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+    setups = {setup["id"]: setup for setup in config["setups"]}
+
+    unweighted = [
+        (pair["setup"], pair["param"])
+        for pair in build_matrix(config)["include"]
+        if pair["param"] not in setups[pair["setup"]].get("seconds", {})
+    ]
+
+    assert not unweighted, f"pairs without a measured weight: {unweighted}"
+
+
+def test_every_step_length_runs_in_the_week_tier_and_the_year_tier() -> None:
+    """The January week and the full year each run at 60 s and at RenoVisor's 900 s (hisim-repo-cleanup-o6a.35).
+
+    The tiers pick their parameter sets by factory, so a 900 s set dropped from the config, or given another
+    window, would shrink a tier without anything failing. The part-load rules and the start-of-step nodes act
+    only above 600 s, so without the 900 s sets nothing pins their results.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+
+    steps_by_factory = {
+        factory: sorted(p["seconds_per_timestep"] for p in config["parameter_sets"] if p["factory"] == factory)
+        for factory in ("one_week_only", "one_week_july", "full_year")
+    }
+
+    assert steps_by_factory == {"one_week_only": [60, 900], "one_week_july": [60], "full_year": [60, 900]}
 
 
 def test_every_system_setup_is_in_the_golden_config() -> None:
@@ -328,7 +366,7 @@ def test_zero_shards_is_refused() -> None:
 
 
 def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
-    """The workflows' own calls: 23 week pairs in four shards, 23 full-year pairs in five.
+    """The workflows' own calls: 46 week pairs (60 s and 900 s) in four shards, 46 full-year pairs in five.
 
     golden-check cuts the week into four shards with the YAML twins and the composed files
     counted (``--with-yaml --with-composed``), the year into five shards with the composed files
@@ -338,17 +376,17 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
     composed = composed_setups(config, REPO_ROOT)
     week = build_shards(config, 4, horizon="week", with_yaml=True, composed=composed)["include"]
     year = build_shards(config, 5, horizon="year", composed=composed)["include"]
-    assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
-    assert len(year) == 5 and sum(cell["count"] for cell in year) == 23
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 46
+    assert len(year) == 5 and sum(cell["count"] for cell in year) == 46
     assert all(cell["count"] > 0 for cell in [*week, *year])
 
 
 def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_shards() -> None:
-    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 23 + 4 + 4 jobs.
+    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 46 + 4 + 4 jobs.
 
-    Every Python pair of the three horizons is blessed exactly once, each full-year pair in a job of
-    its own running only it (``jobs`` 1), the January week pairs in four shards and the July week
-    pairs in four shards of their own. Catches a pair the bless would no longer regenerate, which
+    Every Python pair of the three horizons is blessed exactly once, each full-year pair (60 s and
+    900 s) in a job of its own running only it (``jobs`` 1), the January week pairs of both step
+    lengths in four shards and the July week pairs in four shards of their own. Catches a pair the bless would no longer regenerate, which
     would leave its golden stale without anyone noticing.
     """
     config = json.loads(REAL_CONFIG.read_text())
@@ -356,12 +394,12 @@ def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_sh
     year = [cell for cell in cells if cell["horizon"] == "year"]
     week = [cell for cell in cells if cell["horizon"] == "week"]
     july_week = [cell for cell in cells if cell["horizon"] == "july_week"]
-    assert len(year) == 23 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
-    assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
+    assert len(year) == 46 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 46
     assert len(july_week) == 4 and sum(cell["count"] for cell in july_week) == 23
     emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
     assert emitted == sorted((p["setup"], p["param"]) for p in build_matrix(config)["include"])
-    assert len(emitted) == 69
+    assert len(emitted) == 115
 
 
 def test_one_pair_per_job_gives_each_pair_of_the_horizon_a_cell_first_and_shards_the_rest() -> None:
@@ -414,14 +452,17 @@ def test_runs_give_every_run_a_cell_of_its_own_heaviest_first() -> None:
 
 
 def test_the_shipped_config_gives_golden_year_one_job_per_run() -> None:
-    """The year tier's call: the 23 full-year runs of the config's entries and one composed run per setup with a composed file."""
+    """The year tier's call: the 46 full-year runs of the config's entries, one per step length, and one composed run per
+    step length and setup with a composed file."""
     config = json.loads(REAL_CONFIG.read_text())
     composed = composed_setups(config, REPO_ROOT)
     cells = build_runs(config, horizon="year", composed=composed)["include"]
-    python_setups = sorted(cell["setup"] for cell in cells if cell["mode"] == "python")
-    assert python_setups == sorted(setup["id"] for setup in config["setups"])
+    python_pairs = sorted((cell["setup"], cell["param"]) for cell in cells if cell["mode"] == "python")
+    assert python_pairs == sorted(
+        (setup["id"], param) for setup in config["setups"] for param in ("full_year_60s", "full_year_900s")
+    )
     assert {cell["setup"] for cell in cells if cell["mode"] == "composed"} == set(composed)
-    assert len(cells) == 23 + len(composed)
+    assert len(cells) == 46 + 2 * len(composed)
 
 
 def test_runs_and_shards_exclude_each_other() -> None:

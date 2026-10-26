@@ -2,6 +2,11 @@
 # PR and push to main, comparing KPIs against the committed golden references, first
 # from the Python setups and then from their recorded '.energy_system.yaml' twins.
 #
+# BOTH STEP LENGTHS. The week horizon holds every parameter set built by the one_week_only factory,
+# so the January week runs at 60 s (one_week_60s) and at 900 s (one_week_900s): RenoVisor's step
+# length, and the only one at which the part-load rules and the start-of-step nodes act (above
+# 600 s); see golden_references/README.md.
+#
 # SHARDS. The pairs run as a handful of shards (scripts/golden_matrix.py --shards), each
 # job running its pairs several at a time (golden_check.py --jobs, a child process per
 # pair). One job per pair paid about a minute of container, checkout, install and cache

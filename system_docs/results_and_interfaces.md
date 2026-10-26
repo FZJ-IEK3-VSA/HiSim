@@ -9,7 +9,9 @@ rules are in `testing.md`, the commit and PR form in `coding_style.md` §9 and �
 - **A result change is any KPI that moves beyond the golden tolerance** (§3) in a pair of
   `scripts/golden_config.json`, or a KPI that appears, disappears or changes its unit or address. The golden
   gate decides: on every pull request against `main`, `golden-check.yml` runs the one-week pairs and
-  `golden-year.yml` the full-year pairs, both at once and beside the rest of CI. A stacked pull request gets
+  `golden-year.yml` the full-year pairs, both at once and beside the rest of CI. Each runs at two step lengths,
+  60 s and RenoVisor's 900 s (`one_week_60s`, `one_week_900s`, `full_year_60s`, `full_year_900s`), because the
+  part-load rules and the start-of-step nodes act only above 600 s; `golden_references/README.md` lists the sets. A stacked pull request gets
   neither until it is retargeted to `main`; dispatching both workflows on its branch checks it earlier.
 - **A changed output that no golden KPI shows is still a result change** when the change intends it, for example
   a new output column or a component's time series that changed shape. Say so in the PR description as well.

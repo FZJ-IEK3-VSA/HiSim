@@ -1,5 +1,10 @@
 # Tier 2 of the golden-reference gate: the heavy full-year pairs.
 #
+# BOTH STEP LENGTHS. The year horizon holds every parameter set built by the full_year factory, so
+# every setup runs the year at 60 s (full_year_60s) and at 900 s (full_year_900s): RenoVisor's step
+# length, and the only one at which the part-load rules and the start-of-step nodes act (above
+# 600 s); see golden_references/README.md. A 900 s year has a fifteenth of the 60 s year's steps.
+#
 # IN PARALLEL WITH THE REST OF CI. This workflow starts on the same push or pull request as
 # quality, tests and golden-check, on the self-hosted runners (see tests.yml), and reports as
 # ordinary checks of the pull request. It used to wait until those three were green, so that
@@ -23,8 +28,9 @@
 #
 # ONE RUN PER JOB. Every run is a matrix job of its own (golden_matrix.py --runs, golden_check.py
 # --jobs 1 --pairs <pair> --mode <mode>): each Python full-year pair, and separately each composed
-# file's full-year run, 31 jobs in all. The tier's wall time is then its slowest single run (the
-# heat pump with the car or with solar thermal, about 10 minutes) plus a job's fixed minute or so,
+# file's full-year run, at both step lengths: 62 jobs in all. The tier's wall time is then its
+# slowest single run (the heat pump with the car or with solar thermal at 60 s, about 10 minutes)
+# plus a job's fixed minute or so,
 # instead of the busiest of five shards that each ran two runs at once (12 to 16 minutes measured
 # on #1002); owner decision 2026-10-15. The matrix comes heaviest first, so when the 32 runners
 # are busy the long runs are queued first. A run's weight is its pair's "seconds" in

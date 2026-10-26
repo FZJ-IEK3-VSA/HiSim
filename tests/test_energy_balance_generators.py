@@ -17,7 +17,7 @@ buffer (district heating) is undeclared until hisim-pnw7.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Set, Tuple
+from typing import Any, Dict, Sequence, Set, Tuple
 
 import pytest
 
@@ -72,7 +72,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
             ("electricity", "ElectricityMeter", "ElectricHeating"),
-            ("space_heating_heat", "ElectricHeating", "undeclared: Building"),
+            ("space_heating_heat", "ElectricHeating", "Building"),
             ("domestic_hot_water_heat", "ElectricHeating", "DHWStorage"),
         },
     ),
@@ -97,12 +97,14 @@ def run_household(
     end: str = "2021-01-17",
     seconds_per_timestep: int = 900,
     predefined_profile: bool = True,
+    post_processing_options: Sequence[str] = ("EXPORT_ENERGY_BALANCE",),
 ) -> Path:
     """Run a recorded household from ``start`` to ``end`` (midnight to midnight) and return its results.
 
-    The defaults are the second January week of 2021 at 900 s, offline: the occupancy reads a predefined profile
-    instead of running the LoadProfileGenerator. A household with a car keeps its local LoadProfileGenerator run
-    (``predefined_profile=False``), because only that run publishes the car's driving profile.
+    The defaults are the second January week of 2021 at 900 s, offline, writing the balance report and the Sankeys
+    only: the occupancy reads a predefined profile instead of running the LoadProfileGenerator. A household with a car
+    keeps its local LoadProfileGenerator run (``predefined_profile=False``), because only that run publishes the car's
+    driving profile.
     """
     from hisim.energy_system.executor import run_energy_system  # pylint: disable=import-outside-toplevel
 
@@ -118,7 +120,7 @@ def run_household(
         f"seconds_per_timestep: {seconds_per_timestep}\n"
         "country: DE\n"
         "logging_level: 3\n"
-        "post_processing_options: [EXPORT_ENERGY_BALANCE]\n",
+        f"post_processing_options: [{', '.join(post_processing_options)}]\n",
         encoding="utf-8",
     )
     results = directory / "results"

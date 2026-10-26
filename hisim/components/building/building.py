@@ -7,7 +7,7 @@ moved verbatim from the former single-module ``building.py``.
 """
 
 import importlib
-from typing import Any, ClassVar, List, Optional, Tuple
+from typing import Any, ClassVar, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
@@ -29,6 +29,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.config import DisplayConfig
+from hisim.energy_port import EnergyPort
 from hisim.economics.facts import CostRelevance
 
 
@@ -73,6 +74,24 @@ def degree_hours_above(
     """
     excess = (temperatures_in_celsius - threshold_in_celsius).clip(lower=0.0)
     return float(excess.sum(skipna=False) * seconds_per_timestep / SECONDS_PER_HOUR)
+
+
+class BuildingHeatLossesInWatt(NamedTuple):
+    """The heat flows by which the building's heated zone loses heat to the outside in one step, each in W.
+
+    The 5R1C model of ISO 13790 (annex C) loses heat through three conductances to the outside temperature, each
+    against the node temperature the step's solve used, and through the share of the gains its gain split gives to
+    no node. A flow is negative in a step in which its node is colder than the outside: the zone gains through it.
+    """
+
+    #: H_ve (theta_air - theta_e): the ventilation's loss from the indoor air node, in W.
+    ventilation_in_watt: float
+    #: H_tr_w (theta_s - theta_e): the transmission loss through windows and doors from the surface node, in W.
+    windows_and_doors_in_watt: float
+    #: H_tr_em (theta_m - theta_e): the transmission loss through the opaque elements from the thermal mass, in W.
+    opaque_in_watt: float
+    #: H_tr_w / (h_ms A_t) (0.5 Phi_int + Phi_sol): the gains on the window surfaces, which reach no node, in W.
+    gains_lost_through_windows_in_watt: float
 
 
 class BuildingState:
@@ -152,6 +171,12 @@ class Building(cp.PhysicsComponent):
     # Inputs -> heating device
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ThermalPowerCHP = "ThermalPowerCHP"
+    #: The space heating the building receives, in W, >= 0: an energy port that books the heating direction of the
+    #: device feeding ThermalPowerDelivered.
+    HeatReceivedInWatt = "HeatReceivedInWatt"
+    #: The heat a cooling device takes out of the building, in W, >= 0: an energy port that books the cooling
+    #: direction of the device feeding ThermalPowerDelivered.
+    HeatRemovedByCoolingInWatt = "HeatRemovedByCoolingInWatt"
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
@@ -198,6 +223,13 @@ class Building(cp.PhysicsComponent):
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
     OpenWindow = "OpenWindow"
+    # Outputs -> the energy ports of the heated zone (its losses to the outside and the change of the heat its thermal
+    # mass holds)
+    VentilationLossInWatt = "VentilationLossInWatt"
+    TransmissionLossWindowsAndDoorsInWatt = "TransmissionLossWindowsAndDoorsInWatt"
+    TransmissionLossOpaqueInWatt = "TransmissionLossOpaqueInWatt"
+    GainsLostThroughWindowsInWatt = "GainsLostThroughWindowsInWatt"
+    ThermalMassStoredEnergyIncreaseInWattHour = "ThermalMassStoredEnergyIncreaseInWattHour"
 
     #: The indoor air temperature above which a summer hour counts as overheating: the limit of
     #: DIN 4108-2's summer climate region B, independent of any cooling setpoint.
@@ -281,6 +313,27 @@ class Building(cp.PhysicsComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             False,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+        )
+        # The two directions of the signed ThermalPowerDelivered above, each >= 0, read from the device that feeds it,
+        # since a port books one direction only. The building computes with ThermalPowerDelivered; these two
+        # inputs only carry its energy ports, so that heating is booked as space heating received and cooling as
+        # cooling the building gives to the device.
+        self.heat_received_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatReceivedInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+        )
+        self.heat_removed_by_cooling_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatRemovedByCoolingInWatt,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            False,
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.COOLING),
         )
         self.altitude_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -346,6 +399,7 @@ class Building(cp.PhysicsComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             mandatory=False,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
         )
 
         self.device_heat_gain_channel: cp.ComponentInput = self.add_input(
@@ -354,6 +408,7 @@ class Building(cp.PhysicsComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             mandatory=False,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
         )
 
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
@@ -413,15 +468,21 @@ class Building(cp.PhysicsComponent):
             self.SolarGainThroughWindows,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
+            output_description="The solar heat gain through the windows, in W: the sun's heat entering the heated zone.",
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            energy_port=EnergyPort(
+                lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SOLAR, environment=lt.EnvironmentNode.SOLAR
+            ),
         )
         self.internal_heat_gains_from_residents_and_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.InternalHeatGainsFromOccupancy,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.InternalHeatGainsFromOccupancy} will follow.",
+            output_description=(
+                f"The internal heat gains, in W: the residents' body heat ({self.HeatingByResidents}) plus the heat the "
+                f"devices release ({self.HeatingByDevices}), both from the occupancy."
+            ),
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.theoretical_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
@@ -495,6 +556,7 @@ class Building(cp.PhysicsComponent):
             lt.Units.TIMESTEPS,
             output_description=f"here a description for {self.OpenWindow} will follow.",
         )
+        self.add_energy_port_outputs()
 
         # =================================================================================================================================
         # Add and get default connections
@@ -504,6 +566,76 @@ class Building(cp.PhysicsComponent):
         self.add_default_connections(self.get_default_connections_from_hds())
         self.add_default_connections(self.get_default_connections_from_electric_heater())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+
+    def add_energy_port_outputs(self) -> None:
+        """Add the outputs that state the heated zone's losses and stored heat, each with its energy port.
+
+        The heated zone receives the space heating its heating system delivers and gives a cooling device the heat it
+        removes, both on input ports (:attr:`HeatReceivedInWatt`, ``SPACE_HEATING_HEAT``, and
+        :attr:`HeatRemovedByCoolingInWatt`, ``COOLING``), the heat of a CHP on its input :attr:`ThermalPowerCHP`, the
+        internal gains on its inputs :attr:`HeatingByResidents` and :attr:`HeatingByDevices` (``ROOM_HEAT``, from the
+        occupancy) and the sun's heat through the windows on its output :attr:`SolarGainThroughWindows` (``SOLAR``).
+        The outputs added here are what it loses to the outside by ventilation, by transmission through windows and
+        doors and through the opaque elements, and through the share of the gains on the window surfaces, and what its
+        thermal mass stores (all ``ROOM_HEAT``). Every step of the 5R1C model closes over these ports to float
+        precision, provided the two port inputs read the two directions of the heat :attr:`ThermalPowerDelivered`
+        reads.
+        """
+        self.ventilation_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.VentilationLossInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "The heat the ventilation carries from the indoor air to the outside, in W: H_ve times the indoor air "
+                "temperature of the model's solve minus the outside temperature; negative while the outside is warmer."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        )
+        self.transmission_loss_windows_and_doors_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TransmissionLossWindowsAndDoorsInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "The heat that leaves through windows and doors, in W: H_tr_w times the internal surface temperature "
+                "minus the outside temperature; negative while the outside is warmer."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        )
+        self.transmission_loss_opaque_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TransmissionLossOpaqueInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "The heat that leaves through the opaque elements (walls, roof, floor), in W: H_tr_em times the step's "
+                "mean thermal mass temperature minus the outside temperature; negative while the outside is warmer."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        )
+        self.gains_lost_through_windows_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.GainsLostThroughWindowsInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "The share of the solar gains and of half the internal gains that ISO 13790's gain split gives to no "
+                "node, in W: the gains on the window surfaces, which leave through the windows."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        )
+        self.thermal_mass_stored_energy_increase_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalMassStoredEnergyIncreaseInWattHour,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description=(
+                "The increase of the heat the thermal mass holds over the step, in Wh: its heat capacity times its "
+                "end-of-step temperature, which the next step starts from, minus its start-of-step temperature."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.STORED_CHANGE, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        )
 
     def get_default_connections_from_weather(
         self,
@@ -612,6 +744,20 @@ class Building(cp.PhysicsComponent):
                 component_class.ThermalPowerDelivered,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatReceivedInWatt,
+                hds_classname,
+                component_class.HeatDeliveredInWatt,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatRemovedByCoolingInWatt,
+                hds_classname,
+                component_class.HeatDrawnForCoolingInWatt,
+            )
+        )
         return connections
 
     def get_default_connections_from_electric_heater(
@@ -628,6 +774,14 @@ class Building(cp.PhysicsComponent):
         connections.append(
             cp.ComponentConnection(
                 Building.ThermalPowerDelivered,
+                hds_classname,
+                component_class.ThermalOutputShPower,
+            )
+        )
+        # the heater only heats: its heat, >= 0, is also what the building books as space heating received
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatReceivedInWatt,
                 hds_classname,
                 component_class.ThermalOutputShPower,
             )
@@ -722,6 +876,22 @@ class Building(cp.PhysicsComponent):
         # (T_m,t-1 + T_m,t) / 2 (C.9) is what this step's surface and air equations use and what the thermal mass
         # output publishes; carrying the average forward would let the mass keep only half its net heat per step.
         self.state.thermal_mass_temperature_in_celsius = next_thermal_mass_temperature_in_celsius
+        # The losses use the node temperatures of the solve, before airing below overwrites the published air
+        # temperature: airing moves no heat in this model.
+        heat_losses = self.heat_losses_to_outside_in_watt(
+            indoor_air_temperature_in_celsius=indoor_air_temperature_in_celsius,
+            internal_surface_temperature_in_celsius=internal_surface_temperature_in_celsius,
+            thermal_mass_temperature_in_celsius=thermal_mass_average_bulk_temperature_in_celsius,
+            outside_temperature_in_celsius=temperature_outside_in_celsius,
+            internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt
+            + internal_heat_gains_through_devices_in_watt,
+            solar_heat_gains_in_watt=solar_heat_gain_through_windows_in_watt,
+        )
+        thermal_mass_stored_energy_increase_in_watt_hour = (
+            self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
+            * (next_thermal_mass_temperature_in_celsius - previous_thermal_mass_temperature_in_celsius)
+            / SECONDS_PER_HOUR
+        )
 
         # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or initial temperature is reached
         if self.buildingconfig.enable_opening_windows is True and self.occupants_open_the_windows(
@@ -841,6 +1011,13 @@ class Building(cp.PhysicsComponent):
         stsv.set_output_value(
             self.open_window_channel,
             self.window_open,
+        )
+        stsv.set_output_value(self.ventilation_loss_channel, heat_losses.ventilation_in_watt)
+        stsv.set_output_value(self.transmission_loss_windows_and_doors_channel, heat_losses.windows_and_doors_in_watt)
+        stsv.set_output_value(self.transmission_loss_opaque_channel, heat_losses.opaque_in_watt)
+        stsv.set_output_value(self.gains_lost_through_windows_channel, heat_losses.gains_lost_through_windows_in_watt)
+        stsv.set_output_value(
+            self.thermal_mass_stored_energy_increase_channel, thermal_mass_stored_energy_increase_in_watt_hour
         )
 
     # =================================================================================================================================
@@ -1106,6 +1283,13 @@ class Building(cp.PhysicsComponent):
             self.heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin,
             self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         ) = self.get_conductances()
+        #: The share of the solar gains and of the internal gains' half not given to the air that ISO 13790's gain
+        #: split (C.2, C.3) puts on no node, H_tr_w / (h_ms A_t), dimensionless: the gains on the window surfaces,
+        #: which leave through the windows. About 0.8 % in the household twins.
+        self.share_of_gains_lost_through_windows = self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin / (
+            self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
+            * self.my_building_information.total_internal_surface_area_in_m2
+        )
 
         # Get windows
         self.window_geometries, self.total_scaled_windows_area = self.get_windows()
@@ -1814,20 +1998,15 @@ class Building(cp.PhysicsComponent):
         # Heat flow to the air node in W, before labeled Phi_ia
         heat_flux_indoor_air_in_watt = 0.5 * internal_heat_gains_in_watt
 
-        # Heat flow to the surface node in W, before labeled Phi_st
+        # Heat flow to the surface node in W, before labeled Phi_st; the share lost through the windows reaches no
+        # node (GainsLostThroughWindowsInWatt)
         heat_flux_internal_room_surface_in_watt = (
             1
             - (
                 self.my_building_information.effective_mass_area_in_m2
                 / self.my_building_information.total_internal_surface_area_in_m2
             )
-            - (
-                self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
-                / (
-                    self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
-                    * self.my_building_information.total_internal_surface_area_in_m2
-                )
-            )
+            - self.share_of_gains_lost_through_windows
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
         # Heat flow to the thermal mass node in W, before labeled Phi_m
@@ -1836,20 +2015,10 @@ class Building(cp.PhysicsComponent):
             / self.my_building_information.total_internal_surface_area_in_m2
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
-        # # Heat loss in W, before labeled Phi_loss
-        # heat_loss_in_watt = (
-        #     self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
-        #     / (
-        #         self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
-        #         * self.my_building_information.total_internal_surface_area_in_m2
-        #     )
-        # ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
-
         return (
             heat_flux_indoor_air_in_watt,
             heat_flux_internal_room_surface_in_watt,
             heat_flux_thermal_mass_in_watt,
-            # heat_loss_in_watt,
         )
 
     # =====================================================================================================================================
@@ -2091,6 +2260,49 @@ class Building(cp.PhysicsComponent):
             next_thermal_mass_temperature_in_celsius,
             heat_flux_to_indoor_air_in_watt,
             total_thermal_mass_heat_flux_in_watt,
+        )
+
+    def heat_losses_to_outside_in_watt(
+        self,
+        *,
+        indoor_air_temperature_in_celsius: float,
+        internal_surface_temperature_in_celsius: float,
+        thermal_mass_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+        internal_heat_gains_in_watt: float,
+        solar_heat_gains_in_watt: float,
+    ) -> BuildingHeatLossesInWatt:
+        """Return the heat flows by which the heated zone loses heat to the outside over one step, in W.
+
+        The 5R1C model of ISO 13790 (annex C) connects its three nodes to the outside through three conductances: the
+        ventilation H_ve from the indoor air (the supply air is outside air), H_tr_w through windows and doors from
+        the internal surface, and the external part of the opaque elements H_tr_em from the thermal mass. Its gain
+        split (C.2, C.3) gives the share H_tr_w / (h_ms A_t) of the solar gains and of half the internal gains to no
+        node: the gains on the window surfaces, which leave through the windows. Over a step solved with these node
+        temperatures, the heating and the gains equal the four losses plus C_m times the mass's temperature change
+        per second. For example, with the indoor air at 20 °C and 0 °C outside, the ventilation loses H_ve * 20 K.
+
+        Args:
+            indoor_air_temperature_in_celsius: The indoor air temperature of the step's solve, in °C.
+            internal_surface_temperature_in_celsius: The internal surface temperature of the step's solve, in °C.
+            thermal_mass_temperature_in_celsius: The step's mean thermal mass temperature, (theta_m,t-1 + theta_m,t)
+                / 2, the one the step's surface and air equations use, in °C.
+            outside_temperature_in_celsius: The outside temperature, in °C.
+            internal_heat_gains_in_watt: The internal heat gains of residents and devices, in W.
+            solar_heat_gains_in_watt: The solar heat gains through the windows, in W.
+
+        Returns:
+            The four losses, each in W, negative where the outside is warmer than its node.
+        """
+        # positional, in the order of the fields: this runs in every pass, and keyword arguments cost more
+        return BuildingHeatLossesInWatt(
+            self.thermal_conductance_by_ventilation_in_watt_per_kelvin
+            * (indoor_air_temperature_in_celsius - outside_temperature_in_celsius),
+            self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
+            * (internal_surface_temperature_in_celsius - outside_temperature_in_celsius),
+            self.external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin
+            * (thermal_mass_temperature_in_celsius - outside_temperature_in_celsius),
+            self.share_of_gains_lost_through_windows * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt),
         )
 
     # =====================================================================================================================================

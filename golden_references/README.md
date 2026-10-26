@@ -86,7 +86,7 @@ set's `seconds_per_timestep`; its id names it too, ending in `_60s` or `_900s`.
 
 **Why 900 s.** RenoVisor runs every calculation at 900 s (`hisim/renovisor/simulation.py`), and
 some code acts only at steps above the part-load threshold of 600 s: the part-load rules
-(`hisim/part_load.py`), `CircuitStep.at_part_load` (`hisim/hydronics.py`), and the start-of-step
+(`hisim/part_load.py`), `FluidStream.at_part_load` (`hisim/hydronics.py`), and the start-of-step
 node of the buffer and of the hot-water tank. At 60 s none of it runs. Without the 900 s sets a
 change to it passed the gate unless it moved a total of the time-resolution tests
 (`tests/test_space_heating_time_resolution.py`, `tests/test_dhw_chain_time_resolution.py`) by about
@@ -159,10 +159,13 @@ In CI this runs as two tiers (see `.github/workflows/`):
 - **`golden-year.yml`** — the full-year pairs of both step lengths (`full_year_60s`,
   `full_year_900s`), on every PR and push to `main`, starting at the
   same time as `golden-check` and the rest of CI on the self-hosted runners and reporting as
-  ordinary checks of the pull request; a pull request from a fork skips it. One job per run
+  ordinary checks of the pull request; a pull request from a fork skips it. One job per 60 s run
   (`golden_matrix.py --runs --with-composed`, `golden_check.py --jobs 1 --mode <mode> --pairs
   <pair>`): each Python setup's full-year pair and, separately, where the setup has one, its
-  composed file's, so the tier takes as long as its slowest run. Every setup of the config runs the full year (owner
+  composed file's, so the tier takes as long as its slowest run. The 900 s years run in about a
+  minute each, too short to be worth a job each, so they are packed into four shards instead
+  (`golden_check.py --mode python composed --jobs 2 --pairs <its pairs>`), 35 jobs in all; see
+  "Packed parameter sets" below. Every setup of the config runs the full year (owner
   decision 2026-10-11), because the first week of January never runs a solar collector's pump;
   only a setup that cannot finish a year yet carries `"horizons": ["week"]`, named with its bead
   in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). The energy-system file
@@ -172,9 +175,24 @@ In CI this runs as two tiers (see `.github/workflows/`):
 A missing golden is never a silent pass. `golden_check.py` looks for the golden of every pair it was
 given before it runs any, and when one is absent it runs nothing, lists the pair as `[MISSING
 GOLDEN]` and exits non-zero: in `golden-check` that fails the whole shard holding the pair, in
-`golden-year` the one job of the pair. `golden-update` blesses every pair of the config, so the next
+`golden-year` the one job of the pair, or the 900 s shard holding it. `golden-update` blesses every pair of the config, so the next
 bless writes the missing file: it runs the pair and, finding no file to merge onto, writes the fresh
 leaves as they are. That is how the 900 s sets got their first goldens.
+
+### Packed parameter sets
+
+golden-year and the bless give each full-year pair a job of its own, because a 60 s year runs for up
+to twelve minutes. A parameter set whose runs are short opts out of that explicitly, with
+`"pack_into_shards": N` in its entry of `scripts/golden_config.json`: where a tier would give each of
+its pairs a job, they go into N shards of their own instead, packed by their `"seconds"` with the same
+rule as golden-check's week shards (`PackedParameterSets` and `_pack` in `scripts/golden_matrix.py`).
+Today only `full_year_900s` carries it, with 4 (owner decision 2026-10-26). In golden-year each shard
+runs the Python setups and the composed files of its pairs side by side, two runs at once; in the
+bless, two pairs at once. A shard runs its pairs in child processes, each killed after three times
+its recorded seconds (at least ten minutes), and fails before running anything when one of its pairs
+has no golden. Elsewhere the key changes nothing: golden-check cuts the week into shards anyway. The
+key is explicit rather than a threshold on the measured seconds, so that refreshing a weight never
+moves a pair between a job of its own and a shard unannounced.
 
 ## Blessing (updating the goldens)
 
@@ -183,7 +201,8 @@ reference environment matches the check environment:
 
 > Actions → **golden-update** → *Run workflow* → give a reason.
 
-It regenerates every pair of every parameter set in the CI container and opens a PR with
+It regenerates every pair of every parameter set in the CI container (a job per 60 s full-year
+pair, four shards for the 900 s years, four for each week; 35 jobs) and opens a PR with
 the updated `golden_references/`. Review the per-KPI diff, then merge — that merge
 is the bless. (`scripts/golden_update.py` can be run locally for inspection, but
 locally produced goldens are not the canonical committed ones. A local run is

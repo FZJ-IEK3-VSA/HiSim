@@ -30,10 +30,22 @@ two measured within about 10 % of each other when they were still separate jobs.
 single run rather than its busiest shard, and a cell reads::
 
     {"name": "python-setup_a-full_year_60s", "setup": "setup_a", "param": "full_year_60s",
-     "mode": "python", "pair": "setup_a:full_year_60s", "seconds": 623}
+     "mode": "python", "pair": "setup_a:full_year_60s", "seconds": 623,
+     "modes": "python", "jobs": 1, "pairs": "setup_a:full_year_60s"}
 
 The cells come heaviest first, so the runs that would otherwise finish last are queued first when
 the runners are busy. ``--runs`` takes ``--with-yaml`` and ``--with-composed`` like ``--shards``.
+
+**Packed parameter sets.** A parameter set whose runs are too short to be worth a job each carries
+``"pack_into_shards": N`` in the config (:class:`PackedParameterSets`). In ``--runs`` and in a horizon
+named by ``--one-pair-per-job``, its pairs then go into N shards of their own, packed by the same rule
+as every other shard (:func:`_pack`), and with ``--runs`` such a shard runs all its pairs' modes from
+one pool (``golden_check.py --mode python composed --jobs 2 --pairs ...``)::
+
+    {"name": "year-full_year_900s-1", "horizon": "year", "jobs": 2, "count": 6, "seconds": 166,
+     "pairs": "setup_a:full_year_900s ...", "modes": "python composed"}
+
+Every ``--runs`` cell carries ``modes``, ``jobs`` and ``pairs``, so one workflow job serves both kinds.
 
 ``--one-pair-per-job HORIZON`` is for the bless (golden-update.yml), which mixes the two: with
 ``--shards`` it gives every pair of the named horizon a shard of its own, while the other horizons
@@ -80,7 +92,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 try:  # importable both as ``scripts.golden_matrix`` (tests) and as a script from ``scripts/``
     from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
@@ -179,6 +191,100 @@ def _choose_shard(lanes: list[list[float]], seconds: float, runs: int) -> int:
     return min(range(len(lanes)), key=lambda index: (ends[index], totals[index], index))
 
 
+class PackedParameterSets:
+    """The parameter sets whose pairs are packed into shards where a tier would give each pair a job of its own.
+
+    A parameter set opts in with ``"pack_into_shards": N`` in ``golden_config.json``: in ``--runs``
+    (golden-year) and in a horizon named by ``--one-pair-per-job`` (the bless's full-year pairs), its
+    pairs then go into at most N shards of their own, packed by the same longest-first rule as the
+    week shards (:func:`_pack`), instead of one job each. Example: ``full_year_900s`` carries
+    ``"pack_into_shards": 4``, so golden-year runs its 23 pairs and their composed runs in four jobs,
+    while ``full_year_60s``, which carries no key, keeps one job per run. Everywhere else the key changes
+    nothing: a horizon that is cut into shards anyway (golden-check's week) is cut as a whole.
+
+    Why an explicit key and not a threshold on the measured ``seconds``: a pair would then change its job
+    layout whenever its weight is refreshed across the threshold, with nothing in the config saying so.
+    """
+
+    #: The parameter-set key that names the shard count.
+    KEY: ClassVar[str] = "pack_into_shards"
+
+    @classmethod
+    def shard_counts(cls, config: dict) -> dict[str, int]:
+        """Return the shard count of every parameter set that carries the key, by set id, in config order.
+
+        Example: ``{"full_year_900s": 4}`` for the shipped config.
+
+        Args:
+            config: the parsed ``golden_config.json``.
+
+        Returns:
+            The shard counts; empty when no set carries the key.
+
+        Raises:
+            ValueError: if a value is not a whole number of at least one (a ``bool`` included), so a typo
+                is refused in the discover job rather than read as one shard or none.
+        """
+        counts: dict[str, int] = {}
+        for param in config["parameter_sets"]:
+            if cls.KEY not in param:
+                continue
+            value = param[cls.KEY]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(
+                    f"parameter set {param.get('id')!r}: {cls.KEY!r} must be a whole number of shards, at least 1, not {value!r}."
+                )
+            counts[param["id"]] = value
+        return counts
+
+
+def _pack(
+    name: str,
+    horizon: str,
+    weighted: list[tuple[float, int, dict]],
+    count: int,
+    jobs: int,
+    runs_of: Callable[[dict], int],
+) -> list[dict]:
+    """Pack weighted pairs into at most ``count`` shards of ``jobs`` lanes each; the one packer of every shard.
+
+    ``weighted`` holds ``(seconds, position, pair)`` sorted heaviest first; each pair puts ``runs_of(pair)``
+    runs of its weight (at most ``jobs``) onto its shard's lightest lanes, the shard chosen by
+    :func:`_choose_shard`. The shards are named ``<name>-1``, ``<name>-2``, ...; a shard's ``seconds`` is its
+    busiest lane. Example: ``_pack("week", "week", weighted, 4, 4, runs_of)`` gives golden-check's four week
+    shards. Fewer shards than ``count`` come out when there are fewer pairs, so none is empty.
+    """
+    count = min(count, len(weighted))
+    lanes = [[0.0] * jobs for _ in range(count)]
+    chosen: list[list[dict]] = [[] for _ in range(count)]
+    for seconds, _, pair in weighted:
+        runs = min(runs_of(pair), jobs)
+        target = _choose_shard(lanes, seconds, runs)
+        lane = lanes[target]
+        for _ in range(runs):
+            lane[lane.index(min(lane))] += seconds
+        chosen[target].append(pair)
+    return [
+        {
+            "name": f"{name}-{index + 1}",
+            "horizon": horizon,
+            "jobs": jobs,
+            "count": len(chosen[index]),
+            "seconds": round(max(lanes[index])),
+            "pairs": " ".join(f"{pair['setup']}:{pair['param']}" for pair in chosen[index]),
+        }
+        for index in range(count)
+    ]
+
+
+def _weighted(pairs: list[dict], setups: dict[str, dict]) -> list[tuple[float, int, dict]]:
+    """Return ``(seconds, position, pair)`` for every pair, heaviest first, ties in the given order."""
+    return sorted(
+        ((pair_seconds(setups[p["setup"]], p["param"]), position, p) for position, p in enumerate(pairs)),
+        key=lambda item: (-item[0], item[1]),
+    )
+
+
 def composed_setups(config: dict, repo_root: Path) -> frozenset[str]:
     """The ids of the config's setups that have a composed file in ``repo_root/energy_systems/``.
 
@@ -212,7 +318,9 @@ def build_shards(
 
     A horizon named in ``one_pair_per_job`` is not cut into shards: every pair of it gets a cell
     of its own, its ``jobs`` the pair's number of runs, and those cells come first, heaviest first
-    (for example the bless's full-year pairs, ``{"year"}``).
+    (for example the bless's full-year pairs, ``{"year"}``). The exception are the pairs of a parameter
+    set with ``pack_into_shards`` (:class:`PackedParameterSets`): they go into that many shards of their
+    own, named ``<horizon>-<set id>-<n>``, after the solo cells.
 
     Raises:
         ValueError: if ``shards`` is less than one, ``one_pair_per_job`` names an unknown horizon,
@@ -232,6 +340,10 @@ def build_shards(
         unknown = sorted(set(setup.get("seconds", {})) - set(params))
         if unknown:
             raise ValueError(f"setup {setup['id']!r}: 'seconds' names unknown parameter sets {unknown}.")
+    packed = PackedParameterSets.shard_counts(config)
+
+    def runs_of(pair: dict) -> int:
+        return 1 + with_yaml + (pair["setup"] in composed)
 
     solos: list[dict] = []
     include = []
@@ -239,12 +351,15 @@ def build_shards(
         members = [p for p in pairs if FACTORY_HORIZONS[params[p["param"]]["factory"]] == name]
         if not members:
             continue
-        weighted = sorted(
-            ((pair_seconds(setups[p["setup"]], p["param"]), position, p) for position, p in enumerate(members)),
-            key=lambda item: (-item[0], item[1]),
-        )
+        weighted = _weighted(members, setups)
         if name in one_pair_per_job:
+            for param_id, count in packed.items():
+                own = [item for item in weighted if item[2]["param"] == param_id]
+                if own:
+                    include.extend(_pack(f"{name}-{param_id}", name, own, count, PAIRS_AT_ONCE[name], runs_of))
             for seconds, _, pair in weighted:
+                if pair["param"] in packed:
+                    continue
                 solos.append(
                     {
                         "name": f"{name}-{pair['setup']}-{pair['param']}",
@@ -256,28 +371,7 @@ def build_shards(
                     }
                 )
             continue
-        jobs = PAIRS_AT_ONCE[name]
-        count = min(shards, len(members))
-        lanes = [[0.0] * jobs for _ in range(count)]
-        chosen: list[list[dict]] = [[] for _ in range(count)]
-        for seconds, _, pair in weighted:
-            runs = min(1 + with_yaml + (pair["setup"] in composed), jobs)
-            target = _choose_shard(lanes, seconds, runs)
-            lane = lanes[target]
-            for _ in range(runs):
-                lane[lane.index(min(lane))] += seconds
-            chosen[target].append(pair)
-        for index in range(count):
-            include.append(
-                {
-                    "name": f"{name}-{index + 1}",
-                    "horizon": name,
-                    "jobs": jobs,
-                    "count": len(chosen[index]),
-                    "seconds": round(max(lanes[index])),
-                    "pairs": " ".join(f"{pair['setup']}:{pair['param']}" for pair in chosen[index]),
-                }
-            )
+        include.extend(_pack(name, name, weighted, shards, PAIRS_AT_ONCE[name], runs_of))
     # sorted() is stable: equal weights keep the horizon order and, within one, config order.
     return {"include": sorted(solos, key=lambda cell: -cell["seconds"]) + include}
 
@@ -296,38 +390,63 @@ def build_runs(
     what the Python run weighs, as in :func:`build_shards`. The cells are sorted heaviest first,
     ties in config order and then python, yaml, composed, so the output is deterministic.
 
+    The pairs of a parameter set with ``pack_into_shards`` (:class:`PackedParameterSets`) get no cells
+    of their own: they are packed into that many shards by :func:`_pack`, each shard running all its
+    pairs' modes from one pool of its horizon's :data:`PAIRS_AT_ONCE` children. Every cell therefore
+    carries what the job runs, ``modes``, ``jobs`` and ``pairs``: a run cell ``"python"``, ``1`` and its
+    one pair; a shard cell ``"python composed"`` (the modes of its pairs), ``2`` and its pairs.
+
     Raises:
         ValueError: if a ``seconds`` weight is malformed or names a parameter set the config does
             not have, or :func:`build_matrix` refuses the config.
     """
     pairs = build_matrix(config, horizon=horizon)["include"]
     setups = {setup["id"]: setup for setup in config["setups"]}
-    params = {param["id"] for param in config["parameter_sets"]}
+    params = {param["id"]: param for param in config["parameter_sets"]}
     for setup in config["setups"]:
         pair_seconds(setup, "")  # refuses a malformed 'seconds' before its keys are read
-        unknown = sorted(set(setup.get("seconds", {})) - params)
+        unknown = sorted(set(setup.get("seconds", {})) - set(params))
         if unknown:
             raise ValueError(f"setup {setup['id']!r}: 'seconds' names unknown parameter sets {unknown}.")
+    packed = PackedParameterSets.shard_counts(config)
+
+    def modes_of(pair: dict) -> list[str]:
+        return ["python"] + ["yaml"] * with_yaml + ["composed"] * (pair["setup"] in composed)
 
     cells = []
     for pair in pairs:
-        modes = ["python"]
-        if with_yaml:
-            modes.append("yaml")
-        if pair["setup"] in composed:
-            modes.append("composed")
+        if pair["param"] in packed:
+            continue
         seconds = pair_seconds(setups[pair["setup"]], pair["param"])
-        for mode in modes:
+        for mode in modes_of(pair):
+            token = f"{pair['setup']}:{pair['param']}"
             cells.append(
                 {
                     "name": f"{mode}-{pair['setup']}-{pair['param']}",
                     "setup": pair["setup"],
                     "param": pair["param"],
                     "mode": mode,
-                    "pair": f"{pair['setup']}:{pair['param']}",
+                    "pair": token,
                     "seconds": round(seconds),
+                    "modes": mode,
+                    "jobs": 1,
+                    "pairs": token,
                 }
             )
+    for param_id, count in packed.items():
+        own = [pair for pair in pairs if pair["param"] == param_id]
+        if not own:
+            continue
+        horizon_name = FACTORY_HORIZONS[params[param_id]["factory"]]
+        shards = _pack(
+            f"{horizon_name}-{param_id}", horizon_name, _weighted(own, setups), count, PAIRS_AT_ONCE[horizon_name],
+            lambda pair: len(modes_of(pair)),
+        )
+        by_token = {f"{pair['setup']}:{pair['param']}": pair for pair in own}
+        for shard in shards:
+            members = [by_token[token] for token in shard["pairs"].split()]
+            shard_modes = [mode for mode in ("python", "yaml", "composed") if any(mode in modes_of(pair) for pair in members)]
+            cells.append({**shard, "modes": " ".join(shard_modes)})
     # sorted() is stable: equal weights keep config order, and within a pair python, yaml, composed.
     return {"include": sorted(cells, key=lambda cell: -cell["seconds"])}
 

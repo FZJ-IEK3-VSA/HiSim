@@ -26,21 +26,29 @@
 # so only a year exercises the solar systems); a setup that cannot finish a year would keep a
 # week-only 'horizons' entry until its bead is fixed.
 #
-# ONE RUN PER JOB. Every run is a matrix job of its own (golden_matrix.py --runs, golden_check.py
-# --jobs 1 --pairs <pair> --mode <mode>): each Python full-year pair, and separately each composed
-# file's full-year run, at both step lengths: 62 jobs in all. The tier's wall time is then its
-# slowest single run (the heat pump with the car or with solar thermal at 60 s, about 10 minutes)
-# plus a job's fixed minute or so,
-# instead of the busiest of five shards that each ran two runs at once (12 to 16 minutes measured
-# on #1002); owner decision 2026-10-15. The matrix comes heaviest first, so when the 32 runners
-# are busy the long runs are queued first. A run's weight is its pair's "seconds" in
+# ONE RUN PER JOB AT 60 S. Every 60 s run is a matrix job of its own (golden_matrix.py --runs,
+# golden_check.py --jobs 1 --pairs <pair> --mode <mode>): each Python full-year pair, and separately
+# each composed file's full-year run, 31 jobs. The tier's wall time is then its slowest single run
+# (the heat pump with the car or with solar thermal, about 10 minutes) plus a job's fixed minute or
+# so, instead of the busiest of five shards that each ran two runs at once (12 to 16 minutes
+# measured on #1002); owner decision 2026-10-15. The matrix comes heaviest first, so when the 32
+# runners are busy the long runs are queued first. A run's weight is its pair's "seconds" in
 # golden_config.json, the composed run weighing what the Python run weighs. One run peaks at
 # about 6 GiB, well inside a 16 GB runner.
+#
+# THE 900 S YEARS IN FOUR SHARDS. full_year_900s carries "pack_into_shards": 4 in golden_config.json,
+# so its 23 pairs and their 8 composed runs do not get a job each: golden_matrix.py packs them into
+# four shards, by the packer that cuts golden-check's week shards, each running two runs at once
+# (golden_check.py --mode python composed --jobs 2 --pairs <its pairs>). A 900 s year runs in about
+# a minute, so a job of its own would spend more on its container, checkout and install than on the
+# simulation (owner decision 2026-10-26). 35 jobs in all. Every job reads what to run from its cell:
+# MODES, JOBS and PAIRS.
 #
 # TIMEOUTS. A hung simulation must not hold a runner until GitHub's six-hour default. A run job
 # runs its one pair in-process (--jobs 1), so the job's own limit is the guard: 30 minutes, about
 # three times the slowest run job measured (about 10 minutes). Where pairs run in child processes
-# (--jobs above 1: the week shards of golden-check.yml and the bless in golden-update.yml), each
+# (--jobs above 1: the 900 s shards here, the week shards of golden-check.yml and the bless's
+# shards in golden-update.yml), each
 # child is killed after three times its recorded seconds (at least ten minutes) and fails that
 # pair by name (scripts/runner.py, ChildRuns.timeout_in_seconds).
 
@@ -107,7 +115,7 @@ jobs:
           mode: report
 
   golden-year:
-    name: golden-year ${{ matrix.mode }} ${{ matrix.setup }}
+    name: golden-year ${{ matrix.name }}
     needs: discover
     # On the self-hosted runners; see the runs-on comment in tests.yml.
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
@@ -122,10 +130,12 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     env:
-      # One setup:param token and one mode, passed through the environment rather than
-      # interpolated into the script.
-      PAIR: ${{ matrix.pair }}
-      MODE: ${{ matrix.mode }}
+      # A run cell: one setup:param token, one mode, one job. A shard cell of a packed parameter set:
+      # its space-separated tokens, its modes, and how many runs at once. Passed through the
+      # environment rather than interpolated into the script, and split on purpose where used.
+      PAIRS: ${{ matrix.pairs }}
+      MODES: ${{ matrix.modes }}
+      JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
@@ -145,8 +155,12 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-      - name: Golden KPI check (full year, one run)
-        run: python scripts/golden_check.py --mode "$MODE" --jobs 1 --pairs "$PAIR"
+      # A run cell runs in-process (--jobs 1); a shard runs its pairs in child processes, each killed
+      # after three times its recorded seconds (scripts/runner.py, ChildRuns.timeout_in_seconds).
+      - name: Golden KPI check (full year, one run or one shard)
+        run: |
+          # shellcheck disable=SC2086  # MODES and PAIRS are split into arguments on purpose
+          python scripts/golden_check.py --mode $MODES --jobs "$JOBS" --pairs $PAIRS
       - name: Upload deviation report
         if: failure()
         uses: actions/upload-artifact@v7

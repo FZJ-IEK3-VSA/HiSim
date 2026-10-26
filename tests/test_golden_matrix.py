@@ -17,6 +17,9 @@ from scripts.golden_matrix import (
     DEFAULT_PAIR_SECONDS,
     HORIZON_FACTORIES,
     PAIRS_AT_ONCE,
+    PackedParameterSets,
+    _pack,
+    _weighted,
     build_matrix,
     build_runs,
     build_shards,
@@ -382,19 +385,24 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
 
 
 def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_shards() -> None:
-    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 46 + 4 + 4 jobs.
+    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 23 + 4 + 4 + 4 jobs.
 
-    Every Python pair of the three horizons is blessed exactly once, each full-year pair (60 s and
-    900 s) in a job of its own running only it (``jobs`` 1), the January week pairs of both step
-    lengths in four shards and the July week pairs in four shards of their own. Catches a pair the bless would no longer regenerate, which
+    Every Python pair of the three horizons is blessed exactly once: each 60 s full-year pair in a job
+    of its own running only it (``jobs`` 1), the 900 s full-year pairs in the four shards their
+    ``pack_into_shards`` names, the January week pairs of both step lengths in four shards and the July
+    week pairs in four shards of their own. Catches a pair the bless would no longer regenerate, which
     would leave its golden stale without anyone noticing.
     """
     config = json.loads(REAL_CONFIG.read_text())
     cells = build_shards(config, 4, one_pair_per_job=frozenset({"year"}))["include"]
-    year = [cell for cell in cells if cell["horizon"] == "year"]
+    year = [cell for cell in cells if cell["horizon"] == "year" and cell["count"] == 1]
+    packed = [cell for cell in cells if cell["name"].startswith("year-full_year_900s-")]
     week = [cell for cell in cells if cell["horizon"] == "week"]
     july_week = [cell for cell in cells if cell["horizon"] == "july_week"]
-    assert len(year) == 46 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
+    assert len(year) == 23 and all(cell["jobs"] == 1 and cell["pairs"].endswith(":full_year_60s") for cell in year)
+    assert len(packed) == 4 and sum(cell["count"] for cell in packed) == 23
+    assert all(cell["jobs"] == PAIRS_AT_ONCE["year"] for cell in packed)
+    assert len(cells) == 35
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 46
     assert len(july_week) == 4 and sum(cell["count"] for cell in july_week) == 23
     emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
@@ -452,17 +460,113 @@ def test_runs_give_every_run_a_cell_of_its_own_heaviest_first() -> None:
 
 
 def test_the_shipped_config_gives_golden_year_one_job_per_run() -> None:
-    """The year tier's call: the 46 full-year runs of the config's entries, one per step length, and one composed run per
-    step length and setup with a composed file."""
+    """The year tier's call: a job per 60 s full-year run, Python and composed, and the 900 s years packed into four shards.
+
+    Catches a 60 s run dropped or doubled, a 900 s pair missing from the shards or in two of them, and a shard that
+    would not run the composed files of its pairs. 23 + 8 run jobs and 4 shards: 35 jobs.
+    """
     config = json.loads(REAL_CONFIG.read_text())
     composed = composed_setups(config, REPO_ROOT)
     cells = build_runs(config, horizon="year", composed=composed)["include"]
-    python_pairs = sorted((cell["setup"], cell["param"]) for cell in cells if cell["mode"] == "python")
-    assert python_pairs == sorted(
-        (setup["id"], param) for setup in config["setups"] for param in ("full_year_60s", "full_year_900s")
-    )
-    assert {cell["setup"] for cell in cells if cell["mode"] == "composed"} == set(composed)
-    assert len(cells) == 46 + 2 * len(composed)
+    runs = [cell for cell in cells if "mode" in cell]
+    shards = [cell for cell in cells if "mode" not in cell]
+
+    assert sorted(cell["setup"] for cell in runs if cell["mode"] == "python") == sorted(setup["id"] for setup in config["setups"])
+    assert {cell["setup"] for cell in runs if cell["mode"] == "composed"} == set(composed)
+    assert all(cell["param"] == "full_year_60s" and cell["jobs"] == 1 for cell in runs)
+    assert len(shards) == 4
+    assert all(cell["modes"] == "python composed" and cell["jobs"] == PAIRS_AT_ONCE["year"] for cell in shards)
+    in_shards = sorted(pair for cell in shards for pair in _pairs_of(cell))
+    assert in_shards == sorted((setup["id"], "full_year_900s") for setup in config["setups"])
+    assert len(cells) == 23 + len(composed) + 4
+
+
+def test_the_shipped_config_packs_the_900_s_years_and_nothing_else() -> None:
+    """``full_year_900s`` is the one parameter set packed into shards, into four (owner decision 2026-10-26).
+
+    Catches the key slipping onto a 60 s set, whose year runs take up to twelve minutes and keep a job each, and
+    the 900 s years falling back to one job per run, 31 jobs that each simulate about a minute.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+    assert PackedParameterSets.shard_counts(config) == {"full_year_900s": 4}
+
+
+def test_shard_counts_reads_the_key_of_every_set_that_carries_it() -> None:
+    """A set without the key is not packed; one with it gives its count, in config order."""
+    config = {"parameter_sets": [{"id": "a"}, {"id": "b", "pack_into_shards": 3}, {"id": "c", "pack_into_shards": 1}]}
+    assert PackedParameterSets.shard_counts(config) == {"b": 3, "c": 1}
+    assert PackedParameterSets.shard_counts({"parameter_sets": [{"id": "a"}]}) == {}
+
+
+@pytest.mark.parametrize("value", [0, -2, True, 2.0, "4", None])
+def test_shard_counts_refuses_what_is_not_a_whole_number_of_shards(value: Any) -> None:
+    """A typo is refused by name in the discover job rather than read as one shard, none, or a crash later."""
+    with pytest.raises(ValueError, match="pack_into_shards"):
+        PackedParameterSets.shard_counts({"parameter_sets": [{"id": "b", "pack_into_shards": value}]})
+
+
+def test_weighted_sorts_heaviest_first_and_keeps_ties_in_order() -> None:
+    """The order every packer and every solo list starts from: weight down, then the given order."""
+    setups = {"a": {"id": "a", "seconds": {"p": 5}}, "b": {"id": "b", "seconds": {"p": 9}}, "c": {"id": "c", "seconds": {"p": 5}}}
+    pairs = [{"setup": sid, "param": "p"} for sid in ("a", "b", "c")]
+    assert [(seconds, pair["setup"]) for seconds, _, pair in _weighted(pairs, setups)] == [(9, "b"), (5, "a"), (5, "c")]
+
+
+def test_pack_puts_every_pair_in_one_shard_and_names_them_after_the_set() -> None:
+    """Five pairs into two shards of two lanes: each pair once, no empty shard, the busiest lane as the shard's seconds.
+
+    The 300 s pair and its second run fill both lanes of one shard; the four others share the other shard's lanes.
+    """
+    weighted = [(300.0, 0, {"setup": "big", "param": "y"})] + [(50.0, i, {"setup": f"s{i}", "param": "y"}) for i in range(1, 5)]
+    cells = _pack("year-y", "year", weighted, 2, 2, lambda pair: 2 if pair["setup"] == "big" else 1)
+
+    assert [cell["name"] for cell in cells] == ["year-y-1", "year-y-2"]
+    assert sorted(pair for cell in cells for pair in _pairs_of(cell)) == sorted(("big" if i == 0 else f"s{i}", "y") for i in range(5))
+    assert [(cell["count"], cell["seconds"], cell["jobs"], cell["horizon"]) for cell in cells] == [(1, 300, 2, "year"), (4, 100, 2, "year")]
+    assert len(_pack("year-y", "year", weighted[:1], 4, 2, lambda pair: 1)) == 1
+
+
+def _packed_config() -> dict:
+    """The weighted config with a second, packed full-year set that the two year setups also run."""
+    config = _weighted_config()
+    config["parameter_sets"].append({"id": "full_year_900s", "factory": "full_year", "pack_into_shards": 1})
+    config["setups"][0]["seconds"]["full_year_900s"] = 30
+    return config
+
+
+def test_runs_pack_a_packed_set_into_shards_running_every_mode_of_their_pairs() -> None:
+    """golden-year's matrix: the packed set's pairs leave their run cells for one shard that runs their composed files too.
+
+    Catches a packed pair keeping a run cell (run twice), a shard dropping the composed mode of a pair that has one, and
+    the unpacked set losing its run cells.
+    """
+    cells = build_runs(_packed_config(), horizon="year", composed=frozenset({"heavy"}))["include"]
+    shard = [cell for cell in cells if "mode" not in cell]
+
+    assert [(cell["param"], cell["mode"]) for cell in cells if "mode" in cell] == [
+        ("full_year_60s", "python"), ("full_year_60s", "composed"), ("full_year_60s", "python"),
+    ]
+    assert [(cell["name"], cell["modes"], cell["jobs"], cell["pairs"]) for cell in shard] == [
+        ("year-full_year_900s-1", "python composed", PAIRS_AT_ONCE["year"], "big:full_year_900s heavy:full_year_900s"),
+    ]
+    without_composed = build_runs(_packed_config(), horizon="year")["include"]
+    assert [cell["modes"] for cell in without_composed if "mode" not in cell] == ["python"]
+
+
+def test_one_pair_per_job_packs_a_packed_set_and_gives_the_rest_a_job_each() -> None:
+    """The bless's matrix: a packed set of the named horizon goes into its shards; its other sets keep a cell per pair.
+
+    Where a horizon is cut into shards anyway (no ``one_pair_per_job``), the key changes nothing.
+    """
+    cells = build_shards(_packed_config(), 2, one_pair_per_job=frozenset({"year"}))["include"]
+    year = [cell for cell in cells if cell["horizon"] == "year"]
+    unpacked = _packed_config()
+    del unpacked["parameter_sets"][2]["pack_into_shards"]
+
+    assert [(cell["name"], cell["count"]) for cell in year] == [
+        ("year-heavy-full_year_60s", 1), ("year-big-full_year_60s", 1), ("year-full_year_900s-1", 2),
+    ]
+    assert build_shards(_packed_config(), 2, horizon="year") == build_shards(unpacked, 2, horizon="year")
 
 
 def test_runs_and_shards_exclude_each_other() -> None:

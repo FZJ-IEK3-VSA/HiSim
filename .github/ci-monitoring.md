@@ -122,7 +122,7 @@ was pushed costs a handful of requests, and the request cap is 500.
 
 Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
 one download each, and the golden workflows uploaded 66 per push to `main` before they were
-sharded, and golden-year's one job per run uploads about 30 again — so a
+sharded, and golden-year's one job per 60 s run plus four 900 s shards upload about 35 again — so a
 single sweep a day could never keep up with them, and they are collected for `main` and for
 flagged jobs rather than for everything. Pull-request jobs still produce and print their own
 numbers; they just don't feed the trend.

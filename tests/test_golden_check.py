@@ -454,6 +454,30 @@ def test_a_missing_golden_fails_both_modes_before_running(tmp_path: Path) -> Non
         assert json.loads((tmp_path / subdir / "report.json").read_text())["pairs"][0]["status"] == "missing_golden"
 
 
+def test_a_shard_of_several_modes_with_one_pair_missing_its_golden_fails_every_mode_before_running(tmp_path: Path) -> None:
+    """golden-year's 900 s shards run ``--mode python composed --jobs 2``: a missing golden still stops the whole shard.
+
+    Catches the multi-mode path running the pairs that have goldens and leaving the new one out of either report.
+    """
+    config = _config_dict()
+    config["parameter_sets"].append({**config["parameter_sets"][0], "id": "one_week_900s", "seconds_per_timestep": 900})
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config))
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, general({"a": 1.0}))
+    seen: list = []
+
+    rc = check_modes(
+        ["python", "composed"], config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=tmp_path,
+        pairs=[("setup_a", "one_week_60s"), ("setup_a", "one_week_900s")], jobs=2, run_modes_fn=_modes_run_fn({}, seen),
+    )
+
+    assert rc == 1 and not seen
+    for subdir in ("golden-ref-check", "golden-ref-check-composed"):
+        pairs = json.loads((tmp_path / subdir / "report.json").read_text())["pairs"]
+        assert [(p["parameter_set_id"], p["status"]) for p in pairs] == [("one_week_900s", "missing_golden")]
+
+
 def test_cli_mode_both() -> None:
     """``--mode both`` is python and yaml."""
     assert expand_modes(_parse_args(["--mode", "both"]).mode) == ["python", "yaml"]

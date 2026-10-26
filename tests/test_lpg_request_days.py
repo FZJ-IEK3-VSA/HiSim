@@ -79,7 +79,7 @@ def test_every_window_of_one_year_names_the_same_request_in_the_cache_key(tmp_pa
     """Catches a cache key that names a window's own request, so equal profiles would sit under other requests.
 
     A week, a July week and the whole of 2021 name the same request, in both modes the LoadProfileGenerator
-    computes; 2022 names another, and a shipped profile names none.
+    computes; 2022 names another.
     """
     week = parameters_of(datetime.datetime(2021, 1, 1), 7, tmp_path)
     july_week = parameters_of(datetime.datetime(2021, 7, 1), 7, tmp_path)
@@ -87,12 +87,16 @@ def test_every_window_of_one_year_names_the_same_request_in_the_cache_key(tmp_pa
     next_year = parameters_of(datetime.datetime(2022, 1, 1), 7, tmp_path)
 
     for mode in (LpgDataAcquisitionMode.USE_LOCAL_LPG, LpgDataAcquisitionMode.USE_UTSP):
-        material = UtspLpgConnector.request_key_material(mode, week)
-        assert material == ":lpg_request=2021-01-01..2022-01-01"
-        assert UtspLpgConnector.request_key_material(mode, july_week) == material
-        assert UtspLpgConnector.request_key_material(mode, year) == material
-        assert UtspLpgConnector.request_key_material(mode, next_year) == ":lpg_request=2022-01-01..2023-01-01"
-    assert UtspLpgConnector.request_key_material(LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, week) == ""
+        config = UtspLpgConnectorConfig.for_household(
+            "Occupancy", Households.CHR01_Couple_both_at_Work, data_acquisition_mode=mode
+        )
+        material = UtspLpgConnector.minute_profile_key_material(config, week)
+        assert material.endswith(":lpg_request=2021-01-01..2022-01-01")
+        assert UtspLpgConnector.minute_profile_key_material(config, july_week) == material
+        assert UtspLpgConnector.minute_profile_key_material(config, year) == material
+        assert UtspLpgConnector.minute_profile_key_material(config, next_year).endswith(
+            ":lpg_request=2022-01-01..2023-01-01"
+        )
 
 
 class LocalOccupancy:

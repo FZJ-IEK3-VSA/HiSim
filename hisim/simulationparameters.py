@@ -650,9 +650,9 @@ class SimulationParameters:
         """Gets a unique key from a simulation parameter class.
 
         A part-load threshold other than the default is part of the key, spelled with ``:g`` (``900`` for 900 and
-        900.0 alike). Note: the legacy input cache that still keys through ``utils.get_cache_file``, the
-        load-profile connector's, appends this key as well, so a run with a non-default threshold misses that cache
-        and recomputes it, although it does not depend on the threshold. That costs time, not accuracy.
+        900.0 alike). ``utils.get_cache_file`` appends this key to the key material of an entry; the occupancy's
+        cache of the LoadProfileGenerator's minute profile does not, because its entries serve every window,
+        timestep and threshold of a year.
         """
         return "###".join(
             str(value) for value in (

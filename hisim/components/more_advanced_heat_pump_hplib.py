@@ -1219,8 +1219,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         ``0.4 * 4200 * 5.0 = 8400`` W.
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
-        pump books what the storage receives. While the outlet is hplib's own (not capped,
-        :meth:`capped_hot_water_outlet_in_celsius`), hplib's own thermal power differs from it only
+        pump books what the storage receives. While the outlet is hplib's own (not capped at the hot-water limit,
+        :meth:`hot_water_at_hplib_flow`), hplib's own thermal power differs from it only
         through its specific heat of water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is
         hplib's times 4180/4200, about 0.48 % less.
 
@@ -1774,29 +1774,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
         )
 
-    def capped_hot_water_outlet_in_celsius(
-        self, conditions: "HeatPumpStepConditions", outlet_temperature_in_celsius: float
-    ) -> float:
-        """Return the hot-water outlet after the cap at the maximal supply and the controller's set temperature, in °C.
-
-        hplib has no outlet limit, so the heat pump caps its hot-water supply at the lower of
-        ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
-        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, and the circuit carries
-        the heat of the capped supply.
-        """
-        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
-        return hydronics.capped_hot_water_supply_temperature_c(
-            unthrottled_supply_c=outlet_temperature_in_celsius,
-            return_c=conditions.hot_water_return_temperature_in_celsius,
-            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
-            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
-        )
-
     def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
         """Return a hot-water step with a parallel storage: hplib's flow, its outlet capped, the heat the flow carries.
 
-        hplib answers the tank's return; the outlet is capped (:meth:`capped_hot_water_outlet_in_celsius`), and the
-        heat pump books the heat the flow carries and that heat over hplib's COP.
+        hplib answers the tank's return. hplib has no outlet limit, so the heat pump caps its outlet at the lower of
+        ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
+        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, and the heat pump books the
+        heat the flow carries at the capped outlet and that heat over hplib's COP.
         """
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
@@ -1806,7 +1790,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             operation_mode="heating_dhw",
             minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
-        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, results.outlet_temperature_in_celsius)
+        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
+        outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=results.outlet_temperature_in_celsius,
+            return_c=return_in_celsius,
+            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
+            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
+        )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,
@@ -1829,7 +1819,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         """Return a hot-water step in the fixed-flow mode: the nominal flow, a 5 K target lift, the outlet capped.
 
         The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_operating_point`) and is
-        capped (:meth:`capped_hot_water_outlet_in_celsius`); the heat pump books the heat the flow carries.
+        capped at the lower of the maximal hot-water supply and the controller's set temperature, as in
+        :meth:`hot_water_at_hplib_flow`; the heat pump books the heat the flow carries.
         """
         assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
@@ -1848,7 +1839,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
         )
         mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
-        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, pumped.supply_temperature_in_celsius)
+        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
+        outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=pumped.supply_temperature_in_celsius,
+            return_c=return_in_celsius,
+            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
+            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
+        )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,

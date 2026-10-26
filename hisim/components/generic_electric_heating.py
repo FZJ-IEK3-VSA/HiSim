@@ -638,14 +638,10 @@ class ElectricHeating(PhysicsComponent):
             maximal_supply_c=maximal_supply_temperature_in_celsius,
             set_supply_c=supply_temperature_set_in_celsius,
         )
-        return hydronics.CircuitStep(
+        return hydronics.CircuitStep.carrying(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
-            power_w=hydronics.circuit_power_w(
-                mass_flow_kg_per_s=mass_flow_in_kg_per_second,
-                t_supply_c=supply_temperature_in_celsius,
-                t_return_c=return_temperature_in_celsius,
-            ),
+            t_return_c=return_temperature_in_celsius,
         )
 
     def get_cost_opex(

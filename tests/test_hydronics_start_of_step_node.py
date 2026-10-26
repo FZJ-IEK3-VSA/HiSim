@@ -82,8 +82,11 @@ def test_every_circuit_is_booked_on_the_start_temperature() -> None:
             heat_drawn_w=drawn_w,
         )
         for inflow, heat_in_j in zip(inflows, step.heat_in_j_per_inflow):
-            assert heat_in_j == hydronics.circuit_heat_j(
-                mass_flow_kg_per_s=inflow.mass_flow_kg_per_s, t_supply_c=inflow.temperature_c, t_return_c=t0, dt_s=dt
+            assert heat_in_j == (
+                hydronics.circuit_power_w(
+                    mass_flow_kg_per_s=inflow.mass_flow_kg_per_s, t_supply_c=inflow.temperature_c, t_return_c=t0
+                )
+                * dt
             )
         assert step.loss_j == ua * (t0 - t_amb) * dt
         assert step.heat_drawn_j == drawn_w * dt
@@ -153,30 +156,17 @@ def test_a_node_without_flow_loss_or_draw_keeps_its_temperature() -> None:
     assert step.loss_j == 0.0
 
 
-@pytest.mark.parametrize(
-    ("overrides", "error"),
-    [
-        ({"inflows": [Inflow(-0.1, 50.0)]}, hydronics.NegativeMassFlowError),
-        ({"dt_s": 0.0}, hydronics.NonPositiveTimestepError),
-    ],
-)
-def test_a_wrong_but_finite_argument_is_refused(overrides: Dict[str, Any], error: type) -> None:
-    """A negative inflow or a non-positive step with an inflow is refused: either would give a wrong but finite heat.
+def test_a_negative_inflow_is_refused() -> None:
+    """A negative inflow is refused: it would give a wrong but finite heat.
 
-    The node's constants are checked once when its component is built (``MixedNode.check_constants``), and a NaN is
-    not checked here: it passes into the result, where the check after the run names its column.
+    The node's constants, the step length among them, are checked once when its component is built
+    (``MixedNode.check_constants``), and a NaN is not checked here: it passes into the result, where the check after
+    the run names its column.
     """
-    arguments: Dict[str, Any] = {
-        "t0_c": 40.0,
-        "inflows": [Inflow(0.1, 50.0)],
-        "ua_w_per_k": 2.0,
-        "t_amb_c": 20.0,
-        "dt_s": 900.0,
-        "heat_capacity_j_per_k": 1e6,
-    }
-    arguments.update(overrides)
-    with pytest.raises(error):
-        StartOfStepNode.step(**arguments)
+    with pytest.raises(hydronics.NegativeMassFlowError):
+        StartOfStepNode.step(
+            t0_c=40.0, inflows=[Inflow(-0.1, 50.0)], ua_w_per_k=2.0, t_amb_c=20.0, dt_s=900.0, heat_capacity_j_per_k=1e6
+        )
 
 
 def test_a_nan_passes_through_into_the_end_temperature() -> None:

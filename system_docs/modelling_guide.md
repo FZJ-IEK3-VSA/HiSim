@@ -14,7 +14,8 @@ controller (#941).
   quantity that crosses a port is computed once, from the port quantities both ends see, by one function. A water
   circuit carries a mass flow `m` (kg/s), a supply temperature and a return temperature (°C); its heat flow is
   `P = m c (T_sup - T_ret)` in W (`hisim.hydronics.circuit_power_w`), and its heat over a step of `dt` seconds is
-  `Q = m c (T_sup - T_ret) dt` (`circuit_heat_kwh`, in kWh), with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`.
+  `Q = m c (T_sup - T_ret) dt`, that heat flow times the step (`hisim.energy_port.HydronicPort.heat_in_kilowatt_hour`,
+  in kWh), with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`.
   Neither end books a heat of its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two
   differed by up to 1.5 % per step. Now the heat pump books `m c (T_out - T_in)` of its own outputs, and

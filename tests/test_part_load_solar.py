@@ -34,7 +34,7 @@ class ControllerPasses:
         for _ in range(passes):
             controller.i_restore_state()
             outputs = AllInputsRig.step(controller, stsv, fakes, values, timestep=cls.TIMESTEP)
-            published.append(outputs[SolarThermalSystemController.PartLoadRatio])
+            published.append(outputs[SolarThermalSystemController.RequestedPartLoadRatio])
         return published
 
 
@@ -42,13 +42,13 @@ class ControllerPasses:
 @pytest.mark.parametrize("seconds_per_timestep, extra", [(60, {}), (600, {}), (900, {"part_load_above_seconds": 900})])
 def test_at_and_below_the_threshold_a_running_pump_gets_exactly_one(seconds_per_timestep: int, extra: Dict) -> None:
     """The pump that runs gets 1.0 in every pass however hot the storage ends; 60 s results rest on that."""
-    values = SolarControllerRig.values(start_c=45.0, end_c=70.0, ratio_run=0.3)
+    values = SolarControllerRig.values(start_c=45.0, end_c=70.0, actual_ratio=0.3)
     assert ControllerPasses.ratios(seconds_per_timestep, values, 6, **extra) == [1.0] * 6
 
 
 @pytest.mark.base
 def test_above_the_threshold_the_controller_applies_the_rule_towards_its_maximum_storage_temperature() -> None:
-    """At 900 s the ratio lies on the line from the start temperature through the ratio run to the 80 °C maximum.
+    """At 900 s the ratio lies on the line from the start temperature through the actual ratio to the 80 °C maximum.
 
     A controller that still aimed at the backups' 60 °C warm-water aim would publish 0 for a storage that starts at
     75 °C and stop the sun's charge there.
@@ -79,7 +79,7 @@ def test_a_full_storage_stops_the_pump_and_its_ratio_is_zero() -> None:
 
 
 @pytest.mark.base
-def test_under_force_convergence_the_solar_controller_publishes_the_ratio_run() -> None:
+def test_under_force_convergence_the_solar_controller_publishes_the_actual_ratio() -> None:
     """A forced pass publishes the ratio the pump ran, whatever the storage reads, so the pump stops changing."""
     controller, stsv, fakes = SolarControllerRig.build(900)
     controller.i_save_state()
@@ -90,11 +90,11 @@ def test_under_force_convergence_the_solar_controller_publishes_the_ratio_run() 
         controller,
         stsv,
         fakes,
-        SolarControllerRig.values(start_c=55.0, end_c=50.0, ratio_run=0.42),
+        SolarControllerRig.values(start_c=55.0, end_c=50.0, actual_ratio=0.42),
         timestep=ControllerPasses.TIMESTEP,
         force_convergence=True,
     )
-    assert forced[SolarThermalSystemController.PartLoadRatio] == 0.42
+    assert forced[SolarThermalSystemController.RequestedPartLoadRatio] == 0.42
 
 
 @pytest.mark.base
@@ -104,8 +104,8 @@ def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fract
     The ratio 0.25 keeps the ratio and its complement apart, which 0.5 would not. At full load the new pump draws its
     10 W.
     """
-    full = CollectorRig.charge(900, ratio=1.0)
-    part = CollectorRig.charge(900, ratio=0.25)
+    full = CollectorRig.charge(900, requested_ratio=1.0)
+    part = CollectorRig.charge(900, requested_ratio=0.25)
     assert full[SolarThermalSystem.WaterMassFlowOutput] > 0.0
     assert full[SolarThermalSystem.ElectricityConsumptionOutput] == 10.0
     assert part[SolarThermalSystem.WaterTemperatureOutput] == full[SolarThermalSystem.WaterTemperatureOutput]
@@ -117,10 +117,10 @@ def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fract
     ):
         assert part[field] == pytest.approx(0.25 * full[field], rel=1e-12)
     assert part[SolarThermalSystem.SolarPumpHeatLoss] == part[SolarThermalSystem.ElectricityConsumptionOutput]
-    assert (part[SolarThermalSystem.PartLoadRatioRun], full[SolarThermalSystem.PartLoadRatioRun]) == (0.25, 1.0)
-    standing = CollectorRig.charge(900, ratio=0.0, control_signal=0.0)
+    assert (part[SolarThermalSystem.ActualPartLoadRatio], full[SolarThermalSystem.ActualPartLoadRatio]) == (0.25, 1.0)
+    standing = CollectorRig.charge(900, requested_ratio=0.0, control_signal=0.0)
     assert standing[SolarThermalSystem.ElectricityConsumptionOutput] == 0.0
-    assert standing[SolarThermalSystem.PartLoadRatioRun] == 0.0
+    assert standing[SolarThermalSystem.ActualPartLoadRatio] == 0.0
 
 
 @pytest.mark.base
@@ -129,13 +129,13 @@ def test_a_collector_commanded_ratio_zero_is_idle_though_its_pump_signal_is_on()
 
     A hot outlet with no flow behind it would put a temperature into the results that no water carried.
     """
-    idle = CollectorRig.charge(900, ratio=0.0, control_signal=1.0)
+    idle = CollectorRig.charge(900, requested_ratio=0.0, control_signal=1.0)
     assert idle[SolarThermalSystem.WaterTemperatureOutput] == 45.0
     for field in (
         SolarThermalSystem.WaterMassFlowOutput,
         SolarThermalSystem.ThermalPowerOutput,
         SolarThermalSystem.ThermalEnergyOutput,
         SolarThermalSystem.ElectricityConsumptionOutput,
-        SolarThermalSystem.PartLoadRatioRun,
+        SolarThermalSystem.ActualPartLoadRatio,
     ):
         assert idle[field] == 0.0

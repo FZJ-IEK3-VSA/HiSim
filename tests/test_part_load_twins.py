@@ -51,13 +51,13 @@ class PartLoadTwins:
     CASES: ClassVar[Dict[str, Tuple[str, str, str, Tuple[str, str]]]] = {
         "gas_boiler_first_week": (
             "household_gas_building_sizer",
-            f"ModulatingBoilerController - {GenericBoilerController.PartLoadRatioDhw} [",
+            f"ModulatingBoilerController - {GenericBoilerController.RequestedPartLoadRatioDhw} [",
             f"ModulatingBoilerController - {GenericBoilerController.TargetTemperatureDhwInCelsius} [",
             ("2021-01-01T00:00:00", "2021-01-08T00:00:00"),
         ),
         "solar_pump_june_week": (
             "household_gas_solar_thermal_building_sizer",
-            f"SolarThermalSystemController - {SolarThermalSystemController.PartLoadRatio} [",
+            f"SolarThermalSystemController - {SolarThermalSystemController.RequestedPartLoadRatio} [",
             f"SolarThermalSystemController - {SolarThermalSystemController.TargetTemperatureInCelsius} [",
             ("2021-06-01T00:00:00", "2021-06-08T00:00:00"),
         ),

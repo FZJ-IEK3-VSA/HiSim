@@ -272,7 +272,7 @@ class SingleStep:
         """
         values = {
             MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
-            MoreAdvancedHeatPumpHPLib.PartLoadRatioSh: 1.0,
+            MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioSh: 1.0,
             **values,
         }
         fakes: List[cp.ComponentOutput] = []

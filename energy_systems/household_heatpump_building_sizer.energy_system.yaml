@@ -40,8 +40,8 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - HeatingCurveController
       - HeatDistributionSystem
+      - HeatingCurveController
       - Building
       - SimpleHotWaterStorage
   HeatingCurveController:
@@ -54,9 +54,9 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
+      - MoreAdvancedHeatPumpHPLib
       - Weather
       - HeatingCurveController
-      - MoreAdvancedHeatPumpHPLib
       - L2EMSElectricityController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:

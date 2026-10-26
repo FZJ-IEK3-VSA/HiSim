@@ -86,7 +86,7 @@ class HdsRig:
             HeatDistribution.WaterTemperatureInput: supply_in_celsius,
             HeatDistribution.TheoreticalThermalBuildingDemand: demand_in_watt,
             HeatDistribution.ResidenceTemperatureIndoorAir: room_in_celsius,
-            HeatDistribution.PartLoadRatio: part_load_ratio,
+            HeatDistribution.RequestedPartLoadRatio: part_load_ratio,
         }
         self.hds.i_restore_state()
         outputs = AllInputsRig.step(self.hds, self.stsv, self.fakes, values)
@@ -191,4 +191,4 @@ def test_behind_a_buffer_the_circuit_runs_the_commanded_fraction_of_its_flow_and
     assert part.outputs[HeatDistribution.ThermalPowerDelivered] == pytest.approx(1200.0)
     outlet = HeatDistribution.WaterTemperatureOutput
     assert part.outputs[outlet] == whole.outputs[outlet]
-    assert part.outputs[HeatDistribution.PartLoadRatioRun] == 0.4
+    assert part.outputs[HeatDistribution.ActualPartLoadRatio] == 0.4

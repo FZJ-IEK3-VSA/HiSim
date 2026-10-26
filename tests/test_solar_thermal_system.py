@@ -64,7 +64,7 @@ def test_solar_thermal_system() -> None:
     )
     my_sts.control_signal_channel.source_output = state_controller
     # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
-    my_sts.part_load_command.ratio_channel.source_output = state_controller
+    my_sts.part_load_command.requested_ratio_channel.source_output = state_controller
 
     my_sts.set_sim_repo(repo)
     my_sts.i_prepare_simulation()
@@ -141,7 +141,7 @@ def test_the_collector_reads_the_sun_the_weather_publishes() -> None:
     With the sun's inputs set to 30 degrees from the zenith due south, the irradiance on the plane is the one pvlib
     gives for that sun, at any timestep.
     """
-    outputs = CollectorRig.charge(seconds_per_timestep=3600, ratio=1.0)
+    outputs = CollectorRig.charge(seconds_per_timestep=3600, requested_ratio=1.0)
     area_in_m2 = solar_thermal_system.SolarThermalSystemConfig.COLLECTOR_AREA_IN_M2_PER_APARTMENT
 
     assert outputs[solar_thermal_system.SolarThermalSystem.SolarPowerOnCollector] == pytest.approx(
@@ -242,7 +242,7 @@ def test_the_timestep_reads_the_resolved_area() -> None:
     for collector in collectors:
         collector.control_signal_channel.source_output = state_controller
         # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
-        collector.part_load_command.ratio_channel.source_output = state_controller
+        collector.part_load_command.requested_ratio_channel.source_output = state_controller
         collector.set_sim_repo(repo)
         collector.i_prepare_simulation()
         collector.t_out_channel.source_output = my_weather.air_temperature_output
@@ -393,7 +393,7 @@ def test_the_timestep_output_equals_the_series_path() -> None:
     control, inlet = fake_outputs
     my_sts.control_signal_channel.source_output = control
     # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
-    my_sts.part_load_command.ratio_channel.source_output = control
+    my_sts.part_load_command.requested_ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
@@ -471,7 +471,7 @@ def test_the_collector_pumps_its_heat_over_the_target_lift_and_its_sensor_reads_
     control, inlet = fakes
     my_sts.control_signal_channel.source_output = control
     # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
-    my_sts.part_load_command.ratio_channel.source_output = control
+    my_sts.part_load_command.requested_ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
     my_sts.inlet_temperature_at_start_of_step_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
@@ -1115,14 +1115,14 @@ class SolarControllerSteps:
 
     @staticmethod
     def values(
-        collector_above_storage_in_kelvin: float, start_c: float = 45.0, ratio_run: float = 1.0
+        collector_above_storage_in_kelvin: float, start_c: float = 45.0, actual_ratio: float = 1.0
     ) -> Dict[str, float]:
-        """Return the controller's inputs: the tank's start temperature, the collector's sensor, the pump's ratio run.
+        """Return the controller's inputs: the tank's start temperature, the collector's sensor, the pump's actual ratio.
 
-        The ratio run is the part-load ratio the collector reports its pump ran with; a forced pass reads it.
+        The actual ratio is the part-load ratio the collector reports its pump ran with; a forced pass reads it.
         """
         return SolarControllerRig.values(
-            start_c=start_c, ratio_run=ratio_run, collector_above_storage_in_kelvin=collector_above_storage_in_kelvin
+            start_c=start_c, actual_ratio=actual_ratio, collector_above_storage_in_kelvin=collector_above_storage_in_kelvin
         )
 
     @classmethod
@@ -1198,13 +1198,13 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
 
 
 @pytest.mark.base
-@pytest.mark.parametrize(("ratio_run", "expected_signal"), [(0.42, 1), (1.0, 1), (0.0, 0)])
+@pytest.mark.parametrize(("actual_ratio", "expected_signal"), [(0.42, 1), (1.0, 1), (0.0, 0)])
 def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
-    ratio_run: float, expected_signal: int
+    actual_ratio: float, expected_signal: int
 ) -> None:
     """A forced pass keeps the pump as the collector reports it ran, whatever the sensors; the next step starts from it.
 
-    The pump's signal and the part-load ratio the controller holds under ``force_convergence`` (the ratio run) then
+    The pump's signal and the part-load ratio the controller holds under ``force_convergence`` (the actual ratio) then
     describe the same run. A forced pass that decided on the sensors again could switch on a pump whose held ratio is
     0; one that kept an earlier pass's decision would remember a pass.
     """
@@ -1215,7 +1215,7 @@ def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
         difference = steps.BELOW_THE_OFF_DIFFERENCE_IN_KELVIN
     else:
         difference = steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN
-    forced_values = steps.values(difference, ratio_run=ratio_run)
+    forced_values = steps.values(difference, actual_ratio=actual_ratio)
     assert steps.signal(controller, stsv, fakes, forced_values, force_convergence=True) == expected_signal
     controller.i_save_state()
     between = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
@@ -1227,7 +1227,7 @@ def test_an_unforced_pass_that_signals_the_pump_on_at_ratio_zero_saves_it_as_sta
     """The saved pump state is what the collector will report: a pump signalled on at ratio 0 did not run.
 
     Above the part-load threshold a step that ends the storage at the maximum gets ratio 0 with the signal on; the
-    collector idles and reports a ratio run of 0. A controller that saved the signal instead would choose the
+    collector idles and reports an actual ratio of 0. A controller that saved the signal instead would choose the
     switch-off difference in the next step as if the pump had run, unlike a forced pass on the same step.
     """
     steps = SolarControllerSteps
@@ -1236,13 +1236,13 @@ def test_an_unforced_pass_that_signals_the_pump_on_at_ratio_zero_saves_it_as_sta
     at_the_maximum = SolarControllerRig.values(
         start_c=78.0,
         end_c=80.03,
-        ratio_run=0.0,
+        actual_ratio=0.0,
         collector_above_storage_in_kelvin=steps.ABOVE_THE_ON_DIFFERENCE_IN_KELVIN,
     )
     controller.i_restore_state()
     outputs = AllInputsRig.step(controller, stsv, fakes, at_the_maximum, timestep=steps.TIMESTEP)
     assert outputs[controller.ControlSignalToSolarThermalSystem] == 1
-    assert outputs[controller.PartLoadRatio] == 0.0
+    assert outputs[controller.RequestedPartLoadRatio] == 0.0
     controller.i_save_state()
     assert controller.previous_state.pump_runs is False
     between = steps.values(steps.BETWEEN_THE_DIFFERENCES_IN_KELVIN)
@@ -1308,15 +1308,15 @@ def test_the_collector_sensor_reads_the_stagnation_after_a_standing_step_and_the
     """
     sensor_name = solar_thermal_system.SolarThermalSystem.CollectorSensorTemperatureAtStartOfStepInCelsius
     supply_name = solar_thermal_system.SolarThermalSystem.WaterTemperatureOutput
-    stood = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=40.0)
-    stood_off = CollectorRig.charge(900, ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=55.0)
+    stood = CollectorRig.charge(900, requested_ratio=1.0, inlet_at_start_of_step_c=40.0)
+    stood_off = CollectorRig.charge(900, requested_ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=55.0)
     assert stood[sensor_name] == stood_off[sensor_name] > 80.0
 
-    ran = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True)
+    ran = CollectorRig.charge(900, requested_ratio=1.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True)
     ran_off = CollectorRig.charge(
-        900, ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True
+        900, requested_ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=40.0, pump_ran_in_previous_step=True
     )
     assert ran[sensor_name] == ran_off[sensor_name] == 60.0  # the 20 K target lift on the 40 °C start
     assert ran[supply_name] == 65.0  # the circuit itself runs at the 45 °C step mean
-    cooler = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=35.0, pump_ran_in_previous_step=True)
+    cooler = CollectorRig.charge(900, requested_ratio=1.0, inlet_at_start_of_step_c=35.0, pump_ran_in_previous_step=True)
     assert cooler[sensor_name] == 55.0

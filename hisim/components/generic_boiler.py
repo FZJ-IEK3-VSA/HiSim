@@ -1381,19 +1381,21 @@ class GenericBoiler(PhysicsComponent):
 
     Get Control Signal and calculate on base of it Massflow and Temperature of Massflow.
 
-    A hot-water charge runs the part-load ratio its controller commands (``PartLoadRatioDhw``): 1, the whole step, at
-    and below the part-load threshold; above it the fraction of the step that brings the tank to the controller's
-    target. Below 1 the boiler publishes the averaged flow, the full-load flow times the ratio, at the full-load supply
-    temperature, and books the heat that flow carries and the ratio times the full-load fuel. It reports the ratio it
-    ran with (``PartLoadRatioRunDhw``): the commanded ratio while it charges the tank, 0 otherwise. Cycling losses of
-    the burner are not modelled.
+    A hot-water charge runs the requested part-load ratio its controller commands (``RequestedPartLoadRatioDhw``): 1,
+    the whole step, at and below the part-load threshold; above it the fraction of the step that brings the tank to
+    the controller's target. Below 1 the boiler publishes the averaged flow, the full-load flow times the ratio, at the
+    full-load supply temperature, and books the heat that flow carries and the ratio times the full-load fuel. It
+    reports the actual ratio it ran with (``ActualPartLoadRatioDhw``): the requested ratio while it charges the tank, 0
+    otherwise. Cycling losses of the burner are not modelled.
 
-    A space-heating charge of the buffer runs its own ratio the same way (``PartLoadRatioSh``, reported back as
-    ``PartLoadRatioRunSh``). Above the part-load threshold the controller may also give the space-heating charge the
-    rest of a hot-water step that ends inside the step: the boiler then fires both circuits in the step, the hot-water
-    charge at its ratio and the space-heating charge at its ratio, with the control signal and lift the controller
-    sends for it (``ControlSignalForSpaceHeatingRemainder``, ``TemperatureDeltaForSpaceHeatingRemainderInKelvin``),
-    and the fuel of both adds up.
+    A space-heating charge of the buffer runs its own requested ratio the same way (``RequestedPartLoadRatioSh``,
+    reported back as the actual ratio ``ActualPartLoadRatioSh``). Where the burner's minimum times override the
+    controller (see below), the actual ratios are what the burner ran: 1 for the space-heating charge of a burner held
+    lit, 0 for both charges of one held out. Above the part-load threshold the controller may also give the
+    space-heating charge the rest of a hot-water step that ends inside the step: the boiler then fires both circuits in
+    the step, the hot-water charge at its requested ratio and the space-heating charge at its requested ratio, with the
+    control signal and lift the controller sends for it (``ControlSignalForSpaceHeatingRemainder``,
+    ``TemperatureDeltaForSpaceHeatingRemainderInKelvin``), and the fuel of both adds up.
 
     Without a buffer the space-heating circuit may run on the heat distribution system's flow: the distribution system
     pumps its design flow and the boiler, wired to it through ``WaterInputMassFlowSh``, is a heater on that flow, like
@@ -1418,10 +1420,10 @@ class GenericBoiler(PhysicsComponent):
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: the boiler's hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
-    #: The fraction of the step a hot-water charge runs, commanded by the controller.
-    PartLoadRatioDhw = "PartLoadRatioDhw"
-    #: The fraction of the step a space-heating charge runs, commanded by the controller.
-    PartLoadRatioSh = "PartLoadRatioSh"
+    #: The requested part-load ratio of a hot-water charge: the fraction of the step the controller commands it to run.
+    RequestedPartLoadRatioDhw = "RequestedPartLoadRatioDhw"
+    #: The requested part-load ratio of a space-heating charge: the fraction of the step the controller commands it to run.
+    RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
     #: The control signal and the lift of a space-heating charge in the rest of a hot-water step.
     ControlSignalForSpaceHeatingRemainder = "ControlSignalForSpaceHeatingRemainder"
     TemperatureDeltaForSpaceHeatingRemainderInKelvin = "TemperatureDeltaForSpaceHeatingRemainderInKelvin"
@@ -1432,10 +1434,11 @@ class GenericBoiler(PhysicsComponent):
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
     # Output
-    #: The fraction of the step the hot-water charge ran, reported back to the controller.
-    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
-    #: The fraction of the step the space-heating charge ran, reported back to the controller.
-    PartLoadRatioRunSh = "PartLoadRatioRunSh"
+    #: The actual part-load ratio of the hot-water charge: the fraction of the step it ran, reported back to the controller.
+    ActualPartLoadRatioDhw = "ActualPartLoadRatioDhw"
+    #: The actual part-load ratio of the space-heating charge: the fraction of the step it ran, reported back to the
+    #: controller.
+    ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
     WaterOutputMassFlowSh = "WaterOutputMassFlowSh"
     WaterOutputTemperatureSh = "WaterOutputTemperatureSh"
     EnergyDemandSh = "EnergyDemandSh"
@@ -1496,14 +1499,14 @@ class GenericBoiler(PhysicsComponent):
         )
         self.dhw_part_load_command = PartLoadCommand(
             self,
-            input_name=GenericBoiler.PartLoadRatioDhw,
-            ratio_run_output_name=GenericBoiler.PartLoadRatioRunDhw,
+            requested_ratio_input_name=GenericBoiler.RequestedPartLoadRatioDhw,
+            actual_ratio_output_name=GenericBoiler.ActualPartLoadRatioDhw,
             device_description="the boiler's hot-water charge",
         )
         self.space_heating_part_load_command = PartLoadCommand(
             self,
-            input_name=GenericBoiler.PartLoadRatioSh,
-            ratio_run_output_name=GenericBoiler.PartLoadRatioRunSh,
+            requested_ratio_input_name=GenericBoiler.RequestedPartLoadRatioSh,
+            actual_ratio_output_name=GenericBoiler.ActualPartLoadRatioSh,
             device_description="the boiler's space-heating charge",
         )
         self.control_signal_for_space_heating_remainder_channel: ComponentInput = self.add_input(
@@ -1722,8 +1725,8 @@ class GenericBoiler(PhysicsComponent):
             )
         )
         for input_name, output_name in (
-            (GenericBoiler.PartLoadRatioDhw, component_class.PartLoadRatioDhw),
-            (GenericBoiler.PartLoadRatioSh, component_class.PartLoadRatioSh),
+            (GenericBoiler.RequestedPartLoadRatioDhw, component_class.RequestedPartLoadRatioDhw),
+            (GenericBoiler.RequestedPartLoadRatioSh, component_class.RequestedPartLoadRatioSh),
             (
                 GenericBoiler.ControlSignalForSpaceHeatingRemainder,
                 component_class.ControlSignalForSpaceHeatingRemainder,
@@ -1903,18 +1906,19 @@ class GenericBoiler(PhysicsComponent):
             raise ValueError(f"Unknown operating mode {operating_mode}")
 
         firings: Dict[str, BoilerFiring] = {}
-        ratios_run = {"hot_water": 0.0, "space_heating": 0.0}
+        # the requested ratio of each circuit the controller has fired, keyed like the firings
+        requested_ratios: Dict[str, float] = {}
         # a circuit without a lift moves no water, so it carries no heat and the controller asks for no fire
         if fired is not None and lift_in_kelvin > 0:
-            firing, ratio_run = self.commanded_firing(
+            firing, requested_ratio = self.commanded_firing(
                 stsv, fired=fired, control_signal=control_signal, lift_in_kelvin=lift_in_kelvin
             )
             circuit_name = "hot_water" if fired is self.hot_water_circuit else "space_heating"
-            firings[circuit_name], ratios_run[circuit_name] = firing, ratio_run
+            firings[circuit_name], requested_ratios[circuit_name] = firing, requested_ratio
         if fired is self.hot_water_circuit:
             remainder = self.space_heating_remainder_firing(stsv)
             if remainder is not None:
-                firings["space_heating"], ratios_run["space_heating"] = remainder
+                firings["space_heating"], requested_ratios["space_heating"] = remainder
         asked_to_burn = any(firing.fuel_power_in_watt > 0 for firing in firings.values())
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         burner_is_lit = self.burner_times.burner_is_lit(
@@ -1922,6 +1926,9 @@ class GenericBoiler(PhysicsComponent):
             committed=self.committed_burner_state,
             seconds_per_timestep=seconds_per_timestep,
         )
+        # From the requested to the actual ratios: a fired circuit runs its requested ratio, a circuit not fired runs 0,
+        # and the burner's minimum times override both.
+        actual_ratios = {name: requested_ratios.get(name, 0.0) for name in ("hot_water", "space_heating")}
         if burner_is_lit and not asked_to_burn:
             # held lit by the minimum firing time: the whole step to the space-heating buffer at the pump's largest flow
             firings = {
@@ -1929,41 +1936,40 @@ class GenericBoiler(PhysicsComponent):
                     stsv, fired=self.space_heating_circuit, control_signal=control_signal, lift_in_kelvin=0.0
                 )
             }
-            ratios_run = {"hot_water": 0.0, "space_heating": 1.0}
+            actual_ratios = {"hot_water": 0.0, "space_heating": 1.0}
         elif asked_to_burn and not burner_is_lit:
             # held out by the minimum pause
             firings = {}
-            ratios_run = {"hot_water": 0.0, "space_heating": 0.0}
+            actual_ratios = {"hot_water": 0.0, "space_heating": 0.0}
         self.burner_state = self.committed_burner_state.after_step(
             is_lit=any(firing.fuel_power_in_watt > 0 for firing in firings.values()),
             seconds_per_timestep=seconds_per_timestep,
         )
-        self.dhw_part_load_command.publish_ratio_run(stsv, ratios_run["hot_water"])
-        self.space_heating_part_load_command.publish_ratio_run(stsv, ratios_run["space_heating"])
+        self.dhw_part_load_command.publish_actual_ratio(stsv, actual_ratios["hot_water"])
+        self.space_heating_part_load_command.publish_actual_ratio(stsv, actual_ratios["space_heating"])
         self.publish_firings(stsv, space_heating=firings.get("space_heating"), hot_water=firings.get("hot_water"))
 
     def space_heating_remainder_firing(self, stsv: SingleTimeStepValues) -> Optional[Tuple["BoilerFiring", float]]:
-        """Return the space-heating charge in the rest of a hot-water step and its ratio, or None without one.
+        """Return the space-heating charge in the rest of a hot-water step and its requested ratio, or None without one.
 
-        The controller commands it with a space-heating ratio above 0 in a hot-water step and sends its control signal
-        and lift. The charge is the space-heating circuit's firing at that signal and lift, run for the ratio's
-        fraction of the step (:meth:`part_loaded_firing`).
+        The controller commands it with a requested space-heating ratio above 0 in a hot-water step and sends its
+        control signal and lift. The charge is the space-heating circuit's firing at that signal and lift, run for the
+        requested ratio's fraction of the step (:meth:`part_loaded_firing`).
 
         Args:
             stsv: The step's values.
 
         Returns:
-            The firing and its ratio, or None.
+            The firing and the requested ratio it fired at, or None.
         """
-        ratio = self.space_heating_part_load_command.ratio(stsv)
+        requested_ratio = self.space_heating_part_load_command.requested_ratio(stsv)
         lift_in_kelvin = stsv.get_input_value(self.temperature_delta_for_space_heating_remainder_channel)
         control_signal = stsv.get_input_value(self.control_signal_for_space_heating_remainder_channel)
-        if ratio <= 0.0 or lift_in_kelvin <= 0.0 or control_signal <= 0.0:
+        if requested_ratio <= 0.0 or lift_in_kelvin <= 0.0 or control_signal <= 0.0:
             return None
-        firing, ratio_run = self.commanded_firing(
+        return self.commanded_firing(
             stsv, fired=self.space_heating_circuit, control_signal=control_signal, lift_in_kelvin=lift_in_kelvin
         )
-        return firing, ratio_run
 
     def publish_firings(
         self,
@@ -2008,39 +2014,41 @@ class GenericBoiler(PhysicsComponent):
         control_signal: float,
         lift_in_kelvin: float,
     ) -> Tuple["BoilerFiring", float]:
-        """Return the firing of the circuit the controller commands, and the part-load ratio it runs.
+        """Return the firing of the circuit the controller commands, and the requested ratio it fires at.
 
         A lift smaller than the rise the commanded heat gives at the pump's largest flow is raised to that rise
         (:attr:`pump`), so the flow stays one a household circuit carries and the supply ends above the
         one asked for. The hot-water supply stops at the controller's set temperature and both supplies at the maximal
-        flow temperature. Each circuit runs the part-load ratio the controller commands for it
+        flow temperature. Each circuit runs the requested ratio the controller commands for it
         (:meth:`part_loaded_firing`) on the circuit's whole-step firing (:meth:`whole_step_firing`); a space-heating
         circuit on the distribution system's flow keeps that flow (:meth:`part_loaded_firing_on_distribution_flow`).
 
         Args:
-            stsv: The step's values, read for the circuit's return, the hot-water set temperature and the ratio.
+            stsv: The step's values, read for the circuit's return, the hot-water set temperature and the requested
+                ratio.
             fired: The circuit the controller's mode names.
             control_signal: The share of the maximal burner power the controller commands, 0 to 1.
             lift_in_kelvin: The lift the controller asks for, in K, above 0.
 
         Returns:
-            The circuit's firing, and the part-load ratio it ran with.
+            The circuit's firing, and the requested ratio it fired at. :meth:`i_simulate` turns it into the actual
+            ratio, which the burner's minimum times may override.
         """
         firing = self.whole_step_firing(stsv, fired=fired, control_signal=control_signal, lift_in_kelvin=lift_in_kelvin)
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
         command = (
             self.dhw_part_load_command if fired is self.hot_water_circuit else self.space_heating_part_load_command
         )
-        ratio_run = command.ratio(stsv)
+        requested_ratio = command.requested_ratio(stsv)
         if fired is self.space_heating_circuit and self.space_heating_runs_on_distribution_flow():
             firing = self.part_loaded_firing_on_distribution_flow(
-                firing, part_load_ratio=ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
+                firing, part_load_ratio=requested_ratio, return_temperature_in_celsius=return_temperature_in_celsius
             )
-            return firing, ratio_run
+            return firing, requested_ratio
         firing = self.part_loaded_firing(
-            firing, part_load_ratio=ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
+            firing, part_load_ratio=requested_ratio, return_temperature_in_celsius=return_temperature_in_celsius
         )
-        return firing, ratio_run
+        return firing, requested_ratio
 
     def whole_step_firing(
         self,
@@ -2824,19 +2832,19 @@ class GenericBoilerController(L1ControllerComponent):
     (1) Generic_boiler (control_signal)
 
     The controller also owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`):
-    it decides the mode on the tank's start-of-step temperature as before, and commands the part-load ratio
-    ``PartLoadRatioDhw`` with it. At and below the part-load threshold the ratio is 1 whenever the charge runs. Above it
-    the ratio follows :class:`hisim.part_load.PartLoadRule` from the ratio the boiler reports it ran with
-    (``PartLoadRatioRunDhw``) and the tank's start and end temperatures, so that the tank ends the step at the warm-water
-    aim, the temperature at which the controller ends the charge (``TargetTemperatureDhwInCelsius``, 60 °C), or at most
-    a few hundredths of a kelvin above it, except on a step the simulator forces to converge, which ends wherever its
-    last pass left it.
+    it decides the mode on the tank's start-of-step temperature as before, and commands the requested part-load ratio
+    ``RequestedPartLoadRatioDhw`` with it. At and below the part-load threshold the requested ratio is 1 whenever the
+    charge runs. Above it the requested ratio follows :class:`hisim.part_load.PartLoadRule` from the actual ratio the
+    boiler reports it ran with (``ActualPartLoadRatioDhw``) and the tank's start and end temperatures, so that the tank
+    ends the step at the warm-water aim, the temperature at which the controller ends the charge
+    (``TargetTemperatureDhwInCelsius``, 60 °C), or at most a few hundredths of a kelvin above it, except on a step the
+    simulator forces to converge, which ends wherever its last pass left it.
 
     The minimum running time is kept here, in the controller, not in the boiler: a step held in hot-water mode only by
-    it gets the rule's ratio like any other, which is 0 for a tank that starts at or above the aim, so the boiler does
-    not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time. These
-    times act on the controller's mode; the burner's own minimum firing time and minimum pause, which act on whether
-    it burns, are the boiler's (:class:`BurnerTimes`).
+    it gets the rule's requested ratio like any other, which is 0 for a tank that starts at or above the aim, so the
+    boiler does not fire on it. A fine-step run, which has no part load, keeps firing through the minimum running time.
+    These times act on the controller's mode; the burner's own minimum firing time and minimum pause, which act on
+    whether it burns, are the boiler's (:class:`BurnerTimes`).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -2844,18 +2852,19 @@ class GenericBoilerController(L1ControllerComponent):
     # Inputs
     WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
-    #: The hot-water tank's temperature at the end of the step, which the part-load ratio is set against.
+    #: The hot-water tank's temperature at the end of the step, which the requested part-load ratio is set against.
     WaterTemperatureAtEndOfStepFromDHWStorageInCelsius = "WaterTemperatureAtEndOfStepFromDHWStorageInCelsius"
-    #: The fraction of the step the boiler's hot-water charge ran, as the boiler reports it.
-    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
+    #: The actual part-load ratio of the boiler's hot-water charge: the fraction of the step it ran, as the boiler reports it.
+    ActualPartLoadRatioDhw = "ActualPartLoadRatioDhw"
     #: The buffer's end-of-step temperature, and its end temperature without the boiler's circuit, which the
-    #: space-heating part-load ratio is set from.
+    #: requested space-heating part-load ratio is set from.
     WaterTemperatureAtEndOfStepFromWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWaterStorageInCelsius"
     WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius = (
         "WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius"
     )
-    #: The fraction of the step the boiler's space-heating charge ran, as the boiler reports it.
-    PartLoadRatioRunSh = "PartLoadRatioRunSh"
+    #: The actual part-load ratio of the boiler's space-heating charge: the fraction of the step it ran, as the boiler
+    #: reports it.
+    ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
 
     # The heating curve's signals: the space-heating supply temperature to aim at, and the heating season.
     SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
@@ -2867,12 +2876,12 @@ class GenericBoilerController(L1ControllerComponent):
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 70 °C by default.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
-    #: The fraction of the step the boiler's hot-water charge runs.
-    PartLoadRatioDhw = "PartLoadRatioDhw"
+    #: The requested part-load ratio of the boiler's hot-water charge: the fraction of the step it is to run.
+    RequestedPartLoadRatioDhw = "RequestedPartLoadRatioDhw"
     #: The tank temperature at which the controller ends a hot-water charge, its warm-water aim.
     TargetTemperatureDhwInCelsius = "TargetTemperatureDhwInCelsius"
-    #: The fraction of the step the boiler's space-heating charge runs.
-    PartLoadRatioSh = "PartLoadRatioSh"
+    #: The requested part-load ratio of the boiler's space-heating charge: the fraction of the step it is to run.
+    RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
     #: The buffer temperature a space-heating charge aims at: the heating curve's supply temperature.
     TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
     #: The control signal and the lift of a space-heating charge in the rest of a hot-water step.
@@ -2950,8 +2959,8 @@ class GenericBoilerController(L1ControllerComponent):
         self.dhw_part_load = PartLoadControl(
             self,
             end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
-            ratio_run_input_name=self.PartLoadRatioRunDhw,
-            ratio_output_name=self.PartLoadRatioDhw,
+            actual_ratio_input_name=self.ActualPartLoadRatioDhw,
+            requested_ratio_output_name=self.RequestedPartLoadRatioDhw,
             target_output_name=self.TargetTemperatureDhwInCelsius,
             device_description="the boiler's hot-water charge",
             controls_a_store=self.config.with_domestic_hot_water_preparation,
@@ -2963,8 +2972,8 @@ class GenericBoilerController(L1ControllerComponent):
             end_temperature_without_circuit_input_name=(
                 self.WaterTemperatureAtEndOfStepWithoutBoilerFromWaterStorageInCelsius
             ),
-            ratio_run_input_name=self.PartLoadRatioRunSh,
-            ratio_output_name=self.PartLoadRatioSh,
+            actual_ratio_input_name=self.ActualPartLoadRatioSh,
+            requested_ratio_output_name=self.RequestedPartLoadRatioSh,
             device_description="the boiler's space-heating charge",
             target_output_name=self.TargetTemperatureShInCelsius,
         )
@@ -3127,24 +3136,24 @@ class GenericBoilerController(L1ControllerComponent):
         return connections
 
     def get_default_connections_from_generic_boiler(self) -> List[ComponentConnection]:
-        """Return the default connections from the boiler: the part-load ratios its two charges ran with.
+        """Return the default connections from the boiler: the actual part-load ratios its two charges ran with.
 
-        The controller sets the next ratios from the ratios the boiler reports, so the boiler's reports are wired back
-        to it. A boiler without hot water reports 0 for it on every step.
+        The controller sets the next requested ratios from the actual ratios the boiler reports, so the boiler's reports
+        are wired back to it. A boiler without hot water reports 0 for it on every step.
 
         Returns:
-            The connections of ``PartLoadRatioRunDhw`` and ``PartLoadRatioRunSh``.
+            The connections of ``ActualPartLoadRatioDhw`` and ``ActualPartLoadRatioSh``.
         """
         return [
             ComponentConnection(
-                GenericBoilerController.PartLoadRatioRunDhw,
+                GenericBoilerController.ActualPartLoadRatioDhw,
                 GenericBoiler.get_classname(),
-                GenericBoiler.PartLoadRatioRunDhw,
+                GenericBoiler.ActualPartLoadRatioDhw,
             ),
             ComponentConnection(
-                GenericBoilerController.PartLoadRatioRunSh,
+                GenericBoilerController.ActualPartLoadRatioSh,
                 GenericBoiler.get_classname(),
-                GenericBoiler.PartLoadRatioRunSh,
+                GenericBoiler.ActualPartLoadRatioSh,
             ),
         ]
 
@@ -3212,11 +3221,12 @@ class GenericBoilerController(L1ControllerComponent):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Decide the boiler's mode and power on the stores' start temperatures, and its hot-water part-load ratio.
+        """Decide the boiler's mode and power on the stores' start temperatures, and its requested part-load ratios.
 
-        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratios above
-        the threshold (the space-heating one only with the buffer wired): each becomes the ratio the boiler reports it
-        ran with, so the charge stops changing. At and below the threshold the ratios keep their last values too.
+        Under ``force_convergence`` every output keeps the value of the last pass, except the requested part-load
+        ratios above the threshold (the space-heating one only with the buffer wired): each port then carries the
+        actual ratio the boiler reports it ran with, so the charge stops changing (``publish_held``). At and below the
+        threshold the requested ratios keep their last values too.
         """
 
         if force_convergence:
@@ -3252,7 +3262,7 @@ class GenericBoilerController(L1ControllerComponent):
             stsv.set_output_value(
                 self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
             )
-            hot_water_ratio = self.dhw_part_load.publish(
+            requested_hot_water_ratio = self.dhw_part_load.publish(
                 stsv,
                 device_runs=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
                 start_temperature_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius or 0.0,
@@ -3263,7 +3273,7 @@ class GenericBoilerController(L1ControllerComponent):
                 is_heating_season=stsv.get_input_value(self.heating_season_channel) > 0.5,
                 buffer_start_temperature_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
                 supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-                hot_water_ratio=hot_water_ratio,
+                requested_hot_water_ratio=requested_hot_water_ratio,
                 temperature_delta_in_kelvin=temperature_delta,
             )
 
@@ -3274,10 +3284,10 @@ class GenericBoilerController(L1ControllerComponent):
         is_heating_season: bool,
         buffer_start_temperature_in_celsius: float,
         supply_temperature_set_in_celsius: float,
-        hot_water_ratio: float,
+        requested_hot_water_ratio: float,
         temperature_delta_in_kelvin: float,
     ) -> None:
-        """Publish the fraction of the step the space-heating charge runs, and the commands of its two special cases.
+        """Publish the requested space-heating ratio, and the commands of its two special cases.
 
         At and below the part-load threshold, or without a buffer, a space-heating step runs whole, as always. Above it
         the fraction ends the buffer at the heating curve's supply temperature
@@ -3287,26 +3297,26 @@ class GenericBoilerController(L1ControllerComponent):
           and does not see its own fall within the step, so waiting for the next step would let the distribution
           system drain it first. The charge runs the fraction that ends it at the target, at full power and with no
           lift of its own (:attr:`ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN`).
-        * **The rest of a hot-water step.** A hot-water charge that ends inside the step (ratio below 1) leaves the
-          rest of the step; in the heating season the space-heating charge may run in it, at most that rest, at full
-          power, with the lift to the supply temperature.
+        * **The rest of a hot-water step.** A hot-water charge that ends inside the step (requested ratio below 1)
+          leaves the rest of the step; in the heating season the space-heating charge may run in it, at most that rest,
+          at full power, with the lift to the supply temperature.
 
         Args:
             stsv: The step's values.
             is_heating_season: Whether the heating curve names a heating day.
             buffer_start_temperature_in_celsius: The buffer's start-of-step temperature, in °C.
             supply_temperature_set_in_celsius: The heating curve's supply temperature, the charge's target, in °C.
-            hot_water_ratio: The hot-water part-load ratio published in this pass, from 0 to 1.
+            requested_hot_water_ratio: The requested hot-water ratio published in this pass, from 0 to 1.
             temperature_delta_in_kelvin: The lift :meth:`determine_operating_mode` asked for, in K.
         """
         part = self.space_heating_part_load
         remainder_signal, remainder_lift_in_kelvin = 0.0, 0.0
         if self.controller_mode == HeatingMode.SPACE_HEATING:
-            ratio = part.publish_raising(
+            requested_space_heating_ratio = part.publish_raising(
                 stsv, device_runs=True, target_temperature_in_celsius=supply_temperature_set_in_celsius
             )
             charges_a_buffer_at_its_target = temperature_delta_in_kelvin <= 0.0
-            if part.runs_fractions() and ratio > 0.0 and charges_a_buffer_at_its_target:
+            if part.runs_fractions() and requested_space_heating_ratio > 0.0 and charges_a_buffer_at_its_target:
                 stsv.set_output_value(self.control_signal_to_generic_boiler_channel, 1.0)
                 stsv.set_output_value(
                     self.temperature_delta_channel, self.ASKED_LIFT_OF_A_CHARGE_ABOVE_THE_TARGET_IN_KELVIN
@@ -3316,15 +3326,15 @@ class GenericBoilerController(L1ControllerComponent):
                 self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER
                 and part.runs_fractions()
                 and is_heating_season
-                and hot_water_ratio < 1.0
+                and requested_hot_water_ratio < 1.0
             )
-            ratio = part.publish_raising(
+            requested_space_heating_ratio = part.publish_raising(
                 stsv,
                 device_runs=rest_of_a_hot_water_step,
                 target_temperature_in_celsius=supply_temperature_set_in_celsius,
-                budget=1.0 - hot_water_ratio,
+                budget=1.0 - requested_hot_water_ratio,
             )
-            if ratio > 0.0:
+            if requested_space_heating_ratio > 0.0:
                 remainder_signal = 1.0
                 remainder_lift_in_kelvin = max(
                     supply_temperature_set_in_celsius - buffer_start_temperature_in_celsius,

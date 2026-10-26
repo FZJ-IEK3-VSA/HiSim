@@ -14,7 +14,8 @@ kind of store its device charges or draws from:
 * a step-mean store, the hot-water cylinder (:class:`hisim.hydronics.MixedNode`), uses :class:`PartLoadRule` and
   :class:`PartLoadControl` (decision 11 of ``roadmap/hydronic_part_load_spec.md``): the boiler's hot-water charge and
   the solar collector's pump;
-* a start-of-step store, the space-heating buffer above the threshold (:class:`hisim.hydronics.StartOfStepNode`), uses
+* a start-of-step store, the space-heating buffer above the threshold
+  (:meth:`hisim.components.simple_water_storage.SimpleHotWaterStorage.start_of_step_node_step`), uses
   :class:`StartOfStepPartLoadRule` and :class:`StartOfStepPartLoadControl` (decisions 21 and 22): the boiler's and the
   heat pump's space-heating charge and the heat distribution system's circuit. The two rules read different inputs; a
   start-of-step store publishes its end temperature without each circuit, which makes its rules exact.
@@ -430,13 +431,13 @@ class PartLoadCommand:
 class StartOfStepPartLoadRule:
     """The exact part-load rules for a circuit end of a start-of-step store: one that raises it, one that lowers it.
 
-    A start-of-step store (:class:`hisim.hydronics.StartOfStepNode`) books every circuit on its start temperature, so a
-    circuit that runs a fraction ``r`` of the step changes the store's end temperature by exactly ``r`` times what the
-    whole step would. The store publishes its end temperature ``T_end`` and, per circuit, its end temperature without
-    that circuit ``T_wo``; with the actual ratio the circuit ran, ``r_actual``, the end temperature at any ratio
-    follows, ``T_wo + r (T_end − T_wo) / r_actual``. The rules solve this line for the requested ratio, so it lands in
-    one pass where :class:`PartLoadRule`, which has to take the start temperature as the end temperature at ratio 0,
-    alternates while another circuit draws from the store.
+    A start-of-step store (:meth:`hisim.components.simple_water_storage.SimpleHotWaterStorage.start_of_step_node_step`)
+    books every circuit on its start temperature, so a circuit that runs a fraction ``r`` of the step changes the
+    store's end temperature by exactly ``r`` times what the whole step would. The store publishes its end temperature
+    ``T_end`` and, per circuit, its end temperature without that circuit ``T_wo``; with the actual ratio the circuit
+    ran, ``r_actual``, the end temperature at any ratio follows, ``T_wo + r (T_end − T_wo) / r_actual``. The rules solve
+    this line for the requested ratio, so it lands in one pass where :class:`PartLoadRule`, which has to take the start
+    temperature as the end temperature at ratio 0, alternates while another circuit draws from the store.
 
     * :meth:`raising_ratio`, for a generator: the requested ratio that ends the store at the aim, the middle of the
       target band.

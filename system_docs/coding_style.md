@@ -48,6 +48,14 @@ change, by people and by agents alike. Reviews check it. The rules on what a com
   its invalid input -- without building a simulation. A static function without such tests is either missing its
   tests or should not be a function; a review asks for one or the other.
 
+- **A shared module holds only what more than one caller uses.** A shared module -- `hisim/hydronics.py`,
+  `hisim/part_load.py`, the subcomponents, the utilities -- holds a function, a class or a constant only when more
+  than one production caller uses it; tests do not count. Code with one caller lives in that caller's class, as a
+  static method, or beside it in the caller's module, and moves into the shared module when a second caller
+  appears. A reader then finds the code where it is used, and the shared module shows what really is shared. For
+  example, the tap valve's arithmetic is `SimpleDHWStorage.mixing_valve_draw`, since only the hot-water tank has a
+  tap.
+
 - **Part of a device's behaviour is a subcomponent.** A burner's modulation, a pump's largest flow or a collector's
   efficiency curve is a plain class the component builds once from its configuration and calls in `i_simulate`,
   marked by inheriting `hisim.subcomponents.base.Subcomponent`. It takes plain values, keyword-only, with units in

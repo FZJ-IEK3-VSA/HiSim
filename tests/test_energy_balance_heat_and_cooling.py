@@ -143,25 +143,28 @@ def test_the_device_heats_in_january_and_cools_in_july_at_a_physical_efficiency(
 def test_the_electricity_meter_reads_the_device_and_the_building_heat_is_unlinked(week_results: Tuple[str, str, Path]) -> None:
     """The meter reads the device's electricity; the heat to and from the building is unlinked until the building declares.
 
-    In the setup without a meter the electricity port is unlinked and unmetered, reported and not enforced. Catches an
-    electricity port linked to a controller, a heat port linked to anything but the building, and a meter that
+    In the setup without a meter the electricity port is unlinked and unmetered, reported and not enforced. A port that
+    moves nothing in the week (the cooling in January, the heating in July) is idle and not listed as unlinked. Catches
+    an electricity port linked to a controller, a heat port linked to anything but the building, and a meter that
     publishes other than it reads once the device's port is declared.
     """
     setup, _, results = week_results
     device = Expected.DEVICES[setup]
     report = report_of(results)
-    peers = {port["output"]: port["peer"] for port in balance_entry(results, device)["ports"]}
+    entry = balance_entry(results, device)
+    peers = {port["output"]: port["peer"] for port in entry["ports"]}
+    moving = {output for output, total in totals_of(entry).items() if total != 0.0}
     assert peers["HeatToAmbientInWatt"] == "ambient heat sink"
     building_heat: Set[str] = {"HeatDrawnForCoolingInWatt", *([Expected.HEATING[setup]] if setup in Expected.HEATING else [])}
     unlinked = {port["output"] for port in report["unlinked"] if port["component"] == device}
     unmetered = report["unmetered"]
     assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
     if setup == "simple_air_conditioner_household_building_sizer":
-        assert unlinked == building_heat | {Expected.ELECTRICITY[setup]}
+        assert unlinked == (building_heat | {Expected.ELECTRICITY[setup]}) & moving
         assert {(port["component"], port["output"]) for port in unmetered["ports"]} == {(device, Expected.ELECTRICITY[setup])}
         assert not report["meters"]
         return
-    assert unlinked == building_heat
+    assert unlinked == building_heat & moving
     assert peers[Expected.ELECTRICITY[setup]] == "ElectricityMeter"
     assert peers["HeatFromAmbientInWatt"] == "ambient heat source"
     assert not unmetered["ports"]

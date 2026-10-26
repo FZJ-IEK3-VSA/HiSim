@@ -192,8 +192,7 @@ def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c:
 @dataclass(frozen=True)
 class FluidStream:
 
-    """The stream of water the owner of a circuit sends into it over one step: its mass flow, its supply temperature
-    and the heat flow it carries.
+    """The stream of water a circuit's owner sends into it over one step: its flow, its supply and the heat it carries.
 
     A stream, as in process engineering or a Modelica fluid port, is a flow with its state; HiSim's circuits have no
     transport delay, so the stream holds for the whole step and reaches the receiver within it. A value object, so a

@@ -374,8 +374,8 @@ class LpgMinuteProfile:
     from the result files, before anything of the run is applied to it. Putting the minutes onto the run's
     standard-time clock, cutting out the run's window and averaging them to the run's timestep happen when the
     profile is read (:meth:`UtspLpgConnector.series_of_the_run`), so one entry serves every window and every
-    timestep of the year it was computed for. For example, the profile of CHR01 for any run in 2021 starts on
-    1 January 2021 00:00 on the wall clock and covers the whole of 2021.
+    timestep of the year it was computed for. For example, the local generator's profile of CHR01 for any run in
+    2021 has 527 040 minutes, from 1 January 2021 00:00 to 1 January 2022 23:59 on the wall clock.
 
     The series hold the values exactly as read, as plain lists, so that a JSON round trip gives the same values
     bit for bit (Python writes every float in its shortest exact form).
@@ -393,14 +393,14 @@ class LpgMinuteProfile:
     warm_water_per_minute_in_liter: List[float]
     #: The heat the devices release into the building in each minute, in kWh.
     inner_device_heat_gains_per_minute_in_kwh: List[float]
-    #: The flexibility events, as the generator's JSON file holds them; empty if it wrote none.
-    flexibility: Dict[str, Any]
-    #: The car's state per minute, as the generator's JSON file holds it; empty without a car.
-    car_states: Dict[str, Any]
-    #: The car's location per minute, as the generator's JSON file holds it; empty without a car.
-    car_locations: Dict[str, Any]
-    #: The car's driven distance per minute, as the generator's JSON file holds it; empty without a car.
-    driving_distances: Dict[str, Any]
+    #: The flexibility events, the list the generator's JSON file holds; an empty dictionary if it wrote none.
+    flexibility: Union[Dict[str, Any], List[Any]]
+    #: The car's state per minute, the object the generator's JSON file holds; empty without a car.
+    car_states: Union[Dict[str, Any], List[Any]]
+    #: The car's location per minute, the object the generator's JSON file holds; empty without a car.
+    car_locations: Union[Dict[str, Any], List[Any]]
+    #: The car's driven distance per minute, the object the generator's JSON file holds; empty without a car.
+    driving_distances: Union[Dict[str, Any], List[Any]]
 
 
 class OccupancySeries(NamedTuple):
@@ -2031,7 +2031,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             households = json.load(file)
         return [LpgMinuteProfile(**household) for household in households]
 
-    def read_result_json(self, result_file: str) -> Dict[str, Any]:
+    def read_result_json(self, result_file: str) -> Union[Dict[str, Any], List[Any]]:
         """Read one of the LoadProfileGenerator's JSON result files: from its content (UTSP) or from its path.
 
         A file the source did not produce is an empty string and reads as an empty dictionary, which is how a
@@ -2041,13 +2041,13 @@ class UtspLpgConnector(cp.DataSourceComponent):
             result_file: the file's content in the UTSP mode, its path otherwise, or an empty string.
 
         Returns:
-            Dict[str, Any]: the file's JSON object, or an empty dictionary.
+            Union[Dict[str, Any], List[Any]]: the file's JSON object or list, or an empty dictionary.
         """
         json_acceptable_string = result_file.replace("'", '"')
         if json_acceptable_string == "":
             return {}
         if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-            content: Dict[str, Any] = json.loads(json_acceptable_string)
+            content: Union[Dict[str, Any], List[Any]] = json.loads(json_acceptable_string)
             return content
         with open(json_acceptable_string, encoding="utf-8") as json_file:
             content = json.load(json_file)

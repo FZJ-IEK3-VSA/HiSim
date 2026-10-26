@@ -774,9 +774,9 @@ def test_a_fired_circuit_books_the_heat_its_pump_s_water_carries_and_the_fuel_fo
         return_temperature_in_celsius=70.0,
         supply_temperature_in_celsius=supply_temperature_in_celsius,
     )
-    assert firing.circuit_step.mass_flow_kg_per_s == mass_flow_in_kg_per_second
-    assert firing.circuit_step.t_supply_c == supply_temperature_in_celsius
-    assert firing.circuit_step.power_w == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
+    assert firing.stream.mass_flow_kg_per_s == mass_flow_in_kg_per_second
+    assert firing.stream.t_supply_c == supply_temperature_in_celsius
+    assert firing.stream.power_w == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
     assert firing.fuel_power_in_watt == pytest.approx(expected_fuel_power_in_watt, rel=1e-12, abs=1e-9)
 
 
@@ -1580,7 +1580,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
 
     Unwired, every output equals the one the boiler's own pump subcomponent gives: the space-heating circuit's firing is
     :meth:`GenericBoiler.fired_circuit` on the flow and supply of the boiler's pump, its circuit part-loaded by
-    :meth:`hydronics.CircuitStep.at_part_load` and its fuel by the ratio, compared exactly, not approximately.
+    :meth:`hydronics.FluidStream.at_part_load` and its fuel by the ratio, compared exactly, not approximately.
     """
     boiler, output = BoilerStep.run(
         control_signal=control_signal,
@@ -1609,7 +1609,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         return_temperature_in_celsius=return_in_celsius,
         supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
     )
-    expected = full_load.circuit_step.at_part_load(part_load_ratio=space_heating_ratio, t_return_c=return_in_celsius)
+    expected = full_load.stream.at_part_load(part_load_ratio=space_heating_ratio, t_return_c=return_in_celsius)
     assert output(boiler.water_output_mass_flow_sh_channel) == expected.mass_flow_kg_per_s
     assert output(boiler.water_output_temperature_sh_channel) == expected.t_supply_c
     assert output(boiler.thermal_output_power_sh_channel) == expected.power_w

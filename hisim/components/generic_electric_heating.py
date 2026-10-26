@@ -482,7 +482,7 @@ class ElectricHeating(PhysicsComponent):
         if heating_mode in DiverterValve.CHARGING_MODES:
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
-            hot_water = hydronics.CircuitStep.idle(
+            hot_water = hydronics.FluidStream.idle(
                 t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
         else:
@@ -490,7 +490,7 @@ class ElectricHeating(PhysicsComponent):
         space_heating = self.space_heating_delivery(stsv, heating_mode, hot_water.power_w)
         self.publish_heat(stsv, space_heating, hot_water)
 
-    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
+    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.FluidStream:
         """Return the hot-water circuit of a step that charges the tank, from the controller's lift and set point.
 
         Raises:
@@ -551,7 +551,7 @@ class ElectricHeating(PhysicsComponent):
         )
 
     def publish_heat(
-        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingDelivery", hot_water: hydronics.CircuitStep
+        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingDelivery", hot_water: hydronics.FluidStream
     ) -> None:
         """Publish the rooms' heat, the hot-water circuit and the electricity, which equals the heat."""
         hot_water_energy_in_watt_hour = (
@@ -597,7 +597,7 @@ class ElectricHeating(PhysicsComponent):
         maximal_supply_temperature_in_celsius: float,
         maximal_power_in_watt: float,
         pump: ControllerLiftPump,
-    ) -> hydronics.CircuitStep:
+    ) -> hydronics.FluidStream:
         """Return the electric heater's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
         The heater holds the lift its controller asks for and regulates its power as
@@ -621,7 +621,7 @@ class ElectricHeating(PhysicsComponent):
             The circuit's mass flow, supply temperature and heat.
         """
         if lift_in_kelvin <= 0:
-            return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+            return hydronics.FluidStream.idle(t_return_c=return_temperature_in_celsius)
         regulated_power_in_watt = min(
             maximal_power_in_watt * lift_in_kelvin / ElectricHeating.REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN,
             maximal_power_in_watt,
@@ -638,7 +638,7 @@ class ElectricHeating(PhysicsComponent):
             maximal_supply_c=maximal_supply_temperature_in_celsius,
             set_supply_c=supply_temperature_set_in_celsius,
         )
-        return hydronics.CircuitStep.carrying(
+        return hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,

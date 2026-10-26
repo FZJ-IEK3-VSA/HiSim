@@ -1156,14 +1156,14 @@ class BoilerFiring:
     """What one firing circuit of a boiler burns, and the flow, supply and heat its circuit publishes, in one step.
 
     A value object returned by :meth:`GenericBoiler.fired_circuit`. The circuit's flow, supply and heat are a
-    :class:`hydronics.CircuitStep`, so a firing at part load scales its circuit by the rule every circuit owner uses
-    (:meth:`hydronics.CircuitStep.at_part_load`).
+    :class:`hydronics.FluidStream`, so a firing at part load scales its circuit by the rule every circuit owner uses
+    (:meth:`hydronics.FluidStream.at_part_load`).
     """
 
     #: The fuel power the burner burns, in W.
     fuel_power_in_watt: float
     #: The circuit's mass flow in kg/s, its supply temperature in °C and the heat its water carries in W.
-    circuit_step: hydronics.CircuitStep
+    stream: hydronics.FluidStream
 
 
 @dataclass(frozen=True)
@@ -1988,7 +1988,7 @@ class GenericBoiler(PhysicsComponent):
         if space_heating is None and self.space_heating_runs_on_distribution_flow():
             space_heating = BoilerFiring(
                 fuel_power_in_watt=0.0,
-                circuit_step=hydronics.CircuitStep(
+                stream=hydronics.FluidStream(
                     mass_flow_kg_per_s=stsv.get_input_value(self.water_input_mass_flow_sh_channel),
                     t_supply_c=stsv.get_input_value(self.water_input_temperature_sh_channel),
                     power_w=0.0,
@@ -2001,7 +2001,7 @@ class GenericBoiler(PhysicsComponent):
                 continue
             self.publish_firing(stsv, circuit, firing)
             fuel_power_in_watt += firing.fuel_power_in_watt
-            combustion_loss_in_watt += firing.fuel_power_in_watt - firing.circuit_step.power_w
+            combustion_loss_in_watt += firing.fuel_power_in_watt - firing.stream.power_w
         stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
         stsv.set_output_value(self.combustion_heat_loss_channel, combustion_loss_in_watt)
 
@@ -2020,7 +2020,7 @@ class GenericBoiler(PhysicsComponent):
         one asked for. The hot-water supply stops at the controller's set temperature and both supplies at the maximal
         flow temperature. Each circuit runs the requested ratio the controller commands for it on the circuit's
         whole-step firing (:meth:`whole_step_firing`): the circuit carries the averaged flow at its full-load supply
-        (:meth:`hydronics.CircuitStep.at_part_load`) and the burner burns the ratio times its full-load fuel. A
+        (:meth:`hydronics.FluidStream.at_part_load`) and the burner burns the ratio times its full-load fuel. A
         space-heating circuit on the distribution system's flow keeps that flow
         (:meth:`part_loaded_firing_on_distribution_flow`).
 
@@ -2048,7 +2048,7 @@ class GenericBoiler(PhysicsComponent):
             return firing, requested_ratio
         part_loaded = BoilerFiring(
             fuel_power_in_watt=requested_ratio * firing.fuel_power_in_watt,
-            circuit_step=firing.circuit_step.at_part_load(part_load_ratio=requested_ratio, t_return_c=return_temperature_in_celsius),
+            stream=firing.stream.at_part_load(part_load_ratio=requested_ratio, t_return_c=return_temperature_in_celsius),
         )
         return part_loaded, requested_ratio
 
@@ -2175,7 +2175,7 @@ class GenericBoiler(PhysicsComponent):
         if mass_flow_in_kg_per_second <= 0.0:
             return BoilerFiring(
                 fuel_power_in_watt=0.0,
-                circuit_step=hydronics.CircuitStep(
+                stream=hydronics.FluidStream(
                     mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=return_temperature_in_celsius, power_w=0.0
                 ),
             )
@@ -2189,17 +2189,17 @@ class GenericBoiler(PhysicsComponent):
             return_c=return_temperature_in_celsius,
             supply_limit_c=maximal_supply_temperature_in_celsius,
         )
-        circuit_step = hydronics.CircuitStep.carrying(
+        stream = hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,
         )
         fuel_power_in_watt = commanded_power_in_watt
         if supply_temperature_in_celsius < unthrottled_supply_in_celsius:
-            fuel_power_in_watt = circuit_step.power_w / burner.efficiency_at(
+            fuel_power_in_watt = stream.power_w / burner.efficiency_at(
                 commanded_power_in_watt, return_temperature_in_celsius
             )
-        return BoilerFiring(fuel_power_in_watt=fuel_power_in_watt, circuit_step=circuit_step)
+        return BoilerFiring(fuel_power_in_watt=fuel_power_in_watt, stream=stream)
 
     @staticmethod
     def fired_circuit(
@@ -2235,14 +2235,14 @@ class GenericBoiler(PhysicsComponent):
         """
         commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
         efficiency = burner.efficiency_at(commanded_power_in_watt, return_temperature_in_celsius)
-        circuit_step = hydronics.CircuitStep.carrying(
+        stream = hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=pumped.mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,
         )
         is_throttled = supply_temperature_in_celsius < pumped.supply_temperature_in_celsius
-        fuel_power_in_watt = circuit_step.power_w / efficiency if is_throttled else commanded_power_in_watt
-        return BoilerFiring(fuel_power_in_watt=fuel_power_in_watt, circuit_step=circuit_step)
+        fuel_power_in_watt = stream.power_w / efficiency if is_throttled else commanded_power_in_watt
+        return BoilerFiring(fuel_power_in_watt=fuel_power_in_watt, stream=stream)
 
     def publish_firing(
         self, stsv: SingleTimeStepValues, circuit: "BoilerCircuitChannels", firing: "BoilerFiring"
@@ -2255,16 +2255,16 @@ class GenericBoiler(PhysicsComponent):
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         stsv.set_output_value(self.total_fuel_input_power_channel, firing.fuel_power_in_watt)
-        stsv.set_output_value(self.combustion_heat_loss_channel, firing.fuel_power_in_watt - firing.circuit_step.power_w)
-        stsv.set_output_value(circuit.thermal_power, firing.circuit_step.power_w)
+        stsv.set_output_value(self.combustion_heat_loss_channel, firing.fuel_power_in_watt - firing.stream.power_w)
+        stsv.set_output_value(circuit.thermal_power, firing.stream.power_w)
         stsv.set_output_value(
-            circuit.thermal_energy, firing.circuit_step.power_w * seconds_per_timestep / joules_per_watt_hour
+            circuit.thermal_energy, firing.stream.power_w * seconds_per_timestep / joules_per_watt_hour
         )
         stsv.set_output_value(
             circuit.fuel_energy, firing.fuel_power_in_watt * seconds_per_timestep / joules_per_watt_hour
         )
-        stsv.set_output_value(circuit.supply_temperature, firing.circuit_step.t_supply_c)
-        stsv.set_output_value(circuit.mass_flow, firing.circuit_step.mass_flow_kg_per_s)
+        stsv.set_output_value(circuit.supply_temperature, firing.stream.t_supply_c)
+        stsv.set_output_value(circuit.mass_flow, firing.stream.mass_flow_kg_per_s)
 
     @staticmethod
     def publish_idle_circuit(stsv: SingleTimeStepValues, circuit: "BoilerCircuitChannels") -> None:
@@ -2291,7 +2291,7 @@ class GenericBoiler(PhysicsComponent):
         0.27 kg/s at 29 °C, 2257.2 W of heat and 2375 W of fuel.
 
         Why it differs from a circuit the boiler pumps, whose averaged flow is the full-load flow times the ratio
-        (:meth:`hydronics.CircuitStep.at_part_load`): here the flow is the distribution system's, not the boiler's, so
+        (:meth:`hydronics.FluidStream.at_part_load`): here the flow is the distribution system's, not the boiler's, so
         scaling it would publish a flow the circuit does not carry. The controller commands whole steps to a boiler
         without a buffer, so a ratio below 1 reaches this law only from a controller wired to a buffer.
 
@@ -2307,11 +2307,11 @@ class GenericBoiler(PhysicsComponent):
             return full_load
         return BoilerFiring(
             fuel_power_in_watt=part_load_ratio * full_load.fuel_power_in_watt,
-            circuit_step=hydronics.CircuitStep(
-                mass_flow_kg_per_s=full_load.circuit_step.mass_flow_kg_per_s,
+            stream=hydronics.FluidStream(
+                mass_flow_kg_per_s=full_load.stream.mass_flow_kg_per_s,
                 t_supply_c=return_temperature_in_celsius
-                + part_load_ratio * (full_load.circuit_step.t_supply_c - return_temperature_in_celsius),
-                power_w=part_load_ratio * full_load.circuit_step.power_w,
+                + part_load_ratio * (full_load.stream.t_supply_c - return_temperature_in_celsius),
+                power_w=part_load_ratio * full_load.stream.power_w,
             ),
         )
 

@@ -59,7 +59,8 @@ class Expected:
         },
     }
 
-    #: The new components' ports that no component or meter reads, as ``setup -> {(component, output)}``.
+    #: The new components' ports that no component or meter reads, as ``setup -> {(component, output)}``; those that
+    #: move energy in the week are unlinked.
     UNLINKED: ClassVar[Dict[str, Set[Tuple[str, str]]]] = {
         "dynamic_components": {
             ("CHP1", "ElectricityOutput"),
@@ -130,15 +131,22 @@ def test_the_wind_reaches_the_electrolyzer_only_in_part_and_it_makes_hydrogen_at
 def test_the_ports_no_component_reads_are_unlinked_and_unmetered_and_not_enforced(setup_results: Tuple[str, Path]) -> None:
     """Without a meter the electricity and hydrogen ports nobody reads are unlinked and unmetered, reported, not failing.
 
-    The CHPs' hydrogen comes from the "hydrogen supply" boundary, unmetered. Catches a port of these components
-    linked to a controller (which decides and moves no energy), and an unmetered finding that fails the run while a
-    component is still undeclared.
+    The CHPs' hydrogen comes from the "hydrogen supply" boundary, unmetered. A port that moves nothing in the week (every
+    port of the idle CHPs) is not listed as unlinked, but still as unmetered. Catches a port of these components linked
+    to a controller (which decides and moves no energy), and an unmetered finding that fails the run while a component
+    is still undeclared.
     """
     setup, results = setup_results
     report = report_of(results)
     new_components = set(Expected.PORTS[setup])
+    moving = {
+        (component, port["output"])
+        for component in new_components
+        for port in balance_entry(results, component)["ports"]
+        if port["total_kwh"] != 0.0
+    }
     unlinked = {(port["component"], port["output"]) for port in report["unlinked"] if port["component"] in new_components}
-    assert unlinked == Expected.UNLINKED[setup]
+    assert unlinked == Expected.UNLINKED[setup] & moving
     unmetered = report["unmetered"]
     assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
     unmetered_ports = {(port["component"], port["output"]): port["peer"] for port in unmetered["ports"]}

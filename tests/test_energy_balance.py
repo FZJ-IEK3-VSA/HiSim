@@ -754,6 +754,81 @@ def test_a_one_sided_booking_toward_a_component_without_ports_passes(tmp_path: P
     assert [entry["component"] for entry in written["undeclared"]] == ["Boiler", "Building"]
 
 
+def heated_room(cooling_watt_hour: Sequence[float]) -> EnergyBalanceReport:
+    """A heat pump gives a room 0.7 kWh of space heating per step; the heat pump reads the room's cooling output.
+
+    The room receives the heat on an input port. Its cooling output, a production port of ``COOLING`` that the heat
+    pump reads through an input without a port, names the heat pump as its peer; the heat pump declares no cooling: it
+    never takes heat out of the room. The room's cooling publishes ``cooling_watt_hour``, and its ventilation loses
+    what the heater and the cooling leave, so both close.
+    """
+    cooling = list(cooling_watt_hour)
+    columns: List[Column] = [
+        ("Heater", "Ambient", lt.Units.KWH, EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), [0.7] * len(cooling)),
+        ("Heater", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.7] * len(cooling)),
+        ("Room", "CoolingOut", lt.Units.WATT_HOUR, EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.COOLING), cooling),
+        (
+            "Room",
+            "VentilationLoss",
+            lt.Units.WATT_HOUR,
+            EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT),
+            [700.0 - value for value in cooling],
+        ),
+    ]
+    inputs = {
+        "Room": [wired_input("HeatIn", "Heater", "HeatOut", EnergyPort(CONSUMPTION, SH))],
+        "Heater": [wired_input("RoomCooling", "Room", "CoolingOut")],
+    }
+    return report(columns, inputs=inputs)
+
+
+@pytest.mark.base
+def test_a_port_that_moves_nothing_in_the_run_books_no_transfer() -> None:
+    """A room's cooling port that never cools makes no one-sided link with a heater that declares no cooling.
+
+    Catches: a cooling port failing every run of a house whose heating system cannot cool, although no energy moves
+    through it.
+    """
+    balance_report = heated_room([0.0, 0.0, 0.0])
+    assert not balance_report.failing_links
+    assert [(link.sender, link.receiver, link.carrier) for link in balance_report.links] == [
+        ("Heater", "Room", "space_heating_heat")
+    ]
+    (cooling,) = [series for series in balance_report.declared.all_series() if series.port_name == "CoolingOut"]
+    assert cooling.is_idle and cooling.peer == Peer(PeerKind.COMPONENT, "Heater")
+
+
+@pytest.mark.base
+def test_a_port_that_moves_energy_in_one_step_still_fails_a_one_sided_booking() -> None:
+    """The room's cooling port takes 0.1 kWh out in one step, which the heater does not declare: the link fails.
+
+    Catches: an idle-port rule that also hid a real transfer, booked by one side only.
+    """
+    balance_report = heated_room([0.0, 100.0, 0.0])
+    (link,) = balance_report.failing_links
+    assert (link.sender, link.receiver, link.carrier, link.received) == ("Room", "Heater", "cooling", None)
+    assert link.sent == pytest.approx(0.1)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("heat_kilowatt_hour", "listed"), [(0.0, False), (0.2, True)])
+def test_a_port_without_a_peer_is_unlinked_only_when_it_moves_energy(heat_kilowatt_hour: float, listed: bool) -> None:
+    """A room's heat output that no component reads is idle while it moves nothing, and unlinked once it moves heat.
+
+    The room turns the sun's heat into space heating that it gives to nobody.
+
+    Catches: a port that never carries anything reported as unlinked in every run (a distribution system's cooling
+    direction in a house that never cools, before the building reads it), and an idle rule that hid a port carrying
+    energy to nobody.
+    """
+    columns: List[Column] = [
+        ("Room", "SunIn", lt.Units.KWH, EnergyPort(CONSUMPTION, SOLAR), [0.0, heat_kilowatt_hour]),
+        ("Room", "HeatToNobody", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.0, heat_kilowatt_hour]),
+    ]
+    unlinked = [series.name for series in report(columns).declared.unlinked()]
+    assert unlinked == (["Room.HeatToNobody"] if listed else [])
+
+
 @pytest.mark.base
 def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> None:
     """The tank sends 0.7 kWh, the loop books it on the input that reads it: the link closes and states no reason."""

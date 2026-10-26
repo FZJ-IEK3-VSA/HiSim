@@ -495,7 +495,7 @@ def test_shard_counts_reads_the_key_of_every_set_that_carries_it() -> None:
     """A set without the key is not packed; one with it gives its count, in config order."""
     config = {"parameter_sets": [{"id": "a"}, {"id": "b", "pack_into_shards": 3}, {"id": "c", "pack_into_shards": 1}]}
     assert PackedParameterSets.shard_counts(config) == {"b": 3, "c": 1}
-    assert PackedParameterSets.shard_counts({"parameter_sets": [{"id": "a"}]}) == {}
+    assert not PackedParameterSets.shard_counts({"parameter_sets": [{"id": "a"}]})
 
 
 @pytest.mark.parametrize("value", [0, -2, True, 2.0, "4", None])

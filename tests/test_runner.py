@@ -133,14 +133,23 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
 
 
 def test_load_config_real_file_setups_and_params() -> None:
-    """The shipped config declares uniquely-named setups and 3 parameter sets: January week, July week, full year."""
+    """The shipped config declares uniquely-named setups and 5 parameter sets.
+
+    They are the January week, the July week and the full year at 60 s, and the January week and the full
+    year at 900 s, RenoVisor's step length (hisim-repo-cleanup-o6a.35). Each id ends in the set's step length,
+    so a golden's file name says which step it pins.
+    """
     cfg = load_config(REAL_CONFIG)
     assert cfg.setups  # non-empty
     ids = [s.id for s in cfg.setups]
     assert len(ids) == len(set(ids))  # setup ids are unique
-    assert len(cfg.parameter_sets) == 3
-    factories = {p.factory for p in cfg.parameter_sets}
-    assert factories == {"one_week_only", "one_week_july", "full_year"}
+    assert [(p.id, p.factory, p.seconds_per_timestep) for p in cfg.parameter_sets] == [
+        ("one_week_60s", "one_week_only", 60),
+        ("july_week_60s", "one_week_july", 60),
+        ("full_year_60s", "full_year", 60),
+        ("one_week_900s", "one_week_only", 900),
+        ("full_year_900s", "full_year", 900),
+    ]
     for ps in cfg.parameter_sets:
         assert set(ps.post_processing_options) == {
             "COMPUTE_OPEX",
@@ -260,12 +269,12 @@ def test_an_energy_system_file_is_told_apart_from_a_python_setup() -> None:
 
 
 def test_the_shipped_config_lists_the_gas_boiler_household_file_for_every_horizon() -> None:
-    """The YAML-only reference system is a golden entry, as itself, with a pair for each of the three horizons."""
+    """The YAML-only reference system is a golden entry, as itself, with a pair for each parameter set."""
     cfg = load_config(REAL_CONFIG)
     entry = next(setup for setup in cfg.setups if setup.id == GAS_BOILER_HOUSEHOLD.id)
     assert entry.path == GAS_BOILER_HOUSEHOLD.path
     pairs = [param.id for setup, param in select_pairs(cfg) if setup.id == entry.id]
-    assert pairs == ["one_week_60s", "july_week_60s", "full_year_60s"]
+    assert pairs == ["one_week_60s", "july_week_60s", "full_year_60s", "one_week_900s", "full_year_900s"]
 
 
 def test_resolve_setup_path_accepts_an_energy_system_file_and_refuses_other_files() -> None:

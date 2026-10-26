@@ -14,9 +14,11 @@ Before a change counts as done, on the files it touches:
    (`grep -rl <module> tests/`), with `pytest <files> -n 8 -q`. Once before pushing, the `base` set:
    `pytest -m base -n 32 -q`, and `pytest -m renovisor_probes -q` when the change touches `hisim/renovisor/`.
 3. **The golden gate**, when the change can move simulation results: `python scripts/golden_check.py` on the
-   affected pairs (`--pairs setup:param`). A golden reference is blessed only through the CI workflow
-   `golden-update.yml`; `scripts/golden_update.py` may run locally to inspect what a bless would write, and what
-   it writes locally is never committed. A change that moves results says so in its PR description, with the KPI
+   affected pairs (`--pairs setup:param`), at both step lengths when the change touches code that acts only above
+   600 s, such as the part-load rules or a start-of-step node (`household_gas_building_sizer:one_week_900s`; the
+   parameter sets are listed in `golden_references/README.md`). A golden reference is blessed only through the CI
+   workflow `golden-update.yml`; `scripts/golden_update.py` may run locally to inspect what a bless would write, and
+   what it writes locally is never committed. A change that moves results says so in its PR description, with the KPI
    deltas (`system_docs/results_and_interfaces.md`).
 
 The full suite (`pytest` without `-m`) is for CI. Locally, the slow markers run only for the test files a change

@@ -144,72 +144,18 @@ def test_a_hot_water_charge_at_ratio_zero_books_nothing_and_reports_zero() -> No
 
 
 @pytest.mark.base
-def test_a_whole_step_and_space_heating_are_booked_as_without_part_load() -> None:
-    """Ratio 1 leaves the charge untouched, and space heating ignores the hot-water ratio altogether."""
-    full = BoilerRig.charge(900, requested_ratio=1.0)
-    run = generic_boiler.GenericBoiler.part_loaded_firing(
-        generic_boiler.BoilerFiring(
-            fuel_power_in_watt=full["fuel_w"],
-            thermal_power_in_watt=full["heat_w"],
-            mass_flow_in_kg_per_second=full["flow_kg_per_s"],
-            supply_temperature_in_celsius=70.0,
-        ),
-        part_load_ratio=1.0,
-        return_temperature_in_celsius=55.0,
-    )
-    assert (run.mass_flow_in_kg_per_second, run.thermal_power_in_watt, run.fuel_power_in_watt) == (
-        full["flow_kg_per_s"],
-        full["heat_w"],
-        full["fuel_w"],
-    )
+def test_space_heating_ignores_the_hot_water_ratio() -> None:
+    """A space-heating step books the same at a hot-water ratio of 0 and of 1, and reports a hot-water ratio of 0.
+
+    A boiler that scaled its space-heating charge by the hot-water ratio would idle the buffer whenever the tank needs
+    no hot water; one that reported the hot-water ratio in a space-heating or off step would feed the controller's
+    rule a ratio its hot-water charge never ran.
+    """
     assert BoilerRig.charge(900, requested_ratio=0.0, mode=HeatingMode.SPACE_HEATING) == BoilerRig.charge(
         900, requested_ratio=1.0, mode=HeatingMode.SPACE_HEATING
     )
     assert BoilerRig.charge(900, requested_ratio=1.0, mode=HeatingMode.SPACE_HEATING)["actual_ratio"] == 0.0
     assert BoilerRig.charge(900, requested_ratio=1.0, mode=HeatingMode.OFF)["actual_ratio"] == 0.0
-
-
-@pytest.mark.base
-def test_the_part_loaded_firing_example() -> None:
-    """The documented example: 0.2 kg/s from 55 to 70 °C with 14 kW of fuel at a quarter of the step."""
-    run = generic_boiler.GenericBoiler.part_loaded_firing(
-        generic_boiler.BoilerFiring(
-            fuel_power_in_watt=14000.0,
-            thermal_power_in_watt=12540.0,
-            mass_flow_in_kg_per_second=0.2,
-            supply_temperature_in_celsius=70.0,
-        ),
-        part_load_ratio=0.25,
-        return_temperature_in_celsius=55.0,
-    )
-    assert run.mass_flow_in_kg_per_second == pytest.approx(0.05, rel=1e-12)
-    assert run.supply_temperature_in_celsius == 70.0
-    assert run.thermal_power_in_watt == pytest.approx(3135.0, rel=1e-12)
-    assert run.fuel_power_in_watt == pytest.approx(3500.0, rel=1e-12)
-
-
-@pytest.mark.base
-def test_the_part_loaded_firing_at_ratio_zero_is_idle_with_the_supply_at_the_return() -> None:
-    """At a ratio of 0 either circuit carries nothing and supplies its 55 °C return, not the 70 °C full-load supply.
-
-    The same function part-loads the space-heating circuit behind a buffer (#1011), so this holds for both circuits.
-    """
-    run = generic_boiler.GenericBoiler.part_loaded_firing(
-        generic_boiler.BoilerFiring(
-            fuel_power_in_watt=14000.0,
-            thermal_power_in_watt=12540.0,
-            mass_flow_in_kg_per_second=0.2,
-            supply_temperature_in_celsius=70.0,
-        ),
-        part_load_ratio=0.0,
-        return_temperature_in_celsius=55.0,
-    )
-    assert run == generic_boiler.BoilerFiring(
-        fuel_power_in_watt=0.0,
-        thermal_power_in_watt=0.0,
-        mass_flow_in_kg_per_second=0.0,
-        supply_temperature_in_celsius=55.0,
-    )
 
 
 @pytest.mark.base

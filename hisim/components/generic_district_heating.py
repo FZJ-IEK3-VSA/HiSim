@@ -552,7 +552,7 @@ class DistrictHeating(PhysicsComponent):
         if heating_mode in DiverterValve.CHARGING_MODES:
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
-            hot_water = hydronics.CircuitStep.idle(
+            hot_water = hydronics.FluidStream.idle(
                 t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
         else:
@@ -565,7 +565,7 @@ class DistrictHeating(PhysicsComponent):
             )
         self.publish_circuits(stsv, space_heating, hot_water)
 
-    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
+    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.FluidStream:
         """Return the hot-water circuit of a step with a hot-water request, from the controller's lift and set point.
 
         Raises:
@@ -619,7 +619,7 @@ class DistrictHeating(PhysicsComponent):
         )
 
     def publish_circuits(
-        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingCircuit", hot_water: hydronics.CircuitStep
+        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingCircuit", hot_water: hydronics.FluidStream
     ) -> None:
         """Publish both circuits and the heat drawn from the network, which is the sum of their heats."""
         hot_water_energy_in_watt_hour = (
@@ -705,7 +705,7 @@ class DistrictHeating(PhysicsComponent):
         supply_temperature_set_in_celsius: float,
         connected_load_in_watt: float,
         pump: FixedLiftPump,
-    ) -> hydronics.CircuitStep:
+    ) -> hydronics.FluidStream:
         """Return the substation's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
         The substation is a power-limited heat exchanger. While the controller asks for hot water (a positive lift),
@@ -728,7 +728,7 @@ class DistrictHeating(PhysicsComponent):
             The circuit's mass flow, supply temperature and heat.
         """
         if lift_in_kelvin <= 0:
-            return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+            return hydronics.FluidStream.idle(t_return_c=return_temperature_in_celsius)
         pumped = pump.operating_point(
             heat_power_in_watt=connected_load_in_watt, return_temperature_in_celsius=return_temperature_in_celsius
         )
@@ -738,7 +738,7 @@ class DistrictHeating(PhysicsComponent):
             return_c=return_temperature_in_celsius,
             supply_limit_c=supply_temperature_set_in_celsius,
         )
-        return hydronics.CircuitStep.carrying(
+        return hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
             t_return_c=return_temperature_in_celsius,

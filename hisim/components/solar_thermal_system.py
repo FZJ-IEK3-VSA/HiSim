@@ -1023,7 +1023,7 @@ class SolarThermalSystem(PhysicsComponent):
         operating_point: PumpOperatingPoint,
         inlet_temperature_in_celsius: float,
         pump_runs: bool,
-    ) -> hydronics.CircuitStep:
+    ) -> hydronics.FluidStream:
         """Return the collector circuit of one step: its flow, its supply and the heat its water carries.
 
         While the pump runs and the collector has heat (its operating point has a flow), the circuit runs the operating
@@ -1039,8 +1039,8 @@ class SolarThermalSystem(PhysicsComponent):
             The circuit's mass flow, supply temperature and heat.
         """
         if not pump_runs or operating_point.mass_flow_in_kg_per_second <= 0:
-            return hydronics.CircuitStep.idle(t_return_c=inlet_temperature_in_celsius)
-        return hydronics.CircuitStep.carrying(
+            return hydronics.FluidStream.idle(t_return_c=inlet_temperature_in_celsius)
+        return hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=operating_point.mass_flow_in_kg_per_second,
             t_supply_c=operating_point.supply_temperature_in_celsius,
             t_return_c=inlet_temperature_in_celsius,

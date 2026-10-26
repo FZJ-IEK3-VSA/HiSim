@@ -444,53 +444,57 @@ def test_node_heat_equals_circuit_heat_with_the_step_mean_as_return() -> None:
 
 def test_an_idle_circuit_moves_no_water_and_supplies_its_return() -> None:
     """An idle circuit with a flow or a supply off its return would carry heat nobody booked."""
-    idle = hydronics.CircuitStep.idle(t_return_c=47.5)
-    assert idle == hydronics.CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=47.5, power_w=0.0)
+    idle = hydronics.FluidStream.idle(t_return_c=47.5)
+    assert idle == hydronics.FluidStream(mass_flow_kg_per_s=0.0, t_supply_c=47.5, power_w=0.0)
 
 
 def test_a_carrying_circuit_books_the_heat_its_flow_carries() -> None:
-    """0.025 kg/s at 60 °C over a 40 °C return carry 2090 W; a step booking another heat would unbalance the circuit.
+    """0.025 kg/s at 60 °C over a 40 °C return carry 2090 W; a stream booking another heat would unbalance the circuit.
 
     The power must be the bits :func:`hydronics.circuit_power_w` gives for the same three values, which the receiver
     derives; a negative flow must be refused rather than book a finite wrong heat.
     """
-    step = hydronics.CircuitStep.carrying(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
-    assert step.mass_flow_kg_per_s == 0.025
-    assert step.t_supply_c == 60.0
-    assert step.power_w == hydronics.circuit_power_w(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
-    assert step.power_w == pytest.approx(2090.0, rel=1e-12)
+    stream = hydronics.FluidStream.carrying(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
+    assert stream.mass_flow_kg_per_s == 0.025
+    assert stream.t_supply_c == 60.0
+    assert stream.power_w == hydronics.circuit_power_w(mass_flow_kg_per_s=0.025, t_supply_c=60.0, t_return_c=40.0)
+    assert stream.power_w == pytest.approx(2090.0, rel=1e-12)
     with pytest.raises(hydronics.NegativeMassFlowError):
-        hydronics.CircuitStep.carrying(mass_flow_kg_per_s=-0.01, t_supply_c=60.0, t_return_c=40.0)
+        hydronics.FluidStream.carrying(mass_flow_kg_per_s=-0.01, t_supply_c=60.0, t_return_c=40.0)
 
 
 def test_a_circuit_at_part_load_carries_the_averaged_flow_at_its_full_load_supply() -> None:
     """The documented example, and a ratio of 1, of 0 or outside [0, 1].
 
-    A part-loaded step that kept the full flow, or booked the full-load heat for the averaged flow, would book heat its
+    A part-loaded stream that kept the full flow, or booked the full-load heat for the averaged flow, would book heat its
     water does not carry; a generator that does not run at all but published its full-load supply would show a hot
     outlet with no flow; a ratio outside [0, 1] is a controller error that must stop the step. The ratio 0.25 keeps
     the ratio and its complement apart, which 0.5 would not.
     """
-    full_load = hydronics.CircuitStep(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, power_w=1504.8)
+    full_load = hydronics.FluidStream.carrying(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, t_return_c=50.0)
     part = full_load.at_part_load(part_load_ratio=0.25, t_return_c=50.0)
     assert part.mass_flow_kg_per_s == pytest.approx(0.0036, rel=1e-12)
     assert part.t_supply_c == 75.0
     assert part.power_w == pytest.approx(376.2, rel=1e-12)
     assert full_load.at_part_load(part_load_ratio=1.0, t_return_c=50.0) is full_load
-    assert full_load.at_part_load(part_load_ratio=0.0, t_return_c=50.0) == hydronics.CircuitStep.idle(t_return_c=50.0)
+    assert full_load.at_part_load(part_load_ratio=0.0, t_return_c=50.0) == hydronics.FluidStream.idle(t_return_c=50.0)
     for ratio in (-0.1, 1.5):
         with pytest.raises(ValueError, match="part-load ratio"):
             full_load.at_part_load(part_load_ratio=ratio, t_return_c=50.0)
 
 
-def test_a_circuit_at_part_load_scales_its_full_load_heat_whatever_return_the_caller_passes() -> None:
-    """The heat at part load is the ratio times the full-load heat, not a heat recomputed from the caller's return.
+@pytest.mark.parametrize("part_load_ratio", [0.01, 0.3, 0.42, 0.6, 0.97])
+def test_a_circuit_at_part_load_publishes_the_heat_of_the_flow_it_publishes(part_load_ratio: float) -> None:
+    """The heat at part load is the heat of the averaged flow, bit for bit, not the ratio times the full-load heat.
 
-    The full-load step was built at a 50 °C return; a caller that passed 40 °C would otherwise book 1053.36 W at a
-    ratio of 0.5 instead of 752.4 W, heat the generator never delivered.
+    A receiver derives the heat from the flow, supply and return the owner publishes; a heat scaled from the full-load
+    heat can differ from it in the last bit, and an energy balance that compares both would then see a residual. At
+    each of these ratios the two differ for this circuit, so a return to the scaled heat fails here.
     """
-    full_load = hydronics.CircuitStep(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, power_w=1504.8)
-    assert full_load.at_part_load(part_load_ratio=0.5, t_return_c=40.0).power_w == pytest.approx(752.4, rel=1e-12)
+    full_load = hydronics.FluidStream.carrying(mass_flow_kg_per_s=0.0731, t_supply_c=63.7, t_return_c=41.3)
+    part = full_load.at_part_load(part_load_ratio=part_load_ratio, t_return_c=41.3)
+    assert part.mass_flow_kg_per_s == part_load_ratio * 0.0731
+    assert part.power_w == hydronics.circuit_power_w(mass_flow_kg_per_s=part.mass_flow_kg_per_s, t_supply_c=63.7, t_return_c=41.3)
 
 
 # --- supply limits --------------------------------------------------------------------------------------------

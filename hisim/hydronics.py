@@ -190,13 +190,15 @@ def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c:
 
 
 @dataclass(frozen=True)
-class CircuitStep:
+class FluidStream:
 
-    """What the owner of a circuit publishes for one step: its mass flow, its supply and the heat its water carries.
+    """The stream of water a circuit's owner sends into it over one step: its flow, its supply and the heat it carries.
 
-    A value object, so a flow and a temperature cannot be swapped by position. ``power_w`` is
-    :func:`circuit_power_w` of the flow, the supply and the return the owner read (:meth:`carrying`); an idle circuit
-    has no flow, and its supply is its return (:meth:`idle`).
+    A stream, as in process engineering or a Modelica fluid port, is a flow with its state; HiSim's circuits have no
+    transport delay, so the stream holds for the whole step and reaches the receiver within it. A value object, so a
+    flow and a temperature cannot be swapped by position. ``power_w`` is :func:`circuit_power_w` of the flow, the supply
+    and the return the owner read (:meth:`carrying`); an idle circuit has no flow, and its supply is its return
+    (:meth:`idle`).
     """
 
     #: The circuit's mass flow, in kg/s.
@@ -207,22 +209,22 @@ class CircuitStep:
     power_w: float
 
     @staticmethod
-    def idle(*, t_return_c: float) -> "CircuitStep":
-        """Return the step of a circuit that moves no water: no flow, its supply at its return, no heat.
+    def idle(*, t_return_c: float) -> "FluidStream":
+        """Return the stream of a circuit that moves no water: no flow, its supply at its return, no heat.
 
         Args:
             t_return_c: The circuit's return temperature, in °C.
 
         Returns:
-            The idle step.
+            The idle stream.
         """
-        return CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=t_return_c, power_w=0.0)
+        return FluidStream(mass_flow_kg_per_s=0.0, t_supply_c=t_return_c, power_w=0.0)
 
     @staticmethod
-    def carrying(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> "CircuitStep":
-        """Return the step of a circuit that moves a flow at a supply temperature, with the heat its water carries.
+    def carrying(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> "FluidStream":
+        """Return the stream of a circuit that moves a flow at a supply temperature, with the heat its water carries.
 
-        ``power_w`` is :func:`circuit_power_w` of the flow, the supply and the return, so an owner that builds its step
+        ``power_w`` is :func:`circuit_power_w` of the flow, the supply and the return, so an owner that builds its stream
         here books exactly the heat the receiver derives from the same three values. For example, 0.025 kg/s supplied
         at 60 °C with a 40 °C return carry 2090 W.
 
@@ -232,33 +234,38 @@ class CircuitStep:
             t_return_c: The return temperature the owner read, in °C.
 
         Returns:
-            The step with that flow, that supply and the heat the flow carries.
+            The stream with that flow, that supply and the heat the flow carries.
 
         Raises:
             NegativeMassFlowError: If the mass flow is negative.
         """
-        return CircuitStep(
+        return FluidStream(
             mass_flow_kg_per_s=mass_flow_kg_per_s,
             t_supply_c=t_supply_c,
             power_w=circuit_power_w(mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=t_supply_c, t_return_c=t_return_c),
         )
 
-    def at_part_load(self, *, part_load_ratio: float, t_return_c: float) -> "CircuitStep":
-        """Return this full-load step of a circuit when its generator runs only a fraction of the step.
+    def at_part_load(self, *, part_load_ratio: float, t_return_c: float) -> "FluidStream":
+        """Return this full-load stream of a circuit when its generator runs only a fraction of the step.
 
         A generator that runs a fraction of a step at full load publishes the averaged flow, its full-load flow times
-        the ratio, at its full-load supply temperature. The heat that flow carries is the ratio times the full-load
-        heat, because the heat ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`) is linear in the flow. A ratio of 1
-        returns this step unchanged, and a ratio of 0 returns the idle step (:meth:`idle`): no flow, the supply at the
-        return. For example, a step of 0.0144 kg/s at 75 °C carrying 1504.8 W gives 0.0036 kg/s and 376.2 W at a
+        the ratio, at its full-load supply temperature, and the heat that flow carries (:meth:`carrying`). A ratio of 1
+        returns this stream unchanged, and a ratio of 0 returns the idle stream (:meth:`idle`): no flow, the supply at the
+        return. For example, a stream of 0.0144 kg/s at 75 °C on a 50 °C return gives 0.0036 kg/s carrying 376.2 W at a
         ratio of 0.25.
+
+        The heat is computed from the averaged flow rather than as the ratio times the full-load heat, so the heat a
+        circuit publishes is the heat a receiver derives from its published flow, supply and return, to the last bit.
+        The supply drops to the return at a ratio of 0 because a full-load supply published with no flow would read as
+        a running generator in the outlet temperature column.
 
         Args:
             part_load_ratio: The fraction of the step the generator runs, from 0 to 1.
-            t_return_c: The circuit's return temperature, in °C; the supply of the idle step at a ratio of 0.
+            t_return_c: The circuit's return temperature, in °C, the one this full-load stream was built with;
+                the supply of the idle stream at a ratio of 0.
 
         Returns:
-            The step at that ratio.
+            The stream at that ratio.
 
         Raises:
             ValueError: If the ratio lies outside [0, 1].
@@ -268,11 +275,9 @@ class CircuitStep:
         if part_load_ratio == 1.0:
             return self
         if part_load_ratio == 0.0:
-            return CircuitStep.idle(t_return_c=t_return_c)
-        return CircuitStep(
-            mass_flow_kg_per_s=part_load_ratio * self.mass_flow_kg_per_s,
-            t_supply_c=self.t_supply_c,
-            power_w=part_load_ratio * self.power_w,
+            return FluidStream.idle(t_return_c=t_return_c)
+        return FluidStream.carrying(
+            mass_flow_kg_per_s=part_load_ratio * self.mass_flow_kg_per_s, t_supply_c=self.t_supply_c, t_return_c=t_return_c
         )
 
 

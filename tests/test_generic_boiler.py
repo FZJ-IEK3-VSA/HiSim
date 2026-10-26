@@ -774,9 +774,9 @@ def test_a_fired_circuit_books_the_heat_its_pump_s_water_carries_and_the_fuel_fo
         return_temperature_in_celsius=70.0,
         supply_temperature_in_celsius=supply_temperature_in_celsius,
     )
-    assert firing.mass_flow_in_kg_per_second == mass_flow_in_kg_per_second
-    assert firing.supply_temperature_in_celsius == supply_temperature_in_celsius
-    assert firing.thermal_power_in_watt == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
+    assert firing.stream.mass_flow_kg_per_s == mass_flow_in_kg_per_second
+    assert firing.stream.t_supply_c == supply_temperature_in_celsius
+    assert firing.stream.power_w == pytest.approx(expected_thermal_power_in_watt, rel=1e-12, abs=1e-9)
     assert firing.fuel_power_in_watt == pytest.approx(expected_fuel_power_in_watt, rel=1e-12, abs=1e-9)
 
 
@@ -1267,6 +1267,30 @@ def test_a_space_heating_charge_at_part_load_carries_the_ratio_of_its_flow_heat_
 
 
 @pytest.mark.base
+def test_a_space_heating_charge_at_ratio_zero_is_idle_with_the_supply_at_its_return() -> None:
+    """A space-heating charge at a ratio of 0 carries nothing and supplies its 35 °C return, not its full-load supply.
+
+    A boiler that published its full-load supply with no flow would show a firing burner in the outlet temperature
+    column, and one that burnt fuel at a ratio of 0 would book fuel for no heat.
+    """
+    boiler, output = BoilerStep.run(
+        control_signal=1.0,
+        operating_mode=HeatingMode.SPACE_HEATING.value,
+        lift=10.0,
+        space_heating_return=35.0,
+        requested_space_heating_ratio=0.0,
+    )
+    for channel in (
+        boiler.water_output_mass_flow_sh_channel,
+        boiler.thermal_output_power_sh_channel,
+        boiler.total_fuel_input_power_channel,
+    ):
+        assert output(channel) == 0.0, channel.field_name
+    assert output(boiler.water_output_temperature_sh_channel) == 35.0
+    assert output(boiler.space_heating_part_load_command.actual_ratio_channel) == 0.0
+
+
+@pytest.mark.base
 def test_the_rest_of_a_hot_water_step_charges_the_buffer_and_both_fuels_add_up() -> None:
     """A hot-water charge at 0.6 of the step and a space-heating charge at 0.4 fire in one step; their fuels add up.
 
@@ -1555,8 +1579,8 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
     """Every boiler that charges a buffer leaves the flow input unwired; its outputs must not move by a bit.
 
     Unwired, every output equals the one the boiler's own pump subcomponent gives: the space-heating circuit's firing is
-    :meth:`GenericBoiler.fired_circuit` on the flow and supply of the boiler's pump, part-loaded by
-    :meth:`GenericBoiler.part_loaded_firing`, compared exactly, not approximately.
+    :meth:`GenericBoiler.fired_circuit` on the flow and supply of the boiler's pump, its circuit part-loaded by
+    :meth:`hydronics.FluidStream.at_part_load` and its fuel by the ratio, compared exactly, not approximately.
     """
     boiler, output = BoilerStep.run(
         control_signal=control_signal,
@@ -1578,18 +1602,15 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         return_temperature_in_celsius=return_in_celsius,
         lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
     )
-    expected = generic_boiler.GenericBoiler.part_loaded_firing(
-        generic_boiler.GenericBoiler.fired_circuit(
-            burner=burner,
-            control_signal=control_signal,
-            pumped=pumped,
-            return_temperature_in_celsius=return_in_celsius,
-            supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
-        ),
-        part_load_ratio=space_heating_ratio,
+    full_load = generic_boiler.GenericBoiler.fired_circuit(
+        burner=burner,
+        control_signal=control_signal,
+        pumped=pumped,
         return_temperature_in_celsius=return_in_celsius,
+        supply_temperature_in_celsius=pumped.supply_temperature_in_celsius,
     )
-    assert output(boiler.water_output_mass_flow_sh_channel) == expected.mass_flow_in_kg_per_second
-    assert output(boiler.water_output_temperature_sh_channel) == expected.supply_temperature_in_celsius
-    assert output(boiler.thermal_output_power_sh_channel) == expected.thermal_power_in_watt
-    assert output(boiler.total_fuel_input_power_channel) == expected.fuel_power_in_watt
+    expected = full_load.stream.at_part_load(part_load_ratio=space_heating_ratio, t_return_c=return_in_celsius)
+    assert output(boiler.water_output_mass_flow_sh_channel) == expected.mass_flow_kg_per_s
+    assert output(boiler.water_output_temperature_sh_channel) == expected.t_supply_c
+    assert output(boiler.thermal_output_power_sh_channel) == expected.power_w
+    assert output(boiler.total_fuel_input_power_channel) == space_heating_ratio * full_load.fuel_power_in_watt

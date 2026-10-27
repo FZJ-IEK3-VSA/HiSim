@@ -579,7 +579,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.Units.WATT,
             output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
             energy_port=EnergyPort(
-                lt.EnergyRole.IN, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS
+                lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS
             ),
         )
         self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
@@ -588,7 +588,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description="Inner device heat gains, which heat the building (not intentionally)",
-            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ROOM_HEAT),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -597,7 +597,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electrical power consumption by residents.",
-            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
@@ -633,7 +633,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 "building reads as its gain."
             ),
             energy_port=EnergyPort(
-                lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ROOM_HEAT, peer_output=self.HeatingByResidents
+                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT, peer_output=self.HeatingByResidents
             ),
         )
         self.appliance_electricity_not_released_indoors_channel: cp.ComponentOutput = self.add_output(

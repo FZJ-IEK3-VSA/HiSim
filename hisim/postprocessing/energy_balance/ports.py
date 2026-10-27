@@ -15,7 +15,7 @@ to a component that reads it. A port with no peer falls back to its carrier's bo
 leaves the port *unlinked*. A metered port whose peer is no meter and no component is *unmetered*
 (:meth:`DeclaredPorts.unmetered`).
 
-:meth:`DeclaredPorts.declared_links` pairs a sender's ``OUT`` port with its receiver's ``IN`` port where both
+:meth:`DeclaredPorts.declared_links` pairs a sender's ``PRODUCTION`` port with its receiver's ``CONSUMPTION`` port where both
 describe the same transfer, and lists a transfer between two declared components that only one side books with
 the other side None: the check compares the totals of a pair and fails a one-sided booking, the Sankey draws a
 pair once (:meth:`DeclaredPorts.paired_links`). A booking toward a component that declares no ports at all, a
@@ -346,10 +346,10 @@ class DeclaredPorts:
     def declared_links(self) -> Dict[Tuple[str, str, str], Tuple[Optional[float], Optional[float]]]:
         """Every transfer between two declared components: ``(sender, receiver, carrier) -> (sent, received)``.
 
-        A receiver's ``IN`` port whose peer is a declared component pairs with that sender's ``OUT`` ports of the
+        A receiver's ``CONSUMPTION`` port whose peer is a declared component pairs with that sender's ``PRODUCTION`` ports of the
         same carrier whose peer is the receiver. A side that books nothing of the transfer is None: a receiver's
-        ``IN`` port with no such ``OUT`` port has ``sent`` None, a sender's ``OUT`` port whose declared peer has no
-        ``IN`` port of the same carrier from it has ``received`` None. Both are one-sided bookings, which the
+        ``CONSUMPTION`` port with no such ``PRODUCTION`` port has ``sent`` None, a sender's ``PRODUCTION`` port whose declared peer has no
+        ``CONSUMPTION`` port of the same carrier from it has ``received`` None. Both are one-sided bookings, which the
         check fails (owner, 2026-10-02: always fail hard). A booking toward a component that declares no ports,
         a meter, a boundary node, a store or nobody is not a link between declared components and is not listed.
         """
@@ -359,10 +359,10 @@ class DeclaredPorts:
             for series in ports:
                 if series.peer.kind != PeerKind.COMPONENT or not self.is_declared(series.peer.name):
                     continue
-                if series.port.role == lt.EnergyRole.IN:
+                if series.port.role == lt.EnergyRole.CONSUMPTION:
                     key = (series.peer.name, component, series.port.carrier.value)
                     received[key] = received.get(key, 0.0) + series.annual_kilowatt_hours
-                elif series.port.role == lt.EnergyRole.OUT:
+                elif series.port.role == lt.EnergyRole.PRODUCTION:
                     key = (component, series.peer.name, series.port.carrier.value)
                     sent[key] = sent.get(key, 0.0) + series.annual_kilowatt_hours
         links: Dict[Tuple[str, str, str], Tuple[Optional[float], Optional[float]]] = {
@@ -438,7 +438,7 @@ class Wiring:
         """The component the wiring names as the peer of a port that is not metered; None when there is none.
 
         ``peer_input`` names the component feeding one of the port's own inputs; otherwise the peer reads
-        ``peer_output``, or the port's own output for an ``OUT`` port. Exempt components and meters are skipped.
+        ``peer_output``, or the port's own output for a ``PRODUCTION`` port. Exempt components and meters are skipped.
         Among several readers, one that declares ports is taken first, then the first in the order of the run.
         """
         if not port.names_a_component:

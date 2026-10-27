@@ -307,16 +307,16 @@ class EnergyRole(str, enum.Enum):
 
     """What an energy port of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
-    The balance a component closes is ``sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE) = 0``
-    over all its ports, per timestep. A port's value is read with its own sign: a negative ``IN``
+    The balance a component closes is ``sum(CONSUMPTION) - sum(PRODUCTION) - sum(LOSS) - sum(STORED_CHANGE) = 0``
+    over all its ports, per timestep. A port's value is read with its own sign: a negative ``CONSUMPTION``
     is energy leaving through that port, a negative ``STORED_CHANGE`` is energy the component
     gave up from its store.
     """
 
     #: Energy entering the component (a fuel burnt, heat received, ambient heat drawn).
-    IN = "in"
+    CONSUMPTION = "consumption"
     #: Useful energy leaving the component to another component or to a consumer.
-    OUT = "out"
+    PRODUCTION = "production"
     #: Energy leaving the component unused, to the environment (a standby loss, a flue loss).
     LOSS = "loss"
     #: Increase of the energy the component holds during the step (negative when it discharges).
@@ -362,7 +362,7 @@ class EnvironmentNode(str, enum.Enum):
 
     """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.
 
-    An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
+    A ``CONSUMPTION`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
     ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
     (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names

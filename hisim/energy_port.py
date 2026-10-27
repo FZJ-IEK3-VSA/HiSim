@@ -14,24 +14,24 @@ The other side of a port is found from the wiring (complete Sankey spec, §4.3):
 * ``peer_input`` names one of the component's own inputs; the component that input is connected to is
   the peer (a storage's heat from its generator: the generator feeds the storage's mass-flow input).
 * otherwise the peer is the component reading ``peer_output`` -- one of the component's own outputs,
-  by default the port's own output for an ``OUT`` port (the building reads the heat a distribution
+  by default the port's own output for a ``PRODUCTION`` port (the building reads the heat a distribution
   system delivers). A port names ``peer_input`` or ``peer_output``, never both.
 * A controller is never a peer: it decides, it moves no energy (owner decision D1). Such a component is *exempt*
   (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`) and the wiring skips it.
 * A meter is a node (owner decision Q-J, 2026-10-20): a component that declares what it meters
   (:meth:`hisim.component.Component.metered_exchanges`) stands between the boundary and the devices whose flows it
-  reads. A *metered* port (:attr:`EnergyPort.is_metered`: the ``IN`` or ``OUT`` port of electricity or of a bought
+  reads. A *metered* port (:attr:`EnergyPort.is_metered`: the ``CONSUMPTION`` or ``PRODUCTION`` port of electricity or of a bought
   carrier) watches its own output, whatever its role, and its peer is the component that reads it: a meter of its
   carrier, or a component that moves energy. The wiring is traced through exempt components to the first meter, so
   a heat pump whose electricity the energy manager reads and passes on summed to the electricity meter links to that
   meter. There is no derived junction: what the meter publishes is checked against what it reads, never assumed.
 * A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_boundary`): a bought
-  carrier's ``IN`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their nodes,
+  carrier's ``CONSUMPTION`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their nodes,
   and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A metered
   port whose peer is no meter and no component is *unmetered*, which the balance reports.
 
-A transfer between two components that both declare ports is booked by both: the sender's ``OUT`` port whose
-peer is the receiver, and the receiver's ``IN`` port of the same carrier whose peer is the sender. The check
+A transfer between two components that both declare ports is booked by both: the sender's ``PRODUCTION`` port whose
+peer is the receiver, and the receiver's ``CONSUMPTION`` port of the same carrier whose peer is the sender. The check
 compares the two totals and fails the run when they disagree beyond its tolerance, and when only one side books
 the transfer (owner, 2026-10-02: always fail hard). A one-sided booking is allowed only toward a component that
 declares no ports at all, a meter, a boundary node or nobody.
@@ -46,7 +46,7 @@ Hydronic circuits
 A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
 its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
 derives the heat from :func:`hisim.hydronics.circuit_power_w`, the one rule. Both ends of a circuit declare the
-same port, the supply owner with role ``OUT`` and the receiver with role ``IN``, so a circuit balances by
+same port, the supply owner with role ``PRODUCTION`` and the receiver with role ``CONSUMPTION``, so a circuit balances by
 construction. No component declares one yet, and the balance check does not read them yet. The contract the
 balance check is to implement:
 
@@ -103,7 +103,7 @@ class EnergyPort:
     def __post_init__(self) -> None:
         """Refuse a port whose role or carrier is not one of the enums, that names two peers, or that skips a meter.
 
-        A metered port (``IN`` or ``OUT`` of electricity or a bought carrier) names no ``environment``: its peer is
+        A metered port (``CONSUMPTION`` or ``PRODUCTION`` of electricity or a bought carrier) names no ``environment``: its peer is
         the meter that reads it, and a boundary node named on it would take its flow past every meter (owner decision
         Q-J). The grid nodes are no port's environment at all: "grid import" and "grid export" are where a meter's
         published exchange comes from and goes to (:meth:`MeteredExchange.import_node`).
@@ -123,7 +123,7 @@ class EnergyPort:
         if (
             self.environment is not None
             and self.carrier in self.METERED_CARRIERS
-            and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+            and self.role in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
         ):
             raise ValueError(
                 f"A {self.role.value} port of {self.carrier.value} is metered and names no environment "
@@ -182,7 +182,7 @@ class EnergyPort:
             raise ValueError(f"{load_type!r} is not a fuel with an energy-balance carrier.")
         return cls.FUEL_CARRIERS[load_type]
 
-    #: The carriers bought at the system boundary: an ``IN`` port of one takes it from the carrier's supply node.
+    #: The carriers bought at the system boundary: a ``CONSUMPTION`` port of one takes it from the carrier's supply node.
     SUPPLIED_CARRIERS: ClassVar[FrozenSet[lt.EnergyBalanceCarrier]] = frozenset(
         {
             lt.EnergyBalanceCarrier.NATURAL_GAS,
@@ -196,7 +196,7 @@ class EnergyPort:
     )
 
     #: The carriers whose flows a meter counts at the system boundary: electricity and every bought carrier. Their
-    #: ``IN`` and ``OUT`` ports are metered (:attr:`is_metered`).
+    #: ``CONSUMPTION`` and ``PRODUCTION`` ports are metered (:attr:`is_metered`).
     METERED_CARRIERS: ClassVar[FrozenSet[lt.EnergyBalanceCarrier]] = SUPPLIED_CARRIERS | {
         lt.EnergyBalanceCarrier.ELECTRICITY
     }
@@ -219,10 +219,10 @@ class EnergyPort:
     def default_boundary(self) -> Optional[str]:
         """The boundary node this port goes to when the wiring names no peer for it, or None when it has none.
 
-        The table of the complete Sankey spec, §4.3: a ``LOSS`` port, a bought carrier's ``IN`` port, an ambient-heat
-        ``IN`` or ``OUT`` port and a solar ``IN`` port have one; an electricity port and a heat port have none, and
-        such a port with no peer is unlinked. For example, a boiler's natural-gas ``IN`` port that no meter reads goes
-        to "natural gas supply", a heat pump's ambient-heat ``IN`` port to "ambient heat", a collector's solar ``IN``
+        The table of the complete Sankey spec, §4.3: a ``LOSS`` port, a bought carrier's ``CONSUMPTION`` port, an ambient-heat
+        ``CONSUMPTION`` or ``PRODUCTION`` port and a solar ``CONSUMPTION`` port have one; an electricity port and a heat port have none, and
+        such a port with no peer is unlinked. For example, a boiler's natural-gas ``CONSUMPTION`` port that no meter reads goes
+        to "natural gas supply", a heat pump's ambient-heat ``CONSUMPTION`` port to "ambient heat", a collector's solar ``CONSUMPTION``
         port to "sun" and every ``LOSS`` port to "outdoors". A port that names its ``environment`` goes there.
 
         Returns:
@@ -232,36 +232,36 @@ class EnergyPort:
             return self.environment.value
         if self.role == lt.EnergyRole.LOSS:
             return lt.EnvironmentNode.OUTDOORS.value
-        if self.role == lt.EnergyRole.IN and self.carrier in self.SUPPLIED_CARRIERS:
+        if self.role == lt.EnergyRole.CONSUMPTION and self.carrier in self.SUPPLIED_CARRIERS:
             return self.supply_node_name(self.carrier)
-        if self.carrier == lt.EnergyBalanceCarrier.AMBIENT_HEAT and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT):
+        if self.carrier == lt.EnergyBalanceCarrier.AMBIENT_HEAT and self.role in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION):
             return lt.EnvironmentNode.AMBIENT_HEAT.value
-        if self.carrier == lt.EnergyBalanceCarrier.SOLAR and self.role == lt.EnergyRole.IN:
+        if self.carrier == lt.EnergyBalanceCarrier.SOLAR and self.role == lt.EnergyRole.CONSUMPTION:
             return lt.EnvironmentNode.SOLAR.value
         return None
 
     @property
     def is_metered(self) -> bool:
-        """Whether a meter is to count this port's flow: an ``IN`` or ``OUT`` port of electricity or a bought carrier.
+        """Whether a meter is to count this port's flow: a ``CONSUMPTION`` or ``PRODUCTION`` port of electricity or a bought carrier.
 
-        For example, a heat pump's electricity ``IN`` port and a boiler's natural-gas ``IN`` port are metered, a
+        For example, a heat pump's electricity ``CONSUMPTION`` port and a boiler's natural-gas ``CONSUMPTION`` port are metered, a
         battery's electricity ``LOSS`` port is not. Such a port names no ``environment`` (:meth:`__post_init__`).
         """
-        return self.carrier in self.METERED_CARRIERS and self.role in (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+        return self.carrier in self.METERED_CARRIERS and self.role in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
 
     @property
     def names_a_component(self) -> bool:
         """Whether the port names a peer through the wiring.
 
-        An ``OUT`` port and a metered ``IN`` port (:attr:`is_metered`) name one implicitly through their own output,
-        which the receiver or the meter reads; any other ``LOSS`` or ``IN`` port only when it names ``peer_input`` or
+        A ``PRODUCTION`` port and a metered ``CONSUMPTION`` port (:attr:`is_metered`) name one implicitly through their own output,
+        which the receiver or the meter reads; any other ``LOSS`` or ``CONSUMPTION`` port only when it names ``peer_input`` or
         ``peer_output``. A port with an ``environment`` names none.
         """
         if self.environment is not None:
             return False
         if self.peer_input is not None or self.peer_output is not None:
             return True
-        return self.role == lt.EnergyRole.OUT or self.is_metered
+        return self.role == lt.EnergyRole.PRODUCTION or self.is_metered
 
     def as_dict(self) -> Dict[str, object]:
         """The port as the balance report lists it."""
@@ -283,7 +283,7 @@ class MeteredExchange:
     A meter that declares an exchange is a node of the energy balance (owner decision Q-J): the published import
     enters it from the carrier's boundary node, the published export leaves it to the export node, and the metered
     ports of the devices it reads (:attr:`EnergyPort.is_metered`) link to it. Per step, what it publishes, import
-    minus export, must equal what it reads, the consumers' ``IN`` ports minus the producers' ``OUT`` ports; a gap is
+    minus export, must equal what it reads, the consumers' ``CONSUMPTION`` ports minus the producers' ``PRODUCTION`` ports; a gap is
     the meter's residual, never absorbed. For example, the electricity meter declares
     ``MeteredExchange(ELECTRICITY, "ElectricityFromGridInWatt", "ElectricityToGridInWatt")``. A meter states this
     about itself (:meth:`hisim.component.Component.metered_exchanges`), so the balance depends only on its published
@@ -354,11 +354,11 @@ class HydronicPort:
     ``carrier`` is the heat the circuit carries, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``, so that the
     Sankey knows which heat a circuit moves (complete Sankey spec, §4.2).
 
-    ``role`` is ``OUT`` for the supply owner and ``IN`` for the receiver; it says on which side of that end's
+    ``role`` is ``PRODUCTION`` for the supply owner and ``CONSUMPTION`` for the receiver; it says on which side of that end's
     balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
     a cooling circuit). :meth:`heat_in_kilowatt_hour` returns that heat with the circuit's sign whatever the role,
-    and the balance check adds it on the ``IN`` side and subtracts it on the ``OUT`` side. The role is
-    checked at construction to be ``IN`` or ``OUT``, because :class:`~hisim.loadtypes.EnergyRole` also has
+    and the balance check adds it on the ``CONSUMPTION`` side and subtracts it on the ``PRODUCTION`` side. The role is
+    checked at construction to be ``CONSUMPTION`` or ``PRODUCTION``, because :class:`~hisim.loadtypes.EnergyRole` also has
     ``LOSS`` and ``STORED_CHANGE``, which a circuit end cannot be.
     """
 
@@ -369,7 +369,7 @@ class HydronicPort:
     carrier: lt.EnergyBalanceCarrier
 
     #: The roles a circuit can have at one of its ends.
-    CIRCUIT_ROLES: ClassVar[Tuple[lt.EnergyRole, ...]] = (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+    CIRCUIT_ROLES: ClassVar[Tuple[lt.EnergyRole, ...]] = (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
     #: The heat a circuit can carry; a cooling circuit keeps its circuit's carrier and its heat turns negative.
     CIRCUIT_CARRIERS: ClassVar[Tuple[lt.EnergyBalanceCarrier, ...]] = (
         lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
@@ -377,12 +377,12 @@ class HydronicPort:
     )
 
     def __post_init__(self) -> None:
-        """Refuse names that are not distinct identifiers, a role other than ``IN`` or ``OUT`` and a foreign carrier.
+        """Refuse names that are not distinct identifiers, a role other than ``CONSUMPTION`` or ``PRODUCTION`` and a foreign carrier.
 
         Raises:
             HydronicPortError: If a name is no component key (an identifier, or an assembly member's address joined
-                by ``-``), two names coincide, the role is not an :class:`~hisim.loadtypes.EnergyRole` ``IN`` or
-                ``OUT``, or the carrier is not ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``.
+                by ``-``), two names coincide, the role is not an :class:`~hisim.loadtypes.EnergyRole` ``CONSUMPTION`` or
+                ``PRODUCTION``, or the carrier is not ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``.
         """
         names = {
             "mass_flow": self.mass_flow,
@@ -401,7 +401,7 @@ class HydronicPort:
             )
         if not isinstance(self.role, lt.EnergyRole) or self.role not in self.CIRCUIT_ROLES:
             raise HydronicPortError(
-                f"A hydronic port's role is EnergyRole.IN (the receiver) or EnergyRole.OUT (the supply owner), "
+                f"A hydronic port's role is EnergyRole.CONSUMPTION (the receiver) or EnergyRole.PRODUCTION (the supply owner), "
                 f"got {self.role!r}."
             )
         if not isinstance(self.carrier, lt.EnergyBalanceCarrier) or self.carrier not in self.CIRCUIT_CARRIERS:

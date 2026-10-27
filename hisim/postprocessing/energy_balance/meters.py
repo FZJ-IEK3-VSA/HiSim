@@ -3,8 +3,8 @@
 A meter that declares what it meters (:meth:`hisim.component.Component.metered_exchanges`) stands between its
 carrier's boundary node and the devices whose metered ports it reads (owner decision Q-J of
 ``roadmap/complete_energy_sankeys_spec.md``): the published import enters it from "grid import" or the carrier's
-supply node, the published export leaves it to "grid export", a consumer's ``IN`` port takes from it and a
-producer's ``OUT`` port gives to it. The meter's node closes only if, per step ``t``,
+supply node, the published export leaves it to "grid export", a consumer's ``CONSUMPTION`` port takes from it and a
+producer's ``PRODUCTION`` port gives to it. The meter's node closes only if, per step ``t``,
 
 ``(import_t - export_t) - (sum(IN_t) - sum(OUT_t)) = 0``,
 
@@ -84,8 +84,8 @@ class MeterBalance:
             The meter's balance.
         """
         steps = len(reading.import_kilowatt_hours)
-        consumed = cls.sum_of_role(ports, lt.EnergyRole.IN, steps)
-        produced = cls.sum_of_role(ports, lt.EnergyRole.OUT, steps)
+        consumed = cls.sum_of_role(ports, lt.EnergyRole.CONSUMPTION, steps)
+        produced = cls.sum_of_role(ports, lt.EnergyRole.PRODUCTION, steps)
         entering = reading.import_kilowatt_hours + produced
         leaving = reading.export_kilowatt_hours + consumed
         residual = np.asarray(entering - leaving, dtype=float)
@@ -127,12 +127,12 @@ class MeterBalance:
     @property
     def consumed_kilowatt_hours(self) -> float:
         """What the consumers the meter reads take over the run, in kWh."""
-        return float(self.sum_of_role(self.ports, lt.EnergyRole.IN, len(self.residual_per_step)).sum())
+        return float(self.sum_of_role(self.ports, lt.EnergyRole.CONSUMPTION, len(self.residual_per_step)).sum())
 
     @property
     def produced_kilowatt_hours(self) -> float:
         """What the producers the meter reads give over the run, in kWh."""
-        return float(self.sum_of_role(self.ports, lt.EnergyRole.OUT, len(self.residual_per_step)).sum())
+        return float(self.sum_of_role(self.ports, lt.EnergyRole.PRODUCTION, len(self.residual_per_step)).sum())
 
     @property
     def largest_step_residual(self) -> float:

@@ -600,7 +600,7 @@ class SolarThermalSystem(PhysicsComponent):
             postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING],
             output_description="Thermal power output [W]",
             energy_port=EnergyPort(
-                loadtypes.EnergyRole.OUT,
+                loadtypes.EnergyRole.PRODUCTION,
                 loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
                 peer_output=self.WaterMassFlowOutput,
             ),
@@ -652,7 +652,7 @@ class SolarThermalSystem(PhysicsComponent):
             unit=loadtypes.Units.WATT,
             output_description="Electricity consumption of the solar pump.",
             postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-            energy_port=EnergyPort(loadtypes.EnergyRole.IN, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(loadtypes.EnergyRole.CONSUMPTION, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.solar_power_on_collector_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -660,7 +660,7 @@ class SolarThermalSystem(PhysicsComponent):
             load_type=loadtypes.LoadTypes.IRRADIANCE,
             unit=loadtypes.Units.WATT,
             output_description="Irradiance on the collector plane (poa_global) times the collector area [W].",
-            energy_port=EnergyPort(loadtypes.EnergyRole.IN, loadtypes.EnergyBalanceCarrier.SOLAR),
+            energy_port=EnergyPort(loadtypes.EnergyRole.CONSUMPTION, loadtypes.EnergyBalanceCarrier.SOLAR),
         )
         self.collector_heat_loss_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

@@ -116,6 +116,8 @@ class LoadTypes(str, enum.Enum):
 
     TEMPERATURE = "Temperature"
     PRESSURE = "Pressure"
+    # The relative humidity of air, in percent; a physical quantity like the two above
+    HUMIDITY = "Humidity"
     TIME = "Time"
     PRICE = "Price"
     # Substance

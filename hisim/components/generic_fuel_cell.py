@@ -2,6 +2,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from pathlib import Path
+from typing import ClassVar
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -10,7 +11,9 @@ import numpy as np
 
 # Import modules from HiSim
 from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.components.configuration import PhysicsConfig
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
+from hisim.energy_port import EnergyPort
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -88,9 +91,23 @@ class FuelCell(cp.PhysicsComponent):
     cell current density to the cell voltage, from which the hydrogen
     consumption rate is interpolated for the current operating point.
 
+    Its energy ports: the hydrogen it consumes, by its lower heating value, ``HydrogenConsumptionInWatt``
+    (``CONSUMPTION``), the electricity it produces, ``PowerOutput`` (``PRODUCTION``), and the difference of the two,
+    ``ConversionLossInWatt`` (``LOSS`` of hydrogen): the heat the cell releases, which nothing uses. The hydrogen
+    consumption rate is computed in kg/h, which ``CurrentHydrogenFlowRate`` publishes although it declares kg/s; the
+    energy port converts the kg/h.
     """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: The lower heating value of hydrogen, in J/kg: the energy the hydrogen port counts per kilogram.
+    HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = PhysicsConfig.get_properties_for_energy_carrier(
+        lt.LoadTypes.GREEN_HYDROGEN
+    ).lower_heating_value_in_joule_per_kg
+    #: Seconds per hour, to turn the hydrogen consumption rate in kg/h into kg/s.
+    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
+    #: Watts per kilowatt: the power is held in kW and published in W.
+    WATTS_PER_KILOWATT: ClassVar[float] = 1000.0
 
     # Inputs
     DemandProfile = "DemandProfile"
@@ -115,6 +132,10 @@ class FuelCell(cp.PhysicsComponent):
     TotalRampDownTime = "TotalRampDownTime"
     CurrentEfficiency = "CurrentEfficiency"
     OperatingTime = "OperatingTime"
+    #: The hydrogen consumed in the step by its lower heating value, in W.
+    HydrogenConsumptionInWatt = "HydrogenConsumptionInWatt"
+    #: The hydrogen consumed in the step minus the electricity produced, in W.
+    ConversionLossInWatt = "ConversionLossInWatt"
 
     def __init__(
         self,
@@ -198,7 +219,30 @@ class FuelCell(cp.PhysicsComponent):
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.ComponentType.FUEL_CELL,
             ],
-            output_description="Current power output",
+            output_description="The electricity the fuel cell produces in the step, in W, >= 0.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.hydrogen_consumption_channel: ComponentOutput = self.add_output(
+            self.fuelcellconfig.component_id.name,
+            FuelCell.HydrogenConsumptionInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description=(
+                "The hydrogen the fuel cell consumes in the step, in W, >= 0: its mass flow times the lower heating "
+                "value of hydrogen."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.HYDROGEN),
+        )
+        self.conversion_loss_channel: ComponentOutput = self.add_output(
+            self.fuelcellconfig.component_id.name,
+            FuelCell.ConversionLossInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description=(
+                "The energy the fuel cell loses in the step, in W: the hydrogen it consumes by its lower heating value "
+                "minus the electricity it produces."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.HYDROGEN),
         )
 
         self.current_hydrogen_demand: ComponentOutput = self.add_output(
@@ -632,9 +676,14 @@ class FuelCell(cp.PhysicsComponent):
         stsv.set_output_value(self.oxygen_flow_rate, current_flow_rate_oxygen_in_kg_per_h)
         stsv.set_output_value(self.water_flow_rate, current_flow_rate_water_in_kg_per_h)
         stsv.set_output_value(self.fuel_cell_state, state)
-        stsv.set_output_value(
-            self.current_power_output, (self.current_power_state_in_kilowatt * 1000)
-        )  # transform kW to WATT for EMS
+        power_output_in_watt = self.current_power_state_in_kilowatt * self.WATTS_PER_KILOWATT  # the energy manager reads W
+        stsv.set_output_value(self.current_power_output, power_output_in_watt)
+        # the consumption rate is in kg/h
+        hydrogen_consumption_in_watt = (
+            current_h2_demand_rate_in_kg_per_h / self.SECONDS_PER_HOUR * self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG
+        )
+        stsv.set_output_value(self.hydrogen_consumption_channel, hydrogen_consumption_in_watt)
+        stsv.set_output_value(self.conversion_loss_channel, hydrogen_consumption_in_watt - power_output_in_watt)
         stsv.set_output_value(self.total_energy_produced, self.total_energy_in_kilowatt_hour)
         stsv.set_output_value(self.total_ramp_up_time, self.total_ramp_up_count_state_in_s)
         stsv.set_output_value(self.total_ramp_down_time, self.total_ramp_down_count_state_in_s)

@@ -26,6 +26,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort
 
 
 @dataclass_json
@@ -128,6 +129,12 @@ class GenericCHPState:
 class SimpleCHP(cp.PhysicsComponent):
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
+    Its energy ports: the fuel it burns, hydrogen or natural gas, ``FuelConsumptionInWatt`` (``CONSUMPTION``), the
+    electricity it produces, ``ElectricityOutput``, the space heat ``ThermalPowerOutputBuilding`` and the hot-water heat
+    ``ThermalPowerOutputDHW`` it delivers (all ``PRODUCTION``), and the fuel it burns minus all three,
+    ``ConversionLossInWatt`` (``LOSS`` of the fuel). For example, the gas preset at 500 W of heat burns 1,000 W of
+    gas for 330 W of electricity and loses 170 W.
+
     Components to connect to:
     (1) CHP or fuel cell controller (hisim.components.generic_chp.controller)
     """
@@ -143,6 +150,10 @@ class SimpleCHP(cp.PhysicsComponent):
     ThermalPowerOutputDHW: ClassVar[str] = "ThermalPowerOutputDHW"
     ElectricityOutput: ClassVar[str] = "ElectricityOutput"
     FuelDelivered: ClassVar[str] = "FuelDelivered"
+    #: The fuel burnt in the step, in W.
+    FuelConsumptionInWatt: ClassVar[str] = "FuelConsumptionInWatt"
+    #: The fuel burnt in the step minus the electricity and the heat produced, in W.
+    ConversionLossInWatt: ClassVar[str] = "ConversionLossInWatt"
 
     def __init__(
         self,
@@ -160,11 +171,14 @@ class SimpleCHP(cp.PhysicsComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
-        fuel_power_in_watt = concrete(config.p_fuel)
+        #: The fuel the machine burns while it runs, in W.
+        self.fuel_power_in_watt: float = concrete(config.p_fuel)
         if self.config.fuel_type == lt.LoadTypes.GREEN_HYDROGEN:
-            self.p_fuel: float = fuel_power_in_watt / (3.6e3 * 3.939e4)  # converted to kg / s
+            self.p_fuel: float = self.fuel_power_in_watt / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
-            self.p_fuel = fuel_power_in_watt * my_simulation_parameters.seconds_per_timestep / 3.6e3  # to Wh
+            self.p_fuel = self.fuel_power_in_watt * my_simulation_parameters.seconds_per_timestep / 3.6e3  # to Wh
+        #: The fuel the machine burns while it runs minus the electricity and the heat it produces, in W.
+        self.conversion_loss_in_watt: float = self.fuel_power_in_watt - self.config.p_th - concrete(self.config.p_el)
 
         self.state: GenericCHPState = GenericCHPState(state=0)
         self.previous_state: GenericCHPState = self.state.clone()
@@ -194,6 +208,7 @@ class SimpleCHP(cp.PhysicsComponent):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
             output_description="Thermal Power output from CHP to building or buffer in Watt.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
         self.thermal_power_output_dhw_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -202,6 +217,7 @@ class SimpleCHP(cp.PhysicsComponent):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
             output_description="Thermal Power output from CHP to drain hot water storage in Watt.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -213,6 +229,7 @@ class SimpleCHP(cp.PhysicsComponent):
                 lt.ComponentType.FUEL_CELL,
             ],
             output_description="Electrical Power output of CHP in Watt.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         if self.config.fuel_type == lt.LoadTypes.GREEN_HYDROGEN:
             self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -235,6 +252,26 @@ class SimpleCHP(cp.PhysicsComponent):
                 ],
                 output_description="Gas consumption of CHP in Wh.",
             )
+        fuel_carrier = EnergyPort.carrier_of_fuel(self.config.fuel_type)
+        self.fuel_power_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.FuelConsumptionInWatt,
+            load_type=self.config.fuel_type,
+            unit=lt.Units.WATT,
+            output_description="The fuel the CHP burns in the step, in W, >= 0: its fuel power while it runs, else 0.",
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, fuel_carrier),
+        )
+        self.conversion_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ConversionLossInWatt,
+            load_type=self.config.fuel_type,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The energy the CHP loses in the step, in W, >= 0: the fuel it burns minus the electricity and the heat "
+                "it produces."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, fuel_carrier),
+        )
         self.add_default_connections(self.get_default_connections_from_chp_controller())
 
     def i_prepare_simulation(self) -> None:
@@ -275,6 +312,8 @@ class SimpleCHP(cp.PhysicsComponent):
 
         stsv.set_output_value(self.electricity_output_channel, self.state.state * concrete(self.config.p_el))
         stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
+        stsv.set_output_value(self.fuel_power_channel, self.state.state * self.fuel_power_in_watt)
+        stsv.set_output_value(self.conversion_loss_channel, self.state.state * self.conversion_loss_in_watt)
 
     def get_default_connections_from_chp_controller(
         self,

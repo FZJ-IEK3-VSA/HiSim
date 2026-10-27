@@ -444,9 +444,10 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 - an **observer port**, `observes: {reading: {into: [Meter], default: declared}}`, and `observes:` on
   a site entry or an import (replacing its assembly's default): `declared` is every output the
   observer's class declares a dynamic default connection from among the components present —
-  HiSim's `connect_automatically` — and a list of selectors (`{component_type: PV}`, `{flow:
-  ELECTRICITY_PRODUCTION}`, `{output: TotalElectricityToOrFromGrid}`) filters it. The selection runs in
-  the wiring, on the constructed observer, and the realized record writes the selected feeds as
+  HiSim's `connect_automatically`; for the electricity meter every electricity port any component
+  declares, an `IN` port as consumption and an `OUT` port as production — and a list of selectors
+  (`{component_type: PV}`, `{flow: ELECTRICITY_PRODUCTION}`, `{output: ElectricityOutput}`) filters it.
+  The selection runs in the wiring, on the constructed observer, and the realized record writes the selected feeds as
   ordinary feeds, so `--rerun` selects nothing. A derived input or dispatch output name carries the
   source's runtime name with the address separator `-` mapped to `_` (`pv-east-PVSystem` feeds
   `ElectricityOutputFrompv_east_PVSystem`; `NameSyntax.port_name_part`). A controller — an observer whose class ranks a feed

@@ -280,9 +280,38 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
-              - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
+              - from: Battery.ChargingPower
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: Battery.DischargingPower
                 tags:
                   - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: PVSystem.ElectricityOutput
+                component_type: PV
+                tags:
+                  - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: UTSPConnector.ElectricalPowerConsumption
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
           Battery:
             class: hisim.components.advanced_battery_bslib.Battery
@@ -337,13 +366,19 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
               - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
-                component_type: HEAT_PUMP_DHW
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
               - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
-                component_type: HEAT_PUMP_BUILDING
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999

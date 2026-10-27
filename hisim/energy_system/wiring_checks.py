@@ -476,7 +476,7 @@ def meter_feed_of(components_by_name: Mapping[str, Component], item: ConsumingOu
     """
     assert item.meter is not None
     meter, consumer = components_by_name[item.meter], components_by_name[item.consumer]
-    declared = DynamicConnectionResolver.default_feeds_of(meter, consumer.get_classname())
+    declared = DynamicConnectionResolver.default_feeds_of(meter, consumer)
     match = [declaration for declaration in declared if declaration.source_component_field_name == item.output]
     if len(match) != 1:
         fed = ", ".join(str(declaration.source_component_field_name) for declaration in declared) or "nothing"

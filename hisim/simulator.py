@@ -1209,60 +1209,74 @@ class Simulator:
                 target has no default connections defined.
         """
 
-        # prepare the target components' default connection lists
-        target_default_connection_dict: Union[
-            Dict[str, List[cp.ComponentConnection]],
-            Dict[str, List[dcp.DynamicComponentConnection]],
-        ]
-
-        # check if target component is a normal or a dynamic component and get all default connections
         if isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = target_component.dynamic_default_connections
-
-        elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = target_component.default_connections
-
-        else:
+            self.connect_dynamic_component_automatically(source_component_list, target_component)
+            return
+        if not isinstance(target_component, cp.Component):
             raise TypeError(
                 f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
             )
+        target_default_connection_dict: Dict[str, List[cp.ComponentConnection]] = target_component.default_connections
 
         # check if target component has any default connections (otherwise automatic connection cannot be made)
-        if bool(target_default_connection_dict) is True:
-            # check if at least one source_component is in the target default connections
-            if (
-                any(
-                    source_component.get_classname() in target_default_connection_dict
-                    for source_component in source_component_list
-                )
-                is False
-            ):
-                raise KeyError(
-                    f"No component in the system setup matches the default connections of {target_component.component_name}."
-                )
-
-            # go through all registered components
-            for source_component in source_component_list:
-                source_component_classname = source_component.get_classname()
-
-                # if the source components' classname is found in the target components' default connection dict, a connection is made
-                if source_component_classname in target_default_connection_dict.keys():
-                    if isinstance(target_component, dcp.DynamicComponent):
-                        dynamic_connections = target_component.get_dynamic_default_connections(
-                            source_component=source_component
-                        )
-
-                        target_component.connect_with_dynamic_connections_list(
-                            dynamic_component_connections=dynamic_connections
-                        )
-
-                    if isinstance(target_component, cp.Component) and not isinstance(
-                        target_component, dcp.DynamicComponent
-                    ):
-                        connections = target_component.get_default_connections(source_component=source_component)
-                        target_component.connect_with_connections_list(connections=connections)
-        else:
+        if not target_default_connection_dict:
             raise KeyError(
-                f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
-                + "Please check if a connection is needed and if yes, create the missing default connection in your component."
+                f"Automatic connection does not work for {target_component.component_name} because no default "
+                "connections were found. Please check if a connection is needed and if yes, create the missing "
+                "default connection in your component."
+            )
+        # check if at least one source_component is in the target default connections
+        if not any(
+            source_component.get_classname() in target_default_connection_dict
+            for source_component in source_component_list
+        ):
+            raise KeyError(
+                "No component in the system setup matches the default connections of "
+                f"{target_component.component_name}."
+            )
+        # go through all registered components; a source whose class the target names is connected
+        for source_component in source_component_list:
+            if source_component.get_classname() in target_default_connection_dict:
+                connections = target_component.get_default_connections(source_component=source_component)
+                target_component.connect_with_connections_list(connections=connections)
+
+    @staticmethod
+    def connect_dynamic_component_automatically(
+        source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
+        target_component: dcp.DynamicComponent,
+    ) -> None:
+        """Connects a dynamic component to every source it declares default connections from.
+
+        The dynamic component itself says what it reads of each source (``default_connections_for``): the
+        declarations for the source's class, or for the electricity meter every electricity port the source declares.
+        It never reads its own outputs.
+
+        Args:
+            source_component_list: Candidate source components to connect from, in the order of the run.
+            target_component: The dynamic component whose default connections to resolve.
+
+        Raises:
+            KeyError: If the target declares no default connections, or none from any source of the run.
+        """
+        if not target_component.declares_default_connections():
+            raise KeyError(
+                f"Automatic connection does not work for {target_component.component_name} because no default "
+                "connections were found. Please check if a connection is needed and if yes, create the missing "
+                "default connection in your component."
+            )
+        sources = [
+            source_component
+            for source_component in source_component_list
+            if source_component is not target_component and target_component.default_connections_for(source_component)
+        ]
+        if not sources:
+            raise KeyError(
+                "No component in the system setup matches the default connections of "
+                f"{target_component.component_name}."
+            )
+        for source_component in sources:
+            target_component.connect_with_dynamic_connections_list(
+                dynamic_component_connections=target_component.get_dynamic_default_connections(
+                    source_component=source_component
+                )
             )

@@ -157,10 +157,12 @@ preferring declared readers. Three changes make D1 and Q-J hold:
   role (or its `peer_output`), and its peer is the first that reads it through an explicit connection: (1) a
   component that reads it directly and is not exempt, a meter of the port's carrier first, then a component that
   declares ports, then the first in the order of the run; (2) else a meter of the port's carrier reached through
-  exempt components, breadth first, each passing the flow on through its outputs of the same load type. In the
-  household twins the energy manager reads the heat pump's, the PV system's, the battery's and the occupancy's
-  electricity and gives the electricity meter one signed sum (`TotalElectricityToOrFromGrid`): each device links to
-  the meter, whose input carries their sum. What a controller hands to anything but a meter is a decision (a set
+  exempt components, breadth first, each passing the flow on through its outputs of the same load type. Since
+  hisim-component-physics-4g9.39 (owner decision of 2026-10-10: a meter reads physics ports only) the electricity
+  meter reads every electricity port directly, by its role, so in the household twins every device links to the meter
+  by rule (1); rule (2) remains for a meter a file still wires through a controller (until then, the energy manager
+  gave the meter one signed sum, `TotalElectricityToOrFromGrid`, and the heat pump's cooling and brine-pump ports,
+  which it does not read, were unmetered). What a controller hands to anything but a meter is a decision (a set
   point), not the flow, so only a meter is taken through a controller. A meter is the peer only of a port of a
   carrier it meters. Nothing depends on how another component is modelled: only on published ports, declared
   metered exchanges and the explicit connections.
@@ -175,7 +177,7 @@ preferring declared readers. Three changes make D1 and Q-J hold:
 | `SOLAR` | `sun` (today `solar`) | none: an error | outdoors |
 | heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | outdoors |
 
-So the heat pump's electricity ports drop `peer_output` and link to the electricity meter through the energy manager;
+So the heat pump's electricity ports drop `peer_output` and link to the electricity meter that reads them;
 the boiler's fuel ports drop `peer_output=EnergyDemandSh` and link to the gas or fuel meter that reads them; the
 district-heat ports link to the fuel meter. The meters stay wired as they are and are drawn. A port that has no peer
 after these rules is `unlinked`: reported today, a failure from the acceptance PR on (fail loudly: energy that goes
@@ -295,7 +297,7 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 | Component | `IN` | `OUT` | `LOSS` | Change in PR 1 |
 |---|---|---|---|---|
 | `GenericBoiler` | fuel (`EnergyDemandSh`, `EnergyDemandDhw`, Wh) | SH and DHW circuits | `CombustionHeatLoss` (W) | fuel peer: the gas or fuel meter that reads it (Q-J) |
-| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `ThermalPowerInputFromEnvironment` (W) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`) | none (hplib is a converter: heat = electricity + ambient) | electricity peer: the electricity meter, through the energy manager (Q-J); `...ForCooling` and `...BrinePump` are read by nothing and stay unmetered until hisim-component-physics-4g9.39 |
+| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `ThermalPowerInputFromEnvironment` (W) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`) | none (hplib is a converter: heat = electricity + ambient) | electricity peer: the electricity meter, which reads all four by their role (Q-J; `...ForCooling` and `...BrinePump` since hisim-component-physics-4g9.39) |
 | `DistrictHeating` | `ThermalOutputShEnergy`, `ThermalOutputDhwEnergy` as `DISTRICT_HEAT` (Wh) | SH, DHW | none today; the substation's pipe water is hisim-pnw7 | district heat peer: the fuel meter |
 | `ElectricHeating` | `ElectricOutputShPower`, `...DhwPower` (W) | `ThermalOutputShPower` to the building, DHW circuit | none (efficiency 1) | electricity peer: the electricity meter |
 | `SolarThermalSystem` | `SolarPowerOnCollector` (W, `SOLAR`), `ElectricityConsumptionOutput` (W) | DHW circuit | `CollectorHeatLoss` (`SOLAR`), `SolarPumpHeatLoss` (`ELECTRICITY`) | electricity peer: the electricity meter; sun node renamed |
@@ -306,7 +308,7 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | the electricity meter, through the energy manager |
+| `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | the electricity meter, which reads it by its role |
 | `SOLAR` | `IN` | **new** `SolarPowerOnModulesInWatt`: plane-of-array irradiance times module area (Q-D) | sun |
 | `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | outdoors |
 
@@ -318,8 +320,8 @@ is answered "start at the electricity", PVSystem declares only the `OUT` port an
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `IN` | `ChargingPower` (W, `>= 0`; `peer_output=AcBatteryPowerUsed`, the signed output the energy manager reads) | the electricity meter, through the energy manager |
-| `ELECTRICITY` | `OUT` | `DischargingPower` (W, published `<= 0`: `negated=True`; `peer_output=AcBatteryPowerUsed`) | the electricity meter, through the energy manager |
+| `ELECTRICITY` | `IN` | `ChargingPower` (W, `>= 0`) | the electricity meter, which reads it by its role (hisim-component-physics-4g9.39; before, through the energy manager's signed `AcBatteryPowerUsed`) |
+| `ELECTRICITY` | `OUT` | `DischargingPower` (W, published `<= 0`: `negated=True`) | the electricity meter, which reads it by its role with its sign turned |
 | `ELECTRICITY` | `LOSS` | **new** `InverterLossInWatt` = `AcBatteryPowerUsed − DcBatteryPowerUsed` | its loss node |
 | `ELECTRICITY` | `LOSS` | **new** `CellLossInWatt` = `DcBatteryPowerUsed − StoredEnergyIncreaseInWattHour / dt` | its loss node |
 | `ELECTRICITY` | `STORED_CHANGE` | `StoredEnergyIncreaseInWattHour` (Wh, from the state of charge) | storage node |
@@ -334,7 +336,7 @@ energy: it declares.
 
 | Carrier | Role | Output | Peer |
 |---|---|---|---|
-| `ELECTRICITY` | `IN` | `ElectricalPowerConsumption` (W) | the electricity meter, through the energy manager |
+| `ELECTRICITY` | `IN` | `ElectricalPowerConsumption` (W) | the electricity meter, which reads it by its role |
 | `ROOM_HEAT` | `IN` | `HeatingByResidents` (W) | `RESIDENTS` boundary |
 | `ROOM_HEAT` | `OUT` | `HeatingByDevices` (W) | the building (reads it) |
 | `ROOM_HEAT` | `OUT` | **new** `BodyHeatToBuildingInWatt`, equal to `HeatingByResidents` (an output carries one port, so the body heat's way out needs its own output) | the building |

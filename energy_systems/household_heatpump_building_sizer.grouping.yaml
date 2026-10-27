@@ -40,11 +40,11 @@ assignments:
       determines, not a component that comes or goes.
   ElectricityMeter:
     assign: variant:electricity_management
-    note: 'Present in every configuration and wired differently: fed by the energy
-      manager''s grid balance when there is one, and by every participant directly
-      when there is not. A group can add and remove a component but cannot rewire
-      one that survives, so this is the row that forces a variant. Written out in
-      full in both options.'
+    note: 'Present in every configuration and wired differently: it reads every electricity
+      port by its role, so beside the energy manager it also reads the battery''s
+      charging and discharging, which exist only there. A group can add and remove
+      a component but cannot rewire one that survives, so this is the row that forces
+      a variant. Written out in full in both options.'
   Battery:
     assign: variant:electricity_management/ems_with_battery
     note: Exists only in the world that has an energy manager; the setup builds the
@@ -52,8 +52,7 @@ assignments:
       follows the rooftop share, which stays a knob on top of the membership.
   L2EMSElectricityController:
     assign: variant:electricity_management/ems_with_battery
-    note: The other half of that world, and the component the meter's two wirings
-      are about.
+    note: The other half of that world; the meter reads none of its outputs.
 configurations:
   baseline:
     variants:

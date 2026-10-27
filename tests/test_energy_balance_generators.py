@@ -25,8 +25,8 @@ from hisim.energy_port import EnergyPort
 ROOT = Path(__file__).resolve().parents[1]
 
 #: Per setup: the generator, the carriers it takes in, the carriers it gives out, and links its Sankey must show.
-#: The fuel and the electricity come through the meter that reads them, directly or through the exempt energy manager
-#: (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way outdoors.
+#: The fuel and the electricity come through the meter that reads them: the electricity meter reads every electricity
+#: port by its role (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way outdoors.
 GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
@@ -275,7 +275,7 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["in_kwh"])
     links = sankey_links(results)
     assert ("domestic_hot_water_heat", "SolarThermalSystem") in {(carrier, source) for carrier, source, _ in links}
-    # the pump's re-pointed electricity port reaches the meter through the energy manager (spec §5.2)
+    # the meter reads the pump's re-pointed electricity port directly, by its role (spec §5.2)
     assert ("electricity", "ElectricityMeter", "SolarThermalSystem") in links
 
 

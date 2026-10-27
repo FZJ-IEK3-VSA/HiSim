@@ -826,7 +826,7 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
     house = tmp_path / "two_arrays.energy_system.yaml"
     house.write_text(
         site(Real.WEATHER, Real.OCCUPANCY)
-        + imports(arrays, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID_ON_BALANCE),
+        + imports(arrays, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID),
         encoding="utf-8",
     )
     result = tmp_path / "run"

@@ -5,6 +5,7 @@ ComponentOutput, SingleTimeStepValues, ConfigBase, and related classes.
 Each test verifies a specific aspect of the component system.
 """
 
+import dataclasses
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import List
@@ -410,6 +411,34 @@ def test_component_connections() -> None:
     assert conn2.source_instance_name == "SpecificSource"
 
     log.information("Component connection tests passed!")
+
+
+@pytest.mark.base
+def test_add_input_declares_an_energy_port_on_the_input() -> None:
+    """``energy_port=`` on ``add_input`` is kept on the input; one that does not fit an input is refused (D9)."""
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = dataclasses.replace(
+        example_component.ExampleComponentConfig.preset_standard("Receiver"),
+        capacity=(
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
+    )
+    receiver = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
+    port = EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT)
+    heat_input = receiver.add_input("Receiver", "HeatReceivedInWatt", lt.LoadTypes.HEATING, lt.Units.WATT, False, energy_port=port)
+    assert heat_input.energy_port is port and heat_input in receiver.inputs
+    plain = receiver.add_input("Receiver", "Plain", lt.LoadTypes.HEATING, lt.Units.WATT, False)
+    assert plain.energy_port is None
+    with pytest.raises(ValueError, match="is metered"):
+        receiver.add_input(
+            "Receiver",
+            "Power",
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            False,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
 
 
 @pytest.mark.base

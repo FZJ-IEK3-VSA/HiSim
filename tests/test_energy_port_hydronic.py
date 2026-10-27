@@ -332,9 +332,11 @@ class CircuitRig:
     )
 
     @staticmethod
-    def wired(field: str, source: Optional[str], source_field: Optional[str]) -> SimpleNamespace:
-        """An input of a stand-in, connected to ``source.source_field`` or, with None, to nothing."""
-        return SimpleNamespace(field_name=field, src_object_name=source, src_field_name=source_field)
+    def wired(
+        field: str, source: Optional[str], source_field: Optional[str], port: Optional[EnergyPort] = None
+    ) -> SimpleNamespace:
+        """An input of a stand-in, connected to ``source.source_field`` or, with None, to nothing; ``port`` its port."""
+        return SimpleNamespace(field_name=field, src_object_name=source, src_field_name=source_field, energy_port=port)
 
     @classmethod
     def report(
@@ -597,28 +599,39 @@ def heat_output(component: str, field: str, port: Optional[EnergyPort]) -> cp.Co
     )
 
 
+RECEIVED_HEAT = EnergyPort(lt.EnergyRole.CONSUMPTION, Loops.CARRIER)
+
+
 @pytest.mark.parametrize(
-    ("port", "refused"),
+    ("port", "tagged", "refusal"),
     [
-        (EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER), True),
-        (EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER, peer_output="Heat"), False),
-        (EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY), False),
+        (EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER), (), r"is read by 2 components .* \(First, Second\)"),
+        (EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER), ("First",), None),
+        (EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER), ("First", "Second"), r"by 2 components \(First, Second\)"),
+        (EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY), (), None),
     ],
 )
-def test_an_output_two_declared_components_read_must_name_its_recipient(port: EnergyPort, refused: bool) -> None:
-    """Rule (a) of stage E (owner, 2026-10-02): a heat port read by two components that declare ports names one.
+def test_an_output_two_declared_components_read_needs_exactly_one_tagged_reader(
+    port: EnergyPort, tagged: Tuple[str, ...], refusal: Optional[str]
+) -> None:
+    """Rule (a) of stage E (owner, 2026-10-02) with input ports (D9): exactly one reader tags its reading input.
 
-    A metered port is exempt from the rule: its meter comes first (owner decision Q-J, spec §4.3).
+    A heat port read by two components that declare ports is refused unless exactly one of them reads it through an
+    input carrying a port it pairs with; two such inputs are refused too, one energy being received once. A metered
+    port is exempt from the rule: its meter comes first (owner decision Q-J, spec §4.3).
     """
     outputs = [
         heat_output("Source", "Heat", port),
         heat_output("First", "Loss", EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER)),
         heat_output("Second", "Loss", EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER)),
     ]
-    inputs = {name: [CircuitRig.wired("HeatIn", "Source", "Heat")] for name in ("First", "Second")}
+    inputs = {
+        name: [CircuitRig.wired("HeatIn", "Source", "Heat", RECEIVED_HEAT if name in tagged else None)]
+        for name in ("First", "Second")
+    }
     components = CircuitRig.stand_ins(outputs, inputs, {})
-    if not refused:
+    if refusal is None:
         Wiring.refuse_a_broken_wiring(components)
         return
-    with pytest.raises(EnergyPortWiringError, match=r"Source.Heat .* is read by 2 components .* \(First, Second\)"):
+    with pytest.raises(EnergyPortWiringError, match=r"Source.Heat .* " + refusal):
         Wiring.refuse_a_broken_wiring(components)

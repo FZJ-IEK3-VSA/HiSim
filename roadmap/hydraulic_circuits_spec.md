@@ -2,7 +2,9 @@
 
 Status: draft; the owner's decisions of 2026-10-22 (§2: D1 to D5, and D7 after the first draft's review) and of
 2026-10-27 (D8: fluid-loop tags on the channel definitions replace #1109's hydronic-port declaration, which decides Q4
-against its recommendation; D9: energy ports become channel tags on inputs too) are recorded. The open questions Q0 to
+against its recommendation; D9: energy ports become channel tags on inputs too; D10: the supplier of a loop is declared,
+the direction per step follows from the supplier's sign, a loop that may cool says so — which withdrew the first
+amendment's role-from-sign rule, wrong for cooling loops) are recorded. The open questions Q0 to
 Q3, Q5, Q6 and the new Q7 to Q12 (§5) wait for the owner. Nothing is built; #1109 is back in draft for its rework onto
 the tags (§5, Q6). Owner: Noah. Epic: hisim-hydraulic-circuits-wci7 (`owner-decision`). Builds on:
 `roadmap/hydronic_coupling_spec.md` (§3 circuits and pump owners, §3.5 `HydronicPort`, §4.6 D25 with its amendment
@@ -74,6 +76,7 @@ them as `D3 of the hydraulic circuits spec`.
 | D7 | **No top-level declaration.** Owner, verbatim: "no top level declaration. the ports themselves should declare that they belong to a fluid loop". That is: no top-level `circuits:` block in the energy-system YAML, no `Simulator.add_circuit`, no assembly-level circuit declaration. A component's port set itself declares that it belongs to a fluid loop. | owner, 2026-10-22 | A loop is what the wiring connects: the build finds it by following the port sets' wires from member to member (§4.3), and refuses a loop that does not close, a port set wired outside a loop, or a flow read by two loops. The loop's id is derived from its pump owner's component and port-set name (§4.3). Nothing is told to a component at build; whether a port set pumps is stated in code or in the component's configuration (Q3). The first draft's `circuits:` block, `add_circuit`, `pump: true` on assembly ends and `join_circuit` are withdrawn. D1 to D5, Q0, Q1, Q2, Q5 and the dry run (§6) are unchanged by it. |
 | D8 | **Fluid-loop tags on the channel definitions replace #1109's hydronic-port declaration.** Owner, on #1109: "the hydronic port thing doesn't sit right with me, since it's duplicating information about ports that then needs to be kept in sync. we've already discussed to use fluid_loops and use tagging directly on the component input/output definitions. wouldn't that completely replace the hydronic ports in 1109?" — and, after the answer that it replaces the declaration layer and not the balance logic that consumes it: "yeah, update 1122." | owner, 2026-10-27 | Q4 is decided against its recommendation of 2026-10-22: #1109 is not merged as it is and extended later. Its declaration layer goes: `Component.add_hydronic_port`, `CircuitEnd` and `HydronicPort` as a declared object, which named three channels a second time (by string, beside their `add_input`/`add_output` calls) and had to be kept in step with them. Instead, a channel of a loop says itself, in its own `add_input` or `add_output` call, which loop of the component and which of D1's four quantities it is (§4.1); the build groups the tagged channels into port sets (§4.3). What stays of #1109 is the balance side: the ends paired through the wiring (`Wiring`), the heat derived from the result columns and never from a value a component wrote for the balance, the rules one reader / both ends or neither, and the build-time `refuse_a_broken_wiring`; and the components' loops themselves (the buffer's three, the tank's two coils with their own returns, the distribution system's), now fed by the tags. #1109 is back in draft and is reworked onto the tags (Q4 as decided, Q6 stage 1a). |
 | D9 | **Energy ports become channel tags too, on inputs as on outputs.** Owner: "can we also replace some of the energy port declarations with tags?" Recorded as the owner's request; the design is §4.7, the choices it leaves open are Q7 to Q10. | owner, 2026-10-27 | An `EnergyPort` already sits on the channel (`add_output(energy_port=...)`); what was missing is that only an output could carry one. A component that receives energy through an *input* therefore invented a copy-output and pointed it at the input by string (`peer_input=`, four uses on the building branch), or pointed one output at another (`peer_output=`, three uses). With `add_input(energy_port=...)` the input carries the port, the balance reads the column of the output wired to it, and the two pointers and the copy-outputs go (§4.7; the one case that keeps a second output is a quantity that is both taken from a boundary node and given to a component). A channel whose sign means its direction gets a port with two faces instead of two copy-outputs (Q9). The two tag systems that overlap on about a dozen outputs, `postprocessing_flag` and `energy_port`, are an open question with a recommendation (Q10), because merging them reaches into the KPI computation and the meters' selection. The distribution system's `declares_energy_ports`, a port declaration that reads a position enum, goes with D3's enum removal (Q6, stage 3). |
+| D10 | **The supplier of a loop is declared; the direction per step follows from the supplier's sign; a loop that may cool says so.** Owner, on the first amendment's rule that no member declares a role because "each member's heat into the loop is m·c·(T_out − T_in) from its own four values, positive at the supplier": "for cooling loops this is wrong" — and, on the correction below: "yes, please rewrite it." | owner, 2026-10-27 | `m c (T_out − T_in)` is the heat a member adds to the water, in any loop; "positive at the supplier" holds only while the loop heats. In a cooling loop the supplier (a chiller, a heat pump in cooling mode) sends the water out colder than it came back and the room-side member warms it, so a role read off the sign would make the emitter the supplier and book cooling as space heating flowing the wrong way — what the Sankey's `COOLING` carrier exists to avoid; and a loop that heats in one step and cools in the next (the HDS with `cooling_enabled`, bead hisim-hds-cooling-option-m4g6; a heat pump cooling through a buffer, hisim-energy-sankeys-9uoo.17) has no one sign. So (1) every `FluidLoop` states whether its member supplies the loop (`supplies`, a declared fact like `pumps`, and a separate one: the HDS pumps its loop and does not supply it), and the build refuses a loop with zero or two suppliers; (2) in a step in which the supplier adds heat to the water its loop's heat is booked as the loop's stated heating carrier from the supplier to the other members, in a step in which it removes heat as `COOLING` from the room-side members to the supplier — the rule of Q9's signed energy port, applied to loops; (3) a loop that can only heat states that, and a step in which it cools anyway fails the run; a loop that may also cool says so explicitly (`may_cool`, from the HDS's `cooling_enabled` where the configuration has it). §4.1, §4.3, §4.6, §4.7, Q8, Q9 and §7 are rewritten; the first amendment's Q8 recommendation is withdrawn. |
 
 *Proposed, not decided (agent, 2026-10-22; the owner's confirmation is Q0):* **D6 — HiSim keeps "no buses"; a named
 circuit is not one.** A bus balances: it takes several contributions and solves for what is missing. A named circuit
@@ -94,8 +97,8 @@ messages go. Deleting a bus changes results.
   most once, and it appears in every error that concerns the loop.
 - **Fluid loop** (D8): the one object through which a component names a loop it can be a member of, in its own
   vocabulary (`FluidLoop(name="generator", carrier=SPACE_HEATING_HEAT, pumps=False)`, §4.1): the loop's name as the
-  component knows it, the heat the loop carries, and whether this component pumps it. It is written once per
-  component and loop; the component's channels point at it.
+  component knows it, the heat the loop carries while it heats, and whether this component pumps it, supplies it
+  (D10) and lets it cool. It is written once per component and loop; the component's channels point at it.
 - **Loop tag** (D8): what one channel carries in its `add_input` or `add_output` call to say which fluid loop of the
   component it belongs to and which of the four quantities it is (`fluid_loop=self.generator_loop.flow_in`, §4.1). A
   tag is the only declaration of a port set; there is no second list to keep in step with the channels. The assemblies' circuit names (`{circuit: dhw,
@@ -173,10 +176,14 @@ class LoopQuantity(str, Enum):
 
 @dataclass(frozen=True)
 class FluidLoop:
-    """One loop as its member names it: the member's own name for it, the heat it carries, whether this member pumps it."""
+    """One loop as its member names it: its own name for it, the heat it carries, and what this member is to it."""
     name: str                          # the component's own vocabulary: "space_heating", "dhw", "generator", "distribution", ...
-    carrier: lt.EnergyBalanceCarrier   # SPACE_HEATING_HEAT or DOMESTIC_HOT_WATER_HEAT, stated once per loop
-    pumps: bool                        # D3: fixed in code, or read from the configuration (Q3)
+    carrier: lt.EnergyBalanceCarrier   # the heat the loop carries while it heats: SPACE_HEATING_HEAT or DOMESTIC_HOT_WATER_HEAT
+    pumps: bool                        # D3: this member moves the loop's water; fixed in code, or from the configuration (Q3)
+    supplies: bool                     # D10: this member is the loop's generator end; exactly one per loop
+    may_cool: bool = False             # D10: this member allows the loop to remove heat from the room side (a chiller,
+                                       # a heat pump in cooling mode, an HDS with cooling_enabled); a loop may cool only
+                                       # if every member allows it (Q8)
 
     @property
     def flow_in(self) -> "FluidLoopChannel": ...        # FluidLoopChannel(self, LoopQuantity.FLOW_IN)
@@ -195,8 +202,9 @@ declaration (`FluidLoopError`, a `ValueError`, §4.5): a tag on a channel of the
 temperature °C), a tag of the wrong kind (`FLOW_IN` and `TEMPERATURE_IN` belong on an input, `FLOW_OUT` and
 `TEMPERATURE_OUT` on an output), a tag beside an `energy_port` (a channel is a leg of a loop or a power, never both),
 and two channels of one component with the same tag. The component keeps no list of its loops: `Component.port_sets()`
-derives them by grouping `inputs + outputs` by `tag.loop`, so there is nothing to keep in step. The loop's name,
-carrier and pumping flag are written once, in the `FluidLoop`; each channel points at it. How a component names a loop
+derives them by grouping `inputs + outputs` by `tag.loop`, so there is nothing to keep in step. The loop's name, its
+carrier, and whether this member pumps it, supplies it and lets it cool are written once, in the `FluidLoop`; each
+channel points at it. How a component names a loop
 (a plain string, or a `str` Enum of its loop names that `FluidLoop` takes as `name`), and whether the loop tag and the
 energy port share one keyword argument, is Q7.
 
@@ -236,7 +244,12 @@ After (D8): one `FluidLoop` per loop, the tag on each channel, the fourth channe
 second declaration:
 
 ```python
-self.generator_loop = FluidLoop("generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, pumps=False)
+self.generator_loop = FluidLoop(
+    "generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+    pumps=False,      # a buffer moves no water
+    supplies=False,   # the generator supplies this loop; the buffer receives (its distribution loop says supplies=True)
+    may_cool=True,    # a buffer takes water of any temperature; whether the loop cools is the generator's and the emitter's say (Q8)
+)
 
 self.water_mass_flow_rate_heat_generator_input_channel = self.add_input(
     self.component_name, self.WaterMassFlowRateFromHeatGenerator, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True,
@@ -260,7 +273,9 @@ self.water_mass_flow_rate_to_heat_generator_output_channel = self.add_output(   
 
 The buffer's three `add_hydronic_port` calls become three `FluidLoop` objects and twelve tags; the tank's two coils
 (`:2439`) and the HDS's one call (`heat_distribution_system.py:328`) likewise. A component that can pump or pass
-through writes `pumps=self.config.pumps_space_heating_circuit` (Q3). The existing output names stay as they are, since
+through writes `pumps=self.config.pumps_space_heating_circuit` (Q3); the HDS writes `supplies=False` and
+`may_cool=self.config.cooling_enabled` (D10, Q8); a boiler writes `supplies=True, may_cool=False` on both its loops, the
+heat pump `supplies=True` with `may_cool` from its cooling-mode setting. The existing output names stay as they are, since
 they are addresses in energy-system files and goldens (`system_docs/results_and_interfaces.md`); the new flow outputs
 are named in the components' own idiom (`WaterMassFlowRateToHeatGenerator` on the buffer, `WaterMassFlowOutput` on the
 HDS, …) and each description states that it is the circuit's flow passed through.
@@ -327,6 +342,10 @@ finds it (`Simulator.run_all_timesteps`, after `connect_all_components`, where #
 3. **Exactly one pumping port set per loop.** Zero (two pass-through members, nobody moves water) or two (the
    pre-#1117 `gas_boiler_household`: the boiler's `space_heating` loop and the HDS's `distribution` loop both pumping)
    is refused, naming the loop's members and which of them pump.
+4. **Exactly one supplying port set per loop** (D10). Zero (a loop of receivers: a buffer's generator loop wired to
+   a tank's coil) or two (two generators on one loop with no store between them) is refused, naming the loop's members
+   and which of them supply. Pumping and supplying are counted separately: the HDS pumps and does not supply, the buffer
+   supplies its distribution loop and does not pump.
 
 **The loop's id** is `<pump owner's component name>.<its loop name>`: `hds.distribution`,
 `CondensingGasBoiler.space_heating`, `MoreAdvancedHeatPumpHPLib.dhw`, `SolarThermalSystem.solar_dhw`. A component
@@ -340,14 +359,40 @@ so `i_doublecheck` (§4.4) can put it in its error without any lookup.
 checks that every member of a discovered loop states the same one. It is not derivable from the wiring (the same
 boiler class serves either), and it is what the Sankey draws the loop as; so it stays declared, once.
 
-**The role (supplier or receiver of heat) is not declared** (recommendation; Q8). #1109's `HydronicPort` carried
-`role=IN|OUT` to say on which side of the end's balance the circuit's heat counts. With four quantities per member the
-heat a member gives to the loop is its own `m_out · c · (T_out − T_in)`: positive at the supplier (its water leaves
-hotter than it arrived), negative at the receiver, negative at a heat pump while it cools. The balance books that
-number, signed, as the member's one loop term; around a closed loop the members' terms sum to zero by construction
-once the flows agree (every `T_in` is the previous member's `T_out`, and the mass check makes every `m` the same), which
-is #1109's "a circuit balances by construction" with the role read off the sign instead of declared. A declared role
-would be a second statement of a fact the values already carry, and the build could only check it against them.
+**The supplier is declared, the direction per step is read off the supplier's sign** (D10). #1109's `HydronicPort`
+carried `role=IN|OUT` to say which end supplies the circuit's heat; the `FluidLoop` carries the same fact as
+`supplies`, and the build refuses a loop with no or two supplying port sets, as rule 3 refuses no or two pumping ones
+(rule 4). It is a fact of the device, not of the values: a boiler, a heat pump, a substation and a collector supply
+every loop they are on; a buffer receives on its generator loops and supplies its distribution loop; a tank receives on
+both coils; the HDS receives (it pumps its loop and does not supply it: pumping and supplying are two facts). The first
+amendment's rule of 2026-10-27, "the role is not declared, each member's heat into the loop is `m c (T_out − T_in)`
+from its own four values, positive at the supplier", is withdrawn (owner, 2026-10-27: "for cooling loops this is
+wrong"): `m_out · c · (T_out − T_in)` is the heat a member adds to the water in any loop, but it is positive at the
+supplier only while the loop heats; in a cooling loop the chiller sends the water out colder than it came back and the
+room circuit warms it, so the sign would have named the emitter the supplier and booked cooling as space heating
+flowing the wrong way.
+
+What the values decide is the *direction of the step*, from the supplier's own four columns: `Q_supplier =
+m_out · c · (T_out − T_in)` at the supplier. In a step in which it is positive the supplier added heat to the water,
+and the loop's heat is booked as the loop's stated heating carrier (`carrier`: space heating or hot water) from the
+supplier to the other members, each receiving its own `−m · c · (T_out − T_in)`. In a step in which it is negative the
+supplier removed heat, and the same amounts are booked as `COOLING` the other way: from the room-side members, each
+of which put `m · c · (T_out − T_in) > 0` into the water, to the supplier, which is the cooling source. In a step in
+which it is zero nothing is booked. Around a closed loop the members' `m c (T_out − T_in)` sum to zero by construction
+once the flows agree (every `T_in` is the previous member's `T_out`, and the mass check makes every `m` the same), in
+either direction; that is #1109's "a circuit balances by construction". This is the rule of Q9's signed energy port
+applied to a loop: a loop is a port with two faces, the positive face its heating carrier from the supplier outward,
+the negative face `COOLING` from the emitters to the supplier, and the two are implemented by one rule (§4.7).
+
+**A loop that may cool says so** (D10, Q8). A loop whose every member's `FluidLoop` says `may_cool=True` may run
+either way. On any other loop a step in which the supplier removed heat is a failure: the supplier's `i_doublecheck`
+raises `CircuitError` beside the mass check of §4.4 ("the loop `boiler.space_heating` heats only, and its supplier
+`boiler` removed 1,234 W from the water in step 1234"); before stage 2 exists, the post-run balance of stage 1a
+refuses the run on the same condition from the columns (§4.7). The storages say `may_cool=True` (they take water of
+any temperature; whether a loop cools is for its generator and its emitter to say), the hot-water tank `False` on
+both coils, the boiler and the substation `False`, the heat pump from its cooling-mode setting, the HDS from its
+configuration (`cooling_enabled`, bead hisim-hds-cooling-option-m4g6), so that a heat pump that may cool wired to an
+HDS that may not is a heating-only loop, and a cooling step on it fails by name.
 
 What this replaces: the HDS no longer reads `PARALLEL` or `NO_STORAGE_MASS_FLOW_FIX` to know whether it pumps; its
 `FluidLoop` states it (Q3). The boiler no longer infers from a wired input whether it heats someone else's flow
@@ -370,6 +415,11 @@ def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         if abs(mass_flow_in_in_kg_per_second - mass_flow_out_in_kg_per_second) > port_set.tolerance_in_kg_per_second:
             raise CircuitError(circuit_id=port_set.loop_id, device=self.component_name, timestep=timestep,
                                mass_flow_out_in_kg_per_second=..., mass_flow_in_in_kg_per_second=...)
+    for port_set in self.port_sets_supplied():    # the port sets whose FluidLoop says supplies=True (D10, §4.3)
+        heat_added_in_watt = hydronics.circuit_power_w(...)   # m_out c (T_out − T_in) from its own four values
+        if heat_added_in_watt < -port_set.tolerance_in_watt and not port_set.loop_may_cool:
+            raise CircuitError(circuit_id=port_set.loop_id, device=self.component_name, timestep=timestep,
+                               heat_removed_in_watt=-heat_added_in_watt)   # "the loop heats only"
 ```
 
 The message: `Loop 'hds.distribution' (boiler.space_heating, hds.distribution): the pump owner 'hds' sent 0.270 kg/s
@@ -413,6 +463,8 @@ energy-system format numbers its refusals `EF-…`) is wanted.
 | every member of a loop states the same carrier | build | the same walk (§4.3, rule 2) | a space-heating end wired to a hot-water end | D8 |
 | a flow is read by one loop | build | the same walk | a flow-out output read by two port sets (a split without a valve) | D3, D7 |
 | exactly one pumping port set per loop | build | the same walk, counting the `FluidLoop`s that say `pumps=True` (Q3) | nobody pumps; two pump (the pre-#1117 `gas_boiler_household`) | D3 |
+| exactly one supplying port set per loop | build | the same walk, counting the `FluidLoop`s that say `supplies=True` (§4.3, rule 4) | two generators on one loop without a store between them; a loop of two receivers | D10 |
+| a loop that heats only never cools | every step | `i_doublecheck` of the supplier (§4.3); the post-run balance until stage 2 | a supplier removing heat from the water on a loop whose members do not all say `may_cool` | D10 |
 | flow back = flow sent, at the pump owner | every step | `i_doublecheck` of the pump owner | any member that changed the flow (named only as "some member") | D4 |
 | flow out = flow in, at every member | every step | `i_doublecheck` of every member | the member that changed the flow, by name | Q1 |
 | booked heat = `m c (T_out − T_in)`, at every member | every step | `i_doublecheck` of every member | a member booking with a flow or a temperature it did not publish; the HDS's one-step lag without a buffer | Q2 |
@@ -474,7 +526,13 @@ copy-outputs, two per side, each `>= 0`. The tag can carry the split itself: a p
 and `SignedEnergyPort(positive=EnergyPort(IN, SPACE_HEATING_HEAT), negative=EnergyPort(OUT, COOLING))` on the building's
 input. The balance splits the one column by sign into two series, one per face, and books each on its carrier; the two
 ends tag the same wire, so they book the same numbers; the four copy-outputs go. (`negated` is the degenerate case of a
-port whose one face is the negative one; it stays as it is.)
+port whose one face is the negative one; it stays as it is.) A fluid loop is the same port with two faces, without
+anyone writing them: its positive face is its `carrier` from the supplier to the other members, its negative face
+`COOLING` from the room-side members to the supplier, and the supplier's `m c (T_out − T_in)` in the step chooses the
+face (§4.3, D10). The balance's series builder splits a column by sign once, for both; a loop whose members do not all
+say `may_cool` has no negative face, and a step that would need it fails (the supplier's `i_doublecheck` from stage 2,
+the post-run balance in stage 1a). So the HDS–building wire and the heat pump–buffer loop book a cooling step the
+same way: `COOLING` from the building to the HDS, from the HDS to the buffer, from the buffer to the heat pump.
 
 **Before and after, the building's input.** Today (`building.py:300-306, 555-588` at 2b9fc8a8c): the input is a plain
 input, and two outputs copy it by sign and point back at it:
@@ -700,7 +758,7 @@ The options of 2026-10-22, kept as history:
 
 | #1109 | After D8 |
 |---|---|
-| `HydronicPort` (three names, role, carrier) and `CircuitEnd` (which names are inputs), `energy_port.py:361-558` | go. The names are the channels themselves; "which are inputs" is the channel kind; the role is read off the sign (§4.3, Q8); the carrier is on the `FluidLoop` (§4.1). |
+| `HydronicPort` (three names, role, carrier) and `CircuitEnd` (which names are inputs), `energy_port.py:361-558` | go. The names are the channels themselves; "which are inputs" is the channel kind; the role is `supplies` on the `FluidLoop`, and the direction of each step is read off the supplier's sign (§4.3, D10); the carrier is on the `FluidLoop` (§4.1). |
 | `Component.add_hydronic_port`, `hydronic_ports`, `CIRCUIT_LEG_UNITS`, `HydronicPortError` | go. `add_input`/`add_output` take `fluid_loop=`; `Component.port_sets()` groups the tagged channels; `FluidLoopError` at the declaration (§4.1, §4.5). |
 | `HydronicPort.heat_in_kilowatt_hour` and `heat_in_kilowatt_hours_per_step`, the one rule `m c (T_sup − T_ret) dt` | stay, as functions of `hisim/hydronics.py` beside `circuit_power_w`; applied per member to its own four columns, `m_out c (T_out − T_in)` (§4.3). |
 | `DeclaredPorts.circuit_ends_of`, `Wiring.resolve_circuit`, `CircuitColumns` (three columns per circuit) | stay in substance, adapted: an end is a port set, its columns are its four (`flow_in` and `temperature_in` followed through the wire to the previous member's outputs). |
@@ -795,7 +853,11 @@ What changes, counted on main at 635404f30 (details in §7):
      replaced by `FluidLoop`s and tags on the channels that exist today — three per port set, since the fourth channel
      comes in 1b; until then `port_sets()` accepts a set with one flow channel (a `flow_out` at the pump owner, a
      `flow_in` at the reader) and 1b tightens it to four; the pumping flag is written where it is fixed in code
-     (`pumps=True` on the generators, `False` on the storages) and left out of the either-way components until 1b.
+     (`pumps=True` on the generators, `False` on the storages) and left out of the either-way components until 1b;
+     `supplies` and `may_cool` are written on every loop from the start (D10), because the balance books by them, with
+     rule 4 of §4.3 (one supplier) in `refuse_a_broken_wiring` and the heating-only check in the post-run balance.
+     Result change: none; the balance report books the heat pump's cooling steps as `COOLING` toward the heat pump
+     instead of negative space heating away from it, which moves no total.
      The tests of #1109 rewritten at their declaration sites only. Bit-identical; no new column (the ports it declares
      are on existing channels). Done when #1109's balance report closes for every twin it closes for today.
   1b. *The fourth wire, the pumping flag everywhere and the loop walk* (this spec's own first stage): the new flow
@@ -861,23 +923,55 @@ set of names. Option c is rejected.
 
 Recommendation: a.
 
-### Q8. Whether a loop's role (supplier or receiver) is declared or read off the sign
+### Q8. Which member supplies a loop, and whether a loop may cool
 
-#1109 declares `role=IN|OUT` on every circuit end. §4.3 proposes that no member declares a role: the heat a member
-gives to its loop is `m_out · c · (T_out − T_in)` from its own four columns, positive at a supplier, negative at a
-receiver, negative at a heat pump while it cools; the balance books it signed, and the Sankey draws the link in the
-direction of the run's sign per step.
+*Withdrawn 2026-10-27 (wrong for cooling loops, owner):* the first amendment recommended that no member declares a
+role, because "the heat a member gives to its loop is `m_out · c · (T_out − T_in)` from its own four columns,
+positive at a supplier, negative at a receiver", and the Sankey would draw the link in the direction of the sign. In a
+cooling loop the supplier is the member with the negative sign (a chiller sends the water out colder than it came
+back; the room circuit warms it), so that rule would have named the emitter the supplier and booked cooling as space
+heating flowing the wrong way, and a loop that heats in one step and cools in the next has no one sign at all. The
+owner's correction is D10; §4.3 holds the design. What this question still asks is where the two new facts live and
+what they are called.
 
-- **Option a — derive it** (§4.3). One statement less per loop and member; nothing to check against the values; a
-  component that is a supplier in one system and a receiver in another (a buffer in series, a tank charged by a
-  collector and discharged to a generator's circuit) needs no configuration for it.
-- **Option b — declare it on the `FluidLoop`** (`supplies=True`), and have the build or the balance check it against
-  the sign (a declared supplier whose loop heat is negative over the run is refused or reported). Keeps #1109's
-  vocabulary and gives the Sankey a direction in a step where the heat is 0 (it draws nothing then anyway). A second
-  statement of a fact the values carry — the kind D8 removes — justified only as a check.
+**Decided by D10:** every `FluidLoop` states `supplies` (exactly one per loop, checked at build like `pumps`); the
+direction of each step is the sign of the supplier's own `m c (T_out − T_in)` (positive: the loop's heating carrier
+from the supplier outward; negative: `COOLING` from the emitters to the supplier — the rule of Q9's signed port); a
+loop that may cool says so, and a cooling step on any other loop fails the run.
 
-Recommendation: a. The sign is the role; a declared role that disagrees with the sign would be a modelling error the
-energy check (Q2) and the balance already find.
+**Where "may cool" is stated.**
+
+- **Option a — on every member's `FluidLoop`, and a loop may cool only if every member allows it** (§4.3). The HDS
+  takes it from its configuration (`may_cool=self.config.cooling_enabled`), the heat pump from its cooling-mode
+  setting, the boiler and the substation write `False`, the storages write `True` (a buffer takes water of any
+  temperature; a tank's coils `False`). The build needs no agreement rule: a heat pump that may cool wired to an HDS
+  with `cooling_enabled: false` is a heating-only loop, and the first cooling step fails naming the loop and the
+  supplier, which is the right message (the emitter cannot cool, so the heat pump must not). Four booleans per
+  two-member loop, each a fact of its own device.
+- **Option b — on the supplier only.** One statement per loop; the emitter's `cooling_enabled` is then not part of
+  the loop's declaration, and a heat pump in cooling mode on a radiator circuit that cannot cool would be booked as
+  cooling without complaint until the building's own balance notices nothing at all (the HDS would deliver "negative
+  heat" to the building, which the building's signed port of Q9 books as cooling too). Fewer words, one check less.
+- **Option c — derived from the carrier**: a third carrier `COOLING_LOOP` for loops that only cool, and `may_cool`
+  implied for the space-heating carrier. Rejected: the loops that matter switch between the two (the HDS with
+  `cooling_enabled`, the heat pump through a buffer), so the carrier cannot say it.
+
+**Names.** `supplies` (reads as a statement, `coding_style.md` §5: this member supplies the loop's heat) and
+`may_cool` (this member allows the loop to remove heat); the alternative `is_generator_end` says the same with more
+words, and `cools` would read as "this member cools", which is a per-step fact, not a declaration. For the HDS, the
+loop reads `cooling_enabled` as it is spelt in hisim-hds-cooling-option-m4g6, so one configuration line decides both
+the HDS's own behaviour and its loop's declaration; the heat pump's loop reads whatever names its cooling mode on that
+class.
+
+**Where the heating-only violation is raised.** In the supplier's `i_doublecheck`, beside the mass check (D4, §4.4),
+from stage 2; until then in the post-run balance of stage 1a, which has the same four columns. Both name the loop,
+the supplier, the step and the heat removed in W. It is a `CircuitError` like the mass violation: a loop that
+removes heat it declared it never would is the same kind of fault as a member that changes a flow it declared it would
+pass through.
+
+Recommendation: a, with the names above. It is explicit at every member (D3's rule for pumping, applied to cooling),
+it needs no agreement check at build, and it ties the HDS's loop to the one configuration line that already says
+whether the emitter can cool.
 
 ### Q9. A channel whose sign means its direction: two faces on one port, or two outputs
 
@@ -901,9 +995,10 @@ need will come back wherever one wire carries heat in both directions over the y
   negative while it cools", `more_advanced_heat_pump_hplib.py:695-696`). Simplest, but it undoes the Sankey spec's
   decision to show cooling as its own carrier (Q-G), and the building's cooling would disappear into negative heating.
 
-Recommendation: a. It is the tag doing what the copy-outputs did, at both ends, on one wire. Whether the heat pump's
-cooling circuit should then also carry two faces (`SPACE_HEATING_HEAT` / `COOLING`) instead of going negative is the
-Sankey spec's question, not this one's; nothing here forces it.
+Recommendation: a. It is the tag doing what the copy-outputs did, at both ends, on one wire. A fluid loop is the same
+port with two faces (§4.3, D10): the heat pump's cooling circuit, which #1109 books as negative space heating, is then
+booked as `COOLING` from the buffer to the heat pump in the steps in which the heat pump removes heat, by the one rule
+that splits the HDS–building wire. Option c would leave the two inconsistent.
 
 ### Q10. Two tag systems on one output: `postprocessing_flag` and `energy_port`
 
@@ -1027,17 +1122,17 @@ step's flow (hisim-pnw7). Everything else closes to 0.0 W in every step, forced 
 **Components.** Per component, the fluid loops (D8: one `FluidLoop` per loop, a tag on each of its channels; the
 loop's name is the component's own), the new channels and what leaves:
 
-| Component | Fluid loops (name: can pump?) | Gains | Loses |
+| Component | Fluid loops (name: can pump?; supplies and may_cool per D10) | Gains | Loses |
 |---|---|---|---|
-| `GenericBoiler` | `space_heating`: either (`pumps_space_heating_circuit`, default true, Q3); `dhw`: pump owner | flow in on `dhw`; the flow in on `space_heating` exists (`WaterInputMassFlowSh`, #1117) and becomes the circuit's | `space_heating_runs_on_distribution_flow` inferred from wiring (the port set's flag instead, Q3) |
-| `MoreAdvancedHeatPumpHPLib` | `space_heating`, `dhw`: pump owner (no heater-on-flow mode yet) | flow in on both | `PositionHotWaterStorageInSystemSetup` (`PARALLEL`/`SERIES`/`NO_STORAGE`); `m_dot_ref` stays as the fixed flow of a heater-on-flow mode if one is built later |
-| `DistrictHeating` | `space_heating`: either (`pumps_space_heating_circuit`, default false, Q3); `dhw`: pump owner | flow in on `dhw`; the space-heating pair exists | — |
-| `ElectricHeating` | `dhw`: pump owner | flow in | — |
-| `SolarThermalSystem` | `solar_dhw`: pump owner | flow in | — |
-| `SimpleHotWaterStorage` (buffer) | `generator`, `secondary_generator`, `distribution`: never pumps | flow out on each (pass-through) | `PositionHotWaterStorageInSystemSetup` (`PARALLEL_TO_HEAT_SOURCE`/`SERIES_TO_HEAT_SOURCE`): a series buffer is a three-member circuit |
-| `SimpleDHWStorage` (tank) | `generator`, `secondary_generator`: never pumps | flow out on each | — |
-| `HeatDistribution` | `distribution`: either (`pumps_the_circuit`, default true, Q3) | flow out (pass-through when behind a pump owner); flow in in every role | `PositionHotWaterStorageInSystemSetup` (4 members); `pumps_its_design_flow` from the enum (from the port set's flag instead); the lag half goes with pnw7 |
-| `SimpleHeatSource` | brine circuit: either (`pumps_the_brine_circuit`, Q3) | flow out | `use_external_massflow_as_signal_input_for_nominal_massflow` (a second pump owner by another name) |
+| `GenericBoiler` | `space_heating`: either (`pumps_space_heating_circuit`, default true, Q3); `dhw`: pump owner; supplies both, cools neither | flow in on `dhw`; the flow in on `space_heating` exists (`WaterInputMassFlowSh`, #1117) and becomes the circuit's | `space_heating_runs_on_distribution_flow` inferred from wiring (the port set's flag instead, Q3) |
+| `MoreAdvancedHeatPumpHPLib` | `space_heating`, `dhw`: pump owner (no heater-on-flow mode yet); supplies both; `space_heating` may cool from its cooling-mode setting | flow in on both | `PositionHotWaterStorageInSystemSetup` (`PARALLEL`/`SERIES`/`NO_STORAGE`); `m_dot_ref` stays as the fixed flow of a heater-on-flow mode if one is built later |
+| `DistrictHeating` | `space_heating`: either (`pumps_space_heating_circuit`, default false, Q3); `dhw`: pump owner; supplies both, cools neither | flow in on `dhw`; the space-heating pair exists | — |
+| `ElectricHeating` | `dhw`: pump owner; supplies, never cools | flow in | — |
+| `SolarThermalSystem` | `solar_dhw`: pump owner; supplies, never cools | flow in | — |
+| `SimpleHotWaterStorage` (buffer) | `generator`, `secondary_generator`, `distribution`: never pumps; receives on the generator loops, supplies `distribution`; `may_cool=True` on all | flow out on each (pass-through) | `PositionHotWaterStorageInSystemSetup` (`PARALLEL_TO_HEAT_SOURCE`/`SERIES_TO_HEAT_SOURCE`): a series buffer is a three-member circuit |
+| `SimpleDHWStorage` (tank) | `generator`, `secondary_generator`: never pumps; receives on both, never cools | flow out on each | — |
+| `HeatDistribution` | `distribution`: either (`pumps_the_circuit`, default true, Q3); receives; `may_cool` from `cooling_enabled` (hisim-hds-cooling-option-m4g6) | flow out (pass-through when behind a pump owner); flow in in every role | `PositionHotWaterStorageInSystemSetup` (4 members); `pumps_its_design_flow` from the enum (from the port set's flag instead); the lag half goes with pnw7 |
+| `SimpleHeatSource` | brine circuit: either (`pumps_the_brine_circuit`, Q3); supplies | flow out | `use_external_massflow_as_signal_input_for_nominal_massflow` (a second pump owner by another name) |
 
 **Results.** No KPI moves in any stage (the port sets are metadata on existing and new channels; the pass-through
 outputs are copies; the enums are replaced by a flag that states the same fact). New result columns: one flow-out per
@@ -1065,7 +1160,12 @@ enum line in stage 3; everything else stays byte-identical. `tests/assemblies/` 
 
 **Verification per stage.** Stage 1a: #1109's tests at their declaration sites (a tag on the wrong unit or kind, a
 tag beside an energy port, two channels with one tag, each refused at the declaration; a port set grouped from its
-tags), its balance tests unchanged, its balance report closing for every twin it closes for today. Stage 1b: a test
+tags), its balance tests unchanged, its balance report closing for every twin it closes for today; a loop with no or
+two suppliers refused at build; a cooling loop (a supplier that removes heat in a step, every member `may_cool`)
+booked as `COOLING` from the room-side member to the supplier and as the heating carrier the other way in a heating
+step, the two directions summing to the loop's `m c (T_out − T_in)` at the supplier; a heating-only loop (one member
+without `may_cool`) whose supplier removes heat in a step fails the run naming the loop, the supplier and the step;
+the heat pump twins' cooling steps booked as `COOLING` with every total unchanged. Stage 1b: a test
 that wires two pumping port sets on one loop, none, a loop that does not close, a port set wired by half, a loop
 tagged by half, a `flow_out` read by an untagged input, two members stating different carriers, a flow read by two
 port sets, a temperature wire that does not follow the flow, each refused with the loop's members and the channel
@@ -1077,6 +1177,9 @@ today, with its copy-outputs gone. Stage 2: a test that wires a receiver which p
 `CircuitError` in its `i_doublecheck` with the loop id, the step and both flows (the pre-#1117 `gas_boiler_household`
 wiring rebuilt as a fixture, with the HDS pumping 0.27 kg/s and a boiler pumping 0.359 kg/s — which stage 1's build
 check already refuses, so the fixture declares the boiler as pass-through and makes it publish 0.359 kg/s anyway);
+the heating-only check moved into the supplier's `i_doublecheck`: a boiler fixture that publishes a supply colder
+than its return for one step raises `CircuitError` naming the loop, the boiler, the step and the heat removed, and a
+heat pump fixture with `may_cool` on every member of its loop passes the same step;
 every recorded twin runs the January week with zero errors; the `test_*_time_resolution` and twin tests
 bit-identical. Stage 3: every test that named an enum rewritten against the pumping flag; the 6 recorded lines gone.
 Stage 4: the energy check on every recorded twin, zero errors, after pnw7.
@@ -1100,7 +1203,7 @@ that.
 | hisim-hydronics-fxix.15 (P3) | how a component learns its topology | absorbed by §4.3 and Q3 (Q4) |
 | *to file*, child of wci7 (P2, `components`) | D9: `energy_port=` on `add_input`; `peer_input`/`peer_output` and the copy-outputs go; `SignedEnergyPort` if Q9 a | the D9 PR, after stage 1a |
 | *to file*, child of wci7 (P2, `components`) | stage 1b: the fourth wire, the pumping flag everywhere, the loop walk and its refusals, the Q3 booleans | after stage 1a |
-| *to file*, child of wci7 (P2, `components`) | stage 2: the mass check in `i_doublecheck`, `CircuitError` | after 1b |
+| *to file*, child of wci7 (P2, `components`) | stage 2: the mass check and the heating-only check (D10) in `i_doublecheck`, `CircuitError` | after 1b |
 | *to file*, child of wci7 (P2, `components`) | stage 3: the three enums and `declares_energy_ports` go | after pnw7 |
 | *to file*, child of wci7 (P3, `components`) | stage 4: the energy check | after pnw7 and stage 3 |
 | *to file*, child of hisim-energy-sankeys-9uoo (P3, `cleanup`) | Q10 a: the test that `postprocessing_flag` and `energy_port` agree on every output | its own small PR |

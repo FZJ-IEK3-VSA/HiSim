@@ -2,7 +2,7 @@
 
 Bead hisim-component-physics-4g9.39. Owner decision of 2026-10-10: a meter reads physics ports only, and nothing
 reads a meter. The meter's default connections are therefore found by port role, not by class: every output that
-declares an electricity energy port, an ``IN`` port as consumption and an ``OUT`` port as production. Until this
+declares an electricity energy port, a ``CONSUMPTION`` port as consumption and a ``PRODUCTION`` port as production. Until this
 change, a household with an energy manager billed the manager's signed balance as production, so a consumer the
 manager does not read (the heat pump's cooling and its brine pump) was never billed, and the meter's consumption was
 always zero.
@@ -196,7 +196,7 @@ def test_a_port_fed_through_the_channel_of_the_other_role_is_refused(tmp_path: P
     )
     house.simulator.wrapped_components[-1].connect_automatically = False
     house.wire()
-    with pytest.raises(ValueError, match="Battery.DischargingPower, an electricity out port"):
+    with pytest.raises(ValueError, match="Battery.DischargingPower, an electricity production port"):
         house.step({})
 
 

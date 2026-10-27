@@ -36,22 +36,22 @@ class Expected:
     #: The ports of the three electricity devices as ``component -> output -> (role, carrier)``.
     PORTS: ClassVar[Dict[str, Dict[str, Tuple[str, str]]]] = {
         "PVSystem": {
-            "ElectricityOutput": ("out", "electricity"),
-            "SolarPowerOnModulesInWatt": ("in", "solar"),
+            "ElectricityOutput": ("production", "electricity"),
+            "SolarPowerOnModulesInWatt": ("consumption", "solar"),
             "ModuleAndInverterLossInWatt": ("loss", "solar"),
         },
         "Battery": {
-            "ChargingPower": ("in", "electricity"),
-            "DischargingPower": ("out", "electricity"),
+            "ChargingPower": ("consumption", "electricity"),
+            "DischargingPower": ("production", "electricity"),
             "StoredEnergyIncreaseInWattHour": ("stored_change", "electricity"),
             "InverterLossInWatt": ("loss", "electricity"),
             "CellLossInWatt": ("loss", "electricity"),
         },
         "UTSPConnector": {
-            "ElectricalPowerConsumption": ("in", "electricity"),
-            "HeatingByResidents": ("in", "room_heat"),
-            "HeatingByDevices": ("out", "room_heat"),
-            "BodyHeatToBuildingInWatt": ("out", "room_heat"),
+            "ElectricalPowerConsumption": ("consumption", "electricity"),
+            "HeatingByResidents": ("consumption", "room_heat"),
+            "HeatingByDevices": ("production", "room_heat"),
+            "BodyHeatToBuildingInWatt": ("production", "room_heat"),
             "ApplianceElectricityNotReleasedIndoorsInWatt": ("loss", "electricity"),
         },
     }
@@ -112,7 +112,7 @@ def test_the_electricity_device_declares_its_ports_and_closes(twin: Tuple[str, P
     assert entry["verdict"] == "closes" and entry["worst_step"] is None
     assert abs(entry["residual_kwh"]) <= 1e-9
     assert port_roles(entry) == Expected.PORTS[component]
-    assert entry["in_kwh"] > 1.0
+    assert entry["consumption_kwh"] > 1.0
 
 
 @pytest.mark.extendedbase2
@@ -124,7 +124,7 @@ def test_the_flows_of_the_electricity_devices_are_physical(twin: Tuple[str, Path
     """
     _, results = twin
     pv = balance_entry(results, "PVSystem")["carriers"]
-    assert 4.0 < pv["solar"]["in_kwh"] / pv["electricity"]["out_kwh"] < 8.0
+    assert 4.0 < pv["solar"]["consumption_kwh"] / pv["electricity"]["production_kwh"] < 8.0
     battery = {port["output"]: port["total_kwh"] for port in balance_entry(results, "Battery")["ports"]}
     assert battery["InverterLossInWatt"] > 0.0 and battery["CellLossInWatt"] > 0.0
     assert battery["ChargingPower"] > battery["DischargingPower"] > 0.0

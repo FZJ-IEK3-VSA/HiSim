@@ -149,43 +149,43 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
         {
-            "EnergyDemandSh": ("in", "natural_gas"),
-            "EnergyDemandDhw": ("in", "natural_gas"),
-            "ThermalOutputEnergySh": ("out", "space_heating_heat"),
-            "ThermalOutputEnergyDhw": ("out", "domestic_hot_water_heat"),
+            "EnergyDemandSh": ("consumption", "natural_gas"),
+            "EnergyDemandDhw": ("consumption", "natural_gas"),
+            "ThermalOutputEnergySh": ("production", "space_heating_heat"),
+            "ThermalOutputEnergyDhw": ("production", "domestic_hot_water_heat"),
             "CombustionHeatLoss": ("loss", "natural_gas"),
         },
     ),
     "household_heatpump_building_sizer": (
         "MoreAdvancedHeatPumpHPLib",
         {
-            "ElectricalInputPowerSH": ("in", "electricity"),
-            "ElectricalInputPowerDHW": ("in", "electricity"),
-            "ElectricalInputPowerForCooling": ("in", "electricity"),
-            "ElectricalInputPowerBrinePump": ("in", "electricity"),
-            "ThermalPowerInputFromEnvironment": ("in", "ambient_heat"),
-            "ThermalPowerDeliveredForSpaceHeating": ("out", "space_heating_heat"),
-            "ThermalPowerDrawnForCooling": ("in", "cooling"),
-            "ThermalOutputPowerDHW": ("out", "domestic_hot_water_heat"),
+            "ElectricalInputPowerSH": ("consumption", "electricity"),
+            "ElectricalInputPowerDHW": ("consumption", "electricity"),
+            "ElectricalInputPowerForCooling": ("consumption", "electricity"),
+            "ElectricalInputPowerBrinePump": ("consumption", "electricity"),
+            "ThermalPowerInputFromEnvironment": ("consumption", "ambient_heat"),
+            "ThermalPowerDeliveredForSpaceHeating": ("production", "space_heating_heat"),
+            "ThermalPowerDrawnForCooling": ("consumption", "cooling"),
+            "ThermalOutputPowerDHW": ("production", "domestic_hot_water_heat"),
         },
     ),
     # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum.
     "household_district_heating_building_sizer": (
         "DistrictHeating",
         {
-            "ThermalOutputShEnergy": ("in", "district_heat"),
-            "ThermalOutputDhwEnergy": ("in", "district_heat"),
-            "ThermalOutputShPower": ("out", "space_heating_heat"),
-            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
+            "ThermalOutputShEnergy": ("consumption", "district_heat"),
+            "ThermalOutputDhwEnergy": ("consumption", "district_heat"),
+            "ThermalOutputShPower": ("production", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("production", "domestic_hot_water_heat"),
         },
     ),
     "household_electric_heating_building_sizer": (
         "ElectricHeating",
         {
-            "ElectricOutputShPower": ("in", "electricity"),
-            "ElectricOutputDhwPower": ("in", "electricity"),
-            "ThermalOutputShPower": ("out", "space_heating_heat"),
-            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
+            "ElectricOutputShPower": ("consumption", "electricity"),
+            "ElectricOutputDhwPower": ("consumption", "electricity"),
+            "ThermalOutputShPower": ("production", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("production", "domestic_hot_water_heat"),
         },
     ),
 }
@@ -201,7 +201,7 @@ def test_a_winter_day_runs_and_the_generator_declares_its_ports(setup: str, tmp_
     entry = balance_entry(results, generator)
     assert entry["verdict"] == "closes" and entry["worst_step"] is None
     assert port_roles(entry) == expected_ports
-    assert entry["in_kwh"] > 1.0
+    assert entry["consumption_kwh"] > 1.0
 
 
 @pytest.mark.base
@@ -235,11 +235,11 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
     entry = balance_entry(results, generator)
     assert entry["verdict"] == "closes"
     assert abs(entry["residual_kwh"]) <= 1e-9
-    assert entry["in_kwh"] > 1.0
+    assert entry["consumption_kwh"] > 1.0
     for carrier in carriers_in:
-        assert entry["carriers"][carrier]["in_kwh"] > 0.0, carrier
+        assert entry["carriers"][carrier]["consumption_kwh"] > 0.0, carrier
     for carrier in carriers_out:
-        assert entry["carriers"][carrier]["out_kwh"] > 0.0, carrier
+        assert entry["carriers"][carrier]["production_kwh"] > 0.0, carrier
     links = sankey_links(results)
     assert expected_links <= links
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
@@ -268,11 +268,11 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     entry = balance_entry(results, "SolarThermalSystem")
     assert entry["verdict"] == "closes" and abs(entry["residual_kwh"]) <= 1e-9
     carriers = entry["carriers"]
-    heat_out = carriers["domestic_hot_water_heat"]["out_kwh"]
+    heat_out = carriers["domestic_hot_water_heat"]["production_kwh"]
     assert heat_out > 0.5
-    assert carriers["solar"]["in_kwh"] == pytest.approx(heat_out + carriers["solar"]["loss_kwh"], rel=1e-9)
-    assert carriers["electricity"]["in_kwh"] > 0.0
-    assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["in_kwh"])
+    assert carriers["solar"]["consumption_kwh"] == pytest.approx(heat_out + carriers["solar"]["loss_kwh"], rel=1e-9)
+    assert carriers["electricity"]["consumption_kwh"] > 0.0
+    assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["consumption_kwh"])
     links = sankey_links(results)
     assert ("domestic_hot_water_heat", "SolarThermalSystem") in {(carrier, source) for carrier, source, _ in links}
     # the meter reads the pump's re-pointed electricity port directly, by its role (spec §5.2)
@@ -289,5 +289,5 @@ def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> 
     results = run_household(tmp_path)
     boiler = balance_entry(results, "CondensingGasBoiler")
     gas = boiler["carriers"]["natural_gas"]
-    assert 0.02 * gas["in_kwh"] < gas["loss_kwh"] < 0.13 * gas["in_kwh"]
-    assert boiler["out_kwh"] == pytest.approx(gas["in_kwh"] - gas["loss_kwh"], rel=1e-12)
+    assert 0.02 * gas["consumption_kwh"] < gas["loss_kwh"] < 0.13 * gas["consumption_kwh"]
+    assert boiler["production_kwh"] == pytest.approx(gas["consumption_kwh"] - gas["loss_kwh"], rel=1e-12)

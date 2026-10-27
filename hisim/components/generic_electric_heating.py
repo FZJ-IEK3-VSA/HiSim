@@ -284,7 +284,7 @@ class ElectricHeating(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal power output for space heating",
-            energy_port=EnergyPort(EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -300,7 +300,7 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for space heating",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -332,7 +332,7 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
             energy_port=EnergyPort(
-                EnergyRole.OUT,
+                EnergyRole.PRODUCTION,
                 EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
                 peer_output=self.WaterOutputDhwMassFlowRate,
             ),
@@ -351,7 +351,7 @@ class ElectricHeating(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for domestic hot water",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

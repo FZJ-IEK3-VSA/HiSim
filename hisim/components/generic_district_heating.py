@@ -355,7 +355,7 @@ class DistrictHeating(PhysicsComponent):
             unit=Units.WATT,
             output_description="Thermal power output for space heating",
             energy_port=EnergyPort(
-                EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputShTemperature
+                EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputShTemperature
             ),
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
@@ -364,7 +364,7 @@ class DistrictHeating(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description="Thermal energy output for space heating",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.DISTRICT_HEAT),
         )
 
         # Outputs DHW
@@ -389,7 +389,7 @@ class DistrictHeating(PhysicsComponent):
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
             energy_port=EnergyPort(
-                EnergyRole.OUT,
+                EnergyRole.PRODUCTION,
                 EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
                 peer_output=self.WaterOutputDhwMassFlowRate,
             ),
@@ -411,7 +411,7 @@ class DistrictHeating(PhysicsComponent):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT_HOUR,
             output_description="Thermal energy output for domestic hot water.",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.DISTRICT_HEAT),
         )
         self.add_default_connections(self.get_default_connections_from_district_heating_controller())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())

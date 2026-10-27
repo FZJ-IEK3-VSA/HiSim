@@ -2386,8 +2386,9 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     ) -> "HplibResult":
         """Return hplib's result at one operating point, computed by hplib with the stated SCOP's calibration applied.
 
-        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result is the calibrated
-        machine's.
+        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result's powers and COP
+        are the calibrated machine's. Whether hplib runs its heating rod alone is read before the calibration, from
+        hplib's own COP, so the heating-rod switch stays where hplib puts it (hisim-g0dp).
 
         Args:
             source_on_grid_in_celsius: The source temperature, in °C, on hplib's 0.1 K grid.
@@ -2406,7 +2407,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             mode=mode,
             p_th_min=minimal_thermal_power_in_watt,
         )
-        return HplibResult.from_hplib(self.scop_calibration.apply(self.heatpump, results, mode))
+        return HplibResult.from_hplib(
+            self.scop_calibration.apply(self.heatpump, results, mode),
+            heating_rod_alone=HplibResult.runs_the_heating_rod_alone(results, mode),
+        )
 
     def get_component_kpi_entries(
         self,

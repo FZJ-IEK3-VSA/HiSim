@@ -56,10 +56,9 @@ class DeclaredPortRenamings:
     #: the output and the participant and no index at all, which is why one declarative name
     #: answers several legacy ones.
     AGGREGATOR_INPUTS: ClassVar[Mapping[str, Mapping[str, str]]] = {
-        # The house electricity meter. What feeds it differs from setup to setup — in the
-        # EMS-controlled sizers it sees only the controller's residual, in the plain households it
-        # sees every producer and consumer directly — which is why the same participant appears
-        # here under more than one index.
+        # The house electricity meter. It reads every electricity port of the system directly, by
+        # the port's role (#1108); the order the participants are inserted in differs from setup to
+        # setup, which is why the same participant appears here under more than one index.
         "ElectricityMeter": {
             # PV production, inserted first in basic_household and default_connections.
             "Input_PVSystem_ElectricityOutput_0": "ElectricityOutputFromPVSystem",
@@ -89,11 +88,41 @@ class DeclaredPortRenamings:
             "Input_AirConditioner_ElectricalPowerConsumption_2": (
                 "ElectricalPowerConsumptionFromAirConditioner"
             ),
-            # In every EMS-controlled sizer the meter has exactly one participant — the
-            # controller's residual — so the index is always zero.
-            "Input_L2EMSElectricityController_TotalElectricityToOrFromGrid_0": (
-                "TotalElectricityToOrFromGridFromL2EMSElectricityController"
+            # The EMS-controlled sizers (#1108): the meter reads the devices the energy manager
+            # also reads, each by its port, in the order the setup adds them. Derived by building
+            # all twelve EMS setups through both paths and pairing their meter wires; the occupancy
+            # (index 0) and PV (index 1) entries above serve them as well.
+            "Input_ElectricHeating_ElectricOutputShPower_2": "ElectricOutputShPowerFromElectricHeating",
+            "Input_ElectricHeating_ElectricOutputDhwPower_3": "ElectricOutputDhwPowerFromElectricHeating",
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerForCooling_3": (
+                "ElectricalInputPowerForCoolingFromMoreAdvancedHeatPumpHPLib"
             ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerBrinePump_4": (
+                "ElectricalInputPowerBrinePumpFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5": (
+                "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_SolarThermalSystem_ElectricityConsumptionOutput_2": (
+                "ElectricityConsumptionOutputFromSolarThermalSystem"
+            ),
+            "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
+                "ElectricityConsumptionOutputFromSolarThermalSystem"
+            ),
+            "Input_L1EVChargeControl_1_BatteryChargingPowerToEMS_6": (
+                "BatteryChargingPowerToEMSFromL1EVChargeControl_1"
+            ),
+            # The battery, the last participant, so its index counts the devices before it.
+            "Input_Battery_ChargingPower_2": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_3": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_4": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_6": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_7": "ChargingPowerFromBattery",
+            "Input_Battery_DischargingPower_3": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_4": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_5": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_7": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_8": "DischargingPowerFromBattery",
         },
         # The energy-management controller, which is an aggregator on its consumption and
         # production side as well as a dispatcher on its target side. The battery is always the

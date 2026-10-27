@@ -58,7 +58,10 @@ component whose class inherits none or more than one.
    priority between devices is therefore either static configuration of the L1 controllers (for example
    different set points) or a signal of an L2 controller, never physics.
 4. **Every quantity has one owner.** The set point belongs to its controller; everyone else reads it from the
-   controller's output instead of keeping a copy. At a port, sender and receiver book the same energy.
+   controller's output instead of keeping a copy. At a port, sender and receiver book the same energy. A water loop
+   is a fluid loop that each member tags on its own channels (`fluid_loop=` on `add_input`/`add_output`, stating
+   which member supplies it and which pumps it); the members pass the flow on, and the loop's heat is derived once
+   from the flow and the two temperatures both members see (`roadmap/hydraulic_circuits_spec.md`).
 5. **Components are safe to iterate.** `i_simulate` is a function of the inputs and the saved state; the state
    advances only in `i_save_state`. A converged step does not depend on the order the components are evaluated in.
 6. **The step length is the component's own business.** A component behaves the same at every step length. A

@@ -10,7 +10,7 @@ takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives
 and what it loses; the Sankey links its fuel and electricity to the meter that reads them, which the carrier's supply
 node or the grid feeds (owner decision Q-J; never to a controller, which is exempt), and the generator to its
 storages, its loss nodes and the environment. The heat a generator gives to a storage or a distribution system is
-the heat of its water circuit, which both ends declare as a ``HydronicPort`` (hydronic stage E,
+the heat of its water circuit, a fluid loop both members tag on their channels (hydronic stage E,
 hisim-hydronics-fxix.6): the buffer and the hot-water tank are declared nodes, and the distribution system without a
 buffer (district heating) is undeclared until hisim-pnw7.
 """

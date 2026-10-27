@@ -2,9 +2,9 @@
 
 Beads hisim-hydronics-fxix.6 and hisim-energy-sankeys-9uoo.3.
 
-Complete Sankey spec, §5.1 (``roadmap/complete_energy_sankeys_spec.md``). Every water circuit is declared at both of
-its ends as a ``HydronicPort``, and the balance derives its heat once from the mass flow and the two temperatures both
-ends read, ``m c (T_sup - T_ret) dt``: the generator's circuit into the buffer and into the hot-water tank, the
+Complete Sankey spec, §5.1 (``roadmap/complete_energy_sankeys_spec.md``). Every water circuit is a fluid loop that
+both of its members tag on their channels, and the balance derives its heat once from the mass flow and the two
+temperatures both members read, ``m c (T_sup - T_ret) dt``: the generator's circuit into the buffer and into the hot-water tank, the
 buffer's circuit to the heat distribution system. The buffer (``SimpleHotWaterStorage``) takes its generators'
 circuits in, gives the distribution circuit out, loses its standby heat outdoors (owner decision Q-F) and stores the
 change of its heat; the tank (``SimpleDHWStorage``) takes its charging circuits in, gives the hot water drawn at the

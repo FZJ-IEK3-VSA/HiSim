@@ -145,7 +145,7 @@ beside `EnergyPort` (the module keeps its name: it holds what a channel is in it
 class LoopFluid(str, Enum):
     """What a fluid loop carries, with the specific heat every heat of the loop is computed with (D12)."""
     WATER = "water"   # c = 4,180 J/(kg K): hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K, the one number every hydronic member uses today
-    BRINE = "brine"   # c = 3,857 J/(kg K): 30 % propylene glycol by mass, pygfunction Fluid("PropyleneGlycol", 30).cp
+    BRINE = "brine"   # c = 3,976.8 J/(kg K): 20 % propylene glycol by mass at 20 °C, pygfunction Fluid("PropyleneGlycol", 20, T=20).cp
     AIR = "air"       # c = 1,006 J/(kg K): dry air at 20 °C and 1 bar (VDI Heat Atlas); no component declares an air loop yet
 
     @property
@@ -204,9 +204,9 @@ gains a keyword-only `specific_heat_in_joule_per_kg_kelvin`, which the balance (
 pass from the loop. `hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K` stays the one source of water's number; `LoopFluid.WATER`
 reads it. Every component of today's recorded systems declares `WATER`. `SimpleHeatSource` (the brine side of a heat
 pump) declares `BRINE`; it computes with pygfunction's `cp` of its configured mixture (`FluidMediaType`,
-`mass_fraction_of_fluid_mixed_in_water`, `simple_heat_source.py:388-389`: 3,977 J/(kg K) at its default 20 %
-propylene glycol, 3,857 at 30 %), so its book agrees with the loop's `c` only at the reference mixture. That is of no
-consequence yet: the source is in no recorded system, no component reads its flow, and its brine port set is idle in
+`mass_fraction_of_fluid_mixed_in_water`, `simple_heat_source.py:388-389`); `LoopFluid.BRINE` is its default mixture,
+20 % propylene glycol (3,976.8 J/(kg K); stage 1a, `hydronics.Brine`), so its book agrees with the loop's `c` at its
+default and differs only for another configured mixture. That is of no consequence yet: the source is in no recorded system, no component reads its flow, and its brine port set is idle in
 every shipped system (idle is allowed, §3.3). The first component that closes a brine loop decides whether the
 members compute with `LoopFluid.BRINE` or the fluid gains a mixture parameter; it is noted here, not decided. Air
 loops come with ventilation, which needs carriers of its own; out of scope.
@@ -390,6 +390,12 @@ bookings; that is the one place in the balance where a column is split by sign (
 as two non-negative outputs, §3.7). So the heat pump–buffer loop books a cooling step as `COOLING` from the HDS to
 the buffer and from the buffer to the heat pump, and the HDS's `HeatDrawnForCoolingInWatt` books the same step from
 the building to the HDS.
+
+**Noise below the tolerance books nothing.** Stage 1a found one step of convergence noise on a hot-water loop in a
+July week of the heat-pump twin: the supply 3.9e-8 K below the tank's step mean, −4.4e-5 W, booked as 1.1e-8 kWh of
+`COOLING`. The split by sign uses the energy check's tolerance, `max(1 W, 0.1 %)` (D17): a supplier heat within it is
+booked as the loop's carrier, never as a cooling step, and the heating-only check (stage 2) applies the same bound.
+Built with stage 2.
 
 **A loop that may cool says so.** A loop whose every member's `FluidLoop` says `may_cool=True` may run either way. On
 any other loop a step in which the supplier removed heat fails the run, from stage 2 on (D24):

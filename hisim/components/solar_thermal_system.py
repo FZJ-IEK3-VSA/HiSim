@@ -29,7 +29,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim import hydronics, loadtypes
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.subcomponents.base import Subcomponent
 from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
@@ -562,12 +562,24 @@ class SolarThermalSystem(PhysicsComponent):
             True,
         )
 
+        # The collector's loop to the hot-water tank (complete Sankey spec §5.1): the collector's heat is what it
+        # carries. The solar pump moves it, the collector supplies it, and it never cools the tank. Its liquid is
+        # booked as water, as the collector's own circuit heat is (hisim.hydronics.circuit_power_w).
+        self.solar_loop = FluidLoop(
+            "solar_dhw",
+            carrier=loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureCollectorInletDegC,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
             True,
+            fluid_loop=self.solar_loop.temperature_in,
         )
         self.inlet_temperature_at_start_of_step_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -599,11 +611,6 @@ class SolarThermalSystem(PhysicsComponent):
             unit=loadtypes.Units.WATT,
             postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING],
             output_description="Thermal power output [W]",
-            energy_port=EnergyPort(
-                loadtypes.EnergyRole.PRODUCTION,
-                loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterMassFlowOutput,
-            ),
         )
 
         self.thermal_energy_wh_output_channel: ComponentOutput = self.add_output(
@@ -621,6 +628,7 @@ class SolarThermalSystem(PhysicsComponent):
             load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
+            fluid_loop=self.solar_loop.flow_out,
         )
         self.sensor_temperature_at_start_of_step_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -644,6 +652,7 @@ class SolarThermalSystem(PhysicsComponent):
                 "Supply temperature [°C] of the collector's circuit: the storage's step mean plus the lift the "
                 "collector heat gives at the pump's flow while the pump runs with heat, the return otherwise."
             ),
+            fluid_loop=self.solar_loop.temperature_out,
         )
         self.electricity_consumption_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -879,8 +888,10 @@ class SolarThermalSystem(PhysicsComponent):
     ) -> List[ComponentConnection]:
         """Return the connections from the hot-water storage: the collector inlet's temperatures.
 
-        The collector's inlet is the storage's return leg. Its step mean is the temperature the collector runs at;
-        its start-of-step temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
+        The collector's inlet is the storage's return leg of its secondary coil, the lower solar coil of a bivalent
+        cylinder, which the storage's own defaults wire the collector into (owner decision of 2026-10-21,
+        hisim-dhw-tank-one-return-7kq2). Its step mean is the temperature the collector runs at; its start-of-step
+        temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
 
         Returns:
             The connection list.
@@ -892,7 +903,7 @@ class SolarThermalSystem(PhysicsComponent):
             ComponentConnection(
                 SolarThermalSystem.TemperatureCollectorInletDegC,
                 storage_classname,
-                SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+                SimpleDHWStorage.StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius,
             )
         )
         connections.append(

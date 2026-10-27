@@ -559,10 +559,10 @@ site plus seven (the connection feeding the heat distribution directly, without 
 distribution's `NO_STORAGE_MASS_FLOW_FIX` position is a site line), and
 `household_electric_heating_building_sizer.composed.energy_system.yaml` a site without heat distribution plus six (the
 direct electric heater, which the `Building` reads through a need of its own, in place of the heat pump). The two
-solar thermal twins have no composed file yet: their cylinder takes the collector on its primary coil and the
-generator on its secondary coil, which a circuit end cannot lower to; the composed files, their gates and the reorder
-of the heat-pump solar setup wait for hydronic stage C, whose ports on the cylinder's two coils derive the wires
-(§13 step 5). The table
+solar thermal twins have no composed file yet. Since 2026-10-21 (owner decision on hisim-dhw-tank-one-return-7kq2)
+their cylinder takes the generator on its primary coil and the collector on its secondary, solar coil, both through
+the cylinder's default connections, which removes the explicit wires a circuit end could not lower to; the composed
+files, their gates and the reorder of the heat-pump solar setup are still to be built (§13 step 5). The table
 `hisim/energy_system/assemblies/twins.py` names every composed file, its twin and the rename of its members to the
 twin's names. `tests/assemblies/test_twin_gates.py`, on `tests/assemblies/twin_gate.py`, runs one gate per row: it
 expands the composed file, renames its members and asserts the twin outside the listed intended differences: G7 (the

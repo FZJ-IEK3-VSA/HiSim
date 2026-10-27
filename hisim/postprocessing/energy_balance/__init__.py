@@ -10,10 +10,12 @@ metered port passes a meter; ``sankey`` draws the yearly flows as one connected 
 check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE``
 only writes the files.
 
-Coverage: today the heat generators declare their ports and the meters their published exchanges. The water storages
-and the heat distribution system declare ``HydronicPort`` circuits in PR 3 of the spec's §9 (hisim-hydronics-fxix.6),
-the electricity devices, the building and the rest in the other PRs of §9; until then they are drawn as undeclared
-nodes.
+Coverage: the heat generators, the electricity devices and the occupancy declare their ports, the meters their
+published exchanges; the water storages and the heat distribution system behind a buffer tag their water circuits
+as fluid loops (:class:`~hisim.energy_port.FluidLoop`) on their channels, as the generators at the other end do (PR
+3 of the spec's §9, hydronic stage E, hisim-hydronics-fxix.6). The building and the rest follow in the other PRs of §9, the distribution system without a
+buffer with hisim-pnw7; until then they are drawn as undeclared nodes. :meth:`ports.Wiring.refuse_a_broken_wiring`
+refuses a wiring that breaks a rule of the ports before the run simulates.
 """
 
 from hisim.postprocessing.energy_balance.check import (
@@ -25,13 +27,24 @@ from hisim.postprocessing.energy_balance.check import (
 )
 from hisim.postprocessing.energy_balance.export import EnergyBalanceReport
 from hisim.postprocessing.energy_balance.meters import MeterBalance, MeterCheck
-from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Exemptions, Peer, PeerKind, PortSeries
+from hisim.postprocessing.energy_balance.ports import (
+    CircuitColumns,
+    DeclaredPorts,
+    EnergyPortWiringError,
+    Exemptions,
+    Peer,
+    PeerKind,
+    PortSeries,
+    Wiring,
+)
 
 __all__ = [
     "BalanceCheck",
+    "CircuitColumns",
     "ComponentBalance",
     "DeclaredPorts",
     "EnergyBalanceError",
+    "EnergyPortWiringError",
     "EnergyBalanceReport",
     "Exemptions",
     "LinkBalance",
@@ -41,4 +54,5 @@ __all__ = [
     "PeerKind",
     "PortSeries",
     "Tolerance",
+    "Wiring",
 ]

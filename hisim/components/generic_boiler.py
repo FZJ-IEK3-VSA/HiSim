@@ -51,7 +51,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.subcomponents.base import Subcomponent
 from hisim.subcomponents.pumps import ControllerLiftPump, PumpOperatingPoint
 from hisim.components.dual_circuit_system import (
@@ -1535,6 +1535,25 @@ class GenericBoiler(PhysicsComponent):
         )
 
         fuel_carrier = EnergyPort.carrier_of_fuel(self.config.energy_carrier)
+        # The boiler's two water loops (complete Sankey spec §5.1): the heat it gives is what they carry. It supplies
+        # both and cools neither. It always pumps its hot-water loop; whether it pumps its space-heating loop or heats
+        # the distribution system's flow depends on the system (#1117) and is stated in stage 1b of the hydraulic
+        # circuits spec.
+        self.space_heating_loop = FluidLoop(
+            "space_heating",
+            carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+        )
+        self.hot_water_loop = FluidLoop(
+            "dhw",
+            carrier=lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
         # Space heating
         self.water_input_temperature_sh_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -1542,6 +1561,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
+            fluid_loop=self.space_heating_loop.temperature_in,
         )
         self.water_input_mass_flow_sh_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -1559,6 +1579,7 @@ class GenericBoiler(PhysicsComponent):
                 "The space-heating circuit's mass flow, kg/s: the flow the boiler's pump runs while it fires and 0 "
                 "while it idles, or, with WaterInputMassFlowSh wired, the flow it reads there, in every step."
             ),
+            fluid_loop=self.space_heating_loop.flow_out,
         )
         self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1566,6 +1587,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterOutputTemperatureSh} will follow.",
+            fluid_loop=self.space_heating_loop.temperature_out,
         )
         self.energy_demand_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1591,9 +1613,6 @@ class GenericBoiler(PhysicsComponent):
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalOutputEnergySh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputMassFlowSh
-            ),
         )
 
         # DHW
@@ -1603,6 +1622,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
+            fluid_loop=self.hot_water_loop.temperature_in,
         )
         self.water_output_mass_flow_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1610,6 +1630,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             output_description="Mass flow rate of warm water.",
+            fluid_loop=self.hot_water_loop.flow_out,
         )
         self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1617,6 +1638,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description="Warm water output temperature",
+            fluid_loop=self.hot_water_loop.temperature_out,
         )
         self.energy_demand_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1642,11 +1664,6 @@ class GenericBoiler(PhysicsComponent):
             unit=lt.Units.WATT_HOUR,
             output_description="Thermal energy output",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION,
-                lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterOutputMassFlowDhw,
-            ),
         )
         self.combustion_heat_loss_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

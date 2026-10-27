@@ -14,8 +14,9 @@ controller (#941).
   quantity that crosses a port is computed once, from the port quantities both ends see, by one function. A water
   circuit carries a mass flow `m` (kg/s), a supply temperature and a return temperature (°C); its heat flow is
   `P = m c (T_sup - T_ret)` in W (`hisim.hydronics.circuit_power_w`), and its heat over a step of `dt` seconds is
-  `Q = m c (T_sup - T_ret) dt`, that heat flow times the step (`hisim.energy_port.HydronicPort.heat_in_kilowatt_hour`,
-  in kWh), with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`.
+  `Q = m c (T_sup - T_ret) dt`, that heat flow times the step
+  (`hisim.postprocessing.energy_balance.ports.CircuitColumns.heat_in_kilowatt_hours_per_step`, in kWh), with
+  `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K` (a loop's `c` is its fluid's, `hisim.energy_port.LoopFluid`).
   Neither end books a heat of its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two
   differed by up to 1.5 % per step. Now the heat pump books `m c (T_out - T_in)` of its own outputs, and
@@ -48,15 +49,17 @@ controller (#941).
   step, so power times step length is the step's energy (`hisim/energy_port.py` converts it so). A value at the
   start or end of the step is a sensor or a state, and its name says so (`WaterTemperatureAtEndOfStepInCelsius`).
 - **Every component that moves energy declares its ports and closes its balance.** Each energy-carrying output
-  declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier, peer); a water circuit a
-  `HydronicPort`. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
+  declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier, peer); a water circuit is a
+  `FluidLoop` that both of its members tag on their own channels (`fluid_loop=` on `add_input` and `add_output`),
+  from which the check derives the circuit's heat once for both members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's
   above `max(1e-6 kWh, 0.1 %)` of the step's throughput, a transfer booked by only one of two declared components,
   or a port that is not finite (owner decision 6 of epic hisim-energy-sankeys-9uoo). A new or changed energy-moving component
   declares its ports and gets a test that runs it and reads the balance report, as
-  `tests/test_energy_balance_generators.py` does for the generators. Today the generators declare ports (boiler,
-  heat pump, district heating, electric heating, solar thermal); the storages and the distribution system are
-  still undeclared, and the check reads `HydronicPort` from hydronic stage E on (hisim-hydronics-fxix.6).
+  `tests/test_energy_balance_generators.py` does for the generators. Today the generators, the electricity devices,
+  the occupancy, the water storages and the distribution system behind a buffer declare ports
+  (`tests/test_energy_balance_storages.py`, hydronic stage E); the building, the distribution system without a buffer
+  (hisim-pnw7) and the rest follow with the complete Sankey spec's §9.
 - **An exact step is preferred to a fine one.** Where a law has a closed-form solution over a step with constant
   inputs, use it: `MixedNode.step` solves `C dT/dt = Σ m_i c (T_i - T) - UA (T - T_amb)` exactly, so its heat
   balance closes to float precision at any step length, without sub-stepping.
@@ -70,11 +73,11 @@ Today HiSim mixes conventions:
 | Quantity | Convention today | Where |
 |---|---|---|
 | Mass flow of a water circuit | always `>= 0`; the direction is the circuit's topology | `hisim/hydronics.py` |
-| Heat of a water circuit | positive when the supply owner heats the receiver; negative for a cooling circuit (`T_sup < T_ret`) | `hydronics.circuit_power_w`, `HydronicPort` |
+| Heat of a water circuit | positive when the supply owner heats the receiver; negative for a cooling circuit (`T_sup < T_ret`), which the balance books as `COOLING` toward the supplier | `hydronics.circuit_power_w`, `energy_balance.ports.DeclaredPorts.book_by_the_supplier_s_sign` |
 | Energy-port values | read with the sign of their role: positive `CONSUMPTION` enters, positive `PRODUCTION` and `LOSS` leave, positive `STORED_CHANGE` is stored; `EnergyPort.negated` turns round an output published the other way | `hisim/loadtypes.py` (`EnergyRole`), `hisim/energy_port.py` |
 | Hot water drawn at the tap | positive (`ThermalPowerConsumptionDHW`, stated in its description since #909) | `hisim/components/simple_water_storage.py` |
 | Grid balance of the energy manager | signed net, positive for a surplus to the grid, in an output whose description states no sign (`TotalElectricityToOrFromGrid`) | `hisim/components/controller_l2_energy_management_system.py` |
-| Grid exchange of the electricity meter | import and export both `>= 0` (`ElectricityFromGrid*`, `ElectricityToGrid*`), consumption and production both `>= 0`: the sums of the electricity `IN` and `OUT` ports it reads, stated in the descriptions since hisim-component-physics-4g9.39 | `hisim/components/electricity_meter.py` |
+| Grid exchange of the electricity meter | import and export both `>= 0` (`ElectricityFromGrid*`, `ElectricityToGrid*`), consumption and production both `>= 0`: the sums of the electricity `CONSUMPTION` and `PRODUCTION` ports it reads, stated in the descriptions since hisim-component-physics-4g9.39 | `hisim/components/electricity_meter.py` |
 | Battery power | signed (`AcBatteryPowerUsed`), the description states no sign | `hisim/components/advanced_battery_bslib.py` |
 | Building heat demand | signed, positive for heating and negative for cooling (`TheoreticalThermalBuildingDemand`), the description states no sign | `hisim/components/building/building.py` |
 

@@ -5,13 +5,11 @@ import io
 import json
 import os
 import contextlib
-from ast import literal_eval
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, ClassVar, Dict, List, NamedTuple, Optional, Tuple, Union, Set
 import copy
 import enum
-import portalocker
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -41,7 +39,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.components import lpg_local_time
-from hisim.caching import Fingerprints, ImportClosure, atomic_cache_write
+from hisim.caching import CacheEntry
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
@@ -339,6 +337,87 @@ class UtspLpgConnectorConfig(ConfigBase):
         )
 
 
+@dataclass(frozen=True)
+class LpgResultFiles:
+    """The result files of one household that the occupancy reads, as the profile source hands them over.
+
+    The UTSP hands over each file's content, a local LoadProfileGenerator and the shipped profile hand over each
+    file's path; the acquisition mode says which. A file the source did not produce is an empty string: the shipped
+    profile has no flexibility and no car files, and a household without a car has no car files either.
+    """
+
+    #: The electricity sum profile, ``SumProfiles.HH1.Electricity.csv`` (or its ``NoFlex`` variant).
+    electricity: str
+    #: The warm-water sum profile, ``SumProfiles.HH1.Warm Water.csv``.
+    warm_water: str
+    #: The sum profile of the devices' heat gains, ``SumProfiles.HH1.Inner Device Heat Gains.csv``.
+    inner_device_heat_gains: str
+    #: The persons at a high activity level per minute, ``BodilyActivityLevel.High.HH1.json``.
+    high_activity: str
+    #: The persons at a low activity level per minute, ``BodilyActivityLevel.Low.HH1.json``.
+    low_activity: str
+    #: The flexibility events, or an empty string.
+    flexibility: str = ""
+    #: The car's state per minute, or an empty string.
+    car_states: str = ""
+    #: The car's location per minute, or an empty string.
+    car_locations: str = ""
+    #: The car's driven distance per minute, or an empty string.
+    driving_distances: str = ""
+
+
+@dataclass(frozen=True)
+class LpgMinuteProfile:
+    """One household's profile as the LoadProfileGenerator wrote it: one value per wall-clock minute it simulated.
+
+    This is what the occupancy caches for a household it had the LoadProfileGenerator compute: every series it reads
+    from the result files, before anything of the run is applied to it. Putting the minutes onto the run's
+    standard-time clock, cutting out the run's window and averaging them to the run's timestep happen when the
+    profile is read (:meth:`UtspLpgConnector.series_of_the_run`), so one entry serves every window and every
+    timestep of the year it was computed for. For example, the local generator's profile of CHR01 for any run in
+    2021 has 527 040 minutes, from 1 January 2021 00:00 to 1 January 2022 23:59 on the wall clock.
+
+    The series hold the values exactly as read, as plain lists, so that a JSON round trip gives the same values
+    bit for bit (Python writes every float in its shortest exact form).
+    """
+
+    #: The wall-clock minute the profile starts at, ``StartTime`` of its activity files, ISO 8601 without a time zone.
+    start_time: str
+    #: The number of residents at a high activity level (awake) in each minute.
+    persons_at_high_activity: List[float]
+    #: The number of residents at a low activity level (asleep) in each minute.
+    persons_at_low_activity: List[float]
+    #: The household's electricity consumption in each minute, in kWh.
+    electricity_per_minute_in_kwh: List[float]
+    #: The household's warm-water draw in each minute, in l.
+    warm_water_per_minute_in_liter: List[float]
+    #: The heat the devices release into the building in each minute, in kWh.
+    inner_device_heat_gains_per_minute_in_kwh: List[float]
+    #: The flexibility events, the list the generator's JSON file holds; an empty dictionary if it wrote none.
+    flexibility: Union[Dict[str, Any], List[Any]]
+    #: The car's state per minute, the object the generator's JSON file holds; empty without a car.
+    car_states: Union[Dict[str, Any], List[Any]]
+    #: The car's location per minute, the object the generator's JSON file holds; empty without a car.
+    car_locations: Union[Dict[str, Any], List[Any]]
+    #: The car's driven distance per minute, the object the generator's JSON file holds; empty without a car.
+    driving_distances: Union[Dict[str, Any], List[Any]]
+
+
+class OccupancySeries(NamedTuple):
+    """The five series an occupancy publishes, one value per timestep of the run."""
+
+    #: The electrical power the household draws, in W.
+    electricity_consumption: List[float]
+    #: The heat the devices release into the building, in W.
+    heating_by_devices: List[float]
+    #: The warm water drawn in each timestep, in l.
+    water_consumption: List[float]
+    #: The residents' body heat, in W.
+    heating_by_residents: List[float]
+    #: The number of residents at home.
+    number_of_residents: List[float]
+
+
 class UtspLpgConnector(cp.DataSourceComponent):
     """Component that provides data from the LoadProfileGenerator.
 
@@ -377,6 +456,21 @@ class UtspLpgConnector(cp.DataSourceComponent):
     #: How a request names its first and last day to the LoadProfileGenerator: ISO 8601, which it reads
     #: unambiguously. A day-first ``01-07-2021`` is read month-first, as 7 January.
     LPG_DATE_FORMAT: ClassVar[str] = "%Y-%m-%d"
+
+    #: The resolution a request asks the LoadProfileGenerator to write its result files in, ``h:mm:ss``: one
+    #: minute, its own resolution, at which it writes no files beside the one-minute files the occupancy reads.
+    #: The occupancy averages the minutes to the run's timestep itself (:meth:`series_of_the_run`). The request
+    #: used to ask for the run's timestep, so a 900 s run had the generator write ``SumProfiles_900s.*`` files
+    #: that nothing read, and a request that differed from that of a 60 s run.
+    LPG_EXTERNAL_TIME_RESOLUTION: ClassVar[str] = "0:01:00"
+
+    #: What an occupancy cache entry holds: the minute profiles of one request (:class:`LpgMinuteProfile`), as a
+    #: JSON list. Part of the entry's key (:meth:`minute_profile_key_material`), so that entries of another layout,
+    #: such as the windowed and averaged series cached before, are never read as one.
+    MINUTE_PROFILE_CACHE_CONTENT: ClassVar[str] = "lpg_minute_profiles"
+
+    #: The heat one resident gives off, in W: at a high activity level (awake) and at a low one (asleep).
+    BODY_HEAT_PER_PERSON_IN_WATT: ClassVar[Tuple[float, float]] = (150, 100)
 
     @classmethod
     def electricity_consumption_of(
@@ -657,191 +751,99 @@ class UtspLpgConnector(cp.DataSourceComponent):
             demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
             self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
 
-    def get_resolution(self) -> str:
-        """Gets the temporal resolution of the simulation as a string in the format hh:mm:ss.
+    def get_profiles_from_utsp(
+        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str, utsp_url: str, utsp_api_key: str
+    ) -> List[LpgResultFiles]:
+        """Request the households' profiles from a UTSP server and return the contents of their result files.
 
-        :return: resolution of the simulation
-        :rtype: str
+        The UTSP is asked for the same days as a local LoadProfileGenerator, the run's whole calendar year
+        (:meth:`lpg_request_days`). A list of households is requested in parallel.
+
+        Args:
+            lpg_households: one household reference, or a list of them.
+            guid: the unique identifier of the calculation request.
+            utsp_url: the address of the UTSP server.
+            utsp_api_key: the key the UTSP server accepts.
+
+        Returns:
+            List[LpgResultFiles]: one entry per household, in the order requested, holding each file's content.
+
+        Raises:
+            TypeError: if ``lpg_households`` is neither a reference nor a list of them.
         """
-        seconds = self.my_simulation_parameters.seconds_per_timestep
-        resolution = datetime.timedelta(seconds=seconds)
-        return str(resolution)
-
-    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-        Union[str, List[str]],
-    ]:
-        """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
-
-        :param lpg_households: a single household reference to request a profile for,
-            or a list of household references to request profiles for in parallel
-        :param guid: unique identifier for the calculation request
-
-        :return: a tuple of nine raw, unparsed result file contents (one entry per
-            requested LPG result file). Each entry is the decoded file content as a
-            string when a single household is requested, or a list of per-household
-            file contents when multiple households are requested in parallel. The
-            nine entries, in order, are:
-
-            - electricity consumption
-            - warm water consumption
-            - inner device heat gains
-            - high bodily activity
-            - low bodily activity
-            - flexibility events (an empty string when the file is unavailable)
-            - car states
-            - car locations
-            - driving distances
-        """
-        # The UTSP is asked for the same days as a local LoadProfileGenerator: the run's whole calendar year.
         start_date, end_date = self.lpg_request_days(self.my_simulation_parameters)
 
-        # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
                 start_date=start_date,
                 end_date=end_date,
                 household=lpg_households,
             )
+            return [
+                LpgResultFiles(
+                    *self.calculate_one_utsp_request(
+                        simulation_config=simulation_config, guid=guid, url=utsp_url, api_key=utsp_api_key
+                    )
+                )
+            ]
 
-            (
-                electricity_file,
-                warm_water_file,
-                inner_device_heat_gains_file,
-                high_activity_file,
-                low_activity_file,
-                flexibility_file,
-                car_states_file,
-                car_locations_file,
-                driving_distances_file,
-            ) = self.calculate_one_utsp_request(
-                simulation_config=simulation_config,
-                guid=guid,
-            )
-
-        elif isinstance(lpg_households, List):
-            simulation_configs = []
-            for household in lpg_households:
-                simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
+        if isinstance(lpg_households, List):
+            simulation_configs = [
+                self.prepare_lpg_simulation_config_for_utsp_request(
                     start_date=start_date, end_date=end_date, household=household
                 )
-                simulation_configs.append(simulation_config)
-
-            (
-                electricity_file,
-                warm_water_file,
-                inner_device_heat_gains_file,
-                high_activity_file,
-                low_activity_file,
-                flexibility_file,
-                car_states_file,
-                car_locations_file,
-                driving_distances_file,
-            ) = self.calculate_multiple_utsp_requests(  # type: ignore
-                url=self.utsp_url,
-                api_key=self.utsp_api_key,
+                for household in lpg_households
+            ]
+            files_per_kind = self.calculate_multiple_utsp_requests(
+                url=utsp_url,
+                api_key=utsp_api_key,
                 lpg_configs=simulation_configs,
                 guid=guid,
             )
+            return [LpgResultFiles(*files_of_one_household) for files_of_one_household in zip(*files_per_kind)]
 
-        else:
-            raise TypeError(
-                f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
-            )
-
-        return (
-            electricity_file,
-            warm_water_file,
-            inner_device_heat_gains_file,
-            high_activity_file,
-            low_activity_file,
-            flexibility_file,
-            car_states_file,
-            car_locations_file,
-            driving_distances_file,
+        raise TypeError(
+            f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
         )
 
-    def get_profiles_from_local_lpg(
-        self,
-        lpg_households: Union[JsonReference, List[JsonReference]]
-    ) -> Tuple[
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-    ]:
-        """Requests the required load profiles from local lpg. Returns raw, unparsed result file contents.
+    def get_profiles_from_local_lpg(self, lpg_households: Union[JsonReference, List[JsonReference]]) -> List[LpgResultFiles]:
+        """Compute the households' profiles with the local LoadProfileGenerator and return the paths of their result files.
 
-        :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
-                 and a list of filenames of all additionally saved files
+        The files lie in the generator's working directories, which :meth:`build` deletes once the profiles are
+        read, so the paths are valid only until then.
+
+        Args:
+            lpg_households: one household reference, or a list of them, computed one after another.
+
+        Returns:
+            List[LpgResultFiles]: one entry per household, in the order requested, holding each file's path.
+
+        Raises:
+            TypeError: if ``lpg_households`` is neither a reference nor a list of them.
         """
         if isinstance(lpg_households, JsonReference):
-            (
-                result_folder,
-                electricity_file,
-                warm_water_file,
-                inner_device_heat_gains_file,
-                high_activity_file,
-                low_activity_file,
-                flexibility_file,
-                car_states_file,
-                car_locations_file,
-                driving_distances_file,
-            ) = self.calculate_one_lpg_request(
-                household=lpg_households,
-            )
+            # The first element is the result folder, which nothing reads.
+            return [LpgResultFiles(*self.calculate_one_lpg_request(household=lpg_households)[1:])]
 
-        elif isinstance(lpg_households, List):
-            (
-                result_folder,
-                electricity_file,
-                warm_water_file,
-                inner_device_heat_gains_file,
-                high_activity_file,
-                low_activity_file,
-                flexibility_file,
-                car_states_file,
-                car_locations_file,
-                driving_distances_file,
-            ) = self.calculate_multiple_lpg_request(  # type: ignore
-                households=lpg_households,
-            )
+        if isinstance(lpg_households, List):
+            files_per_kind = self.calculate_multiple_lpg_request(households=lpg_households)[1:]
+            return [LpgResultFiles(*files_of_one_household) for files_of_one_household in zip(*files_per_kind)]
 
-        else:
-            raise TypeError(
-                f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
-            )
-
-        return (
-            result_folder,
-            electricity_file,
-            warm_water_file,
-            inner_device_heat_gains_file,
-            high_activity_file,
-            low_activity_file,
-            flexibility_file,
-            car_states_file,
-            car_locations_file,
-            driving_distances_file,
+        raise TypeError(
+            f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
         )
 
-    def get_profiles_from_predefined_profile(
-        self,
-    ) -> Tuple[str, str, str, str, str]:
-        """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
+    def get_profiles_from_predefined_profile(self) -> LpgResultFiles:
+        """Return the paths of the shipped profile's files, from ``hisim/inputs/loadprofiles`` or an external directory.
+
+        The shipped profile has no flexibility and no car files, so those stay empty.
+
+        Returns:
+            LpgResultFiles: the paths of the five files the shipped profile has.
+
+        Raises:
+            ValueError: if an external profile directory is configured and does not exist or is empty.
+        """
         if self.name_of_predefined_loadprofile is None:
             self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
             log.information(f"You choose {self.utsp_config.data_acquisition_mode}, "
@@ -897,15 +899,12 @@ class UtspLpgConnector(cp.DataSourceComponent):
             warm_water_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Warm Water.csv")
             inner_device_heat_gains_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Inner Device Heat Gains.csv")
 
-        #
-        # when using predefined profile there are no saved files concerning flexibility or car data
-        # TODO: implement flexibility and car files?
-        return (
-            electricity_file,
-            warm_water_file,
-            inner_device_heat_gains_file,
-            high_activity_file,
-            low_activity_file,
+        return LpgResultFiles(
+            electricity=electricity_file,
+            warm_water=warm_water_file,
+            inner_device_heat_gains=inner_device_heat_gains_file,
+            high_activity=high_activity_file,
+            low_activity=low_activity_file,
         )
 
     def describe_unreachable_profile_source(self) -> str:
@@ -936,350 +935,126 @@ class UtspLpgConnector(cp.DataSourceComponent):
             "                           and results are not comparable with the other two modes."
         )
 
-    def build(self):
-        """Retrieves and preprocesses all data for this component."""
+    def build(self) -> None:
+        """Read the occupancy's series for the run: from the shipped profile, or from the cache or the LoadProfileGenerator.
 
-        # check if file exists and get cache_filepath and put in list
-        (
-            self.list_of_file_exists_and_cache_files,
-            list_of_unique_household_configs,
-        ) = self.get_list_of_file_exists_bools_and_cache_file_paths(cache_dir_path=self.utsp_config.cache_dir_path)
+        A household the LoadProfileGenerator computes is computed once per configuration and year: the cache holds
+        its minute profile of the whole requested year (:class:`LpgMinuteProfile`), and every run, whatever its
+        window and timestep, reads the profile from there and cuts its own series from it
+        (:meth:`series_of_the_run`). Several households, given as a list, are read one by one and summed. The shipped
+        profile is read from its files on every run; it needs no generator and is not cached.
 
-        # go through list of file_exists and cache_filepaths and get caches if possible,
-        # otherwise send request to UTSP
-        cache_complete = False
-        value_dict: Dict = {
-            "electricity_consumption": [],
-            "water_consumption": [],
-            "heating_by_devices": [],
-            "heating_by_residents": [],
-            "number_of_residents": [],
-        }
+        There is deliberately no fallback chain here. The configured mode is the mode that runs: a profile source
+        that cannot be reached is a configuration error, not an invitation to substitute a different household
+        (roadmap/pylpg_flakiness.md F1).
+        """
         self.car_data_dict: Dict[str, Any] = {
             "car_states": [],
             "car_locations": [],
             "driving_distances": [],
         }
         self.flexibility_data_dict: Dict = {"flexibility": []}
-        # iterate over all unique utsp configs and either take cache results or calculate for each household and sum up later
-        for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
-            file_exists = list_item[0]
-            cache_filepath = list_item[1]
-            log.information("Lpg cache filepath " + cache_filepath)
 
-            # a cache file exists
-            if file_exists:
-                with open(cache_filepath, "r", encoding="utf-8") as file:
-                    cache_content: Dict = json.load(file)
-                    cache_complete = True
+        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+            log.information(
+                f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
+                f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
+            )
+            (
+                self.electricity_consumption,
+                self.heating_by_devices,
+                self.water_consumption,
+                self.heating_by_residents,
+                self.number_of_residents,
+            ) = self.series_of_the_run(self.read_minute_profile(self.get_profiles_from_predefined_profile()))
+            self.max_hot_water_demand = max(self.water_consumption)
+            return
 
-                # check if cache content has correct format, otherwise delete cache (because it is from older version) and run new request
-                if (
-                    not all(isinstance(values, str) for values in cache_content.values())
-                    and "saved_files" in cache_content.keys()
-                ):
-                    log.information(
-                        "An older LPG cache version was found but it's not usuable anymore. Therefore it will be deleted."
-                    )
-                    os.remove(cache_filepath)
-                    cache_complete = False
+        self.minute_profile_cache_entries, household_configs = self.minute_profile_cache_entries_of_households(
+            cache_dir_path=self.utsp_config.cache_dir_path
+        )
+        value_dict: Dict[str, List[List[float]]] = {
+            "electricity_consumption": [],
+            "water_consumption": [],
+            "heating_by_devices": [],
+            "heating_by_residents": [],
+            "number_of_residents": [],
+        }
+        for cache_entry, household_config in zip(self.minute_profile_cache_entries, household_configs):
+            log.information("Lpg cache filepath " + cache_entry.path)
+            if cache_entry.exists:
+                log.information("LPG data taken from cache.")
+                minute_profiles = self.read_cached_minute_profiles(cache_entry.path)
+            else:
+                log.information(f"LPG data is not in the cache; it is computed in {self.utsp_config.data_acquisition_mode}.")
+                minute_profiles = self.minute_profiles_from_the_generator(household_config)
+                self.write_minute_profiles(cache_entry, minute_profiles)
 
-            if cache_complete:
-                log.information("LPG data taken from cache. ")
-                for cache_key in cache_content.keys():
-                    # get dataframe from cache content
-                    cached_data = io.StringIO(cache_content[cache_key])
-                    # float_precision="round_trip" for the same reason as the other caches: the
-                    # default reader loses the last bit of a sixth of the values.
-                    dataframe = pd.read_csv(
-                        cached_data,
-                        sep=",",
-                        decimal=".",
-                        encoding="cp1252",
-                        index_col=0,
-                        float_precision="round_trip",
-                    )
+            for minute_profile in minute_profiles:
+                series = self.series_of_the_run(minute_profile)
+                for name, values_of_the_households in value_dict.items():
+                    values_of_the_households.append(getattr(series, name))
+                self.flexibility_data_dict["flexibility"].append(minute_profile.flexibility)
+                self.car_data_dict["car_states"].append(minute_profile.car_states)
+                self.car_data_dict["car_locations"].append(minute_profile.car_locations)
+                self.car_data_dict["driving_distances"].append(minute_profile.driving_distances)
 
-                    if cache_key == "data":
+        # sum over all household profiles
+        (
+            self.electricity_consumption,
+            self.heating_by_residents,
+            self.water_consumption,
+            self.heating_by_devices,
+            self.number_of_residents,
+        ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+        self.max_hot_water_demand = max(self.water_consumption)
 
-                        number_of_residents = dataframe["number_of_residents"].tolist()
-                        heating_by_residents = dataframe["heating_by_residents"].tolist()
-                        electricity_consumption = dataframe["electricity_consumption"].tolist()
-                        water_consumption = dataframe["water_consumption"].tolist()
-                        heating_by_devices = dataframe["heating_by_devices"].to_list()
+    def minute_profiles_from_the_generator(self, household_config: UtspLpgConnectorConfig) -> List[LpgMinuteProfile]:
+        """Have the LoadProfileGenerator compute one configuration's households and read their minute profiles.
 
-                        number_of_residents = dataframe["number_of_residents"].tolist()
+        The configuration is the effective one the request is made with -- one household, or a list of them that
+        share a request guid -- so the cache entry the profiles are written to is named after what produced them.
+        A local generator's working directories are deleted afterwards, whether the calculation succeeded or not.
 
-                        # write lists to dict
-                        value_dict["electricity_consumption"].append(electricity_consumption)
-                        value_dict["heating_by_devices"].append(heating_by_devices)
-                        value_dict["heating_by_residents"].append(heating_by_residents)
-                        value_dict["water_consumption"].append(water_consumption)
-                        value_dict["number_of_residents"].append(number_of_residents)
+        Args:
+            household_config: the configuration of the request, from :meth:`minute_profile_cache_entries_of_households`.
 
-                        # sum over all household profiles
-                        (
-                            self.electricity_consumption,
-                            self.heating_by_residents,
-                            self.water_consumption,
-                            self.heating_by_devices,
-                            self.number_of_residents,
-                        ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+        Returns:
+            List[LpgMinuteProfile]: one profile per household of the request, in its order.
 
-                        self.max_hot_water_demand = max(self.water_consumption)
-
-                    elif cache_key == "car_data":
-                        # process car data from cache
-                        for key, dict_values in self.car_data_dict.items():
-                            # transform dataframe column to dict, then get original types of dict values and lastly append to
-                            # car_data_dict
-                            transformed_data_dict = self.transform_dict_values(dataframe[key].to_dict())
-                            dict_values.append(transformed_data_dict)
-
-                    elif cache_key == "flexibility_data":
-                        # process flexibility data from cache
-                        # transform dataframe column to dict, then get original types of dict values and lastly append to
-                        # car_and_flexibility_dict
-                        transformed_data_dict = self.transform_dict_values(dataframe["flexibility"].to_dict())
-                        self.flexibility_data_dict["flexibility"].append(transformed_data_dict)
-
-                    else:
-                        raise KeyError(f"The cache content key {cache_key} could not be recognized.")
-
-            if not cache_complete or file_exists is False:
-                log.information(
-                    "LPG data cannot be taken from cache. It will be taken from UTSP or from predefined profile."
+        Raises:
+            Exception: whatever the profile source raised, unchanged, after the guidance of
+                :meth:`describe_unreachable_profile_source` was logged.
+        """
+        try:
+            log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
+            if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                # These raise when the .env is missing, and that is the intent: an unconfigured UTSP must stop the
+                # run rather than quietly become a different profile source.
+                result_files = self.get_profiles_from_utsp(
+                    lpg_households=household_config.household,
+                    guid=household_config.guid,
+                    utsp_url=utils.get_environment_variable("UTSP_URL"),
+                    utsp_api_key=utils.get_environment_variable("UTSP_API_KEY"),
                 )
-                # There is deliberately no fallback chain here. The configured mode is the mode that
-                # runs: a profile source that cannot be reached is a configuration error, not an
-                # invitation to substitute a different household. See roadmap/pylpg_flakiness.md F1.
-                if (self.utsp_config.data_acquisition_mode in
-                        (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
-                    try:
-                        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                            # These raise when the .env is missing, and that is the intent: an
-                            # unconfigured UTSP must stop the run rather than quietly become a
-                            # different profile source.
-                            self.utsp_url = utils.get_environment_variable("UTSP_URL")
-                            self.utsp_api_key = utils.get_environment_variable("UTSP_API_KEY")
+            else:
+                result_files = self.get_profiles_from_local_lpg(lpg_households=household_config.household)
+            # Read before the finally block deletes the local generator's working directories.
+            return [self.read_minute_profile(files) for files in result_files]
 
-                        log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
-                        new_unique_config = list_of_unique_household_configs[list_index]
-                        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                            (
-                                electricity_file,
-                                warm_water_file,
-                                inner_device_heat_gains_file,
-                                high_activity_file,
-                                low_activity_file,
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ) = self.get_profiles_from_utsp(
-                                lpg_households=new_unique_config.household,
-                                guid=new_unique_config.guid,
-                            )
-                        elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
-                            (
-                                _result_folder,
-                                electricity_file,
-                                warm_water_file,
-                                inner_device_heat_gains_file,
-                                high_activity_file,
-                                low_activity_file,
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ) = self.get_profiles_from_local_lpg(lpg_households=new_unique_config.household)
+        except Exception:
+            # Unwrapped on purpose: the original exception and its traceback reach the caller untouched, with the
+            # guidance printed beside it rather than instead of it. Narrowing or re-wrapping here would only
+            # mistranslate failures that nobody has observed yet.
+            log.error(self.describe_unreachable_profile_source())
+            raise
 
-                        # only one result obtained
-                        if isinstance(electricity_file, str):
-                            log.information(f"One result obtained from {self.utsp_config.data_acquisition_mode}.")
-                            (
-                                electricity_consumption,
-                                heating_by_devices,
-                                water_consumption,
-                                heating_by_residents,
-                                number_of_residents,
-                            ) = self.load_result_files_and_transform_to_lists(
-                                electricity=electricity_file,
-                                warm_water=warm_water_file,
-                                inner_device_heat_gains=inner_device_heat_gains_file,
-                                high_activity=high_activity_file,
-                                low_activity=low_activity_file,
-                                data_acquisition_mode=self.utsp_config.data_acquisition_mode,
-                            )
-                            list_of_flexibility_and_car_files = [
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ]
-                            if all(isinstance(file, str) for file in list_of_flexibility_and_car_files):
-                                list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                    list_of_result_files=list_of_flexibility_and_car_files  # type: ignore
-                                )
-                            else:
-                                raise TypeError(
-                                    f"Type of flexibility and car files should be str, but it's {[type(i) for i in list_of_flexibility_and_car_files]}"
-                                )
-
-                            # write lists to dict
-                            value_dict["electricity_consumption"].append(electricity_consumption)
-                            value_dict["heating_by_devices"].append(heating_by_devices)
-                            value_dict["heating_by_residents"].append(heating_by_residents)
-                            value_dict["water_consumption"].append(water_consumption)
-                            value_dict["number_of_residents"].append(number_of_residents)
-                            self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                            self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                            self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                            self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
-
-                            # cache results for each household individually
-                            self.cache_results(
-                                cache_filepath=cache_filepath,
-                                effective_household_config=new_unique_config,
-                                number_of_residents=number_of_residents,
-                                electricity_consumption=electricity_consumption,
-                                heating_by_residents=heating_by_residents,
-                                water_consumption=water_consumption,
-                                heating_by_devices=heating_by_devices,
-                                flexibility=list_of_flexibility_and_car_data[0],
-                                car_states=list_of_flexibility_and_car_data[1],
-                                car_locations=list_of_flexibility_and_car_data[2],
-                                driving_distances=list_of_flexibility_and_car_data[3],
-                            )
-
-                            # get sum of all household profiles
-                            (
-                                self.electricity_consumption,
-                                self.heating_by_residents,
-                                self.water_consumption,
-                                self.heating_by_devices,
-                                self.number_of_residents,
-                            ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
-
-                            self.max_hot_water_demand = max(self.water_consumption)
-
-                        # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
-                        elif isinstance(electricity_file, List):
-                            log.information(f"Multiple results obtained from {self.utsp_config.data_acquisition_mode}.")
-
-                            for index, electricity in enumerate(electricity_file):
-                                warm_water = warm_water_file[index]
-                                inner_device_heat_gains = inner_device_heat_gains_file[index]
-                                high_activity = high_activity_file[index]
-                                low_activity = low_activity_file[index]
-                                flexibility = flexibility_file[index]
-                                car_states = car_states_file[index]
-                                car_locations = car_locations_file[index]
-                                driving_distances = driving_distances_file[index]
-
-                                (
-                                    electricity_consumption,
-                                    heating_by_devices,
-                                    water_consumption,
-                                    heating_by_residents,
-                                    number_of_residents,
-                                ) = self.load_result_files_and_transform_to_lists(
-                                    electricity=electricity,
-                                    warm_water=warm_water,
-                                    inner_device_heat_gains=inner_device_heat_gains,
-                                    high_activity=high_activity,
-                                    low_activity=low_activity,
-                                    data_acquisition_mode=self.utsp_config.data_acquisition_mode,
-                                )
-                                list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                    list_of_result_files=[flexibility, car_states, car_locations, driving_distances]
-                                )
-
-                                # write lists to dict
-                                value_dict["electricity_consumption"].append(electricity_consumption)
-                                value_dict["heating_by_devices"].append(heating_by_devices)
-                                value_dict["heating_by_residents"].append(heating_by_residents)
-                                value_dict["water_consumption"].append(water_consumption)
-                                value_dict["number_of_residents"].append(number_of_residents)
-                                self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                                self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                                self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                                self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
-
-                            # get sum of all household profiles
-                            (
-                                self.electricity_consumption,
-                                self.heating_by_residents,
-                                self.water_consumption,
-                                self.heating_by_devices,
-                                self.number_of_residents,
-                            ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
-
-                            self.max_hot_water_demand = max(self.water_consumption)
-
-                            # cache for multiple results at a time
-                            self.cache_results(
-                                cache_filepath=cache_filepath,
-                                effective_household_config=new_unique_config,
-                                number_of_residents=self.number_of_residents,
-                                heating_by_residents=self.heating_by_residents,
-                                water_consumption=self.water_consumption,
-                                heating_by_devices=self.heating_by_devices,
-                                electricity_consumption=self.electricity_consumption,
-                                flexibility=list_of_flexibility_and_car_data[0],
-                                car_states=list_of_flexibility_and_car_data[1],
-                                car_locations=list_of_flexibility_and_car_data[2],
-                                driving_distances=list_of_flexibility_and_car_data[3],
-                            )
-
-                    except Exception:
-                        # Unwrapped on purpose: the original exception and its traceback reach the
-                        # caller untouched, with the guidance printed beside it rather than instead
-                        # of it. Narrowing or re-wrapping here would only mistranslate failures that
-                        # nobody has observed yet.
-                        log.error(self.describe_unreachable_profile_source())
-                        raise
-
-                    finally:
-                        # Runs whether the attempt succeeded, raised or was interrupted. The
-                        # directories are resolved from the indices claimed above, which are known
-                        # before the calculation starts, so a failure cannot leave debris for the
-                        # next run to trip over.
-                        PylpgWorkspace.release(self.claimed_pylpg_calculation_indices, self.pylpg_work_root())
-                        self.claimed_pylpg_calculation_indices.clear()
-
-                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
-                    log.information(
-                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
-                        f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
-                    )
-
-                    (
-                        electricity_file,
-                        warm_water_file,
-                        inner_device_heat_gains_file,
-                        high_activity_file,
-                        low_activity_file,
-                    ) = self.get_profiles_from_predefined_profile()
-
-                    (
-                        self.electricity_consumption,
-                        self.heating_by_devices,
-                        self.water_consumption,
-                        self.heating_by_residents,
-                        self.number_of_residents,
-                    ) = self.load_result_files_and_transform_to_lists(
-                        electricity=electricity_file,
-                        warm_water=warm_water_file,
-                        inner_device_heat_gains=inner_device_heat_gains_file,
-                        high_activity=high_activity_file,
-                        low_activity=low_activity_file,
-                        data_acquisition_mode=self.utsp_config.data_acquisition_mode,
-                    )
-
-                    self.max_hot_water_demand = max(self.water_consumption)
-
-                    # no caching if predefined profile is used
+        finally:
+            # Runs whether the attempt succeeded, raised or was interrupted. The directories are resolved from the
+            # indices claimed above, which are known before the calculation starts, so a failure cannot leave
+            # debris for the next run to trip over.
+            PylpgWorkspace.release(self.claimed_pylpg_calculation_indices, self.pylpg_work_root())
+            self.claimed_pylpg_calculation_indices.clear()
 
     def get_result_lists_by_summing_over_value_dict(
         self, value_dict: Dict[Any, Any]
@@ -1304,103 +1079,76 @@ class UtspLpgConnector(cp.DataSourceComponent):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
 
-    def get_list_of_file_exists_bools_and_cache_file_paths(self, cache_dir_path: Optional[str]) -> Tuple[List, List]:
-        """Check if file exists and get cache_filepath and put in list."""
+    def minute_profile_cache_entries_of_households(
+        self, cache_dir_path: Optional[str]
+    ) -> Tuple[List[CacheEntry], List[UtspLpgConnectorConfig]]:
+        """Return the cache entry of every request this occupancy makes, and the configuration of each request.
 
-        list_of_file_exists_and_cache_files: List = []
-        list_of_unique_household_configs: List = []
+        A list of households without a request guid is requested, and cached, household by household, each with a
+        guid of its own so that duplicates get different profiles
+        (:meth:`vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types`).
+        Any other configuration is one request. Each entry is named after its request's configuration
+        (:meth:`minute_profile_key_material`).
 
-        # a config-level override stays the one directory; None falls through to the simulation's
-        # own cache locations, which may be a read-ordered list (hisim-renovisor-translator-epc.22)
+        Args:
+            cache_dir_path: a directory that overrides the run's cache locations, or ``None``.
 
-        # config household is list of jsonreferences and no other guid than default is given ("")
-        # if the guid = "" and multiple households are given as a list, each household will be calculated and cached individually
+        Returns:
+            Tuple[List[CacheEntry], List[UtspLpgConnectorConfig]]: the entries and the configurations, in the same
+                order.
+        """
         if isinstance(self.utsp_config.household, List) and self.utsp_config.guid == "":
-            # get specific guid list in order to prevent duplicated requests
             guid_list = (
                 self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
             )
-
+            household_configs = []
             for index, household in enumerate(self.utsp_config.household):
-                # make new config object with only one household in order to find local cache in cache_dir_path
-                new_config_object = copy.deepcopy(self.utsp_config)
-                new_config_object.household = household
-                new_config_object.guid = guid_list[index]
-
-                # check if cache for utsp config exists and get or make cache filepath
-                file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.config.component_id.name,
-                    parameter_class=new_config_object,
-                    my_simulation_parameters=self.my_simulation_parameters,
-                    cache_dir_path=cache_dir_path,
-                    extra_key_material=self.extra_cache_key_material(),
-                )
-                list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
-                list_of_unique_household_configs.append(new_config_object)
-
-        # config household is one jsonreference
+                household_config = copy.deepcopy(self.utsp_config)
+                household_config.household = household
+                household_config.guid = guid_list[index]
+                household_configs.append(household_config)
         else:
-            file_exists, cache_filepath = utils.get_cache_file(
+            household_configs = [self.utsp_config]
+
+        cache_entries = [
+            utils.get_cache_entry(
                 component_key=self.config.component_id.name,
-                parameter_class=self.utsp_config,
+                key_material=self.minute_profile_key_material(household_config, self.my_simulation_parameters),
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,
-                extra_key_material=self.extra_cache_key_material(),
             )
-            list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
-            # ustp config is already unique because only 1 household in it
-            list_of_unique_household_configs.append(self.utsp_config)
-
-        return list_of_file_exists_and_cache_files, list_of_unique_household_configs
-
-    def extra_cache_key_material(self) -> str:
-        """Return what the key of this component's cache entries names beyond the configuration and the run.
-
-        An entry holds the profiles after :mod:`hisim.components.lpg_local_time` put them onto the run's clock
-        and cut out its window, so an entry written by another version of that conversion holds other values
-        under the same configuration and simulation parameters. With the fingerprint of the conversion's code
-        in the key, an edit to it makes every entry a miss instead of serving the old values.
-
-        The days the LoadProfileGenerator simulates, locally or on the UTSP, are named too, because its
-        profile of the same days depends on how many days it simulates. They are the run's calendar year
-        (:meth:`lpg_request_days`), so the material is the same for every window of one year: a week and the
-        whole of 2021 both name ``2021-01-01..2022-01-01``. An entry of an earlier request of the window's own
-        days (a week asked for as ``2021-01-01..2021-01-08``, or a UTSP request without this part) is a miss.
-        The entry itself still belongs to one window: the key's simulation part names the run's start, end and
-        resolution (:func:`hisim.utils.build_cache_key_string`), because the entry holds the window's profile.
-
-        Example: ``":lpg_local_time=<fingerprint>:lpg_request=2021-01-01..2022-01-01"`` for a local or UTSP
-        profile of any window in 2021, and ``":lpg_local_time=<fingerprint>"`` for a shipped profile.
-
-        Returns:
-            str: ``":lpg_local_time="`` and the code fingerprint of the conversion's import closure, and for a
-                profile the LoadProfileGenerator computes ``":lpg_request="`` and the first and the last day
-                it simulates.
-        """
-        return ":lpg_local_time=" + Fingerprints.code(ImportClosure.of(lpg_local_time)) + self.request_key_material(
-            self.utsp_config.data_acquisition_mode, self.my_simulation_parameters
-        )
+            for household_config in household_configs
+        ]
+        return cache_entries, household_configs
 
     @classmethod
-    def request_key_material(
-        cls, data_acquisition_mode: LpgDataAcquisitionMode, parameters: SimulationParameters
-    ) -> str:
-        """Return the part of the cache key that names the days the LoadProfileGenerator simulates for a run.
+    def minute_profile_key_material(cls, household_config: UtspLpgConnectorConfig, parameters: SimulationParameters) -> str:
+        """Return the string a minute-profile cache entry is named after, and that its ``.meta`` file records.
 
-        See :meth:`extra_cache_key_material`, which appends it. Example: ``":lpg_request=2021-01-01..2022-01-01"``
-        for a local or UTSP profile of any window in 2021, and an empty string for a shipped profile, which no
-        request computes.
+        An entry holds the minute profiles the LoadProfileGenerator computed for one request
+        (:class:`LpgMinuteProfile`), so the key names what decides them and nothing else: the request's
+        configuration (household, acquisition mode, energy intensity, mobility sets, appliances, guid; the fields
+        that only place the run are cleared, :meth:`UtspLpgConnectorConfig.cache_key_view`) and the days the
+        generator simulates, which are the run's calendar year (:meth:`lpg_request_days`). The run's window, its
+        timestep and its part-load threshold are not part of it, because they are applied when the profile is
+        read. :attr:`MINUTE_PROFILE_CACHE_CONTENT` names what the entry holds, so an entry of another layout is a
+        miss.
+
+        Example: a week, a July week and the whole of 2021, at 60 s or 900 s, all give
+        ``'{...configuration...}:lpg_minute_profiles:lpg_request=2021-01-01..2022-01-01'``.
 
         Args:
-            data_acquisition_mode: where the profile comes from.
-            parameters: the run's simulation parameters.
+            household_config: the configuration the request is made with.
+            parameters: the run's simulation parameters; only their year is read.
 
         Returns:
-            str: ``":lpg_request="`` and the first and the last requested day, or an empty string.
+            str: the configuration's key JSON, the content name and the requested days.
         """
-        if data_acquisition_mode in (LpgDataAcquisitionMode.USE_LOCAL_LPG, LpgDataAcquisitionMode.USE_UTSP):
-            return ":lpg_request=" + "..".join(cls.lpg_request_days(parameters))
-        return ""
+        return (
+            household_config.cache_key_view().to_json()
+            + f":{cls.MINUTE_PROFILE_CACHE_CONTENT}:lpg_request="
+            + "..".join(cls.lpg_request_days(parameters))
+        )
 
     def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(
         self,
@@ -1433,8 +1181,8 @@ class UtspLpgConnector(cp.DataSourceComponent):
         and the calculation directories (``PylpgWorkspace.work_root``) live below it.
         """
         # A missing entry's path names the write directory; an existing one may sit in a read-only seed.
-        missing = [path for exists, path in self.list_of_file_exists_and_cache_files if not exists]
-        cache_filepath = missing[0] if missing else self.list_of_file_exists_and_cache_files[0][1]
+        missing = [entry.path for entry in self.minute_profile_cache_entries if not entry.exists]
+        cache_filepath = missing[0] if missing else self.minute_profile_cache_entries[0].path
         return str(os.path.dirname(cache_filepath))
 
     def pylpg_work_root(self) -> Path:
@@ -1507,8 +1255,6 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 travel_route_set = self.utsp_config.travel_route_set
                 energy_intensity = self.utsp_config.energy_intensity
 
-                resolution = self.get_resolution()
-
                 calc_options = [
                     CalcOption.JsonHouseholdSumFiles,
                     CalcOption.HouseholdSumProfilesFromDetailedDats,
@@ -1571,7 +1317,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
                     request.CalcSpec.set_EnableTransportation(True)
                     request.CalcSpec.CalcOptions.append(CalcOption.TansportationDeviceJsons)
 
-                request.CalcSpec.ExternalTimeResolution = resolution
+                request.CalcSpec.ExternalTimeResolution = self.LPG_EXTERNAL_TIME_RESOLUTION
                 calcspecfilename = Path(lpe.calculation_directory, "calcspec.json")
                 with open(calcspecfilename, "w", encoding="utf-8") as calcspecfile:
                     jsonrequest = request.to_json(indent=4)
@@ -1606,7 +1352,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
         The same days are asked of a local LoadProfileGenerator and of the UTSP. The generator always simulates
         the run's whole calendar year, whatever the run's length or start, and the run's window is cut from that
-        year when the profile is read (:meth:`load_result_files_and_transform_to_lists`). The household a
+        year when the profile is read (:meth:`series_of_the_run`). The household a
         generator simulates depends on how many days it simulates, so a week asked for on its own differs from
         the same week of the year; with the year always asked for, a window gets the same profile as the same
         days of a full-year run (owner decision of 2026-10-19).
@@ -1801,7 +1547,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
         )
 
     def calculate_one_utsp_request(
-        self, simulation_config: HouseCreationAndCalculationJob, guid: str
+        self, simulation_config: HouseCreationAndCalculationJob, guid: str, url: str, api_key: str
     ) -> Tuple[str, str, str, str, str, str, str, str, str]:
         """Calculate one lpg request."""
 
@@ -1828,7 +1574,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
 
         # Request the time series
         result = client.request_time_series_and_wait_for_delivery(
-            self.utsp_url, request, self.utsp_api_key, timeout=100
+            url, request, api_key, timeout=100
         )
 
         # decode required result files
@@ -1979,7 +1725,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             housetype=HouseTypes.HT23_No_Infrastructure_at_all,
             startdate=start_date,
             enddate=end_date,
-            external_resolution=self.get_resolution(),
+            external_resolution=self.LPG_EXTERNAL_TIME_RESOLUTION,
             energy_intensity=self.utsp_config.energy_intensity,
             travel_route_set=self.utsp_config.travel_route_set,
             transportation_device_set=self.utsp_config.transportation_device_set,
@@ -2045,42 +1791,122 @@ class UtspLpgConnector(cp.DataSourceComponent):
             driving_distances,
         )
 
-    def load_result_files_and_transform_to_lists(
-        self,
-        data_acquisition_mode: LpgDataAcquisitionMode,
-        electricity: Any,
-        warm_water: Any,
-        inner_device_heat_gains: Any,
-        high_activity: Any,
-        low_activity: Any,
-    ) -> tuple[List, List, List, List, List]:
-        """Load result files and transform to lists."""
+    def read_minute_profile(self, result_files: LpgResultFiles) -> LpgMinuteProfile:
+        """Read one household's minute profile from its result files, the values exactly as the files state them.
 
-        ################################
-        # Calculates heating generated by residents and loads number of residents
-        # Heat power generated per resident in W
-        # mode 1: awake
-        # mode 2: sleeping
-        gain_per_person = [150, 100]
+        The UTSP hands over the files' contents, a local LoadProfileGenerator and the shipped profile their paths
+        (:class:`LpgResultFiles`). Nothing of the run is applied here: the minutes stay on the generator's wall
+        clock and in its units, so the profile can be cached once and serve every window and timestep.
 
-        # load occupancy profile
-        occupancy_profile = []
-        bodily_activity_files = [high_activity, low_activity]
-        for filecontent in bodily_activity_files:
-            if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                json_filex = json.loads(filecontent)
-            # this is used for files from predefined profile
-            elif (data_acquisition_mode in
-                  (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
-                with open(filecontent, encoding="utf-8") as json_file:
-                    json_filex = json.load(json_file)
+        Args:
+            result_files: the household's result files.
+
+        Returns:
+            LpgMinuteProfile: the profile; flexibility and car data are empty where their files are.
+
+        Raises:
+            ValueError: if the activity files state different starts (:meth:`common_start_time`).
+        """
+        reads_contents = self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP
+        activity_profiles: List[Dict[str, Any]] = []
+        for activity_file in (result_files.high_activity, result_files.low_activity):
+            if reads_contents:
+                activity_profiles.append(json.loads(activity_file))
             else:
-                raise ValueError("Could not recognize data_acquisition_mode.")
+                with open(activity_file, encoding="utf-8") as json_file:
+                    activity_profiles.append(json.load(json_file))
 
-            occupancy_profile.append(json_filex)
+        sum_columns: Dict[str, List[float]] = {}
+        for name, result_file, column in (
+            ("electricity", result_files.electricity, "Sum [kWh]"),
+            ("warm_water", result_files.warm_water, "Sum [L]"),
+            ("inner_device_heat_gains", result_files.inner_device_heat_gains, "Sum [kWh]"),
+        ):
+            if reads_contents:
+                sum_profile = pd.read_csv(io.StringIO(result_file), sep=";", decimal=".", encoding="cp1252")
+            else:
+                sum_profile = pd.read_csv(result_file, sep=";", decimal=".", encoding="utf-8", usecols=[column])
+            sum_columns[name] = sum_profile[column].tolist()
 
-        # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
-        simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+        return LpgMinuteProfile(
+            start_time=self.common_start_time(activity_profiles),
+            persons_at_high_activity=activity_profiles[0]["Values"],
+            persons_at_low_activity=activity_profiles[1]["Values"],
+            electricity_per_minute_in_kwh=sum_columns["electricity"],
+            warm_water_per_minute_in_liter=sum_columns["warm_water"],
+            inner_device_heat_gains_per_minute_in_kwh=sum_columns["inner_device_heat_gains"],
+            flexibility=self.read_result_json(result_files.flexibility),
+            car_states=self.read_result_json(result_files.car_states),
+            car_locations=self.read_result_json(result_files.car_locations),
+            driving_distances=self.read_result_json(result_files.driving_distances),
+        )
+
+    @classmethod
+    def minute_values_of(cls, minute_profile: LpgMinuteProfile) -> pd.DataFrame:
+        """Return a household's minute profile in the occupancy's quantities, one row per minute of the profile.
+
+        The residents' number is the sum of the persons at a high and at a low activity level, and their body heat
+        is :attr:`BODY_HEAT_PER_PERSON_IN_WATT` per person at each level. An energy per minute in kWh becomes a
+        power in W by a factor of 1000 * 60. The rows run as long as the shortest series. Example: two persons at a
+        high and one at a low activity level, 0.001 kWh of electricity and 0.5 l of warm water in a minute give 3
+        residents, 400 W of body heat, 60 W of electricity and 0.5 l.
+
+        The arithmetic and its order are the ones the occupancy has always used, so a profile gives the same values
+        bit for bit whether it was just computed or read from the cache.
+
+        Args:
+            minute_profile: the household's profile as the LoadProfileGenerator wrote it.
+
+        Returns:
+            pd.DataFrame: the columns ``number_of_residents``, ``heating_by_residents`` (W),
+                ``electricity_consumption`` (W), ``water_consumption`` (l) and ``inner_device_heat_gains`` (W).
+        """
+        activity_values = [minute_profile.persons_at_high_activity, minute_profile.persons_at_low_activity]
+        minutes_of_activity = min(len(values) for values in activity_values)
+        heating_by_residents = [0.0] * minutes_of_activity
+        number_of_residents: List[float] = [0] * minutes_of_activity
+        for level, gain in enumerate(cls.BODY_HEAT_PER_PERSON_IN_WATT):
+            for minute in range(minutes_of_activity):
+                number_of_residents[minute] += activity_values[level][minute]
+                heating_by_residents[minute] = heating_by_residents[minute] + gain * activity_values[level][minute]
+
+        minute_columns = {
+            "number_of_residents": number_of_residents,
+            "heating_by_residents": heating_by_residents,
+            # 1 kWh per minute is 60 000 W
+            "electricity_consumption": pd.to_numeric(
+                pd.Series(minute_profile.electricity_per_minute_in_kwh) * 1000 * 60
+            ).tolist(),
+            "water_consumption": pd.to_numeric(pd.Series(minute_profile.warm_water_per_minute_in_liter)).tolist(),
+            "inner_device_heat_gains": pd.to_numeric(
+                pd.Series(minute_profile.inner_device_heat_gains_per_minute_in_kwh) * 1000 * 60
+            ).tolist(),
+        }
+        minutes_in_common = min(len(values) for values in minute_columns.values())
+        return pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
+
+    def series_of_the_run(self, minute_profile: LpgMinuteProfile) -> OccupancySeries:
+        """Return the run's series of one household: its minutes on the run's clock, cut to the window and averaged.
+
+        The minutes (:meth:`minute_values_of`) are put onto the run's standard-time clock and the run's window is
+        cut out (:meth:`hisim.components.lpg_local_time.LpgLocalTime.window_in_standard_time`); the profile starts
+        where its activity files say, laid onto the run's year. A timestep of several minutes then gets the mean of
+        its minutes for a power, the sum for the warm water and the mean rounded down for the residents. Example: a
+        900 s run of a week reads the week's 10 080 minutes and averages them to 672 timesteps.
+
+        This runs on every read, of a profile just computed and of one from the cache alike, which is why the cache
+        can serve every window and timestep of a year.
+
+        Args:
+            minute_profile: the household's profile as the LoadProfileGenerator wrote it.
+
+        Returns:
+            OccupancySeries: one value per timestep of the run.
+
+        Raises:
+            ValueError: if the run's timestep is not a whole number of minutes.
+            hisim.window_offset.WindowOffsetError: if the profile does not cover the run's window.
+        """
         # A timestep averages whole minutes of the profile: at 90 s a timestep would read one minute, and a
         # day of 960 timesteps 16 hours of the household, without an error.
         if self.my_simulation_parameters.seconds_per_timestep % lpg_local_time.LpgLocalTime.SECONDS_PER_MINUTE:
@@ -2089,114 +1915,26 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 "run's timestep must be a whole multiple of a minute; "
                 f"{self.my_simulation_parameters.seconds_per_timestep} s is not."
             )
+        simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
         minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
         steps_desired = int(
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
         )
         steps_desired_in_minutes = steps_desired * minutes_per_timestep
-        # The whole profile is read: the window is cut from it after it is on the run's clock.
-        minutes_of_activity = min(len(activity["Values"]) for activity in occupancy_profile)
 
-        # initialize number of residence and heating by residents
-        heating_by_residents = [0.0] * minutes_of_activity
-        number_of_residents = [0] * minutes_of_activity
-
-        # compute heat gains and number of persons
-        for mode, gain in enumerate(gain_per_person):
-            for timestep in range(minutes_of_activity):
-                number_of_residents[timestep] += occupancy_profile[mode]["Values"][timestep]
-                heating_by_residents[timestep] = (
-                    heating_by_residents[timestep] + gain * occupancy_profile[mode]["Values"][timestep]
-                )
-        if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-            # load electricity consumption, water consumption and inner device heat gains
-            electricity_data = io.StringIO(electricity)
-            pre_electricity_consumption = pd.read_csv(
-                electricity_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
-            )
-            electricity_consumption_list = pd.to_numeric(
-                pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
-
-            water_data = io.StringIO(warm_water)
-            pre_water_consumption = pd.read_csv(
-                water_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
-            )
-            water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
-
-            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
-            pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gain_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
-            )
-            inner_device_heat_gains_list = pd.to_numeric(
-                pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
-        elif (data_acquisition_mode in
-              (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
-            # load electricity consumption, water consumption and inner device heat gains
-            pre_electricity_consumption = pd.read_csv(
-                electricity,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Sum [kWh]"],
-            )
-            electricity_consumption_list = pd.to_numeric(
-                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60 000 W / min
-
-            pre_water_consumption = pd.read_csv(
-                warm_water,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Sum [L]"],
-            )
-            water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
-
-            pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gains,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Sum [kWh]"],
-            )
-            inner_device_heat_gains_list = pd.to_numeric(
-                pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
-
-        # put everything in a data frame, one row per minute of the profile the files have in common
-        minute_columns = {
-            "number_of_residents": number_of_residents,
-            "heating_by_residents": heating_by_residents,
-            "electricity_consumption": electricity_consumption_list,
-            "water_consumption": water_consumption_list,
-            "inner_device_heat_gains": inner_device_heat_gains_list,
-        }
-        minutes_in_common = min(len(values) for values in minute_columns.values())
-        minute_profile = pd.DataFrame({name: values[:minutes_in_common] for name, values in minute_columns.items()})
-
-        # Put the profile onto the run's standard-time clock and cut out the run's window. The profile starts
-        # where its activity files say it does: on 1 January, for a shipped year laid onto the run's year as the
-        # weather is, and for a local or UTSP profile because it is the run's calendar year (lpg_request_days).
         initial_data = lpg_local_time.LpgLocalTime.window_in_standard_time(
-            minute_values=minute_profile,
-            first_label=self.first_label_of_profile(occupancy_profile),
+            minute_values=self.minute_values_of(minute_profile),
+            first_label=lpg_local_time.LpgLocalTime.first_label_in_year(
+                minute_profile.start_time, self.my_simulation_parameters.year
+            ),
             window_start=self.my_simulation_parameters.start_date,
             window_minutes=steps_desired_in_minutes,
-            source=f"The LoadProfileGenerator profile of {self.component_name} ({data_acquisition_mode.name})",
+            source=(
+                f"The LoadProfileGenerator profile of {self.component_name} "
+                f"({self.utsp_config.data_acquisition_mode.name})"
+            ),
         )
 
-        # extract everything from data frame
         electricity_consumption = initial_data["electricity_consumption"].tolist()
         heating_by_residents = initial_data["heating_by_residents"].tolist()
         number_of_residents = initial_data["number_of_residents"].tolist()
@@ -2227,25 +1965,25 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
 
-        return (
-            electricity_consumption,
-            heating_by_devices,
-            water_consumption,
-            heating_by_residents,
-            number_of_residents,
+        return OccupancySeries(
+            electricity_consumption=electricity_consumption,
+            heating_by_devices=heating_by_devices,
+            water_consumption=water_consumption,
+            heating_by_residents=heating_by_residents,
+            number_of_residents=number_of_residents,
         )
 
-    def first_label_of_profile(self, activity_profiles: List[Dict[str, Any]]) -> datetime.datetime:
-        """Return the wall-clock minute a household's profile starts at, from the ``StartTime`` its files state.
+    def common_start_time(self, activity_profiles: List[Dict[str, Any]]) -> str:
+        """Return the wall-clock minute a household's profile starts at, the ``StartTime`` its activity files state.
 
         All files of a household come from one calculation and start together; the activity files say where.
-        Example: the shipped CHR01 profile states ``2021-01-01T00:00:00``, which a run of 2021 reads as it is.
+        Example: the shipped CHR01 profile states ``2021-01-01T00:00:00``.
 
         Args:
             activity_profiles: the household's bodily-activity files, as read from their JSON.
 
         Returns:
-            datetime.datetime: the first row's wall-clock time, laid onto the run's year.
+            str: the stated ``StartTime``, ISO 8601 without a time zone.
 
         Raises:
             ValueError: if the files state different starts, so the household's profile has no one start.
@@ -2256,134 +1994,64 @@ class UtspLpgConnector(cp.DataSourceComponent):
                 f"The bodily-activity files of {self.component_name} state different starts, {sorted(start_times)}; "
                 "the files of one household come from one LoadProfileGenerator calculation and start together."
             )
-        return lpg_local_time.LpgLocalTime.first_label_in_year(start_times.pop(), self.my_simulation_parameters.year)
+        return str(start_times.pop())
 
-    def cache_results(
-        self,
-        cache_filepath: str,
-        effective_household_config: "UtspLpgConnectorConfig",
-        number_of_residents: List,
-        heating_by_residents: List,
-        electricity_consumption: List,
-        water_consumption: List,
-        heating_by_devices: List,
-        flexibility: Any,
-        car_states: Any,
-        car_locations: Any,
-        driving_distances: Any,
-        # saved_files: List,
-    ) -> None:
-        """Writes the profiles of one household into the cache, with the configuration that produced them.
+    @staticmethod
+    def write_minute_profiles(cache_entry: CacheEntry, minute_profiles: List[LpgMinuteProfile]) -> None:
+        """Write the minute profiles of one request into its cache entry, as a JSON list of their fields.
 
-        The configuration passed here is the effective one -- the single-household config the request
-        was actually made with -- and its hash has to equal the digest in ``cache_filepath``. That is
-        what the companion metadata file records, so that a later lookup can prove the contents belong
-        to the key rather than assuming it. See ``roadmap/pylpg_flakiness.md`` F5.
+        The entry lands atomically, with its ``.meta`` file recording the key material it was looked up under
+        (:meth:`hisim.caching.CacheEntry.writing`). That material names the configuration the request was made with,
+        so the metadata names what produced the profiles (roadmap/pylpg_flakiness.md F5). JSON keeps every float
+        exact, so :meth:`read_cached_minute_profiles` gives back the same values bit for bit.
 
         Args:
-            cache_filepath: the entry to write, from ``get_cache_file``.
-            effective_household_config: the configuration the profiles were actually produced from.
-            number_of_residents: per-timestep resident count.
-            heating_by_residents: per-timestep heat gain from the residents.
-            electricity_consumption: per-timestep electricity demand.
-            water_consumption: per-timestep warm-water draw.
-            heating_by_devices: per-timestep heat gain from the devices.
-            flexibility: the flexibility events of this household.
-            car_states: the car state series of this household.
-            car_locations: the car location series of this household.
-            driving_distances: the driving distance series of this household.
+            cache_entry: the entry, from :meth:`minute_profile_cache_entries_of_households`.
+            minute_profiles: the profiles of the request's households, in its order.
+        """
+        with cache_entry.writing() as temporary_cache_filepath:
+            with open(temporary_cache_filepath, "w", encoding="utf-8") as file:
+                json.dump([vars(minute_profile) for minute_profile in minute_profiles], file)
+        log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_entry.path}.")
+
+    @staticmethod
+    def read_cached_minute_profiles(cache_filepath: str) -> List[LpgMinuteProfile]:
+        """Read the minute profiles of one request from its cache entry, as :meth:`write_minute_profiles` wrote them.
+
+        Args:
+            cache_filepath: the path of a validated entry.
+
+        Returns:
+            List[LpgMinuteProfile]: the profiles of the request's households, in its order.
 
         Raises:
-            portalocker.exceptions.LockException: if the entry's lock cannot be acquired in time.
+            TypeError: if the entry's fields are not those of :class:`LpgMinuteProfile`.
         """
+        with open(cache_filepath, encoding="utf-8") as file:
+            households = json.load(file)
+        return [LpgMinuteProfile(**household) for household in households]
 
-        lock_filepath = cache_filepath + ".lock"
-        try:
-            with portalocker.Lock(lock_filepath, timeout=60):
-                if os.path.exists(cache_filepath):
-                    return
+    def read_result_json(self, result_file: str) -> Union[Dict[str, Any], List[Any]]:
+        """Read one of the LoadProfileGenerator's JSON result files: from its content (UTSP) or from its path.
 
-                loadprofile_dataframe = pd.DataFrame(
-                    {
-                        "number_of_residents": number_of_residents,
-                        "heating_by_residents": heating_by_residents,
-                        "electricity_consumption": electricity_consumption,
-                        "water_consumption": water_consumption,
-                        "heating_by_devices": heating_by_devices,
-                    }
-                )
-                car_data_dict = {
-                    "car_states": car_states,
-                    "car_locations": car_locations,
-                    "driving_distances": driving_distances,
-                }
-                flexibility_data_dict = {"flexibility": flexibility}
+        A file the source did not produce is an empty string and reads as an empty dictionary, which is how a
+        household without a car or without flexibility events shows. Single quotes are read as double quotes.
 
-                car_dataframe = pd.DataFrame(car_data_dict)
-                flexibility_dataframe = pd.DataFrame(flexibility_data_dict)
+        Args:
+            result_file: the file's content in the UTSP mode, its path otherwise, or an empty string.
 
-                cache_content: Dict[str, Any] = {
-                    "data": loadprofile_dataframe,
-                    "car_data": car_dataframe,
-                    "flexibility_data": flexibility_dataframe,
-                }
-
-                for key, d_f in cache_content.items():
-                    cache_file = io.StringIO()
-                    d_f.to_csv(cache_file)
-                    d_f_str = cache_file.getvalue()
-                    cache_content.update({key: d_f_str})
-
-                with atomic_cache_write(
-                    cache_filepath,
-                    utils.build_cache_key_string(effective_household_config, self.my_simulation_parameters)
-                    + self.extra_cache_key_material(),
-                ) as temporary_cache_filepath:
-                    with open(temporary_cache_filepath, "w", encoding="utf-8") as file:
-                        json.dump(cache_content, file)
-
-                del loadprofile_dataframe
-                del car_dataframe
-                del flexibility_dataframe
-
-                log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
-
-        except portalocker.exceptions.LockException as e:
-            log.error(f"Could not acquire lock on {lock_filepath}: {e}")
-            raise
-
-        finally:
-            if os.path.exists(lock_filepath):
-                os.remove(lock_filepath)
-
-    def load_results_and_transform_string_to_data(self, list_of_result_files: List[str]) -> List[Any]:
-        """Transform a string of data into a data."""
-        list_of_data = []
-        for result_file_str in list_of_result_files:
-            json_acceptable_string = result_file_str.replace("'", '"')
-            if json_acceptable_string != "":
-                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                    data = json.loads(json_acceptable_string)
-                else:
-                    with open(json_acceptable_string, encoding="utf-8") as json_file:
-                        data = json.load(json_file)
-            else:
-                data = {}
-            list_of_data.append(data)
-        return list_of_data
-
-    def transform_dict_values(self, dict_to_check: Dict[str, str]) -> Dict[str, Any]:
-        """Function to convert string representations of data in a dictionary back to their original types."""
-        transformed_data: Dict[str, Any] = {}
-        for key, value in dict_to_check.items():
-            try:
-                # Attempt to evaluate the string value to a Python data type
-                transformed_value = literal_eval(value)
-            except (ValueError, SyntaxError):
-                # If evaluation fails, keep the original string value
-                transformed_value = value
-            transformed_data[key] = transformed_value
-        return transformed_data
+        Returns:
+            Union[Dict[str, Any], List[Any]]: the file's JSON object or list, or an empty dictionary.
+        """
+        json_acceptable_string = result_file.replace("'", '"')
+        if json_acceptable_string == "":
+            return {}
+        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+            content: Union[Dict[str, Any], List[Any]] = json.loads(json_acceptable_string)
+            return content
+        with open(json_acceptable_string, encoding="utf-8") as json_file:
+            content = json.load(json_file)
+        return content
 
     def get_component_kpi_entries(
         self,

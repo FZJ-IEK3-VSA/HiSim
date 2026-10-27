@@ -28,16 +28,18 @@ class CacheReaders:
     Listed explicitly rather than discovered, because a new cache reader should have to be added
     here deliberately -- which is the moment to ask whether it parses exactly.
 
-    The list is now all five of them. Four arrived with the argument; the car was simply missed, and
-    had been reading its cache inexactly the whole time. The solar thermal collector cached its sun
-    position until it read the sun the weather publishes (hisim-midyear-windows-9g2.7), and left the list with it.
+    The list holds four readers. The car was missed when the argument arrived, and had been reading its
+    cache inexactly the whole time. The solar thermal collector cached its sun position until it read the
+    sun the weather publishes (hisim-midyear-windows-9g2.7), and left the list with it. The occupancy left
+    it when it began to cache the LoadProfileGenerator's minute profile as JSON (hisim-caching-hi1.10),
+    whose floats round-trip exactly without a parser argument;
+    ``tests/test_lpg_minute_profile_cache.py`` pins that.
     """
 
     SITES: Tuple[Tuple[str, str], ...] = (
         ("hisim/components/generic_pv_system/pv_system.py", "Get PV results from cache."),
         ("hisim/components/building/building.py", "Building solar gains cache hit"),
         ("hisim/components/weather/weather.py", "weather_series = pd.read_csv("),
-        ("hisim/components/loadprofilegenerator_utsp_connector.py", "dataframe = pd.read_csv("),
         ("hisim/components/generic_car.py", "Generic car data is taken from cache"),
     )
 

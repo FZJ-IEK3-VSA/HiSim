@@ -24,9 +24,10 @@ household's breakfast at 06:00 on its clock in July and at 07:00 in January, on 
 weather.
 
 The module imports pandas, numpy and :mod:`hisim.window_offset` only: the car's cached profile is computed with
-it, so the car's producer imports it and its cache key fingerprints this module, and the occupancy's cache key
-fingerprints it too. An edit here therefore makes both caches miss. :mod:`hisim.utils` imports the simulation
-parameters and the cache client, which a producer's import closure must not contain.
+it, so the car's producer imports it and its cache key fingerprints this module, and an edit here makes the car's
+cache miss. The occupancy caches the generator's minutes before this conversion and applies it on every read, so
+its cache does not depend on this module. :mod:`hisim.utils` imports the simulation parameters and the cache
+client, which a producer's import closure must not contain.
 """
 
 import datetime

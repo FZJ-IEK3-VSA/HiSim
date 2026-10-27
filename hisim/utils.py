@@ -16,7 +16,7 @@ import copy
 import psutil
 
 from hisim import log
-from hisim.caching import CacheClient
+from hisim.caching import CacheClient, CacheEntry
 from hisim.simulationparameters import CacheLocations, SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -249,25 +249,19 @@ def get_cache_file(
 ) -> Tuple[bool, str]:  # noqa
     """Return ``(exists, path)`` for the cache entry of a configuration under the given simulation parameters.
 
-    The key material is built here with :func:`build_cache_key_string`; the lookup itself -- filename,
-    directory, validation of an existing entry -- is :meth:`hisim.caching.CacheClient.lookup`. The
-    signature and return value are unchanged, so no component had to change when the client was introduced.
+    The key material is built here with :func:`build_cache_key_string`; where the entry lives and whether an
+    existing one is valid is :func:`get_cache_entry`. The signature and return value are unchanged, so no
+    component had to change when the client was introduced.
 
     ``exists`` is advisory: two processes may both miss the same key and both compute the entry, which
     wastes work but is harmless. Never write to the returned path directly; use
     :func:`hisim.caching.atomic_cache_write`, otherwise a concurrent reader can see a half-written file.
 
-    The locations are chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
-    ``my_simulation_parameters.cache_locations()`` -- the parameter list, read in order and written to the
-    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-renovisor-translator-epc.22). The
-    argument wins over the environment so that a test pointing at its own directory keeps working on a
-    machine where the override or a directory list is set.
-
     Args:
         component_key: filename prefix, today the component's instance name.
         parameter_class: a dataclass with ``to_json``; its ``component_id.building`` is cleared before hashing.
         my_simulation_parameters: provides the default directory and the simulation part of the key.
-        cache_dir_path: optional directory override; see the order above.
+        cache_dir_path: optional directory override; see :func:`get_cache_entry`.
         extra_key_material: appended to the key material, for what the configuration and the simulation
             parameters do not show, such as the fingerprint of the code that computed the entry. The writer
             appends the same string to the material it records.
@@ -279,6 +273,40 @@ def get_cache_file(
         ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
     key_material = build_cache_key_string(parameter_class, my_simulation_parameters) + extra_key_material
+    entry = get_cache_entry(component_key, key_material, my_simulation_parameters, cache_dir_path)
+    return entry.exists, entry.path
+
+
+def get_cache_entry(
+    component_key: str,
+    key_material: str,
+    my_simulation_parameters: SimulationParameters,
+    cache_dir_path: Optional[str] = None,
+) -> CacheEntry:
+    """Return the cache entry named after ``key_material``: where it is or will be, and whether a valid one exists.
+
+    The entry's filename is ``<component_key>_<sha256 of key_material>.cache``; the lookup itself -- filename,
+    validation of an existing entry against its ``.meta`` file -- is :meth:`hisim.caching.CacheClient.lookup_across`.
+    This function decides which directories are read. For example, a run whose parameters list no cache
+    directories and with no ``HISIM_CACHE_DIR`` set reads and writes its ``cache_dir_path``.
+
+    The locations are chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
+    ``my_simulation_parameters.cache_locations()`` -- the parameter list, read in order and written to the
+    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-renovisor-translator-epc.22). The
+    argument wins over the environment so that a test pointing at its own directory keeps working on a
+    machine where the override or a directory list is set.
+
+    Args:
+        component_key: filename prefix, today the component's instance name.
+        key_material: the string that identifies what produced the entry; its hash names the file, and
+            :meth:`hisim.caching.CacheEntry.writing` records it beside the entry.
+        my_simulation_parameters: provides the default cache locations.
+        cache_dir_path: optional directory override; see the order above.
+
+    Returns:
+        CacheEntry: the entry, with ``exists`` True only for a validated hit. Write it through
+            :meth:`hisim.caching.CacheEntry.writing`, never to its path directly.
+    """
     client = CacheClient.from_environment()
     if cache_dir_path is not None:
         # The explicit argument outranks the environment and the parameter list; the override is
@@ -290,8 +318,7 @@ def get_cache_file(
         if client.settings.local_directory is not None:
             locations = CacheLocations([client.settings.local_directory])
             client.announce_environment_override(locations.write_directory())
-    entry = client.lookup_across(component_key, key_material, locations)
-    return entry.exists, entry.path
+    return client.lookup_across(component_key, key_material, locations)
 
 
 def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:

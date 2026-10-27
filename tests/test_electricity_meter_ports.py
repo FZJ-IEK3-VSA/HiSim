@@ -200,7 +200,6 @@ def test_a_port_fed_through_the_channel_of_the_other_role_is_refused(tmp_path: P
         house.step({})
 
 
-
 @pytest.mark.base
 def test_the_meter_sums_its_readings_exactly_rounded_whatever_order_they_were_wired_in(tmp_path: Path) -> None:
     """Each channel's total is the exactly rounded sum of its readings, which does not depend on their order.

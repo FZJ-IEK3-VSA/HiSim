@@ -1,6 +1,6 @@
 {
   "config_sha256": "dd5f51edb5665974da9a26b91313f8087efe8c373c0efe652c5ff8c402d1846e",
-  "generated_at": "2026-10-27T08:41:27.744911+00:00",
+  "generated_at": "2026-10-27T10:19:12.836509+00:00",
   "golden_files": [
     "air_conditioned_house__full_year_60s.json",
     "air_conditioned_house__full_year_900s.json",
@@ -118,7 +118,7 @@
     "simple_system_setup_two__one_week_60s.json",
     "simple_system_setup_two__one_week_900s.json"
   ],
-  "hisim_commit": "13fb73106fe112796f5f198a8215deaaaec3da3c",
+  "hisim_commit": "8012cf3d689f6abcc6ed1ac1a0e677a257452b8c",
   "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.36",
   "python_version": "3.11.17"
 }

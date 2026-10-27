@@ -245,6 +245,7 @@ def test_a_metered_exchange_names_a_metered_carrier_and_two_distinct_outputs() -
         (EnergyPort(CONSUMPTION, SH), None),
         (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.COOLING), None),
         (EnergyPort(CONSUMPTION, SH, negated=True), None),
+        (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY), None),
         (EnergyPort(LOSS, SH), "no exchange with its source"),
         (EnergyPort(STORED, SH), "no exchange with its source"),
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS), "names the environment"),
@@ -1238,6 +1239,79 @@ def test_a_meter_is_the_peer_only_of_the_carrier_it_meters() -> None:
     (series,) = balance_report.declared.all_series()
     assert series.peer == Peer.unlinked()
     assert [port.name for port in balance_report.meter_check.unmetered] == ["Pump.Power"]
+
+
+def car(wired: bool) -> EnergyBalanceReport:
+    """A car battery the meter reads charging 2 kWh in one 900 s step, discharging 0.5 kWh into its car.
+
+    The battery loses 0.1 kWh and stores 1.4 kWh; the car turns the 0.5 kWh into driving. The discharge is vehicle
+    electricity, a carrier no meter reads (owner decision Q-K of the complete Sankey spec). With ``wired`` the car reads
+    the discharge through an input carrying its consumption port, as the car twin does; else nothing connects the two.
+    """
+    vehicle_electricity = lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY
+    columns: List[Column] = [
+        ("CarBattery", "ChargingIn", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [2.0]),
+        ("CarBattery", "DischargeOut", lt.Units.KWH, EnergyPort(PRODUCTION, vehicle_electricity), [0.5]),
+        ("CarBattery", "Loss", lt.Units.KWH, EnergyPort(LOSS, ELECTRICITY), [0.1]),
+        ("CarBattery", "Stored", lt.Units.KWH, EnergyPort(STORED, ELECTRICITY), [1.4]),
+        (
+            "Car",
+            "Driving",
+            lt.Units.KWH,
+            EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.DRIVING, environment=lt.EnvironmentNode.DRIVING),
+            [0.5],
+        ),
+        ("Meter", "FromGridInWatt", lt.Units.WATT, None, [8000.0]),
+        ("Meter", "ToGridInWatt", lt.Units.WATT, None, [0.0]),
+    ]
+    inputs = {
+        "Meter": [wired_input("Charging", "CarBattery", "ChargingIn")],
+        "Car": [
+            wired_input(
+                "FromBattery",
+                "CarBattery" if wired else None,
+                "DischargeOut" if wired else None,
+                EnergyPort(CONSUMPTION, vehicle_electricity),
+            )
+        ],
+    }
+    return report(columns, inputs=inputs, classes={"Meter": Meter})
+
+
+@pytest.mark.base
+def test_a_car_battery_discharging_into_its_car_passes_no_meter_and_the_meter_reads_only_its_charging() -> None:
+    """Grid import to the meter, the meter to the car battery, the battery straight to the car, the car to driving.
+
+    Catches the car's vehicle electricity linked to the meter (the meter would read 2.5 kWh where it publishes 2 kWh)
+    or listed as unmetered, and a car input port that does not find the battery it reads.
+    """
+    balance_report = car(wired=True)
+    peers = {series.name: series.peer for series in balance_report.declared.all_series()}
+    assert peers["CarBattery.ChargingIn"] == Peer.meter("Meter")
+    assert peers["CarBattery.DischargeOut"] == Peer(PeerKind.COMPONENT, "Car")
+    assert peers["Car.FromBattery"] == Peer(PeerKind.COMPONENT, "CarBattery")
+    assert peers["Car.Driving"] == Peer(PeerKind.BOUNDARY, "driving")
+    assert balance_report.declared.paired_links() == {("CarBattery", "Car", "vehicle_electricity"): (0.5, 0.5)}
+    (meter,) = balance_report.meter_check.balances
+    assert meter.agrees and meter.residual == pytest.approx(0.0, abs=1e-12)
+    assert not balance_report.meter_check.unmetered and not balance_report.declared.unlinked()
+    overall = flows(balance_report.sankeys()["overall"])
+    assert overall[("grid import", "Meter")] == pytest.approx(2.0)
+    assert overall[("Meter", "CarBattery")] == pytest.approx(2.0)
+    assert overall[("CarBattery", "Car")] == pytest.approx(0.5)
+    assert overall[("Car", "driving")] == pytest.approx(0.5)
+
+
+@pytest.mark.base
+def test_a_car_battery_whose_car_does_not_read_it_leaves_its_discharge_unlinked_not_unmetered() -> None:
+    """A car nobody connects to its battery: the discharge has no peer and is reported unlinked; the car books nothing.
+
+    Catches vehicle electricity that silently takes a boundary node or the meter when its car is missing.
+    """
+    balance_report = car(wired=False)
+    assert [series.name for series in balance_report.declared.unlinked()] == ["CarBattery.DischargeOut"]
+    assert "Car.FromBattery" not in {series.name for series in balance_report.declared.all_series()}
+    assert not balance_report.meter_check.unmetered
 
 
 @pytest.mark.base

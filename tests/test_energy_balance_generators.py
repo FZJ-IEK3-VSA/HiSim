@@ -96,16 +96,21 @@ def run_household(
     start: str = "2021-01-10",
     end: str = "2021-01-17",
     seconds_per_timestep: int = 900,
+    predefined_profile: bool = True,
 ) -> Path:
-    """Run a recorded household offline from ``start`` to ``end`` (midnight to midnight) and return its results.
+    """Run a recorded household from ``start`` to ``end`` (midnight to midnight) and return its results.
 
-    The defaults are the second January week of 2021 at 900 s.
+    The defaults are the second January week of 2021 at 900 s, offline: the occupancy reads a predefined profile
+    instead of running the LoadProfileGenerator. A household with a car keeps its local LoadProfileGenerator run
+    (``predefined_profile=False``), because only that run publishes the car's driving profile.
     """
     from hisim.energy_system.executor import run_energy_system  # pylint: disable=import-outside-toplevel
 
     twin = (ROOT / "energy_systems" / f"{setup}.energy_system.yaml").read_text(encoding="utf-8")
     energy_system = directory / "household.energy_system.yaml"
-    energy_system.write_text(twin.replace("USE_LOCAL_LPG", "USE_PREDEFINED_PROFILE"), encoding="utf-8")
+    if predefined_profile:
+        twin = twin.replace("USE_LOCAL_LPG", "USE_PREDEFINED_PROFILE")
+    energy_system.write_text(twin, encoding="utf-8")
     parameters = directory / "period.simulation.yaml"
     parameters.write_text(
         f"start_date: '{start}T00:00:00'\n"

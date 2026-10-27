@@ -116,6 +116,8 @@ components:
       maintenance_costs_in_euro_per_year: 889.96
       subsidy_as_percentage_of_investment_costs: 0.0
       occupancy_identity: use_local_lpg/CHR01 Couple both at Work/EnergySaving/Travel Route Set for 10km Commuting Distance/Bus and one 30 km/h Car/Charging At Home with 11 kW/with-appliances/CHR01 Couple both at Work/-/-
+    inputs:
+      - CarBattery_1
   CarBattery_1:
     class: hisim.components.advanced_ev_battery_bslib.CarBattery
     preset: standard
@@ -157,7 +159,7 @@ variants:
                 tags:
                   - ELECTRICITY_PRODUCTION
                 weight: 999
-              - from: L1EVChargeControl_1.BatteryChargingPowerToEMS
+              - from: CarBattery_1.AcBatteryChargingPower
                 component_type: CAR_BATTERY
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
@@ -247,7 +249,7 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
-              - from: L1EVChargeControl_1.BatteryChargingPowerToEMS
+              - from: CarBattery_1.AcBatteryChargingPower
                 component_type: CAR_BATTERY
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED

@@ -130,8 +130,11 @@ class HeatDistribution(cp.PhysicsComponent):
 
     In the energy balance (complete Sankey spec §5.1, hydronic stage E) the system declares its ports behind a
     buffer (``PARALLEL``), where it books this step's heat on the buffer's start-of-step temperature: its end of the
-    buffer's circuit (the fluid loop ``distribution``, which the buffer supplies) and the heat it delivers to the building
-    (``ThermalPowerDelivered``, ``PRODUCTION``, space-heating heat up to the building's input). Without a buffer it declares
+    buffer's circuit (the fluid loop ``distribution``, which the buffer supplies), the heat it delivers to the building
+    while it heats (``HeatDeliveredInWatt``, ``PRODUCTION``, space-heating heat) and the heat it takes from the building
+    while its controller cools (``HeatDrawnForCoolingInWatt``, ``CONSUMPTION`` of ``COOLING``): the two directions of
+    its signed ``ThermalPowerDelivered``, which the building computes with and which carries no port, since a port
+    books one direction only. Without a buffer it declares
     none yet: there its outputs lag one step behind its circuit, and the boiler of ``gas_boiler_household`` books a
     flow of its own on the same circuit, so its balance would not close (beads hisim-pnw7, the pipe water as a
     start-of-step node, and hisim-boiler-circuit-flow-gap-g2mx, who pumps a circuit without a buffer); until they
@@ -155,6 +158,10 @@ class HeatDistribution(cp.PhysicsComponent):
     WaterTemperatureOutput = "WaterTemperatureOutput"
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    #: The positive part of ThermalPowerDelivered, the heat delivered while heating, in W.
+    HeatDeliveredInWatt = "HeatDeliveredInWatt"
+    #: Minus the negative part of ThermalPowerDelivered, the heat taken from the building while cooling, in W.
+    HeatDrawnForCoolingInWatt = "HeatDrawnForCoolingInWatt"
     WaterMassFlowHDS = "WaterMassFlowHDS"
     #: The actual part-load ratio: the fraction of the step the circuit ran, reported back to the controller.
     ActualPartLoadRatio = "ActualPartLoadRatio"
@@ -316,8 +323,37 @@ class HeatDistribution(cp.PhysicsComponent):
                 "negative while it cools. Behind a buffer it is the heat of this step's circuit, m c (T_sup - T_ret); "
                 "without a buffer it lags one step."
             ),
+        )
+        # The signed heat above is the physics channel the building computes with and carries no port, since a port
+        # books one direction only; its two directions, each >= 0, carry the ports: heating is space-heating heat
+        # produced for the building, cooling (the controller's cooling mode, running water cooler than the room) is
+        # heat taken from the building, booked as COOLING the system consumes.
+        self.heat_delivered_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDeliveredInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the circuit delivers to the building while it heats, in W, >= 0: {self.ThermalPowerDelivered} "
+                "in a step in which it is positive, else 0."
+            ),
             energy_port=(
                 EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT)
+                if self.declares_energy_ports
+                else None
+            ),
+        )
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the circuit takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0."
+            ),
+            energy_port=(
+                EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING)
                 if self.declares_energy_ports
                 else None
             ),
@@ -583,6 +619,8 @@ class HeatDistribution(cp.PhysicsComponent):
             published.water_input_temperature_in_celsius - published.water_output_temperature_in_celsius,
         )
         stsv.set_output_value(self.thermal_power_delivered_channel, published.thermal_power_delivered_in_watt)
+        stsv.set_output_value(self.heat_delivered_channel, max(0.0, published.thermal_power_delivered_in_watt))
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -published.thermal_power_delivered_in_watt))
         stsv.set_output_value(
             self.water_mass_flow_channel,
             water_mass_flow_rate_in_kg_per_second,

@@ -102,6 +102,7 @@ class ConfigEnumSerializationCases:
                     water_mass_flow_rate_in_kg_per_second=0.5,
                     conditioned_floor_area_in_m2=120.0,
                     heat_distribution_system_type=heat_distribution_system.HeatDistributionSystemType.RADIATOR,
+                    heat_distribution_cooling_enabled=False,
                 )
             )
         ),

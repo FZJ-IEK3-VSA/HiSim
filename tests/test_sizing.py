@@ -410,6 +410,7 @@ def test_hds_preset_is_sizing_mandatory_and_enum_typed():
         water_mass_flow_rate_in_kg_per_second=0.2712,
         conditioned_floor_area_in_m2=121.2,
         heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
+        heat_distribution_cooling_enabled=False,
     )
     resolved = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(ctx)
     assert resolved.water_mass_flow_rate_in_kg_per_second == 0.27  # the old factory's round(.., 2)

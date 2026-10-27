@@ -295,12 +295,20 @@ gets no port; the report may list it beside the diagram.
 | Carrier | Role | Output(s) | Peer |
 |---|---|---|---|
 | SH heat | `IN` circuit from the buffer (or the generator without buffer) | `WaterMassFlowHDS`, `WaterTemperatureInlet`, `WaterTemperatureOutput` | buffer or generator |
-| SH heat | `OUT` | `ThermalPowerDelivered` (W, signed today: positive heating) | the building (`peer_output`) |
+| SH heat | `OUT` | `HeatDeliveredInWatt` (W, `>= 0`: the positive part of the signed `ThermalPowerDelivered`) | the building (`peer_output` `ThermalPowerDelivered`) |
+| Cooling | `IN` | `HeatDrawnForCoolingInWatt` (W, `>= 0`: minus the negative part of `ThermalPowerDelivered`) | the building (`peer_output` `ThermalPowerDelivered`) |
 | SH heat | `LOSS` | none today: the model has no pipe loss | – |
 
-Sign: `ThermalPowerDelivered` is split into a heating output (`>= 0`, `SPACE_HEATING_HEAT` `OUT`) and a cooling
-output (`>= 0`, `COOLING` `IN`) when cooling through the HDS is built (hisim-energy-sankeys-9uoo.17, hisim-hydronics-fxix.7); no twin cools
-through the HDS today.
+Sign: the signed `ThermalPowerDelivered`, which the building reads, carries no port; its two directions are the two
+outputs above, each `>= 0` (hisim-hds-cooling-option-m4g6). The circuit cools only where the heat distribution
+controller's configuration enables it: `HeatDistributionControllerConfig.cooling_enabled`, off in every preset and
+so in every twin (owner, 2026-10-27). The controller then never opens the valve for cooling, the system copies the
+option as the sizing fact `heat_distribution_cooling_enabled` and refuses a cooling command without it, and
+`HeatDrawnForCoolingInWatt` is 0 in every step of every twin. Before the option, every buffered twin cooled a little
+through its HDS (in 2021 at 900 s, 18.3 kWh in `household_heatpump_building_sizer` and 25.0 kWh in
+`household_gas_building_sizer`), buffer water cooler than the room taking room heat into the buffer. A system that
+cools through the HDS switches the option on beside a generator that can cool (hisim-energy-sankeys-9uoo.17,
+hisim-hydronics-fxix.7).
 
 The generators' circuit ends (boiler, heat pump, district heating, electric heater, solar collector) become
 `HydronicPort`s in the same PR; their fuel, electricity, ambient, solar and loss ports stay `EnergyPort`s.

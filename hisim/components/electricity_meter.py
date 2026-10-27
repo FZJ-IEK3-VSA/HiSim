@@ -460,11 +460,17 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         controller) is read as its channel says, with the factor 1. Called once the inputs are connected, at the
         first step.
 
+        The inputs are returned sorted by their source component and output, so the channel sums them in the same
+        order however the system was wired: a Python setup, its recorded twin and its composed file add their inputs
+        in different orders, and floating-point addition is not associative, so the sums would otherwise differ in the
+        last bits.
+
         Args:
             channel_key: :attr:`PRODUCTION_CHANNEL` or :attr:`CONSUMPTION_UNCONTROLLED_CHANNEL`.
 
         Returns:
-            The channel's inputs with their factors, in the order the channel sums them.
+            The channel's inputs with their factors, sorted by source component and output, the order the channel
+            sums them in.
 
         Raises:
             ValueError: For an input whose output declares a port the meter does not read (not electricity, or a
@@ -496,7 +502,7 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
                     f"{self.FLOW_TAG_OF_ROLE[port.role].name}. Feed it with that tag."
                 )
             readings.append((component_input, -1.0 if port.negated else 1.0))
-        return readings
+        return sorted(readings, key=lambda reading: (reading[0].src_object_name or "", reading[0].src_field_name or ""))
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Sum what the meter reads into consumption and production, and publish the grid import and export."""

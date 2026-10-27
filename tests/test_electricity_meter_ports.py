@@ -198,3 +198,20 @@ def test_a_port_fed_through_the_channel_of_the_other_role_is_refused(tmp_path: P
     house.wire()
     with pytest.raises(ValueError, match="Battery.DischargingPower, an electricity out port"):
         house.step({})
+
+
+@pytest.mark.base
+def test_the_meter_sums_its_readings_in_the_order_of_their_sources_not_of_their_wiring(tmp_path: Path) -> None:
+    """Each channel sums its inputs sorted by source component and output, whatever order they were wired in.
+
+    Catches a meter that sums in wiring order: a Python setup, its recorded twin and its composed file wire the same
+    inputs in different orders, and floating-point addition is not associative, so their grid columns would differ in
+    the last bits (the composed twin gate compares them bit for bit).
+    """
+    house = MeteredHouse(tmp_path)
+    house.wire()
+    house.step({})
+    wired = [(source, output) for source, output, tags in house.reads() if tags == [CONSUMPTION]]
+    summed = [(item.src_object_name, item.src_field_name) for item, _ in house.meter.consumption_readings]
+    assert wired != sorted(wired), "the heat pump is wired before the battery, so wiring order is not sorted"
+    assert summed == sorted(wired)

@@ -198,3 +198,26 @@ def test_a_port_fed_through_the_channel_of_the_other_role_is_refused(tmp_path: P
     house.wire()
     with pytest.raises(ValueError, match="Battery.DischargingPower, an electricity out port"):
         house.step({})
+
+
+
+@pytest.mark.base
+def test_the_meter_sums_its_readings_exactly_rounded_whatever_order_they_were_wired_in(tmp_path: Path) -> None:
+    """Each channel's total is the exactly rounded sum of its readings, which does not depend on their order.
+
+    Catches a meter that sums in wiring order: a Python setup, its recorded twin and its composed file wire the same
+    inputs in different orders, and floating-point addition is not associative, so their grid columns would differ in
+    the last bits (the composed twin gate compares them bit for bit). With 0.1, 0.2 and 0.3 W a left-to-right sum (Python 3.11's
+    ``sum``, which CI runs; 3.12 compensates) gives 0.6000000000000001 W, the exactly rounded sum 0.6 W.
+    """
+    house = MeteredHouse(tmp_path)
+    house.wire()
+    published = house.step(
+        {
+            ("HeatPump", "ElectricalInputPowerSH"): 0.1,
+            ("HeatPump", "ElectricalInputPowerForCooling"): 0.2,
+            ("HeatPump", "ElectricalInputPowerBrinePump"): 0.3,
+        }
+    )
+    assert (0.1 + 0.2) + 0.3 != 0.6
+    assert published["ElectricityConsumptionInWatt"] == 0.6

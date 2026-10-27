@@ -1,5 +1,6 @@
 """Electricity meter module should replace the sumbuilder. """
 
+import math
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar, List, Mapping, Optional, Tuple
@@ -518,11 +519,13 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
 
         # ELECTRICITY #
 
-        # get sum of production and consumption for all inputs for each iteration
-        production_in_watt = sum(
+        # Summed exactly rounded (math.fsum), so the totals do not depend on the order the inputs were wired in: a
+        # Python setup, its recorded twin and its composed file wire them in different orders, and a plain sum would
+        # make their grid columns differ in the last bits.
+        production_in_watt = math.fsum(
             factor * stsv.get_input_value(component_input=elem) for elem, factor in self.production_readings
         )
-        consumption_uncontrolled_in_watt = sum(
+        consumption_uncontrolled_in_watt = math.fsum(
             factor * stsv.get_input_value(component_input=elem) for elem, factor in self.consumption_readings
         )
 

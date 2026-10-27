@@ -95,7 +95,7 @@ def test_the_heat_refuses_what_the_library_refuses(
 def test_names_must_be_distinct_identifiers(names: tuple) -> None:
     """A port whose names are not three distinct identifiers would pair the wrong outputs; it must be refused."""
     with pytest.raises(HydronicPortError):
-        HydronicPort(*names, role=lt.EnergyRole.OUT, carrier=Circuit.CARRIER)
+        HydronicPort(*names, role=lt.EnergyRole.PRODUCTION, carrier=Circuit.CARRIER)
 
 
 def test_names_obey_the_one_identifier_rule() -> None:
@@ -103,13 +103,13 @@ def test_names_obey_the_one_identifier_rule() -> None:
     assert "Vorlauftemperaturé".isidentifier()
     with pytest.raises(HydronicPortError, match="supply_temperature"):
         HydronicPort(
-            "MassFlowSh", "Vorlauftemperaturé", "ReturnTemperatureSh", role=lt.EnergyRole.OUT, carrier=Circuit.CARRIER
+            "MassFlowSh", "Vorlauftemperaturé", "ReturnTemperatureSh", role=lt.EnergyRole.PRODUCTION, carrier=Circuit.CARRIER
         )
 
 
-@pytest.mark.parametrize("role", [lt.EnergyRole.LOSS, "in"])
-def test_role_is_in_or_out(role: object) -> None:
-    """A circuit end is the supply owner (OUT) or the receiver (IN); any other role would unbalance the circuit."""
+@pytest.mark.parametrize("role", [lt.EnergyRole.LOSS, "consumption"])
+def test_role_is_consumption_or_production(role: object) -> None:
+    """A circuit end is the supply owner (PRODUCTION) or the receiver (CONSUMPTION); any other role would unbalance the circuit."""
     with pytest.raises(HydronicPortError):
         # the refusal of a wrong type is tested
         HydronicPort(*Circuit.NAMES, role=role, carrier=Circuit.CARRIER)  # type: ignore[arg-type]
@@ -121,10 +121,10 @@ def test_role_is_in_or_out(role: object) -> None:
 def test_carrier_is_space_heating_or_hot_water_heat(carrier: object) -> None:
     """The Sankey must know which heat a circuit carries (spec §4.2); a circuit carries no other carrier."""
     with pytest.raises(HydronicPortError, match="space-heating or hot-water heat"):
-        HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.OUT, carrier=carrier)  # type: ignore[arg-type]
+        HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.PRODUCTION, carrier=carrier)  # type: ignore[arg-type]
 
 
 def test_a_circuit_names_its_heat() -> None:
     """Both circuit carriers are accepted and kept."""
     for carrier in HydronicPort.CIRCUIT_CARRIERS:
-        assert HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.IN, carrier=carrier).carrier is carrier
+        assert HydronicPort(*Circuit.NAMES, role=lt.EnergyRole.CONSUMPTION, carrier=carrier).carrier is carrier

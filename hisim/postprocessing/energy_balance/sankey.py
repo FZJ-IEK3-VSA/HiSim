@@ -4,15 +4,15 @@ The graph follows ``roadmap/complete_energy_sankeys_spec.md`` §4 (owner decisio
 of the kinds of :class:`NodeKind`; every edge carries one carrier, a yearly value in kWh (always drawn positive: a
 negative total turns the edge round) and the port it came from:
 
-* **transfer**: a producer's ``OUT`` port to a consumer's ``IN`` port, drawn once, at the value the receiver books;
+* **transfer**: a producer's ``PRODUCTION`` port to a consumer's ``CONSUMPTION`` port, drawn once, at the value the receiver books;
   when the two sides disagree beyond the tolerance, the difference goes to or from ``unaccounted`` at the sender. A
   port whose peer declares no ports is drawn to or from the grey node "undeclared: <component>", so the graph also
   shows how much of the house the balance covers.
-* **metered**: a metered port whose peer is a meter, ``IN`` from the meter and ``OUT`` to it.
+* **metered**: a metered port whose peer is a meter, ``CONSUMPTION`` from the meter and ``PRODUCTION`` to it.
 * **meter boundary**: what a meter publishes, its import from "grid import" or the carrier's supply node and its
   export to "grid export" (:mod:`.meters`). A meter's gap between what it publishes and what it reads is its
   residual, treated like a component's.
-* **boundary**: an ``IN`` port from its boundary node ("natural gas supply", "ambient heat", "sun") or an ``OUT``
+* **boundary**: a ``CONSUMPTION`` port from its boundary node ("natural gas supply", "ambient heat", "sun") or a ``PRODUCTION``
   port to one.
 * **loss**: a ``LOSS`` port to its own loss node, "<component> · <output>", which carries the total on to its
   boundary node, "outdoors" unless the port names another.
@@ -242,14 +242,14 @@ class SankeyBuilder:
         Args:
             component: The port's component.
             series: The port.
-            paired: The transfers both sides book; their sender's ``OUT`` port draws nothing, the receiver does.
+            paired: The transfers both sides book; their sender's ``PRODUCTION`` port draws nothing, the receiver does.
         """
         carrier = series.port.carrier.value
         total = series.annual_kilowatt_hours
         role = series.port.role
         label = series.name
         edge = self.EDGE_OF_PEER[series.peer.kind]
-        if role == lt.EnergyRole.IN:
+        if role == lt.EnergyRole.CONSUMPTION:
             self.add(self.node_of(series.peer), component, total, carrier, label, edge)
         elif role == lt.EnergyRole.STORED_CHANGE:
             self.add(component, self.node_of(series.peer), total, carrier, label, EdgeKind.STORAGE)
@@ -259,7 +259,7 @@ class SankeyBuilder:
             self.add(loss, self.node_of(series.peer), total, carrier, label, EdgeKind.LOSS)
         elif (component, series.peer.name, carrier) not in paired:
             self.add(component, self.node_of(series.peer), total, carrier, label, edge)
-        # an OUT port of a paired transfer is drawn once, at the receiver's value, by the receiver's IN port
+        # a PRODUCTION port of a paired transfer is drawn once, at the receiver's value, by the receiver's CONSUMPTION port
 
 
 class SankeyDiagram:

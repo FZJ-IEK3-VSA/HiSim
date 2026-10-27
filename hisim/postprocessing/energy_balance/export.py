@@ -8,8 +8,8 @@ than it reads or a metered port passes no meter (:mod:`.meters`); the message na
 which no component declares a port passes.
 
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only decides whether the
-files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/2``) lists, per
-declared component, the run's in / out / loss / storage change in kWh (in total and per carrier), the residual in kWh
+files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/3``) lists, per
+declared component, the run's consumption / production / loss / storage change in kWh (in total and per carrier), the residual in kWh
 and in percent of the throughput, the worst step and the verdict; then every link between declared components (a
 side that books nothing is null, and a failing link states its reason); every meter with what it publishes, the
 ports it reads and whether the two agree; every unmetered port; every unlinked port; every undeclared component; and
@@ -51,8 +51,10 @@ class EnergyBalanceReport:
     SANKEY_DIRECTORY: ClassVar[str] = "energy_sankeys"
     #: The file of every view's nodes and links in the Sankey directory.
     SANKEY_JSON_FILE: ClassVar[str] = "energy_sankey.json"
-    #: The report's schema: 2 adds the meters, the unmetered and unlinked ports and the exempt components.
-    REPORT_SCHEMA: ClassVar[str] = "hisim.energy_balance/2"
+    #: The report's schema: 2 adds the meters, the unmetered and unlinked ports and the exempt components; 3 renames
+    #: the roles ``in`` and ``out`` to ``consumption`` and ``production``, and the totals ``in_kwh`` and ``out_kwh`` to
+    #: ``consumption_kwh`` and ``production_kwh``.
+    REPORT_SCHEMA: ClassVar[str] = "hisim.energy_balance/3"
 
     def __init__(
         self,
@@ -239,7 +241,7 @@ class EnergyBalanceReport:
         lines: List[str] = []
         for balance in self.failing:
             carriers = ", ".join(
-                f"{carrier} {totals.residual:.6g} kWh" for carrier, totals in balance.carriers.items()
+                f"{carrier} {totals.residual_in_kilowatt_hour:.6g} kWh" for carrier, totals in balance.carriers.items()
             )
             worst = balance.worst_step
             worst_text = (

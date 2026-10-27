@@ -1,7 +1,7 @@
 # The public grid connection (the one provider of electricity) and its bidirectional meter, an observer whose
 # selection the importing file writes (spec §4.3, §5.1). Electricity has no link: an electricity need only checks that
 # exactly one connection exists. At its default the meter observes every electricity port the system's components
-# declare, an IN port as consumption and an OUT port as production, beside an energy manager too: a meter reads physics
+# declare, a CONSUMPTION port as consumption and a PRODUCTION port as production, beside an energy manager too: a meter reads physics
 # ports only, never the manager's balance (bead hisim-component-physics-4g9.39), and bills the grid exchange itself.
 
 schema_version: 4

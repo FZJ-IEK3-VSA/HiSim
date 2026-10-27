@@ -621,7 +621,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power for SH in Watt",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.p_el_cooling: ComponentOutput = self.add_output(
@@ -631,7 +631,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             unit=Units.WATT,
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for cooling in Watt",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.p_el_brine_pump: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -642,7 +642,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "Electricity of the brine or well pump of a ground- or water-source heat pump in W, part of "
                 "ElectricalInputPowerTotalHeatpump; zero for an air-source heat pump."
             ),
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -726,7 +726,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal Input Power from Environment",
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.AMBIENT_HEAT),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.AMBIENT_HEAT),
         )
         self.thermal_power_delivered_for_space_heating: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -735,7 +735,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             unit=Units.WATT,
             output_description="Heat delivered to the space-heating circuit in W: ThermalOutputPowerSH when positive.",
             energy_port=EnergyPort(
-                EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.MassFlowOutputSH
+                EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.MassFlowOutputSH
             ),
         )
         self.thermal_power_drawn_for_cooling: ComponentOutput = self.add_output(
@@ -747,7 +747,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "Heat drawn from the space-heating circuit in cooling mode in W: minus ThermalOutputPowerSH when "
                 "negative. It leaves, with the electricity, to the environment."
             ),
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.COOLING, peer_output=self.MassFlowOutputSH),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.COOLING, peer_output=self.MassFlowOutputSH),
         )
 
         self.thermal_energy_hp_space_heating_channel: ComponentOutput = self.add_output(
@@ -865,7 +865,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 output_description=("Thermal output power dhw Storage in Watt"),
                 postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
                 energy_port=EnergyPort(
-                    EnergyRole.OUT, EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=self.MassFlowOutputDHW
+                    EnergyRole.PRODUCTION, EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=self.MassFlowOutputDHW
                 ),
             )
 
@@ -875,7 +875,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT,
                 output_description="Electricity input power for DHW in Watt",
-                energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+                energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
             )
 
             self.t_in_dhw: ComponentOutput = self.add_output(

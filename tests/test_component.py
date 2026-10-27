@@ -40,7 +40,7 @@ def test_component_output_and_input() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         postprocessing_flag=[],
-        energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY),
+        energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         output_description="Test output description",
         source_component_class="TestComponentClass",
         component_id=ComponentID("TestComponent"),
@@ -56,7 +56,7 @@ def test_component_output_and_input() -> None:
     assert output.unit == lt.Units.WATT
     assert output.global_index == -1  # Default value
     assert output.postprocessing_flag == []
-    assert output.energy_port == EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY)
+    assert output.energy_port == EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY)
     assert output.output_description == "Test output description"
     assert output.source_component_class == "TestComponentClass"
 

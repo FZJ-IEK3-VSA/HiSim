@@ -443,13 +443,13 @@ class MockHeater(MockComponent, PhysicsComponent):
             "ThermalPower",
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
         self.output_port(
             "ElectricityInput",
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.defaults_from("MockController", {"Signal": "Signal"})
 
@@ -811,14 +811,14 @@ class MockBoiler(MockComponent, PhysicsComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             energy_port=EnergyPort(
-                lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW
+                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW
             ),
         )
         self.output_port(
             "FuelUse",
             lt.LoadTypes.GAS,
             lt.Units.WATT_HOUR,
-            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
         )
         self.output_port(
             "FlueLoss",
@@ -874,7 +874,7 @@ class MockCombiBurner(MockComponent, PhysicsComponent):
                 name,
                 lt.LoadTypes.GAS,
                 lt.Units.WATT_HOUR,
-                energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output=name),
+                energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output=name),
             )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:

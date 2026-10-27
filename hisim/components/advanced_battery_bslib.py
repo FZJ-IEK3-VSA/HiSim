@@ -384,7 +384,7 @@ class Battery(PhysicsComponent):
             unit=Units.WATT,
             output_description=f"here a description for {self.ChargingPower} will follow.",
             # the electricity meter reads this port, and the discharging port below, by their roles
-            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.discharging_power_channel: ComponentOutput = self.add_output(
@@ -393,7 +393,7 @@ class Battery(PhysicsComponent):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=f"here a description for {self.DischargingPower} will follow.",
-            energy_port=EnergyPort(EnergyRole.OUT, EnergyBalanceCarrier.ELECTRICITY, negated=True),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.ELECTRICITY, negated=True),
         )
         self.maximum_charging_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

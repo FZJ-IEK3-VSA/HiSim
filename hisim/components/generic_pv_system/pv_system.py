@@ -237,7 +237,7 @@ class PVSystem(cp.PhysicsComponent):
                 lt.ComponentType.PV,
             ],
             output_description="Electricity output of the PV system.",
-            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
@@ -264,7 +264,7 @@ class PVSystem(cp.PhysicsComponent):
                 "The solar power on the modules, in W: the global irradiance on the plane of the array times the "
                 "area of its modules (peak power over module peak power, times module area). Zero at night."
             ),
-            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.SOLAR),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SOLAR),
         )
         self.module_and_inverter_loss_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,

@@ -1574,7 +1574,7 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.EnergyDemandSh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, fuel_carrier),
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -1592,7 +1592,7 @@ class GenericBoiler(PhysicsComponent):
             output_description=f"here a description for {self.ThermalOutputEnergySh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             energy_port=EnergyPort(
-                lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputMassFlowSh
+                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputMassFlowSh
             ),
         )
 
@@ -1625,7 +1625,7 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.WATT_HOUR,
             output_description="Energy demand",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, fuel_carrier),
         )
         self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -1643,7 +1643,7 @@ class GenericBoiler(PhysicsComponent):
             output_description="Thermal energy output",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             energy_port=EnergyPort(
-                lt.EnergyRole.OUT,
+                lt.EnergyRole.PRODUCTION,
                 lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
                 peer_output=self.WaterOutputMassFlowDhw,
             ),

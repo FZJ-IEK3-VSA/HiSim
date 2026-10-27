@@ -1009,8 +1009,8 @@ energy check (D15), which is why that check waits for pnw7. Re-recorded: the thr
 
 ## 9. Beads
 
-Epic hisim-hydraulic-circuits-wci7 (P2, `components`; its `owner-decision` label is for the owner to remove with
-`br`, now that every question is decided). The child beads are filed with `br`, one per stage of §4; this PR edits
+Epic hisim-hydraulic-circuits-wci7 (P2, `components`; its `owner-decision` label was removed on 2026-10-27,
+every question being decided). The child beads are filed with `br`, one per stage of §4; this PR edits
 the epic's title and description wording to "fluid loops" (in `.beads/issues.jsonl`, its id unchanged) and files no
 child bead; the rows marked *to file* are the list for that.
 

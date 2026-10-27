@@ -21,14 +21,18 @@ the other side None: the check compares the totals of a pair and fails a one-sid
 pair once (:meth:`DeclaredPorts.paired_links`). A booking toward a component that declares no ports at all, a
 meter, a boundary node or nobody stays one-sided without failing.
 
-A water circuit is declared by both of its ends with a :class:`~hisim.energy_port.HydronicPort`
-(:class:`~hisim.energy_port.CircuitEnd`). :meth:`DeclaredPorts.collect` follows each end's inputs to the outputs
-connected to them (:class:`CircuitColumns`), derives the circuit's heat once from the three columns and gives both
-ends that one series, the supply owner's as a ``PRODUCTION`` port and the receiver's as a ``CONSUMPTION`` port of the circuit's
-carrier, each with the other end as its peer (:meth:`Wiring.circuit_peer`). So a circuit is a transfer like any
-other, which :meth:`DeclaredPorts.declared_links` pairs, and it cannot disagree with itself. What breaks the rules of
-:mod:`hisim.energy_port` (two readers of one flow, an end without its match, a circuit that pumps water it cannot
-account for) is a :attr:`DeclaredPorts.circuit_faults` entry, which fails the run.
+A water circuit, a fluid loop, is declared by the loop tags on its members' channels
+(:class:`~hisim.energy_port.FluidLoopChannel`); each member's tagged channels of one loop are its port set
+(:class:`~hisim.component.FluidLoopPortSet`), and each port set is one *end* of the circuit here.
+:meth:`DeclaredPorts.collect` follows each end's inputs to the outputs connected to them (:class:`CircuitColumns`),
+derives the circuit's heat once from the three columns and gives both ends that one series, booked by the supplier's
+sign (§3.4 of ``roadmap/hydraulic_circuits_spec.md``): where the supplier heats the water, the supplier's ``PRODUCTION`` port
+and the receiver's ``CONSUMPTION`` port of the loop's carrier; where it cools it, the receiver's ``PRODUCTION`` port and the
+supplier's ``CONSUMPTION`` port of ``COOLING``. Each end has the other as its peer (:meth:`Wiring.circuit_peer`). So a circuit
+is a transfer like any other, which :meth:`DeclaredPorts.declared_links` pairs, and it cannot disagree with itself.
+What breaks the rules of :mod:`hisim.energy_port` (two readers of one flow, an end without its match, no or two
+suppliers, a circuit that pumps water it cannot account for) is a :attr:`DeclaredPorts.circuit_faults` entry, which
+fails the run.
 
 Beside the ports, :class:`DeclaredPorts` reads what each meter publishes (:class:`MeterReading`, from
 :meth:`hisim.component.Component.metered_exchanges`), which :mod:`.meters` checks against the ports it reads.
@@ -44,19 +48,21 @@ from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequ
 import numpy as np
 import pandas as pd
 
+from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim.component import (
     Component,
     ComponentKindNotDeclaredError,
     ComponentKinds,
     ComponentOutput,
+    FluidLoopPortSet,
     L1ControllerComponent,
     L2ControllerComponent,
     MeterComponent,
 )
 from hisim.component_wrapper import ComponentWrapper
 from hisim.config.channels import PortTypeCompatibility
-from hisim.energy_port import CircuitEnd, EnergyPort, HydronicPort, MeteredExchange
+from hisim.energy_port import EnergyPort, LoopQuantity, MeteredExchange
 
 
 @enum.unique
@@ -159,9 +165,72 @@ class CircuitColumns:
     supply_temperature: Tuple[str, str]
     return_temperature: Tuple[str, str]
 
+    #: The three legs of a circuit, as the fields name them.
+    LEGS: ClassVar[Tuple[str, ...]] = ("mass_flow", "supply_temperature", "return_temperature")
+
     def as_dict(self) -> Dict[str, str]:
         """The three outputs as the balance report lists them, ``component.output`` each."""
-        return {leg: ".".join(getattr(self, leg)) for leg in CircuitEnd.LEGS}
+        return {leg: ".".join(getattr(self, leg)) for leg in self.LEGS}
+
+    def joins_the_same_outputs(self, other: "CircuitColumns") -> bool:
+        """Whether ``other`` names the same flow and the same two temperatures, whichever it takes for the supply.
+
+        Two members of one loop resolve to the same three outputs when exactly one of them supplies it; when both or
+        neither state ``supplies``, they read the two temperatures the other way round, and this still finds them one
+        loop, so that the fault names the suppliers rather than a missing member.
+        """
+        return self.mass_flow == other.mass_flow and {self.supply_temperature, self.return_temperature} == {
+            other.supply_temperature,
+            other.return_temperature,
+        }
+
+    @staticmethod
+    def heat_in_kilowatt_hours_per_step(
+        *,
+        mass_flow_in_kg_per_second: np.ndarray,
+        supply_temperature_in_celsius: np.ndarray,
+        return_temperature_in_celsius: np.ndarray,
+        seconds_per_timestep: float,
+        specific_heat_in_joule_per_kilogram_kelvin: float,
+    ) -> np.ndarray:
+        """Return the heat a circuit's fluid carries in every step of a run, ``m c (T_sup - T_ret) dt``, in kWh.
+
+        The rule of :func:`hisim.hydronics.circuit_power_w` times the step, converted from J to kWh, the same
+        operations in the same order, applied to the three columns of the result table at once; so for water it
+        agrees to the last bit with the power a component books for the same three values. ``c`` is the loop's fluid's
+        (:attr:`hisim.energy_port.LoopFluid.specific_heat_j_per_kg_k`). For example, flows of 0.1 and 0 kg/s of water
+        over 10 K for one hour carry 4.18 and 0 kWh.
+
+        Args:
+            mass_flow_in_kg_per_second: The circuit's mass flow per step, in kg/s, at least 0 in every step.
+            supply_temperature_in_celsius: The supply temperature per step, in °C.
+            return_temperature_in_celsius: The return temperature per step, in °C.
+            seconds_per_timestep: The step duration, in s.
+            specific_heat_in_joule_per_kilogram_kelvin: The fluid's specific heat capacity, in J/(kg K).
+
+        Returns:
+            The heat per step, in kWh; negative in a step in which the supplier cools the fluid.
+
+        Raises:
+            HydronicsError: If a step's flow is negative (``NegativeMassFlowError``, naming the first such step) or
+                the step is not positive (``NonPositiveTimestepError``), as :func:`hisim.hydronics.circuit_power_w`
+                raises them for one step.
+        """
+        mass_flow = np.asarray(mass_flow_in_kg_per_second, dtype=float)
+        if seconds_per_timestep <= 0.0:
+            raise hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
+        negative = mass_flow < 0.0
+        if negative.any():
+            first = int(np.argmax(negative))
+            raise hydronics.NegativeMassFlowError(
+                f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow[first]!r} in step {first}."
+            )
+        supply = np.asarray(supply_temperature_in_celsius, dtype=float)
+        returned = np.asarray(return_temperature_in_celsius, dtype=float)
+        power_in_watt = mass_flow * specific_heat_in_joule_per_kilogram_kelvin * (supply - returned)
+        return np.asarray(
+            power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR, dtype=float
+        )
 
     @property
     def label(self) -> str:
@@ -177,7 +246,8 @@ class PortSeries:
     """One declared port of one component: its declaration, its peer and its kWh per step.
 
     A circuit end (``circuit`` set) is a port too: its ``port`` states its role and carrier, its ``output`` is the
-    circuit's mass flow, and its kWh per step are the circuit's heat, the same series at both ends.
+    circuit's mass flow, and its kWh per step are the circuit's heat in the steps its direction is the port's, the same
+    series at both ends (:meth:`DeclaredPorts.add_circuits`).
     """
 
     component: str
@@ -347,13 +417,16 @@ class DeclaredPorts:
         return metered_carriers, exempt
 
     @staticmethod
-    def circuit_ends_of(component: Any) -> Tuple[CircuitEnd, ...]:
-        """The circuit ends ``component`` declares; empty when it declares none.
+    def port_sets_of(component: Any) -> Tuple[FluidLoopPortSet, ...]:
+        """The circuit ends ``component`` declares, its port sets (:meth:`hisim.component.Component.port_sets`).
 
-        A component declares them with :meth:`hisim.component.Component.add_hydronic_port`; a stand-in without the
-        attribute, as the tests build them, declares none.
+        A stand-in without the method, as the tests build them, declares none.
+
+        Raises:
+            FluidLoopError: If the component tags a loop by half.
         """
-        return tuple(getattr(component, "hydronic_ports", ()))
+        declare = getattr(component, "port_sets", None)
+        return tuple(declare()) if callable(declare) else ()
 
     def add_circuits(
         self,
@@ -364,55 +437,97 @@ class DeclaredPorts:
     ) -> None:
         """Add every declared circuit end as a port, with the circuit's heat per step and the other end as its peer.
 
-        The heat of each circuit is derived once from its three columns
-        (:meth:`hisim.energy_port.HydronicPort.heat_in_kilowatt_hours_per_step`) and both ends carry that series.
-        The wiring's faults (:meth:`Wiring.circuits`) become :attr:`circuit_faults`, and so does an end that pumps
-        water into a circuit it cannot follow: one whose own flow is not 0 in some step while one of the quantities it
-        reads is not connected. An open end that moves no water is left out without a fault: a buffer's circuit to a
-        second generator the house does not have, a boiler's hot-water circuit in a house without a tank.
+        The heat of each circuit is derived once from its three columns (:meth:`CircuitColumns.heat_in_kilowatt_hours_per_step`,
+        with the specific heat of the loop's fluid), and both ends book that series by the supplier's sign
+        (:meth:`book_by_the_supplier_s_sign`). The wiring's faults (:meth:`Wiring.circuits`) become
+        :attr:`circuit_faults`, and so does an end that pumps water into a circuit it cannot follow: one whose own flow
+        is not 0 in some step while one of the quantities it reads is not connected. An open end that moves no water is
+        left out without a fault: a buffer's circuit to a second generator the house does not have, a boiler's
+        hot-water circuit in a house without a tank.
 
         Raises:
             ValueError: If an end names an output the run does not have.
         """
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
         self.circuit_faults.extend(circuits.faults)
-        for name, end, open_leg in circuits.open_ends:
-            column = position_of.get((name, end.port.mass_flow))
-            if end.is_input("mass_flow") or column is None:
+        for name, port_set, open_quantity in circuits.open_ends:
+            if port_set.flow_quantity is not LoopQuantity.FLOW_OUT:
                 continue
-            if np.any(results.iloc[:, column].to_numpy(dtype=float) != 0.0):
+            flow = port_set.channels[LoopQuantity.FLOW_OUT].field_name
+            column = position_of.get((name, flow))
+            if column is not None and np.any(results.iloc[:, column].to_numpy(dtype=float) != 0.0):
                 self.circuit_faults.append(
-                    f"{name} pumps water through its circuit {end.port.mass_flow} ({end.port.carrier.value}), but its "
-                    f"{open_leg} input {end.name_of(open_leg)} is not connected: the heat of that water goes nowhere "
-                    "the balance can see"
+                    f"{name} pumps water through its loop {port_set.loop.name!r} ({flow}, "
+                    f"{port_set.loop.carrier.value}), but its {open_quantity.value} input "
+                    f"{port_set.channels[open_quantity].field_name} is not connected: the heat of that water goes "
+                    "nowhere the balance can see"
                 )
-        heat_of: Dict[CircuitColumns, np.ndarray] = {}
-        for name, end, columns, peer_name in circuits.ends:
-            for leg in CircuitEnd.LEGS:
+        heat_of: Dict[Tuple[CircuitColumns, float], np.ndarray] = {}
+        for name, port_set, columns, peer_name in circuits.ends:
+            for leg in CircuitColumns.LEGS:
                 if getattr(columns, leg) not in position_of:
                     raise ValueError(
                         f"{name} declares a circuit whose {leg} is {'.'.join(getattr(columns, leg))}, an output the "
                         "run does not have."
                     )
-            if columns not in heat_of:
+            specific_heat = port_set.loop.fluid.specific_heat_j_per_kg_k
+            if (columns, specific_heat) not in heat_of:
                 mass_flow, supply, returned = (
-                    results.iloc[:, position_of[getattr(columns, leg)]].to_numpy(dtype=float) for leg in CircuitEnd.LEGS
+                    results.iloc[:, position_of[getattr(columns, leg)]].to_numpy(dtype=float)
+                    for leg in CircuitColumns.LEGS
                 )
-                heat_of[columns] = HydronicPort.heat_in_kilowatt_hours_per_step(
+                heat_of[(columns, specific_heat)] = CircuitColumns.heat_in_kilowatt_hours_per_step(
                     mass_flow_in_kg_per_second=mass_flow,
                     supply_temperature_in_celsius=supply,
                     return_temperature_in_celsius=returned,
                     seconds_per_timestep=seconds_per_timestep,
+                    specific_heat_in_joule_per_kilogram_kelvin=specific_heat,
                 )
-            series = PortSeries(
-                component=name,
-                output=all_outputs[position_of[columns.mass_flow]],
-                port=EnergyPort(end.port.role, end.port.carrier),
-                peer=Peer.unlinked() if peer_name is None else Peer(PeerKind.COMPONENT, peer_name),
-                kilowatt_hours=heat_of[columns],
-                circuit=columns,
-            )
-            self.by_component.setdefault(name, []).append(series)
+            peer = Peer.unlinked() if peer_name is None else Peer(PeerKind.COMPONENT, peer_name)
+            for port, kilowatt_hours in self.book_by_the_supplier_s_sign(
+                heat_of[(columns, specific_heat)], port_set.loop.carrier, supplies=port_set.loop.supplies
+            ):
+                series = PortSeries(
+                    component=name,
+                    output=all_outputs[position_of[columns.mass_flow]],
+                    port=port,
+                    peer=peer,
+                    kilowatt_hours=kilowatt_hours,
+                    circuit=columns,
+                )
+                self.by_component.setdefault(name, []).append(series)
+
+    @staticmethod
+    def book_by_the_supplier_s_sign(
+        heat_in_kilowatt_hours: np.ndarray, carrier: lt.EnergyBalanceCarrier, *, supplies: bool
+    ) -> List[Tuple[EnergyPort, np.ndarray]]:
+        """The ports one end of a circuit books, with their kWh per step, by the sign of the supplier's heat (§3.4).
+
+        ``heat_in_kilowatt_hours`` is ``m c (T_sup - T_ret) dt``, the heat the supplier adds to the fluid. Where it is
+        positive the circuit heats: the loop's ``carrier`` goes from the supplier (``PRODUCTION``) to the receiver (``CONSUMPTION``).
+        Where it is negative the supplier cools the fluid: ``COOLING`` goes from the receiver (``PRODUCTION``) to the supplier
+        (``CONSUMPTION``), the minus of the heat. A run in which no step cools books the heat as it is under the carrier alone,
+        so a heating-only circuit has one port per end, as it always had; a run with a cooling step books both
+        directions, each 0 in the other's steps, and each end's balance is the same. For example, a heat pump's
+        space-heating circuit that carries 2 kWh in one step and -1 kWh in the next books, at the heat pump, ``PRODUCTION`` of
+        space-heating heat ``[2, 0]`` and ``CONSUMPTION`` of cooling ``[0, 1]``.
+
+        Args:
+            heat_in_kilowatt_hours: The circuit's heat per step, in kWh, from the supplier's side.
+            carrier: The heat the loop carries while it heats.
+            supplies: Whether this end is the circuit's supplier.
+
+        Returns:
+            The end's ports with their kWh per step: the heating face, and the cooling face where a step cools.
+        """
+        heating_role, cooling_role = (lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION) if supplies else (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
+        cools = heat_in_kilowatt_hours < 0.0
+        if not cools.any():
+            return [(EnergyPort(heating_role, carrier), heat_in_kilowatt_hours)]
+        return [
+            (EnergyPort(heating_role, carrier), np.where(cools, 0.0, heat_in_kilowatt_hours)),
+            (EnergyPort(cooling_role, lt.EnergyBalanceCarrier.COOLING), np.where(cools, -heat_in_kilowatt_hours, 0.0)),
+        ]
 
     @staticmethod
     def read_meters(
@@ -524,17 +639,17 @@ class DeclaredPorts:
 
 @dataclass
 class CircuitWiring:
-    """The declared circuit ends of a run as the wiring resolves them, before any value is read.
+    """The declared circuit ends of a run, its port sets, as the wiring resolves them, before any value is read.
 
     Attributes:
-        ends: Every resolved end as ``(component, end, its three outputs, the other end or None)``.
+        ends: Every resolved end as ``(component, port set, its three outputs, the other end or None)``.
         open_ends: Every end with a quantity it reads through an input that is not connected, as
-            ``(component, end, the first such leg)``; whether it moves water only the run's values tell.
+            ``(component, port set, the first such quantity)``; whether it moves water only the run's values tell.
         faults: Every breach of the circuit rules of :mod:`hisim.energy_port` the wiring shows, one sentence each.
     """
 
-    ends: List[Tuple[str, CircuitEnd, CircuitColumns, Optional[str]]] = field(default_factory=list)
-    open_ends: List[Tuple[str, CircuitEnd, str]] = field(default_factory=list)
+    ends: List[Tuple[str, FluidLoopPortSet, CircuitColumns, Optional[str]]] = field(default_factory=list)
+    open_ends: List[Tuple[str, FluidLoopPortSet, LoopQuantity]] = field(default_factory=list)
     faults: List[str] = field(default_factory=list)
 
 
@@ -570,7 +685,7 @@ class Wiring:
         self.outputs: Dict[str, List[str]] = {}
         self.declared: Dict[str, bool] = {
             component.component_name: any(output.energy_port is not None for output in component.outputs)
-            or bool(DeclaredPorts.circuit_ends_of(component))
+            or bool(DeclaredPorts.port_sets_of(component))
             for component in components
         }
         for component in components:
@@ -684,26 +799,38 @@ class Wiring:
         return None
 
     def resolve_circuit(
-        self, component_name: str, end: CircuitEnd
-    ) -> Tuple[Optional[CircuitColumns], Optional[str]]:
-        """The three outputs a circuit end names, an input followed to the output connected to it.
+        self, component_name: str, port_set: FluidLoopPortSet
+    ) -> Tuple[Optional[CircuitColumns], Optional[LoopQuantity]]:
+        """The three outputs a port set's channels stand for, an input followed to the output connected to it.
+
+        The flow is the set's one flow channel; the supply is the supplier's ``TEMPERATURE_OUT`` and the receiver's
+        ``TEMPERATURE_IN``, the return the other temperature. For example, a buffer's ``generator`` set
+        (``supplies=False``) resolves to the generator's flow and supply outputs, which its inputs read, and its own
+        return output.
 
         Args:
             component_name: The end's component.
-            end: The circuit end it declares.
+            port_set: The port set it declares.
 
         Returns:
-            The circuit's outputs and None; or None and the first leg whose input is not connected.
+            The circuit's outputs and None; or None and the first quantity whose input is not connected.
         """
+        supplies = port_set.loop.supplies
+        quantity_of_leg = {
+            "mass_flow": port_set.flow_quantity,
+            "supply_temperature": LoopQuantity.TEMPERATURE_OUT if supplies else LoopQuantity.TEMPERATURE_IN,
+            "return_temperature": LoopQuantity.TEMPERATURE_IN if supplies else LoopQuantity.TEMPERATURE_OUT,
+        }
         resolved: Dict[str, Tuple[str, str]] = {}
-        for leg in CircuitEnd.LEGS:
-            name = end.name_of(leg)
-            if not end.is_input(leg):
+        for leg in CircuitColumns.LEGS:
+            quantity = quantity_of_leg[leg]
+            name = port_set.channels[quantity].field_name
+            if not quantity.is_input:
                 resolved[leg] = (component_name, name)
                 continue
             source = self.source_outputs.get((component_name, name))
             if source is None:
-                return None, leg
+                return None, quantity
             resolved[leg] = source
         return CircuitColumns(**resolved), None
 
@@ -711,7 +838,7 @@ class Wiring:
         self,
         component_name: str,
         columns: CircuitColumns,
-        ends_at: Mapping[str, List[Tuple[CircuitEnd, CircuitColumns]]],
+        ends_at: Mapping[str, List[Tuple[FluidLoopPortSet, CircuitColumns]]],
     ) -> Optional[str]:
         """The other end of a circuit, found from the wiring alone; None when there is none.
 
@@ -735,7 +862,7 @@ class Wiring:
             return owner if self.moves_energy(owner) else None
 
         def declares_this_circuit(name: str) -> bool:
-            return any(other == columns for _, other in ends_at.get(name, []))
+            return any(other.joins_the_same_outputs(columns) for _, other in ends_at.get(name, []))
 
         readers = [name for name in self.readers.get((owner, flow), []) if self.moves_energy(name)]
         if not readers:
@@ -758,8 +885,8 @@ class Wiring:
         """Resolve every declared circuit end of the run, find its other end and check the circuit rules.
 
         The rules of :mod:`hisim.energy_port`, each breach a fault: two components besides its owner declaring an end
-        on one mass flow ("one reader"), an end whose other end declares ports but not the same circuit ("both ends or
-        neither"), and two ends of one circuit with the same role.
+        on one mass flow ("one reader"), an end whose other end declares ports but not the same circuit ("every member
+        or none"), and a circuit with no or two suppliers (rule 4 of §3.3 of ``roadmap/hydraulic_circuits_spec.md``).
 
         Args:
             components: The components of the run, in the order of the run.
@@ -769,23 +896,24 @@ class Wiring:
 
         Raises:
             ValueError: If an exempt component or a meter declares a circuit end: it moves no water of its own.
+            FluidLoopError: If a component tags a loop by half.
         """
         wired = CircuitWiring()
-        resolved: List[Tuple[str, CircuitEnd, CircuitColumns]] = []
+        resolved: List[Tuple[str, FluidLoopPortSet, CircuitColumns]] = []
         for component in components:
             name = component.component_name
-            for end in DeclaredPorts.circuit_ends_of(component):
+            for port_set in DeclaredPorts.port_sets_of(component):
                 if not self.moves_energy(name):
                     raise ValueError(
-                        f"{name} declares a circuit end ({end.port.mass_flow}), but it is exempt from the energy "
+                        f"{name} declares the fluid loop {port_set.loop.name!r}, but it is exempt from the energy "
                         "balance or a meter: it moves no water of its own."
                     )
-                columns, open_leg = self.resolve_circuit(name, end)
+                columns, open_quantity = self.resolve_circuit(name, port_set)
                 if columns is None:
-                    wired.open_ends.append((name, end, open_leg or "mass_flow"))
+                    wired.open_ends.append((name, port_set, open_quantity or port_set.flow_quantity))
                 else:
-                    resolved.append((name, end, columns))
-        ends_at: Dict[str, List[Tuple[CircuitEnd, CircuitColumns]]] = {}
+                    resolved.append((name, port_set, columns))
+        ends_at: Dict[str, List[Tuple[FluidLoopPortSet, CircuitColumns]]] = {}
         for name, end, columns in resolved:
             ends_at.setdefault(name, []).append((end, columns))
         for name, end, columns in resolved:
@@ -810,28 +938,35 @@ class Wiring:
     def pairing_fault(
         self,
         name: str,
-        end: CircuitEnd,
+        end: FluidLoopPortSet,
         columns: CircuitColumns,
         peer_name: Optional[str],
-        ends_at: Mapping[str, List[Tuple[CircuitEnd, CircuitColumns]]],
+        ends_at: Mapping[str, List[Tuple[FluidLoopPortSet, CircuitColumns]]],
     ) -> Optional[str]:
         """Why a circuit end does not pair with its other end, or None when it does or need not.
 
-        The other end must declare the same three outputs with the other role. One that declares no ports at all, or
-        no other end, is no fault: the circuit is drawn to an undeclared or an unlinked node instead.
+        The other end must tag a loop on the same three outputs, and exactly one of the two must supply it (rule 4 of
+        §3.3 of ``roadmap/hydraulic_circuits_spec.md``): no supplier is a loop of two receivers, a buffer's generator
+        loop wired to a tank's coil; two are two generators on one loop with no store between them. One that declares
+        no ports at all, or no other end, is no fault: the circuit is drawn to an undeclared or an unlinked node
+        instead.
         """
         if peer_name is None or not self.declared.get(peer_name, False):
             return None
-        matching = [other for other, other_columns in ends_at.get(peer_name, []) if other_columns == columns]
+        matching = [
+            other for other, other_columns in ends_at.get(peer_name, []) if other_columns.joins_the_same_outputs(columns)
+        ]
         if not matching:
             return (
-                f"{name} declares its end ({end.port.role.value}) of the circuit {columns.as_dict()}, but its other "
+                f"{name} tags its end (loop {end.loop.name!r}) of the circuit {columns.as_dict()}, but its other "
                 f"end, {peer_name}, declares ports and not this circuit"
             )
-        if all(other.port.role == end.port.role for other in matching):
+        if all(other.loop.supplies == end.loop.supplies for other in matching):
+            how_many = "two suppliers" if end.loop.supplies else "no supplier"
             return (
-                f"{name} and {peer_name} both declare the circuit {columns.as_dict()} as {end.port.role.value}: one "
-                "end supplies it (PRODUCTION) and the other receives it (CONSUMPTION)"
+                f"the circuit {columns.as_dict()} between {end.label} and "
+                f"{', '.join(other.label for other in matching)} has {how_many}: exactly one member of a loop supplies "
+                "it (supplies=True)"
             )
         return None
 
@@ -890,6 +1025,7 @@ class Wiring:
         Raises:
             EnergyPortWiringError: Naming every breach.
             ValueError: If an exempt component or a meter declares a circuit end.
+            FluidLoopError: If a component tags a loop by half.
         """
         metered_carriers, exempt = DeclaredPorts.classify(components)
         wiring = cls(components, exempt, metered_carriers)

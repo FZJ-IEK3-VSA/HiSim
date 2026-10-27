@@ -15,7 +15,7 @@ import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim import hydronics
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.component import (
     SingleTimeStepValues,
     ComponentInput,
@@ -718,9 +718,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`);
     it too publishes ``T0`` on ``WaterTemperatureAtStartOfStepInCelsius``.
 
-    In the energy balance (complete Sankey spec §5.1, hydronic stage E) the buffer declares its circuits as
-    :class:`~hisim.energy_port.HydronicPort` ends: the heat each generator's circuit brings (``CONSUMPTION``) and the heat the
-    distribution system's circuit takes (``PRODUCTION``), its standby loss (``LOSS``, to outdoors: owner decision Q-F, the
+    In the energy balance (complete Sankey spec §5.1, hydronic stage E) the buffer tags its circuits as fluid loops
+    (:class:`~hisim.energy_port.FluidLoop`): the heat each generator's loop brings, which the generator supplies, and
+    the heat the distribution system's loop takes, which the buffer supplies; its standby loss (``LOSS``, to outdoors: owner decision Q-F, the
     buffer stands in an unheated room) and the change of the heat it holds (``STORED_CHANGE``). The balance derives
     each circuit's heat from the flow and the two temperatures both ends read, so it checks that the buffer's node
     step books what its circuits carry. The mass-mixing path declares the same ports; it is not energy-consistent
@@ -843,6 +843,24 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.previous_state = self.state.self_copy()
 
         # =================================================================================================================================
+        # The buffer's water loops (complete Sankey spec §5.1, hydronic stage E): each generator's loop brings the
+        # heat its generator supplies, the distribution loop takes the heat the buffer supplies. A buffer moves no
+        # water, and it takes water of any temperature: whether a loop cools is for its generator and its emitter to
+        # say. A buffer in series with its generator has no generator loops of its own; one whose secondary flow input
+        # is not connected (no second generator) moves no water on that loop, and the balance leaves it out.
+        parallel = self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
+        self.generator_loop, self.secondary_generator_loop, self.distribution_loop = (
+            FluidLoop(
+                name,
+                carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+                fluid=LoopFluid.WATER,
+                supplies=supplies,
+                may_cool=True,
+                pumps=False,
+            )
+            for name, supplies in (("generator", False), ("secondary_generator", False), ("distribution", True))
+        )
+
         # Input channels
 
         self.water_temperature_heat_distribution_system_input_channel: ComponentInput = self.add_input(
@@ -851,6 +869,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
+            fluid_loop=self.distribution_loop.temperature_in,
         )
         self.water_mass_flow_rate_heat_distribution_system_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -858,15 +877,17 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             True,
+            fluid_loop=self.distribution_loop.flow_in,
         )
 
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
+        if parallel:
             self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterTemperatureFromHeatGenerator,
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
                 True,
+                fluid_loop=self.generator_loop.temperature_in,
             )
 
             self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
@@ -875,6 +896,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
                 True,
+                fluid_loop=self.generator_loop.flow_in,
             )
             self.water_temperature_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
@@ -882,6 +904,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
                 False,
+                fluid_loop=self.secondary_generator_loop.temperature_in,
             )
             self.water_mass_flow_rate_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
@@ -889,6 +912,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
                 False,
+                fluid_loop=self.secondary_generator_loop.flow_in,
             )
 
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -903,6 +927,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatDistribution} will follow.",
+            fluid_loop=self.distribution_loop.temperature_out,
         )
 
         self.water_temperature_heat_generator_output_channel: ComponentOutput = self.add_output(
@@ -911,6 +936,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
+            fluid_loop=self.generator_loop.temperature_out if parallel else None,
         )
 
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
@@ -919,6 +945,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToSecondaryHeatGenerator} will follow.",
+            fluid_loop=self.secondary_generator_loop.temperature_out if parallel else None,
         )
 
         self.water_temperature_mean_channel: ComponentOutput = self.add_output(
@@ -1053,44 +1080,9 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             output_description=f"here a description for {self.ThermalPowerFromSecondaryHeatGenerator} will follow.",
         )
 
-        self.declare_circuits()
-
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_generic_boiler())
-
-    def declare_circuits(self) -> None:
-        """Declare the buffer's ends of its water circuits (complete Sankey spec §5.1, hydronic stage E).
-
-        Each generator's circuit enters it (``CONSUMPTION``): the generator's flow and supply temperature, which the buffer
-        reads, and the buffer's return to it. The distribution system's circuit leaves it (``PRODUCTION``): the
-        distribution system's flow and return, which the buffer reads, and the buffer's supply to it. A circuit whose
-        flow input is not connected (no second generator) moves no water and is left out by the balance. A buffer in
-        series with its generator has no generator circuits of its own.
-        """
-        space_heating = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
-            self.add_hydronic_port(
-                mass_flow=self.water_mass_flow_rate_heat_generator_input_channel,
-                supply_temperature=self.water_temperature_heat_generator_input_channel,
-                return_temperature=self.water_temperature_heat_generator_output_channel,
-                role=lt.EnergyRole.CONSUMPTION,
-                carrier=space_heating,
-            )
-            self.add_hydronic_port(
-                mass_flow=self.water_mass_flow_rate_secondary_heat_generator_input_channel,
-                supply_temperature=self.water_temperature_secondary_heat_generator_input_channel,
-                return_temperature=self.water_temperature_secondary_heat_generator_output_channel,
-                role=lt.EnergyRole.CONSUMPTION,
-                carrier=space_heating,
-            )
-        self.add_hydronic_port(
-            mass_flow=self.water_mass_flow_rate_heat_distribution_system_input_channel,
-            supply_temperature=self.water_temperature_heat_distribution_system_output_channel,
-            return_temperature=self.water_temperature_heat_distribution_system_input_channel,
-            role=lt.EnergyRole.PRODUCTION,
-            carrier=space_heating,
-        )
 
     def get_default_connections_from_heat_distribution_system(
         self,
@@ -2107,8 +2099,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
     (:meth:`solve_tank_step`), so the heat drawn equals the demand exactly while ``T̄ > T_warm``. Below ``T_warm`` all
     of ``m_d`` leaves unmixed and the shortfall is ``ThermalEnergyUnmetDHWInWattHour``.
 
-    In the energy balance (complete Sankey spec §5.1, hydronic stage E) the tank declares each charging circuit as a
-    :class:`~hisim.energy_port.HydronicPort` end (``CONSUMPTION``), the heat drawn at the taps (``PRODUCTION``, to the boundary node
+    In the energy balance (complete Sankey spec §5.1, hydronic stage E) the tank tags each charging coil's circuit as
+    a fluid loop (:class:`~hisim.energy_port.FluidLoop`) its generator supplies, the heat drawn at the taps (``PRODUCTION``, to the boundary node
     "hot water drawn at the taps": the occupancy reads nothing, so it cannot take it in), its standby loss (``LOSS``,
     to outdoors: owner decision Q-F) and the change of the heat it holds (``STORED_CHANGE``). The unmet hot water is
     no flow, since it was never delivered, and has no port.
@@ -2204,12 +2196,29 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.Units.LITER,
             True,
         )
+        # Each charging coil is a water loop with its own return (owner decision of 2026-10-21 on
+        # hisim-dhw-tank-one-return-7kq2): the primary generator reads the first of the two step-mean outputs, the
+        # secondary one (the solar coil) the second. The two are equal while the tank is fully mixed; a stratified
+        # tank may give the lower coil a colder return. Each coil's generator supplies and pumps its loop, and no
+        # loop cools the tank. A coil whose flow input is not connected moves no water, and the balance leaves it out.
+        self.generator_loop, self.secondary_generator_loop = (
+            FluidLoop(
+                name,
+                carrier=lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+                fluid=LoopFluid.WATER,
+                supplies=False,
+                may_cool=False,
+                pumps=False,
+            )
+            for name in ("generator", "secondary_generator")
+        )
         self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureFromHeatGenerator,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
+            fluid_loop=self.generator_loop.temperature_in,
         )
         self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -2217,6 +2226,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             True,
+            fluid_loop=self.generator_loop.flow_in,
         )
         # A cylinder charged only through its solar coil, the secondary one, leaves its primary coil open: the
         # circuit then moves no water and the balance leaves it out (hisim-dhw-tank-one-return-7kq2).
@@ -2232,6 +2242,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
+            fluid_loop=self.secondary_generator_loop.temperature_in,
         )
         self.water_mass_flow_rate_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -2239,6 +2250,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             False,
+            fluid_loop=self.secondary_generator_loop.flow_in,
         )
 
         # Output channels
@@ -2252,6 +2264,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 "The tank's step mean temperature T̄, the return temperature of the primary charging circuit: the "
                 "mean of the tank temperature over the step, which makes m c (T_sup - T̄) the heat the circuit brings."
             ),
+            fluid_loop=self.generator_loop.temperature_out,
         )
 
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
@@ -2262,6 +2275,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             output_description=(
                 "The tank's step mean temperature T̄, the return temperature of the secondary charging circuit."
             ),
+            fluid_loop=self.secondary_generator_loop.temperature_out,
         )
 
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(
@@ -2418,31 +2432,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 "(T_warm - T_cold) / (T̄ - T_cold) above the tap temperature, all of m_d at or below it."
             ),
         )
-
-        for mass_flow, supply_temperature, return_temperature in (
-            (
-                self.water_mass_flow_rate_heat_generator_input_channel,
-                self.water_temperature_heat_generator_input_channel,
-                self.water_temperature_to_heat_generator_channel,
-            ),
-            (
-                self.water_mass_flow_rate_secondary_heat_generator_input_channel,
-                self.water_temperature_secondary_heat_generator_input_channel,
-                self.water_temperature_secondary_heat_generator_output_channel,
-            ),
-        ):
-            # Each charging coil is a circuit with its own return (owner decision of 2026-10-21 on
-            # hisim-dhw-tank-one-return-7kq2): the primary generator reads the first of the two step-mean outputs,
-            # the secondary one (the solar coil) the second. The two are equal while the tank is fully mixed; a
-            # stratified tank may give the lower coil a colder return. A circuit whose flow input is not connected is
-            # left out by the balance.
-            self.add_hydronic_port(
-                mass_flow=mass_flow,
-                supply_temperature=supply_temperature,
-                return_temperature=return_temperature,
-                role=lt.EnergyRole.CONSUMPTION,
-                carrier=lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-            )
 
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_generic_dhw_boiler())

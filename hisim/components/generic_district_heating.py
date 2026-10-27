@@ -17,7 +17,7 @@ from dataclasses_json import dataclass_json
 from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim import hydronics
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.loadtypes import (
     EnergyBalanceCarrier,
     EnergyRole,
@@ -279,6 +279,26 @@ class DistrictHeating(PhysicsComponent):
         #: for example, 15 kW pump 0.0359 kg/s. The space-heating circuit has no pump of its own, it reads the heat
         #: distribution system's flow.
         self.hot_water_pump: FixedLiftPump = FixedLiftPump(target_lift_in_kelvin=self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
+        # The substation's two water loops (complete Sankey spec §5.1): the heat it gives is what they carry. It
+        # supplies both and cools neither. It pumps its hot-water loop; its space-heating loop runs on the
+        # distribution system's flow, which stage 1b of the hydraulic circuits spec states. A substation without
+        # hot-water preparation tags no channel with the hot-water loop.
+        self.space_heating_loop = FluidLoop(
+            "space_heating",
+            carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+        )
+        self.hot_water_loop = FluidLoop(
+            "dhw",
+            carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
+        with_hot_water = self.config.with_domestic_hot_water_preparation
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -307,6 +327,7 @@ class DistrictHeating(PhysicsComponent):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
+            fluid_loop=self.space_heating_loop.temperature_in,
         )
         self.water_input_mass_flow_rate_sh_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -314,10 +335,11 @@ class DistrictHeating(PhysicsComponent):
             LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             True,
+            fluid_loop=self.space_heating_loop.flow_in,
         )
         # The tank's step mean, the hot-water circuit's return; a substation without a tank has no such input.
         self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
-        if self.config.with_domestic_hot_water_preparation:
+        if with_hot_water:
             self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 self.component_name,
                 DistrictHeating.SupplyTemperatureSetForDHWInCelsius,
@@ -331,6 +353,7 @@ class DistrictHeating(PhysicsComponent):
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
+                fluid_loop=self.hot_water_loop.temperature_in,
             )
 
         # Outputs Space Heating
@@ -347,6 +370,7 @@ class DistrictHeating(PhysicsComponent):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for space heating.",
+            fluid_loop=self.space_heating_loop.temperature_out,
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -371,6 +395,7 @@ class DistrictHeating(PhysicsComponent):
             LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             output_description="Water mass flow rate for domestic hot water.",
+            fluid_loop=self.hot_water_loop.flow_out if with_hot_water else None,
         )
         self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -378,6 +403,7 @@ class DistrictHeating(PhysicsComponent):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for domestic hot water.",
+            fluid_loop=self.hot_water_loop.temperature_out if with_hot_water else None,
         )
         self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -405,26 +431,9 @@ class DistrictHeating(PhysicsComponent):
             output_description="Thermal energy output for domestic hot water.",
             energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.DISTRICT_HEAT),
         )
-        # the heat the substation gives is what its circuits carry (complete Sankey spec §5.1): the space-heating
-        # circuit at the distribution system's flow, which the substation reads, the hot-water circuit at its own
-        self.add_hydronic_port(
-            mass_flow=self.water_input_mass_flow_rate_sh_channel,
-            supply_temperature=self.water_output_temperature_sh_channel,
-            return_temperature=self.water_input_temperature_sh_channel,
-            role=EnergyRole.PRODUCTION,
-            carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
-        )
-        if self.water_input_temperature_dhw_channel is not None:
-            self.add_hydronic_port(
-                mass_flow=self.water_mass_flow_dhw_output_channel,
-                supply_temperature=self.water_output_temperature_dhw_channel,
-                return_temperature=self.water_input_temperature_dhw_channel,
-                role=EnergyRole.PRODUCTION,
-                carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-            )
         self.add_default_connections(self.get_default_connections_from_district_heating_controller())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
-        if self.config.with_domestic_hot_water_preparation:
+        if with_hot_water:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_district_heating_controller(

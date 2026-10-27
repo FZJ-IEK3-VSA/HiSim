@@ -29,7 +29,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim import hydronics, loadtypes
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.subcomponents.base import Subcomponent
 from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
@@ -562,12 +562,24 @@ class SolarThermalSystem(PhysicsComponent):
             True,
         )
 
+        # The collector's loop to the hot-water tank (complete Sankey spec §5.1): the collector's heat is what it
+        # carries. The solar pump moves it, the collector supplies it, and it never cools the tank. Its liquid is
+        # booked as water, as the collector's own circuit heat is (hisim.hydronics.circuit_power_w).
+        self.solar_loop = FluidLoop(
+            "solar_dhw",
+            carrier=loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureCollectorInletDegC,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
             True,
+            fluid_loop=self.solar_loop.temperature_in,
         )
         self.inlet_temperature_at_start_of_step_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -616,6 +628,7 @@ class SolarThermalSystem(PhysicsComponent):
             load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
+            fluid_loop=self.solar_loop.flow_out,
         )
         self.sensor_temperature_at_start_of_step_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -639,6 +652,7 @@ class SolarThermalSystem(PhysicsComponent):
                 "Supply temperature [°C] of the collector's circuit: the storage's step mean plus the lift the "
                 "collector heat gives at the pump's flow while the pump runs with heat, the return otherwise."
             ),
+            fluid_loop=self.solar_loop.temperature_out,
         )
         self.electricity_consumption_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -675,14 +689,6 @@ class SolarThermalSystem(PhysicsComponent):
             unit=loadtypes.Units.WATT,
             output_description="Electricity of the solar pump, which the model does not add to the fluid [W].",
             energy_port=EnergyPort(loadtypes.EnergyRole.LOSS, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
-        )
-        # the collector's heat is what its circuit to the hot-water tank carries (complete Sankey spec §5.1)
-        self.add_hydronic_port(
-            mass_flow=self.water_mass_flow_kg_s_output_channel,
-            supply_temperature=self.water_temperature_deg_c_output_channel,
-            return_temperature=self.water_temperature_input_channel,
-            role=loadtypes.EnergyRole.PRODUCTION,
-            carrier=loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
         )
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())

@@ -15,7 +15,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
 import json
 import pandas as pd
 
@@ -23,7 +23,7 @@ from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
-from hisim.energy_port import CircuitEnd, EnergyPort, HydronicPort, HydronicPortError, MeteredExchange
+from hisim.energy_port import EnergyPort, FluidLoop, FluidLoopChannel, FluidLoopError, LoopQuantity, MeteredExchange
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
@@ -59,6 +59,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         display_config: Optional[cfg.DisplayConfig] = None,
         may_be_non_finite: bool = False,
         aggregation: Optional[lt.OutputAggregation] = None,
+        fluid_loop: Optional[FluidLoopChannel] = None,
     ):
         """Defines a component output.
 
@@ -79,7 +80,9 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
         An output that carries energy states its role and carrier in the component's energy
         balance with ``energy_port`` (:mod:`hisim.energy_port`); the balance check and the
-        Sankeys read nothing else.
+        Sankeys read nothing else. An output that is a leg of a fluid loop, the flow or the
+        temperature of the fluid leaving the component, says so with ``fluid_loop``
+        (:class:`~hisim.energy_port.FluidLoopChannel`); a channel takes one of the two or neither.
 
         ``display_config`` is the owning component's display configuration, set by
         :meth:`Component.add_output` and the dynamic components' output builders. With
@@ -104,11 +107,15 @@ class ComponentOutput:  # noqa: too-few-public-methods
                 construction can pass anything, and an unusable prefix would defeat the rule
                 on the very column name it exists for. Also if ``energy_port`` is given for an
                 output that is neither a power nor an energy.
+            FluidLoopError: If ``fluid_loop`` does not fit the output: a quantity of an input, a
+                unit other than its quantity's, or an ``energy_port`` beside it.
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component output")
         if energy_port is not None:
             EnergyPort.validate_unit(unit)
+        if fluid_loop is not None:
+            fluid_loop.check_fits(object_name, field_name, unit, is_input=False, energy_port=energy_port)
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -118,6 +125,8 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.global_index: int = -1
         self.postprocessing_flag: Optional[List[Any]] = postprocessing_flag
         self.energy_port: Optional[EnergyPort] = energy_port
+        #: The fluid loop this output is a leg of, and which quantity, or None.
+        self.fluid_loop: Optional[FluidLoopChannel] = fluid_loop
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
@@ -153,6 +162,8 @@ class ComponentInput:  # noqa: too-few-public-methods
         unit: lt.Units,
         mandatory: bool,
         allow_unconnected_mandatory: bool = False,
+        *,
+        fluid_loop: Optional[FluidLoopChannel] = None,
     ):
         """Initializes a component input.
 
@@ -168,8 +179,13 @@ class ComponentInput:  # noqa: too-few-public-methods
                 this for mandatory inputs whose source output may legitimately
                 not exist (e.g. a heat pump's DHW electrical power output when
                 domestic hot water preparation is disabled).
+            fluid_loop: The fluid loop this input is a leg of, the flow or the temperature of the
+                fluid arriving, and which quantity (:class:`~hisim.energy_port.FluidLoopChannel`);
+                None for an input that is no leg of a loop.
 
         Raises:
+            FluidLoopError: If ``fluid_loop`` does not fit the input: a quantity of an output or a
+                unit other than its quantity's.
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 An input is written as its own key in a declarative energy-system file rather
                 than behind a dot, so the grammar does not force the rule on it the way it does
@@ -179,6 +195,8 @@ class ComponentInput:  # noqa: too-few-public-methods
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component input")
+        if fluid_loop is not None:
+            fluid_loop.check_fits(object_name, field_name, unit, is_input=True)
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -190,6 +208,85 @@ class ComponentInput:  # noqa: too-few-public-methods
         self.source_output: Optional[ComponentOutput] = None
         self.is_mandatory = mandatory
         self.allow_unconnected_mandatory: bool = allow_unconnected_mandatory
+        #: The fluid loop this input is a leg of, and which quantity, or None.
+        self.fluid_loop: Optional[FluidLoopChannel] = fluid_loop
+
+
+@dataclass(frozen=True)
+class FluidLoopPortSet:
+    """One component's channels of one fluid loop, keyed by the quantity each carries.
+
+    The build groups a component's tagged channels by the :class:`~hisim.energy_port.FluidLoop` their tags name
+    (:meth:`group`); one group is a port set. In stage 1a of ``roadmap/hydraulic_circuits_spec.md`` a port set has
+    three channels: the two temperatures and the one flow the member has today, a ``FLOW_OUT`` at the member that
+    publishes the loop's flow, a ``FLOW_IN`` at the member that reads it. Stage 1b gives every member both flows. For
+    example, a buffer's ``generator`` set holds its inputs ``WaterMassFlowRateFromHeatGenerator`` (``FLOW_IN``) and
+    ``WaterTemperatureFromHeatGenerator`` (``TEMPERATURE_IN``) and its output ``WaterTemperatureToHeatGenerator``
+    (``TEMPERATURE_OUT``).
+
+    Attributes:
+        component_name: The component the channels belong to.
+        loop: The loop, as the component states it.
+        channels: The channel of each quantity the component tags on the loop.
+    """
+
+    component_name: str
+    loop: FluidLoop
+    channels: Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]
+
+    #: The quantities every port set has in stage 1a; besides them it has exactly one of :attr:`FLOWS`.
+    TEMPERATURES: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT)
+    #: The two flow quantities.
+    FLOWS: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.FLOW_IN, LoopQuantity.FLOW_OUT)
+
+    @property
+    def flow_quantity(self) -> LoopQuantity:
+        """The one flow quantity the set has: ``FLOW_OUT`` where the member publishes the flow, else ``FLOW_IN``."""
+        return LoopQuantity.FLOW_OUT if LoopQuantity.FLOW_OUT in self.channels else LoopQuantity.FLOW_IN
+
+    @property
+    def label(self) -> str:
+        """The set as messages name it, ``component.loop``, for example ``"CondensingGasBoiler.space_heating"``."""
+        return f"{self.component_name}.{self.loop.name}"
+
+    @staticmethod
+    def group(
+        component_name: str, channels: Sequence[Union[ComponentInput, ComponentOutput]]
+    ) -> Tuple["FluidLoopPortSet", ...]:
+        """Group a component's channels by the fluid loop their tags name, one port set per loop.
+
+        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop tagged by half is refused: one without both temperatures, or (stage 1a)
+        with no flow or with both. For example, a boiler's three space-heating channels and its three hot-water
+        channels give two sets.
+
+        Args:
+            component_name: The component the channels belong to.
+            channels: Its inputs and outputs; a channel without a ``fluid_loop`` attribute counts as untagged.
+
+        Returns:
+            The port sets.
+
+        Raises:
+            FluidLoopError: For a loop tagged by half, naming the component, the loop and what it lacks.
+        """
+        grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
+        for channel in channels:
+            tag: Optional[FluidLoopChannel] = getattr(channel, "fluid_loop", None)
+            if tag is not None:
+                grouped.setdefault(tag.loop, {})[tag.quantity] = channel
+        port_sets: List[FluidLoopPortSet] = []
+        for loop, by_quantity in grouped.items():
+            missing = [quantity.value for quantity in FluidLoopPortSet.TEMPERATURES if quantity not in by_quantity]
+            flows = [quantity for quantity in FluidLoopPortSet.FLOWS if quantity in by_quantity]
+            if missing or len(flows) != 1:
+                raise FluidLoopError(
+                    f"{component_name} tags the loop {loop.name!r} by half: it has "
+                    f"{', '.join(quantity.value for quantity in by_quantity)}; a port set has both temperatures "
+                    "and, until stage 1b of the hydraulic circuits spec, exactly one flow (flow_out where the member "
+                    "publishes the loop's flow, flow_in where it reads it)."
+                )
+            port_sets.append(FluidLoopPortSet(component_name, loop, by_quantity))
+        return tuple(port_sets)
 
 
 class SingleTimeStepValues:
@@ -337,8 +434,6 @@ class Component:
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []
-        #: The ends of water circuits this component declares (:meth:`add_hydronic_port`).
-        self.hydronic_ports: List[CircuitEnd] = []
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
@@ -443,9 +538,18 @@ class Component:
         load_type: lt.LoadTypes,
         unit: lt.Units,
         mandatory: bool,
+        *,
+        fluid_loop: Optional[FluidLoopChannel] = None,
     ) -> ComponentInput:
-        """Adds an input definition."""
-        myinput = ComponentInput(object_name, field_name, load_type, unit, mandatory)
+        """Adds an input definition; ``fluid_loop`` tags it as a leg of one of the component's fluid loops.
+
+        Raises:
+            FluidLoopError: If the tag does not fit the input (:meth:`hisim.energy_port.FluidLoopChannel.check_fits`) or
+                repeats one of the component's (:meth:`refuse_a_repeated_fluid_loop_tag`).
+        """
+        myinput = ComponentInput(object_name, field_name, load_type, unit, mandatory, fluid_loop=fluid_loop)
+        if fluid_loop is not None:
+            self.refuse_a_repeated_fluid_loop_tag(fluid_loop, field_name)
         self.inputs.append(myinput)
         return myinput
 
@@ -461,13 +565,21 @@ class Component:
         *,
         may_be_non_finite: bool = False,
         aggregation: Optional[lt.OutputAggregation] = None,
+        fluid_loop: Optional[FluidLoopChannel] = None,
     ) -> ComponentOutput:
         """Adds an output definition; ``energy_port`` declares its role in the energy balance.
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
         after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
         infinity in any other. ``aggregation`` declares how its time steps are combined into monthly values and a
-        run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`).
+        run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`). ``fluid_loop``
+        tags the output as a leg of one of the component's fluid loops; an output takes it or ``energy_port``, never
+        both.
+
+        Raises:
+            ValueError: If ``output_description`` is missing.
+            FluidLoopError: If the tag does not fit the output (:meth:`hisim.energy_port.FluidLoopChannel.check_fits`)
+                or repeats one of the component's (:meth:`refuse_a_repeated_fluid_loop_tag`).
         """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
@@ -484,79 +596,57 @@ class Component:
             display_config=self.my_display_config,
             may_be_non_finite=may_be_non_finite,
             aggregation=aggregation,
+            fluid_loop=fluid_loop,
         )
+        if fluid_loop is not None:
+            self.refuse_a_repeated_fluid_loop_tag(fluid_loop, field_name)
         self.outputs.append(outp)
         return outp
 
-    #: The unit each leg of a water circuit must have.
-    CIRCUIT_LEG_UNITS: ClassVar[Dict[str, lt.Units]] = {
-        "mass_flow": lt.Units.KG_PER_SEC,
-        "supply_temperature": lt.Units.CELSIUS,
-        "return_temperature": lt.Units.CELSIUS,
-    }
+    def refuse_a_repeated_fluid_loop_tag(self, tag: FluidLoopChannel, field_name: str) -> None:
+        """Refuse a loop tag that one of the component's channels already carries, or a second loop of the same name.
 
-    def add_hydronic_port(
-        self,
-        *,
-        mass_flow: typing.Union[ComponentInput, ComponentOutput],
-        supply_temperature: typing.Union[ComponentInput, ComponentOutput],
-        return_temperature: typing.Union[ComponentInput, ComponentOutput],
-        role: lt.EnergyRole,
-        carrier: lt.EnergyBalanceCarrier,
-    ) -> CircuitEnd:
-        """Declare this component's end of a water circuit by the channels that carry its three quantities.
-
-        Each quantity is one of the component's own outputs, when it publishes it, or one of its inputs, when it
-        reads it from the other end; the energy balance follows an input to the output connected to it, so both ends
-        of a circuit resolve to the same three columns and derive the same heat
-        (:class:`~hisim.energy_port.HydronicPort`). ``role`` is ``PRODUCTION`` for the supply owner and ``CONSUMPTION`` for the
-        receiver. For example, a buffer
-        declares its end of the boiler's circuit with ``mass_flow`` and ``supply_temperature`` its inputs from the
-        boiler, ``return_temperature`` its own output to the boiler, role ``CONSUMPTION``.
+        A port set has one channel per quantity, so two channels with one tag would leave the loop's flow or
+        temperature ambiguous; and the component names each of its loops once, so two different
+        :class:`~hisim.energy_port.FluidLoop` objects with one name (one stating ``supplies=True``, the other
+        ``False``) would be two loops the reports could not tell apart. For example, a buffer that tagged two inputs
+        ``self.generator_loop.flow_in`` is refused at the second.
 
         Args:
-            mass_flow: The channel of the circuit's mass flow, in kg/s.
-            supply_temperature: The channel of the supply temperature, in °C.
-            return_temperature: The channel of the return temperature, in °C.
-            role: ``PRODUCTION`` for the supply owner, ``CONSUMPTION`` for the receiver.
-            carrier: The heat the circuit carries, space-heating or hot-water heat.
-
-        Returns:
-            The declared end, also kept in :attr:`hydronic_ports`.
+            tag: The tag of the channel being declared.
+            field_name: The channel's name, for the message.
 
         Raises:
-            HydronicPortError: If a channel is not one of this component's own inputs or outputs, has the wrong unit
-                (kg/s for the flow, °C for the temperatures), or the port itself is malformed.
+            FluidLoopError: If a channel of this component carries the same tag, or a tag of another loop of the same
+                name.
         """
-        channels = {
-            "mass_flow": mass_flow,
-            "supply_temperature": supply_temperature,
-            "return_temperature": return_temperature,
-        }
-        for leg, channel in channels.items():
-            own = self.inputs if isinstance(channel, ComponentInput) else self.outputs
-            if channel.component_name != self.component_name or all(channel is not mine for mine in own):
-                raise HydronicPortError(
-                    f"{self.component_name} declares a circuit whose {leg} is {channel.component_name}."
-                    f"{channel.field_name}, which is not one of its own inputs or outputs."
+        channels: List[Union[ComponentInput, ComponentOutput]] = [*self.inputs, *self.outputs]
+        for channel in channels:
+            other = channel.fluid_loop
+            if other is None:
+                continue
+            if other == tag:
+                raise FluidLoopError(
+                    f"{self.component_name}.{field_name} and {self.component_name}.{channel.field_name} both carry "
+                    f"the {tag.quantity.value} of the loop {tag.loop.name!r}; a loop has one channel per quantity."
                 )
-            if channel.unit != self.CIRCUIT_LEG_UNITS[leg]:
-                raise HydronicPortError(
-                    f"{self.component_name} declares a circuit whose {leg} {channel.field_name} is in "
-                    f"{channel.unit.value}, not {self.CIRCUIT_LEG_UNITS[leg].value}."
+            if other.loop.name == tag.loop.name and other.loop != tag.loop:
+                raise FluidLoopError(
+                    f"{self.component_name}.{field_name} names a loop {tag.loop.name!r} that differs from the loop of "
+                    f"that name {self.component_name}.{channel.field_name} carries ({tag.loop} against {other.loop}); "
+                    "a component names each of its loops once."
                 )
-        end = CircuitEnd(
-            port=HydronicPort(
-                mass_flow=mass_flow.field_name,
-                supply_temperature=supply_temperature.field_name,
-                return_temperature=return_temperature.field_name,
-                role=role,
-                carrier=carrier,
-            ),
-            input_legs=frozenset(leg for leg, channel in channels.items() if isinstance(channel, ComponentInput)),
-        )
-        self.hydronic_ports.append(end)
-        return end
+
+    def port_sets(self) -> Tuple["FluidLoopPortSet", ...]:
+        """Return the component's port sets, its tagged channels grouped by fluid loop (:meth:`FluidLoopPortSet.group`).
+
+        For example, a buffer behind a generator has three, ``generator``, ``secondary_generator`` and
+        ``distribution``. The energy balance reads nothing else about a component's loops.
+
+        Raises:
+            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+        """
+        return FluidLoopPortSet.group(self.component_name, [*self.inputs, *self.outputs])
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""

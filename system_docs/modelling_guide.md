@@ -49,7 +49,9 @@ controller (#941).
   step, so power times step length is the step's energy (`hisim/energy_port.py` converts it so). A value at the
   start or end of the step is a sensor or a state, and its name says so (`WaterTemperatureAtEndOfStepInCelsius`).
 - **Every component that moves energy declares its ports and closes its balance.** Each energy-carrying output
-  declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier, peer); a water circuit is a
+  declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier), and so does an
+  input on which energy arrives (`energy_port=` on `add_input`), instead of an output that copies the input; the
+  wiring finds each port's peer. A water circuit is a
   `FluidLoop` that both of its members tag on their own channels (`fluid_loop=` on `add_input` and `add_output`),
   from which the check derives the circuit's heat once for both members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's

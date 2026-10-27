@@ -3,14 +3,17 @@
 :class:`DeclaredPorts` reads the result table once: every output that declares an
 :class:`~hisim.energy_port.EnergyPort` becomes a :class:`PortSeries`, its column converted to kWh per step
 (a power with the timestep) and turned round when the port is declared ``negated``; the sign of its role is
-applied by the check (:mod:`.check`). A component that declares what it meters
+applied by the check (:mod:`.check`). An input that declares a port becomes one too, with the column of the output
+connected to it (decision D9 of ``roadmap/fluid_loops_spec.md``); an input that is not connected is left out. A component that declares what it meters
 (:meth:`hisim.component.Component.metered_exchanges`) is a *meter*, a node of its own (owner decision Q-J of
 ``roadmap/complete_energy_sankeys_spec.md``). Any other component none of whose outputs declares a port is
 *undeclared*, unless it is *exempt* (:class:`Exemptions`): a controller decides, it moves no energy (owner decision
 D1). The peer of each port comes from the wiring the simulator left on the components' inputs
-(:attr:`~hisim.component.ComponentInput.src_object_name`), skipping exempt components (:class:`Wiring`): a metered
-port of electricity or a bought carrier goes to the meter that reads it, directly or through exempt components, or
-to a component that reads it. A port with no peer falls back to its carrier's boundary default
+(:attr:`~hisim.component.ComponentInput.src_object_name`), skipping exempt components (:class:`Wiring`): an input
+port's peer is the component it reads; an output port's is the component that reads it through an input carrying a
+port it pairs with, else, for a ``PRODUCTION`` port, the component that reads it; a metered port of electricity or a
+bought carrier goes to the meter that reads it, directly or through exempt components, or to a component that reads
+it. A port with no peer falls back to its carrier's boundary default
 (:meth:`hisim.energy_port.EnergyPort.default_boundary`), such as "natural gas supply" or "outdoors", or to nobody, which
 leaves the port *unlinked*. A metered port whose peer is no meter and no component is *unmetered*
 (:meth:`DeclaredPorts.unmetered`).
@@ -245,18 +248,24 @@ class CircuitColumns:
 class PortSeries:
     """One declared port of one component: its declaration, its peer and its kWh per step.
 
-    A circuit end (``circuit`` set) is a port too: its ``port`` states its role and carrier, its ``output`` is the
-    circuit's mass flow, and its kWh per step are the circuit's heat in the steps its direction is the port's, the same
-    series at both ends (:meth:`DeclaredPorts.add_circuits`).
+    A port is declared on one of the component's channels, an output or an input (``reads`` set: the output connected
+    to the input, whose column the series is). A circuit end (``circuit`` set) is a port too: its ``port`` states its
+    role and carrier, its ``channel`` is the circuit's mass flow, and its kWh per step are the circuit's heat in the
+    steps its direction is the port's, the same series at both ends (:meth:`DeclaredPorts.add_circuits`).
     """
 
     component: str
-    output: ComponentOutput
+    #: The output or input the port is declared on; a circuit end's mass flow.
+    channel: str
+    #: The unit of the column the series is read from.
+    unit: lt.Units
     port: EnergyPort
     peer: Peer
     kilowatt_hours: np.ndarray
-    #: The circuit's three outputs, for a circuit end; None for a port of an output.
+    #: The circuit's three outputs, for a circuit end; None for a port of a channel.
     circuit: Optional[CircuitColumns] = None
+    #: For an input port, the output connected to the input as ``(component, output)``; None for any other port.
+    reads: Optional[Tuple[str, str]] = None
 
     @property
     def annual_kilowatt_hours(self) -> float:
@@ -265,18 +274,19 @@ class PortSeries:
 
     @property
     def port_name(self) -> str:
-        """The output a port is declared on, or the circuit's label for a circuit end."""
-        return self.output.field_name if self.circuit is None else self.circuit.label
+        """The channel a port is declared on, or the circuit's label for a circuit end."""
+        return self.channel if self.circuit is None else self.circuit.label
 
     def as_dict(self) -> Dict[str, object]:
         """The port as the balance report lists it; a circuit end in kWh, with its three outputs."""
         entry: Dict[str, object] = {
             "output": self.port_name,
-            "unit": self.output.unit.value if self.circuit is None else lt.Units.KWH.value,
+            "unit": self.unit.value if self.circuit is None else lt.Units.KWH.value,
             **self.port.as_dict(),
             "peer": self.peer.name,
             "peer_kind": self.peer.kind.value,
             "total_kwh": self.annual_kilowatt_hours,
+            "reads": None if self.reads is None else ".".join(self.reads),
         }
         if self.circuit is not None:
             entry["circuit"] = self.circuit.as_dict()
@@ -341,6 +351,9 @@ class DeclaredPorts:
     ) -> "DeclaredPorts":
         """Read the declared ports and the meters from the result table, whose columns are ``all_outputs`` in order.
 
+        An output port's series is its own column; an input port's the column of the output connected to it, and an
+        input port whose input is not connected is left out (:meth:`add_input_ports`).
+
         Raises:
             ValueError: If the table does not have one column per output, if an exempt component or a meter declares a
                 port (a controller or meter that moves energy contradicts its kind), or if a meter declares a metered
@@ -360,26 +373,21 @@ class DeclaredPorts:
             port = output.energy_port
             if port is None:  # pragma: no cover - the columns are the declared ones
                 continue
-            if output.component_name in exempt:
-                raise ValueError(
-                    f"{output.component_name} declares the energy port {output.field_name}, but it is exempt from the "
-                    f"energy balance: {exempt[output.component_name]}."
-                )
-            if output.component_name in metered_carriers:
-                raise ValueError(
-                    f"{output.component_name} declares the energy port {output.field_name}, but it is a meter: it "
-                    f"publishes what it meters (metered_exchanges) and moves no energy of its own."
-                )
+            cls.refuse_a_port_of_a_node_that_moves_nothing(
+                output.component_name, output.field_name, exempt, metered_carriers
+            )
             factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
             sign = -1.0 if port.negated else 1.0
             series = PortSeries(
                 component=output.component_name,
-                output=output,
+                channel=output.field_name,
+                unit=output.unit,
                 port=port,
                 peer=wiring.peer_of(output.component_name, output.field_name, port),
                 kilowatt_hours=values[:, position] * (factor * sign),
             )
             declared.by_component.setdefault(output.component_name, []).append(series)
+        declared.add_input_ports(results, all_outputs, components, wiring, seconds_per_timestep)
         declared.add_circuits(results, all_outputs, wiring.circuits(components), seconds_per_timestep)
         for component in components:
             declared.class_names[component.component_name] = type(component).__name__
@@ -388,6 +396,91 @@ class DeclaredPorts:
                 declared.undeclared.append(name)
         declared.meters = cls.read_meters(results, all_outputs, components, seconds_per_timestep)
         return declared
+
+    @staticmethod
+    def refuse_a_port_of_a_node_that_moves_nothing(
+        component_name: str,
+        channel_name: str,
+        exempt: Mapping[str, str],
+        metered_carriers: Mapping[str, FrozenSet[lt.EnergyBalanceCarrier]],
+    ) -> None:
+        """Refuse an energy port declared by an exempt component or a meter, which move no energy of their own.
+
+        For example, an L1 controller declaring a port on its output, or the electricity meter on an input, contradicts
+        its kind: a controller decides, a meter publishes what it meters (:meth:`classify`).
+
+        Args:
+            component_name: The declaring component.
+            channel_name: The output or input that carries the port.
+            exempt: The exempt components with their reasons.
+            metered_carriers: The meters with the carriers each meters.
+
+        Raises:
+            ValueError: If the component is exempt or a meter, naming the channel and the reason.
+        """
+        if component_name in exempt:
+            raise ValueError(
+                f"{component_name} declares the energy port {channel_name}, but it is exempt from the "
+                f"energy balance: {exempt[component_name]}."
+            )
+        if component_name in metered_carriers:
+            raise ValueError(
+                f"{component_name} declares the energy port {channel_name}, but it is a meter: it "
+                f"publishes what it meters (metered_exchanges) and moves no energy of its own."
+            )
+
+    def add_input_ports(
+        self,
+        results: pd.DataFrame,
+        all_outputs: Sequence[ComponentOutput],
+        components: Sequence[Any],
+        wiring: "Wiring",
+        seconds_per_timestep: float,
+    ) -> None:
+        """Add every input that declares an energy port, booking the column of the output connected to it, in kWh.
+
+        The output's unit converts the column, the port's ``negated`` turns it round, and the output's component is
+        the peer (:meth:`Wiring.input_peer`). An input that is not connected moves nothing in this run and is left
+        out, as an optional input without a source is. For example, a building's input ``HeatReceivedInWatt`` with
+        ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)``, connected to a distribution system's ``HeatDeliveredInWatt``,
+        books that column as space heating received from the distribution system.
+
+        Raises:
+            ValueError: If an exempt component or a meter declares an input port, or an input reads an output the run
+                does not have.
+        """
+        position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
+        for component in components:
+            name = component.component_name
+            for component_input in component.inputs:
+                port = component_input.energy_port
+                if port is None:
+                    continue
+                self.refuse_a_port_of_a_node_that_moves_nothing(
+                    name, component_input.field_name, wiring.exempt, wiring.metered_carriers
+                )
+                source = wiring.source_outputs.get((name, component_input.field_name))
+                if source is None:
+                    continue
+                if source not in position_of:
+                    raise ValueError(
+                        f"{name}.{component_input.field_name} declares an energy port and reads {'.'.join(source)}, "
+                        "an output the run does not have."
+                    )
+                output = all_outputs[position_of[source]]
+                factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
+                sign = -1.0 if port.negated else 1.0
+                column = results.iloc[:, position_of[source]].to_numpy(dtype=float)
+                series = PortSeries(
+                    component=name,
+                    channel=component_input.field_name,
+                    unit=output.unit,
+                    port=port,
+                    peer=wiring.input_peer(source[0], port),
+                    kilowatt_hours=column * (factor * sign),
+                    reads=source,
+                )
+                self.by_component.setdefault(name, []).append(series)
 
     @staticmethod
     def classify(
@@ -487,9 +580,11 @@ class DeclaredPorts:
             for port, kilowatt_hours in self.book_by_the_supplier_s_sign(
                 heat_of[(columns, specific_heat)], port_set.loop.carrier, supplies=port_set.loop.supplies
             ):
+                flow_output = all_outputs[position_of[columns.mass_flow]]
                 series = PortSeries(
                     component=name,
-                    output=all_outputs[position_of[columns.mass_flow]],
+                    channel=flow_output.field_name,
+                    unit=flow_output.unit,
                     port=port,
                     peer=peer,
                     kilowatt_hours=kilowatt_hours,
@@ -681,10 +776,15 @@ class Wiring:
         #: The output each connected input reads, ``(component, input) -> (source component, source output)``.
         self.source_outputs: Dict[Tuple[str, str], Tuple[str, str]] = {}
         self.readers: Dict[Tuple[str, str], List[str]] = {}
+        #: Every connected input that declares an energy port, by the output it reads: ``[(reader, input, port)]``.
+        self.port_readers: Dict[Tuple[str, str], List[Tuple[str, str, EnergyPort]]] = {}
         self.load_types: Dict[Tuple[str, str], lt.LoadTypes] = {}
         self.outputs: Dict[str, List[str]] = {}
+        #: The energy port of every output that declares one, ``(component, output) -> port``.
+        self.output_ports: Dict[Tuple[str, str], EnergyPort] = {}
         self.declared: Dict[str, bool] = {
             component.component_name: any(output.energy_port is not None for output in component.outputs)
+            or any(component_input.energy_port is not None for component_input in component.inputs)
             or bool(DeclaredPorts.port_sets_of(component))
             for component in components
         }
@@ -692,18 +792,22 @@ class Wiring:
             self.outputs[component.component_name] = [output.field_name for output in component.outputs]
             for output in component.outputs:
                 self.load_types[(component.component_name, output.field_name)] = output.load_type
+                if output.energy_port is not None:
+                    self.output_ports[(component.component_name, output.field_name)] = output.energy_port
             for component_input in component.inputs:
                 source = component_input.src_object_name
                 if source is None or component_input.src_field_name is None:
                     continue
+                key = (source, component_input.src_field_name)
                 self.sources[(component.component_name, component_input.field_name)] = source
-                self.source_outputs[(component.component_name, component_input.field_name)] = (
-                    source,
-                    component_input.src_field_name,
-                )
-                readers = self.readers.setdefault((source, component_input.src_field_name), [])
+                self.source_outputs[(component.component_name, component_input.field_name)] = key
+                readers = self.readers.setdefault(key, [])
                 if component.component_name not in readers:
                     readers.append(component.component_name)
+                if component_input.energy_port is not None:
+                    self.port_readers.setdefault(key, []).append(
+                        (component.component_name, component_input.field_name, component_input.energy_port)
+                    )
 
     def meters(self, name: str, carrier: lt.EnergyBalanceCarrier) -> bool:
         """Whether the component ``name`` is a meter of ``carrier``."""
@@ -713,22 +817,66 @@ class Wiring:
         """Whether the component ``name`` can be the peer of a port that is not metered: neither exempt nor a meter."""
         return name not in self.exempt and name not in self.metered_carriers
 
-    def component_peer(self, component_name: str, field_name: str, port: EnergyPort) -> Optional[str]:
-        """The component the wiring names as the peer of a port that is not metered; None when there is none.
+    def paired_readers(self, component_name: str, field_name: str, port: EnergyPort) -> List[str]:
+        """The components that read an output port through an input carrying a port it pairs with, in wiring order.
 
-        ``peer_input`` names the component feeding one of the port's own inputs; otherwise the peer reads
-        ``peer_output``, or the port's own output for a ``PRODUCTION`` port. Exempt components and meters are skipped.
-        Among several readers, one that declares ports is taken first, then the first in the order of the run.
+        For example, a building reading a distribution system's ``HeatDeliveredInWatt`` through its input
+        ``HeatReceivedInWatt`` with ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` is the paired reader of the
+        distribution system's ``EnergyPort(PRODUCTION, SPACE_HEATING_HEAT)`` on that output
+        (:meth:`hisim.energy_port.EnergyPort.pairs_with`). Exempt components and meters are left out.
+
+        Args:
+            component_name: The output port's component.
+            field_name: The output.
+            port: The output's port.
+
+        Returns:
+            The readers' names, without repeats.
         """
-        if not port.names_a_component:
+        paired: List[str] = []
+        for reader, _, reader_port in self.port_readers.get((component_name, field_name), []):
+            if port.pairs_with(reader_port) and self.moves_energy(reader) and reader not in paired:
+                paired.append(reader)
+        return paired
+
+    def component_peer(self, component_name: str, field_name: str, port: EnergyPort) -> Optional[str]:
+        """The component the wiring names as the peer of an output port that is not metered; None when there is none.
+
+        A port naming its ``environment`` has none. A component reading the output through an input carrying a port
+        this port pairs with is the peer (:meth:`paired_readers`); else a ``PRODUCTION`` port's peer is a component
+        that reads the output: one that declares ports first, then the first in the order of the run. Any other port
+        names no component. Exempt components and meters are skipped.
+        """
+        if port.environment is not None:
             return None
-        if port.peer_input is not None:
-            source = self.sources.get((component_name, port.peer_input))
-            return source if source is not None and self.moves_energy(source) else None
-        watched = port.peer_output if port.peer_output is not None else field_name
-        readers = [name for name in self.readers.get((component_name, watched), []) if self.moves_energy(name)]
+        paired = self.paired_readers(component_name, field_name, port)
+        if paired:
+            return paired[0]
+        if port.role != lt.EnergyRole.PRODUCTION:
+            return None
+        readers = [name for name in self.readers.get((component_name, field_name), []) if self.moves_energy(name)]
         readers.sort(key=lambda name: (not self.declared.get(name, False), self.order.get(name, 0)))
         return readers[0] if readers else None
+
+    def input_peer(self, source_name: str, port: EnergyPort) -> Peer:
+        """The peer of an input port: the component whose output the input reads, or the port's fallback.
+
+        An input port books the energy exchanged with its source, so the source is the peer when it moves energy. A
+        source that is exempt or a meter moves none (an input port is never metered,
+        :meth:`hisim.energy_port.EnergyPort.check_fits_an_input`), and the port then takes its carrier's boundary
+        default or is unlinked, as an output port without a peer does.
+
+        Args:
+            source_name: The component whose output the input reads.
+            port: The input's port.
+
+        Returns:
+            The peer.
+        """
+        if self.moves_energy(source_name):
+            return Peer(PeerKind.COMPONENT, source_name)
+        boundary = port.default_boundary()
+        return Peer.unlinked() if boundary is None else Peer(PeerKind.BOUNDARY, boundary)
 
     @staticmethod
     def load_types_agree(first: Optional[lt.LoadTypes], second: Optional[lt.LoadTypes]) -> bool:
@@ -743,8 +891,7 @@ class Wiring:
     def metered_peer(self, component_name: str, field_name: str, port: EnergyPort) -> Optional[Peer]:
         """The peer of a metered port (:attr:`~hisim.energy_port.EnergyPort.is_metered`); None when nothing reads it.
 
-        ``peer_input`` names the component feeding one of the port's own inputs. Otherwise the port watches
-        ``peer_output`` or its own output, whatever its role, and its peer is the first that reads it:
+        The port watches its own output, whatever its role, and its peer is the first that reads it:
 
         1. a component that reads it directly and is not exempt: a meter of the port's carrier first, then a
            component that declares ports, then the first in the order of the run;
@@ -762,14 +909,7 @@ class Wiring:
             The meter or the component, or None.
         """
         carrier = port.carrier
-        if port.peer_input is not None:
-            source = self.sources.get((component_name, port.peer_input))
-            if source is not None and self.meters(source, carrier):
-                return Peer.meter(source)
-            if source is not None and self.moves_energy(source):
-                return Peer(PeerKind.COMPONENT, source)
-            return None
-        watched = port.peer_output if port.peer_output is not None else field_name
+        watched = field_name
         direct = self.readers.get((component_name, watched), [])
         candidates = [name for name in direct if self.meters(name, carrier) or self.moves_energy(name)]
         candidates.sort(
@@ -971,22 +1111,34 @@ class Wiring:
         return None
 
     def ambiguous_receiver_faults(self, components: Sequence[Any]) -> List[str]:
-        """A fault for every port whose output more than one component that declares ports reads, naming none of them.
+        """A fault for every output port whose receiver the wiring cannot tell among several readers.
 
-        Owner decision of 2026-10-02 on hydronic stage E (bead hisim-hydronics-fxix.6, rule (a)): a ``PRODUCTION`` port that
-        finds its receiver through its own output, and names no recipient with ``peer_input`` or ``peer_output``,
-        would otherwise silently book its energy to the first of them. A metered port is not affected: its peer
-        follows the order of the complete Sankey spec, §4.3, a meter of its carrier first (owner decision Q-J). For
-        example, a distribution system's heat read by the building and by a second heat sink that declares ports is
-        refused.
+        Owner decision of 2026-10-02 on hydronic stage E (bead hisim-hydronics-fxix.6, rule (a)), with input ports
+        (§3.7 of ``roadmap/fluid_loops_spec.md``): a ``PRODUCTION`` port that is not metered and is read by more than
+        one component that declares ports would otherwise silently book its energy to the first of them; it is
+        refused unless exactly one reader tags the reading input with a port it pairs with, which is then its peer.
+        Any output port read through two or more inputs carrying a port it pairs with is refused as well: one energy
+        cannot be received twice. A metered port is not affected: its peer follows the order of the complete Sankey
+        spec, §4.3, a meter of its carrier first (owner decision Q-J). For example, a distribution system's heat read
+        by the building and by a second heat sink that declares ports, neither tagging the reading input, is refused.
         """
         faults: List[str] = []
         for component in components:
             for output in component.outputs:
                 port = output.energy_port
-                if port is None or not self.finds_its_receiver_by_its_own_output(port):
+                if port is None or port.is_metered or port.environment is not None:
                     continue
                 key = (component.component_name, output.field_name)
+                paired = self.paired_readers(component.component_name, output.field_name, port)
+                if len(paired) > 1:
+                    faults.append(
+                        f"the energy port {'.'.join(key)} ({port.role.value}, {port.carrier.value}) is read through "
+                        f"inputs carrying a matching port by {len(paired)} components ({', '.join(paired)}): one "
+                        "energy is received once"
+                    )
+                    continue
+                if paired or port.role != lt.EnergyRole.PRODUCTION:
+                    continue
                 readers = [
                     name
                     for name in self.readers.get(key, [])
@@ -995,29 +1147,42 @@ class Wiring:
                 if len(readers) > 1:
                     faults.append(
                         f"the energy port {'.'.join(key)} ({port.role.value}, {port.carrier.value}) is read by "
-                        f"{len(readers)} components that declare ports ({', '.join(readers)}) and names none of them: "
-                        "name its recipient with peer_input or peer_output"
+                        f"{len(readers)} components that declare ports ({', '.join(readers)}) and none of them tags "
+                        "its reading input: tag the receiving input with an energy port"
                     )
         return faults
 
-    @staticmethod
-    def finds_its_receiver_by_its_own_output(port: EnergyPort) -> bool:
-        """Whether a port's receiver is whoever reads its own output: a ``PRODUCTION`` port, not metered, naming no peer.
+    def unpaired_input_port_faults(self) -> List[str]:
+        """A fault for every input port that reads an output port it does not pair with.
 
-        For example, a distribution system's ``ThermalPowerDelivered`` goes to the component that reads it; a heat
-        pump's electricity (metered) and a port naming ``peer_output`` do not.
+        The two ports of one wire book the two ends of one transfer, so they state the same carrier and opposite
+        exchange roles (:meth:`hisim.energy_port.EnergyPort.pairs_with`). For example, a building's input
+        ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` reading an output declared ``EnergyPort(PRODUCTION, COOLING)``
+        is refused. An input reading an output without a port is no fault here; when that output's component declares
+        ports, the check after the run finds the transfer booked on one side only.
         """
-        named = port.peer_input is not None or port.peer_output is not None
-        return port.role == lt.EnergyRole.PRODUCTION and port.names_a_component and not port.is_metered and not named
+        faults: List[str] = []
+        for (source, output), readers in self.port_readers.items():
+            sent = self.output_ports.get((source, output))
+            if sent is None:
+                continue
+            for reader, field_name, port in readers:
+                if not sent.pairs_with(port):
+                    faults.append(
+                        f"the input {reader}.{field_name} ({port.role.value}, {port.carrier.value}) reads the energy "
+                        f"port {source}.{output} ({sent.role.value}, {sent.carrier.value}): the two ports of one wire "
+                        "state the same carrier, one consumption and the other production"
+                    )
+        return faults
 
     @classmethod
     def refuse_a_broken_wiring(cls, components: Sequence[Any]) -> None:
         """Refuse a run whose wiring breaks a rule of the energy ports, right after the build and before it simulates.
 
-        The rules that need no value of the run: the circuit rules of :mod:`hisim.energy_port` (:meth:`circuits`) and
-        an energy port read by several components that declare ports without naming one
-        (:meth:`ambiguous_receiver_faults`). The balance after the run checks the circuit rules again, beside
-        everything that needs the run's values.
+        The rules that need no value of the run: the circuit rules of :mod:`hisim.energy_port` (:meth:`circuits`), an
+        energy port whose receiver the wiring cannot tell (:meth:`ambiguous_receiver_faults`) and an input port that
+        does not pair with the output port it reads (:meth:`unpaired_input_port_faults`). The balance after the run
+        checks the circuit rules again, beside everything that needs the run's values.
 
         Args:
             components: The components of the run, in the order of the run, with their inputs connected.
@@ -1029,7 +1194,11 @@ class Wiring:
         """
         metered_carriers, exempt = DeclaredPorts.classify(components)
         wiring = cls(components, exempt, metered_carriers)
-        faults = wiring.circuits(components).faults + wiring.ambiguous_receiver_faults(components)
+        faults = (
+            wiring.circuits(components).faults
+            + wiring.ambiguous_receiver_faults(components)
+            + wiring.unpaired_input_port_faults()
+        )
         if faults:
             raise EnergyPortWiringError(
                 "The wiring of this run breaks the rules of the energy ports (hisim/energy_port.py):\n"
@@ -1037,10 +1206,11 @@ class Wiring:
             )
 
     def peer_of(self, component_name: str, field_name: str, port: EnergyPort) -> Peer:
-        """The peer of one port (complete Sankey spec, §4.3; :mod:`hisim.energy_port` states the rule).
+        """The peer of one output port (complete Sankey spec, §4.3; :mod:`hisim.energy_port` states the rule).
 
         A storage change goes to the component's own store. A metered port goes to the meter or component that reads
-        it (:meth:`metered_peer`), any other port to the component the wiring names (:meth:`component_peer`). A port
+        it (:meth:`metered_peer`), any other port to the component the wiring names (:meth:`component_peer`); an input
+        port's peer is :meth:`input_peer`'s. A port
         with no such peer takes its carrier's boundary default, or nobody (unlinked). For example, a heat pump's
         electricity port, which the energy manager reads and passes on summed to the electricity meter, goes to the
         meter "ElectricityMeter"; a boiler's gas port that no meter reads comes from "natural gas supply".

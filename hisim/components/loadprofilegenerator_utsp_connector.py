@@ -578,9 +578,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
-            energy_port=EnergyPort(
-                lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS
-            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
         )
         self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -621,19 +619,20 @@ class UtspLpgConnector(cp.DataSourceComponent):
         # electricity meter that reads it and the residents' body heat from the residents, and releases the device heat
         # gains and the body heat into the building, which reads both. The LoadProfileGenerator gives the device
         # heat gains as a profile of its own, so the electricity they do not account for leaves the house with
-        # waste water, exhaust air and light. An output carries one port, so the body heat's way out to the
-        # building is an output of its own; its peer is the building that reads HeatingByResidents.
+        # waste water, exhaust air and light. An output carries one port, so the body heat is booked on two: its way
+        # out to the building on HeatingByResidents, which the building reads, and its way in from the residents on
+        # an output of its own, which needs no reader.
         self.body_heat_to_building_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.BodyHeatToBuildingInWatt,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             output_description=(
-                "The residents' body heat released into the building, in W; equal to HeatingByResidents, which the "
-                "building reads as its gain."
+                "The residents' body heat the occupancy takes in from the residents, in W; equal to "
+                "HeatingByResidents, which the building reads as its gain."
             ),
             energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT, peer_output=self.HeatingByResidents
+                lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS
             ),
         )
         self.appliance_electricity_not_released_indoors_channel: cp.ComponentOutput = self.add_output(

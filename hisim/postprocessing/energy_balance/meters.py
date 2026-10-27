@@ -179,7 +179,7 @@ class MeterBalance:
             "reads": [
                 {
                     "component": series.component,
-                    "output": series.output.field_name,
+                    "output": series.channel,
                     "role": series.port.role.value,
                     "total_kwh": series.annual_kilowatt_hours,
                 }
@@ -257,7 +257,7 @@ class MeterCheck:
             "ports": [
                 {
                     "component": series.component,
-                    "output": series.output.field_name,
+                    "output": series.channel,
                     "role": series.port.role.value,
                     "carrier": series.port.carrier.value,
                     "peer": series.peer.name,

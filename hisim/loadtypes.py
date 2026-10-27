@@ -369,9 +369,13 @@ class EnvironmentNode(str, enum.Enum):
 
     """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.
 
-    A ``CONSUMPTION`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
-    ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
-    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    A ``CONSUMPTION`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT_SOURCE`` (the outside air or the
+    ground a device takes heat from), a ``PRODUCTION`` port of it goes to ``AMBIENT_HEAT_SINK`` (the outside air a
+    cooling device rejects heat to), one of carrier ``SOLAR`` comes from ``SOLAR`` (the sun), and a ``LOSS`` port goes
+    ``OUTDOORS``, unless the port names its node itself (:meth:`hisim.energy_port.EnergyPort.default_boundary`). The
+    source and the sink of ambient heat are two nodes, so the Sankey draws the one left and the other right (owner
+    decision Q-M of ``roadmap/complete_energy_sankeys_spec.md``). ``HEAT_SOURCE`` is the fixed heat source of a ground
+    collector (``SimpleHeatSource``), which its ports name (Q-O). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
     at the taps, ``RESIDENTS`` the residents' body heat and ``DRIVING`` the energy cars use to drive. The supply node of a bought carrier, such as
@@ -379,7 +383,9 @@ class EnvironmentNode(str, enum.Enum):
     (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
 
-    AMBIENT_HEAT = "ambient heat"
+    AMBIENT_HEAT_SOURCE = "ambient heat source"
+    AMBIENT_HEAT_SINK = "ambient heat sink"
+    HEAT_SOURCE = "heat source"
     SOLAR = "sun"
     OUTDOORS = "outdoors"
     GRID_IMPORT = "grid import"

@@ -113,8 +113,8 @@ def test_the_heat_refuses_what_the_library_refuses(
     ("changes", "match"),
     [
         ({"name": ""}, "non-empty text"),
-        ({"carrier": lt.EnergyBalanceCarrier.ELECTRICITY}, "space-heating or hot-water heat"),
-        ({"carrier": "space_heating_heat"}, "space-heating or hot-water heat"),
+        ({"carrier": lt.EnergyBalanceCarrier.ELECTRICITY}, "space-heating, hot-water or ambient heat"),
+        ({"carrier": "space_heating_heat"}, "space-heating, hot-water or ambient heat"),
         ({"fluid": "water"}, "LoopFluid"),
         ({"supplies": 1}, "supplies as True or False"),
         ({"may_cool": None}, "may_cool as True or False"),
@@ -144,7 +144,7 @@ def test_a_loop_refuses_what_cannot_describe_a_loop(changes: Dict[str, Any], mat
 
 
 def test_a_loop_s_name_is_free_text_and_its_carriers_are_the_heats() -> None:
-    """A component may name as many loops as its configuration has, "apartment 3" too; both heats are accepted."""
+    """A component may name as many loops as its configuration has, "apartment 3" too; each loop carrier is accepted."""
     for carrier in FluidLoop.LOOP_CARRIERS:
         loop = FluidLoop("apartment 3", carrier=carrier, fluid=LoopFluid.BRINE, supplies=False, may_cool=True)
         assert (loop.name, loop.carrier, loop.pumps) == ("apartment 3", carrier, None)
@@ -497,7 +497,10 @@ def test_the_supplier_s_sign_splits_a_circuit_into_its_two_directions() -> None:
     A heating-only run keeps the one series it always had, so its report does not change.
     """
     heat = np.array([2.0, -1.0, 0.0])
-    for supplies, heating_role, cooling_role in ((True, lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION), (False, lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)):
+    for supplies, heating_role, cooling_role in (
+        (True, lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION),
+        (False, lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION),
+    ):
         (heating_port, heating), (cooling_port, cooling) = DeclaredPorts.book_by_the_supplier_s_sign(heat, Loops.CARRIER, supplies=supplies)
         assert heating_port == EnergyPort(heating_role, Loops.CARRIER)
         assert cooling_port == EnergyPort(cooling_role, lt.EnergyBalanceCarrier.COOLING)

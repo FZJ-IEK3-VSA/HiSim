@@ -33,12 +33,12 @@ from hisim import loadtypes as lt
 from hisim.component import Component
 from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.advanced_fuel_cell import CHP
-from hisim.components.air_conditioner import AirConditioner
 from hisim.components.fuel_meter import FuelMeterConfig
 from hisim.components.generic_electrolyzer_h2 import Electrolyzer
-from hisim.components.generic_heat_pump import GenericHeatPump
 from hisim.components.heating_curve import HeatDistributionSystemType
+from hisim.components.idealized_electric_heater import IdealizedElectricHeater
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
+from hisim.components.simple_air_conditioner import SimpleAirConditioner
 from hisim.components.transformer_rectifier import Transformer
 from hisim.config import ConfigBase, auto_fields, presets_of
 from hisim.config.context import SizingContext
@@ -154,8 +154,6 @@ class FlagPortAgreement:
         "a port and no flag: the balance books the heat pump's electricity per mode, the KPIs count it once as "
         "ElectricalInputPowerTotalHeatpump; a consumption flag here would count this share twice."
     )
-    #: The reason an output of a class that declares no energy port carries a flag and no port.
-    UNDECLARED_REASON: ClassVar[str] = "a flag and no port: the class declares no energy port at all, and the balance lists it as undeclared."
     #: The reason an electricity port of a device in a golden setup carries no flag.
     RESULTS_KEEP_REASON: ClassVar[str] = (
         "a port and no flag: the device runs in a golden setup (dynamic_components, electrolyzer_with_renewables) "
@@ -181,10 +179,17 @@ class FlagPortAgreement:
             "a port and no flag: the KPIs read the battery through its signed CHARGE_DISCHARGE output and its "
             "STORED_ENERGY_INCREASE output; flagged as production, the discharging would count as generation."
         ),
-        (AirConditioner, AirConditioner.ElectricalPowerConsumption): UNDECLARED_REASON,
         (CHP, CHP.ElectricityOutput): RESULTS_KEEP_REASON,
         (Electrolyzer, Electrolyzer.CurrentLoad): RESULTS_KEEP_REASON,
-        (GenericHeatPump, GenericHeatPump.ElectricityOutput): UNDECLARED_REASON,
+        (IdealizedElectricHeater, IdealizedElectricHeater.ElectricityConsumptionInWatt): (
+            "a port and no flag: the idealized heater holds a building at its set points to measure the building's "
+            "demand; nothing bills it, and a consumption flag would put its electricity into the KPIs of the building "
+            "tests that run it."
+        ),
+        (SimpleAirConditioner, SimpleAirConditioner.ElectricalPowerConsumption): (
+            "a port and no flag: the device runs in the golden setup simple_air_conditioner_household_building_sizer, "
+            "whose KPIs would move if they counted this electricity."
+        ),
         (Transformer, Transformer.ElectricityReceivedInKilowatt): RESULTS_KEEP_REASON,
     }
 

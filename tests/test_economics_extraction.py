@@ -1308,6 +1308,7 @@ _ENERGY_BALANCE_MODULES = {
     "ElectricHeating": "generic_electric_heating",
     "AirConditioner": "air_conditioner",
     "SimpleAirConditioner": "simple_air_conditioner",
+    "IdealizedElectricHeater": "idealized_electric_heater",
     "SolarThermalSystem": "solar_thermal_system",
     "AdvancedElectrolyzer": "generic_electrolyzer_and_h2_storage",
     "Electrolyzer": "generic_electrolyzer_h2",

@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.generic_car import Car, CarConfig
 from hisim.components.lpg_car_information import (
@@ -29,6 +30,7 @@ from hisim.components.lpg_car_information import (
 from hisim.config import ComponentID, constructors_of
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
+from tests import functions_for_testing as fft
 
 
 class FakeOccupancy:
@@ -307,3 +309,63 @@ def test_an_occupancy_without_car_data_publishes_nothing_and_the_car_complains_i
     assert GenericCarInformation.has_car_data(CarReports.empty()) is False
     with pytest.raises(ValueError, match="only empty dictionaries"):
         GenericCarInformation(my_occupancy_instance=FakeOccupancy(CarReports.empty()))
+
+
+@pytest.mark.base
+def test_an_electric_car_takes_its_electricity_from_its_battery_and_turns_it_into_driving():
+    """The electric car reads its battery's discharge as vehicle electricity in and turns it into driving energy.
+
+    One 900 s step with 1500 m driven at 0.15 kWh/km uses 900 W. Catches the battery input without its port or with
+    a carrier the electricity meter would read, and driving energy sent anywhere but the driving node.
+    """
+    car = Car(
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900),
+        config=_car_config(name="ElectricCar", household_name="CHR01", car_name="SmallCar"),
+    )
+    assert len(car.inputs) == 1
+    battery_input = car.inputs[0]
+    assert battery_input.field_name == Car.ElectricityFromCarBatteryInWatt and battery_input.is_mandatory
+    assert [(connection.source_class_name, connection.source_output_name) for connection in car.default_connections["CarBattery"]] == [
+        ("CarBattery", "AcBatteryDischargingPower")
+    ]
+    received = battery_input.energy_port
+    assert received is not None
+    assert (received.role, received.carrier, received.is_metered) == (
+        lt.EnergyRole.CONSUMPTION,
+        lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY,
+        False,
+    )
+    ports = {output.field_name: output.energy_port for output in car.outputs if output.energy_port is not None}
+    assert list(ports) == [Car.ElectricityOutput]
+    driving = ports[Car.ElectricityOutput]
+    assert (driving.role, driving.carrier, driving.default_boundary()) == (
+        lt.EnergyRole.PRODUCTION,
+        lt.EnergyBalanceCarrier.DRIVING,
+        "driving",
+    )
+
+    discharge = cp.ComponentOutput(
+        "CarBattery", "AcBatteryDischargingPower", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID("CarBattery")
+    )
+    battery_input.source_output = discharge
+    fft.add_global_index_of_components([car, discharge])
+    car.meters_driven = [1500.0]
+    car.car_location = [0]
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([car, discharge]))
+    stsv.values[discharge.global_index] = 900.0
+    car.i_simulate(0, stsv, False)
+    values = {output.field_name: stsv.values[output.global_index] for output in car.outputs}
+    assert values[Car.ElectricityOutput] == pytest.approx(900.0, rel=1e-12)
+
+
+@pytest.mark.base
+def test_a_diesel_car_reads_no_battery_and_declares_no_port_yet():
+    """A diesel car has no battery to read; its fuel in litres cannot carry an energy port, so it declares none yet.
+
+    Catches the battery input made mandatory for a car that has no battery, which would fail every diesel run.
+    """
+    config = CarConfig.for_household(name="DieselCar", household_name="CHR01", car_name="SmallCar", fuel=lt.LoadTypes.DIESEL)
+    config.occupancy_identity = "profile published by the test for CHR01"
+    car = Car(my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900), config=config)
+    assert not car.inputs and not car.default_connections
+    assert all(output.energy_port is None for output in car.outputs)

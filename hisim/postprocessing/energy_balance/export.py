@@ -10,11 +10,12 @@ other than it reads or a metered port passes no meter (:mod:`.meters`); the mess
 in which no component declares a port passes.
 
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only decides whether the
-files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/3``) lists, per
+files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/4``) lists, per
 declared component, the run's consumption / production / loss / storage change in kWh (in total and per carrier), the residual in kWh
 and in percent of the throughput, the worst step and the verdict; then every link between declared components (a
 side that books nothing is null, and a failing link states its reason; a water circuit is a link from its supply
-owner to its receiver, and each end's port lists the circuit's three outputs); every breach of the circuit rules;
+owner to its receiver, and each end's port lists the circuit's three outputs; an input's port names the output it
+reads); every breach of the circuit rules;
 every meter with what it publishes, the ports it reads and whether the two agree; every unmetered port; every
 unlinked port; every undeclared component; and every exempt component with its reason. Beside it,
 ``energy_sankeys/`` holds ``energy_sankey.json`` (every view's nodes and links: ``overall``, the connected graph, and
@@ -56,8 +57,9 @@ class EnergyBalanceReport:
     SANKEY_JSON_FILE: ClassVar[str] = "energy_sankey.json"
     #: The report's schema: 2 adds the meters, the unmetered and unlinked ports and the exempt components; 3 renames
     #: the roles ``in`` and ``out`` to ``consumption`` and ``production``, and the totals ``in_kwh`` and ``out_kwh`` to
-    #: ``consumption_kwh`` and ``production_kwh``.
-    REPORT_SCHEMA: ClassVar[str] = "hisim.energy_balance/3"
+    #: ``consumption_kwh`` and ``production_kwh``; 4 drops each port's ``peer_input`` and ``peer_output`` and adds
+    #: ``reads``, the output an input port reads (decision D9 of ``roadmap/fluid_loops_spec.md``).
+    REPORT_SCHEMA: ClassVar[str] = "hisim.energy_balance/4"
 
     def __init__(
         self,

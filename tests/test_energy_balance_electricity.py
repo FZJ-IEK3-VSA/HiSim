@@ -49,9 +49,9 @@ class Expected:
         },
         "UTSPConnector": {
             "ElectricalPowerConsumption": ("consumption", "electricity"),
-            "HeatingByResidents": ("consumption", "room_heat"),
+            "HeatingByResidents": ("production", "room_heat"),
             "HeatingByDevices": ("production", "room_heat"),
-            "BodyHeatToBuildingInWatt": ("production", "room_heat"),
+            "BodyHeatToBuildingInWatt": ("consumption", "room_heat"),
             "ApplianceElectricityNotReleasedIndoorsInWatt": ("loss", "electricity"),
         },
     }

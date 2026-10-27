@@ -810,15 +810,13 @@ class MockBoiler(MockComponent, PhysicsComponent):
             "ThermalPowerDhw",
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            energy_port=EnergyPort(
-                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW
-            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
         )
         self.output_port(
             "FuelUse",
             lt.LoadTypes.GAS,
             lt.Units.WATT_HOUR,
-            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS),
         )
         self.output_port(
             "FlueLoss",
@@ -874,7 +872,7 @@ class MockCombiBurner(MockComponent, PhysicsComponent):
                 name,
                 lt.LoadTypes.GAS,
                 lt.Units.WATT_HOUR,
-                energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output=name),
+                energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.NATURAL_GAS),
             )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:

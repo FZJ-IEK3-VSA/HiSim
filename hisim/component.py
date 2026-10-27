@@ -164,6 +164,7 @@ class ComponentInput:  # noqa: too-few-public-methods
         allow_unconnected_mandatory: bool = False,
         *,
         fluid_loop: Optional[FluidLoopChannel] = None,
+        energy_port: Optional[EnergyPort] = None,
     ):
         """Initializes a component input.
 
@@ -182,21 +183,29 @@ class ComponentInput:  # noqa: too-few-public-methods
             fluid_loop: The fluid loop this input is a leg of, the flow or the temperature of the
                 fluid arriving, and which quantity (:class:`~hisim.energy_port.FluidLoopChannel`);
                 None for an input that is no leg of a loop.
+            energy_port: What the energy arriving on this input is in the component's balance
+                (:mod:`hisim.energy_port`): the balance books the column of the output connected to
+                it, with that output's component as the peer. None for an input that books nothing.
 
         Raises:
-            FluidLoopError: If ``fluid_loop`` does not fit the input: a quantity of an output or a
-                unit other than its quantity's.
+            FluidLoopError: If ``fluid_loop`` does not fit the input: a quantity of an output, a
+                unit other than its quantity's, or an ``energy_port`` beside it.
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 An input is written as its own key in a declarative energy-system file rather
                 than behind a dot, so the grammar does not force the rule on it the way it does
                 on an output; it is enforced anyway, because an input and an output of the same
                 flow that spelled their names by different rules would be a trap for every
-                reader of both.
+                reader of both. Also if ``energy_port`` is given for an input that is neither a
+                power nor an energy, or does not fit an input
+                (:meth:`hisim.energy_port.EnergyPort.check_fits_an_input`).
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component input")
+        if energy_port is not None:
+            EnergyPort.validate_unit(unit)
+            energy_port.check_fits_an_input(object_name, field_name)
         if fluid_loop is not None:
-            fluid_loop.check_fits(object_name, field_name, unit, is_input=True)
+            fluid_loop.check_fits(object_name, field_name, unit, is_input=True, energy_port=energy_port)
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -210,6 +219,8 @@ class ComponentInput:  # noqa: too-few-public-methods
         self.allow_unconnected_mandatory: bool = allow_unconnected_mandatory
         #: The fluid loop this input is a leg of, and which quantity, or None.
         self.fluid_loop: Optional[FluidLoopChannel] = fluid_loop
+        #: What the energy arriving on this input is in the component's balance, or None.
+        self.energy_port: Optional[EnergyPort] = energy_port
 
 
 @dataclass(frozen=True)
@@ -540,14 +551,22 @@ class Component:
         mandatory: bool,
         *,
         fluid_loop: Optional[FluidLoopChannel] = None,
+        energy_port: Optional[EnergyPort] = None,
     ) -> ComponentInput:
-        """Adds an input definition; ``fluid_loop`` tags it as a leg of one of the component's fluid loops.
+        """Adds an input definition; ``fluid_loop`` tags it as a leg of a fluid loop, ``energy_port`` as a port.
+
+        An input takes one of the two or neither. ``energy_port`` books the energy arriving on the input in the
+        component's balance (:mod:`hisim.energy_port`), so a component that receives energy needs no output that
+        copies the input.
 
         Raises:
             FluidLoopError: If the tag does not fit the input (:meth:`hisim.energy_port.FluidLoopChannel.check_fits`) or
                 repeats one of the component's (:meth:`refuse_a_repeated_fluid_loop_tag`).
+            ValueError: If the energy port does not fit the input (:class:`ComponentInput`).
         """
-        myinput = ComponentInput(object_name, field_name, load_type, unit, mandatory, fluid_loop=fluid_loop)
+        myinput = ComponentInput(
+            object_name, field_name, load_type, unit, mandatory, fluid_loop=fluid_loop, energy_port=energy_port
+        )
         if fluid_loop is not None:
             self.refuse_a_repeated_fluid_loop_tag(fluid_loop, field_name)
         self.inputs.append(myinput)

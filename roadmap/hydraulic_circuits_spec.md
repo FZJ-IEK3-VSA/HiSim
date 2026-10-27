@@ -1,10 +1,12 @@
-# Spec: named hydraulic circuits — every water loop has an id, one declared pump owner and a conservation check in every step
+# Spec: named hydraulic circuits — every water loop has an id, one declared pump owner and a conservation check of every step, after the run
 
 Status: draft; the owner's decisions of 2026-10-22 (§2: D1 to D5, and D7 after the first draft's review) and of
 2026-10-27 (D8: fluid-loop tags on the channel definitions replace #1109's hydronic-port declaration, which decides Q4
 against its recommendation; D9: energy ports become channel tags on inputs too; D10: the supplier of a loop is declared,
 the direction per step follows from the supplier's sign, a loop that may cool says so — which withdrew the first
-amendment's role-from-sign rule, wrong for cooling loops) are recorded. The open questions Q0 to
+amendment's role-from-sign rule, wrong for cooling loops; D11: every loop check of values runs once after the run,
+vectorized over the result columns, not per step in `i_doublecheck`, as agreed on 2026-10-23 and confirmed for Q1 and
+Q2 on 2026-10-27) are recorded. The open questions Q0 to
 Q3, Q5, Q6 and the new Q7 to Q12 (§5) wait for the owner. Nothing is built; #1109 is back in draft for its rework onto
 the tags (§5, Q6). Owner: Noah. Epic: hisim-hydraulic-circuits-wci7 (`owner-decision`). Builds on:
 `roadmap/hydronic_coupling_spec.md` (§3 circuits and pump owners, §3.5 `HydronicPort`, §4.6 D25 with its amendment
@@ -53,7 +55,7 @@ and heats that flow. The class of fault stays open, because nothing in HiSim kno
 - **The one remaining gap in a recorded system is also invisible.** Without a buffer, the HDS publishes its return
   temperature and its delivered heat one step late (`heat_distribution_system.py:529-530`). The district-heating twin's
   substation bills `m c (T_sup − T_ret_published)` on this stale return: −17.6 kWh/yr (−0.16 %) at 900 s, −44.7 kWh
-  (−0.41 %) at 3600 s (hisim-pnw7, closed hisim-energy-sankeys-9uoo.12). Only a per-step check of each device's book
+  (−0.41 %) at 3600 s (hisim-pnw7, closed hisim-energy-sankeys-9uoo.12). Only a check of every step of each device's book
   against its own published quantities would show it.
 
 The rules exist: `hydronic_coupling_spec.md` §3.1 (one pump owner per circuit; the other end reads its flow),
@@ -71,18 +73,19 @@ them as `D3 of the hydraulic circuits spec`.
 | D1 | **Fluid circuits with an id.** Every device connected to a circuit has, per circuit, a mass-flow input, a mass-flow output, a temperature input and a temperature output (one such set per circuit, so a buffer or tank on several circuits has several sets). | owner, 2026-10-22 | A loop is a named thing in the model, and every member publishes what left it, not only what it decided. Today's three quantities per loop become four per member (§4.1); every receiver gains a mass-flow output and every pump owner a mass-flow input. |
 | D2 | **Detection, not prevention.** No shared circuit-level flow value. Each device publishes its own outputs through ports (black boxes). A violation fails hard. Owner: "why prevent? what advantage do we gain with the added complexity?" | owner, 2026-10-22 | The circuit holds no value and computes nothing (§4.2). The components stay black boxes that talk through ports; a device that breaks conservation is caught, not corrected. |
 | D3 | **The pump owner is explicit.** No implicit pumps or roles derived from positioning, list order or position enums. Owner: "that is not salient and usually a bad design choice." Each circuit has exactly one explicitly declared pump owner, checked at build. The `PositionHotWaterStorageInSystemSetup` enums (three of them) then go. | owner, 2026-10-22 | Who pumps is stated by the pump owner's own port set, in code or in its configuration (§4.3, Q3; D7). The build refuses a loop with zero or two pumping port sets. The three enums are removed (§7; the HDS's lag half of its enum goes with hisim-pnw7). |
-| D4 | **The check runs every step, in the pump component:** `if abs(massflow_in - massflow_out) > tolerance: raise CircuitError(...)`. It goes in `i_doublecheck`, which the simulator calls once per step after convergence (`simulator.py:503`), not in `i_simulate`, which runs every pass, where the returning flow can lag a pass. The error names the circuit, the device, the step and both flows. | owner, 2026-10-22 | `Component.i_doublecheck` gets its first production use (§4.4). The check costs one subtraction per circuit per step, outside the convergence loop. |
+| D4 | **The check runs every step, in the pump component:** `if abs(massflow_in - massflow_out) > tolerance: raise CircuitError(...)`. It goes in `i_doublecheck`, which the simulator calls once per step after convergence (`simulator.py:503`), not in `i_simulate`, which runs every pass, where the returning flow can lag a pass. The error names the circuit, the device, the step and both flows. | owner, 2026-10-22 | **Where it runs is superseded by D11:** the rule (the pump owner's returning flow equals the flow it sent, tolerance, `CircuitError` naming the circuit, the device, the step and both flows) stays; it is checked once after the run over the result columns of every step (§4.4), not in `i_doublecheck`, which keeps no production use. |
 | D5 | **Forced steps need no exception.** Only controllers are forced; physics always converges (a physics non-convergence aborts at 100 passes). Mass flows and temperatures are physics outputs, so they are converged in every step. | owner, 2026-10-22 | The check has no "forced" branch and no tolerance widening for forced steps (§4.4). |
 | D7 | **No top-level declaration.** Owner, verbatim: "no top level declaration. the ports themselves should declare that they belong to a fluid loop". That is: no top-level `circuits:` block in the energy-system YAML, no `Simulator.add_circuit`, no assembly-level circuit declaration. A component's port set itself declares that it belongs to a fluid loop. | owner, 2026-10-22 | A loop is what the wiring connects: the build finds it by following the port sets' wires from member to member (§4.3), and refuses a loop that does not close, a port set wired outside a loop, or a flow read by two loops. The loop's id is derived from its pump owner's component and port-set name (§4.3). Nothing is told to a component at build; whether a port set pumps is stated in code or in the component's configuration (Q3). The first draft's `circuits:` block, `add_circuit`, `pump: true` on assembly ends and `join_circuit` are withdrawn. D1 to D5, Q0, Q1, Q2, Q5 and the dry run (§6) are unchanged by it. |
 | D8 | **Fluid-loop tags on the channel definitions replace #1109's hydronic-port declaration.** Owner, on #1109: "the hydronic port thing doesn't sit right with me, since it's duplicating information about ports that then needs to be kept in sync. we've already discussed to use fluid_loops and use tagging directly on the component input/output definitions. wouldn't that completely replace the hydronic ports in 1109?" — and, after the answer that it replaces the declaration layer and not the balance logic that consumes it: "yeah, update 1122." | owner, 2026-10-27 | Q4 is decided against its recommendation of 2026-10-22: #1109 is not merged as it is and extended later. Its declaration layer goes: `Component.add_hydronic_port`, `CircuitEnd` and `HydronicPort` as a declared object, which named three channels a second time (by string, beside their `add_input`/`add_output` calls) and had to be kept in step with them. Instead, a channel of a loop says itself, in its own `add_input` or `add_output` call, which loop of the component and which of D1's four quantities it is (§4.1); the build groups the tagged channels into port sets (§4.3). What stays of #1109 is the balance side: the ends paired through the wiring (`Wiring`), the heat derived from the result columns and never from a value a component wrote for the balance, the rules one reader / both ends or neither, and the build-time `refuse_a_broken_wiring`; and the components' loops themselves (the buffer's three, the tank's two coils with their own returns, the distribution system's), now fed by the tags. #1109 is back in draft and is reworked onto the tags (Q4 as decided, Q6 stage 1a). |
 | D9 | **Energy ports become channel tags too, on inputs as on outputs.** Owner: "can we also replace some of the energy port declarations with tags?" Recorded as the owner's request; the design is §4.7, the choices it leaves open are Q7 to Q10. | owner, 2026-10-27 | An `EnergyPort` already sits on the channel (`add_output(energy_port=...)`); what was missing is that only an output could carry one. A component that receives energy through an *input* therefore invented a copy-output and pointed it at the input by string (`peer_input=`, four uses on the building branch), or pointed one output at another (`peer_output=`, three uses). With `add_input(energy_port=...)` the input carries the port, the balance reads the column of the output wired to it, and the two pointers and the copy-outputs go (§4.7; the one case that keeps a second output is a quantity that is both taken from a boundary node and given to a component). A channel whose sign means its direction gets a port with two faces instead of two copy-outputs (Q9). The two tag systems that overlap on about a dozen outputs, `postprocessing_flag` and `energy_port`, are an open question with a recommendation (Q10), because merging them reaches into the KPI computation and the meters' selection. The distribution system's `declares_energy_ports`, a port declaration that reads a position enum, goes with D3's enum removal (Q6, stage 3). |
 | D10 | **The supplier of a loop is declared; the direction per step follows from the supplier's sign; a loop that may cool says so.** Owner, on the first amendment's rule that no member declares a role because "each member's heat into the loop is m·c·(T_out − T_in) from its own four values, positive at the supplier": "for cooling loops this is wrong" — and, on the correction below: "yes, please rewrite it." | owner, 2026-10-27 | `m c (T_out − T_in)` is the heat a member adds to the water, in any loop; "positive at the supplier" holds only while the loop heats. In a cooling loop the supplier (a chiller, a heat pump in cooling mode) sends the water out colder than it came back and the room-side member warms it, so a role read off the sign would make the emitter the supplier and book cooling as space heating flowing the wrong way — what the Sankey's `COOLING` carrier exists to avoid; and a loop that heats in one step and cools in the next (the HDS with `cooling_enabled`, bead hisim-hds-cooling-option-m4g6; a heat pump cooling through a buffer, hisim-energy-sankeys-9uoo.17) has no one sign. So (1) every `FluidLoop` states whether its member supplies the loop (`supplies`, a declared fact like `pumps`, and a separate one: the HDS pumps its loop and does not supply it), and the build refuses a loop with zero or two suppliers; (2) in a step in which the supplier adds heat to the water its loop's heat is booked as the loop's stated heating carrier from the supplier to the other members, in a step in which it removes heat as `COOLING` from the room-side members to the supplier — the rule of Q9's signed energy port, applied to loops; (3) a loop that can only heat states that, and a step in which it cools anyway fails the run; a loop that may also cool says so explicitly (`may_cool`, from the HDS's `cooling_enabled` where the configuration has it). §4.1, §4.3, §4.6, §4.7, Q8, Q9 and §7 are rewritten; the first amendment's Q8 recommendation is withdrawn. |
+| D11 | **The loop checks of values run after the run, vectorized, not every step.** Owner, 2026-10-23, on the per-step `i_doublecheck` of D4: "maybe move the checking to post-processing as a vector-check to avoid hundreds of thousands of i_doublecheck calls?" — agreed the same day and not written into this spec until the owner's reminder of 2026-10-27, for Q1: "i thought we agreed already to move the q1 mass checks also to postprocessing for speed reasons? i mean this will be about catching bugs, so 99.999% of runs will be fine and we don't need to waste the compute of doing it every step. if it fails we can easily go back and debug it." — and for Q2: "same for the energy check in q2". | owner, 2026-10-23 and 2026-10-27 | Every check of §4.6 that reads the values of a step — the mass check (D4, Q1), the energy check (Q2) and the heating-only check (D10) — runs once, after the simulation and before anything reads the result table, beside `FiniteResultsCheck` (`postprocessing_main.py:307`), as whole-column operations over all steps; nothing runs per step or per pass, and `i_doublecheck` keeps no production use. A violation still fails the run hard (D2), with the loop, the member, the first failing step, the number of failing steps and the values at the first one (§4.4, §4.5); the run's result table is kept, so the fault can be read off it. The build checks of §4.3 are unchanged: they run once, before step 0. |
 
 *Proposed, not decided (agent, 2026-10-22; the owner's confirmation is Q0):* **D6 — HiSim keeps "no buses"; a named
 circuit is not one.** A bus balances: it takes several contributions and solves for what is missing. A named circuit
 balances nothing and solves nothing: it is a name shared by the ends of one series loop, the declaration of the one
 member that pumps it, and a check of what the members published. Deleting every circuit declaration from a system
-leaves every simulation result bit-identical; only the build check, the per-step check and the names in error
+leaves every simulation result bit-identical; only the build check, the post-run check and the names in error
 messages go. Deleting a bus changes results.
 
 ## 3. Terms
@@ -126,9 +129,10 @@ messages go. Deleting a bus changes results.
 - **Build**: the moment after `Simulator.connect_all_components` and before step 0 (`Simulator.run_all_timesteps`,
   `simulator.py:816`), where the energy-port rules of #1109 also run. A build check refuses a system before it
   simulates.
-- **Step check**: a check of converged values, once per step, in `Component.i_doublecheck`
-  (`component.py:820`), which the simulator calls for every component after the passes of a step have converged
-  (`simulator.py:502-503`).
+- **Post-run check** (D11): a check of the converged values of every step, run once after the simulation over the
+  result table, one column operation per check and port set, where `FiniteResultsCheck` runs
+  (`postprocessing_main.py:307`), before anything reads the table. The table holds one column per output and one row
+  per step; an input is read through the output wired to it.
 - **Forced step**: a step whose controllers were frozen after ten passes (`force_convergence`, `simulator.py:488-489`)
   so that the physics can settle; the physics still iterates to the convergence criterion (`|Δ| ≤ 1e-4` on every
   output, `SingleTimeStepValues.is_close_enough_to_previous`, `component.py:222-228`) or the run aborts at the pass
@@ -147,7 +151,7 @@ groups a component's tagged channels by loop into its port sets (§4.3).
 
 | Quantity | Channel kind | Unit | Loop tag | Pump owner | Pass-through member |
 |---|---|---|---|---|---|
-| flow in | `ComponentInput` | kg/s | `loop.flow_in` | the flow that came back round the loop; read only for the step check | the flow the previous member sent; read and passed through |
+| flow in | `ComponentInput` | kg/s | `loop.flow_in` | the flow that came back round the loop; read only by the post-run check, through the output wired to it | the flow the previous member sent; read and passed through |
 | flow out | `ComponentOutput` | kg/s | `loop.flow_out` | the flow it pumps this step | equal to flow in, by the member's own code |
 | temperature in | `ComponentInput` | °C | `loop.temperature_in` | the water arriving (the return, for a generator) | the water arriving (the supply, for a receiver) |
 | temperature out | `ComponentOutput` | °C | `loop.temperature_out` | the water leaving (the supply) | the water leaving (the return) |
@@ -287,7 +291,7 @@ HiSim has no bus and no implicit balancing junction, by owner decision (`roadmap
 What the named circuit is:
 
 - **A name.** The loop the wiring connects gets an id from its pump owner's port set (D7, §4.3), so the build can say
-  "the loop `hds.distribution` between `boiler` and `hds`" and the step check can name the loop whose water does not add
+  "the loop `hds.distribution` between `boiler` and `hds`" and the post-run check can name the loop whose water does not add
   up.
 - **A declaration of the one pump owner** (D3), made by the pump owner's own port set (D7, Q3), read at build.
 - **A conservation check** (D4) of the values the members published on their own: at the pump owner, the flow that
@@ -353,7 +357,7 @@ name is unique in a run and a component pumps each of its port sets at most once
 refused in rule 3 has no pump owner to name it by, so that message lists the members instead:
 "the loop (boiler.space_heating, hds.distribution) has 2 pumping port sets, boiler.space_heating and
 hds.distribution; exactly one member of a loop pumps". The id is derived at build and kept on each member's port set,
-so `i_doublecheck` (§4.4) can put it in its error without any lookup.
+so the post-run check (§4.4) can put it in its error without any lookup.
 
 **The carrier** (space heating or hot water) is stated once per loop and member, in the `FluidLoop`, and rule 2
 checks that every member of a discovered loop states the same one. It is not derivable from the wiring (the same
@@ -385,10 +389,10 @@ applied to a loop: a loop is a port with two faces, the positive face its heatin
 the negative face `COOLING` from the emitters to the supplier, and the two are implemented by one rule (§4.7).
 
 **A loop that may cool says so** (D10, Q8). A loop whose every member's `FluidLoop` says `may_cool=True` may run
-either way. On any other loop a step in which the supplier removed heat is a failure: the supplier's `i_doublecheck`
-raises `CircuitError` beside the mass check of §4.4 ("the loop `boiler.space_heating` heats only, and its supplier
-`boiler` removed 1,234 W from the water in step 1234"); before stage 2 exists, the post-run balance of stage 1a
-refuses the run on the same condition from the columns (§4.7). The storages say `may_cool=True` (they take water of
+either way. On any other loop a step in which the supplier removed heat is a failure: the post-run check raises
+`CircuitError` beside the mass check of §4.4 ("the loop `boiler.space_heating` heats only, and its supplier
+`boiler` removed 1,234 W from the water in step 1234, first of 3 steps") (D11); before stage 2 exists, the post-run
+balance of stage 1a refuses the run on the same condition from the same columns (§4.7). The storages say `may_cool=True` (they take water of
 any temperature; whether a loop cools is for its generator and its emitter to say), the hot-water tank `False` on
 both coils, the boiler and the substation `False`, the heat pump from its cooling-mode setting, the HDS from its
 configuration (`cooling_enabled`, bead hisim-hds-cooling-option-m4g6), so that a heat pump that may cool wired to an
@@ -403,49 +407,64 @@ but at the port). And #1109's `add_hydronic_port`, which named three channels a 
 on that branch) and checked that they were the component's own, goes: a tag is on the channel, so it cannot name a
 foreign one (D8).
 
-### 4.4 The step check in `i_doublecheck`
+### 4.4 The post-run check (D4, D11)
 
-D4, verbatim: in the pump owner, once per step, after convergence,
+D4's rule, checked where D11 puts it: once, after the simulation, over the result columns of every step. The result
+table has one column per output and one row per step (`FiniteResultsCheck` relies on the same layout); an input is
+not a column, so a member's `flow_in` and `temperature_in` are read as the columns of the outputs wired to them (the
+wiring the build walked, §4.3). One whole-column comparison per port set and check:
 
 ```python
-def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-    for port_set in self.port_sets_pumped():      # the port sets whose FluidLoop says pumps=True (§4.1)
-        mass_flow_out_in_kg_per_second = stsv.get_output_value(port_set.flow_out)
-        mass_flow_in_in_kg_per_second = stsv.get_input_value(port_set.flow_in)
-        if abs(mass_flow_in_in_kg_per_second - mass_flow_out_in_kg_per_second) > port_set.tolerance_in_kg_per_second:
-            raise CircuitError(circuit_id=port_set.loop_id, device=self.component_name, timestep=timestep,
-                               mass_flow_out_in_kg_per_second=..., mass_flow_in_in_kg_per_second=...)
-    for port_set in self.port_sets_supplied():    # the port sets whose FluidLoop says supplies=True (D10, §4.3)
-        heat_added_in_watt = hydronics.circuit_power_w(...)   # m_out c (T_out − T_in) from its own four values
-        if heat_added_in_watt < -port_set.tolerance_in_watt and not port_set.loop_may_cool:
-            raise CircuitError(circuit_id=port_set.loop_id, device=self.component_name, timestep=timestep,
-                               heat_removed_in_watt=-heat_added_in_watt)   # "the loop heats only"
+class LoopCheck:
+    """The loop checks of values (D4, Q1, Q2, D10), over the result table after the run (D11)."""
+
+    @staticmethod
+    def require_conserved(results: pd.DataFrame, loops: Sequence[FluidLoopWiring]) -> None:
+        for loop in loops:
+            for port_set in loop.port_sets:                     # every member (Q1); the pump owner alone under Q1 a
+                flow_out = results[port_set.flow_out.column]
+                flow_in = results[port_set.flow_in.source_column]   # the output wired to the member's flow in
+                failing = (flow_out - flow_in).abs() > port_set.tolerance_in_kg_per_second
+                if failing.any():
+                    raise CircuitError.of_mass(loop, port_set, failing, flow_in, flow_out)
+            heat_added_in_watt = loop.supplier.heat_added_in_watt(results)   # m_out c (T_out − T_in), its own columns
+            if not loop.may_cool:
+                failing = heat_added_in_watt < -loop.supplier.tolerance_in_watt
+                if failing.any():
+                    raise CircuitError.of_cooling(loop, failing, heat_added_in_watt)   # "the loop heats only" (D10)
 ```
 
-The message: `Loop 'hds.distribution' (boiler.space_heating, hds.distribution): the pump owner 'hds' sent 0.270 kg/s
-in step 1234 (2021-01-13 20:30) and 0.359 kg/s came back. Some member of the loop changed the flow; every member but
-the pump owner passes the flow through unchanged.` With Q1 the member that changed it is named instead.
+The message names the loop, the member, the first failing step with its time, how many steps fail and the two values
+at the first one: `Loop 'hds.distribution' (boiler.space_heating, hds.distribution): member 'boiler' sent 0.359 kg/s
+in step 1234 (2021-01-13 20:30) where 0.270 kg/s arrived, and so in 592 of 672 steps. Every member but the pump owner
+passes the flow through unchanged.` Under Q1 a only the pump owner is checked, and the message can say only that
+some member changed the flow.
 
-Why `i_doublecheck` and not `i_simulate` (D4): `i_simulate` runs in every pass of the step, and in the first pass of
-a step the pass-through member has not yet seen the pump owner's new flow, so the returning flow lags a pass and a
-check there would fire on every change of flow. `i_doublecheck` runs once, after the step's passes converged
-(`simulator.py:502-503`), on values that satisfy `|Δ| ≤ 1e-4` against the previous pass for every output; the
-returning flow is then the sent flow passed through pass-through members that have all seen it.
+Why after the run (D11): the check is for catching bugs. Nearly every run passes it, and one that fails is debugged
+from its result table, which the run keeps. A per-step `i_doublecheck` would cost a call per member and step — at
+60 s over a year, 525,600 steps for each of a twin's members — for a check that almost never fires; the post-run
+check costs one vectorized comparison per port set over the whole run, as `FiniteResultsCheck` does for NaN. What
+it gives up: a run with a violation in its first step still simulates to its end before it fails, and the failure
+is reported after the run rather than at the step. That is accepted: a violation is a modelling bug, not a state a
+run can recover from, and its steps are all in the table.
 
-Why no forced-step branch (D5): forcing freezes the controllers after ten passes (`simulator.py:488-489`); the
-physics keeps iterating until the convergence criterion holds, or the run aborts at the pass limit
-(`maximum_passes_per_timestep`). Mass flows and temperatures are physics outputs, so in every step that finishes they
-are converged. The 38 to 67 forced steps of the heat-pump twins in the January week (§6) therefore need no exemption;
-the audit measured their circuits closing exactly (0.000 kWh) with forcing on.
+Why converged values are enough (D5): the table holds each step's values after its passes converged; forcing freezes
+the controllers after ten passes (`simulator.py:488-489`), and the physics keeps iterating until the convergence
+criterion holds or the run aborts at the pass limit (`maximum_passes_per_timestep`). Mass flows and temperatures are
+physics outputs, so in every step of the table they are converged, the forced ones included. The 38 to 67 forced
+steps of the heat-pump twins in the January week (§6) need no exemption; the audit measured their circuits closing
+exactly (0.000 kWh) with forcing on.
 
-Cost: the check is one subtraction per pumped circuit per step, outside the convergence loop; it does not touch the
-hot path (`simulator-hot-path`: components about 80 %, `is_close_enough` about 3 %).
+Why not `i_simulate` (unchanged from D4): it runs in every pass, and in the first pass of a step a pass-through
+member has not yet seen the pump owner's new flow, so the returning flow lags a pass; a check there would fire on
+every change of flow.
 
 ### 4.5 The error
 
 `CircuitError(HydronicsError)` in `hisim/hydronics.py` (where every hydronic refusal lives), a `ValueError` like
-them, raised from the member's `i_doublecheck` and left to propagate: the run fails with the circuit, the device,
-the step and both values in the message (D4), and `hisim_main` reports it as it reports any component exception.
+them, raised by the post-run check (§4.4) before anything reads the result table and left to propagate: the run
+fails with the circuit, the member, the first failing step, the number of failing steps and both values at the
+first one in the message (D4, D11), and `hisim_main` reports it as it reports any exception after the run.
 `CircuitWiringError(HydronicsError)` is the build-time twin for a wiring that is no loop or a loop with no or two
 pump owners (§4.3), beside #1109's `EnergyPortWiringError`. `FluidLoopError(ValueError)` in `hisim/energy_port.py` is
 raised at the declaration, by `add_input`/`add_output`, for a loop tag that cannot describe its channel (§4.1); it
@@ -464,10 +483,10 @@ energy-system format numbers its refusals `EF-…`) is wanted.
 | a flow is read by one loop | build | the same walk | a flow-out output read by two port sets (a split without a valve) | D3, D7 |
 | exactly one pumping port set per loop | build | the same walk, counting the `FluidLoop`s that say `pumps=True` (Q3) | nobody pumps; two pump (the pre-#1117 `gas_boiler_household`) | D3 |
 | exactly one supplying port set per loop | build | the same walk, counting the `FluidLoop`s that say `supplies=True` (§4.3, rule 4) | two generators on one loop without a store between them; a loop of two receivers | D10 |
-| a loop that heats only never cools | every step | `i_doublecheck` of the supplier (§4.3); the post-run balance until stage 2 | a supplier removing heat from the water on a loop whose members do not all say `may_cool` | D10 |
-| flow back = flow sent, at the pump owner | every step | `i_doublecheck` of the pump owner | any member that changed the flow (named only as "some member") | D4 |
-| flow out = flow in, at every member | every step | `i_doublecheck` of every member | the member that changed the flow, by name | Q1 |
-| booked heat = `m c (T_out − T_in)`, at every member | every step | `i_doublecheck` of every member | a member booking with a flow or a temperature it did not publish; the HDS's one-step lag without a buffer | Q2 |
+| a loop that heats only never cools | after the run, every step | the post-run check (§4.4); the post-run balance until stage 2 | a supplier removing heat from the water on a loop whose members do not all say `may_cool` | D10, D11 |
+| flow back = flow sent, at the pump owner | after the run, every step | the post-run check (§4.4) | any member that changed the flow (named only as "some member") | D4, D11 |
+| flow out = flow in, at every member | after the run, every step | the post-run check (§4.4) | the member that changed the flow, by name | D11; Q1 |
+| booked heat = `m c (T_out − T_in)`, at every member | after the run, every step | the post-run check (§4.4) | a member booking with a flow or a temperature it did not publish; the HDS's one-step lag without a buffer | D11; Q2 |
 
 ### 4.7 Energy ports as channel tags, on inputs as on outputs (D9)
 
@@ -530,8 +549,8 @@ port whose one face is the negative one; it stays as it is.) A fluid loop is the
 anyone writing them: its positive face is its `carrier` from the supplier to the other members, its negative face
 `COOLING` from the room-side members to the supplier, and the supplier's `m c (T_out − T_in)` in the step chooses the
 face (§4.3, D10). The balance's series builder splits a column by sign once, for both; a loop whose members do not all
-say `may_cool` has no negative face, and a step that would need it fails (the supplier's `i_doublecheck` from stage 2,
-the post-run balance in stage 1a). So the HDS–building wire and the heat pump–buffer loop book a cooling step the
+say `may_cool` has no negative face, and a step that would need it fails (the post-run check from stage 2, the
+post-run balance in stage 1a). So the HDS–building wire and the heat pump–buffer loop book a cooling step the
 same way: `COOLING` from the building to the HDS, from the HDS to the buffer, from the buffer to the heat pump.
 
 **Before and after, the building's input.** Today (`building.py:300-306, 555-588` at 2b9fc8a8c): the input is a plain
@@ -626,16 +645,17 @@ Recommendation: a. The concept is a name and a check, and the owner's D1 to D5 a
 ### Q1. The per-member mass check as well
 
 D4 puts the check in the pump owner. The pump owner's check tells that *some* member changed the flow, not which.
+Where it runs is decided by D11: after the run, over the result columns. The question left is only who is checked.
 
 - **Option a — pump owner only (D4 as written).** One check per circuit. In a two-member loop the culprit is the
   other member, so the message can name it; in a three-member loop it cannot.
 - **Option b — every member checks its own flow out against its flow in, the pump owner's check being the same rule
   applied to it** (its flow out is what it pumped, its flow in what came back). The error then names the member that
-  changed the flow. Cost: one subtraction per member per step. For a pass-through member the check is trivially true
+  changed the flow. Cost: one column comparison per member, once per run (D11). For a pass-through member the check is trivially true
   if its code copies the input to the output, which is exactly the point: a member that *computes* a flow of its own
   (the pre-#1117 HDS, `SimpleHeatSource` with the nominal-flow override) fails on the first step it does so.
 
-Recommendation: b. It is the same rule, costs the same, and the error names the device. Dry run (§6): on today's main
+Recommendation: b. It is the same rule, costs the same after the run as option a does, and the error names the device. Dry run (§6): on today's main
 both members that already have both channels pass it in every step.
 
 ### Q2. The energy check per member
@@ -647,11 +667,12 @@ own port set (`system_docs/modelling_guide.md` §1), with `c = hydronics.Water.S
 - **Option a — no energy check here.** The post-run energy balance (#1109, `hisim/postprocessing/energy_balance/`)
   checks balances over the run and per step from the result columns, once the HDS and the storages declare ports
   (hydronic stage E, hisim-hydronics-fxix.6). Nothing fails during the run.
-- **Option b — every member checks, in the same `i_doublecheck`,** `|Q_booked − m c (T_out − T_in)| ≤ tolerance`
-  (Q5), raising `CircuitError` with the circuit, the member, the step, the booked and the carried heat in W. It
-  catches during the run what the post-run check finds afterwards, and it catches one thing the post-run check cannot
-  see today: a member whose booked heat does not match its *own* published quantities (the HDS without a buffer, which
-  publishes last step's return and heat beside this step's flow).
+- **Option b — every member is checked, in the post-run check of §4.4 (D11),** `|Q_booked − m c (T_out − T_in)| ≤
+  tolerance` (Q5) over every step, raising `CircuitError` with the circuit, the member, the first failing step, the
+  number of failing steps, the booked and the carried heat in W. The booked heat, the flow out and the temperature
+  out are the member's own columns, the temperature in is the column of the output wired to it. It catches one thing
+  the balance of option a cannot see today: a member whose booked heat does not match its *own* published quantities
+  (the HDS without a buffer, which publishes last step's return and heat beside this step's flow).
 
 What b would fail on today's main (§6, January week at 900 s): the HDS in both buffer-less systems. In
 `gas_boiler_household` it fails 592 of 672 steps (first at step 4, booked 0 W against 8,276 W carried; summed
@@ -664,8 +685,9 @@ generator, both storages, the HDS behind a buffer, the collector, the heater). S
 for, and nothing else; it cannot land before pnw7's pipe-water node, or the two buffer-less twins (and RenoVisor's
 district-heating translation) stop running.
 
-Recommendation: b, staged after hisim-pnw7 (§7). Until then the energy check is built behind the mass check and
-switched on when pnw7 closes the lag; the two systems it would fail are the two pnw7 is measured on.
+Recommendation: b, staged after hisim-pnw7 (§7). Until then the energy check is built beside the mass check in the
+post-run check and switched on when pnw7 closes the lag; the two systems it would fail are the two pnw7 is measured
+on.
 
 ### Q3. How a port set says that it pumps
 
@@ -864,8 +886,8 @@ What changes, counted on main at 635404f30 (details in §7):
      channels of §7 and their default connections, the config booleans of Q3 with their defaults, `pumps=` on the
      either-way loops, `port_sets()` requiring four quantities, the walk and the refusals of §4.3 (rules 0 to 3),
      `CircuitWiringError`, the three boiler lines; bit-identical, new result columns only. Depends on 1a merged.
-  2. *The mass check*: D4's check in the pump owners (and Q1's in every member) in `i_doublecheck`, `CircuitError`;
-     bit-identical.
+  2. *The mass check*: D4's check of the pump owners (and Q1's of every member) and the heating-only check (D10),
+     in the post-run check of §4.4 beside `FiniteResultsCheck` (D11), `CircuitError`; bit-identical.
   3. *The enums go*: `PositionHotWaterStorageInSystemSetup` × 3 removed, the HDS's and the heat pump's flow source
      from their pumping flag, the HDS's `declares_energy_ports` with them (§4.7); the 6 recorded lines, the two
      assembly lines, the setup line and the 13 code and test files that name an enum; bit-identical.
@@ -963,8 +985,8 @@ loop reads `cooling_enabled` as it is spelt in hisim-hds-cooling-option-m4g6, so
 the HDS's own behaviour and its loop's declaration; the heat pump's loop reads whatever names its cooling mode on that
 class.
 
-**Where the heating-only violation is raised.** In the supplier's `i_doublecheck`, beside the mass check (D4, §4.4),
-from stage 2; until then in the post-run balance of stage 1a, which has the same four columns. Both name the loop,
+**Where the heating-only violation is raised.** In the post-run check, beside the mass check (D4, D11, §4.4), from
+stage 2; until then in the post-run balance of stage 1a, which reads the same four columns. Both name the loop,
 the supplier, the step and the heat removed in W. It is a `CircuitError` like the mass violation: a loop that
 removes heat it declared it never would is the same kind of fault as a member that changes a flow it declared it would
 pass through.
@@ -1174,10 +1196,10 @@ kg/s channels are tagged or listed (Q11, option c). The D9 PR: an input port res
 wired to it and to its source as the peer; an unconnected optional input port left out; the ambiguity rule with and
 without a tagged reader; a signed port split into its two faces; the building branch's balance closing as it does
 today, with its copy-outputs gone. Stage 2: a test that wires a receiver which publishes a flow of its own on a loop it does not pump and asserts
-`CircuitError` in its `i_doublecheck` with the loop id, the step and both flows (the pre-#1117 `gas_boiler_household`
+`CircuitError` from the post-run check with the loop id, the member, the first failing step, the number of failing steps and both flows (the pre-#1117 `gas_boiler_household`
 wiring rebuilt as a fixture, with the HDS pumping 0.27 kg/s and a boiler pumping 0.359 kg/s — which stage 1's build
 check already refuses, so the fixture declares the boiler as pass-through and makes it publish 0.359 kg/s anyway);
-the heating-only check moved into the supplier's `i_doublecheck`: a boiler fixture that publishes a supply colder
+the heating-only check moved into the post-run check: a boiler fixture that publishes a supply colder
 than its return for one step raises `CircuitError` naming the loop, the boiler, the step and the heat removed, and a
 heat pump fixture with `may_cool` on every member of its loop passes the same step;
 every recorded twin runs the January week with zero errors; the `test_*_time_resolution` and twin tests
@@ -1193,7 +1215,7 @@ that.
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-hydraulic-circuits-wci7 (P2, epic, `owner-decision`) | this spec; the owner's decisions D1 to D5 and D7 to D9; the questions Q0 to Q3 and Q5 to Q12 | #1122 |
+| hisim-hydraulic-circuits-wci7 (P2, epic, `owner-decision`) | this spec; the owner's decisions D1 to D5 and D7 to D11; the questions Q0 to Q3 and Q5 to Q12 | #1122 |
 | hisim-hydronics-fxix.6 (P2) | stage E, every circuit in the balance check; re-scoped by D8 from `HydronicPort` to loop tags, the balance logic unchanged | #1109, reworked onto the tags (stage 1a, Q4, Q12) |
 | hisim-energy-sankeys-9uoo.3 (P1) | the energy ports of the water storages and the HDS; the same re-scope | #1109 (stage 1a) |
 | hisim-energy-sankeys-9uoo.6 (P1) | the energy ports of the building; reworked by D9 onto input ports, no copy-outputs | branch `sankey-pr4-building`, rebased onto the D9 PR |
@@ -1203,7 +1225,7 @@ that.
 | hisim-hydronics-fxix.15 (P3) | how a component learns its topology | absorbed by §4.3 and Q3 (Q4) |
 | *to file*, child of wci7 (P2, `components`) | D9: `energy_port=` on `add_input`; `peer_input`/`peer_output` and the copy-outputs go; `SignedEnergyPort` if Q9 a | the D9 PR, after stage 1a |
 | *to file*, child of wci7 (P2, `components`) | stage 1b: the fourth wire, the pumping flag everywhere, the loop walk and its refusals, the Q3 booleans | after stage 1a |
-| *to file*, child of wci7 (P2, `components`) | stage 2: the mass check and the heating-only check (D10) in `i_doublecheck`, `CircuitError` | after 1b |
+| *to file*, child of wci7 (P2, `components`) | stage 2: the mass check and the heating-only check (D10) in the post-run check (D11), `CircuitError` | after 1b |
 | *to file*, child of wci7 (P2, `components`) | stage 3: the three enums and `declares_energy_ports` go | after pnw7 |
 | *to file*, child of wci7 (P3, `components`) | stage 4: the energy check | after pnw7 and stage 3 |
 | *to file*, child of hisim-energy-sankeys-9uoo (P3, `cleanup`) | Q10 a: the test that `postprocessing_flag` and `energy_port` agree on every output | its own small PR |

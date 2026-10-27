@@ -138,18 +138,26 @@ def test_the_hot_water_tank_declares_its_circuits_taps_loss_and_stored_heat_and_
 
 @pytest.mark.extendedbase2
 def test_the_distribution_system_takes_the_buffer_s_circuit_and_heats_the_building(twin: Tuple[str, Path]) -> None:
-    """Behind a buffer the distribution system books this step's circuit and gives all of it to the building."""
+    """Behind a buffer the distribution system books this step's circuit and gives all of it to the building.
+
+    Its signed heat is booked in its two directions: heating out to the building, and the heat its cooling mode takes
+    from the building in.
+    """
     _, results = twin
     entry = balance_entry(results, "HeatDistributionSystem")
     closes_in_every_step(entry)
     assert port_roles(entry) == {
         Expected.DISTRIBUTION_CIRCUIT: ("consumption", "space_heating_heat"),
-        "ThermalPowerDelivered": ("production", "space_heating_heat"),
+        "HeatDeliveredInWatt": ("production", "space_heating_heat"),
+        "HeatDrawnForCoolingInWatt": ("consumption", "cooling"),
     }
     peers = {port["output"]: (port["peer_kind"], port["peer"]) for port in entry["ports"]}
+    # The building reads the signed ThermalPowerDelivered, which carries no port; until it reads the two directions
+    # through input ports of its own, they have no reader and are unlinked.
     assert peers == {
         Expected.DISTRIBUTION_CIRCUIT: ("component", "SimpleHotWaterStorage"),
-        "ThermalPowerDelivered": ("component", "Building"),
+        "HeatDeliveredInWatt": ("unlinked", "unlinked"),
+        "HeatDrawnForCoolingInWatt": ("unlinked", "unlinked"),
     }
     assert entry["production_kwh"] > 10.0
 
@@ -179,7 +187,9 @@ def test_the_connected_diagram_runs_from_the_generators_through_the_storages(twi
     expected: Set[Tuple[str, str, str]] = {
         ("space_heating_heat", generator, "SimpleHotWaterStorage"),
         ("space_heating_heat", "SimpleHotWaterStorage", "HeatDistributionSystem"),
-        ("space_heating_heat", "HeatDistributionSystem", "undeclared: Building"),
+        # the building reads the signed ThermalPowerDelivered, which carries no port, so the distribution system's
+        # heating direction has no reader yet
+        ("space_heating_heat", "HeatDistributionSystem", "unlinked"),
         ("space_heating_heat", "SimpleHotWaterStorage", "SimpleHotWaterStorage · StandbyHeatLoss"),
         ("space_heating_heat", "SimpleHotWaterStorage · StandbyHeatLoss", "outdoors"),
         ("domestic_hot_water_heat", "DHWStorage", "hot water drawn at the taps"),

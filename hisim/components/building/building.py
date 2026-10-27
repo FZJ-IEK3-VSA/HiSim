@@ -938,18 +938,7 @@ class Building(cp.PhysicsComponent):
         entry = self.cache_entry(calculation_inputs)
         if entry.exists:
             log.information(f"Building solar gains cache hit: {entry.path}")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the
-            # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
-            # the last bit of a sixth of the values, whatever precision they were written with;
-            # measured on this data: 317 of 2000 with the default write format, 358 with
-            # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
-            # not the digits on disk, which is why writing more of them does not help.
-            cached_series = pd.read_csv(
-                entry.path,
-                sep=",",
-                decimal=".",
-                float_precision="round_trip",
-            )
+            cached_series = pd.read_csv(entry.path, sep=",", decimal=".")
             cached_gains_in_watt: List[float] = cached_series[solar_gains.SERIES_COLUMN].tolist()
             return cached_gains_in_watt
         log.information(f"Building solar gains cache miss: computing them and filing them at {entry.path}")

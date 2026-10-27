@@ -474,14 +474,7 @@ class Car(cp.PhysicsComponent):
         entry = self.cache_entry(calculation_inputs)
         if entry.exists:
             log.information(f"Generic car data is taken from cache: {entry.path}")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the same
-            # run. pandas' default CSV reader uses a fast, inexact float parser and loses the last
-            # bit of a fifth of the distances in this file -- measured on a committed year-long
-            # entry: 334 of the 1789 non-zero values of meters_driven come back different from
-            # what was written, and none do with this argument.
-            dataframe = pd.read_csv(
-                entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
-            )
+            dataframe = pd.read_csv(entry.path, sep=",", decimal=".", encoding="cp1252")
             self.require_one_row_per_timestep(dataframe, f"the cache entry {entry.path}")
         else:
             log.information(f"Generic car data cache miss: computing it and filing it at {entry.path}")

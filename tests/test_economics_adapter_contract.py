@@ -123,6 +123,8 @@ class AdapterContractScan:
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
+        # The heat distribution controller's choice, off in its preset. The extractor does not read it.
+        "HeatDistributionConfig.cooling_enabled": False,
         # What the area law gives the single apartment of a single-family house.
         "SolarThermalSystemConfig.area_m2": SolarThermalSystemConfig.COLLECTOR_AREA_IN_M2_PER_APARTMENT,
         # The heat pump the copy laws build for the fleet's archetype: the machine covers the

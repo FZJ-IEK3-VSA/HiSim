@@ -61,6 +61,9 @@ class SizingContext:
     conditioned_floor_area_in_m2: FactValue = None
     water_mass_flow_rate_in_kg_per_second: FactValue = None
     heat_distribution_system_type: Optional["HeatDistributionSystemType"] = None
+    #: Whether the heat distribution controller may open the circuit's valve for cooling; the distribution system
+    #: refuses a cooling command when it is false.
+    heat_distribution_cooling_enabled: Optional[bool] = None
     number_of_residents: FactValue = None
     maximal_thermal_power_in_watt: FactValue = None
     minimal_thermal_power_in_watt: FactValue = None
@@ -160,6 +163,7 @@ class Size:
     WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND: ClassVar[_FactTerm] = _FactTerm(
         "water_mass_flow_rate_in_kg_per_second")
     HEAT_DISTRIBUTION_SYSTEM_TYPE: ClassVar[_FactTerm] = _FactTerm("heat_distribution_system_type")
+    HEAT_DISTRIBUTION_COOLING_ENABLED: ClassVar[_FactTerm] = _FactTerm("heat_distribution_cooling_enabled")
     NUMBER_OF_RESIDENTS: ClassVar[_FactTerm] = _FactTerm("number_of_residents")
     MAXIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("maximal_thermal_power_in_watt")
     MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("minimal_thermal_power_in_watt")

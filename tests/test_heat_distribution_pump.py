@@ -11,9 +11,11 @@ from typing import ClassVar, Mapping
 
 import pytest
 
+from hisim import loadtypes as lt
 from hisim.components import heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistribution, PositionHotWaterStorageInSystemSetup
 from hisim.config import ComponentID
+from hisim.energy_port import EnergyPort
 from hisim.simulationparameters import SimulationParameters
 from tests.part_load_rigs import AllInputsRig
 
@@ -41,12 +43,15 @@ class HdsRig:
     #: The floor area the rig's circuit heats, in m².
     FLOOR_AREA_IN_M2: ClassVar[float] = 121.2
 
-    def __init__(self, position: PositionHotWaterStorageInSystemSetup, seconds_per_timestep: int = 900) -> None:
+    def __init__(
+        self, position: PositionHotWaterStorageInSystemSetup, seconds_per_timestep: int = 900, *, cooling_enabled: bool = False
+    ) -> None:
         """Build the heat distribution system and its fake sources.
 
         Args:
             position: Where the storage sits, which decides who pumps.
             seconds_per_timestep: The step length, in s.
+            cooling_enabled: Whether the circuit may cool; off, as in every preset, unless a test cools.
         """
         config = heat_distribution_system.HeatDistributionConfig(
             component_id=ComponentID(name="HeatDistributionSystem"),
@@ -54,6 +59,7 @@ class HdsRig:
             position_hot_water_storage_in_system=position,
             absolute_conditioned_floor_area_in_m2=self.FLOOR_AREA_IN_M2,
             heating_system=heat_distribution_system.HeatDistributionSystemType.FLOORHEATING,
+            cooling_enabled=cooling_enabled,
         )
         self.hds = HeatDistribution(
             config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep)
@@ -133,7 +139,7 @@ def test_an_open_valve_pumps_the_design_flow(
     The delivered heat is read on the second step, since the outputs lag one step. For cooling it is negative: 2000 W
     taken out of a room at 26 °C by water supplied at 16 °C.
     """
-    rig = HdsRig(position)
+    rig = HdsRig(position, cooling_enabled=True)
     inputs = {
         "valve_state": valve_state,
         "supply_in_celsius": supply_in_celsius,
@@ -162,6 +168,7 @@ def test_a_circuit_that_pumps_its_own_design_flow_refuses_a_design_flow_of_zero(
         position_hot_water_storage_in_system=position,
         absolute_conditioned_floor_area_in_m2=HdsRig.FLOOR_AREA_IN_M2,
         heating_system=heat_distribution_system.HeatDistributionSystemType.FLOORHEATING,
+        cooling_enabled=False,
     )
     with pytest.raises(ValueError, match="water_mass_flow_rate_in_kg_per_second is 0.0 kg/s"):
         HeatDistribution(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900))
@@ -192,3 +199,81 @@ def test_behind_a_buffer_the_circuit_runs_the_commanded_fraction_of_its_flow_and
     outlet = HeatDistribution.WaterTemperatureOutput
     assert part.outputs[outlet] == whole.outputs[outlet]
     assert part.outputs[HeatDistribution.ActualPartLoadRatio] == 0.4
+
+
+@pytest.mark.base
+def test_a_circuit_without_the_cooling_option_refuses_a_cooling_command() -> None:
+    """Catches a circuit that cools on its controller's command although its configuration does not enable cooling.
+
+    Only a controller whose configuration enables cooling sends ``State`` -1, and the circuit copies that option, so
+    a cooling command it may not follow means the two disagree; the run fails instead of taking the room's heat into
+    the buffer.
+    """
+    rig = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL)
+    with pytest.raises(ValueError, match="cooling_enabled is false"):
+        rig.step(valve_state=-1, supply_in_celsius=16.0, demand_in_watt=-2000.0, room_in_celsius=26.0)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("valve_state", "supply_in_celsius", "demand_in_watt", "room_in_celsius", "heat_delivered_in_watt", "heat_drawn_in_watt"),
+    [(1, 35.0, 3000.0, 20.0, 3000.0, 0.0), (-1, 16.0, -2000.0, 26.0, 0.0, 2000.0), (0, 35.0, 3000.0, 20.0, 0.0, 0.0)],
+    ids=["heating", "cooling", "shut"],
+)
+def test_the_signed_heat_is_published_as_heating_and_cooling_each_at_least_zero(
+    valve_state: float,
+    supply_in_celsius: float,
+    demand_in_watt: float,
+    room_in_celsius: float,
+    heat_delivered_in_watt: float,
+    heat_drawn_in_watt: float,
+) -> None:
+    """Catches a split that books cooling as negative heating, or a direction in the wrong output.
+
+    Behind a buffer the outputs are this step's. ``HeatDeliveredInWatt`` is the positive part of the signed
+    ``ThermalPowerDelivered``, ``HeatDrawnForCoolingInWatt`` minus its negative part, so their difference is the
+    signed heat in every step.
+    """
+    rig = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL, cooling_enabled=True)
+    step = rig.step(
+        valve_state=valve_state,
+        supply_in_celsius=supply_in_celsius,
+        demand_in_watt=demand_in_watt,
+        room_in_celsius=room_in_celsius,
+    )
+    assert step.outputs[HeatDistribution.HeatDeliveredInWatt] == pytest.approx(heat_delivered_in_watt)
+    assert step.outputs[HeatDistribution.HeatDrawnForCoolingInWatt] == pytest.approx(heat_drawn_in_watt)
+    assert step.outputs[HeatDistribution.HeatDeliveredInWatt] - step.outputs[
+        HeatDistribution.HeatDrawnForCoolingInWatt
+    ] == pytest.approx(step.outputs[HeatDistribution.ThermalPowerDelivered])
+
+
+@pytest.mark.base
+def test_the_two_directions_carry_the_ports_and_the_signed_heat_carries_none() -> None:
+    """Catches a port left on the signed heat, or a direction booked with the wrong role or carrier.
+
+    Behind a buffer the heating direction is space-heating heat the circuit produces, the cooling direction cooling it
+    consumes, and the signed ``ThermalPowerDelivered`` stays the physics channel the building computes with, without
+    a port: one port books one direction only.
+    """
+    hds = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL).hds
+    ports = {output.field_name: output.energy_port for output in hds.outputs}
+    assert ports[HeatDistribution.ThermalPowerDelivered] is None
+    assert ports[HeatDistribution.HeatDeliveredInWatt] == EnergyPort(
+        lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
+    )
+    assert ports[HeatDistribution.HeatDrawnForCoolingInWatt] == EnergyPort(
+        lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("cooling_enabled", [False, True])
+def test_the_distribution_loop_may_cool_exactly_where_the_configuration_enables_cooling(cooling_enabled: bool) -> None:
+    """Catches a loop that declares it may cool although the circuit refuses every cooling command, or the reverse.
+
+    The circuit's ``FluidLoop`` states ``may_cool`` from ``cooling_enabled``, so one configuration line decides both
+    what the circuit does and what its loop declares.
+    """
+    hds = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL, cooling_enabled=cooling_enabled).hds
+    assert hds.distribution_loop.may_cool is cooling_enabled

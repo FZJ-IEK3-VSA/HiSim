@@ -562,7 +562,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.0006101960467836259
+    "value": 0.0006101960441725782
   },
   "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -637,7 +637,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 0.10251293585964916
+    "value": 0.10251293542099311
   },
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": {
     "building": "BUI1",

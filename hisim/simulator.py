@@ -15,6 +15,7 @@ import pandas as pd
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.energy_balance.ports import Wiring
 from hisim.component_wrapper import ComponentWrapper
+from hisim.fluid_loops import FluidLoopWalk
 from hisim.evaluation_order import EvaluationOrder, L2Order, PhysicsOrder
 from hisim import sim_repository
 import hisim.component as cp
@@ -815,8 +816,11 @@ class Simulator:
         self.prepare_calculation()
         # Connects all components
         self.connect_all_components()
-        # a wiring that breaks a rule of the energy ports fails now, not after the run (hisim-hydronics-fxix.6)
-        Wiring.refuse_a_broken_wiring([wrapped.my_component for wrapped in self.wrapped_components])
+        components = [wrapped.my_component for wrapped in self.wrapped_components]
+        # a wiring that is no fluid loop, or breaks a rule of the energy ports, fails now, not after the run
+        # (roadmap/fluid_loops_spec.md §3.3; hisim-hydronics-fxix.6)
+        FluidLoopWalk.find_loops(components)
+        Wiring.refuse_a_broken_wiring(components)
         log.information(
             f"finished connecting all components. A total of {len(self.wrapped_components)} "
             f"components were defined. They have a total of {len(self.all_outputs)} outputs."

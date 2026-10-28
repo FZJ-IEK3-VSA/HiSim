@@ -12,6 +12,7 @@ from hisim.components.generic_district_heating import (
     HeatingMode,
 )
 from hisim import hydronics
+from hisim.energy_port import LoopQuantity
 from hisim import simulator as sim
 from hisim.subcomponents.pumps import FixedLiftPump
 from tests.part_load_rigs import AllInputsRig
@@ -222,3 +223,25 @@ def test_a_controller_without_hot_water_has_no_set_temperature_output() -> None:
     assert DistrictHeatingController.SupplyTemperatureSetForDHWInCelsius not in [
         output.field_name for output in controller.outputs
     ]
+
+
+@pytest.mark.base
+def test_the_substation_passes_the_distribution_flow_on_and_refuses_to_pump_its_space_heating_loop() -> None:
+    """Catches a substation that claims a pump it does not have, or whose loops the build cannot walk.
+
+    HiSim's substation has no space-heating pump: it heats the flow the heat distribution system pumps and passes it
+    on, which its configuration states with ``pumps_space_heating_loop`` false by default (D16 of
+    ``roadmap/fluid_loops_spec.md``); true is refused when it is built. Its hot-water loop it pumps, and it reads its own
+    flow back from the tank on ``WaterInputMassFlowRateReturningDhw``.
+    """
+    config = DistrictHeatingConfig.preset_standard("DistrictHeating")
+    config.with_domestic_hot_water_preparation = True
+    config.connected_load_in_w = 20000.0
+    substation = DistrictHeating(sim.SimulationParameters.one_day_only(2021, 900), config)
+    pumping = {port_set.loop.name: port_set.loop.pumps for port_set in substation.port_sets()}
+    assert pumping == {"space_heating": False, "dhw": True}
+    (hot_water,) = [port_set for port_set in substation.port_sets() if port_set.loop.name == "dhw"]
+    assert hot_water.channels[LoopQuantity.FLOW_IN].field_name == DistrictHeating.WaterInputMassFlowRateReturningDhw
+    config.pumps_space_heating_loop = True
+    with pytest.raises(ValueError, match="the district-heating substation has no space-heating pump"):
+        DistrictHeating(sim.SimulationParameters.one_day_only(2021, 900), config)

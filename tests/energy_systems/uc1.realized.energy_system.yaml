@@ -112,6 +112,7 @@ components:
       absolute_conditioned_floor_area_in_m2: 121.2 # sized from building.conditioned_floor_area_in_m2=121.2
       cooling_enabled: false # sized from hds_controller.heat_distribution_cooling_enabled=False
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX # overrides preset default PARALLEL
+      pumps_the_distribution_loop: true
       device_co2_footprint_in_kg: null
       investment_costs_in_euro: null
       lifetime_in_years: null
@@ -122,6 +123,8 @@ components:
       - hds_controller
       - input: WaterTemperatureInput
         from: boiler.WaterOutputTemperatureSh
+      - input: WaterMassFlowInput
+        from: boiler.WaterOutputMassFlowSh
     sizing_sources:
       heat_distribution_system_type: hds_controller.heat_distribution_system_type # unique provider, written for re-execution
       water_mass_flow_rate_in_kg_per_second: hds_controller.water_mass_flow_rate_in_kg_per_second # unique provider, written for re-execution
@@ -139,6 +142,7 @@ components:
       temperature_delta_in_celsius: 20.0
       maximal_flow_temperature_in_celsius: 80.0
       minimal_lift_at_maximal_power_in_kelvin: 5.0
+      pumps_space_heating_loop: false # overrides preset default True
       device_co2_footprint_in_kg: null
       investment_costs_in_euro: null
       lifetime_in_years: null

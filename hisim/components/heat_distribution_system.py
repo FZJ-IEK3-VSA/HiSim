@@ -91,6 +91,11 @@ class HeatDistributionConfig(ConfigBase):
     position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
         PositionHotWaterStorageInSystemSetup.PARALLEL
     )
+    #: Whether the system pumps its distribution loop (D16 of ``roadmap/fluid_loops_spec.md``): True, the default, for
+    #: a system that pumps its design flow, behind a buffer or a substation without a pump; False for one that passes
+    #: on the flow its heat generator pumps. It must agree with ``position_hot_water_storage_in_system`` until that
+    #: field goes (stage 3 of the spec): ``PARALLEL`` and ``NO_STORAGE_MASS_FLOW_FIX`` pump, the other positions do not.
+    pumps_the_distribution_loop: bool = True
     #: CO2 footprint of investment in kg; None means postprocessing looks it up.
     device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro; None means postprocessing looks it up.
@@ -131,17 +136,20 @@ class HeatDistribution(cp.PhysicsComponent):
 
     It simulates the heat exchange between heat generator and building.
 
+    Its circuit is the fluid loop ``distribution``, tagged on its four channels in every position: the supply it
+    reads (``WaterTemperatureInput``), the return it publishes (``WaterTemperatureOutput``), the flow it pumps or
+    passes on (``WaterMassFlowHDS``) and the flow arriving (``WaterMassFlowInput``), which it computes with only where
+    it does not pump (``pumps_the_distribution_loop``).
+
     In the energy balance (complete Sankey spec §5.1, hydronic stage E) the system declares its ports behind a
     buffer (``PARALLEL``), where it books this step's heat on the buffer's start-of-step temperature: its end of the
     buffer's circuit (the fluid loop ``distribution``, which the buffer supplies), the heat it delivers to the building
     while it heats (``HeatDeliveredInWatt``, ``PRODUCTION``, space-heating heat) and the heat it takes from the building
     while its controller cools (``HeatDrawnForCoolingInWatt``, ``CONSUMPTION`` of ``COOLING``): the two directions of
     its signed ``ThermalPowerDelivered``, which the building computes with and which carries no port, since a port
-    books one direction only. Without a buffer it declares
-    none yet: there its outputs lag one step behind its circuit, and the boiler of ``gas_boiler_household`` books a
-    flow of its own on the same circuit, so its balance would not close (beads hisim-pnw7, the pipe water as a
-    start-of-step node, and hisim-boiler-circuit-flow-gap-g2mx, who pumps a circuit without a buffer); until they
-    land it is drawn as undeclared.
+    books one direction only. Without a buffer it declares none yet and the balance does not book its loop
+    (:meth:`port_sets_in_the_energy_balance`): there its outputs lag one step behind its circuit, so its balance would
+    not close (bead hisim-pnw7, the pipe water as a start-of-step node); until that lands it is drawn as undeclared.
 
     The circuit cools only where its configuration allows it (``cooling_enabled``, copied from its controller's
     configuration and off in every preset): a cooling command (``State`` -1) received while cooling is not enabled
@@ -222,6 +230,7 @@ class HeatDistribution(cp.PhysicsComponent):
         self.pumps_its_design_flow: bool = (
             self.position_hot_water_storage_in_system in self.POSITIONS_PUMPING_THE_DESIGN_FLOW
         )
+        self.refuse_a_pumping_flag_the_position_contradicts()
         self.refuse_a_design_flow_that_moves_no_water()
         #: The circuit's own pump, a constant pump at the design flow, where it pumps that flow itself; None where it
         #: reads the flow its heat generator pumps.
@@ -237,17 +246,18 @@ class HeatDistribution(cp.PhysicsComponent):
         self.declares_energy_ports: bool = (
             self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
         )
-        #: The circuit as a fluid loop (complete Sankey spec §5.1), tagged on its channels only where the system
-        #: declares its energy ports. Its generator end supplies it; it may cool exactly where the configuration
-        #: enables cooling (``cooling_enabled``), so one configuration line decides both what the circuit does and
-        #: what its loop declares. Whether it pumps the loop or passes its generator's flow on depends on the system
-        #: and is not stated yet.
+        #: The circuit as a fluid loop (complete Sankey spec §5.1), tagged on its four channels in every position;
+        #: the energy balance books it only where the system declares its energy ports
+        #: (:meth:`port_sets_in_the_energy_balance`). Its generator end supplies it; it may cool exactly where the
+        #: configuration enables cooling (``cooling_enabled``), so one configuration line decides both what the circuit
+        #: does and what its loop declares; whether it pumps the loop is ``pumps_the_distribution_loop``.
         self.distribution_loop = FluidLoop(
             "distribution",
             carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
             fluid=LoopFluid.WATER,
             supplies=False,
             may_cool=self.cooling_enabled,
+            pumps=self.heat_distribution_system_config.pumps_the_distribution_loop,
         )
 
         self.build()
@@ -278,7 +288,7 @@ class HeatDistribution(cp.PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
-            fluid_loop=self.distribution_loop.temperature_in if self.declares_energy_ports else None,
+            fluid_loop=self.distribution_loop.temperature_in,
         )
 
         self.residence_temperature_input_channel: cp.ComponentInput = self.add_input(
@@ -289,16 +299,16 @@ class HeatDistribution(cp.PhysicsComponent):
             True,
         )
 
-        self.water_mass_flow_rate_hp_in_kg_per_second_channel: Optional[cp.ComponentInput] = None
-        if not self.pumps_its_design_flow:
-            # just important for heating system without parallel bufferstorage
-            self.water_mass_flow_rate_hp_in_kg_per_second_channel = self.add_input(
-                self.component_name,
-                self.WaterMassFlowInput,
-                lt.LoadTypes.WARM_WATER,
-                lt.Units.KG_PER_SEC,
-                True,
-            )
+        # The flow arriving: the flow the circuit runs on where it does not pump, else its own flow returning, which it
+        # reads for the loop's book only.
+        self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterMassFlowInput,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            not self.pumps_its_design_flow,
+            fluid_loop=self.distribution_loop.flow_in,
+        )
 
         # Outputs
         self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
@@ -314,7 +324,7 @@ class HeatDistribution(cp.PhysicsComponent):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
-            fluid_loop=self.distribution_loop.temperature_out if self.declares_energy_ports else None,
+            fluid_loop=self.distribution_loop.temperature_out,
         )
         self.water_temperature_difference_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -373,8 +383,12 @@ class HeatDistribution(cp.PhysicsComponent):
             self.WaterMassFlowHDS,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
-            output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
-            fluid_loop=self.distribution_loop.flow_out if self.declares_energy_ports else None,
+            output_description=(
+                "The circuit's mass flow, kg/s: its design flow while its pump runs (times the part-load ratio behind "
+                "a buffer), 0 while the valve stops it; where it does not pump, the flow it reads at "
+                "WaterMassFlowInput, passed on."
+            ),
+            fluid_loop=self.distribution_loop.flow_out,
         )
 
         self.part_load_command = PartLoadCommand(
@@ -456,6 +470,14 @@ class HeatDistribution(cp.PhysicsComponent):
                 component_class.WaterTemperatureToHeatDistribution,
             )
         )
+        # the circuit's own flow, passed back by the buffer: the distribution loop's fourth wire
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.WaterMassFlowInput,
+                hws_classname,
+                component_class.WaterMassFlowRateToHeatDistributionSystem,
+            )
+        )
         return connections
 
     def get_default_connections_from_district_heating(
@@ -475,6 +497,14 @@ class HeatDistribution(cp.PhysicsComponent):
                 HeatDistribution.WaterTemperatureInput,
                 classname,
                 component_class.WaterOutputShTemperature,
+            )
+        )
+        # the circuit's own flow, passed on by the substation, which heats it: the distribution loop's fourth wire
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.WaterMassFlowInput,
+                classname,
+                component_class.WaterOutputShMassFlowRate,
             )
         )
         return connections
@@ -560,12 +590,7 @@ class HeatDistribution(cp.PhysicsComponent):
             # a constant pump: its flow is its design flow, whatever heat the circuit carries
             water_mass_flow_rate_in_kg_per_second = self.pump.design_mass_flow_in_kg_per_second
         else:
-            # important for heating system without buffer storage
-            if self.water_mass_flow_rate_hp_in_kg_per_second_channel is None:
-                raise ValueError(
-                    "water_mass_flow_rate_hp_in_kg_per_second_channel is not configured "
-                    "for the current hot water storage position."
-                )
+            # a circuit that does not pump runs on the flow its heat generator pumps
             water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
                 self.water_mass_flow_rate_hp_in_kg_per_second_channel
             )
@@ -649,6 +674,36 @@ class HeatDistribution(cp.PhysicsComponent):
         self.state.water_output_temperature_in_celsius = water_temperature_output_in_celsius
         self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
         self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
+
+    def port_sets_in_the_energy_balance(self) -> Tuple[cp.FluidLoopPortSet, ...]:
+        """Return the distribution loop where the system declares its energy ports, behind a buffer; else none.
+
+        Without a buffer the system's outputs lag one step behind its loop, so its balance would not close (bead
+        hisim-pnw7); the balance then draws it as undeclared, as before its loop was tagged in every position. The
+        build's loop walk reads :meth:`port_sets`, which holds the loop in every position. Stage 3 of
+        ``roadmap/fluid_loops_spec.md`` removes this exception.
+        """
+        return self.port_sets() if self.declares_energy_ports else ()
+
+    def refuse_a_pumping_flag_the_position_contradicts(self) -> None:
+        """Refuse a ``pumps_the_distribution_loop`` that disagrees with the position the circuit computes its flow from.
+
+        Until stage 3 of ``roadmap/fluid_loops_spec.md`` the circuit takes its flow from
+        ``position_hot_water_storage_in_system``: ``PARALLEL`` and ``NO_STORAGE_MASS_FLOW_FIX`` pump the design flow,
+        the other positions read their generator's flow. The flag states the same fact for the build's loop walk, so
+        the two must agree. For example, ``SERIES`` with the default ``pumps_the_distribution_loop: true`` is refused.
+
+        Raises:
+            ValueError: If the flag and the position disagree, naming both.
+        """
+        stated = self.heat_distribution_system_config.pumps_the_distribution_loop
+        if stated != self.pumps_its_design_flow:
+            behaviour = "pumps its design flow" if self.pumps_its_design_flow else "runs on the flow its heat generator pumps"
+            raise ValueError(
+                f"{self.component_name}: pumps_the_distribution_loop is {str(stated).lower()}, but at position "
+                f"{self.position_hot_water_storage_in_system.value} the circuit {behaviour}; set "
+                f"pumps_the_distribution_loop: {str(self.pumps_its_design_flow).lower()}."
+            )
 
     @staticmethod
     def pump_stopped_by_the_valve(valve_state: float) -> bool:

@@ -52,8 +52,11 @@ controller (#941).
   declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier), and so does an
   input on which energy arrives (`energy_port=` on `add_input`), instead of an output that copies the input; the
   wiring finds each port's peer. A water circuit is a
-  `FluidLoop` that both of its members tag on their own channels (`fluid_loop=` on `add_input` and `add_output`),
-  from which the check derives the circuit's heat once for both members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
+  `FluidLoop` that each of its members tags on its own four channels, flow and temperature in and out (`fluid_loop=`
+  on `add_input` and `add_output`), stating whether it supplies and whether it pumps; the member that pumps publishes
+  its flow, every other member passes the flow it reads on unchanged, and the build walks the loop through the
+  wiring and refuses one that does not close or has no or two pump owners (`hisim/fluid_loops.py`). The check
+  derives the circuit's heat once for its members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's
   above `max(1e-6 kWh, 0.1 %)` of the step's throughput, a transfer booked by only one of two declared components,
   or a port that is not finite (owner decision 6 of epic hisim-energy-sankeys-9uoo). A new or changed energy-moving component

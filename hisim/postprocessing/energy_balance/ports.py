@@ -29,7 +29,7 @@ A water circuit, a fluid loop, is declared by the loop tags on its members' chan
 (:class:`~hisim.component.FluidLoopPortSet`), and each port set is one *end* of the circuit here.
 :meth:`DeclaredPorts.collect` follows each end's inputs to the outputs connected to them (:class:`CircuitColumns`),
 derives the circuit's heat once from the three columns and gives both ends that one series, booked by the supplier's
-sign (§3.4 of ``roadmap/hydraulic_circuits_spec.md``): where the supplier heats the water, the supplier's ``PRODUCTION`` port
+sign (§3.4 of ``roadmap/fluid_loops_spec.md``): where the supplier heats the water, the supplier's ``PRODUCTION`` port
 and the receiver's ``CONSUMPTION`` port of the loop's carrier; where it cools it, the receiver's ``PRODUCTION`` port and the
 supplier's ``CONSUMPTION`` port of ``COOLING``. Each end has the other as its peer (:meth:`Wiring.circuit_peer`). So a circuit
 is a transfer like any other, which :meth:`DeclaredPorts.declared_links` pairs, and it cannot disagree with itself.
@@ -522,14 +522,15 @@ class DeclaredPorts:
 
     @staticmethod
     def port_sets_of(component: Any) -> Tuple[FluidLoopPortSet, ...]:
-        """The circuit ends ``component`` declares, its port sets (:meth:`hisim.component.Component.port_sets`).
+        """The circuit ends ``component`` declares to the balance (:meth:`hisim.component.Component.port_sets_in_the_energy_balance`).
 
-        A stand-in without the method, as the tests build them, declares none.
+        A stand-in without that method books its port sets (``port_sets``) if it has them, else none, as the tests
+        build them.
 
         Raises:
-            FluidLoopError: If the component tags a loop by half.
+            FluidLoopWiringError: If the component tags a loop by half.
         """
-        declare = getattr(component, "port_sets", None)
+        declare = getattr(component, "port_sets_in_the_energy_balance", None) or getattr(component, "port_sets", None)
         return tuple(declare()) if callable(declare) else ()
 
     def add_circuits(
@@ -555,7 +556,7 @@ class DeclaredPorts:
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
         self.circuit_faults.extend(circuits.faults)
         for name, port_set, open_quantity in circuits.open_ends:
-            if port_set.flow_quantity is not LoopQuantity.FLOW_OUT:
+            if not port_set.loop.pumps:
                 continue
             flow = port_set.channels[LoopQuantity.FLOW_OUT].field_name
             column = position_of.get((name, flow))
@@ -961,10 +962,11 @@ class Wiring:
     ) -> Tuple[Optional[CircuitColumns], Optional[LoopQuantity]]:
         """The three outputs a port set's channels stand for, an input followed to the output connected to it.
 
-        The flow is the set's one flow channel; the supply is the supplier's ``TEMPERATURE_OUT`` and the receiver's
-        ``TEMPERATURE_IN``, the return the other temperature. For example, a buffer's ``generator`` set
-        (``supplies=False``) resolves to the generator's flow and supply outputs, which its inputs read, and its own
-        return output.
+        The flow is the one the pump owner moves (:attr:`hisim.component.FluidLoopPortSet.pumped_flow_quantity`): the
+        pump owner's own ``FLOW_OUT``, the ``FLOW_IN`` of a member that passes it on; the supply is the supplier's
+        ``TEMPERATURE_OUT`` and the receiver's ``TEMPERATURE_IN``, the return the other temperature. For example, a
+        buffer's ``generator`` set (``supplies=False``, ``pumps=False``) resolves to the generator's flow and supply
+        outputs, which its inputs read, and its own return output.
 
         Args:
             component_name: The end's component.
@@ -975,7 +977,7 @@ class Wiring:
         """
         supplies = port_set.loop.supplies
         quantity_of_leg = {
-            "mass_flow": port_set.flow_quantity,
+            "mass_flow": port_set.pumped_flow_quantity,
             "supply_temperature": LoopQuantity.TEMPERATURE_OUT if supplies else LoopQuantity.TEMPERATURE_IN,
             "return_temperature": LoopQuantity.TEMPERATURE_IN if supplies else LoopQuantity.TEMPERATURE_OUT,
         }
@@ -1044,7 +1046,7 @@ class Wiring:
 
         The rules of :mod:`hisim.energy_port`, each breach a fault: two components besides its owner declaring an end
         on one mass flow ("one reader"), an end whose other end declares ports but not the same circuit ("every member
-        or none"), and a circuit with no or two suppliers (rule 4 of §3.3 of ``roadmap/hydraulic_circuits_spec.md``).
+        or none"), and a circuit with no or two suppliers (rule 4 of §3.3 of ``roadmap/fluid_loops_spec.md``).
 
         Args:
             components: The components of the run, in the order of the run.
@@ -1054,7 +1056,7 @@ class Wiring:
 
         Raises:
             ValueError: If an exempt component or a meter declares a circuit end: it moves no water of its own.
-            FluidLoopError: If a component tags a loop by half.
+            FluidLoopWiringError: If a component tags a loop by half.
         """
         wired = CircuitWiring()
         resolved: List[Tuple[str, FluidLoopPortSet, CircuitColumns]] = []
@@ -1068,7 +1070,7 @@ class Wiring:
                     )
                 columns, open_quantity = self.resolve_circuit(name, port_set)
                 if columns is None:
-                    wired.open_ends.append((name, port_set, open_quantity or port_set.flow_quantity))
+                    wired.open_ends.append((name, port_set, open_quantity or port_set.pumped_flow_quantity))
                 else:
                     resolved.append((name, port_set, columns))
         ends_at: Dict[str, List[Tuple[FluidLoopPortSet, CircuitColumns]]] = {}
@@ -1104,7 +1106,7 @@ class Wiring:
         """Why a circuit end does not pair with its other end, or None when it does or need not.
 
         The other end must tag a loop on the same three outputs, and exactly one of the two must supply it (rule 4 of
-        §3.3 of ``roadmap/hydraulic_circuits_spec.md``): no supplier is a loop of two receivers, a buffer's generator
+        §3.3 of ``roadmap/fluid_loops_spec.md``): no supplier is a loop of two receivers, a buffer's generator
         loop wired to a tank's coil; two are two generators on one loop with no store between them. One that declares
         no ports at all, or no other end, is no fault: the circuit is drawn to an undeclared or an unlinked node
         instead.
@@ -1208,7 +1210,7 @@ class Wiring:
         Raises:
             EnergyPortWiringError: Naming every breach.
             ValueError: If an exempt component or a meter declares a circuit end.
-            FluidLoopError: If a component tags a loop by half.
+            FluidLoopWiringError: If a component tags a loop by half.
         """
         metered_carriers, exempt = DeclaredPorts.classify(components)
         wiring = cls(components, exempt, metered_carriers)

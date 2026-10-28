@@ -59,10 +59,14 @@ components:
       - hds_controller
       - input: WaterTemperatureInput            # the boiler feeds the circuit directly
         from: boiler.WaterOutputTemperatureSh
+      - input: WaterMassFlowInput               # the hds's own flow, back from the boiler that heats it
+        from: boiler.WaterOutputMassFlowSh
 
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas                  # power band AUTO <- building (heating_load, apartments)
+    config:
+      pumps_space_heating_loop: false       # no buffer: the hds pumps the circuit, the boiler heats its flow
     inputs:
       - boiler_controller
       - input: WaterInputTemperatureSh        # the circuit's return, no buffer in between

@@ -15,7 +15,7 @@ from hisim import loadtypes as lt
 from hisim.components import heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistribution, PositionHotWaterStorageInSystemSetup
 from hisim.config import ComponentID
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, LoopQuantity
 from hisim.simulationparameters import SimulationParameters
 from tests.part_load_rigs import AllInputsRig
 
@@ -277,3 +277,43 @@ def test_the_distribution_loop_may_cool_exactly_where_the_configuration_enables_
     """
     hds = HdsRig(PositionHotWaterStorageInSystemSetup.PARALLEL, cooling_enabled=cooling_enabled).hds
     assert hds.distribution_loop.may_cool is cooling_enabled
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("position", list(PositionHotWaterStorageInSystemSetup))
+def test_the_distribution_loop_is_tagged_whole_in_every_position_and_pumps_where_the_position_pumps(
+    position: PositionHotWaterStorageInSystemSetup,
+) -> None:
+    """Catches a loop the build cannot walk in a position, or a pumping flag that disagrees with the circuit's flow.
+
+    The circuit tags its four channels in every position (stage 1b of ``roadmap/fluid_loops_spec.md``); it pumps where
+    the position makes it pump its design flow, and a ``pumps_the_distribution_loop`` that says otherwise is refused
+    when the system is built, naming both. The energy balance books the loop only behind a buffer (hisim-pnw7).
+    """
+    pumps = position in HeatDistribution.POSITIONS_PUMPING_THE_DESIGN_FLOW
+    config = heat_distribution_system.HeatDistributionConfig(
+        component_id=ComponentID(name="HeatDistributionSystem"),
+        water_mass_flow_rate_in_kg_per_second=HdsRig.DESIGN_MASS_FLOW_IN_KG_PER_SECOND,
+        position_hot_water_storage_in_system=position,
+        absolute_conditioned_floor_area_in_m2=HdsRig.FLOOR_AREA_IN_M2,
+        heating_system=heat_distribution_system.HeatDistributionSystemType.FLOORHEATING,
+        cooling_enabled=False,
+        pumps_the_distribution_loop=pumps,
+    )
+    hds = HeatDistribution(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900))
+    port_sets = hds.port_sets()
+    assert len(port_sets) == 1
+    port_set = port_sets[0]
+    assert port_set.loop.pumps is pumps
+    assert {quantity: channel.field_name for quantity, channel in port_set.channels.items()} == {
+        LoopQuantity.TEMPERATURE_IN: HeatDistribution.WaterTemperatureInput,
+        LoopQuantity.FLOW_IN: HeatDistribution.WaterMassFlowInput,
+        LoopQuantity.TEMPERATURE_OUT: HeatDistribution.WaterTemperatureOutput,
+        LoopQuantity.FLOW_OUT: HeatDistribution.WaterMassFlowHDS,
+    }
+    assert hds.port_sets_in_the_energy_balance() == (
+        (port_set,) if position is PositionHotWaterStorageInSystemSetup.PARALLEL else ()
+    )
+    config.pumps_the_distribution_loop = not pumps
+    with pytest.raises(ValueError, match=f"pumps_the_distribution_loop is {str(not pumps).lower()}, but at position {position.value}"):
+        HeatDistribution(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900))

@@ -20,6 +20,7 @@ import json
 import pandas as pd
 
 from hisim import config as cfg
+from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
@@ -229,12 +230,11 @@ class FluidLoopPortSet:
     """One component's channels of one fluid loop, keyed by the quantity each carries.
 
     The build groups a component's tagged channels by the :class:`~hisim.energy_port.FluidLoop` their tags name
-    (:meth:`group`); one group is a port set. In stage 1a of ``roadmap/hydraulic_circuits_spec.md`` a port set has
-    three channels: the two temperatures and the one flow the member has today, a ``FLOW_OUT`` at the member that
-    publishes the loop's flow, a ``FLOW_IN`` at the member that reads it. Stage 1b gives every member both flows. For
-    example, a buffer's ``generator`` set holds its inputs ``WaterMassFlowRateFromHeatGenerator`` (``FLOW_IN``) and
-    ``WaterTemperatureFromHeatGenerator`` (``TEMPERATURE_IN``) and its output ``WaterTemperatureToHeatGenerator``
-    (``TEMPERATURE_OUT``).
+    (:meth:`group`); one group is a port set, with one channel of each of the four quantities (D1 of
+    ``roadmap/fluid_loops_spec.md``). For example, a buffer's ``generator`` set holds its inputs
+    ``WaterMassFlowRateFromHeatGenerator`` (``FLOW_IN``) and ``WaterTemperatureFromHeatGenerator``
+    (``TEMPERATURE_IN``) and its outputs ``WaterMassFlowRateToHeatGenerator`` (``FLOW_OUT``) and
+    ``WaterTemperatureToHeatGenerator`` (``TEMPERATURE_OUT``).
 
     Attributes:
         component_name: The component the channels belong to.
@@ -246,15 +246,15 @@ class FluidLoopPortSet:
     loop: FluidLoop
     channels: Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]
 
-    #: The quantities every port set has in stage 1a; besides them it has exactly one of :attr:`FLOWS`.
-    TEMPERATURES: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT)
-    #: The two flow quantities.
-    FLOWS: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.FLOW_IN, LoopQuantity.FLOW_OUT)
-
     @property
-    def flow_quantity(self) -> LoopQuantity:
-        """The one flow quantity the set has: ``FLOW_OUT`` where the member publishes the flow, else ``FLOW_IN``."""
-        return LoopQuantity.FLOW_OUT if LoopQuantity.FLOW_OUT in self.channels else LoopQuantity.FLOW_IN
+    def pumped_flow_quantity(self) -> LoopQuantity:
+        """The channel through which the member sees the flow the pump owner moves.
+
+        The pump owner publishes it as its ``FLOW_OUT``; a member that passes the flow on reads it through its
+        ``FLOW_IN``. For example, a boiler that pumps its space-heating loop has ``FLOW_OUT``, the buffer it charges
+        ``FLOW_IN``.
+        """
+        return LoopQuantity.FLOW_OUT if self.loop.pumps else LoopQuantity.FLOW_IN
 
     @property
     def label(self) -> str:
@@ -267,8 +267,9 @@ class FluidLoopPortSet:
     ) -> Tuple["FluidLoopPortSet", ...]:
         """Group a component's channels by the fluid loop their tags name, one port set per loop.
 
-        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop tagged by half is refused: one without both temperatures, or (stage 1a)
-        with no flow or with both. For example, a boiler's three space-heating channels and its three hot-water
+        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop
+        tagged by half, one without all four quantities, is refused (rule 0 of §3.3 of
+        ``roadmap/fluid_loops_spec.md``). For example, a boiler's four space-heating channels and its four hot-water
         channels give two sets.
 
         Args:
@@ -279,7 +280,8 @@ class FluidLoopPortSet:
             The port sets.
 
         Raises:
-            FluidLoopError: For a loop tagged by half, naming the component, the loop and what it lacks.
+            FluidLoopWiringError: For a loop tagged by half, naming the component, the loop, the channels it tags and
+                the quantities it lacks.
         """
         grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
         for channel in channels:
@@ -288,15 +290,15 @@ class FluidLoopPortSet:
                 grouped.setdefault(tag.loop, {})[tag.quantity] = channel
         port_sets: List[FluidLoopPortSet] = []
         for loop, by_quantity in grouped.items():
-            missing = [quantity.value for quantity in FluidLoopPortSet.TEMPERATURES if quantity not in by_quantity]
-            flows = [quantity for quantity in FluidLoopPortSet.FLOWS if quantity in by_quantity]
-            if missing or len(flows) != 1:
-                raise FluidLoopError(
-                    f"{component_name} tags the loop {loop.name!r} by half: it has "
-                    f"{', '.join(quantity.value for quantity in by_quantity)}; a port set has both temperatures "
-                    "and, until stage 1b of the hydraulic circuits spec, exactly one flow (flow_out where the member "
-                    "publishes the loop's flow, flow_in where it reads it)."
+            missing = [quantity.value for quantity in LoopQuantity if quantity not in by_quantity]
+            if missing:
+                tagged = ", ".join(f"{channel.field_name} ({quantity.value})" for quantity, channel in by_quantity.items())
+                raise hydronics.FluidLoopWiringError(
+                    f"{component_name} tags the loop {loop.name!r} by half: it tags {tagged} and lacks "
+                    f"{', '.join(missing)}; a member of a fluid loop has a flow in, a flow out, a temperature in and "
+                    "a temperature out."
                 )
+
             port_sets.append(FluidLoopPortSet(component_name, loop, by_quantity))
         return tuple(port_sets)
 
@@ -661,12 +663,26 @@ class Component:
         """Return the component's port sets, its tagged channels grouped by fluid loop (:meth:`FluidLoopPortSet.group`).
 
         For example, a buffer behind a generator has three, ``generator``, ``secondary_generator`` and
-        ``distribution``. The energy balance reads nothing else about a component's loops.
+        ``distribution``. The build's loop walk (:mod:`hisim.fluid_loops`) reads nothing else about a component's
+        loops.
 
         Raises:
-            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+            FluidLoopWiringError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
         """
         return FluidLoopPortSet.group(self.component_name, [*self.inputs, *self.outputs])
+
+    def port_sets_in_the_energy_balance(self) -> Tuple["FluidLoopPortSet", ...]:
+        """Return the port sets the energy balance books: all of :meth:`port_sets`, unless the component says otherwise.
+
+        The build's loop walk reads :meth:`port_sets`, every loop the component is a member of. The balance reads
+        these. The one component that books fewer is the heat distribution system without a buffer, whose outputs
+        lag one step behind its loop, so that its balance would not close (bead hisim-pnw7); it books none until
+        stage 3 of ``roadmap/fluid_loops_spec.md`` and is drawn as undeclared, as before.
+
+        Raises:
+            FluidLoopWiringError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+        """
+        return self.port_sets()
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""

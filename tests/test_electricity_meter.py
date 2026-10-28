@@ -23,7 +23,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulator import SimulationParameters
 from hisim import log
-from tests.idealized_heater_rig import controller_between
+from tests.idealized_heater_rig import controller_between, heat_into
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -103,11 +103,7 @@ def _build_system(
 
     # Building
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_idealized_electric_heater.component_name,
-        my_idealized_electric_heater.ThermalPowerDelivered,
-    )
+    heat_into(my_building, my_idealized_electric_heater)
 
     # Idealized Heater
 

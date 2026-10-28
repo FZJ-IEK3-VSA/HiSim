@@ -17,7 +17,7 @@ from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
 from hisim.config import ComponentID, SizingContext
-from tests.idealized_heater_rig import controller_between
+from tests.idealized_heater_rig import controller_between, heat_into
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -184,11 +184,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_occupancy.component_name,
         my_occupancy.HeatingByDevices,
     )
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_idealized_electric_heater.component_name,
-        my_idealized_electric_heater.ThermalPowerDelivered,
-    )
+    heat_into(my_building, my_idealized_electric_heater)
 
     # =========================================================================================================================================================
     # Add Components to Simulator and run all timesteps

@@ -33,6 +33,7 @@ def test_preset_standard_returns_config_with_documented_defaults() -> None:
     assert config.component_id.name == "GenericTransformerAndRectifier"
     assert config.efficiency == pytest.approx(0.95)
     assert config.rated_power_in_kilowatt == pytest.approx(1000.0)
+    assert config.received_carrier == lt.EnergyBalanceCarrier.ELECTRICITY
     # All five cost fields stay unset so that postprocessing looks the figures up from the device
     # database for the simulated year and country instead of freezing them into every caller.
     assert config.device_co2_footprint_in_kg is None
@@ -152,13 +153,11 @@ def test_transformer_inherited_lifecycle_hooks_are_noops() -> None:
     transformer.i_doublecheck(0, SingleTimeStepValues(0))
 
 
-@pytest.mark.base
-def test_transformer_simulate_scales_input_by_efficiency() -> None:
-    """i_simulate reads the input power and writes input * efficiency to the output.
+def one_step_of_a_transformer(offered_power_in_kilowatt: float) -> dict:
+    """One step of a 100 kW transformer at 90 % offered ``offered_power_in_kilowatt``, as ``output name -> value``.
 
-    Uses the hoisted-stsv direct-drive seam (KB-4557): a source ComponentOutput
-    feeds the transformer's input, values are injected directly into stsv.values,
-    and i_simulate is called without an external orchestrator.
+    Uses the hoisted-stsv direct-drive seam (KB-4557): a source ComponentOutput feeds the transformer's input, the
+    value is injected directly into stsv.values, and i_simulate is called without an external orchestrator.
     """
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = TransformerConfig(
@@ -181,13 +180,66 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
     stsv = SingleTimeStepValues(number_of_outputs)
     fft.add_global_index_of_components([transformer, source_output])
 
-    input_power = 10.0
-    stsv.values[source_output.global_index] = input_power
+    stsv.values[source_output.global_index] = offered_power_in_kilowatt
 
     transformer.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
 
-    expected_output = input_power * config.efficiency
-    assert stsv.values[transformer.electricity_output.global_index] == pytest.approx(expected_output)
+    return {output.field_name: stsv.values[output.global_index] for output in transformer.outputs}
+
+
+@pytest.mark.base
+def test_transformer_simulate_scales_input_by_efficiency() -> None:
+    """Below its rating the unit takes the whole input, delivers input * efficiency in W and curtails nothing.
+
+    10 kW offered at 90 % are 9,000 W delivered and 1,000 W lost. Catches the kW input published as W without its
+    factor and a curtailment below the rating.
+    """
+    values = one_step_of_a_transformer(offered_power_in_kilowatt=10.0)
+
+    assert values[Transformer.ElectricityDeliveredInWatt] == pytest.approx(9000.0, rel=1e-12)
+    assert values[Transformer.ElectricityReceivedInWatt] == pytest.approx(10000.0, rel=1e-12)
+    assert values[Transformer.ConversionLossInWatt] == pytest.approx(1000.0, rel=1e-12)
+    assert values[Transformer.CurtailedInputInWatt] == 0.0
+
+
+@pytest.mark.base
+def test_transformer_delivers_at_most_its_rating_and_curtails_the_rest_of_the_input() -> None:
+    """Above its rating the unit delivers its rating, receives rating / efficiency and curtails the rest of the input.
+
+    A 100 kW unit at 90 % offered 500 kW delivers 100 kW, receives 111.1 kW, loses 11.1 kW and curtails 388.9 kW;
+    received equals delivered plus lost, and offered equals received plus curtailed. Catches a unit that passes more
+    than its rating (bead hisim-component-physics-4g9.69) and a curtailment counted as a loss.
+    """
+    values = one_step_of_a_transformer(offered_power_in_kilowatt=500.0)
+
+    received_in_watt = 100_000.0 / 0.9
+    assert values[Transformer.ElectricityDeliveredInWatt] == pytest.approx(100_000.0, rel=1e-12)
+    assert values[Transformer.ElectricityReceivedInWatt] == pytest.approx(received_in_watt, rel=1e-12)
+    assert values[Transformer.ConversionLossInWatt] == pytest.approx(received_in_watt - 100_000.0, rel=1e-12)
+    assert values[Transformer.CurtailedInputInWatt] == pytest.approx(500_000.0 - received_in_watt, rel=1e-12)
+
+
+@pytest.mark.base
+def test_transformer_books_a_wind_turbines_electricity_from_the_wind_turbine_node() -> None:
+    """A unit fed by a wind turbine's series books what it receives as wind electricity from the "wind turbine" node.
+
+    Catches the received port of such a unit booked as electricity, which the electricity meter would read as
+    consumption, and a carrier the unit cannot receive accepted by the configuration.
+    """
+    config = TransformerConfig.preset_standard("Transformer")
+    config.received_carrier = lt.EnergyBalanceCarrier.WIND_ELECTRICITY
+    transformer = Transformer(SimulationParameters.one_day_only(2021, 60), config)
+
+    port = transformer.electricity_received_channel.energy_port
+    assert port is not None
+    assert (port.role, port.carrier, port.environment) == (
+        lt.EnergyRole.CONSUMPTION,
+        lt.EnergyBalanceCarrier.WIND_ELECTRICITY,
+        lt.EnvironmentNode.WIND_TURBINE,
+    )
+    assert not port.is_metered
+    with pytest.raises(ValueError, match="receives electricity or wind_electricity, not hydrogen"):
+        TransformerConfig(component_id=ComponentID(name="Transformer"), received_carrier=lt.EnergyBalanceCarrier.HYDROGEN)
 
 
 @pytest.mark.base
@@ -212,16 +264,24 @@ def test_transformer_config_refuses_an_efficiency_outside_the_fraction_range() -
     )
 
 
+def two_steps_of_transformer_columns(transformer: Transformer) -> tuple:
+    """The transformer's three integrated outputs over two steps of 60 s, and a frame of their columns in W.
+
+    100 kW delivered, 25 kW lost and 50 kW curtailed in each step: 3.333 kWh, 0.833 kWh and 1.667 kWh.
+    """
+    outputs = [transformer.electricity_output, transformer.conversion_loss_channel, transformer.curtailed_input_channel]
+    frame = pd.DataFrame({0: [100_000.0, 100_000.0], 1: [25_000.0, 25_000.0], 2: [50_000.0, 50_000.0]})
+    return outputs, frame
+
+
 @pytest.mark.base
-def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
-    """The two transformer KPIs integrate the delivered kilowatts and derive the losses from the efficiency.
+def test_transformer_kpi_entries_integrate_its_delivered_lost_and_curtailed_power() -> None:
+    """The three transformer KPIs integrate the delivered, lost and curtailed power columns in W.
 
-    Two timesteps of 60 s at 100 kW are 3.333 kWh delivered; at 80 % efficiency one quarter of
-    the delivered energy was lost on the way (1/0.8 - 1 = 0.25), so the losses are 0.833 kWh.
-    Both are hand-derived literals over an explicit non-default efficiency, so a wrong-but-
-    consistent losses formula, or a drifted config default, cannot agree with the test.
+    Two timesteps of 60 s at 100 kW are 3.333 kWh delivered, at 25 kW 0.833 kWh lost and at 50 kW 1.667 kWh
+    curtailed: hand-derived literals, so a column read in the wrong unit or under the wrong KPI cannot agree.
 
-    A foreign component's kilowatt column is prepended the way the real caller hands the whole
+    A foreign component's column of the same name is prepended the way the real caller hands the whole
     run's outputs over, so the component_name filter is load-bearing here too.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
@@ -231,21 +291,20 @@ def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
     foreign = ComponentOutput(
         object_name="OtherUnit",
-        field_name="TransformerOutput",
+        field_name=Transformer.ElectricityDeliveredInWatt,
         load_type=lt.LoadTypes.ELECTRICITY,
-        unit=lt.Units.KILOWATT,
+        unit=lt.Units.WATT,
         output_description="a stranger's output",
         component_id=ComponentID(name="OtherUnit"),
     )
-    frame = pd.DataFrame({0: [999.0, 999.0], 1: [100.0, 100.0]})
+    outputs, columns = two_steps_of_transformer_columns(transformer)
+    frame = pd.concat([pd.DataFrame({0: [999.0, 999.0]}), columns.rename(columns=lambda index: index + 1)], axis=1)
 
-    entries = {
-        e.name: e
-        for e in transformer.component_kpi_entries([foreign, transformer.electricity_output], frame)
-    }
+    entries = {e.name: e for e in transformer.component_kpi_entries([foreign, *outputs], frame)}
 
     assert entries["Electrical energy delivered"].value == pytest.approx(3.333)
     assert entries["Conversion losses"].value == pytest.approx(0.833)
+    assert entries["Curtailed input energy"].value == pytest.approx(1.667)
     assert all(e.source == transformer.kpi_source() for e in entries.values()), (
         "every entry carries its component's source, the address its key is qualified with"
     )
@@ -267,10 +326,11 @@ def test_transformer_kpi_entries_refuse_nan_instead_of_understating() -> None:
         component_id=ComponentID(name="Transformer"), efficiency=0.8, rated_power_in_kilowatt=100.0
     )
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
-    frame = pd.DataFrame({0: [100.0, float("nan")]})
+    outputs, frame = two_steps_of_transformer_columns(transformer)
+    frame.iloc[1, 0] = float("nan")
 
     with pytest.raises(ValueError, match="NaN"):
-        transformer.component_kpi_entries([transformer.electricity_output], frame)
+        transformer.component_kpi_entries(outputs, frame)
 
 
 @pytest.mark.base
@@ -282,7 +342,7 @@ def test_transformer_kpi_entries_refuse_a_missing_output() -> None:
         config=TransformerConfig.preset_standard("GenericTransformerAndRectifier"),
     )
 
-    with pytest.raises(ValueError, match="transformer output column"):
+    with pytest.raises(ValueError, match="transformer output columns .* were not found"):
         transformer.component_kpi_entries([], pd.DataFrame())
 
 
@@ -368,22 +428,22 @@ def test_transformer_capex_prefers_explicit_config_values_over_the_database() ->
 
 @pytest.mark.base
 def test_transformer_opex_prices_the_conversion_losses_only() -> None:
-    """The operating cost covers the losses, not the throughput, and carries a maintenance share.
+    """The operating cost covers the losses, not the throughput or the curtailed input, and carries a maintenance share.
 
     Everything the unit does not lose it passes on, and the consumer downstream reports that
     share as its own consumption, so the two are disjoint and the system total may add them.
     Reporting the throughput here instead would count the same kilowatt-hours twice, which is the
-    failure this test catches: two timesteps of 60 s at 100 kW are 3.333 kWh delivered, and at
-    80 % efficiency the losses are 0.833 kWh -- the consumption reported must be the latter.
+    failure this test catches: two timesteps of 60 s at 100 kW are 3.333 kWh delivered, at 25 kW
+    lost 0.833 kWh -- the consumption reported must be the latter.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     config = TransformerConfig(
         component_id=ComponentID(name="Transformer"), efficiency=0.8, rated_power_in_kilowatt=500.0
     )
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
-    frame = pd.DataFrame({0: [100.0, 100.0]})
+    outputs, frame = two_steps_of_transformer_columns(transformer)
 
-    opex = transformer.get_cost_opex([transformer.electricity_output], frame)
+    opex = transformer.get_cost_opex(outputs, frame)
 
     assert opex.total_consumption_in_kwh == pytest.approx(0.833)
     assert opex.loadtype == lt.LoadTypes.ELECTRICITY

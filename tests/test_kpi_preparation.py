@@ -600,14 +600,15 @@ class TestElectricityKpisReadTheDeclaredUnit:
     """The electricity KPIs convert each flagged column from the unit its output declares (hisim-50kh)."""
 
     @staticmethod
-    def one_hour_of_transformer_output(power_in_kilowatt: float) -> tuple[Transformer, List, pd.DataFrame]:
-        """Build a standard transformer and one hour at 60 s steps of its output at a constant power.
+    def one_hour_of_transformer_output(power_in_watt: float) -> tuple[Transformer, List, pd.DataFrame]:
+        """Build a standard transformer and one hour at 60 s steps of its outputs, delivering a constant power.
 
         Args:
-            power_in_kilowatt: The power the transformer delivers in every step, in its declared unit kW.
+            power_in_watt: The power the transformer delivers in every step, in its declared unit W.
 
         Returns:
-            The transformer, its outputs in column order, and the result frame with its one output column.
+            The transformer, its outputs in column order, and the result frame with one column per output: the
+            delivered power, and zero in every other.
         """
         simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
         transformer = Transformer(
@@ -615,18 +616,43 @@ class TestElectricityKpisReadTheDeclaredUnit:
             config=TransformerConfig.preset_standard("StandardTransformerAndRectifier"),
         )
         outputs = list(transformer.get_outputs())
-        frame = pd.DataFrame({0: [power_in_kilowatt] * 60})
+        frame = pd.DataFrame(
+            {
+                index: [power_in_watt if output is transformer.electricity_output else 0.0] * 60
+                for index, output in enumerate(outputs)
+            }
+        )
         return transformer, outputs, frame
 
-    @pytest.mark.base
-    def test_the_total_production_of_a_transformer_in_kilowatt_equals_its_delivered_energy(self) -> None:
-        """Catches the general KPI summing a kW column as watts, which reported 180.5 for 180,546 kWh delivered.
+    @staticmethod
+    def one_hour_of_a_kilowatt_production(power_in_kilowatt: float) -> tuple[ComponentOutput, pd.DataFrame]:
+        """An output flagged as electricity production in kW, and one hour at 60 s steps of it at a constant power.
 
-        The transformer publishes its output in kW and flags it as electricity production. One hour at 10 kW is
-        10 kWh: the transformer's own KPI says so, and the general "Total electricity production" must agree
-        instead of reading the column as 10 W and reporting 0.01 kWh (rounded to 0.0).
+        Args:
+            power_in_kilowatt: The power in every step, in kW.
+
+        Returns:
+            The output and the result frame with its one column.
         """
-        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
+        output = ComponentOutput(
+            object_name="KilowattProducer",
+            field_name="ElectricityOutput",
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.KILOWATT,
+            postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION],
+            component_id=ComponentID(name="KilowattProducer"),
+        )
+        return output, pd.DataFrame({0: [power_in_kilowatt] * 60})
+
+    @pytest.mark.base
+    def test_the_total_production_of_a_transformer_equals_its_delivered_energy(self) -> None:
+        """Catches the general KPI and the transformer's own KPI reading its delivered power in different units.
+
+        The transformer publishes what it delivers in W and flags it as electricity production. One hour at
+        10,000 W is 10 kWh: the transformer's own KPI says so, and the general "Total electricity production" must
+        agree.
+        """
+        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_watt=10_000.0)
         building = transformer.component_id.building_label
         preparation = _bare_preparation(building)
 
@@ -650,27 +676,46 @@ class TestElectricityKpisReadTheDeclaredUnit:
         )
 
     @pytest.mark.base
+    def test_a_kilowatt_column_is_read_in_kilowatt(self) -> None:
+        """Catches the general KPI summing a kW column as watts, which reported 180.5 for 180,546 kWh delivered.
+
+        One hour at 10 kW is 10 kWh, not the 0.01 kWh (rounded to 0.0) of the column read as 10 W.
+        """
+        output, frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
+        building = output.component_id.building_label
+        preparation = _bare_preparation(building)
+
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=[output], results=frame, building_objects_in_district=building
+        )
+        _, total_production_in_kilowatt_hour, _, _, _ = (
+            preparation.compute_electricity_consumption_and_production_and_battery_kpis(
+                result_dataframe=filtered, building_objects_in_district=building, kpi_tag=KpiTagEnumClass.GENERAL
+            )
+        )
+
+        assert total_production_in_kilowatt_hour == pytest.approx(10.0, rel=1e-9)
+
+    @pytest.mark.base
     def test_a_watt_column_and_a_kilowatt_column_each_keep_their_own_factor(self) -> None:
         """Catches the unit factors being applied to the wrong columns when W and kW outputs are summed together.
 
-        A PV-flagged output in W comes first and the transformer's output in kW after it, as in a run where both
+        A PV-flagged output in W comes first and a producer's output in kW after it, as in a run where both
         feed the grid. Each column must be scaled by its own factor before the sum: 2000 W plus 10 kW is 12 kW,
         so one hour gives 12 kWh. Factors swapped or shifted by one column would give 2,000,010 W or 20 kW.
         """
-        transformer, transformer_outputs, transformer_frame = self.one_hour_of_transformer_output(
-            power_in_kilowatt=10.0
-        )
+        kilowatt_output, kilowatt_frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
         pv_output_in_watt = ComponentOutput(
             object_name="PhotovoltaicStandIn",
             field_name="ElectricityOutput",
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION, ComponentType.PV],
-            component_id=transformer.component_id,
+            component_id=kilowatt_output.component_id,
         )
-        outputs = [pv_output_in_watt, *transformer_outputs]
-        frame = pd.DataFrame({0: [2000.0] * 60, 1: transformer_frame[0].tolist()})
-        building = transformer.component_id.building_label
+        outputs = [pv_output_in_watt, kilowatt_output]
+        frame = pd.DataFrame({0: [2000.0] * 60, 1: kilowatt_frame[0].tolist()})
+        building = kilowatt_output.component_id.building_label
         preparation = _bare_preparation(building)
 
         filtered = preparation.filter_results_according_to_postprocessing_flags(
@@ -693,13 +738,13 @@ class TestElectricityKpisReadTheDeclaredUnit:
     @pytest.mark.base
     def test_a_flagged_output_in_a_unit_without_a_conversion_is_refused(self) -> None:
         """Catches a flagged column in an unexpected unit, here kWh, being summed as watts without notice."""
-        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
-        outputs[0].unit = Units.KWH
-        building = transformer.component_id.building_label
+        output, frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
+        output.unit = Units.KWH
+        building = output.component_id.building_label
         preparation = _bare_preparation(building)
         with pytest.raises(ValueError, match="no conversion to W"):
             preparation.filter_results_according_to_postprocessing_flags(
-                all_outputs=outputs, results=frame, building_objects_in_district=building
+                all_outputs=[output], results=frame, building_objects_in_district=building
             )
 
 

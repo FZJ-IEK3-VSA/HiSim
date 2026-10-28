@@ -136,6 +136,12 @@ class DeclaredPortRenamings:
             "Input_SimpleAirConditioner_ElectricalPowerConsumption_0": (
                 "ElectricalPowerConsumptionFromSimpleAirConditioner"
             ),
+            # electrolyzer_with_renewables, the grid connection: the transformer's delivery and the
+            # electrolyzer's draw.
+            "Input_StandardTransformerAndRectifier_ElectricityDeliveredInWatt_0": (
+                "ElectricityDeliveredInWattFromStandardTransformerAndRectifier"
+            ),
+            "Input_Electrolyzer_CurrentLoad_1": "CurrentLoadFromElectrolyzer",
         },
         # The energy-management controller, which is an aggregator on its consumption and
         # production side as well as a dispatcher on its target side. The battery is always the
@@ -215,10 +221,12 @@ class DeclaredPortRenamings:
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
         },
-        # The hydrogen meter of dynamic_components, which measures the mass flow each CHP burns.
+        # The hydrogen meter of dynamic_components, which measures the mass flow each CHP burns, and
+        # of electrolyzer_with_renewables, which measures the mass flow the electrolyzer produces.
         "HydrogenMeter": {
             "Input_CHP1_GasDemandReal_0": "GasDemandRealFromCHP1",
             "Input_CHP2_GasDemandReal_1": "GasDemandRealFromCHP2",
+            "Input_Electrolyzer_CurrentHydrogenFlowRate_0": "CurrentHydrogenFlowRateFromElectrolyzer",
         },
         # The gas meter, which measures a boiler's two fuel demands. Space heating is always
         # inserted before domestic hot water.

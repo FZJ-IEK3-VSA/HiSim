@@ -112,8 +112,8 @@ class Rig:
     #: rather than a structural difference the rig would catch without comparing any values. The
     #: twin leaves the efficiency to ``preset: standard`` and so carries no line for it; the
     #: alteration therefore adds one below the rating, overriding the preset's 0.95 with 0.9.
-    ORIGINAL_LINE: ClassVar[str] = "      rated_power_in_kilowatt: 1028.225"
-    ALTERED_LINE: ClassVar[str] = "      rated_power_in_kilowatt: 1028.225\n      efficiency: 0.9"
+    ORIGINAL_LINE: ClassVar[str] = "      rated_power_in_kilowatt: 5000.0"
+    ALTERED_LINE: ClassVar[str] = "      rated_power_in_kilowatt: 5000.0\n      efficiency: 0.9"
 
     #: The component whose result columns the altered value has to move.
     ALTERED_COMPONENT: ClassVar[str] = "StandardTransformerAndRectifier"

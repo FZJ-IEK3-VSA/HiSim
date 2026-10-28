@@ -5,6 +5,7 @@ from typing import Optional
 
 # Owned
 from hisim import log
+from hisim.config import SizingContext
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.generic_electrolyzer_h2 import (
@@ -16,6 +17,8 @@ from hisim import loadtypes as lt
 
 # CSV lib
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
+from hisim.components.electricity_meter import ElectricityMeter, ElectricityMeterConfig
+from hisim.components.gas_meter import GasMeter, GasMeterConfig
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 
 # import controller
@@ -34,12 +37,14 @@ __status__ = "development"
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """Electrolyzer system setup.
+    """Electrolyzer system setup: a grid-connected electrolyzer plant fed by a wind turbine.
 
-    In this system setup, a power input from a csv time series file is transformed
-    into a hydrogen mass flow as an output.
-
-    The result is a time series (my_transformer).
+    A 5 MW wind turbine's output, read from a csv time series in kW, feeds a transformer and rectifier
+    rated to the turbine's 5,000 kW, so no wind is curtailed. The electrolyzer turns the electricity
+    it takes into hydrogen. The electricity meter reads both devices: what the electrolyzer does not
+    take is exported to the grid, and what it takes beyond the delivery is imported. The hydrogen
+    meter reads the hydrogen produced and passes it out of the system (owner decisions of 2026-10-28
+    on bead hisim-component-physics-4g9.69).
     """
     log.information("Starting basic electrolyzer system setup")
 
@@ -65,6 +70,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Set transformer and rectifier parameter
     name = "StandardTransformerAndRectifier"
+    # The rated power of the wind turbine the series stands for, which is also the series' peak: the transformer and
+    # rectifier is rated to it, so it carries all the wind and none is curtailed.
+    wind_turbine_rated_power_in_kilowatt = 5000.0
     loadtype = lt.LoadTypes.ELECTRICITY
     unit = lt.Units.KILOWATT
 
@@ -98,16 +106,17 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create new CSV loader object
     csv_loader = CSVLoader(my_csv_loader, my_simulation_parameters=my_simulation_parameters)
 
-    # The electrolyzer configuration is read first because the transformer and rectifier in front
-    # of it is rated for it: the conversion stage has to carry the machine's maximum load, which is
-    # also what its investment cost is scaled by.
     my_electrolyzer_config = ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name=electrolyzer_name)
 
     # Setup the transformer and rectifier unit
     # The preset's 95 % efficiency is the figure from the literature this setup runs on.
     my_transformer_config = TransformerConfig.preset_standard(name)
-    # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
-    my_transformer_config.rated_power_in_kilowatt = my_electrolyzer_config.max_load
+    # Rated to carry the whole turbine, not only the electrolyzer's maximum load: what the electrolyzer does not take
+    # is exported to the grid (owner decision of 2026-10-28). The investment cost scales with this rating.
+    my_transformer_config.rated_power_in_kilowatt = wind_turbine_rated_power_in_kilowatt
+    # The series is the output of a wind turbine the setup does not model: the unit receives it from the
+    # "wind turbine" boundary node, and only what it delivers passes the electricity meter.
+    my_transformer_config.received_carrier = lt.EnergyBalanceCarrier.WIND_ELECTRICITY
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
         config=my_transformer_config,
@@ -125,6 +134,21 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # The grid connection: it reads the electricity the transformer delivers and the electrolyzer draws, by their
+    # roles, and exports or imports the difference.
+    my_electricity_meter = ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+
+    # The hydrogen the plant produces leaves the system through this meter.
+    my_hydrogen_meter = GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=GasMeterConfig.preset_standard("HydrogenMeter").resolve(
+            SizingContext(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN)
+        ),
+    )
+
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
@@ -132,9 +156,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_transformer.connect_input(my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1)
 
     my_controller.connect_input(
-        my_controller.ProvidedLoad,
+        my_controller.ProvidedLoadInWatt,
         my_transformer.component_name,
-        my_transformer.TransformerOutput,
+        my_transformer.ElectricityDeliveredInWatt,
     )
 
     my_electrolyzer.connect_input(
@@ -156,6 +180,17 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_sim.add_component(csv_loader)  # Add csv_loader to simulator
     my_sim.add_component(my_controller)  # Add my_controller to simulator
     my_sim.add_component(my_electrolyzer)
+
+    my_hydrogen_meter.add_component_input_and_connect(
+        source_object_name=my_electrolyzer.component_name,
+        source_component_output=my_electrolyzer.CurrentHydrogenFlowRate,
+        source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+        source_unit=lt.Units.KG_PER_SEC,
+        source_tags=[lt.InandOutputType.GAS_PRODUCTION, lt.InandOutputType.MASS_FLOW],
+        source_weight=999,
+    )
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_meter)
 
 
 # python ../hisim/hisim_main.py electrolyzer_with_renewables.py setup_function

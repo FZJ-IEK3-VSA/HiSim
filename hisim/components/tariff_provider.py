@@ -131,6 +131,10 @@ class TariffProvider(cp.DataSourceComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST  # the contract prices energy, not hardware
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "it publishes prices, no energy"
+
     # Outputs
     PricePurchase = "PricePurchase"
     PriceInjection = "PriceInjection"

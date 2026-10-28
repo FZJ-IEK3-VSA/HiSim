@@ -99,6 +99,10 @@ class ExampleTransformer(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "a teaching example that scales signals of any load type and unit; scaling a signal moves no energy"
+
     # A demonstration component that scales one signal by a constant. It models no device, so
     # it has no operating cost -- as opposed to one whose cost model is merely unwritten.
     # See Component.MODELS_NO_DEVICE.

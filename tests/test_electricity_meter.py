@@ -129,6 +129,16 @@ def _build_system(
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
+    # The heater's electricity passes the meter too: with the weather exempt, no component of this run is
+    # undeclared, so the energy balance fails an electricity port no meter reads (owner decision Q-H).
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_idealized_electric_heater.component_name,
+        source_component_output=my_idealized_electric_heater.ElectricityConsumptionInWatt,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
 
     # =========================================================================================================================================================
     # Add Components to Simulator and run all timesteps

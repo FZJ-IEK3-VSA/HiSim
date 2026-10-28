@@ -25,6 +25,7 @@ import hisim.simulator as sim
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components import building
+from hisim.components import electricity_meter
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.config import SizingContext
@@ -319,6 +320,22 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
+    # The occupancy's electricity passes a meter: with the weather exempt, no component of this run is undeclared,
+    # so the energy balance fails an electricity port no meter reads (owner decision Q-H).
+    # It is wired by hand: the test prepares the run twice, and an automatic connection would be added twice.
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    my_sim.add_component(my_electricity_meter)
 
     # Prepare the components explicitly first, so the per-simulation repository can be inspected:
     # ``run_all_timesteps`` prepares them again and then clears the repository at the end of the

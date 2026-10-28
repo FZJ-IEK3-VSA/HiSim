@@ -275,6 +275,9 @@ class IdealizedElectricHeater(cp.PhysicsComponent):
                 f"Electricity the heater turns into heat, in W, >= 0: equal to {self.HeatingPowerDelivered}, an electric "
                 "resistance heater without losses."
             ),
+            # Every electricity port passes a meter (owner decision Q-J), so the meter bills this electricity, and the
+            # KPIs count it as consumption like every other consumer the meter reads.
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(

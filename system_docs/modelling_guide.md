@@ -70,7 +70,10 @@ controller (#941).
   inputs, use it: `MixedNode.step` solves `C dT/dt = Σ m_i c (T_i - T) - UA (T - T_amb)` exactly, so its heat
   balance closes to float precision at any step length, without sub-stepping.
 - **Physical constants have one home.** Water's specific heat and density are `hydronics.Water`; a second literal
-  (`0.992` kg/l in the occupancy connector's KPI) is a duplicate to remove (`coding_style.md` §1, DRY).
+  (`0.992` kg/l in the occupancy connector's KPI) is a duplicate to remove (`coding_style.md` §1, DRY). A fuel's
+  lower heating value is `PhysicsConfig`'s: an energy port on a fuel's mass flow in kg/s is converted by it
+  (`hisim/energy_port.py`, "Ports on mass-flow channels"), so a component hands its fuel over as kg/s and publishes
+  no copy of the flow in W.
 
 ## 2. Sign conventions
 

@@ -142,11 +142,11 @@ class CHP(PhysicsComponent):
     Simulate chp efficiency (cop) as well as electrical (p_el) &
     thermal power (p_th), massflow (m_dot) and output temperature (t_out).
 
-    Its energy ports: the fuel it burns, hydrogen or natural gas by its lower heating value,
-    ``FuelConsumptionInWatt`` (``CONSUMPTION``), the electricity it produces, ``ElectricityOutput``, and the heat it
-    gives its water, ``ThermalOutputPower`` (both ``PRODUCTION``), and the fuel it burns minus both,
-    ``ConversionLossInWatt`` (``LOSS`` of the fuel). For example, the hydrogen preset at full load burns 7,000 W of
-    hydrogen for 1,200 W of electricity and 2,200 W of heat, and loses 3,600 W.
+    Its energy ports: the fuel it burns, hydrogen or natural gas, ``GasDemandReal`` in kg/s (``CONSUMPTION``, counted
+    by the fuel's lower heating value: a port on a mass-flow channel, :mod:`hisim.energy_port`), the electricity it
+    produces, ``ElectricityOutput``, and the heat it gives its water, ``ThermalOutputPower`` (both ``PRODUCTION``), and
+    the fuel it burns minus both, ``ConversionLossInWatt`` (``LOSS`` of the fuel). For example, the hydrogen preset at
+    full load burns 7,000 W of hydrogen for 1,200 W of electricity and 2,200 W of heat, and loses 3,600 W.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -170,8 +170,6 @@ class CHP(PhysicsComponent):
     NumberofCycles: ClassVar[str] = "NumberofCycles"
     ThermalOutputPower: ClassVar[str] = "ThermalOutputPower"
     GasDemandReal: ClassVar[str] = "GasDemandReal"
-    #: The fuel burnt in the step by its lower heating value, in W.
-    FuelConsumptionInWatt: ClassVar[str] = "FuelConsumptionInWatt"
     #: The fuel burnt in the step minus the electricity and the heat produced, in W.
     ConversionLossInWatt: ClassVar[str] = "ConversionLossInWatt"
 
@@ -327,29 +325,20 @@ class CHP(PhysicsComponent):
             ),
             energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
+        fuel_carrier = EnergyPort.carrier_of_fuel(fuel_load_type)
         self.gas_demand_real_used_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.GasDemandReal,
             fuel_load_type,
             lt.Units.KG_PER_SEC,
-            output_description=f"here a description for {self.GasDemandReal} will follow.",
-        )
-        fuel_carrier = EnergyPort.carrier_of_fuel(fuel_load_type)
-        #: The lower heating value of the fuel, in J/kg: the energy the fuel ports count per kilogram burnt.
-        self.fuel_lower_heating_value_in_joule_per_kg: float = PhysicsConfig.get_properties_for_energy_carrier(
-            energy_carrier=fuel_load_type
-        ).lower_heating_value_in_joule_per_kg
-        self.fuel_consumption_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            CHP.FuelConsumptionInWatt,
-            fuel_load_type,
-            lt.Units.WATT,
             output_description=(
-                "The fuel the CHP burns in the step, in W, >= 0: the mass flow it really draws times the fuel's lower "
-                "heating value."
+                "The fuel the CHP burns in the step, in kg/s, >= 0: what it asks for (GasDemandTarget), or 0 in a step "
+                "in which its hydrogen tank reports hydrogen not released."
             ),
             energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, fuel_carrier),
         )
+        #: The lower heating value of the fuel, in J/kg: the energy the fuel port counts per kilogram burnt.
+        self.fuel_lower_heating_value_in_joule_per_kg: float = EnergyPort.lower_heating_value_in_joule_per_kg(fuel_carrier)
         self.conversion_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.ConversionLossInWatt,
@@ -682,7 +671,6 @@ class CHP(PhysicsComponent):
         stsv.set_output_value(self.gas_demand_target_channel, gas_demand_target)  # CHP runs with
         stsv.set_output_value(self.gas_demand_real_used_channel, gas_demand_real_used)  # ThermalPowerOutput
         fuel_consumption_in_watt = gas_demand_real_used * self.fuel_lower_heating_value_in_joule_per_kg
-        stsv.set_output_value(self.fuel_consumption_channel, fuel_consumption_in_watt)
         stsv.set_output_value(self.conversion_loss_channel, fuel_consumption_in_watt - el_power - th_power)
 
     def read_run_totals(

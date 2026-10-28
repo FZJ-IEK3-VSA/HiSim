@@ -106,14 +106,15 @@ class ComponentOutput:  # noqa: too-few-public-methods
                 The prefix is normally the already-validated component name, but a direct
                 construction can pass anything, and an unusable prefix would defeat the rule
                 on the very column name it exists for. Also if ``energy_port`` is given for an
-                output that is neither a power nor an energy.
+                output that is neither a power nor an energy nor a fuel's mass flow
+                (:meth:`hisim.energy_port.EnergyPort.validate_unit`).
             FluidLoopError: If ``fluid_loop`` does not fit the output: a quantity of an input, a
                 unit other than its quantity's, or an ``energy_port`` beside it.
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component output")
         if energy_port is not None:
-            EnergyPort.validate_unit(unit)
+            EnergyPort.validate_unit(unit, energy_port.carrier)
         if fluid_loop is not None:
             fluid_loop.check_fits(object_name, field_name, unit, is_input=False, energy_port=energy_port)
         self.full_name: str = object_name + " # " + field_name
@@ -196,14 +197,14 @@ class ComponentInput:  # noqa: too-few-public-methods
                 on an output; it is enforced anyway, because an input and an output of the same
                 flow that spelled their names by different rules would be a trap for every
                 reader of both. Also if ``energy_port`` is given for an input that is neither a
-                power nor an energy, or does not fit an input
+                power nor an energy nor a fuel's mass flow, or does not fit an input
                 (:meth:`hisim.energy_port.EnergyPort.check_fits_an_input`).
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component input")
         if energy_port is not None:
-            EnergyPort.validate_unit(unit)
-            energy_port.check_fits_an_input(object_name, field_name)
+            EnergyPort.validate_unit(unit, energy_port.carrier)
+            energy_port.check_fits_an_input(object_name, field_name, unit)
         if fluid_loop is not None:
             fluid_loop.check_fits(object_name, field_name, unit, is_input=True, energy_port=energy_port)
         self.fullname: str = object_name + " # " + field_name

@@ -20,6 +20,7 @@ import pytest
 
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.components.configuration import PhysicsConfig
 from hisim.config import ComponentID
 from hisim.energy_port import EnergyPort, MeteredExchange
 from hisim.postprocessing.energy_balance import (
@@ -37,6 +38,7 @@ SH = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
 ELECTRICITY = lt.EnergyBalanceCarrier.ELECTRICITY
 GAS = lt.EnergyBalanceCarrier.NATURAL_GAS
 SOLAR = lt.EnergyBalanceCarrier.SOLAR
+HYDROGEN = lt.EnergyBalanceCarrier.HYDROGEN
 
 #: (component, field, unit, port or None, values per step)
 Column = Tuple[str, str, lt.Units, Optional[EnergyPort], Sequence[float]]
@@ -251,25 +253,40 @@ def test_a_metered_exchange_names_a_metered_carrier_and_two_distinct_outputs() -
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS), "names the environment"),
         (EnergyPort(CONSUMPTION, ELECTRICITY), "is metered"),
         (EnergyPort(PRODUCTION, GAS), "is metered"),
+        (EnergyPort(CONSUMPTION, HYDROGEN), "is metered"),
     ],
 )
 def test_an_input_port_is_an_unmetered_exchange_with_its_source(port: EnergyPort, refusal: Optional[str]) -> None:
-    """An input port is consumption or production of a carrier no meter counts, and names no environment (D9)."""
+    """An input port in W is consumption or production of a carrier no meter counts, and names no environment (D9)."""
     if refusal is None:
-        port.check_fits_an_input("Building", "HeatIn")
+        port.check_fits_an_input("Building", "HeatIn", lt.Units.WATT)
         assert cp.ComponentInput("Building", "HeatIn", lt.LoadTypes.HEATING, lt.Units.WATT, False, energy_port=port)
         return
     with pytest.raises(ValueError, match=f"input Building.HeatIn .*{refusal}"):
-        port.check_fits_an_input("Building", "HeatIn")
+        port.check_fits_an_input("Building", "HeatIn", lt.Units.WATT)
     with pytest.raises(ValueError, match=refusal):
         cp.ComponentInput("Building", "HeatIn", lt.LoadTypes.HEATING, lt.Units.WATT, False, energy_port=port)
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("port", [EnergyPort(CONSUMPTION, HYDROGEN), EnergyPort(PRODUCTION, HYDROGEN), EnergyPort(CONSUMPTION, GAS)])
+def test_an_input_port_of_a_bought_fuel_fits_its_mass_flow_from_another_component(port: EnergyPort) -> None:
+    """A fuel handed over between two components passes no meter: its port fits an input in kg/s (hisim-m4tx).
+
+    Catches the rule of D9 applied to a mass flow, which would leave a tank unable to book the hydrogen an
+    electrolyzer hands it on the wire that carries it.
+    """
+    port.check_fits_an_input("Tank", "HydrogenIn", lt.Units.KG_PER_SEC)
+    assert cp.ComponentInput("Tank", "HydrogenIn", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC, False, energy_port=port)
+
+
+@pytest.mark.base
 def test_an_input_port_must_be_a_power_or_an_energy() -> None:
-    """An input in °C cannot carry energy: it is refused when it is declared, as an output is."""
+    """An input in °C cannot carry energy, nor a heat input in kg/s: refused when it is declared, as an output is."""
     with pytest.raises(ValueError, match="power or an energy"):
         cp.ComponentInput("Tank", "Supply", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, False, energy_port=EnergyPort(CONSUMPTION, SH))
+    with pytest.raises(ValueError, match="power or an energy, or the mass flow"):
+        cp.ComponentInput("Tank", "Flow", lt.LoadTypes.WATER, lt.Units.KG_PER_SEC, False, energy_port=EnergyPort(CONSUMPTION, SH))
 
 
 @pytest.mark.base
@@ -308,16 +325,56 @@ def test_two_ports_pair_when_they_book_the_two_ends_of_one_transfer(
 def test_every_power_and_energy_unit_converts_to_kilowatt_hours_per_step(
     unit: lt.Units, seconds: int, factor: float
 ) -> None:
-    """A power is multiplied by the timestep, an energy taken per step; validate_unit accepts both."""
-    EnergyPort.validate_unit(unit)
-    assert EnergyPort.kilowatt_hours_per_step(unit, seconds) == pytest.approx(factor)
+    """A power is multiplied by the timestep, an energy taken per step; validate_unit accepts both for any carrier."""
+    for carrier in (SH, ELECTRICITY, HYDROGEN):
+        EnergyPort.validate_unit(unit, carrier)
+        assert EnergyPort.kilowatt_hours_per_step(unit, seconds, carrier) == pytest.approx(factor)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("carrier", "load_type"),
+    [
+        (HYDROGEN, lt.LoadTypes.GREEN_HYDROGEN),
+        (GAS, lt.LoadTypes.GAS),
+        (lt.EnergyBalanceCarrier.HEATING_OIL, lt.LoadTypes.OIL),
+        (lt.EnergyBalanceCarrier.PELLETS, lt.LoadTypes.PELLETS),
+        (lt.EnergyBalanceCarrier.WOOD_CHIPS, lt.LoadTypes.WOOD_CHIPS),
+    ],
+)
+def test_a_fuel_s_mass_flow_converts_by_the_lower_heating_value_physics_config_states(
+    carrier: lt.EnergyBalanceCarrier, load_type: lt.LoadTypes
+) -> None:
+    """1 kg/s over 900 s is 900 kg, times the fuel's lower heating value from PhysicsConfig, the one source.
+
+    For hydrogen 900 kg at 119.96 MJ/kg are 29,989 kWh. Catches a conversion without the step, a heating value of
+    another fuel or a constant of its own beside PhysicsConfig's.
+    """
+    lower_heating_value = PhysicsConfig.get_properties_for_energy_carrier(load_type).lower_heating_value_in_joule_per_kg
+    assert EnergyPort.lower_heating_value_in_joule_per_kg(carrier) == lower_heating_value > 0.0
+    EnergyPort.validate_unit(lt.Units.KG_PER_SEC, carrier)
+    assert EnergyPort.kilowatt_hours_per_step(lt.Units.KG_PER_SEC, 900, carrier) == pytest.approx(900 * lower_heating_value / 3.6e6, rel=1e-15)
+    if carrier == HYDROGEN:
+        assert EnergyPort.kilowatt_hours_per_step(lt.Units.KG_PER_SEC, 900, carrier) == pytest.approx(29989.43, rel=1e-6)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("carrier", [ELECTRICITY, SH, lt.EnergyBalanceCarrier.DIESEL, lt.EnergyBalanceCarrier.DISTRICT_HEAT])
+def test_a_mass_flow_of_a_carrier_without_a_stated_heating_value_is_refused(carrier: lt.EnergyBalanceCarrier) -> None:
+    """Only a fuel with a lower heating value in PhysicsConfig is counted in kg/s; diesel has none yet."""
+    with pytest.raises(ValueError, match=f"mass flow .* not <Units.KG_PER_SEC: 'kg/s'> for {carrier.value}"):
+        EnergyPort.validate_unit(lt.Units.KG_PER_SEC, carrier)
+    with pytest.raises(ValueError, match="no stated lower heating value"):
+        EnergyPort.lower_heating_value_in_joule_per_kg(carrier)
+    with pytest.raises(ValueError, match="power or an energy, or the mass flow"):
+        output("Pipe", "Flow", lt.Units.KG_PER_SEC, EnergyPort(PRODUCTION, carrier))
 
 
 @pytest.mark.base
 def test_validate_unit_refuses_what_is_neither_power_nor_energy() -> None:
     """The unit check stands on its own, without a timestep."""
     with pytest.raises(ValueError, match="power or an energy"):
-        EnergyPort.validate_unit(lt.Units.CELSIUS)
+        EnergyPort.validate_unit(lt.Units.CELSIUS, HYDROGEN)
 
 
 @pytest.mark.base
@@ -1027,6 +1084,60 @@ def test_an_input_port_must_pair_with_the_output_port_it_reads(input_port: Energ
         return
     with pytest.raises(EnergyPortWiringError, match=r"the input Loop.HeatIn .* reads the energy port Tank.HeatOut"):
         Wiring.refuse_a_broken_wiring(components)
+
+
+def electrolyzer_and_tank(stored_kilograms: Sequence[float]) -> EnergyBalanceReport:
+    """An electrolyzer hands hydrogen in kg/s to a tank, which books it on the input that reads it (hisim-m4tx).
+
+    The electrolyzer draws 2 kW and publishes 1e-5 kg/s of hydrogen, about 1.2 kW by its lower heating value, on an
+    output carrying ``EnergyPort(PRODUCTION, HYDROGEN)``, and loses the rest; the tank reads that output through an
+    input carrying ``EnergyPort(CONSUMPTION, HYDROGEN)`` and stores ``stored_kilograms`` per step, booked in Wh.
+    900 s steps.
+    """
+    hydrogen_kilograms_per_second = 1e-5
+    hydrogen_watt = hydrogen_kilograms_per_second * EnergyPort.lower_heating_value_in_joule_per_kg(HYDROGEN)
+    stored_watt_hour = [kilograms * EnergyPort.lower_heating_value_in_joule_per_kg(HYDROGEN) / 3600.0 for kilograms in stored_kilograms]
+    steps = len(stored_kilograms)
+    columns: List[Column] = [
+        ("Electrolyzer", "ElectricityInWatt", lt.Units.WATT, EnergyPort(CONSUMPTION, ELECTRICITY), [2000.0] * steps),
+        ("Electrolyzer", "HydrogenOutput", lt.Units.KG_PER_SEC, EnergyPort(PRODUCTION, HYDROGEN), [hydrogen_kilograms_per_second] * steps),
+        ("Electrolyzer", "LossInWatt", lt.Units.WATT, EnergyPort(LOSS, ELECTRICITY), [2000.0 - hydrogen_watt] * steps),
+        ("Tank", "StoredInWattHour", lt.Units.WATT_HOUR, EnergyPort(STORED, HYDROGEN), stored_watt_hour),
+    ]
+    inputs = {"Tank": [wired_input("ChargingHydrogenAmount", "Electrolyzer", "HydrogenOutput", EnergyPort(CONSUMPTION, HYDROGEN))]}
+    return report(columns, inputs=inputs)
+
+
+@pytest.mark.base
+def test_hydrogen_handed_over_in_kg_per_second_links_and_closes_through_the_wire_that_carries_it() -> None:
+    """The electrolyzer's hydrogen and the tank's are one column, converted by hydrogen's heating value at both ends.
+
+    1e-5 kg/s over 900 s are 9 g, 0.29989 kWh; the tank stores them all. Catches a mass flow booked as kg instead of
+    its energy, a link that the hydrogen does not find through its wire, and the tank's port given another peer.
+    """
+    balance_report = electrolyzer_and_tank([9e-3, 9e-3])
+    links = {(link.sender, link.receiver, link.carrier): link for link in balance_report.links}
+    hydrogen = links[("Electrolyzer", "Tank", "hydrogen")]
+    assert hydrogen.closes and hydrogen.sent == hydrogen.received == pytest.approx(2 * 0.2998943, rel=1e-6)
+    assert all(balance.closes for balance in balance_report.balances)
+    tank = {series.channel: series for series in balance_report.declared.by_component["Tank"]}
+    assert tank["ChargingHydrogenAmount"].peer == Peer(PeerKind.COMPONENT, "Electrolyzer")
+    assert tank["ChargingHydrogenAmount"].as_dict()["unit"] == "kg/s"
+    electrolyzer = {series.channel: series for series in balance_report.declared.by_component["Electrolyzer"]}
+    assert electrolyzer["HydrogenOutput"].peer == Peer(PeerKind.COMPONENT, "Tank")
+    assert flows(balance_report.sankeys()["hydrogen"])[("Electrolyzer", "Tank")] == pytest.approx(2 * 0.2998943, rel=1e-6)
+
+
+@pytest.mark.base
+def test_a_tank_that_stores_less_hydrogen_than_it_is_handed_does_not_close() -> None:
+    """Of 9 g received the tank stores 6 g: 3 g, 0.09997 kWh, are on no port, and the balance fails the run.
+
+    Catches a receiver whose hydrogen port books what it stores instead of what reaches it through the wire.
+    """
+    balance_report = electrolyzer_and_tank([6e-3])
+    (tank,) = [balance for balance in balance_report.balances if balance.component == "Tank"]
+    assert not tank.closes
+    assert tank.residual == pytest.approx(3e-3 * EnergyPort.lower_heating_value_in_joule_per_kg(HYDROGEN) / 3.6e6, rel=1e-9)
 
 
 @pytest.mark.base

@@ -386,7 +386,7 @@ class DeclaredPorts:
             cls.refuse_a_port_of_a_node_that_moves_nothing(
                 output.component_name, output.field_name, exempt, metered_carriers
             )
-            factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
+            factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, port.carrier)
             sign = -1.0 if port.negated else 1.0
             series = PortSeries(
                 component=output.component_name,
@@ -449,9 +449,10 @@ class DeclaredPorts:
     ) -> None:
         """Add every input that declares an energy port, booking the column of the output connected to it, in kWh.
 
-        The output's unit converts the column, the port's ``negated`` turns it round, and the output's component is
-        the peer (:meth:`Wiring.input_peer`). An input that is not connected moves nothing in this run and is left
-        out, as an optional input without a source is. For example, a building's input ``HeatReceivedInWatt`` with
+        The output's unit converts the column (a fuel's mass flow by the port's carrier's lower heating value), the
+        port's ``negated`` turns it round, and the output's component is the peer (:meth:`Wiring.input_peer`). An
+        input that is not connected moves nothing in this run and is left out, as an optional input without a source
+        is. For example, a building's input ``HeatReceivedInWatt`` with
         ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)``, connected to a distribution system's ``HeatDeliveredInWatt``,
         books that column as space heating received from the distribution system.
 
@@ -478,7 +479,7 @@ class DeclaredPorts:
                         "an output the run does not have."
                     )
                 output = all_outputs[position_of[source]]
-                factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
+                factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, port.carrier)
                 sign = -1.0 if port.negated else 1.0
                 column = results.iloc[:, position_of[source]].to_numpy(dtype=float)
                 series = PortSeries(
@@ -666,7 +667,7 @@ class DeclaredPorts:
                         )
                     output = all_outputs[column]
                     building = output.component_id.building
-                    factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
+                    factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, exchange.carrier)
                     series.append(results.iloc[:, column].to_numpy(dtype=float) * factor)
                 readings.append(MeterReading(component.component_name, building, exchange, series[0], series[1]))
         return readings
@@ -878,9 +879,10 @@ class Wiring:
         """The peer of an input port: the component whose output the input reads, or the port's fallback.
 
         An input port books the energy exchanged with its source, so the source is the peer when it moves energy. A
-        source that is exempt or a meter moves none (an input port is never metered,
-        :meth:`hisim.energy_port.EnergyPort.check_fits_an_input`), and the port then takes its carrier's boundary
-        default or is unlinked, as an output port without a peer does.
+        source that is exempt or a meter moves none, and the port then takes its carrier's boundary default or is
+        unlinked, as an output port without a peer does. For example, a hydrogen tank's input that reads an
+        electrolyzer's ``HydrogenOutput`` (a fuel's mass flow, the one place an input port of a metered carrier fits,
+        :meth:`hisim.energy_port.EnergyPort.check_fits_an_input`) has the electrolyzer as its peer.
 
         Args:
             source_name: The component whose output the input reads.

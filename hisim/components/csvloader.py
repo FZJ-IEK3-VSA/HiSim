@@ -244,6 +244,13 @@ class CSVLoader(cp.DataSourceComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = (
+        "it replays an arbitrary series from a file, whose carrier it does not know: a component that takes "
+        "energy from it books that energy on its own port, from its carrier's boundary default"
+    )
+
     Output1: str = "CSVProfile"
 
     # A loader that replays a recorded profile is a data source, not a device: it has

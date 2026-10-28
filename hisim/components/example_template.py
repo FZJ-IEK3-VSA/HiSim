@@ -53,6 +53,20 @@ Steps to build a component, in the order they appear below:
    the component reads a sized field like any other value — through
    :func:`~hisim.config.concrete`, which says exactly that to the type checker.
 
+6. Declare the **energy ports**: every output that carries energy into, out of or within the
+   device states what it is in the device's energy balance, ``add_output(...,
+   energy_port=EnergyPort(role, carrier))`` (``hisim/energy_port.py``). The balance check runs
+   in every simulation and fails the run when the ports of one component do not close in a
+   step: what comes in equals what goes out, plus the losses, plus the change of what it
+   holds. So a device declares every port at once, never one of them. The template draws
+   electricity (``OutputWithoutState``, a ``CONSUMPTION`` port, which also carries the
+   consumption flag the KPIs count it by) and turns all of it into heat lost to the outdoors
+   (``ConversionLossInWatt``, a ``LOSS`` port). A component that moves no energy at all, a
+   helper that sums two signals, declares no port and states why in
+   ``ENERGY_PORTS_EXEMPT_BECAUSE`` on its class instead; controllers and meters are exempt by
+   their kind. ``tests/test_energy_port_coverage.py`` refuses a component class that does
+   neither.
+
 Who runs the sizing: the energy-system executor resolves every config of a system against
 the facts the system provides, before any component is constructed. A hand-written setup
 or a test does the same explicitly with ``config.resolve(SizingContext(...))``.
@@ -69,6 +83,7 @@ from dataclasses_json import dataclass_json
 from hisim.component import PhysicsComponent, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes
+from hisim.energy_port import EnergyPort
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
@@ -207,8 +222,10 @@ class ComponentName(PhysicsComponent):
     Attributes:
         InputFromOtherComponent: Name of the input field read from another component.
         OutputWithState: Name of the output field whose value is held in state.
-        OutputWithoutState: Name of the stateless output field, a power in watts capped
-            at the sized ``rated_power_in_watt``.
+        OutputWithoutState: Name of the stateless output field, the electricity the device
+            draws, a power in watts capped at the sized ``rated_power_in_watt``.
+        ConversionLossInWatt: Name of the output field of the heat the device loses, all of
+            the electricity it draws.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -219,6 +236,7 @@ class ComponentName(PhysicsComponent):
     # Outputs
     OutputWithState: str = "OutputWithState"
     OutputWithoutState: str = "OutputWithoutState"
+    ConversionLossInWatt: str = "ConversionLossInWatt"
 
     def __init__(
         self,
@@ -282,7 +300,23 @@ class ComponentName(PhysicsComponent):
             field_name=self.OutputWithoutState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
-            output_description="Output without State",
+            output_description="Output without State: the electricity the device draws",
+            # The KPIs count this output as electricity consumed by its flag, the energy balance by its
+            # port; the two always say the same (tests/test_energy_port_flag_agreement.py).
+            postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            # Electricity in: the balance books it from the electricity meter that reads this output.
+            energy_port=EnergyPort(loadtypes.EnergyRole.CONSUMPTION, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
+        )
+
+        self.conversion_loss: ComponentOutput = self.add_output(
+            object_name=self.componentnameconfig.component_id.name,
+            field_name=self.ConversionLossInWatt,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT,
+            output_description="Heat the device loses to the outdoors, all of the electricity it draws",
+            # Energy out as a loss: it leaves the system to the outdoors. With the consumption above, the
+            # device's balance closes in every step.
+            energy_port=EnergyPort(loadtypes.EnergyRole.LOSS, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
         )
 
     def i_prepare_simulation(self) -> None:
@@ -348,6 +382,7 @@ class ComponentName(PhysicsComponent):
         # write values for output time series
         stsv.set_output_value(self.output_with_state, output_1_in_wh)
         stsv.set_output_value(self.output_without_state, output_2_in_w)
+        stsv.set_output_value(self.conversion_loss, output_2_in_w)
 
         # write values to state
         self.state.output_with_state_in_wh = output_1_in_wh

@@ -106,6 +106,13 @@ class ExampleComponent(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = (
+        "a teaching example: its electricity and stored heat are fixed numbers that model no device, so its "
+        "outputs have no physical carrier to balance"
+    )
+
     ThermalEnergyDelivered: str = "ThermalEnergyDelivered"
 
     # Outputs

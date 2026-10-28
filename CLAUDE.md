@@ -236,7 +236,10 @@ marker on a test that reads none of them.
    `L1ControllerComponent`, `PhysicsComponent` or `MeterComponent` (with `DynamicComponent` or
    `StatelessComponent`, list both: `class MyMeter(DynamicComponent, MeterComponent)`). The simulator refuses a
    class without exactly one kind base. Keep to that kind's role, declare inputs/outputs in `__init__`, implement
-   the four lifecycle methods.
+   the four lifecycle methods. Declare every output that moves energy as an energy port (`energy_port=`, as the
+   template's electricity and loss do) so the device closes its balance, or, for a physics component or data
+   source that moves none, state why in `ENERGY_PORTS_EXEMPT_BECAUSE`; `tests/test_energy_port_coverage.py`
+   refuses a class that does neither.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
 5. `hisim energy-system describe hisim.components.my_component.MyComponent` prints what the class now
    offers — its presets, what each sets, and the law behind every sizable field.

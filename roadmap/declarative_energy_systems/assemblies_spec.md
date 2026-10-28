@@ -806,7 +806,11 @@ for a fuel the assembly provides a consumer partner, and for every sizing fact a
 provides, no fact port names and no partner already in the system contributes by its class the registered provider
 of that fact (it crosses by the bare-fact rule, §6, D29; `facts_needed` in `testing/isolation.py`: a fuel meter copies
 its carrier from the consumer partner beside it, and a second `energy_carrier` provider of any value is refused at
-sizing, §5.1, D30); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
+sizing, §5.1, D30), and for every carrier its components move through a metered port and no component of it meters
+the registered provider of that carrier, its meter (every bought carrier passes a meter, Q-J of
+`roadmap/complete_energy_sankeys_spec.md`; `carriers_to_meter` in `testing/isolation.py` finds the carriers by
+building the system once without running it, since a component declares its energy ports when it is constructed:
+the residents beside a boiler, a PV array and a battery get the electricity meter); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
 check and `i_doublecheck` on. The test partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires; a requirement a member of the assembly has the class of is
 met by that member and does not join (D32). The run fails on an exception,

@@ -43,11 +43,13 @@ from hisim.energy_system.assemblies.testing.isolation import (
     IsolationRunError,
     bind_optional_partner_ports,
     brought_by_circuit_end,
+    carriers_to_meter,
     facts_needed,
     facts_of_partners,
     isolation_document,
     refusal_in,
     run_isolation,
+    unmetered_carriers,
 )
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.testing.partners import (
@@ -74,7 +76,16 @@ from hisim.postprocessing.kpi_computation import tolerances
 from hisim.simulationparameters import SimulationParameters
 from scripts import golden_kpis
 from tests.assemblies.helpers import Library, Mocks, Real
-from tests.assemblies.mock_components import MockHeater, MockHeaterConfig, MockTank, MockTankConfig
+from tests.assemblies.mock_components import (
+    MockBoiler,
+    MockBoilerConfig,
+    MockElectricityMeter,
+    MockElectricityMeterConfig,
+    MockHeater,
+    MockHeaterConfig,
+    MockTank,
+    MockTankConfig,
+)
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
 BOX = f"""
@@ -1169,3 +1180,64 @@ def test_the_real_heat_pump_refuses_a_w55_scop_above_its_w35_scop_as_a_configura
     with pytest.raises(checks.SampleRefused, match="^hp s0 refused by a member: HeatPump"):
         checks.check_run(run)
     run.release()
+
+
+@pytest.mark.assemblies
+def test_the_carriers_to_meter_are_those_moved_through_a_metered_port_that_no_component_meters() -> None:
+    """A heater's electricity and a boiler's natural gas need meters; beside an electricity meter only the gas does."""
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    heater = MockHeater(parameters, MockHeaterConfig.preset_standard("Heater"))
+    boiler = MockBoiler(parameters, MockBoilerConfig.preset_condensing("Boiler"))
+    meter = MockElectricityMeter(parameters, MockElectricityMeterConfig.preset_standard("Grid"))
+    assert unmetered_carriers([heater, boiler]) == ["electricity", "natural_gas"]
+    assert unmetered_carriers([heater, boiler, meter]) == ["natural_gas"]
+    assert unmetered_carriers([meter]) == []
+
+
+@pytest.mark.assemblies
+def test_a_carrier_to_meter_brings_its_registered_provider_once() -> None:
+    """Catches an isolation system that moves electricity without the meter the energy balance requires (z026).
+
+    Beside an oil boiler the residents' electricity brings the registry's electricity meter, ``Grid``, with the
+    energy manager it requires; beside the mock heater, whose electricity need binds ``Grid`` already, nothing joins;
+    a carrier no partner serves refuses the build by name.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/oil_boiler", "test")
+    defaults = ParameterSpace(assembly.model).defaults()
+    unmetered = list(isolation_document(assembly, defaults, registry)["components"])
+    metered = list(isolation_document(assembly, defaults, registry, ["electricity"])["components"])
+    assert "Grid" not in unmetered
+    assert sorted(metered) == sorted(unmetered + ["EnergyManager", "Grid"])
+    heater, space = mock("mock/variant_heater")
+    mocks = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    assert isolation_document(heater, space.defaults(), mocks, ["electricity"]) == isolation_document(
+        heater, space.defaults(), mocks
+    )
+    with pytest.raises(
+        TestPartnerMissingError,
+        match="the metered carrier 'natural_gas' of 'mock/variant_heater' needs a test partner, the provider of "
+        "natural_gas",
+    ):
+        isolation_document(heater, space.defaults(), mocks, ["natural_gas"])
+
+
+@pytest.mark.assemblies
+def test_the_meter_probe_finds_the_residents_electricity_beside_a_boiler(tmp_path: Path) -> None:
+    """The probe build names electricity beside an oil boiler, and nothing once the meter joins.
+
+    A system that does not build gives nothing either: its run raises the same error, which the checks report. Each
+    probe deletes its directory.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/oil_boiler", "test")
+    defaults = ParameterSpace(assembly.model).defaults()
+    document = isolation_document(assembly, defaults, registry)
+    assert carriers_to_meter(document, tmp_path / "probe", resolver) == ["electricity"]
+    metered = isolation_document(assembly, defaults, registry, ["electricity"])
+    assert carriers_to_meter(metered, tmp_path / "probe", resolver) == []
+    broken = dict(document, components={**document["components"], "Weather": {"class": "hisim.components.nowhere.Nothing"}})
+    assert carriers_to_meter(broken, tmp_path / "probe", resolver) == []
+    assert not (tmp_path / "probe").exists()

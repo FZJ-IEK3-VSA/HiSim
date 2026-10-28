@@ -38,3 +38,11 @@ components:
     preset: standard
     inputs:
       - Building
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: SimpleAirConditioner.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999

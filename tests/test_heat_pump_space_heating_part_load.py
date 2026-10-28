@@ -17,6 +17,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.components.more_advanced_heat_pump_hplib import (
+    HeatPumpSpaceHeatingMode,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
@@ -211,7 +212,9 @@ class ControllerStep:
         controller = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
         )
-        controller.controller_heatpumpmode = state
+        controller.state_at_step_start = controller.state_at_step_start._replace(
+            mode=HeatPumpSpaceHeatingMode[state.upper()]
+        )
         unwired = {
             MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
             ControllerStep.WITHOUT_HEAT_PUMP,

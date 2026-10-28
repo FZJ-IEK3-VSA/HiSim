@@ -4,6 +4,7 @@ import pytest
 
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.components.more_advanced_heat_pump_hplib import (
+    HeatPumpSpaceHeatingMode,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
@@ -24,21 +25,20 @@ def context(room_setpoint: float = ROOM_SETPOINT) -> SizingContext:
     )
 
 
-def controller(mode: int = 1, state: str = "off") -> MoreAdvancedHeatPumpHPLibControllerSpaceHeating:
-    """A floor-heating controller of a house heated to 21 °C, in the given control mode and state."""
+def controller(mode: int = 1) -> MoreAdvancedHeatPumpHPLibControllerSpaceHeating:
+    """A floor-heating controller of a house heated to 21 °C, in the given control mode."""
     config = MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard("SH").resolve(context())
     config.mode = mode
     component = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 900)
     )
-    component.controller_heatpumpmode = state
     return component
 
 
 def after(water: float, flow: float, state: str = "off", modifier: float = 0.0) -> str:
     """The mode-1 controller's mode after one decision."""
-    component = controller(mode=1, state=state)
-    component.conditions_on_off(
+    mode = controller(mode=1).conditions_on_off(
+        HeatPumpSpaceHeatingMode[state.upper()],
         water_temperature_input_in_celsius=water,
         set_heating_flow_temperature_in_celsius=flow,
         summer_heating_mode="on",
@@ -46,13 +46,13 @@ def after(water: float, flow: float, state: str = "off", modifier: float = 0.0) 
         upper_temperature_offset_for_state_conditions_in_celsius=OFFSET,
         lower_temperature_offset_for_state_conditions_in_celsius=OFFSET,
     )
-    return str(component.controller_heatpumpmode)
+    return mode.name.lower()
 
 
 def after_mode_2(water: float, flow: float, state: str = "off") -> str:
     """The mode-2 (heating, cooling, off) controller's mode after one decision, cooling out of season."""
-    component = controller(mode=2, state=state)
-    component.conditions_heating_cooling_off(
+    mode = controller(mode=2).conditions_heating_cooling_off(
+        HeatPumpSpaceHeatingMode[state.upper()],
         water_temperature_input_in_celsius=water,
         set_heating_flow_temperature_in_celsius=flow,
         summer_heating_mode="on",
@@ -61,7 +61,7 @@ def after_mode_2(water: float, flow: float, state: str = "off") -> str:
         upper_temperature_offset_for_state_conditions_in_celsius=OFFSET,
         lower_temperature_offset_for_state_conditions_in_celsius=OFFSET,
     )
-    return str(component.controller_heatpumpmode)
+    return mode.name.lower()
 
 
 def test_a_mild_day_s_floor_heating_starts_when_the_buffer_is_below_the_room_setpoint() -> None:

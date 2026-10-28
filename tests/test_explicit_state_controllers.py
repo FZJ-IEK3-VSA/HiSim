@@ -214,6 +214,7 @@ class ExplicitStateRuns:
                 for wrapped in simulator.wrapped_components
                 if isinstance(wrapped.my_component, ExplicitStateController)
             ]
+            last_pass_forced = self.record_whether_the_last_pass_was_forced(simulator)
             prepared = {id(controller): Memory.of(controller) for controller in controllers}
             runs: Dict[type, ControllerRun] = {type(controller): ControllerRun() for controller in controllers}
             values = cp.SingleTimeStepValues(len(simulator.all_outputs))
@@ -227,10 +228,39 @@ class ExplicitStateRuns:
                     changed = sorted(name for name in before.keys() | now.keys() if not Memory.equal(before.get(name), now.get(name)))
                     if changed:
                         run.memory_changes.append((timestep, changed))
-                    foreign = self.outputs_not_of_the_committed_state(controller, values, forced)
+                    foreign = self.outputs_not_of_the_committed_state(controller, values, last_pass_forced[id(controller)])
                     if foreign:
                         run.foreign_outputs.append((timestep, foreign))
         return runs
+
+    @staticmethod
+    def record_whether_the_last_pass_was_forced(simulator: Simulator) -> Dict[int, bool]:
+        """Wrap each explicit-state controller's calculation so it records whether its last pass was a forced pass.
+
+        The flag the simulator returns for a step is not that: the simulator sets ``force_convergence`` after its
+        twelfth pass, also when that pass converged, so a step can report forced without any forced pass, and its
+        outputs are then those of :meth:`ExplicitStateController.publish`. For example, a part-load ratio that a forced
+        pass would replace by the actual ratio the device ran is still the requested ratio of the state.
+
+        Args:
+            simulator: The prepared and wired simulator; its wrappers of explicit-state controllers are wrapped.
+
+        Returns:
+            A mapping from ``id`` of each controller to whether its last pass was forced, updated as the run goes.
+        """
+        last_pass_forced: Dict[int, bool] = {}
+        for wrapped in simulator.wrapped_components:
+            controller = wrapped.my_component
+            if not isinstance(controller, ExplicitStateController):
+                continue
+            last_pass_forced[id(controller)] = False
+
+            def calculate(timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool, *, _calculate=wrapped.calculate_component, _key=id(controller)) -> None:
+                last_pass_forced[_key] = force_convergence
+                _calculate(timestep, stsv, force_convergence)
+
+            setattr(wrapped, "calculate_component", calculate)
+        return last_pass_forced
 
     @staticmethod
     def outputs_not_of_the_committed_state(
@@ -244,7 +274,8 @@ class ExplicitStateRuns:
         Args:
             controller: The controller, after the step.
             values: The values the step converged to.
-            forced: Whether the step was forced, so the committed state is published as a forced pass publishes it.
+            forced: Whether the controller's last pass was forced, so the committed state is published as a forced pass
+                publishes it.
 
         Returns:
             The names of the differing outputs; empty if the committed state belongs to the published outputs.

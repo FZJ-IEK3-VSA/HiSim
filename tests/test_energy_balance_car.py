@@ -11,8 +11,8 @@ and published 34 kWh more than any declared port took in this week.
 
 The second January week at 900 s of ``household_heatpump_car_building_sizer``, run once for the module with its local
 LoadProfileGenerator, which alone publishes the car's driving profile: the run finishing proves every declared balance
-closes; the tests read its report. The building and the storages declare no ports yet, so the meter check is reported,
-not enforced (owner decision Q-H).
+closes; the tests read its report. Every component declares its ports or is exempt, so the meter check is enforced
+(owner decision Q-H).
 """
 
 import json
@@ -116,7 +116,7 @@ def test_the_electricity_meter_reads_the_car_s_charging_and_publishes_what_it_re
     assert not {component for component, _ in reads} & {Expected.CAR, "L1EVChargeControl_1"}
     assert (Expected.CAR_BATTERY, "AcBatteryDischargingPower") not in reads
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0 and meter["worst_step"] is None
-    assert meter["enforced"] is False and "undeclared" in meter["not_enforced_because"]
+    assert meter["enforced"] is True
     assert abs(meter["residual_kwh"]) <= 1e-6 and meter["largest_step_residual_kwh"] <= 1e-9
     assert not report["unmetered"]["ports"] and not report["unlinked"]
     exempt = {entry["component"]: entry["reason"] for entry in report["exempt"]}

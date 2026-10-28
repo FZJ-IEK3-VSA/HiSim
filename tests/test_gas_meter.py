@@ -3,13 +3,15 @@
 import dataclasses
 import os
 import json
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.config import SizingContext, concrete
+from hisim.config import ComponentID, SizingContext, concrete
+from hisim.energy_port import EnergyPort
 from hisim.components import heating_curve
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -27,6 +29,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim import log
+from tests import functions_for_testing as fft
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -366,3 +369,79 @@ def test_the_opex_record_reports_the_gas_the_meter_actually_measured() -> None:
 
     assert opex.total_consumption_in_kwh == pytest.approx(384.0)
     assert opex.opex_energy_cost_in_euro > 0.0
+
+
+class MassFlowFixtures:
+    """A hydrogen meter fed by a boiler's energy per step in Wh and a CHP's mass flow in kg/s, run for one step."""
+
+    #: The step's duration, in s.
+    SECONDS_PER_TIMESTEP: int = 900
+
+    #: The two feeds as ``(source, output, unit)``; the CHP's tags are the test's to choose.
+    FEEDS: Tuple[Tuple[str, str, lt.Units], ...] = (
+        ("Boiler", "EnergyDemandSh", lt.Units.WATT_HOUR),
+        ("CHP", "GasDemandReal", lt.Units.KG_PER_SEC),
+    )
+
+    def __init__(self, mass_flow_tags: List[lt.InandOutputType]) -> None:
+        """Build the meter with one feed from each source, the CHP's tagged ``mass_flow_tags``.
+
+        Every input reads a fake source output of its own unit, indexed for one step's values.
+        """
+        self.meter = gas_meter.GasMeter(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, self.SECONDS_PER_TIMESTEP),
+            config=gas_meter.GasMeterConfig.preset_standard("HydrogenMeter").resolve(
+                SizingContext(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN)
+            ),
+        )
+        #: The fake output each source publishes, by source name.
+        self.sources: Dict[str, cp.ComponentOutput] = {}
+        for source, output, unit in self.FEEDS:
+            tags = mass_flow_tags if source == "CHP" else [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED]
+            self.meter.add_component_input_and_connect(
+                source_object_name=source,
+                source_component_output=output,
+                source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+                source_unit=unit,
+                source_tags=list(tags),
+                source_weight=999,
+            )
+            self.sources[source] = cp.ComponentOutput(source, output, lt.LoadTypes.GREEN_HYDROGEN, unit, component_id=ComponentID(source))
+            self.meter.inputs[-1].source_output = self.sources[source]
+        fft.add_global_index_of_components([self.meter, *self.sources.values()])
+
+    def run(self, values: Dict[str, float]) -> Dict[str, float]:
+        """Simulate the meter's first step with each source's value by source name; return its outputs by name."""
+        stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([self.meter, *self.sources.values()]))
+        for source, output in self.sources.items():
+            stsv.values[output.global_index] = values[source]
+        self.meter.i_simulate(0, stsv, False)
+        return {output.field_name: stsv.values[output.global_index] for output in self.meter.outputs}
+
+
+@pytest.mark.base
+def test_the_meter_counts_a_mass_flow_by_the_lower_heating_value_of_its_gas() -> None:
+    """A CHP's 0.001 kg/s of hydrogen over 900 s is 0.9 kg, 29,989 Wh by hydrogen's 33.32 kWh/kg, beside a boiler's Wh.
+
+    The factor is the one the energy balance counts the CHP's fuel port by, so the meter publishes what the port books.
+    Catches a mass flow summed as watt-hours, a conversion by another heating value, and the boiler's feed counted twice
+    or dropped once the mass flow is split off the consumption channel.
+    """
+    fixture = MassFlowFixtures([lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW])
+    outputs = fixture.run({"Boiler": 500.0, "CHP": 0.001})
+    factor_in_kilowatt_hours = EnergyPort.kilowatt_hours_per_step(
+        lt.Units.KG_PER_SEC, MassFlowFixtures.SECONDS_PER_TIMESTEP, lt.EnergyBalanceCarrier.HYDROGEN
+    )
+    assert factor_in_kilowatt_hours * 0.001 == pytest.approx(29.989, rel=1e-4)
+    assert outputs[gas_meter.GasMeter.GasConsumption] == pytest.approx(500.0 + 1e3 * factor_in_kilowatt_hours * 0.001, rel=1e-12)
+    assert outputs[gas_meter.GasMeter.GasFromGrid] == outputs[gas_meter.GasMeter.GasConsumption]
+    assert [component_input.src_object_name for component_input in fixture.meter.consumption_uncontrolled_inputs] == ["Boiler"]
+    assert [component_input.src_object_name for component_input in fixture.meter.consumption_mass_flow_inputs] == ["CHP"]
+
+
+@pytest.mark.base
+def test_a_mass_flow_fed_without_its_tag_is_refused() -> None:
+    """A kg/s feed tagged only as consumption would be summed as watt-hours: the meter refuses it at its first step."""
+    fixture = MassFlowFixtures([lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED])
+    with pytest.raises(ValueError, match="CHP.GasDemandReal in kg/s on its channel 'consumption_uncontrolled'"):
+        fixture.run({"Boiler": 500.0, "CHP": 0.001})

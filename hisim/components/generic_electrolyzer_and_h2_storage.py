@@ -11,6 +11,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
 from hisim.components.configuration import PhysicsConfig
+from hisim.energy_port import EnergyPort
 from hisim import log
 from hisim.economics.facts import CostRelevance
 
@@ -260,9 +261,21 @@ class ElectrolyzerSimulation:
 
 
 class AdvancedElectrolyzer(PhysicsComponent):
-    """Advanced Electrolyzer class."""
+    """An electrolyzer that turns the electricity it is offered within its power band into hydrogen for a storage.
+
+    Its energy ports: the electricity it uses, ``ElectricityRealNeeded`` (``CONSUMPTION``), the hydrogen it produces,
+    by its lower heating value, ``HydrogenProductionInWatt`` (``PRODUCTION``), and the waste heat it states,
+    ``EnergyLosses`` (``LOSS`` of electricity). The three do not close: the hydrogen rates of the configuration are a
+    supplier's two figures, interpolated without regard to the electricity, so a run that uses this component fails its
+    energy balance (bead hisim-advanced-electrolyzer-energy-ws1d).
+    """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: The lower heating value of hydrogen, in J/kg: the energy the hydrogen port counts per kilogram.
+    HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = PhysicsConfig.get_properties_for_energy_carrier(
+        lt.LoadTypes.GREEN_HYDROGEN
+    ).lower_heating_value_in_joule_per_kg
 
     # input
     ElectricityInput = "ElectricityInput"  # W
@@ -276,6 +289,8 @@ class AdvancedElectrolyzer(PhysicsComponent):
     ElectrolyzerEfficiency = "ElectrolyzerEfficiency"  # -
     PowerLevel = "PowerLevel"  # %
     ElectricityRealNeeded = "ElectricityRealNeeded"
+    #: The hydrogen produced in the step by its lower heating value, in W.
+    HydrogenProductionInWatt = "HydrogenProductionInWatt"
 
     def __init__(
         self,
@@ -340,7 +355,22 @@ class AdvancedElectrolyzer(PhysicsComponent):
             AdvancedElectrolyzer.EnergyLosses,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description="Energy Losses",
+            output_description=(
+                "The electricity the electrolyzer loses as waste heat in the step, in W, >= 0: its configured waste "
+                "power while it runs, else 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.hydrogen_production_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            AdvancedElectrolyzer.HydrogenProductionInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description=(
+                "The hydrogen the electrolyzer produces in the step, in W, >= 0: HydrogenOutput times the lower heating "
+                "value of hydrogen."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
         )
         self.unused_power_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -354,7 +384,12 @@ class AdvancedElectrolyzer(PhysicsComponent):
             AdvancedElectrolyzer.ElectricityRealNeeded,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description="Electricity Real Needed",
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            output_description=(
+                "The electricity the electrolyzer uses in the step, in W, >= 0: what it is offered minus the power "
+                "outside its band or beyond what the storage takes."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electrolyzer_efficiency_channel: ComponentOutput = self.add_output(
@@ -464,6 +499,9 @@ class AdvancedElectrolyzer(PhysicsComponent):
 
         stsv.set_output_value(self.water_demand_channel, water_consumption)
         stsv.set_output_value(self.hydrogen_output_channel, hydrogen_output)
+        stsv.set_output_value(
+            self.hydrogen_production_channel, hydrogen_output * self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG
+        )
         stsv.set_output_value(self.oxygen_output_channel, oxygen_output)
         stsv.set_output_value(self.energy_losses_channel, waste_energy_output)
 
@@ -649,9 +687,27 @@ class HydrogenStorageSimulation:
 
 
 class HydrogenStorage(PhysicsComponent):
-    """Hydrogen storage class."""
+    """A hydrogen tank: it stores the hydrogen it is offered and releases what is asked of it, within its rates.
+
+    Its energy ports, the hydrogen counted by its lower heating value: the hydrogen it stores,
+    ``HydrogenReceivedInWatt`` (``CONSUMPTION``), the hydrogen it releases, ``HydrogenReleasedInWatt``
+    (``PRODUCTION``), the hydrogen it loses, ``HydrogenLossInWatt`` (``LOSS``), and the change of the hydrogen it
+    holds from the start to the end of the step, ``StoredEnergyIncreaseInWattHour`` (``STORED_CHANGE``); and the
+    electricity it spends compressing and releasing hydrogen, ``HydrogenStorageEnergyDemand`` (``CONSUMPTION``),
+    which leaves as heat, ``CompressionLossInWatt`` (``LOSS`` of electricity). Hydrogen offered and asked for in the
+    same step is netted before the tank acts: the tank books only what it stores or releases. A withdrawal above the
+    discharging rate or above the fill takes hydrogen from the fill without releasing it, so such a step does not close
+    (bead hisim-hydrogen-tank-drops-hn7k).
+    """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: The lower heating value of hydrogen, in J/kg: the energy the hydrogen ports count per kilogram.
+    HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = PhysicsConfig.get_properties_for_energy_carrier(
+        lt.LoadTypes.GREEN_HYDROGEN
+    ).lower_heating_value_in_joule_per_kg
+    #: Seconds per hour, to turn the hydrogen the tank holds, in J, into Wh.
+    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
 
     # input
     ChargingHydrogenAmount = "ChargingHydrogenAmount"  # kg/s
@@ -666,6 +722,16 @@ class HydrogenStorage(PhysicsComponent):
     HydrogenStorageEnergyDemand = "HydrogenStorageEnergyDemand"  # W
     HydrogenLosses = "HydrogenLosses"  # kg
     DischargingHydrogenAmountReal = "DischargingHydrogenAmountReal"  # kg/s
+    #: The hydrogen stored in the step by its lower heating value, in W.
+    HydrogenReceivedInWatt = "HydrogenReceivedInWatt"
+    #: The hydrogen released in the step by its lower heating value, in W.
+    HydrogenReleasedInWatt = "HydrogenReleasedInWatt"
+    #: The hydrogen lost from the tank in the step by its lower heating value, in W.
+    HydrogenLossInWatt = "HydrogenLossInWatt"
+    #: The increase of the hydrogen the tank holds over the step by its lower heating value, in Wh.
+    StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
+    #: The electricity spent compressing and releasing hydrogen, which leaves as heat, in W.
+    CompressionLossInWatt = "CompressionLossInWatt"
 
     #: The share of the usable range, from ``min_capacity`` to ``max_capacity``, that the tank holds before the first
     #: step, dimensionless between 0 and 1: a half-full tank. A run that starts on an empty tank cannot supply its
@@ -747,7 +813,22 @@ class HydrogenStorage(PhysicsComponent):
             HydrogenStorage.HydrogenStorageEnergyDemand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description="Hydrogen Storage Energy Demand",
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            output_description=(
+                "The electricity the tank spends compressing and releasing hydrogen in the step, in W, >= 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.compression_loss_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            HydrogenStorage.CompressionLossInWatt,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            output_description=(
+                "The electricity the tank spends compressing and releasing hydrogen in the step, in W, >= 0, which "
+                "leaves as heat: equal to HydrogenStorageEnergyDemand."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.hydrogen_losses: ComponentOutput = self.add_output(
             self.component_name,
@@ -762,6 +843,44 @@ class HydrogenStorage(PhysicsComponent):
             load_type=lt.LoadTypes.GREEN_HYDROGEN,
             unit=lt.Units.KG_PER_SEC,
             output_description="Discharging Hydrogen Amount Real",
+        )
+        self.hydrogen_received_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            HydrogenStorage.HydrogenReceivedInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description="The hydrogen the tank stores in the step, in W, >= 0, by its lower heating value.",
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.HYDROGEN),
+        )
+        self.hydrogen_released_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            HydrogenStorage.HydrogenReleasedInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description="The hydrogen the tank releases in the step, in W, >= 0, by its lower heating value.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
+        )
+        self.hydrogen_loss_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            HydrogenStorage.HydrogenLossInWatt,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT,
+            output_description=(
+                "The hydrogen lost from the tank in the step, in W, >= 0, by its lower heating value: the daily loss "
+                "share of the hydrogen it holds."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.HYDROGEN),
+        )
+        self.stored_energy_increase_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            HydrogenStorage.StoredEnergyIncreaseInWattHour,
+            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.Units.WATT_HOUR,
+            output_description=(
+                "The increase of the hydrogen the tank holds from the start to the end of the step, in Wh, by its "
+                "lower heating value; negative while the tank empties."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.STORED_CHANGE, lt.EnergyBalanceCarrier.HYDROGEN),
         )
 
         self.max_capacity = config.max_capacity
@@ -822,6 +941,7 @@ class HydrogenStorage(PhysicsComponent):
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Setting up the internal values
+        fill_at_start_of_step_in_kg = self.hydrogenstorage.fill
         charging_amount_sec = stsv.get_input_value(self.charging_hydrogen)
         charging_amount = charging_amount_sec * self.seconds_per_timestep
         # takes positive value for the discharge
@@ -888,6 +1008,18 @@ class HydrogenStorage(PhysicsComponent):
         stsv.set_output_value(self.hydrogen_not_released, hydrogen_not_released)
         stsv.set_output_value(self.current_fill, self.hydrogenstorage.fill)
         stsv.set_output_value(self.current_fill_percent, percent_fill)
+        stsv.set_output_value(self.compression_loss_channel, energy_demand)
+        # a kilogram moved over the step, as a mean power
+        power_per_kilogram_in_watt_per_kg = self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG / self.seconds_per_timestep
+        stsv.set_output_value(self.hydrogen_received_channel, hydrogen_input * power_per_kilogram_in_watt_per_kg)
+        stsv.set_output_value(self.hydrogen_released_channel, hydrogen_output * power_per_kilogram_in_watt_per_kg)
+        stsv.set_output_value(self.hydrogen_loss_channel, losses_this_timestep * power_per_kilogram_in_watt_per_kg)
+        stsv.set_output_value(
+            self.stored_energy_increase_channel,
+            (self.hydrogenstorage.fill - fill_at_start_of_step_in_kg)
+            * self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG
+            / self.SECONDS_PER_HOUR,
+        )
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublechecks."""

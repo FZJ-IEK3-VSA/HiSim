@@ -258,7 +258,7 @@ def test_the_key_names_nothing_of_the_runs_window_timestep_or_threshold(tmp_path
     material = UtspLpgConnector.minute_profile_key_material(config, week)
 
     assert material.startswith(config.cache_key_view().to_json())
-    assert material.endswith(":lpg_minute_profiles:lpg_request=2021-01-01..2022-01-01")
+    assert material.endswith(":lpg_minute_profiles:version=2:lpg_request=2021-01-01..2022-01-01")
     for parameters in others:
         assert UtspLpgConnector.minute_profile_key_material(config, parameters) == material
 
@@ -279,6 +279,24 @@ def test_the_key_names_the_household_the_mode_the_guid_and_the_year(tmp_path: pa
         dataclasses.replace(config, profile_with_washing_machine_and_dishwasher=False),
     ):
         assert UtspLpgConnector.minute_profile_key_material(other_config, week) != material
+
+
+@pytest.mark.base
+def test_raising_the_version_drops_every_entry_cached_before(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a version that is not part of the key, so raising it would leave the old entries in use.
+
+    A week is computed and cached under the current version; with the version raised by one, the same week misses the
+    cache and runs the generator again.
+    """
+    generator = FakeGenerator(tmp_path)
+    generator.install(monkeypatch)
+    parameters = Runs.parameters(tmp_path, days=7, seconds_per_timestep=60)
+    Runs.occupancy(parameters)
+
+    monkeypatch.setattr(UtspLpgConnector, "MINUTE_PROFILE_CACHE_VERSION", UtspLpgConnector.MINUTE_PROFILE_CACHE_VERSION + 1)
+    Runs.occupancy(parameters)
+
+    assert generator.runs == 2
 
 
 @pytest.mark.base

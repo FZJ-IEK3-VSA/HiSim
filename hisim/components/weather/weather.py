@@ -385,15 +385,11 @@ class Weather(DataSourceComponent):
         entry = self.cache_entry(key)
         if entry.exists:
             log.information(f"Weather series cache hit: {entry.path}")
-            # float_precision="round_trip": pandas' default CSV reader uses a fast, inexact float
-            # parser, so without this a cached run and an uncached one are not the same run. See the
-            # measurement in the commit that introduced this across the caches.
             weather_series = pd.read_csv(
                 entry.path,
                 sep=",",
                 decimal=".",
                 encoding="cp1252",
-                float_precision="round_trip",
                 index_col=ProducedFrame.INDEX_NAME,
                 parse_dates=[ProducedFrame.INDEX_NAME],
             )

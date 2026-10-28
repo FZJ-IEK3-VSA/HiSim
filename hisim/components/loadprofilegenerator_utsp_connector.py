@@ -469,6 +469,13 @@ class UtspLpgConnector(cp.DataSourceComponent):
     #: such as the windowed and averaged series cached before, are never read as one.
     MINUTE_PROFILE_CACHE_CONTENT: ClassVar[str] = "lpg_minute_profiles"
 
+    #: The version of the cached minute profiles, part of the entry's key (:meth:`minute_profile_key_material`).
+    #: Raise it by one whenever entries already cached must not be read again although the request is the same,
+    #: so every cache (CI, each machine, each container) misses once and computes them afresh. Example: version 2
+    #: dropped the profiles parsed by pandas before 3.1, whose CSV reader read the generator's result files up to
+    #: ten units in the last place off.
+    MINUTE_PROFILE_CACHE_VERSION: ClassVar[int] = 2
+
     #: The heat one resident gives off, in W: at a high activity level (awake) and at a low one (asleep).
     BODY_HEAT_PER_PERSON_IN_WATT: ClassVar[Tuple[float, float]] = (150, 100)
 
@@ -1132,21 +1139,21 @@ class UtspLpgConnector(cp.DataSourceComponent):
         generator simulates, which are the run's calendar year (:meth:`lpg_request_days`). The run's window, its
         timestep and its part-load threshold are not part of it, because they are applied when the profile is
         read. :attr:`MINUTE_PROFILE_CACHE_CONTENT` names what the entry holds, so an entry of another layout is a
-        miss.
+        miss, and :attr:`MINUTE_PROFILE_CACHE_VERSION` drops every entry cached under an earlier version.
 
         Example: a week, a July week and the whole of 2021, at 60 s or 900 s, all give
-        ``'{...configuration...}:lpg_minute_profiles:lpg_request=2021-01-01..2022-01-01'``.
+        ``'{...configuration...}:lpg_minute_profiles:version=2:lpg_request=2021-01-01..2022-01-01'``.
 
         Args:
             household_config: the configuration the request is made with.
             parameters: the run's simulation parameters; only their year is read.
 
         Returns:
-            str: the configuration's key JSON, the content name and the requested days.
+            str: the configuration's key JSON, the content name, the version and the requested days.
         """
         return (
             household_config.cache_key_view().to_json()
-            + f":{cls.MINUTE_PROFILE_CACHE_CONTENT}:lpg_request="
+            + f":{cls.MINUTE_PROFILE_CACHE_CONTENT}:version={cls.MINUTE_PROFILE_CACHE_VERSION}:lpg_request="
             + "..".join(cls.lpg_request_days(parameters))
         )
 

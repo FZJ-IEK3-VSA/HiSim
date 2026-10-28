@@ -17,9 +17,10 @@ buffer (district heating) is undeclared until hisim-pnw7.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Set, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Set, Tuple
 
 import pytest
+import yaml
 
 from hisim import loadtypes as lt
 from hisim.energy_port import EnergyPort
@@ -72,7 +73,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
             ("electricity", "ElectricityMeter", "ElectricHeating"),
-            ("space_heating_heat", "ElectricHeating", "undeclared: Building"),
+            ("space_heating_heat", "ElectricHeating", "Building"),
             ("domestic_hot_water_heat", "ElectricHeating", "DHWStorage"),
         },
     ),
@@ -97,19 +98,28 @@ def run_household(
     end: str = "2021-01-17",
     seconds_per_timestep: int = 900,
     predefined_profile: bool = True,
+    post_processing_options: Sequence[str] = ("EXPORT_ENERGY_BALANCE",),
+    config_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> Path:
     """Run a recorded household from ``start`` to ``end`` (midnight to midnight) and return its results.
 
-    The defaults are the second January week of 2021 at 900 s, offline: the occupancy reads a predefined profile
-    instead of running the LoadProfileGenerator. A household with a car keeps its local LoadProfileGenerator run
-    (``predefined_profile=False``), because only that run publishes the car's driving profile.
+    The defaults are the second January week of 2021 at 900 s, offline, writing the balance report and the Sankeys
+    only: the occupancy reads a predefined profile instead of running the LoadProfileGenerator. A household with a car
+    keeps its local LoadProfileGenerator run (``predefined_profile=False``), because only that run publishes the car's
+    driving profile. ``config_overrides`` sets configuration fields of the twin's components before the run, by
+    component name, for example ``{"HeatDistributionController": {"cooling_enabled": True}}``.
     """
     from hisim.energy_system.executor import run_energy_system  # pylint: disable=import-outside-toplevel
 
     twin = (ROOT / "energy_systems" / f"{setup}.energy_system.yaml").read_text(encoding="utf-8")
-    energy_system = directory / "household.energy_system.yaml"
     if predefined_profile:
         twin = twin.replace("USE_LOCAL_LPG", "USE_PREDEFINED_PROFILE")
+    if config_overrides:
+        document = yaml.safe_load(twin)
+        for component, fields in config_overrides.items():
+            document["components"][component].setdefault("config", {}).update(fields)
+        twin = yaml.safe_dump(document, sort_keys=False)
+    energy_system = directory / "household.energy_system.yaml"
     energy_system.write_text(twin, encoding="utf-8")
     parameters = directory / "period.simulation.yaml"
     parameters.write_text(
@@ -118,7 +128,7 @@ def run_household(
         f"seconds_per_timestep: {seconds_per_timestep}\n"
         "country: DE\n"
         "logging_level: 3\n"
-        "post_processing_options: [EXPORT_ENERGY_BALANCE]\n",
+        f"post_processing_options: [{', '.join(post_processing_options)}]\n",
         encoding="utf-8",
     )
     results = directory / "results"

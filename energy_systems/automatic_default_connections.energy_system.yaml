@@ -22,8 +22,8 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
-      - UTSPConnector
       - HeatDistributionSystem
+      - UTSPConnector
   MoreAdvancedHeatPumpHPLib:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water

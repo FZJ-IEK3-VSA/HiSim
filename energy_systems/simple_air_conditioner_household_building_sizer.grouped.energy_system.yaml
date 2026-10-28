@@ -14,6 +14,8 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
+      - input: HeatRemovedByCoolingInWatt
+        from: SimpleAirConditioner.HeatDrawnForCoolingInWatt
       - input: ThermalPowerDelivered
         from: SimpleAirConditioner.ThermalPowerDelivered
   Weather:

@@ -28,8 +28,8 @@ components:
     inputs:
       - Weather
       - {$port: temperature_modifier}
-      - UTSPConnector
       - HeatDistributionSystem
+      - UTSPConnector
     ports:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifierInKelvin
     optional-bind: {temperature_modifier: control}

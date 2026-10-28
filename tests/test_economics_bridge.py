@@ -68,7 +68,7 @@ from hisim.components import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from tests.fake_component_source import NamedComponentSource
-from tests.idealized_heater_rig import controller_between
+from tests.idealized_heater_rig import controller_between, heat_into
 
 # PATH needed to build simulator, PATH is fake
 PATH: str = "../system_setups/household_for_test_economics_bridge.py"
@@ -137,11 +137,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_idealized_electric_heater.component_name,
-        my_idealized_electric_heater.ThermalPowerDelivered,
-    )
+    heat_into(my_building, my_idealized_electric_heater)
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_photovoltaic_system.component_name,
         source_component_output=my_photovoltaic_system.ElectricityOutput,

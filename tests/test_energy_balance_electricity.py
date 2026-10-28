@@ -13,9 +13,10 @@ reads it. Per step, the import minus the export the meter publishes must equal w
 minus what they give, and no electricity port is left unmetered, the heat pump's cooling and brine pump included.
 
 The second January week at 900 s of the heat-pump and the gas household (each run once per module): the run
-finishing proves every declared balance closes; the tests read its report. The building declares no ports until
-PR 4 of the spec, so the room heat ends at the grey "undeclared: Building" and the meter check is reported, not
-enforced (owner decision Q-H: it fails the run only once no component is undeclared).
+finishing proves every declared balance closes; the tests read its report. The occupancy's room heat goes to the
+building, which declares its ports since PR 4 of the spec. The weather is still undeclared (its exemption is PR 5d),
+so the meter check is reported, not enforced (owner decision Q-H: it fails the run only once no component is
+undeclared).
 """
 
 import json
@@ -77,7 +78,7 @@ class Expected:
         ("electricity", "Battery", "Battery · CellLossInWatt"),
         ("electricity", "ElectricityMeter", "UTSPConnector"),
         ("room_heat", "residents' body heat", "UTSPConnector"),
-        ("room_heat", "UTSPConnector", "undeclared: Building"),
+        ("room_heat", "UTSPConnector", "Building"),
         ("electricity", "UTSPConnector", "UTSPConnector · ApplianceElectricityNotReleasedIndoorsInWatt"),
         ("electricity", "grid import", "ElectricityMeter"),
         ("electricity", "ElectricityMeter", "grid export"),
@@ -138,7 +139,7 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
     """Import minus export of the electricity meter equals what the devices it reads take minus what they give.
 
     The meter reads every device's electricity port directly, the heat pump's cooling and brine pump too, and no
-    electricity port is unmetered. The check is reported and not yet enforced, because the building is still
+    electricity port is unmetered. The check is reported and not yet enforced, because the weather is still
     undeclared (Q-H); with PV, battery and occupancy declared it already agrees in every step.
     """
     setup, results = twin
@@ -173,10 +174,4 @@ def test_the_connected_diagram_draws_the_electricity_devices(twin: Tuple[str, Pa
     nodes = {node for _, source, target in links for node in (source, target)}
     assert not {"undeclared: PVSystem", "undeclared: Battery", "undeclared: UTSPConnector"} & nodes
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
-    # every port finds its peer but the distribution system's two heat directions, which the building does not read
-    # through input ports yet
-    unlinked = {(port["component"], port["output"]) for port in report["unlinked"]}
-    assert unlinked <= {
-        ("HeatDistributionSystem", "HeatDeliveredInWatt"),
-        ("HeatDistributionSystem", "HeatDrawnForCoolingInWatt"),
-    }, unlinked
+    assert not report["unlinked"], "every port finds its peer"

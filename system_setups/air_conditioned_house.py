@@ -215,6 +215,17 @@ def setup_function(
         my_air_conditioner.component_name,
         my_air_conditioner.ThermalPowerDelivered,
     )
+    # the building books the two directions of that heat, each >= 0, on its input ports
+    my_building.connect_input(
+        my_building.HeatReceivedInWatt,
+        my_air_conditioner.component_name,
+        my_air_conditioner.HeatDeliveredInWatt,
+    )
+    my_building.connect_input(
+        my_building.HeatRemovedByCoolingInWatt,
+        my_air_conditioner.component_name,
+        my_air_conditioner.HeatDrawnForCoolingInWatt,
+    )
     my_sim.add_component(my_building, connect_automatically=True)
 
     """Air conditioner on-off controller"""

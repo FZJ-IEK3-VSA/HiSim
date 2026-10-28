@@ -273,6 +273,16 @@ class PortSeries:
         return float(self.kilowatt_hours.sum())
 
     @property
+    def is_idle(self) -> bool:
+        """Whether the port moves no energy in any step of the run, so that it books no transfer and needs no peer.
+
+        For example, a cooling port read by a heater that declares no cooling, in a run that never cools: a transfer
+        of nothing is no one-sided booking. A port that is NaN in a step is not idle (the check reports it as not
+        finite).
+        """
+        return not np.any(self.kilowatt_hours)
+
+    @property
     def port_name(self) -> str:
         """The channel a port is declared on, or the circuit's label for a circuit end."""
         return self.channel if self.circuit is None else self.circuit.label
@@ -670,11 +680,15 @@ class DeclaredPorts:
         return [series for ports in self.by_component.values() for series in ports]
 
     def unlinked(self) -> List[PortSeries]:
-        """Every port without a peer: its wiring names no meter or component moving energy, its carrier no default.
+        """Every port without a peer that moves energy: its wiring names no meter or component moving energy, its carrier no default.
 
-        Reported, not yet a failure; the acceptance PR of the complete Sankey spec makes it one (§4.3).
+        An idle port (:attr:`PortSeries.is_idle`) is not listed: it moves nothing that needs a peer, for example a
+        distribution system's cooling direction in a house that never cools, while no input reads it. Reported, not
+        yet a failure; the acceptance PR of the complete Sankey spec makes it one (§4.3).
         """
-        return [series for series in self.all_series() if series.peer.kind == PeerKind.UNLINKED]
+        return [
+            series for series in self.all_series() if series.peer.kind == PeerKind.UNLINKED and not series.is_idle
+        ]
 
     def unmetered(self) -> List[PortSeries]:
         """Every metered port (:attr:`~hisim.energy_port.EnergyPort.is_metered`) whose flow passes no meter.
@@ -698,13 +712,15 @@ class DeclaredPorts:
         ``CONSUMPTION`` port with no such ``PRODUCTION`` port has ``sent`` None, a sender's ``PRODUCTION`` port whose declared peer has no
         ``CONSUMPTION`` port of the same carrier from it has ``received`` None. Both are one-sided bookings, which the
         check fails (owner, 2026-10-02: always fail hard). A booking toward a component that declares no ports,
-        a meter, a boundary node, a store or nobody is not a link between declared components and is not listed.
+        a meter, a boundary node, a store or nobody is not a link between declared components and is not listed, and
+        neither is an idle port (:attr:`PortSeries.is_idle`), which books nothing: a cooling port read by a heater
+        that never cools and declares no cooling.
         """
         received: Dict[Tuple[str, str, str], float] = {}
         sent: Dict[Tuple[str, str, str], float] = {}
         for component, ports in self.by_component.items():
             for series in ports:
-                if series.peer.kind != PeerKind.COMPONENT or not self.is_declared(series.peer.name):
+                if series.peer.kind != PeerKind.COMPONENT or not self.is_declared(series.peer.name) or series.is_idle:
                     continue
                 if series.port.role == lt.EnergyRole.CONSUMPTION:
                     key = (series.peer.name, component, series.port.carrier.value)

@@ -23,6 +23,17 @@ ports are bound like required ones, so the run exercises the whole interface the
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.
 
+**The meters.** Every flow of electricity or of a bought carrier passes a meter (owner decision Q-J of
+``roadmap/complete_energy_sankeys_spec.md``), and the energy balance fails a run with a metered port no meter
+reads once no component is undeclared (Q-H). An isolation system therefore meters every carrier its components
+move through a metered port: the harness builds the system once without running it, reads the carriers of the
+metered output ports of its constructed components (:func:`unmetered_carriers`), and for each carrier no component
+of the system meters adds the partner the registry serves the carrier with, ``{carrier: <carrier>}``, the same
+provider a carrier need binds (:func:`carriers_to_meter`). Example: beside a boiler, the residents' cylinder brings
+the occupancy, whose electricity no meter reads, so the system gets the registry's electricity meter, ``Grid``. A
+carrier with no registered provider refuses the build by name, as a port does. The probe build is the one way to
+know the carriers, since a component declares its energy ports when it is constructed.
+
 **The run.** One calculation through :func:`~hisim.energy_system.executor.run_energy_system`, the
 entry point every run takes, in a fresh directory the caller names: the system file and its
 simulation parameters (one day at 900 s, the KPIs written as JSON) are written there first, so the
@@ -51,6 +62,8 @@ from typing import Any, Collection, Dict, Iterable, List, Mapping, Optional, Seq
 import pandas as pd
 import yaml
 
+from hisim.calculation_scope import CalculationScope
+from hisim.component import Component
 from hisim.config import AddressStep, ComponentID, ConfigurationRefusedError
 from hisim.config.contributions import declared_facts_of
 from hisim.energy_system.assemblies.model import MemberTemplate
@@ -64,7 +77,7 @@ from hisim.energy_system.assemblies.testing.partners import (
 )
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import ClassBinder
-from hisim.energy_system.executor import run_energy_system
+from hisim.energy_system.executor import SimulationParametersReader, build_energy_system, run_energy_system
 from hisim.energy_system.imports_model import Port, PortKind, PortState
 from hisim.energy_system.model import EnergySystemFile
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
@@ -262,9 +275,17 @@ def brought_by_circuit_end(
 
 
 def isolation_document(
-    assembly: ResolvedAssembly, values: Mapping[str, Any], registry: TestPartnerRegistry
+    assembly: ResolvedAssembly,
+    values: Mapping[str, Any],
+    registry: TestPartnerRegistry,
+    metered_carriers: Sequence[str] = (),
 ) -> Dict[str, Any]:
     """The energy-system document of one isolation system.
+
+    Besides the partners its ports and facts need, the system holds the registered provider of every carrier in
+    ``metered_carriers``, the meter :func:`carriers_to_meter` finds the system lacking (see the module docstring).
+    Example: ``heating/oil_boiler`` with ``metered_carriers=["electricity"]`` gains the partner ``Grid``, the
+    electricity meter, and the energy manager it requires.
 
     A need binds the partner of its class that an active circuit end of the same assembly brings,
     if there is one: the cylinder a collector charges is the cylinder its controller reads, as the
@@ -273,9 +294,17 @@ def isolation_document(
     the partner ``SolarCylinder`` of that class, so the need binds ``SolarCylinder`` instead of the
     registry's own ``SimpleDHWStorage`` partner, and the system holds one cylinder.
 
+    Args:
+        assembly: The assembly under test.
+        values: The sample's parameters.
+        registry: The test partners.
+        metered_carriers: The carriers whose registered provider joins as the system's meter, by their values
+            (``electricity``); none by default.
+
     Raises:
         EnergySystemAssemblyError: When the parameters do not fit the assembly (a bug of the sampler).
-        TestPartnerMissingError: When an active port has no registered test partner.
+        TestPartnerMissingError: When an active port, or a carrier of ``metered_carriers``, has no registered test
+            partner.
         TestPartnerRegistryError: When a need's partner class is brought by two circuit ends as two
             different partners: the binding is ambiguous, as the engine's default rule refuses two
             candidates.
@@ -317,6 +346,10 @@ def isolation_document(
         for port in model.ports.values()
         if port.kind == PortKind.FACT and port.fact and selection.state(port) != PortState.INACTIVE
     ]
+    for carrier in metered_carriers:
+        meter = registry.find((("carrier", carrier),), f"the metered carrier '{carrier}'", assembly.path)
+        if meter.name not in partners:
+            partners.append(meter.name)
     add_fact_providers(partners, port_facts, selection.members, registry, assembly.path)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
@@ -469,16 +502,19 @@ def run_isolation(
 ) -> IsolationRun:
     """Builds and runs the isolation system of one parameter set in a fresh directory.
 
+    The system holds a meter for every carrier its components move through a metered port
+    (:func:`carriers_to_meter`, which builds the system once without the meters to find them).
+
     Raises:
-        TestPartnerMissingError: When an active port has no registered test partner.
+        TestPartnerMissingError: When an active port, or a carrier to meter, has no registered test partner.
         TestPartnerRegistryError: When the partners' site entries do not read.
     """
     document = isolation_document(assembly, values, registry)
     directory.mkdir(parents=True, exist_ok=False)
-    system = directory / "isolation.energy_system.yaml"
-    parameters = directory / "isolation.simulation.yaml"
-    system.write_text(yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    parameters.write_text(yaml.safe_dump(dict(SIMULATION_PARAMETERS), sort_keys=False), encoding="utf-8")
+    metered = carriers_to_meter(document, directory / "meter_probe", resolver)
+    if metered:
+        document = isolation_document(assembly, values, registry, metered)
+    system, parameters = write_isolation_files(document, directory)
     run = IsolationRun(label=label, assembly=assembly.path, directory=directory)
     try:
         built = run_energy_system(system, parameters, result_directory=str(directory), assembly_resolver=resolver)
@@ -493,6 +529,79 @@ def run_isolation(
     run.members = {member: components[name] for member, name in run.runtime.items()}
     run.components = components
     return run
+
+
+def write_isolation_files(document: Mapping[str, Any], directory: Path) -> Tuple[Path, Path]:
+    """Writes an isolation system and the simulation parameters of its run into a directory.
+
+    Args:
+        document: The isolation system (:func:`isolation_document`).
+        directory: Where both files go; it exists.
+
+    Returns:
+        The paths of the system file and of the parameters file.
+    """
+    system = directory / "isolation.energy_system.yaml"
+    parameters = directory / "isolation.simulation.yaml"
+    system.write_text(yaml.safe_dump(dict(document), sort_keys=False, allow_unicode=True), encoding="utf-8")
+    parameters.write_text(yaml.safe_dump(dict(SIMULATION_PARAMETERS), sort_keys=False), encoding="utf-8")
+    return system, parameters
+
+
+def unmetered_carriers(components: Iterable[Component]) -> List[str]:
+    """The carriers the components move through a metered port and no component of them meters, sorted.
+
+    A metered port (:attr:`~hisim.energy_port.EnergyPort.is_metered`) is a ``CONSUMPTION`` or ``PRODUCTION`` output
+    port of electricity or of a bought carrier; a component meters the carriers of its
+    :meth:`~hisim.component.Component.metered_exchanges`. Example: an occupancy whose electricity port is metered and
+    an oil boiler whose heating-oil port is, beside a fuel meter of heating oil, give ``["electricity"]``.
+
+    Args:
+        components: The constructed components of one system.
+
+    Returns:
+        The carriers' values, each once.
+    """
+    components = list(components)
+    moved = {
+        output.energy_port.carrier.value
+        for component in components
+        for output in component.outputs
+        if output.energy_port is not None and output.energy_port.is_metered
+    }
+    metered = {exchange.carrier.value for component in components for exchange in component.metered_exchanges()}
+    return sorted(moved - metered)
+
+
+def carriers_to_meter(document: Mapping[str, Any], directory: Path, resolver: AssemblyResolver) -> List[str]:
+    """The carriers an isolation system moves through a metered port and meters nowhere, found by building it once.
+
+    The system is built in a calculation of its own in ``directory``, without running a step, and the directory is
+    deleted afterwards; its constructed components give the carriers (:func:`unmetered_carriers`). A system that
+    does not build gives none: its run raises the same error, which the checks report as the finding about the
+    sample (a member refusing the sample at construction, for example).
+
+    Args:
+        document: The isolation system without the meters (:func:`isolation_document`).
+        directory: A directory that does not exist yet, for the build.
+        resolver: The library the system's import resolves in.
+
+    Returns:
+        The carriers' values, sorted.
+    """
+    directory.mkdir(parents=True, exist_ok=False)
+    try:
+        system, parameters_path = write_isolation_files(document, directory)
+        with CalculationScope.open(label=f"the meter probe of {system}", run_directory=str(directory)):
+            parameters = SimulationParametersReader.read(parameters_path)
+            parameters.result_directory = str(directory)
+            built = build_energy_system(system, parameters, assembly_resolver=resolver)
+            return unmetered_carriers(component for _, component in built.wired.components)
+    # The run of the same system raises the same error, and the checks report it with the sample.
+    except Exception:  # pylint: disable=broad-exception-caught
+        return []
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def members_of(addresses: Mapping[str, ComponentID]) -> Dict[str, str]:

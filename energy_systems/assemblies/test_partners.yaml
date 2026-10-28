@@ -475,10 +475,12 @@ partners:
       preset: optimize_own_consumption
       observes: declared
   Grid:
-    # The one electricity provider an electricity need checks for. Its meter observes every electricity port of the
-    # system by its role, never the energy manager's balance (a meter reads physics ports only). It requires the
-    # manager because a need for electricity stands beside one in this library (the heating assemblies bind their
-    # modifiers to it).
+    # The one electricity provider an electricity need checks for, and the meter the harness adds to every isolation
+    # system whose components move electricity through a port no meter reads (the residents beside a boiler, a PV
+    # array, a battery; isolation.py, carriers_to_meter), so every bought carrier passes a meter (owner decision Q-J
+    # of roadmap/complete_energy_sankeys_spec.md). Its meter observes every electricity port of the system by its
+    # role, never the energy manager's balance (a meter reads physics ports only). It requires the manager because a
+    # need for electricity stands beside one in this library (the heating assemblies bind their modifiers to it).
     serves: {carrier: electricity}
     requires: [EnergyManager]
     component:

@@ -60,6 +60,10 @@ class CalculateOperation(cp.PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "an arithmetic helper; calculating with energy values is not moving energy"
+
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
@@ -172,6 +176,10 @@ class SumBuilderForTwoInputs(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "an arithmetic helper; summing energy is not moving it"
+
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
@@ -259,6 +267,10 @@ class SumBuilderForThreeInputs(PhysicsComponent):
     """Sum builder for three inputs."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
+
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "an arithmetic helper; summing energy is not moving it"
 
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.

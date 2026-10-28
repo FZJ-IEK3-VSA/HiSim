@@ -11,8 +11,8 @@ transformer and rectifier receives the wind turbine's electricity, read from a s
 node, delivers it times its efficiency and loses the rest; it is rated to the turbine's 5,000 kW, so no wind is
 curtailed. The electrolyzer turns the electricity it draws into hydrogen, published as a mass flow in kg/s, and loses
 the rest. The electricity meter reads what the transformer delivers and what the electrolyzer draws and exports the
-difference to the grid; the hydrogen meter reads the hydrogen and passes it out of the system. The CSV series declares
-no ports, so the meters' findings are reported, not enforced (owner decision Q-H). The CHPs of ``dynamic_components``
+difference to the grid; the hydrogen meter reads the hydrogen and passes it out of the system. The CSV series is exempt
+(Sankey PR 5d), so nothing in the run is undeclared and the meters' findings are enforced (owner decision Q-H). The CHPs of ``dynamic_components``
 never run, because its energy manager does not read the occupancy's consumption and so never asks them for power (bead
 hisim-dynamic-components-chp-idle-v8mt); their ports close at zero.
 
@@ -178,8 +178,7 @@ def test_the_plants_electricity_and_hydrogen_pass_their_meters_and_no_port_is_un
     }
     assert peers == Expected.PLANT_PEERS
     assert not report["unmetered"]["ports"] and not report["unlinked"]
-    assert report["unmetered"]["enforced"] is False and "undeclared" in report["unmetered"]["not_enforced_because"]
-    assert [entry["component"] for entry in report["undeclared"]] == ["CSV"]
+    assert report["unmetered"]["enforced"] is True and not report["undeclared"]
     meters = {meter["meter"]: meter for meter in report["meters"]}
     assert {name: meter["carrier"] for name, meter in meters.items()} == {"ElectricityMeter": "electricity", "HydrogenMeter": "hydrogen"}
     assert all(meter["verdict"] == "agrees" and meter["failing_steps"] == 0 for meter in meters.values())

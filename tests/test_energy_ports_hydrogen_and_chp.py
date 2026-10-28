@@ -2,17 +2,20 @@
 
 Complete Sankey spec, PR 5c: the electrolyzers, the hydrogen tank, the fuel cell, the two CHPs and the transformer and
 rectifier state the energy they take, give, lose and store as energy ports. Hydrogen and the CHPs' fuel count by the
-fuel's lower heating value. Most of these components are run by no setup, so each is driven here for one step with
-fake inputs, and its published ports are summed: consumption minus production, losses and stored change must be
-zero, as the energy balance requires in every step of a run. ``tests/test_energy_balance_hydrogen.py`` runs the two
-setups that use some of them.
+fuel's lower heating value; where they hand hydrogen over as a mass flow, the port sits on that channel in kg/s (the
+owner's decision of 2026-10-28 on hisim-m4tx): the advanced electrolyzer's ``HydrogenOutput``, the tank's input
+``ChargingHydrogenAmount`` and the modulating CHP's ``GasDemandReal``. Most of these components are run by no setup,
+so each is driven here for one step with fake inputs, and its ports, on outputs and on inputs, are summed:
+consumption minus production, losses and stored change must be zero, as the energy balance requires in every step of
+a run. ``tests/test_energy_balance_hydrogen.py`` runs the two setups that use some of them.
 
 The advanced electrolyzer does not close: its supplier's hydrogen rates give more hydrogen than the electricity it
 uses (bead hisim-advanced-electrolyzer-energy-ws1d), so it is checked here for its ports only. The tank closes in the
-steps tested here; two branches that drop hydrogen without releasing it are bead hisim-hydrogen-tank-drops-hn7k.
+steps tested here; two branches that drop hydrogen without releasing it, and hydrogen offered beyond what it can store,
+are bead hisim-hydrogen-tank-drops-hn7k.
 """
 
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import pytest
 
@@ -34,6 +37,7 @@ from hisim.components.generic_fuel_cell import FuelCell, FuelCellConfig
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 from hisim.config import ComponentID, SizingContext
 from hisim.energy_port import EnergyPort
+from hisim.postprocessing.energy_balance.ports import Peer, PeerKind, Wiring
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
@@ -90,14 +94,27 @@ class OneStep:
         return {output.field_name: stsv.values[output.global_index] for output in self.component.outputs}
 
     def ports(self) -> Dict[str, Tuple[lt.EnergyRole, lt.EnergyBalanceCarrier]]:
-        """The component's energy ports as ``output -> (role, carrier)``."""
+        """The component's energy ports on its outputs as ``output -> (role, carrier)``."""
         return {output.field_name: (output.energy_port.role, output.energy_port.carrier) for output in self.component.outputs if output.energy_port is not None}
 
-    def residual_in_watt(self, values: Dict[str, float]) -> float:
-        """The component's balance over the step from its published ports, as a mean power in W.
+    def input_ports(self) -> Dict[str, Tuple[lt.EnergyRole, lt.EnergyBalanceCarrier]]:
+        """The component's energy ports on its inputs as ``input -> (role, carrier)``."""
+        return {
+            component_input.field_name: (component_input.energy_port.role, component_input.energy_port.carrier)
+            for component_input in self.component.inputs
+            if component_input.energy_port is not None
+        }
+
+    def residual_in_watt(self, values: Dict[str, float], inputs: Optional[Dict[str, float]] = None) -> float:
+        """The component's balance over the step from its ports, as a mean power in W.
 
         Consumption minus production, losses and stored change, each port converted from its unit as the energy
-        balance converts it (:meth:`hisim.energy_port.EnergyPort.kilowatt_hours_per_step`).
+        balance converts it (:meth:`hisim.energy_port.EnergyPort.kilowatt_hours_per_step`). An input port books the
+        value its fake source gave it in ``inputs``, as the balance books the column of the output an input reads.
+
+        Args:
+            values: The component's outputs of the step, by name.
+            inputs: The step's input values, by name, as given to :meth:`run`; an input not named read 0.
         """
         sign_of_role = {
             lt.EnergyRole.CONSUMPTION: 1.0,
@@ -105,10 +122,15 @@ class OneStep:
             lt.EnergyRole.LOSS: -1.0,
             lt.EnergyRole.STORED_CHANGE: -1.0,
         }
+        channels = [(output.energy_port, output.unit, values[output.field_name]) for output in self.component.outputs if output.energy_port is not None]
+        channels += [
+            (component_input.energy_port, component_input.unit, (inputs or {}).get(component_input.field_name, 0.0))
+            for component_input in self.component.inputs
+            if component_input.energy_port is not None
+        ]
         residual_in_kilowatt_hour = sum(
-            sign_of_role[output.energy_port.role] * values[output.field_name] * EnergyPort.kilowatt_hours_per_step(output.unit, self.SECONDS_PER_TIMESTEP)
-            for output in self.component.outputs
-            if output.energy_port is not None
+            sign_of_role[port.role] * value * EnergyPort.kilowatt_hours_per_step(unit, self.SECONDS_PER_TIMESTEP, port.carrier)
+            for port, unit, value in channels
         )
         return residual_in_kilowatt_hour * self.JOULES_PER_KILOWATT_HOUR / self.SECONDS_PER_TIMESTEP
 
@@ -193,8 +215,9 @@ def test_the_fuel_cell_turns_hydrogen_into_electricity_and_loses_the_rest() -> N
 def test_the_modulating_chp_burns_its_fuel_into_electricity_heat_and_loss(gas_type: str, fuel_carrier: lt.EnergyBalanceCarrier) -> None:
     """At full load the hydrogen preset burns 7,000 W for 1,200 W of electricity and 2,200 W of heat, losing 3,600 W.
 
-    The fuel port's carrier follows the configured gas. Catches a fuel port of the wrong carrier, a fuel power that
-    is not the drawn mass flow times the fuel's heating value, and a loss that does not close the step.
+    The fuel port's carrier follows the configured gas, and it sits on the mass flow the CHP draws, ``GasDemandReal`` in
+    kg/s. Catches a fuel port of the wrong carrier, a fuel counted by another heating value than the one the CHP
+    draws its mass flow by, and a loss that does not close the step.
     """
     config = CHPConfig.preset_hydrogen("CHP")
     config.gas_type = gas_type
@@ -203,13 +226,13 @@ def test_the_modulating_chp_burns_its_fuel_into_electricity_heat_and_loss(gas_ty
     assert step.ports() == {
         CHP.ElectricityOutput: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         CHP.ThermalOutputPower: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
-        CHP.FuelConsumptionInWatt: (lt.EnergyRole.CONSUMPTION, fuel_carrier),
+        CHP.GasDemandReal: (lt.EnergyRole.CONSUMPTION, fuel_carrier),
         CHP.ConversionLossInWatt: (lt.EnergyRole.LOSS, fuel_carrier),
     }
     values = step.run({CHP.ControlSignal: 1.0, CHP.MassflowInputTemperature: 40.0}, timestep=100)
     assert values[CHP.ElectricityOutput] == pytest.approx(1200.0, rel=1e-12)
     assert values[CHP.ThermalOutputPower] == pytest.approx(2200.0, rel=1e-9)
-    assert values[CHP.FuelConsumptionInWatt] == pytest.approx(7000.0, rel=1e-9)
+    assert values[CHP.GasDemandReal] * EnergyPort.lower_heating_value_in_joule_per_kg(fuel_carrier) == pytest.approx(7000.0, rel=1e-9)
     assert values[CHP.ConversionLossInWatt] == pytest.approx(3600.0, rel=1e-9)
     assert step.residual_in_watt(values) == pytest.approx(0.0, abs=1e-6)
 
@@ -250,21 +273,23 @@ def test_the_simple_chp_burns_its_fuel_into_electricity_heat_and_loss(
 def test_the_advanced_electrolyzer_declares_its_electricity_hydrogen_and_waste_heat() -> None:
     """The electricity it uses, the hydrogen it produces by its heating value and its stated waste heat are its ports.
 
-    The three do not close (bead hisim-advanced-electrolyzer-energy-ws1d), so only the ports and the hydrogen
-    power's conversion are checked. Catches a hydrogen port in kg/s and the electricity offered booked instead of
-    the electricity used.
+    The hydrogen port sits on the mass flow it hands a tank, ``HydrogenOutput`` in kg/s. The three do not close (bead
+    hisim-advanced-electrolyzer-energy-ws1d), so only the ports and the step's residual of that bead are checked.
+    Catches the hydrogen port moved off the wire a tank reads, and the electricity offered booked instead of the
+    electricity used.
     """
     step = OneStep(AdvancedElectrolyzer(OneStep.parameters(), ElectrolyzerWithStorageConfig.preset_standard("Electrolyzer")))
     assert step.ports() == {
         AdvancedElectrolyzer.ElectricityRealNeeded: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         AdvancedElectrolyzer.EnergyLosses: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
-        AdvancedElectrolyzer.HydrogenProductionInWatt: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
+        AdvancedElectrolyzer.HydrogenOutput: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
     }
+    assert not step.input_ports()
     values = step.run({AdvancedElectrolyzer.ElectricityInput: 3000.0})
     assert values[AdvancedElectrolyzer.ElectricityRealNeeded] == 2400.0
-    assert values[AdvancedElectrolyzer.HydrogenProductionInWatt] == pytest.approx(
-        values[AdvancedElectrolyzer.HydrogenOutput] * hydrogen_lower_heating_value_in_joule_per_kg(), rel=1e-12
-    )
+    hydrogen_in_watt = values[AdvancedElectrolyzer.HydrogenOutput] * hydrogen_lower_heating_value_in_joule_per_kg()
+    assert step.residual_in_watt(values) == pytest.approx(2400.0 - hydrogen_in_watt - 400.0, rel=1e-9)
+    assert step.residual_in_watt(values) == pytest.approx(-12976.4, abs=0.1)
 
 
 class TankSteps:
@@ -290,36 +315,77 @@ class TankSteps:
 def test_the_hydrogen_tank_declares_hydrogen_in_out_lost_and_stored_and_its_compression() -> None:
     """The tank's ports: hydrogen stored, released, lost and the change of its fill; compression electricity in and lost.
 
-    Catches a storage change taken from the step's own flows instead of the fill it carries into the next step,
-    and a hydrogen port in kg instead of W.
+    The hydrogen it is offered is booked on the input that reads it, ``ChargingHydrogenAmount`` in kg/s; the hydrogen it
+    hands on is a W output, because the consumer's wire to the tank carries what the consumer asks for. Catches a
+    storage change taken from the step's own flows instead of the fill it carries into the next step, and the
+    received hydrogen booked on an output nobody reads.
     """
-    assert TankSteps.build().ports() == {
+    step = TankSteps.build()
+    assert step.ports() == {
         HydrogenStorage.HydrogenStorageEnergyDemand: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         HydrogenStorage.CompressionLossInWatt: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
-        HydrogenStorage.HydrogenReceivedInWatt: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.HYDROGEN),
         HydrogenStorage.HydrogenReleasedInWatt: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
         HydrogenStorage.HydrogenLossInWatt: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.HYDROGEN),
         HydrogenStorage.StoredEnergyIncreaseInWattHour: (lt.EnergyRole.STORED_CHANGE, lt.EnergyBalanceCarrier.HYDROGEN),
     }
+    assert step.input_ports() == {HydrogenStorage.ChargingHydrogenAmount: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.HYDROGEN)}
 
 
 @pytest.mark.parametrize(("charging_in_kg_per_h", "discharging_in_kg_per_h"), [(1.0, 0.0), (0.0, 1.5), (1.5, 0.5), (0.0, 0.0)])
 def test_a_step_of_the_hydrogen_tank_closes(charging_in_kg_per_h: float, discharging_in_kg_per_h: float) -> None:
-    """Charging, discharging, both netted, and idle: stored, released and lost hydrogen add up to the fill's change.
+    """Charging, discharging, both at once, and idle: received, handed on and lost hydrogen add up to the fill's change.
 
-    Catches the stored change or a flow converted with a different heating value or step length than the others,
-    and a loss that leaves the fill without being booked.
+    Hydrogen offered and asked for in the same step passes straight through: it is received on the input and handed
+    on, and only the difference reaches the fill. Catches the stored change or a flow converted with a different
+    heating value or step length than the others, a loss that leaves the fill without being booked, and hydrogen
+    that passes through booked on one side only.
     """
     step = TankSteps.build()
-    values = step.run(
-        {
-            HydrogenStorage.ChargingHydrogenAmount: TankSteps.kilograms_per_second(charging_in_kg_per_h),
-            HydrogenStorage.DischargingHydrogenAmountTarget: TankSteps.kilograms_per_second(discharging_in_kg_per_h),
-        }
-    )
+    inputs = {
+        HydrogenStorage.ChargingHydrogenAmount: TankSteps.kilograms_per_second(charging_in_kg_per_h),
+        HydrogenStorage.DischargingHydrogenAmountTarget: TankSteps.kilograms_per_second(discharging_in_kg_per_h),
+    }
+    values = step.run(inputs)
     assert values[HydrogenStorage.HydrogenLossInWatt] > 0.0
-    assert step.residual_in_watt(values) == pytest.approx(0.0, abs=1e-6)
-    netted_charging_in_kg_per_h = charging_in_kg_per_h - discharging_in_kg_per_h
-    assert (values[HydrogenStorage.HydrogenReceivedInWatt] > 0.0) == (netted_charging_in_kg_per_h > 0.0)
-    assert (values[HydrogenStorage.HydrogenReleasedInWatt] > 0.0) == (netted_charging_in_kg_per_h < 0.0)
+    assert step.residual_in_watt(values, inputs) == pytest.approx(0.0, abs=1e-6)
+    released_in_watt = TankSteps.kilograms_per_second(discharging_in_kg_per_h) * hydrogen_lower_heating_value_in_joule_per_kg()
+    assert values[HydrogenStorage.HydrogenReleasedInWatt] == pytest.approx(released_in_watt, rel=1e-12)
     assert values[HydrogenStorage.CompressionLossInWatt] == values[HydrogenStorage.HydrogenStorageEnergyDemand]
+
+
+def test_hydrogen_offered_beyond_the_tank_s_charging_rate_is_received_and_not_stored() -> None:
+    """3 kg/h offered at a charging rate of 2 kg/h: the 1 kg/h above the rate is on no port, and the step does not close.
+
+    The tank books what reaches it through the wire; what it refuses stays with the offerer, which reads
+    ``HydrogenNotStored``, while an electrolyzer still publishes its full production (beads
+    hisim-hydrogen-tank-drops-hn7k and hisim-advanced-electrolyzer-energy-ws1d). Catches a tank whose received
+    hydrogen silently follows what it stores, which would hide the hydrogen lost between offerer and tank.
+    """
+    step = TankSteps.build()
+    inputs = {HydrogenStorage.ChargingHydrogenAmount: TankSteps.kilograms_per_second(3.0)}
+    values = step.run(inputs)
+    refused_in_watt = TankSteps.kilograms_per_second(1.0) * hydrogen_lower_heating_value_in_joule_per_kg()
+    assert values[HydrogenStorage.HydrogenNotStored] == pytest.approx(0.25, rel=1e-12)
+    assert step.residual_in_watt(values, inputs) == pytest.approx(refused_in_watt, rel=1e-9)
+
+
+def test_a_tank_reading_the_advanced_electrolyzer_s_hydrogen_links_to_it_through_that_wire() -> None:
+    """Wired as the component intends, ``HydrogenOutput`` into ``ChargingHydrogenAmount``, the two ports are one transfer.
+
+    The electrolyzer's port finds the tank that reads it, the tank's input port the electrolyzer, and the build's
+    wiring rules accept the pair. Catches a hydrogen port on a W copy nobody reads, which left the electrolyzer's
+    hydrogen unlinked and the transfer unchecked (hisim-m4tx).
+    """
+    electrolyzer = AdvancedElectrolyzer(OneStep.parameters(), ElectrolyzerWithStorageConfig.preset_standard("Electrolyzer"))
+    tank = TankSteps.build().component
+    tank.charging_hydrogen.src_object_name = electrolyzer.component_name
+    tank.charging_hydrogen.src_field_name = AdvancedElectrolyzer.HydrogenOutput
+    Wiring.refuse_a_broken_wiring([electrolyzer, tank])
+    wiring = Wiring([electrolyzer, tank])
+    output_port = electrolyzer.hydrogen_output_channel.energy_port
+    input_port = tank.charging_hydrogen.energy_port
+    assert output_port is not None and input_port is not None and output_port.pairs_with(input_port)
+    assert wiring.peer_of(electrolyzer.component_name, AdvancedElectrolyzer.HydrogenOutput, output_port) == Peer(
+        PeerKind.COMPONENT, tank.component_name
+    )
+    assert wiring.input_peer(electrolyzer.component_name, input_port) == Peer(PeerKind.COMPONENT, electrolyzer.component_name)

@@ -15,9 +15,9 @@ A port names no other component; the other side is found from the wiring (comple
 * An *input port* books the energy that arrives on its input: its series is the column of the output connected to
   the input, and its peer is that output's component. For example, a building that reads a distribution system's
   heat through an input carrying ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` books that heat from the
-  distribution system. An input port is a ``CONSUMPTION`` or ``PRODUCTION`` port of a carrier no meter counts
-  (:meth:`EnergyPort.check_fits_an_input`); an optional input port that is not connected moves nothing and is left
-  out.
+  distribution system. An input port is a ``CONSUMPTION`` or ``PRODUCTION`` port of a carrier no meter counts, or of
+  a fuel the input reads as a mass flow from the component that hands it over (:meth:`EnergyPort.check_fits_an_input`);
+  an optional input port that is not connected moves nothing and is left out.
 * An *output port* that is read through an input carrying a port it pairs with (:meth:`EnergyPort.pairs_with`: the
   same carrier, the other of ``CONSUMPTION`` and ``PRODUCTION``) has that reader as its peer. Otherwise a
   ``PRODUCTION`` port's peer is the component that reads its output (the building reads the heat a distribution
@@ -47,7 +47,22 @@ still proves each side's own balance.
 
 A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
 kJ) is taken per step as it is; any other unit is refused when the output is declared
-(:meth:`EnergyPort.validate_unit`).
+(:meth:`EnergyPort.validate_unit`), except a fuel's mass flow.
+
+Ports on mass-flow channels
+---------------------------
+
+A fuel that one component hands to another travels as a mass flow in kg/s: an electrolyzer publishes the hydrogen it
+produces, a tank reads it. Its energy port sits on that channel (owner decision of 2026-10-28 on bead
+hisim-hydrogen-transfer-links-m4tx): the balance converts the kilograms with the carrier's lower heating value, which
+:class:`hisim.components.configuration.PhysicsConfig` states once per fuel (:meth:`EnergyPort.lower_heating_value_in_joule_per_kg`).
+The input that reads the flow carries the paired port, so the transfer links and is checked through the wire that
+carries the fuel, as electricity or heat is. A metered carrier is otherwise booked on the output a meter reads; a fuel
+handed over between two components passes no meter, so its input port is allowed on a mass flow and nowhere else. The
+fuels with a stated heating value are :attr:`EnergyPort.MASS_FLOW_FUELS`: hydrogen, natural gas, heating oil, pellets
+and wood chips. A fuel without one, diesel today, joins with an entry in ``PhysicsConfig`` that names its source and a
+line in that mapping. For example, ``EnergyPort(PRODUCTION, HYDROGEN)`` on an output of 1e-3 kg/s counts 119.96 kW
+of hydrogen, 29.99 kWh in a step of 900 s.
 
 Fluid loops
 -----------
@@ -110,6 +125,7 @@ from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
 
 from hisim import hydronics
 from hisim import loadtypes as lt
+from hisim.components.configuration import PhysicsConfig
 
 
 @dataclass(frozen=True)
@@ -133,6 +149,22 @@ class EnergyPort:
     }
     #: Kilowatts of one unit of a power output.
     POWER_UNITS_IN_KILOWATT: ClassVar[Dict[lt.Units, float]] = {lt.Units.WATT: 1e-3, lt.Units.KILOWATT: 1.0}
+    #: Kilograms per second of one unit of a fuel's mass-flow output.
+    MASS_FLOW_UNITS_IN_KG_PER_SECOND: ClassVar[Dict[lt.Units, float]] = {lt.Units.KG_PER_SEC: 1.0}
+    #: The fuels a port may count as a mass flow, each with the load type under which
+    #: :class:`~hisim.components.configuration.PhysicsConfig` states its lower heating value, the one source of the
+    #: energy a kilogram of it carries (read-only). A fuel joins with a ``PhysicsConfig`` entry and a line here.
+    MASS_FLOW_FUELS: ClassVar[Mapping[lt.EnergyBalanceCarrier, lt.LoadTypes]] = MappingProxyType(
+        {
+            lt.EnergyBalanceCarrier.HYDROGEN: lt.LoadTypes.GREEN_HYDROGEN,
+            lt.EnergyBalanceCarrier.NATURAL_GAS: lt.LoadTypes.GAS,
+            lt.EnergyBalanceCarrier.HEATING_OIL: lt.LoadTypes.OIL,
+            lt.EnergyBalanceCarrier.PELLETS: lt.LoadTypes.PELLETS,
+            lt.EnergyBalanceCarrier.WOOD_CHIPS: lt.LoadTypes.WOOD_CHIPS,
+        }
+    )
+    #: Joules per kilowatt hour.
+    JOULES_PER_KILOWATT_HOUR: ClassVar[float] = 3.6e6
 
     def __post_init__(self) -> None:
         """Refuse a port whose role or carrier is not one of the enums, or that skips a meter.
@@ -162,21 +194,26 @@ class EnergyPort:
                 f"({self.environment.value!r}): its peer is the meter that reads it."
             )
 
-    def check_fits_an_input(self, component_name: str, field_name: str) -> None:
+    def check_fits_an_input(self, component_name: str, field_name: str, unit: lt.Units) -> None:
         """Refuse this port on an input it cannot describe: an input port books energy exchanged with its source.
 
         An input's other side is the component whose output it reads, so the port is a ``CONSUMPTION`` (energy
         arriving from the source) or a ``PRODUCTION`` (energy given to the source, as cooling leaves a building) and
-        names no ``environment``. A metered carrier is booked on the output a meter reads (owner decision Q-J), never
-        on an input. For example, ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` fits an input, while
-        ``EnergyPort(LOSS, SPACE_HEATING_HEAT)`` and ``EnergyPort(CONSUMPTION, ELECTRICITY)`` do not.
+        names no ``environment``. A metered carrier is booked on the output a meter reads (owner decision Q-J), so
+        its port fits an input only where the input reads a fuel's mass flow from the component that hands it over,
+        which passes no meter (owner decision of 2026-10-28 on hisim-m4tx). For example,
+        ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` fits an input in W and ``EnergyPort(CONSUMPTION, HYDROGEN)``
+        an input in kg/s, while ``EnergyPort(LOSS, SPACE_HEATING_HEAT)``, ``EnergyPort(CONSUMPTION, ELECTRICITY)``
+        and ``EnergyPort(CONSUMPTION, HYDROGEN)`` on an input in W do not.
 
         Args:
             component_name: The input's component, for the message.
             field_name: The input's name, for the message.
+            unit: The input's unit.
 
         Raises:
-            ValueError: If the role is ``LOSS`` or ``STORED_CHANGE``, the port names an environment or it is metered.
+            ValueError: If the role is ``LOSS`` or ``STORED_CHANGE``, the port names an environment, or it is metered
+                and the input is no mass flow.
         """
         where = f"The energy port of the input {component_name}.{field_name} ({self.role.value}, {self.carrier.value})"
         if self.role not in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION):
@@ -185,8 +222,11 @@ class EnergyPort:
             raise ValueError(
                 f"{where} names the environment {self.environment.value!r}; an input port's peer is its source."
             )
-        if self.is_metered:
-            raise ValueError(f"{where} is metered: a metered carrier is booked on the output its meter reads.")
+        if self.is_metered and unit not in self.MASS_FLOW_UNITS_IN_KG_PER_SECOND:
+            raise ValueError(
+                f"{where} is metered: a metered carrier is booked on the output its meter reads, and on an input only "
+                f"as a fuel's mass flow handed over by another component, not in {unit.value}."
+            )
 
     def pairs_with(self, other: "EnergyPort") -> bool:
         """Whether this port and ``other`` book the two ends of one transfer: the same carrier, opposite exchange roles.
@@ -200,26 +240,70 @@ class EnergyPort:
         return self.carrier == other.carrier and {self.role, other.role} == exchange
 
     @classmethod
-    def validate_unit(cls, unit: lt.Units) -> None:
-        """Refuse a unit that is neither a power nor an energy.
+    def validate_unit(cls, unit: lt.Units, carrier: lt.EnergyBalanceCarrier) -> None:
+        """Refuse a unit a port of ``carrier`` cannot be read in: a power, an energy, or a fuel's mass flow.
+
+        A mass flow (kg/s) carries energy only by the fuel's lower heating value, so it is accepted for a carrier of
+        :attr:`MASS_FLOW_FUELS` alone. For example, kg/s is accepted for ``HYDROGEN`` and refused for ``ELECTRICITY``,
+        and °C is refused for every carrier.
+
+        Args:
+            unit: The channel's unit.
+            carrier: The port's carrier.
 
         Raises:
-            ValueError: If ``unit`` is neither a power nor an energy.
+            ValueError: If ``unit`` is neither a power nor an energy nor, for a fuel with a stated lower heating value,
+                a mass flow.
         """
-        if unit not in cls.ENERGY_UNITS_IN_KILOWATT_HOUR and unit not in cls.POWER_UNITS_IN_KILOWATT:
-            raise ValueError(f"An energy port must be a power or an energy, not {unit!r}.")
+        if unit in cls.ENERGY_UNITS_IN_KILOWATT_HOUR or unit in cls.POWER_UNITS_IN_KILOWATT:
+            return
+        if unit in cls.MASS_FLOW_UNITS_IN_KG_PER_SECOND and carrier in cls.MASS_FLOW_FUELS:
+            return
+        raise ValueError(
+            f"An energy port must be a power or an energy, or the mass flow (kg/s) of a fuel with a stated lower heating "
+            f"value ({', '.join(fuel.value for fuel in cls.MASS_FLOW_FUELS)}); not {unit!r} for {carrier.value}."
+        )
 
     @classmethod
-    def kilowatt_hours_per_step(cls, unit: lt.Units, seconds_per_timestep: float) -> float:
-        """The factor that turns one step's value of an output in ``unit`` into kWh.
+    def lower_heating_value_in_joule_per_kg(cls, carrier: lt.EnergyBalanceCarrier) -> float:
+        """The lower heating value of the fuel ``carrier``, in J/kg, as :class:`PhysicsConfig` states it.
+
+        For example, hydrogen's is 119.96 MJ/kg (10.783 MJ/m3 at 0.08989 kg/m3).
 
         Raises:
-            ValueError: If ``unit`` is neither a power nor an energy.
+            ValueError: If ``carrier`` is no fuel of :attr:`MASS_FLOW_FUELS`.
         """
-        cls.validate_unit(unit)
+        if carrier not in cls.MASS_FLOW_FUELS:
+            raise ValueError(f"{carrier.value} has no stated lower heating value: it is no fuel a port counts as a mass flow.")
+        return PhysicsConfig.get_properties_for_energy_carrier(cls.MASS_FLOW_FUELS[carrier]).lower_heating_value_in_joule_per_kg
+
+    @classmethod
+    def kilowatt_hours_per_step(cls, unit: lt.Units, seconds_per_timestep: float, carrier: lt.EnergyBalanceCarrier) -> float:
+        """The factor that turns one step's value of an output in ``unit``, carrying ``carrier``, into kWh.
+
+        A power is multiplied by the step, an energy taken as it is, and a fuel's mass flow multiplied by the step and
+        the fuel's lower heating value (:meth:`lower_heating_value_in_joule_per_kg`). For example, 1 kg/s of hydrogen
+        over 900 s is 29,989 kWh.
+
+        Args:
+            unit: The output's unit.
+            seconds_per_timestep: The step's length, in s.
+            carrier: The carrier the output carries.
+
+        Raises:
+            ValueError: If ``unit`` is no unit a port of ``carrier`` can be read in (:meth:`validate_unit`).
+        """
+        cls.validate_unit(unit, carrier)
         if unit in cls.ENERGY_UNITS_IN_KILOWATT_HOUR:
             return cls.ENERGY_UNITS_IN_KILOWATT_HOUR[unit]
-        return cls.POWER_UNITS_IN_KILOWATT[unit] * seconds_per_timestep / 3600.0
+        if unit in cls.POWER_UNITS_IN_KILOWATT:
+            return cls.POWER_UNITS_IN_KILOWATT[unit] * seconds_per_timestep / 3600.0
+        return (
+            cls.MASS_FLOW_UNITS_IN_KG_PER_SECOND[unit]
+            * seconds_per_timestep
+            * cls.lower_heating_value_in_joule_per_kg(carrier)
+            / cls.JOULES_PER_KILOWATT_HOUR
+        )
 
     #: The balance carrier of a fuel a component names by its :class:`~hisim.loadtypes.LoadTypes` (read-only).
     FUEL_CARRIERS: ClassVar[Mapping[lt.LoadTypes, lt.EnergyBalanceCarrier]] = MappingProxyType(

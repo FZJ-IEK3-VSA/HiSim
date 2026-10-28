@@ -2,11 +2,11 @@
 
 Complete Sankey spec, PR 5c. ``dynamic_components`` runs two hydrogen CHPs beside the PV system, two batteries and the
 occupancy; ``electrolyzer_with_renewables`` feeds a wind series through a transformer and rectifier into an
-electrolyzer. Each CHP burns hydrogen by its lower heating value into electricity, heat and a loss; the transformer
-receives electricity, delivers it and loses the rest; the electrolyzer turns electricity into hydrogen and loses the
-rest. Neither setup has a meter (bead hisim-meter-bought-carriers-lyfl), so every electricity and hydrogen port that no
-component reads is unlinked and unmetered; the weather and the CSV series declare no ports yet, so neither finding is
-enforced (owner decision Q-H).
+electrolyzer. Each CHP burns hydrogen, counted on the mass flow it draws, ``GasDemandReal`` in kg/s, by its lower
+heating value, into electricity, heat and a loss; the transformer receives electricity, delivers it and loses the
+rest; the electrolyzer turns electricity into hydrogen and loses the rest. Neither setup has a meter (bead
+hisim-meter-bought-carriers-lyfl), so every electricity and hydrogen port that no component reads is unlinked and
+unmetered; the weather and the CSV series declare no ports yet, so neither finding is enforced (owner decision Q-H).
 
 The electrolyzer reads its load through its controller, a decision the balance never follows, so the electricity
 the transformer delivers and the electricity the electrolyzer draws are two unlinked ports: in this week the
@@ -38,7 +38,7 @@ class Expected:
     CHP_PORTS: ClassVar[Dict[str, Tuple[str, str]]] = {
         "ElectricityOutput": ("production", "electricity"),
         "ThermalOutputPower": ("production", "space_heating_heat"),
-        "FuelConsumptionInWatt": ("consumption", "hydrogen"),
+        "GasDemandReal": ("consumption", "hydrogen"),
         "ConversionLossInWatt": ("loss", "hydrogen"),
     }
 
@@ -98,8 +98,8 @@ def report_of(results: Path) -> Dict[str, Any]:
 def test_the_new_components_declare_their_ports_and_close_in_every_step(setup_results: Tuple[str, Path]) -> None:
     """Each CHP, the transformer and the electrolyzer declare the ports of PR 5c and close to 1e-9 kWh in every step.
 
-    Catches a port of the wrong role or carrier, a fuel or hydrogen port in kg instead of W, and a loss that does not
-    close its component's step.
+    Catches a port of the wrong role or carrier, a CHP fuel port moved off the mass flow it draws, and a loss that
+    does not close its component's step.
     """
     setup, results = setup_results
     for component, ports in Expected.PORTS[setup].items():
@@ -153,6 +153,6 @@ def test_the_ports_no_component_reads_are_unlinked_and_unmetered_and_not_enforce
     for component, output in Expected.UNLINKED[setup] - {(name, "ThermalOutputPower") for name in new_components}:
         assert unmetered_ports[(component, output)] == "unlinked"
     if setup == "dynamic_components":
-        assert unmetered_ports[("CHP1", "FuelConsumptionInWatt")] == "hydrogen supply"
+        assert unmetered_ports[("CHP1", "GasDemandReal")] == "hydrogen supply"
     assert not report["links"] and not report["meters"]
     assert not new_components & {entry["component"] for entry in report["undeclared"]}

@@ -766,9 +766,9 @@ def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
         fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage], start_temperature_in_celsius
     )
     stsv.set_output_value(fakes[MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier], raise_in_kelvin)
-    controller.state_dhw = HeatPumpDhwState.ON
+    controller.state_at_step_start = controller.state_at_step_start._replace(charge=HeatPumpDhwState.ON)
     controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert controller.state_dhw == expected_state
+    assert controller.state_of_last_free_pass.charge == expected_state
     assert stsv.values[controller.state_dhw_channel.global_index] == expected_state.value
     assert (
         stsv.values[controller.supply_temperature_set_for_dhw_in_celsius_channel.global_index]
@@ -777,20 +777,46 @@ def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
 
 
 @pytest.mark.base
-def test_a_zero_tank_temperature_on_the_first_pass_keeps_the_last_reading() -> None:
-    """A 0 °C reading, the zeroed value of a pass before the tank ran, must not start a charge.
+def test_a_charge_one_pass_asks_for_does_not_last_into_the_next_pass_of_the_step() -> None:
+    """Catches a pass that decides from the pass before it instead of from the start of the step (4g9.24).
 
-    The controller keeps the temperature it read last instead; without that, a controller simulated before the tank
-    would switch on at every step's first pass and, since it keeps its decision between passes, charge all day.
+    The first pass of a run reads the tank's zeroed output, 0 °C, and asks for a charge; the next pass reads the
+    tank's 50 °C, inside the 40/60 °C band, and must keep the state the step started from, off. Before, the controller
+    decided from the pass before, so the charge latched for the step and, with the pass memory, for the day.
     """
     controller, stsv, fakes = dhw_controller_with_fake_inputs()
     storage_fake = fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage]
-    stsv.set_output_value(storage_fake, 50.0)
-    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
     stsv.set_output_value(storage_fake, 0.0)
     controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert controller.state_dhw == HeatPumpDhwState.OFF
-    assert controller.water_temperature_input_from_dhw_storage_in_celsius == 50.0
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.ON.value
+    stsv.set_output_value(storage_fake, 50.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    assert controller.state_of_last_free_pass.charge == HeatPumpDhwState.OFF
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.OFF.value
+
+
+@pytest.mark.base
+def test_a_raise_that_comes_and_goes_within_a_step_decides_each_pass_from_the_start_of_the_step() -> None:
+    """Catches a surplus charge that one raised pass latches for the rest of the step (4g9.24).
+
+    A tank at 50 °C, inside the band and off at the start of the step: a pass with the energy manager's 10 K raise asks
+    for a charge, a later pass without the raise keeps the start of the step's off. A forced pass then holds the last
+    unforced pass, which is what the step commits.
+    """
+    controller, stsv, fakes = dhw_controller_with_fake_inputs()
+    stsv.set_output_value(fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage], 50.0)
+    raise_fake = fakes[MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier]
+    charges = []
+    for raise_in_kelvin in (10.0, 0.0):
+        stsv.set_output_value(raise_fake, raise_in_kelvin)
+        controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+        charges.append(controller.state_of_last_free_pass.charge)
+    assert charges == [HeatPumpDhwState.ON, HeatPumpDhwState.OFF]
+    stsv.set_output_value(raise_fake, 10.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=True)
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.OFF.value
+    controller.i_save_state()
+    assert controller.state_at_step_start.charge == HeatPumpDhwState.OFF
 
 
 @pytest.mark.base

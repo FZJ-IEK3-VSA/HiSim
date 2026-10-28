@@ -12,7 +12,10 @@ First divergence: one heat-pump SH on/off decision resolving the other way (step
    *Fixed 2026-10-09 (hisim-component-physics-4g9.23):* the simulator now starts every step from the previous step's converged values
    (warm start); only step 0 starts from zeros. The heat pump's workaround stays as a step-0 guard until defect 2 is
    fixed (hisim-component-physics-4g9.28), because the controller's restore latches a decision taken on the 0.
+   *Removed 2026-10-28 with defect 2 (hisim-component-physics-4g9.24).*
 2. DHW controller i_restore_state (:3333-3338) overwrites its saved state -> restores the previous PASS, not the step start.
+   *Fixed 2026-10-28 (hisim-component-physics-4g9.24):* the controller is an `ExplicitStateController`; every unforced
+   pass decides from the state at the start of the step, so a decision taken on the step-0 zero does not last.
 3. HeatDistributionController i_restore_state assigns the mode to itself (heat_distribution_system.py:1178-1180): no restore.
 4. Heat pump sets self.minimum_thermal_output_power = 0.0 on any pass with on_off==2 (:1649), never restored.
 5. EMS i_save_state aliases instead of copying (controller_l2_energy_management_system.py:651-658); harmless today.

@@ -31,11 +31,12 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort
 
 
 # ==============================================================================
@@ -103,6 +104,10 @@ class SimpleAirConditioner(cp.PhysicsComponent):
     ``temperature_epsilon_k``, it computes a Carnot-limited COP and delivers
     negative thermal power (heat removed from the space).  Otherwise all outputs
     are zero.
+
+    Its energy ports (complete Sankey spec, PR 5a): it consumes electricity (``ElectricalPowerConsumption``), draws
+    heat from the building (``HeatDrawnForCoolingInWatt``, carrier ``COOLING``) and rejects both to the outside air
+    (``HeatToAmbientInWatt``). It never heats, so it has no space-heating port.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -114,6 +119,10 @@ class SimpleAirConditioner(cp.PhysicsComponent):
 
     # Output channel names
     ThermalPowerDelivered: str = "ThermalPowerDelivered"
+    #: Minus ThermalPowerDelivered, the heat taken from the building while cooling, in W, >= 0.
+    HeatDrawnForCoolingInWatt: str = "HeatDrawnForCoolingInWatt"
+    #: The heat rejected to the outside air while cooling, in W, >= 0.
+    HeatToAmbientInWatt: str = "HeatToAmbientInWatt"
     ThermalEnergyDelivered: str = "ThermalEnergyDelivered"
     ElectricalPowerConsumption: str = "ElectricalPowerConsumption"
     ElectricalEnergyConsumption: str = "ElectricalEnergyConsumption"
@@ -170,6 +179,32 @@ class SimpleAirConditioner(cp.PhysicsComponent):
             Units.WATT,
             output_description="Thermal power delivered (negative = cooling).",
         )
+        # The cooling direction of the signed heat above, >= 0, which the building reads through its input port
+        # beside its signed heat, since a port books one direction only; the device never heats.
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            LoadTypes.COOLING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0. The building books it as the cooling it gives the device."
+            ),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.COOLING),
+        )
+        # The outside air takes the heat drawn from the building and the electricity; the energy balance links it to
+        # the "ambient heat sink" boundary node (owner decision Q-M).
+        self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatToAmbientInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device rejects to the outside air while it cools, in W, >= 0: {self.HeatDrawnForCoolingInWatt} "
+                f"plus {self.ElectricalPowerConsumption}."
+            ),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
         self.thermal_energy_generation_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyDelivered,
@@ -183,6 +218,7 @@ class SimpleAirConditioner(cp.PhysicsComponent):
             LoadTypes.ELECTRICITY,
             Units.WATT,
             output_description="Electrical power consumption.",
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electrical_energy_consumption_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -318,6 +354,8 @@ class SimpleAirConditioner(cp.PhysicsComponent):
         stsv.set_output_value(
             self.thermal_power_generation_channel, thermal_power_delivered_w
         )
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -thermal_power_delivered_w))
+        stsv.set_output_value(self.heat_to_ambient_channel, thermal_cooling_w + electric_w)
         stsv.set_output_value(
             self.thermal_energy_generation_channel, thermal_energy_wh
         )

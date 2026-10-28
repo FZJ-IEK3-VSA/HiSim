@@ -25,6 +25,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, pr
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
+from hisim.energy_port import EnergyPort
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
@@ -212,6 +213,29 @@ class GenericHeatPumpState:
                 f"is not zero, positive, or negative (possible NaN)."
             )
 
+    @property
+    def heat_from_ambient_in_watt(self) -> float:
+        """The heat the machine takes from the outside air while it heats, in W: its heating minus its electricity.
+
+        For example, 8,000 W of heating at a COP of 4 take 2,000 W of electricity and 6,000 W from the air. Zero while
+        it cools or is off. The value is negative only at a COP below 1, which the catalogue fit gives at no
+        temperature of the recorded weather.
+        """
+        if self.heating_power_in_watt > 0.0:
+            return self.heating_power_in_watt - self.electricity_input_in_watt
+        return 0.0
+
+    @property
+    def heat_to_ambient_in_watt(self) -> float:
+        """The heat the machine rejects to the outside air while it cools, in W: the heat it draws plus its electricity.
+
+        For example, drawing 8,000 W from the building at a COP of 4 takes 2,000 W of electricity and rejects
+        10,000 W to the air. Zero while it heats or is off.
+        """
+        if self.cooling_power_in_watt < 0.0:
+            return -self.cooling_power_in_watt + self.electricity_input_in_watt
+        return 0.0
+
     def clone(self) -> Any:
         """Clone heat pump state."""
         return GenericHeatPumpState(
@@ -228,6 +252,13 @@ class GenericHeatPump(cp.PhysicsComponent):
     It does support a refrigeration cycle.
     Thermal output is delivered straight to
     the component object.
+
+    Its energy ports (complete Sankey spec, PR 5a): it consumes electricity (``ElectricityOutput``). While it heats it
+    takes heat from the outside air (``HeatFromAmbientInWatt``) and delivers the sum as space heating (``Heating``);
+    while it cools it draws heat from the building (``HeatDrawnForCoolingInWatt``, carrier ``COOLING``) and rejects
+    that heat plus its electricity to the outside air (``HeatToAmbientInWatt``). Both directions of the building heat
+    are non-negative outputs, which the receiver reads with an input each (decision D20 of
+    ``roadmap/fluid_loops_spec.md``); the signed ``ThermalPowerDelivered`` carries no port.
 
     Parameters
     ----------
@@ -255,6 +286,12 @@ class GenericHeatPump(cp.PhysicsComponent):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     Heating = "Heating"
     Cooling = "Cooling"
+    #: Minus the negative part of ThermalPowerDelivered, the heat taken from the building while cooling, in W.
+    HeatDrawnForCoolingInWatt = "HeatDrawnForCoolingInWatt"
+    #: The heat taken from the outside air while heating, in W, >= 0.
+    HeatFromAmbientInWatt = "HeatFromAmbientInWatt"
+    #: The heat rejected to the outside air while cooling, in W, >= 0.
+    HeatToAmbientInWatt = "HeatToAmbientInWatt"
     ElectricityOutput = "ElectricityOutput"
     NumberOfCycles = "NumberOfCycles"
 
@@ -343,7 +380,11 @@ class GenericHeatPump(cp.PhysicsComponent):
             self.Heating,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.Heating} will follow.",
+            output_description=(
+                f"The heat the machine delivers to the building while it heats, in W, >= 0: {self.ThermalPowerDelivered} "
+                "in a step in which it is positive, else 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
@@ -353,14 +394,52 @@ class GenericHeatPump(cp.PhysicsComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.Cooling} will follow.",
         )
+        # The cooling direction of the signed heat, >= 0, which the building reads through its input port beside the
+        # heating direction, Heating: a port books one direction only.
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the device takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0. The building books it as the cooling it gives the device."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING),
+        )
+        # The outside air is the machine's source while it heats and its sink while it cools; the energy balance links
+        # the one to the "ambient heat source" boundary node and the other to "ambient heat sink" (owner decision Q-M).
+        self.heat_from_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatFromAmbientInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the machine takes from the outside air while it heats, in W: {self.Heating} minus "
+                f"{self.ElectricityOutput} in a step in which it heats, else 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
+        self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatToAmbientInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the machine rejects to the outside air while it cools, in W, >= 0: {self.HeatDrawnForCoolingInWatt} "
+                f"plus {self.ElectricityOutput} in a step in which it cools, else 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow.",
+            output_description="The electricity the machine draws, in W, >= 0: its heating or cooling power over its COP.",
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
@@ -591,6 +670,9 @@ class GenericHeatPump(cp.PhysicsComponent):
             )
             stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
             stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
+            stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -self.state.cooling_power_in_watt))
+            stsv.set_output_value(self.heat_from_ambient_channel, self.state.heat_from_ambient_in_watt)
+            stsv.set_output_value(self.heat_to_ambient_channel, self.state.heat_to_ambient_in_watt)
             stsv.set_output_value(self.electricity_output_channel, self.state.electricity_input_in_watt)
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
             return
@@ -623,6 +705,9 @@ class GenericHeatPump(cp.PhysicsComponent):
         )
         stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
         stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -self.state.cooling_power_in_watt))
+        stsv.set_output_value(self.heat_from_ambient_channel, self.state.heat_from_ambient_in_watt)
+        stsv.set_output_value(self.heat_to_ambient_channel, self.state.heat_to_ambient_in_watt)
         stsv.set_output_value(self.electricity_output_channel, self.state.electricity_input_in_watt)
         stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
 

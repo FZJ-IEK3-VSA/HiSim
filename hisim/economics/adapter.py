@@ -492,6 +492,9 @@ class DeviceEnergySpecs:
         "ElectricHeating": (),
         "AirConditioner": (),
         "SimpleAirConditioner": (),
+        # The idealized heater holds a building at its set points to measure its demand; its electricity
+        # (equal to its heat, since the energy balance needs it as the heat's source) is no device's consumption.
+        "IdealizedElectricHeater": (),
         # Auxiliary pump electricity of a solar thermal loop.
         "SolarThermalSystem": (),
         # The hydrogen chain (electrolyzers, fuel cells, reversible cells, CHP and their storage):

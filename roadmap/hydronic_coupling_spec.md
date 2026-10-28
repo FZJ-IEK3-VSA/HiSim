@@ -834,7 +834,8 @@ and its underheating below the set temperature by -4 %. The gas twin needs 4.10 
 forced steps either way and KPIs equal to float noise (3e-12); the electric-heating twin needs 6.16 instead of 6.95,
 its KPIs equal to 1e-7. On main, before stage B, the verification also measured the order sensitivity of the
 heat-pump twin's annual KPIs: it fell 3-7x. The heat pump's DHW zero guard stays as a step-0 guard until the
-controller restore fix (hisim-component-physics-4g9.28).
+controller restore fix (hisim-component-physics-4g9.28). *Note (2026-10-28):* the guard is gone; the hot-water
+controller now decides every unforced pass from the start of the step (hisim-component-physics-4g9.24).
 *Amendment (owner, 2026-10-11):* the acceleration is removed again (§6); the simulator only iterates.
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:

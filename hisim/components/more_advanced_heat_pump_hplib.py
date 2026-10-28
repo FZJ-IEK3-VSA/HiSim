@@ -3905,12 +3905,37 @@ class HeatPumpDhwState(int, Enum):
     ON = 2
 
 
-class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
+class HeatPumpDhwControllerState(NamedTuple):
+    """The whole memory of the heat pump's hot-water controller: its charge, the charge it commands, and its timer.
+
+    :class:`MoreAdvancedHeatPumpHPLibControllerDHW` keeps nothing else between passes or steps
+    (:class:`hisim.explicit_state_controller.ExplicitStateController`). For example, a charge that has had priority for
+    its maximum time while space heating asks for heat holds ``charge=HeatPumpDhwState.ON`` and
+    ``commanded_charge=HeatPumpDhwState.OFF``: it yields the step to space heating and resumes after the interval. It is a
+    NamedTuple, so a pass builds a new state instead of changing the old one.
+    """
+
+    #: The controller's own hysteresis decision, which stays ON through a priority interruption.
+    charge: HeatPumpDhwState
+    #: The hot-water signal the controller commands the heat pump: ``charge``, or OFF on a step it yields to space heating.
+    commanded_charge: HeatPumpDhwState
+    #: Where a charge stands against its maximum priority time (:class:`HotWaterPriorityLimit`).
+    hot_water_priority_timer: HotWaterPriorityTimer
+    #: The hot-water supply temperature the controller aims at, ``t_max`` plus the energy manager's raise, in °C.
+    supply_temperature_set_for_dhw_in_celsius: float
+
+
+class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhwControllerState], L1ControllerComponent):
     """Heat Pump Controller for DHW.
 
     It takes data from DHW Storage --> generic hot water storage modular
     sends signal to the heat pump for activation or deactivation.
 
+    The controller keeps its whole memory in one :class:`HeatPumpDhwControllerState` and leaves saving, restoring and
+    forcing to :class:`hisim.explicit_state_controller.ExplicitStateController`: every unforced pass decides from the
+    state at the start of the step (:meth:`decide`), and a forced pass republishes the state of the last unforced pass,
+    which is also the state the step commits. Before, each pass decided from the pass before it, so a decision of any
+    pass latched for the rest of the step (hisim-component-physics-4g9.24).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -3945,19 +3970,6 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
             my_display_config=my_display_config,
         )
         self.config: MoreAdvancedHeatPumpHPLibControllerDHWConfig = config
-
-        self.state_dhw: HeatPumpDhwState
-        self.previous_state_dhw: HeatPumpDhwState
-        self.water_temperature_input_from_dhw_storage_in_celsius_previous: float
-        self.water_temperature_input_from_dhw_storage_in_celsius: float
-        self.supply_temperature_set_for_dhw_in_celsius: float
-        # the state the controller publishes: its own state, or OFF on a step the priority limit gives to space heating
-        self.published_state_dhw = HeatPumpDhwState.OFF
-        # the hot-water priority timer at the end of the last unforced pass, and at the start of the step
-        self.hot_water_priority_timer = HotWaterPriorityTimer()
-        self.hot_water_priority_timer_at_start_of_step = HotWaterPriorityTimer()
-
-        self.build()
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -4066,40 +4078,22 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
         )
         return connections
 
-    def build(
-        self,
-    ) -> None:
-        """Build function.
+    def initial_state(self) -> HeatPumpDhwControllerState:
+        """Return the state before the first step: no charge, an idle priority timer and ``t_max`` as the set temperature.
 
-        The function sets important constants and parameters for the calculations.
+        Returns:
+            The initial state.
         """
-
-        self.state_dhw = HeatPumpDhwState.OFF
-        self.water_temperature_input_from_dhw_storage_in_celsius = self.INITIAL_STORAGE_TEMPERATURE_IN_CELSIUS
-        self.supply_temperature_set_for_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius
+        return HeatPumpDhwControllerState(
+            charge=HeatPumpDhwState.OFF,
+            commanded_charge=HeatPumpDhwState.OFF,
+            hot_water_priority_timer=HotWaterPriorityTimer(),
+            supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
-
-    def i_save_state(self) -> None:
-        """Save the current state, and the hot-water priority timer the step starts from.
-
-        Every unforced pass decides the step from the timer saved here; a forced pass keeps the timer of the last
-        unforced pass, as it keeps that pass's decision.
-        """
-        self.previous_state_dhw = self.state_dhw
-        self.water_temperature_input_from_dhw_storage_in_celsius_previous = (
-            self.water_temperature_input_from_dhw_storage_in_celsius
-        )
-        self.hot_water_priority_timer_at_start_of_step = self.hot_water_priority_timer
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.state_dhw = self.previous_state_dhw
-        self.water_temperature_input_from_dhw_storage_in_celsius = (
-            self.water_temperature_input_from_dhw_storage_in_celsius_previous
-        )
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -4108,9 +4102,6 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         return self.heatpump_controller_dhw_config.get_string_dict()
-
-    #: The tank temperature the controller assumes before it has read one, in °C: the lower end of the default band.
-    INITIAL_STORAGE_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 40.0
 
     @staticmethod
     def next_state(
@@ -4170,56 +4161,63 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
             next_state = HeatPumpDhwState.ON
         return next_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Decide whether the heat pump charges the hot-water tank, and publish the decision and the set temperature.
+    def decide(
+        self, *, timestep: int, stsv: SingleTimeStepValues, state: HeatPumpDhwControllerState
+    ) -> HeatPumpDhwControllerState:
+        """Decide whether the heat pump charges the hot-water tank, and the set temperature of the charge.
 
         The decision (:meth:`next_state`) is taken on the tank's start-of-step temperature, which does not change
-        while the step iterates. A charge that has had priority for its maximum time while the space-heating
-        controller asks for heat yields its steps to space heating for the configured interval
-        (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`): the controller publishes OFF on them
-        and keeps its own state ON, so the charge resumes after the interval and ends at its target. Under
-        ``force_convergence`` the controller keeps its decision.
-        """
-        if not force_convergence:
-            storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-            if storage_temperature_in_celsius == 0:
-                # Step-0 guard: only the first step starts from zeroed outputs, so on its first pass a controller
-                # simulated before the tank reads 0 °C and would start a charge; it keeps the temperature it read
-                # last instead. Every later step starts from the values the previous step converged to (the
-                # simulator's warm start), so the guard fires only at step 0. It goes once the controller restores
-                # its decision on every pass, since until then a decision taken on the 0 would latch.
-                storage_temperature_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
-            self.water_temperature_input_from_dhw_storage_in_celsius = storage_temperature_in_celsius
-            raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)
-            self.supply_temperature_set_for_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin
-            self.state_dhw = self.next_state(
-                state=self.state_dhw,
-                storage_temperature_in_celsius=storage_temperature_in_celsius,
-                raise_in_kelvin=raise_in_kelvin,
-                minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
-                maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
-                charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
-            )
-            charges, self.hot_water_priority_timer = HotWaterPriorityLimit.decide(
-                timer=self.hot_water_priority_timer_at_start_of_step,
-                charge_requested=self.state_dhw == HeatPumpDhwState.ON,
-                space_heating_requested=stsv.get_input_value(self.space_heating_state_channel) == 1,
-                maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
-                space_heating_interval_in_seconds=(
-                    self.config.space_heating_interval_after_hot_water_priority_in_seconds
-                ),
-                seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
-            )
-            self.published_state_dhw = self.state_dhw if charges else HeatPumpDhwState.OFF
+        while the step iterates, from the charge at the start of the step. A charge that has had priority for its
+        maximum time while the space-heating controller asks for heat yields its steps to space heating for the
+        configured interval (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`): the controller
+        commands OFF on them and keeps its own charge ON, so the charge resumes after the interval and ends at its
+        target. For example, a tank at 39 °C with the 40/60 °C band and no raise starts a charge at 60 °C.
 
-        self.previous_state_dhw = self.state_dhw
-        self.water_temperature_input_from_dhw_storage_in_celsius_previous = (
-            self.water_temperature_input_from_dhw_storage_in_celsius
+        A first pass of the run reads the tank's zeroed output, 0 °C, and asks for a charge; the next pass decides
+        again from the start of the step on the tank's real temperature, so that request does not last.
+
+        Args:
+            timestep: The step.
+            stsv: The step's values, to read the inputs from.
+            state: The state at the start of the step.
+
+        Returns:
+            The new state.
+        """
+        raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)
+        charge = self.next_state(
+            state=state.charge,
+            storage_temperature_in_celsius=stsv.get_input_value(self.water_temperature_input_channel),
+            raise_in_kelvin=raise_in_kelvin,
+            minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
+            maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+            charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
+        )
+        charges, timer = HotWaterPriorityLimit.decide(
+            timer=state.hot_water_priority_timer,
+            charge_requested=charge == HeatPumpDhwState.ON,
+            space_heating_requested=stsv.get_input_value(self.space_heating_state_channel) == 1,
+            maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
+            space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+        )
+        return HeatPumpDhwControllerState(
+            charge=charge,
+            commanded_charge=charge if charges else HeatPumpDhwState.OFF,
+            hot_water_priority_timer=timer,
+            supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin,
         )
 
-        stsv.set_output_value(self.state_dhw_channel, self.published_state_dhw.value)
+    def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpDhwControllerState) -> None:
+        """Write the outputs that belong to ``state``: the commanded charge and the set temperature.
+
+        Args:
+            stsv: The step's values, to write the outputs to.
+            state: The state whose outputs are written.
+        """
+        stsv.set_output_value(self.state_dhw_channel, state.commanded_charge.value)
         stsv.set_output_value(
-            self.supply_temperature_set_for_dhw_in_celsius_channel, self.supply_temperature_set_for_dhw_in_celsius
+            self.supply_temperature_set_for_dhw_in_celsius_channel, state.supply_temperature_set_for_dhw_in_celsius
         )
 
     @staticmethod

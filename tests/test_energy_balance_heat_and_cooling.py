@@ -8,10 +8,11 @@ decision D20 of ``roadmap/fluid_loops_spec.md``), and the outside air as its sou
 cooling, linked to the "ambient heat source" and the "ambient heat sink" boundary nodes (owner decision Q-M of
 ``roadmap/complete_energy_sankeys_spec.md``).
 
-The building does not declare its ports in this stack yet, so it reads neither heat output, and both are unlinked:
-reported, not failing. The electricity meter of the first two setups reads each device's electricity port; the third
-setup has no meter (bead hisim-meter-bought-carriers-lyfl), so its electricity port is unlinked and unmetered, which
-is not enforced while the building is undeclared (owner decision Q-H).
+The building reads both heat outputs through its input ports ``HeatReceivedInWatt`` and
+``HeatRemovedByCoolingInWatt`` (decision D9), wired by each setup, so the device's heat links to the building. The
+electricity meter of the first two setups reads each device's electricity port; the third setup has no meter (bead
+hisim-meter-bought-carriers-lyfl), so its electricity port is unlinked and unmetered, which is not enforced while a
+component of the run (the weather) is undeclared (owner decision Q-H).
 
 The second January week of 2021 (heating) and the first full July week (cooling: the simple air conditioner cools in
 80 of its steps) at 900 s, each run once per module: the run finishing proves every declared balance closes; the tests
@@ -140,13 +141,14 @@ def test_the_device_heats_in_january_and_cools_in_july_at_a_physical_efficiency(
 
 
 @pytest.mark.extendedbase2
-def test_the_electricity_meter_reads_the_device_and_the_building_heat_is_unlinked(week_results: Tuple[str, str, Path]) -> None:
-    """The meter reads the device's electricity; the heat to and from the building is unlinked until the building declares.
+def test_the_electricity_meter_reads_the_device_and_the_building_reads_its_heat(week_results: Tuple[str, str, Path]) -> None:
+    """The meter reads the device's electricity, and the building's input ports read its heat to and from the building.
 
-    In the setup without a meter the electricity port is unlinked and unmetered, reported and not enforced. A port that
-    moves nothing in the week (the cooling in January, the heating in July) is idle and not listed as unlinked. Catches
-    an electricity port linked to a controller, a heat port linked to anything but the building, and a meter that
-    publishes other than it reads once the device's port is declared.
+    In the setup without a meter the electricity port is unlinked and unmetered, reported and not enforced; in a week in
+    which the device never runs (the simple air conditioner in January) it is idle and not listed as unlinked. Catches
+    an electricity port linked to a controller, a heat port linked to anything but the building, a setup that leaves one
+    of the building's two inputs unwired, and a meter that publishes other than it reads once the device's port is
+    declared.
     """
     setup, _, results = week_results
     device = Expected.DEVICES[setup]
@@ -159,15 +161,16 @@ def test_the_electricity_meter_reads_the_device_and_the_building_heat_is_unlinke
     unlinked = {port["output"] for port in report["unlinked"] if port["component"] == device}
     unmetered = report["unmetered"]
     assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
+    assert {output: peers[output] for output in building_heat} == {output: "Building" for output in building_heat}
+    assert "Building" not in {item["component"] for item in report["undeclared"]}
     if setup == "simple_air_conditioner_household_building_sizer":
-        assert unlinked == (building_heat | {Expected.ELECTRICITY[setup]}) & moving
+        assert unlinked == {Expected.ELECTRICITY[setup]} & moving
         assert {(port["component"], port["output"]) for port in unmetered["ports"]} == {(device, Expected.ELECTRICITY[setup])}
         assert not report["meters"]
         return
-    assert unlinked == building_heat & moving
+    assert not unlinked
     assert peers[Expected.ELECTRICITY[setup]] == "ElectricityMeter"
     assert peers["HeatFromAmbientInWatt"] == "ambient heat source"
     assert not unmetered["ports"]
     (meter,) = report["meters"]
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0
-    assert "Building" in {entry["component"] for entry in report["undeclared"]}

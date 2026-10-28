@@ -160,6 +160,12 @@ def setup_function(
         my_air_conditioner.component_name,
         my_air_conditioner.ThermalPowerDelivered,
     )
+    # the building books the cooling, >= 0, on its input port
+    my_building.connect_input(
+        my_building.HeatRemovedByCoolingInWatt,
+        my_air_conditioner.component_name,
+        my_air_conditioner.HeatDrawnForCoolingInWatt,
+    )
 
     # Controller: add with auto-connect (connects to Building via default connections)
     my_sim.add_component(my_air_conditioner_controller, connect_automatically=True)

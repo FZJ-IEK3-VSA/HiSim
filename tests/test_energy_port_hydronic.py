@@ -44,9 +44,11 @@ class Loops:
     CARRIER = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
 
     @classmethod
-    def loop(cls, *, supplies: bool, name: str = "space_heating", may_cool: bool = False) -> FluidLoop:
-        """A water loop of space-heating heat, as a member that supplies it or not states it."""
-        return FluidLoop(name, carrier=cls.CARRIER, fluid=LoopFluid.WATER, supplies=supplies, may_cool=may_cool)
+    def loop(cls, *, supplies: bool, pumps: bool, name: str = "space_heating", may_cool: bool = False) -> FluidLoop:
+        """A water loop of space-heating heat, as a member that supplies it or not, and pumps it or not, states it."""
+        return FluidLoop(
+            name, carrier=cls.CARRIER, fluid=LoopFluid.WATER, supplies=supplies, may_cool=may_cool, pumps=pumps
+        )
 
 
 def test_the_heat_is_the_circuit_power_times_the_step_to_the_last_bit() -> None:
@@ -118,7 +120,8 @@ def test_the_heat_refuses_what_the_library_refuses(
         ({"fluid": "water"}, "LoopFluid"),
         ({"supplies": 1}, "supplies as True or False"),
         ({"may_cool": None}, "may_cool as True or False"),
-        ({"pumps": "yes"}, "pumps as True, False or None"),
+        ({"pumps": "yes"}, "pumps as True or False"),
+        ({"pumps": None}, "pumps as True or False"),
     ],
 )
 def test_a_loop_refuses_what_cannot_describe_a_loop(changes: Dict[str, Any], match: str) -> None:
@@ -129,7 +132,7 @@ def test_a_loop_refuses_what_cannot_describe_a_loop(changes: Dict[str, Any], mat
         "fluid": LoopFluid.WATER,
         "supplies": True,
         "may_cool": False,
-        "pumps": None,
+        "pumps": True,
     }
     fields.update(changes)
     with pytest.raises(FluidLoopError, match=match):
@@ -146,9 +149,9 @@ def test_a_loop_refuses_what_cannot_describe_a_loop(changes: Dict[str, Any], mat
 def test_a_loop_s_name_is_free_text_and_its_carriers_are_the_heats() -> None:
     """A component may name as many loops as its configuration has, "apartment 3" too; each loop carrier is accepted."""
     for carrier in FluidLoop.LOOP_CARRIERS:
-        loop = FluidLoop("apartment 3", carrier=carrier, fluid=LoopFluid.BRINE, supplies=False, may_cool=True)
-        assert (loop.name, loop.carrier, loop.pumps) == ("apartment 3", carrier, None)
-    loop = Loops.loop(supplies=True)
+        loop = FluidLoop("apartment 3", carrier=carrier, fluid=LoopFluid.BRINE, supplies=False, may_cool=True, pumps=False)
+        assert (loop.name, loop.carrier, loop.pumps) == ("apartment 3", carrier, False)
+    loop = Loops.loop(supplies=True, pumps=True)
     assert [loop.flow_in, loop.flow_out, loop.temperature_in, loop.temperature_out] == [
         FluidLoopChannel(loop, quantity) for quantity in LoopQuantity
     ]
@@ -189,7 +192,7 @@ def test_a_tag_that_does_not_fit_its_channel_is_refused(
 ) -> None:
     """A tag of the wrong unit, of the wrong kind or beside an energy port would pair the wrong columns."""
     with pytest.raises(FluidLoopError, match=match):
-        FluidLoopChannel(Loops.loop(supplies=True), quantity).check_fits(
+        FluidLoopChannel(Loops.loop(supplies=True, pumps=True), quantity).check_fits(
             "Boiler", "Channel", unit, is_input=is_input, energy_port=energy_port
         )
 
@@ -210,10 +213,13 @@ def bare_component(name: str) -> Any:
 
 
 def test_a_component_tags_its_channels_and_groups_them_into_port_sets() -> None:
-    """The boiler's three tagged channels are one port set; its untagged channels belong to none."""
+    """The boiler's four tagged channels are one port set; its untagged channels belong to none."""
     boiler = bare_component("Boiler")
-    loop = Loops.loop(supplies=True)
+    loop = Loops.loop(supplies=True, pumps=True)
     returned = boiler.add_input("Boiler", "Return", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, False, fluid_loop=loop.temperature_in)
+    returning_flow = boiler.add_input(
+        "Boiler", "FlowBack", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, False, fluid_loop=loop.flow_in
+    )
     flow = boiler.add_output(
         "Boiler", "Flow", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, output_description="flow", fluid_loop=loop.flow_out
     )
@@ -227,10 +233,13 @@ def test_a_component_tags_its_channels_and_groups_them_into_port_sets() -> None:
     assert (port_set.component_name, port_set.loop, port_set.label) == ("Boiler", loop, "Boiler.space_heating")
     assert port_set.channels == {
         LoopQuantity.TEMPERATURE_IN: returned,
+        LoopQuantity.FLOW_IN: returning_flow,
         LoopQuantity.FLOW_OUT: flow,
         LoopQuantity.TEMPERATURE_OUT: supply,
     }
-    assert port_set.flow_quantity is LoopQuantity.FLOW_OUT
+    # the pump owner's own flow out is the loop's flow, a pass-through member's flow in
+    assert port_set.pumped_flow_quantity is LoopQuantity.FLOW_OUT
+    assert cp.FluidLoopPortSet("Tank", Loops.loop(supplies=False, pumps=False), {}).pumped_flow_quantity is LoopQuantity.FLOW_IN
     # the declaration refuses a tag the channel's unit or kind cannot carry
     with pytest.raises(FluidLoopError, match=r"Boiler.Power2 .* is in W"):
         boiler.add_output(
@@ -243,19 +252,19 @@ def test_a_component_tags_its_channels_and_groups_them_into_port_sets() -> None:
 def test_two_channels_with_one_tag_or_two_loops_of_one_name_are_refused() -> None:
     """A loop has one channel per quantity, and a component names each of its loops once."""
     tank = bare_component("Tank")
-    loop = Loops.loop(supplies=False)
+    loop = Loops.loop(supplies=False, pumps=False)
     tank.add_input("Tank", "Flow", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True, fluid_loop=loop.flow_in)
     with pytest.raises(FluidLoopError, match="Tank.Flow2 and Tank.Flow both carry the flow_in"):
         tank.add_input("Tank", "Flow2", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True, fluid_loop=loop.flow_in)
     with pytest.raises(FluidLoopError, match="names a loop 'space_heating' that differs"):
         tank.add_input(
-            "Tank", "Supply", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True, fluid_loop=Loops.loop(supplies=True).temperature_in
+            "Tank", "Supply", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True, fluid_loop=Loops.loop(supplies=True, pumps=False).temperature_in
         )
     # the same loop on another quantity, and another loop on the same quantity, are fine
     tank.add_input("Tank", "Supply", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True, fluid_loop=loop.temperature_in)
     tank.add_input(
         "Tank", "SolarFlow", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, False,
-        fluid_loop=Loops.loop(supplies=False, name="solar").flow_in,
+        fluid_loop=Loops.loop(supplies=False, pumps=False, name="solar").flow_in,
     )
 
 
@@ -265,12 +274,16 @@ def test_two_channels_with_one_tag_or_two_loops_of_one_name_are_refused() -> Non
         (LoopQuantity.FLOW_IN,),
         (LoopQuantity.FLOW_IN, LoopQuantity.TEMPERATURE_IN),
         (LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT),
-        (LoopQuantity.FLOW_IN, LoopQuantity.FLOW_OUT, LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT),
+        (LoopQuantity.FLOW_OUT, LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT),
+        (LoopQuantity.FLOW_IN, LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT),
     ],
 )
 def test_a_loop_tagged_by_half_is_refused_when_grouped(quantities: Tuple[LoopQuantity, ...]) -> None:
-    """A port set has both temperatures and, until stage 1b, exactly one flow; anything else names the loop."""
-    loop = Loops.loop(supplies=False)
+    """Rule 0 of §3.3: a port set has all four quantities; one with one to three names the component, loop and gap.
+
+    The three-channel sets of stage 1a, one flow beside both temperatures, are among them.
+    """
+    loop = Loops.loop(supplies=False, pumps=False)
     channels: List[Union[cp.ComponentInput, cp.ComponentOutput]] = []
     for quantity in quantities:
         tag = FluidLoopChannel(loop, quantity)
@@ -280,7 +293,8 @@ def test_a_loop_tagged_by_half_is_refused_when_grouped(quantities: Tuple[LoopQua
             channels.append(
                 cp.ComponentOutput("Tank", quantity.value, lt.LoadTypes.ANY, quantity.unit, component_id=ComponentID("Tank"), fluid_loop=tag)
             )
-    with pytest.raises(FluidLoopError, match="Tank tags the loop 'space_heating' by half"):
+    missing = [quantity.value for quantity in LoopQuantity if quantity not in quantities]
+    with pytest.raises(hydronics.FluidLoopWiringError, match=f"Tank tags the loop 'space_heating' by half: .* lacks {', '.join(missing)};"):
         cp.FluidLoopPortSet.group("Tank", channels)
 
 
@@ -322,12 +336,12 @@ class CircuitRig:
     HEAT_IN_KILOWATT_HOUR: float = 0.1 * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 10.0 * 900 / 3.6e6
     #: The boiler's end: it supplies the loop, publishes the flow and the supply and reads the return.
     SUPPLY_END = End(
-        Loops.loop(supplies=True),
+        Loops.loop(supplies=True, pumps=True),
         {LoopQuantity.FLOW_OUT: "Flow", LoopQuantity.TEMPERATURE_OUT: "Supply", LoopQuantity.TEMPERATURE_IN: "Return"},
     )
     #: The tank's end: it reads the flow and the supply and publishes the return.
     RECEIVING_END = End(
-        Loops.loop(supplies=False),
+        Loops.loop(supplies=False, pumps=False),
         {LoopQuantity.FLOW_IN: "Flow", LoopQuantity.TEMPERATURE_IN: "Supply", LoopQuantity.TEMPERATURE_OUT: "Return"},
     )
 
@@ -561,8 +575,8 @@ def test_an_other_end_that_declares_no_ports_is_drawn_as_undeclared() -> None:
 def test_a_loop_with_no_or_two_suppliers_is_refused_at_build(boiler_supplies: bool, tank_supplies: bool, how_many: str) -> None:
     """Rule 4 of §3.3: exactly one member supplies a loop; two receivers or two suppliers would book its heat twice."""
     ends = {
-        "Boiler": [End(Loops.loop(supplies=boiler_supplies), CircuitRig.SUPPLY_END.names)],
-        "Tank": [End(Loops.loop(supplies=tank_supplies), CircuitRig.RECEIVING_END.names)],
+        "Boiler": [End(Loops.loop(supplies=boiler_supplies, pumps=True), CircuitRig.SUPPLY_END.names)],
+        "Tank": [End(Loops.loop(supplies=tank_supplies, pumps=False), CircuitRig.RECEIVING_END.names)],
     }
     columns = CircuitRig.boiler_columns() + CircuitRig.tank_columns()
     inputs = {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}

@@ -242,6 +242,12 @@ class GenericBoilerConfig(ConfigBase):
     #: ``set_temperature_difference_for_full_power`` would raise lifts on which that controller commands full power,
     #: so the supply would end above the one it asked for: keep it at or below that threshold.
     minimal_lift_at_maximal_power_in_kelvin: float = field(default=5.0, metadata={"unit": lt.Units.KELVIN})
+    #: Whether the boiler pumps its space-heating loop (D16 of ``roadmap/fluid_loops_spec.md``). True, the default,
+    #: for a boiler that charges a buffer: its pump moves the flow its lift asks for. False for a boiler without a
+    #: buffer, wired directly to a heat distribution system that pumps the loop: the boiler heats the flow it reads
+    #: through ``WaterInputMassFlowSh`` and passes it on. The build refuses a loop with no or two pump owners, so a
+    #: wrong value is named there.
+    pumps_space_heating_loop: bool = True
     device_co2_footprint_in_kg: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
     lifetime_in_years: Optional[float] = None
@@ -1396,13 +1402,16 @@ class GenericBoiler(PhysicsComponent):
     ``TemperatureDeltaForSpaceHeatingRemainderInKelvin``), and the fuel of both adds up.
 
     Without a buffer the space-heating circuit may run on the heat distribution system's flow: the distribution system
-    pumps its design flow and the boiler, wired to it through ``WaterInputMassFlowSh``, is a heater on that flow, like
-    a district-heating substation without a pump (``roadmap/hydronic_coupling_spec.md``, D25 as amended on 2026-10-22).
+    pumps its design flow and the boiler, configured not to pump its space-heating loop (``pumps_space_heating_loop``
+    false) and reading that flow through ``WaterInputMassFlowSh``, is a heater on that flow, like a district-heating
+    substation without a pump (``roadmap/hydronic_coupling_spec.md``, D25 as amended on 2026-10-22).
     It then holds the commanded power instead of the controller's lift: the supply is the return plus the rise that
     power's heat gives at the flow it reads, throttled at the maximal flow temperature, and it books the heat with that
     flow, so both ends of the circuit book the same water. With no flow it does not fire, like a boiler's flow switch.
     The space-heating circuit then publishes the flow it reads in every step, firing or not
-    (:meth:`fired_on_distribution_flow`). Unwired, the boiler pumps its own flow as before.
+    (:meth:`fired_on_distribution_flow`). Pumping its loop, the default, the boiler moves its own flow and reads the
+    flow that returns through ``WaterInputMassFlowSh`` without using it: each of its two water loops is a fluid loop
+    with a flow in, a flow out and two temperatures (``roadmap/fluid_loops_spec.md``).
 
     A pellet or wood-chip burner keeps its minimum firing time and minimum pause (:class:`BurnerTimes`), the device's
     protection against short cycling: lit, it burns on although its controller asks it to stop, sending the heat to the
@@ -1426,10 +1435,12 @@ class GenericBoiler(PhysicsComponent):
     ControlSignalForSpaceHeatingRemainder = "ControlSignalForSpaceHeatingRemainder"
     TemperatureDeltaForSpaceHeatingRemainderInKelvin = "TemperatureDeltaForSpaceHeatingRemainderInKelvin"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
-    #: The space-heating circuit's mass flow, in kg/s, when the component at its other end pumps it: a heat
-    #: distribution system that pumps its design flow, with no buffer in between. Optional; unwired, the boiler pumps.
+    #: The space-heating loop's flow arriving at the boiler, in kg/s: the flow it heats when it does not pump the loop
+    #: (a heat distribution system that pumps its design flow, with no buffer in between), else its own flow returning.
     WaterInputMassFlowSh = "WaterInputMassFlowSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
+    #: The hot-water loop's flow returning to the boiler, in kg/s: its own flow, passed back by the tank.
+    WaterInputMassFlowDhw = "WaterInputMassFlowDhw"
 
     # Output
     #: The actual part-load ratio of the hot-water charge: the fraction of the step it ran, reported back to the controller.
@@ -1537,14 +1548,15 @@ class GenericBoiler(PhysicsComponent):
         fuel_carrier = EnergyPort.carrier_of_fuel(self.config.energy_carrier)
         # The boiler's two water loops (complete Sankey spec §5.1): the heat it gives is what they carry. It supplies
         # both and cools neither. It always pumps its hot-water loop; whether it pumps its space-heating loop or heats
-        # the distribution system's flow depends on the system (#1117) and is stated in stage 1b of the hydraulic
-        # circuits spec.
+        # the distribution system's flow depends on the system (#1117) and is its configuration's
+        # pumps_space_heating_loop (D16 of roadmap/fluid_loops_spec.md).
         self.space_heating_loop = FluidLoop(
             "space_heating",
             carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
             fluid=LoopFluid.WATER,
             supplies=True,
             may_cool=False,
+            pumps=self.config.pumps_space_heating_loop,
         )
         self.hot_water_loop = FluidLoop(
             "dhw",
@@ -1569,6 +1581,7 @@ class GenericBoiler(PhysicsComponent):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             False,
+            fluid_loop=self.space_heating_loop.flow_in,
         )
         self.water_output_mass_flow_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1577,7 +1590,8 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.KG_PER_SEC,
             output_description=(
                 "The space-heating circuit's mass flow, kg/s: the flow the boiler's pump runs while it fires and 0 "
-                "while it idles, or, with WaterInputMassFlowSh wired, the flow it reads there, in every step."
+                "while it idles, or, where the boiler does not pump its space-heating loop, the flow it reads at "
+                "WaterInputMassFlowSh, passed on in every step."
             ),
             fluid_loop=self.space_heating_loop.flow_out,
         )
@@ -1623,6 +1637,14 @@ class GenericBoiler(PhysicsComponent):
             lt.Units.CELSIUS,
             False,
             fluid_loop=self.hot_water_loop.temperature_in,
+        )
+        self.water_input_mass_flow_dhw_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.WaterInputMassFlowDhw,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            False,
+            fluid_loop=self.hot_water_loop.flow_in,
         )
         self.water_output_mass_flow_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1768,6 +1790,14 @@ class GenericBoiler(PhysicsComponent):
                 component_class.WaterTemperatureToHeatGenerator,
             )
         )
+        # the boiler's own flow, passed back by the buffer: the space-heating loop's fourth wire
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.WaterInputMassFlowSh,
+                hws_classname,
+                component_class.WaterMassFlowRateToHeatGenerator,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_dhw_storage(
@@ -1782,6 +1812,14 @@ class GenericBoiler(PhysicsComponent):
                 GenericBoiler.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+            )
+        )
+        # the boiler's own hot-water flow, passed back by the tank's primary coil: the loop's fourth wire
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.WaterInputMassFlowDhw,
+                hws_classname,
+                component_class.WaterMassFlowRateToHeatGenerator,
             )
         )
         return connections
@@ -1891,7 +1929,7 @@ class GenericBoiler(PhysicsComponent):
         off burns at its minimal power, a twelfth of its maximal one, and one whose controller still names space heating
         with the buffer above its set temperature burns at full power. A burner out for less than its minimum pause
         stays out. Out, no circuit moves water and no fuel is burnt, except that a space-heating circuit on the
-        distribution system's flow (``WaterInputMassFlowSh`` wired) carries that flow at its return. On that flow the
+        distribution system's flow (``pumps_space_heating_loop`` false) carries that flow at its return. On that flow the
         space-heating circuit fires on the flow it reads, not on the lift, and a burner held lit sends its heat into
         that flow; with no flow it does not fire (:meth:`fired_on_distribution_flow`). The decision reads only this
         step's inputs and the burner's state committed at the end of the previous step, so every pass of a step decides
@@ -2003,7 +2041,7 @@ class GenericBoiler(PhysicsComponent):
             space_heating: The space-heating circuit's firing, or None while it idles.
             hot_water: The hot-water circuit's firing, or None while it idles.
         """
-        if space_heating is None and self.space_heating_runs_on_distribution_flow():
+        if space_heating is None and not self.space_heating_loop.pumps:
             space_heating = BoilerFiring(
                 fuel_power_in_watt=0.0,
                 stream=hydronics.FluidStream(
@@ -2059,7 +2097,7 @@ class GenericBoiler(PhysicsComponent):
             self.dhw_part_load_command if fired is self.hot_water_circuit else self.space_heating_part_load_command
         )
         requested_ratio = command.requested_ratio(stsv)
-        if fired is self.space_heating_circuit and self.space_heating_runs_on_distribution_flow():
+        if fired is self.space_heating_circuit and not self.space_heating_loop.pumps:
             firing = self.part_loaded_firing_on_distribution_flow(
                 firing, part_load_ratio=requested_ratio, return_temperature_in_celsius=return_temperature_in_celsius
             )
@@ -2086,7 +2124,7 @@ class GenericBoiler(PhysicsComponent):
         the space-heating circuit this way with a lift of 0 K, so it runs at the pump's largest flow for the whole
         step: it is not part-loaded, since the controller that asked it to stop may command a space-heating ratio of
         0 above 600 s, and the burner would then go out before its minimum firing time. A space-heating circuit on the
-        distribution system's flow (``WaterInputMassFlowSh`` wired) ignores the lift and fires on the flow it reads
+        distribution system's flow (``pumps_space_heating_loop`` false) ignores the lift and fires on the flow it reads
         (:meth:`fired_on_distribution_flow`).
 
         Args:
@@ -2101,7 +2139,7 @@ class GenericBoiler(PhysicsComponent):
         """
         commanded_power_in_watt = self.burner.commanded_power_in_watt(control_signal)
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
-        if fired is self.space_heating_circuit and self.space_heating_runs_on_distribution_flow():
+        if fired is self.space_heating_circuit and not self.space_heating_loop.pumps:
             return self.fired_on_distribution_flow(
                 burner=self.burner,
                 control_signal=control_signal,
@@ -2134,20 +2172,6 @@ class GenericBoiler(PhysicsComponent):
             return_temperature_in_celsius=return_temperature_in_celsius,
             supply_temperature_in_celsius=supply_temperature_in_celsius,
         )
-
-    def space_heating_runs_on_distribution_flow(self) -> bool:
-        """Return whether the space-heating circuit runs on the flow another component pumps: its flow input is wired.
-
-        A boiler without a buffer between it and the heat distribution system is wired to the distribution system's
-        flow (``WaterInputMassFlowSh``), since the distribution system pumps that circuit; every other boiler leaves
-        the input unwired and pumps its own flow. For example, ``gas_boiler_household.energy_system.yaml`` wires it,
-        and every boiler that charges a buffer does not. Read from the wiring in every call, which is one attribute
-        lookup, so a test that wires the input after building the boiler sees it.
-
-        Returns:
-            True when the flow input is wired.
-        """
-        return self.water_input_mass_flow_sh_channel.source_output is not None
 
     @staticmethod
     def fired_on_distribution_flow(

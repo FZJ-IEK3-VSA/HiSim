@@ -304,6 +304,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
     TemperatureInputSecondarySH = "TemperatureInputSecondarySH"  # °C
     TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
+    #: The space-heating loop's flow returning to the machine, in kg/s: its own flow, passed back by the buffer.
+    ReturningMassFlowSH = "ReturningMassFlowSH"
+    #: The hot-water loop's flow returning to the machine, in kg/s: its own flow, passed back by the tank.
+    ReturningMassFlowDHW = "ReturningMassFlowDHW"
     #: The hot-water supply temperature the hot-water controller aims at: the hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
@@ -576,6 +580,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             mandatory=False,
             fluid_loop=self.space_heating_loop.temperature_in,
         )
+        # The flows returning to the machine: it pumps both loops, so it reads them for the loop's book only.
+        self.mass_flow_input_space_heating: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.ReturningMassFlowSH,
+            load_type=LoadTypes.WARM_WATER,
+            unit=Units.KG_PER_SEC,
+            mandatory=False,
+            fluid_loop=self.space_heating_loop.flow_in,
+        )
 
         self.t_amb: ComponentInput = self.add_input(
             object_name=self.component_name,
@@ -601,6 +614,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 unit=Units.CELSIUS,
                 mandatory=True,
                 fluid_loop=self.hot_water_loop.temperature_in,
+            )
+            self.mass_flow_input_dhw: ComponentInput = self.add_input(
+                object_name=self.component_name,
+                field_name=self.ReturningMassFlowDHW,
+                load_type=LoadTypes.WARM_WATER,
+                unit=Units.KG_PER_SEC,
+                mandatory=False,
+                fluid_loop=self.hot_water_loop.flow_in,
             )
 
             self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
@@ -1089,6 +1110,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        # the machine's own flow, passed back by the buffer: the space-heating loop's fourth wire
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.ReturningMassFlowSH,
+                hws_classname,
+                simple_water_storage.SimpleHotWaterStorage.WaterMassFlowRateToHeatGenerator,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_dhw_storage(
@@ -1106,6 +1135,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
                 dhw_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+            )
+        )
+        # the machine's own hot-water flow, passed back by the tank's primary coil: the loop's fourth wire
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.ReturningMassFlowDHW,
+                dhw_classname,
+                component_class.WaterMassFlowRateToHeatGenerator,
             )
         )
         return connections

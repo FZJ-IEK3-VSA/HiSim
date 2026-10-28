@@ -2714,6 +2714,9 @@
                   "minimal_lift_at_maximal_power_in_kelvin": {
                     "type": "number"
                   },
+                  "pumps_space_heating_loop": {
+                    "type": "boolean"
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -3254,6 +3257,9 @@
                 "properties": {
                   "component_id": {},
                   "with_domestic_hot_water_preparation": {
+                    "type": "boolean"
+                  },
+                  "pumps_space_heating_loop": {
                     "type": "boolean"
                   },
                   "device_co2_footprint_in_kg": {
@@ -4216,6 +4222,9 @@
                       "NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR",
                       "NO_STORAGE_MASS_FLOW_FIX"
                     ]
+                  },
+                  "pumps_the_distribution_loop": {
+                    "type": "boolean"
                   },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
@@ -5261,6 +5270,9 @@
                     ]
                   },
                   "use_external_massflow_as_signal_input_for_nominal_massflow": {
+                    "type": "boolean"
+                  },
+                  "pumps_the_brine_loop": {
                     "type": "boolean"
                   },
                   "device_co2_footprint_in_kg": {

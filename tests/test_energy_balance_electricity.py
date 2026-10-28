@@ -14,9 +14,8 @@ minus what they give, and no electricity port is left unmetered, the heat pump's
 
 The second January week at 900 s of the heat-pump and the gas household (each run once per module): the run
 finishing proves every declared balance closes; the tests read its report. The occupancy's room heat goes to the
-building, which declares its ports since PR 4 of the spec. The weather is still undeclared (its exemption is PR 5d),
-so the meter check is reported, not enforced (owner decision Q-H: it fails the run only once no component is
-undeclared).
+building, which declares its ports since PR 4 of the spec. The weather is exempt since PR 5d, so no component is
+undeclared and the meter check is enforced (owner decision Q-H: it fails the run once no component is undeclared).
 """
 
 import json
@@ -139,8 +138,8 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
     """Import minus export of the electricity meter equals what the devices it reads take minus what they give.
 
     The meter reads every device's electricity port directly, the heat pump's cooling and brine pump too, and no
-    electricity port is unmetered. The check is reported and not yet enforced, because the weather is still
-    undeclared (Q-H); with PV, battery and occupancy declared it already agrees in every step.
+    electricity port is unmetered. The check is enforced, because no component is undeclared (Q-H), and it agrees
+    in every step.
     """
     setup, results = twin
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
@@ -156,7 +155,7 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
     heat_pump_reads = {(component, output) for component, output in reads if component == "MoreAdvancedHeatPumpHPLib"}
     assert heat_pump_reads == (Expected.HEAT_PUMP_READS if setup == "household_heatpump_building_sizer" else set())
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0 and meter["worst_step"] is None
-    assert meter["enforced"] is False and "undeclared" in meter["not_enforced_because"]
+    assert meter["enforced"] is True and meter["not_enforced_because"] is None
     assert abs(meter["residual_kwh"]) <= 1e-6
     assert meter["published_import_kwh"] - meter["published_export_kwh"] == pytest.approx(
         meter["consumed_kwh"] - meter["produced_kwh"], rel=1e-6, abs=1e-6

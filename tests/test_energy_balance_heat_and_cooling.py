@@ -11,7 +11,8 @@ cooling, linked to the "ambient heat source" and the "ambient heat sink" boundar
 The building reads both heat outputs through its input ports ``HeatReceivedInWatt`` and
 ``HeatRemovedByCoolingInWatt`` (decision D9), wired by each setup, so the device's heat links to the building. The
 electricity meter of each setup reads the device's electricity port (bead hisim-meter-bought-carriers-lyfl gave the
-third setup its meter), so no port is unmetered.
+third setup its meter), so no port is unmetered. Since the weather is exempt (PR 5d) no component of the run is
+undeclared, so the metering rule is enforced (owner decision Q-H).
 
 The second January week of 2021 (heating) and the first full July week (cooling: the simple air conditioner cools in
 80 of its steps) at 900 s, each run once per module: the run finishing proves every declared balance closes; the tests
@@ -157,7 +158,7 @@ def test_the_electricity_meter_reads_the_device_and_the_building_reads_its_heat(
     building_heat: Set[str] = {"HeatDrawnForCoolingInWatt", *([Expected.HEATING[setup]] if setup in Expected.HEATING else [])}
     unlinked = {port["output"] for port in report["unlinked"] if port["component"] == device}
     unmetered = report["unmetered"]
-    assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
+    assert unmetered["enforced"] is True and not report["undeclared"]
     assert {output: peers[output] for output in building_heat} == {output: "Building" for output in building_heat}
     assert "Building" not in {item["component"] for item in report["undeclared"]}
     assert not unlinked

@@ -29,7 +29,6 @@ import pytest
 from hisim import loadtypes as lt
 from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.advanced_fuel_cell import CHP
-from hisim.components.idealized_electric_heater import IdealizedElectricHeater
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.transformer_rectifier import Transformer
 from hisim.energy_port import EnergyPort
@@ -127,11 +126,6 @@ class FlagPortAgreement:
             "STORED_ENERGY_INCREASE output; flagged as production, the discharging would count as generation."
         ),
         (CHP, CHP.ElectricityOutput): RESULTS_KEEP_REASON,
-        (IdealizedElectricHeater, IdealizedElectricHeater.ElectricityConsumptionInWatt): (
-            "a port and no flag: the idealized heater holds a building at its set points to measure the building's "
-            "demand; nothing bills it, and a consumption flag would put its electricity into the KPIs of the building "
-            "tests that run it."
-        ),
         (Transformer, Transformer.ElectricityReceivedInWatt): (
             "a port and no flag: the preset's unit receives electricity, which no setup feeds it (electrolyzer_with_"
             "renewables feeds it a wind turbine's electricity, another carrier); the KPIs count what it delivers as "

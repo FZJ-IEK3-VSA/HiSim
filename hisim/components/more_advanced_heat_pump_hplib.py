@@ -16,7 +16,7 @@ import importlib
 import math
 from enum import Enum, unique
 from dataclasses import dataclass, field, replace
-from typing import Any, ClassVar, List, Optional, Dict, Tuple
+from typing import Any, ClassVar, List, NamedTuple, Optional, Dict, Tuple
 
 import pandas as pd
 import numpy as np
@@ -48,6 +48,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim.components import weather, simple_water_storage, heating_curve
+from hisim.explicit_state_controller import ExplicitStateController
 from hisim import hydronics
 from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
@@ -3048,7 +3049,43 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
+@unique
+class HeatPumpSpaceHeatingMode(int, Enum):
+    """The modes of the hplib heat pump's space-heating controller, with the ``State_SH`` values it publishes.
+
+    The heat pump reads the value as its space-heating switch: 1 heats, -1 cools (control mode 2 with floor heating
+    only), 0 does neither.
+    """
+
+    #: Cooling through the floor.
+    COOLING = -1
+    #: Neither heating nor cooling.
+    OFF = 0
+    #: Heating.
+    HEATING = 1
+
+
+class HeatPumpSpaceHeatingControllerState(NamedTuple):
+    """The whole memory of the heat pump's space-heating controller: its mode and the part-load outputs it publishes.
+
+    :class:`MoreAdvancedHeatPumpHPLibControllerSpaceHeating` keeps nothing else between passes or steps
+    (:class:`hisim.explicit_state_controller.ExplicitStateController`). For example, a controller that switched heating
+    on below a 37.5 °C target and asks for two thirds of a 900 s step holds ``mode=HeatPumpSpaceHeatingMode.HEATING``,
+    ``requested_part_load_ratio_sh=0.67`` and ``target_temperature_sh_in_celsius=37.5``. It is a NamedTuple, so a pass
+    builds a new state instead of changing the old one.
+    """
+
+    #: Heating, cooling or off: the hysteresis decision, which the next step starts from.
+    mode: HeatPumpSpaceHeatingMode
+    #: The fraction of the step the space-heating charge is to run, from 0 to 1.
+    requested_part_load_ratio_sh: float
+    #: The buffer temperature the space-heating charge aims at, in °C.
+    target_temperature_sh_in_celsius: float
+
+
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+    ExplicitStateController[HeatPumpSpaceHeatingControllerState], L1ControllerComponent
+):
     """Heat Pump Controller for Space Heating.
 
     It takes data from other
@@ -3083,6 +3120,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     ratio the heat pump reports it ran with (``ActualPartLoadRatioSh``); otherwise it keeps the value of the last
     unforced pass
     (:meth:`hisim.part_load.StartOfStepPartLoadControl.publish_held`).
+
+    The controller keeps its whole memory in one :class:`HeatPumpSpaceHeatingControllerState` and leaves saving,
+    restoring and forcing to :class:`hisim.explicit_state_controller.ExplicitStateController`: :meth:`decide` returns
+    the state of a pass, :meth:`publish` writes its outputs, and a forced pass republishes the state of the last unforced
+    pass (:meth:`publish_forced`), which is also the state the step commits. So a forced step whose last unforced pass
+    switched heating off commits off, the mode the heat pump ran, not the mode the step started in
+    (hisim-component-physics-4g9.28).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -3205,9 +3249,6 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             target_output_name=self.TargetTemperatureShInCelsius,
         )
 
-        self.controller_heatpumpmode: Any
-        self.previous_heatpump_mode: Any
-
         self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -3323,7 +3364,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
-        """Set the control law and the hysteresis band, and start the controller switched off.
+        """Set the control law and the hysteresis band; the controller starts switched off (:meth:`initial_state`).
 
         The control law is refused here, when the controller is built, rather than in its first simulated step:
         mode 1 (on/off) is accepted for every emitter, mode 2 (heating, cooling, off) only for floor heating,
@@ -3350,9 +3391,6 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 f"{self.component_name}: the space-heating controller's mode 2 cools through the emitter, which only "
                 f"floor heating can do, but the emitter is {self.heat_distribution_system_type!r}."
             )
-        self.controller_heatpumpmode = "off"
-        self.previous_heatpump_mode = self.controller_heatpumpmode
-
         # Configuration
         self.mode = mode
         self.upper_temperature_offset_for_state_conditions_in_celsius = (
@@ -3362,17 +3400,19 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             lower_temperature_offset_for_state_conditions_in_celsius
         )
 
+    def initial_state(self) -> HeatPumpSpaceHeatingControllerState:
+        """Return the state before the first step: off, no part-load ratio and no target.
+
+        Returns:
+            The initial state.
+        """
+        return HeatPumpSpaceHeatingControllerState(
+            mode=HeatPumpSpaceHeatingMode.OFF, requested_part_load_ratio_sh=0.0, target_temperature_sh_in_celsius=0.0
+        )
+
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
-
-    def i_save_state(self) -> None:
-        """Save the current state."""
-        self.previous_heatpump_mode = self.controller_heatpumpmode
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_heatpumpmode = self.previous_heatpump_mode
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -3382,87 +3422,107 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         """Write important variables to report."""
         return self.heatpump_controller_config.get_string_dict()
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def decide(
+        self, *, timestep: int, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState
+    ) -> HeatPumpSpaceHeatingControllerState:
         """Decide heating, cooling or off on the buffer's start temperature, and the requested space-heating ratio.
 
-        Under ``force_convergence`` every output keeps the value of the last pass, except the requested ratio above the
-        threshold with the buffer wired: its port then carries the actual ratio the heat pump reports it ran with, so
-        the charge stops changing. At and below the threshold, or without the buffer, the requested ratio keeps its last
-        value too.
+        For example, a controller that is off, with the buffer at 29 °C below the 30 °C switch-on point of a 35 °C
+        supply temperature, returns heating with the ratio that ends the buffer at its 37.5 °C target. Control mode 1
+        switches between heating and off (:meth:`conditions_on_off`), mode 2 also cools
+        (:meth:`conditions_heating_cooling_off`). The decision is returned as a new state and published by
+        :meth:`publish`; a forced pass publishes the state of the last unforced pass (:meth:`publish_forced`).
+
+        Args:
+            timestep: The step.
+            stsv: The step's values, to read the inputs from.
+            state: The state at the start of the step.
+
+        Returns:
+            The new state.
+
+        Raises:
+            ValueError: If the configured control mode is neither 1 nor 2.
         """
+        water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+        heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.supply_temperature_set_channel)
+        storage_temperature_modifier = stsv.get_input_value(self.simple_hot_water_storage_temperature_modifier_channel)
+        # the heat pump heats only in the heating season the heating curve publishes
+        summer_heating_mode = "on" if stsv.get_input_value(self.heating_season_channel) > 0.5 else "off"
 
-        if force_convergence:
-            self.space_heating_part_load.publish_held(stsv)
-        else:
-            # Retrieves inputs
-
-            water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.supply_temperature_set_channel
+        # mode 1 is on/off controller
+        if self.mode == 1:
+            mode = self.conditions_on_off(
+                state.mode,
+                water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                summer_heating_mode=summer_heating_mode,
+                storage_temperature_modifier=storage_temperature_modifier,
+                upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
+                lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
             )
-
-            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
-            )
-
-            storage_temperature_modifier = stsv.get_input_value(
-                self.simple_hot_water_storage_temperature_modifier_channel
-            )
-
-            # the heat pump heats only in the heating season the heating curve publishes
-            summer_heating_mode = "on" if stsv.get_input_value(self.heating_season_channel) > 0.5 else "off"
-
-            # mode 1 is on/off controller
-            if self.mode == 1:
-                self.conditions_on_off(
-                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-                    summer_heating_mode=summer_heating_mode,
-                    storage_temperature_modifier=storage_temperature_modifier,
-                    upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
-                    lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
-                )
-
-            # mode 2 is the regulated controller (heating, cooling, off); build() admits it only for floor heating
-            elif self.mode == 2:
-                # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
-                summer_cooling_mode = self.summer_cooling_condition(
-                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                    set_cooling_threshold_temperature_in_celsius=self.heatpump_controller_config.set_cooling_threshold_outside_temperature_in_celsius,
-                )
-                self.conditions_heating_cooling_off(
-                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-                    summer_heating_mode=summer_heating_mode,
-                    summer_cooling_mode=summer_cooling_mode,
-                    storage_temperature_modifier=storage_temperature_modifier,
-                    upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
-                    lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
-                )
-
-            else:
-                raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
-
-            if self.controller_heatpumpmode == "heating":
-                state = 1
-            elif self.controller_heatpumpmode == "cooling":
-                state = -1
-            elif self.controller_heatpumpmode == "off":
-                state = 0
-            else:
-                raise ValueError("Advanced HP Lib Controller State unknown.")
-
-            stsv.set_output_value(self.state_channel, state)
-            self.space_heating_part_load.publish_raising(
-                stsv,
-                device_runs=state == 1,
-                target_temperature_in_celsius=self.space_heating_target_temperature_in_celsius(
-                    supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-                    storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
-                    upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
+        # mode 2 is the regulated controller (heating, cooling, off); build() admits it only for floor heating
+        elif self.mode == 2:
+            # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
+            summer_cooling_mode = self.summer_cooling_condition(
+                daily_average_outside_temperature_in_celsius=stsv.get_input_value(
+                    self.daily_avg_outside_temperature_input_channel
                 ),
+                set_cooling_threshold_temperature_in_celsius=self.heatpump_controller_config.set_cooling_threshold_outside_temperature_in_celsius,
             )
+            mode = self.conditions_heating_cooling_off(
+                state.mode,
+                water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                summer_heating_mode=summer_heating_mode,
+                summer_cooling_mode=summer_cooling_mode,
+                storage_temperature_modifier=storage_temperature_modifier,
+                upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
+                lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
+            )
+        else:
+            raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
+
+        target_temperature_in_celsius = self.space_heating_target_temperature_in_celsius(
+            supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+            upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
+        )
+        return HeatPumpSpaceHeatingControllerState(
+            mode=mode,
+            requested_part_load_ratio_sh=self.space_heating_part_load.next_requested_raising_ratio(
+                stsv,
+                device_runs=mode == HeatPumpSpaceHeatingMode.HEATING,
+                target_temperature_in_celsius=target_temperature_in_celsius,
+            ),
+            target_temperature_sh_in_celsius=target_temperature_in_celsius,
+        )
+
+    def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
+        """Write the outputs that belong to ``state``: the mode as ``State_SH``, the requested ratio and its target.
+
+        Args:
+            stsv: The step's values, to write the outputs to.
+            state: The state whose outputs are written.
+        """
+        stsv.set_output_value(self.state_channel, state.mode.value)
+        stsv.set_output_value(self.space_heating_part_load.requested_ratio_channel, state.requested_part_load_ratio_sh)
+        if self.space_heating_part_load.target_channel is not None:
+            stsv.set_output_value(self.space_heating_part_load.target_channel, state.target_temperature_sh_in_celsius)
+
+    def publish_forced(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
+        """Write the outputs of a forced pass: those of ``state``, except the requested ratio above the threshold.
+
+        Above the threshold with the buffer wired the requested ratio becomes the actual ratio the heat pump reports it
+        ran with, so the charge stops changing; the state keeps the ratio its pass decided. At and below the threshold,
+        or without the buffer, the ratio is the state's, like every other output.
+
+        Args:
+            stsv: The step's values.
+            state: The state of the last unforced pass.
+        """
+        self.publish(stsv=stsv, state=state)
+        self.space_heating_part_load.publish_held(stsv)
 
     @classmethod
     def space_heating_target_temperature_in_celsius(
@@ -3505,32 +3565,50 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
     def conditions_on_off(
         self,
+        mode: HeatPumpSpaceHeatingMode,
+        *,
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
         storage_temperature_modifier: float,
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
-    ) -> None:
-        """Set conditions for the heat pump controller mode."""
+    ) -> HeatPumpSpaceHeatingMode:
+        """Return the mode of control mode 1 (on/off) after one decision on the buffer's start temperature.
+
+        Heating switches off above the switch-off point or outside the heating season; off switches to heating below
+        the switch-on point in the heating season (:meth:`heating_switch_temperatures_in_celsius`); inside the band the
+        mode stays. For example, with a 35 °C flow temperature and 5 K offsets, heating at 39 °C stays heating and
+        heating at 41 °C switches off.
+
+        Args:
+            mode: The mode at the start of the step.
+            water_temperature_input_in_celsius: The buffer's start-of-step temperature, in °C.
+            set_heating_flow_temperature_in_celsius: The flow temperature the circuit asks for, in °C.
+            summer_heating_mode: "on" in the heating season, "off" outside it.
+            storage_temperature_modifier: The energy manager's raise of the band, in K.
+            upper_temperature_offset_for_state_conditions_in_celsius: The upper half of the band, in K.
+            lower_temperature_offset_for_state_conditions_in_celsius: The lower half of the band, in K.
+
+        Returns:
+            The mode after the decision.
+
+        Raises:
+            ValueError: If ``mode`` is cooling, which control mode 1 never decides.
+        """
         switch_on_in_celsius, switch_off_in_celsius = self.heating_switch_temperatures_in_celsius(
             set_heating_flow_temperature_in_celsius,
             upper_temperature_offset_for_state_conditions_in_celsius,
             lower_temperature_offset_for_state_conditions_in_celsius,
             storage_temperature_modifier,
         )
-
-        if self.controller_heatpumpmode == "heating":
-            if water_temperature_input_in_celsius > switch_off_in_celsius or summer_heating_mode == "off":
-                self.controller_heatpumpmode = "off"
-                return
-
-        elif self.controller_heatpumpmode == "off":
-            if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
-                return
-
-        else:
-            raise ValueError("unknown mode")
+        if mode == HeatPumpSpaceHeatingMode.HEATING:
+            heating_ends = water_temperature_input_in_celsius > switch_off_in_celsius or summer_heating_mode == "off"
+            return HeatPumpSpaceHeatingMode.OFF if heating_ends else mode
+        if mode == HeatPumpSpaceHeatingMode.OFF:
+            heating_starts = self.heating_is_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode)
+            return HeatPumpSpaceHeatingMode.HEATING if heating_starts else mode
+        raise ValueError(f"{self.component_name}: control mode 1 has no mode {mode!r}.")
 
     def heating_switch_temperatures_in_celsius(
         self,
@@ -3581,24 +3659,31 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             switch_off_without_modifier_in_celsius + storage_temperature_modifier,
         )
 
-    def start_heating_if_due(
-        self,
+    @staticmethod
+    def heating_is_due(
         water_temperature_input_in_celsius: float,
         switch_on_temperature_in_celsius: float,
         summer_heating_mode: str,
     ) -> bool:
-        """Switch an idle machine to heating if the water is below the switch-on point in the heating season.
+        """Return whether an idle machine starts heating: the water is below the switch-on point in the heating season.
+
+        For example, water at 29 °C below a 30 °C switch-on point starts heating in the heating season ("on") and not
+        outside it ("off").
+
+        Args:
+            water_temperature_input_in_celsius: The buffer's start-of-step temperature, in °C.
+            switch_on_temperature_in_celsius: The switch-on point, in °C.
+            summer_heating_mode: "on" in the heating season, "off" outside it.
 
         Returns:
-            Whether the machine now heats.
+            Whether the machine starts heating.
         """
-        if water_temperature_input_in_celsius < switch_on_temperature_in_celsius and summer_heating_mode == "on":
-            self.controller_heatpumpmode = "heating"
-            return True
-        return False
+        return water_temperature_input_in_celsius < switch_on_temperature_in_celsius and summer_heating_mode == "on"
 
     def conditions_heating_cooling_off(
         self,
+        mode: HeatPumpSpaceHeatingMode,
+        *,
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
@@ -3606,8 +3691,29 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         storage_temperature_modifier: float,
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
-    ) -> None:
-        """Set conditions for the heat pump controller mode according to the flow temperature."""
+    ) -> HeatPumpSpaceHeatingMode:
+        """Return the mode of control mode 2 (heating, cooling, off) after one decision on the buffer's start temperature.
+
+        Heating switches off at or above the switch-off point or outside the heating season; cooling switches off at or
+        below the flow temperature less the lower offset, or when it is too cold for cooling; off starts heating below
+        the switch-on point in the heating season (:meth:`heating_is_due`), else cooling above the flow temperature plus
+        the upper offset when it is warm enough. For example, off at 41 °C with a 35 °C flow temperature, 5 K offsets
+        and the cooling season on switches to cooling.
+
+        Args:
+            mode: The mode at the start of the step.
+            water_temperature_input_in_celsius: The buffer's start-of-step temperature, in °C.
+            set_heating_flow_temperature_in_celsius: The flow temperature the circuit asks for, in °C; also the cooling
+                set temperature.
+            summer_heating_mode: "on" in the heating season, "off" outside it.
+            summer_cooling_mode: "on" when it is warm enough for cooling (:meth:`summer_cooling_condition`).
+            storage_temperature_modifier: The energy manager's raise of the heating band, in K.
+            upper_temperature_offset_for_state_conditions_in_celsius: The upper half of the band, in K.
+            lower_temperature_offset_for_state_conditions_in_celsius: The lower half of the band, in K.
+
+        Returns:
+            The mode after the decision.
+        """
         # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
         # Todo: Check if storage_temperature_modifier is neccessary for the switch-off point
@@ -3617,36 +3723,26 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             lower_temperature_offset_for_state_conditions_in_celsius,
             storage_temperature_modifier,
         )
-
-        if self.controller_heatpumpmode == "heating":
-            if water_temperature_input_in_celsius >= switch_off_in_celsius or summer_heating_mode == "off":
-                self.controller_heatpumpmode = "off"
-                return
-        elif self.controller_heatpumpmode == "cooling":
-            if (
+        if mode == HeatPumpSpaceHeatingMode.HEATING:
+            heating_ends = water_temperature_input_in_celsius >= switch_off_in_celsius or summer_heating_mode == "off"
+            return HeatPumpSpaceHeatingMode.OFF if heating_ends else mode
+        if mode == HeatPumpSpaceHeatingMode.COOLING:
+            cooling_ends = (
                 water_temperature_input_in_celsius
                 <= cooling_set_temperature - lower_temperature_offset_for_state_conditions_in_celsius
                 or summer_cooling_mode == "off"
-            ):
-                self.controller_heatpumpmode = "off"
-                return
-
-        elif self.controller_heatpumpmode == "off":
-            if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
-                return
-
-            # heat pump is only turned on for cooling if the water temperature is above a certain flow temperature
-            # and if the avg daily outside temperature is warm enough (summer cooling mode on)
-            if (
-                water_temperature_input_in_celsius
-                > (cooling_set_temperature + upper_temperature_offset_for_state_conditions_in_celsius)
-                and summer_cooling_mode == "on"
-            ):
-                self.controller_heatpumpmode = "cooling"
-                return
-
-        else:
-            raise ValueError("unknown mode")
+            )
+            return HeatPumpSpaceHeatingMode.OFF if cooling_ends else mode
+        if self.heating_is_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
+            return HeatPumpSpaceHeatingMode.HEATING
+        # heat pump is only turned on for cooling if the water temperature is above a certain flow temperature
+        # and if the avg daily outside temperature is warm enough (summer cooling mode on)
+        cooling_is_due = (
+            water_temperature_input_in_celsius
+            > (cooling_set_temperature + upper_temperature_offset_for_state_conditions_in_celsius)
+            and summer_cooling_mode == "on"
+        )
+        return HeatPumpSpaceHeatingMode.COOLING if cooling_is_due else mode
 
     def summer_cooling_condition(
         self,

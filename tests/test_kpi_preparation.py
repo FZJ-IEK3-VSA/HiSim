@@ -86,6 +86,33 @@ def test_production_without_consumption_reports_zero_self_sufficiency() -> None:
     assert "Self-consumption rate of electricity" in collected
 
 
+@pytest.mark.base
+def test_a_run_that_consumes_and_buys_nothing_has_no_relative_grid_demand() -> None:
+    """Catches 0 kWh bought of 0 kWh consumed reported as NaN, which no golden can compare, or as a number.
+
+    The simple air conditioner's household neither cools nor consumes in a January week, and its meter reads 0 kWh
+    from the grid. A run that buys what it does not count as consumed still fails: that is a consumer the KPIs miss.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    relative = preparation.compute_relative_electricity_demand(
+        total_electricity_consumption_in_kilowatt_hour=0.0,
+        electricity_from_grid_in_kilowatt_hour=0.0,
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    assert relative is None
+    assert preparation.kpi_collection_dict_unsorted["BUI1"]["Relative electricity demand from grid"]["value"] is None
+    with pytest.raises(ValueError, match="should not be over 100 %"):
+        preparation.compute_relative_electricity_demand(
+            total_electricity_consumption_in_kilowatt_hour=1.0,
+            electricity_from_grid_in_kilowatt_hour=1.8,
+            building_objects_in_district="BUI1",
+            kpi_tag=KpiTagEnumClass.GENERAL,
+        )
+
+
 def _source(component_name: str) -> KpiSource:
     """The source a plain component of that name stamps on its KPI entries."""
     return KpiSource.for_component(ComponentID(component_name), DisplayConfig())

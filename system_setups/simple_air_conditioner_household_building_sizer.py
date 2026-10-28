@@ -2,12 +2,14 @@
 
 This setup pairs a :class:`~hisim.components.building.Building` with
 :class:`~hisim.components.weather.Weather`, a
-:class:`~hisim.components.simple_air_conditioner.SimpleAirConditioner` and its
-:class:`~hisim.components.simple_air_conditioner.SimpleAirConditionerController`.
+:class:`~hisim.components.simple_air_conditioner.SimpleAirConditioner`, its
+:class:`~hisim.components.simple_air_conditioner.SimpleAirConditionerController` and an
+:class:`~hisim.components.electricity_meter.ElectricityMeter` for the electricity the air
+conditioner buys.
 
 It is derived from ``household_heatpump_building_sizer.py`` but stripped down to
-weather + building + AC + controller only — no UTSP/occupancy, PV, battery, EMS,
-heat pump, heat distribution, DHW storage, or electricity meter.
+weather + building + AC + controller + electricity meter only — no UTSP/occupancy, PV, battery,
+EMS, heat pump, heat distribution or DHW storage.
 """
 
 import re
@@ -18,6 +20,7 @@ from hisim.components import weather
 from hisim.config import SizingContext
 from hisim.components import building
 from hisim.components import simple_air_conditioner
+from hisim.components import electricity_meter
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
@@ -46,6 +49,7 @@ def setup_function(
         - Weather
         - SimpleAirConditioner (Carnot-efficiency cooling model)
         - SimpleAirConditionerController (hysteresis on indoor temperature)
+        - ElectricityMeter (reads the air conditioner's electricity)
     """
     # =================================================================================================================================
     # Set System Parameters from Config
@@ -169,6 +173,15 @@ def setup_function(
 
     # Controller: add with auto-connect (connects to Building via default connections)
     my_sim.add_component(my_air_conditioner_controller, connect_automatically=True)
+
+    # =================================================================================================================================
+    # Build Electricity Meter: the electricity the air conditioner draws is bought, so it passes the meter, which reads
+    # every electricity port by its role
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # =================================================================================================================================
     # Set Results Path

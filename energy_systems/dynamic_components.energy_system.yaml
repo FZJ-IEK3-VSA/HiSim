@@ -92,3 +92,56 @@ components:
       power_in_watt: 10000.0
     inputs:
       - Weather
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: Battery1.ChargingPower
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: Battery1.DischargingPower
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: Battery2.ChargingPower
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: Battery2.DischargingPower
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: CHP1.ElectricityOutput
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: CHP2.ElectricityOutput
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: PVSystem.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+  HydrogenMeter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    config:
+      gas_loadtype: GREEN_HYDROGEN # pinned: no provider of energy_carrier in this system yet
+    inputs:
+      - from: CHP1.GasDemandReal
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+          - MASS_FLOW
+        weight: 999
+      - from: CHP2.GasDemandReal
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+          - MASS_FLOW
+        weight: 999

@@ -78,6 +78,17 @@ components:
       - input: WaterTemperatureInputFromWaterStorage
         from: hds.WaterTemperatureOutput
 
+  gas_meter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard                        # measures what the boiler burns: the carrier is the boiler's
+    inputs:                                 # every bought carrier passes a meter (owner decision Q-J)
+      - from: boiler.EnergyDemandSh         # the boiler's two gas ports, each spelled as its output
+        tags: [GAS_CONSUMPTION_UNCONTROLLED]
+        weight: 999
+      - from: boiler.EnergyDemandDhw
+        tags: [GAS_CONSUMPTION_UNCONTROLLED]
+        weight: 999
+
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard

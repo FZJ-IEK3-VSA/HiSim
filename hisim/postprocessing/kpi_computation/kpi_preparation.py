@@ -589,9 +589,19 @@ class KpiPreparation:
         kpi_tag: KpiTagEnumClass,
         name: str = "Relative electricity demand from grid",
     ) -> Optional[float]:
-        """Return the relative electricity demand."""
+        """Return the relative electricity demand: the electricity bought from the grid per electricity consumed, in %.
 
-        if electricity_from_grid_in_kilowatt_hour is None:
+        A run that consumes nothing and buys nothing (both round to 0.0 kWh) has no relative demand: the entry is
+        emitted with no value, as :meth:`compute_ratio_between_two_values_and_set_as_kpi` does for a total
+        consumption of zero, because 0/0 is undefined, not 0 % or 100 %. For example, the simple air conditioner's
+        household in a January week neither cools nor consumes. A run that buys electricity it does not count as
+        consumed still fails below: that is a consumer the KPIs miss.
+        """
+
+        relative_electricity_demand_from_grid_in_percent: Optional[float]
+        if electricity_from_grid_in_kilowatt_hour is None or (
+            round(electricity_from_grid_in_kilowatt_hour, 1) == 0 and round(total_electricity_consumption_in_kilowatt_hour, 1) == 0
+        ):
             relative_electricity_demand_from_grid_in_percent = None
         else:
             relative_electricity_demand_from_grid_in_percent = (

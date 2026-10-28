@@ -12,6 +12,8 @@ from hisim.components import weather
 # from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
 from hisim.components import generic_pv_system
+from hisim.components import electricity_meter
+from hisim.components import gas_meter
 
 # from hisim.components import building
 from hisim.components import advanced_fuel_cell
@@ -32,7 +34,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     In this system setup a generic controller is added. The generic controller
     makes it possible to add component generically.
     Here two fuel_cell/chp_systems and two batteries
-    are added.
+    are added. An electricity meter reads every electricity port, and a hydrogen meter
+    reads the hydrogen the two CHPs burn.
     """
     year = 2018
     seconds_per_timestep = 60 * 15
@@ -224,6 +227,30 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         src_object=electricity_from_fuel_cell_target_2,
     )
 
+    # The hydrogen the CHPs burn is bought, so it passes a meter: each CHP publishes it as a mass flow in kg/s, which
+    # the meter counts by the lower heating value of hydrogen.
+    my_hydrogen_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=gas_meter.GasMeterConfig.preset_standard("HydrogenMeter").resolve(
+            SizingContext(energy_carrier=my_advanced_fuel_cell_1.get_fuel_load_type())
+        ),
+    )
+    for my_advanced_fuel_cell in (my_advanced_fuel_cell_1, my_advanced_fuel_cell_2):
+        my_hydrogen_meter.add_component_input_and_connect(
+            source_object_name=my_advanced_fuel_cell.component_name,
+            source_component_output=my_advanced_fuel_cell.GasDemandReal,
+            source_load_type=my_advanced_fuel_cell.get_fuel_load_type(),
+            source_unit=lt.Units.KG_PER_SEC,
+            source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW],
+            source_weight=999,
+        )
+
+    # The meter reads every electricity port by its role: the residents, the PV system, the batteries and the CHPs.
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+
     my_sim.add_component(my_advanced_battery_1)
     my_sim.add_component(my_advanced_battery_2)
     my_sim.add_component(my_advanced_fuel_cell_1)
@@ -232,3 +259,5 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_photovoltaic_system)
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_meter)

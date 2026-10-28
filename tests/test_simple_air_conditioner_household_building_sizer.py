@@ -8,11 +8,12 @@ Covers three concerns:
     gains — the foundation for the new setup that has no occupancy component.
 2.  That :func:`setup_function` in
     ``system_setups/simple_air_conditioner_household_building_sizer.py`` builds
-    the expected four-component graph (Building, Weather, SimpleAirConditioner,
-    SimpleAirConditionerController) with the manual AC → Building
+    the expected five-component graph (Building, Weather, SimpleAirConditioner,
+    SimpleAirConditionerController, ElectricityMeter) with the manual AC → Building
     ThermalPowerDelivered connection, and that all mandatory inputs resolve.
-3.  That the recorded ``.energy_system.yaml`` twin declares the same four
-    components and the same one manual connection.
+3.  That the recorded ``.energy_system.yaml`` twin declares the same five
+    components and the same manual connections, and its meter reads the air
+    conditioner's electricity.
 """
 
 import json
@@ -26,6 +27,7 @@ import yaml
 from hisim import component as cp
 from hisim.components import building
 from hisim.components import weather
+from hisim.components.electricity_meter import ElectricityMeter
 from hisim.config import SizingContext
 from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
@@ -137,13 +139,13 @@ def test_building_simulates_without_occupancy_connections() -> None:
 
 @pytest.mark.base
 def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
-    """The setup function creates 4 components and wires them correctly.
+    """The setup function creates 5 components and wires them correctly.
 
     Uses :func:`hisim_main.initialize_from_python` to load the setup module (which
     handles the ``system_setups`` import path) with a short one-day simulation, then
     verifies:
-    - exactly four components (Building, Weather, SimpleAirConditioner,
-      SimpleAirConditionerController);
+    - exactly five components (Building, Weather, SimpleAirConditioner,
+      SimpleAirConditionerController, ElectricityMeter);
     - the manual AC → Building ThermalPowerDelivered and HeatRemovedByCoolingInWatt
       connections are set;
     - ``prepare_calculation`` and ``connect_all_components`` succeed (all
@@ -165,7 +167,7 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
         my_module_config=None,
     )
 
-    # ---- Verify the four expected components are present ----------------
+    # ---- Verify the five expected components are present ----------------
     component_types = {
         type(wrapped.my_component) for wrapped in my_sim.wrapped_components
     }
@@ -173,7 +175,8 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
     assert weather.Weather in component_types
     assert SimpleAirConditioner in component_types
     assert SimpleAirConditionerController in component_types
-    assert len(my_sim.wrapped_components) == 4
+    assert ElectricityMeter in component_types
+    assert len(my_sim.wrapped_components) == 5
 
     # ---- Verify the manual AC → Building ThermalPowerDelivered connection --
     my_building = next(
@@ -223,10 +226,11 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
 
 @pytest.mark.base
 def test_recorded_twin_structure() -> None:
-    """The recorded twin declares 4 components and the two manual connections.
+    """The recorded twin declares 5 components, the two manual connections and the meter's feed.
 
     Verifies that ``energy_systems/<setup>.energy_system.yaml`` is valid YAML, names the
-    four expected component classes, and declares the manual
+    five expected component classes, that the electricity meter reads the air conditioner's
+    electricity, and that it declares the manual
     SimpleAirConditioner.ThermalPowerDelivered -> Building.ThermalPowerDelivered and
     SimpleAirConditioner.HeatDrawnForCoolingInWatt -> Building.HeatRemovedByCoolingInWatt
     connections. This replaced the same check against the setup's ``.scenario.json``
@@ -236,14 +240,22 @@ def test_recorded_twin_structure() -> None:
     twin = yaml.safe_load(_ENERGY_SYSTEM_YAML.read_text(encoding="utf-8"))
     components = twin["components"]
 
-    # Four components with the expected class names
+    # Five components with the expected class names
     assert {entry["class"] for entry in components.values()} == {
         "hisim.components.building.building.Building",
         "hisim.components.weather.Weather",
         "hisim.components.simple_air_conditioner.SimpleAirConditioner",
         "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
+        "hisim.components.electricity_meter.ElectricityMeter",
     }
-    assert len(components) == 4
+    assert len(components) == 5
+    assert components["ElectricityMeter"]["inputs"] == [
+        {
+            "from": "SimpleAirConditioner.ElectricalPowerConsumption",
+            "tags": ["ELECTRICITY_CONSUMPTION_UNCONTROLLED"],
+            "weight": 999,
+        }
+    ]
 
     # Two manual connections: AC.ThermalPowerDelivered -> Building.ThermalPowerDelivered, the
     # signed heat the building computes with, and AC.HeatDrawnForCoolingInWatt ->
@@ -254,7 +266,7 @@ def test_recorded_twin_structure() -> None:
         feed
         for entry in components.values()
         for feed in entry.get("inputs", [])
-        if isinstance(feed, dict)
+        if isinstance(feed, dict) and "input" in feed
     ]
     assert named == [
         {"input": "HeatRemovedByCoolingInWatt", "from": "SimpleAirConditioner.HeatDrawnForCoolingInWatt"},
@@ -287,11 +299,13 @@ def test_recorded_twin_structure() -> None:
 class UndefinedForThisHousehold:
     """The KPIs that cannot exist for a household with no electricity at all.
 
-    This setup builds a weather, a building and an air conditioner: no occupancy, no generation, no
-    meter. Its total electricity consumption is genuinely zero, so every figure expressed as a
-    proportion of it has no value -- not zero, which would be a measurement, but nothing. The KPI
-    layer used to divide by that total and end the run with ``ZeroDivisionError``; it now emits the
-    entries without values, the way it already did for a self-consumption rate with no production.
+    This setup builds a weather, a building, an air conditioner and the meter that bills it: no
+    occupancy, no generation. On a January day the air conditioner never runs, so its total
+    electricity consumption and what its meter buys are genuinely zero, and every figure expressed
+    as a proportion of the consumption has no value -- not zero, which would be a measurement, but
+    nothing. The KPI layer used to divide by that total and end the run with ``ZeroDivisionError``;
+    it now emits the entries without values, the way it already did for a self-consumption rate
+    with no production.
 
     Pinning the names keeps the distinction from being quietly "fixed" into zeros later, which would
     make a household that consumes nothing indistinguishable from one that consumes plenty and

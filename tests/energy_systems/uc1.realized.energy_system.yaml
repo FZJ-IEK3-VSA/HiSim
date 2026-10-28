@@ -175,6 +175,26 @@ components:
     sizing_sources:
       minimal_thermal_power_in_watt: boiler.minimal_thermal_power_in_watt # unique provider, written for re-execution
       maximal_thermal_power_in_watt: boiler.maximal_thermal_power_in_watt # unique provider, written for re-execution
+  gas_meter:
+    class: hisim.components.gas_meter.GasMeter
+    config: # built from preset: standard
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+      gas_loadtype: GAS # sized from boiler.energy_carrier=GAS
+    inputs:
+      - from: boiler.EnergyDemandSh
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: boiler.EnergyDemandDhw
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+    sizing_sources:
+      energy_carrier: boiler.energy_carrier # unique provider, written for re-execution
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     config: # built from preset: standard

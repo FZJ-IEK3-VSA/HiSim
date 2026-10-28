@@ -10,9 +10,8 @@ cooling, linked to the "ambient heat source" and the "ambient heat sink" boundar
 
 The building reads both heat outputs through its input ports ``HeatReceivedInWatt`` and
 ``HeatRemovedByCoolingInWatt`` (decision D9), wired by each setup, so the device's heat links to the building. The
-electricity meter of the first two setups reads each device's electricity port; the third setup has no meter (bead
-hisim-meter-bought-carriers-lyfl), so its electricity port is unlinked and unmetered, which is not enforced while a
-component of the run (the weather) is undeclared (owner decision Q-H).
+electricity meter of each setup reads the device's electricity port (bead hisim-meter-bought-carriers-lyfl gave the
+third setup its meter), so no port is unmetered.
 
 The second January week of 2021 (heating) and the first full July week (cooling: the simple air conditioner cools in
 80 of its steps) at 900 s, each run once per module: the run finishing proves every declared balance closes; the tests
@@ -144,18 +143,16 @@ def test_the_device_heats_in_january_and_cools_in_july_at_a_physical_efficiency(
 def test_the_electricity_meter_reads_the_device_and_the_building_reads_its_heat(week_results: Tuple[str, str, Path]) -> None:
     """The meter reads the device's electricity, and the building's input ports read its heat to and from the building.
 
-    In the setup without a meter the electricity port is unlinked and unmetered, reported and not enforced; in a week in
-    which the device never runs (the simple air conditioner in January) it is idle and not listed as unlinked. Catches
-    an electricity port linked to a controller, a heat port linked to anything but the building, a setup that leaves one
-    of the building's two inputs unwired, and a meter that publishes other than it reads once the device's port is
-    declared.
+    The meter is the electricity port's peer also in a week in which the device never runs (the simple air conditioner
+    in January). Catches an electricity port linked to a controller or left unmetered, a heat port linked to anything
+    but the building, a setup that leaves one of the building's two inputs unwired, and a meter that publishes other
+    than it reads once the device's port is declared.
     """
     setup, _, results = week_results
     device = Expected.DEVICES[setup]
     report = report_of(results)
     entry = balance_entry(results, device)
     peers = {port["output"]: port["peer"] for port in entry["ports"]}
-    moving = {output for output, total in totals_of(entry).items() if total != 0.0}
     assert peers["HeatToAmbientInWatt"] == "ambient heat sink"
     building_heat: Set[str] = {"HeatDrawnForCoolingInWatt", *([Expected.HEATING[setup]] if setup in Expected.HEATING else [])}
     unlinked = {port["output"] for port in report["unlinked"] if port["component"] == device}
@@ -163,14 +160,10 @@ def test_the_electricity_meter_reads_the_device_and_the_building_reads_its_heat(
     assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
     assert {output: peers[output] for output in building_heat} == {output: "Building" for output in building_heat}
     assert "Building" not in {item["component"] for item in report["undeclared"]}
-    if setup == "simple_air_conditioner_household_building_sizer":
-        assert unlinked == {Expected.ELECTRICITY[setup]} & moving
-        assert {(port["component"], port["output"]) for port in unmetered["ports"]} == {(device, Expected.ELECTRICITY[setup])}
-        assert not report["meters"]
-        return
     assert not unlinked
     assert peers[Expected.ELECTRICITY[setup]] == "ElectricityMeter"
-    assert peers["HeatFromAmbientInWatt"] == "ambient heat source"
+    if "HeatFromAmbientInWatt" in peers:
+        assert peers["HeatFromAmbientInWatt"] == "ambient heat source"
     assert not unmetered["ports"]
     (meter,) = report["meters"]
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0

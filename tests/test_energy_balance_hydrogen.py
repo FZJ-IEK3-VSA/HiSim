@@ -4,9 +4,12 @@ Complete Sankey spec, PR 5c. ``dynamic_components`` runs two hydrogen CHPs besid
 occupancy; ``electrolyzer_with_renewables`` feeds a wind series through a transformer and rectifier into an
 electrolyzer. Each CHP burns hydrogen, counted on the mass flow it draws, ``GasDemandReal`` in kg/s, by its lower
 heating value, into electricity, heat and a loss; the transformer receives electricity, delivers it and loses the
-rest; the electrolyzer turns electricity into hydrogen and loses the rest. Neither setup has a meter (bead
-hisim-meter-bought-carriers-lyfl), so every electricity and hydrogen port that no component reads is unlinked and
-unmetered; the weather and the CSV series declare no ports yet, so neither finding is enforced (owner decision Q-H).
+rest; the electrolyzer turns electricity into hydrogen and loses the rest. ``dynamic_components`` meters what it buys
+(bead hisim-meter-bought-carriers-lyfl): an electricity meter reads every electricity port, a hydrogen meter the CHPs'
+mass flows. ``electrolyzer_with_renewables`` has no meter yet: where its wind electricity and its hydrogen go is the
+open owner decision of bead hisim-component-physics-4g9.69, so every electricity and hydrogen port that no component
+reads is unlinked and unmetered; the CSV series declares no ports yet, so neither finding is enforced (owner decision
+Q-H).
 
 The electrolyzer reads its load through its controller, a decision the balance never follows, so the electricity
 the transformer delivers and the electricity the electrolyzer draws are two unlinked ports: in this week the
@@ -42,6 +45,9 @@ class Expected:
         "ConversionLossInWatt": ("loss", "hydrogen"),
     }
 
+    #: The meter each metered port of ``dynamic_components``' CHPs passes, as ``output -> meter``.
+    CHP_METERS: ClassVar[Dict[str, str]] = {"ElectricityOutput": "ElectricityMeter", "GasDemandReal": "HydrogenMeter"}
+
     #: The ports of each setup's new components as ``setup -> component -> output -> (role, carrier)``.
     PORTS: ClassVar[Dict[str, Dict[str, Dict[str, Tuple[str, str]]]]] = {
         "dynamic_components": {"CHP1": CHP_PORTS, "CHP2": CHP_PORTS},
@@ -59,15 +65,9 @@ class Expected:
         },
     }
 
-    #: The new components' ports that no component or meter reads, as ``setup -> {(component, output)}``; those that
-    #: move energy in the week are unlinked.
+    #: The new components' metered ports that no component or meter reads in the setup without a meter, as
+    #: ``setup -> {(component, output)}``; those that move energy in the week are unlinked.
     UNLINKED: ClassVar[Dict[str, Set[Tuple[str, str]]]] = {
-        "dynamic_components": {
-            ("CHP1", "ElectricityOutput"),
-            ("CHP1", "ThermalOutputPower"),
-            ("CHP2", "ElectricityOutput"),
-            ("CHP2", "ThermalOutputPower"),
-        },
         "electrolyzer_with_renewables": {
             ("StandardTransformerAndRectifier", "MyTransformerOutput"),
             ("StandardTransformerAndRectifier", "ElectricityReceivedInKilowatt"),
@@ -128,13 +128,36 @@ def test_the_wind_reaches_the_electrolyzer_only_in_part_and_it_makes_hydrogen_at
 
 
 @pytest.mark.extendedbase2
+@pytest.mark.parametrize("setup_results", ["dynamic_components"], indirect=True)
+def test_the_chps_electricity_and_hydrogen_pass_their_meters_and_no_port_is_unmetered(setup_results: Tuple[str, Path]) -> None:
+    """The electricity meter reads the CHPs' electricity, the hydrogen meter their mass flows, and both agree.
+
+    The CHPs are idle in the week, so both meters agree at zero; the hydrogen meter's conversion of a mass flow is
+    tested on its own in ``tests/test_gas_meter.py``. Catches a CHP port taking the "hydrogen supply" boundary past
+    the meter, a meter that reads a port of another carrier, and an unmetered port left in the setup.
+    """
+    _, results = setup_results
+    report = report_of(results)
+    for component in ("CHP1", "CHP2"):
+        peers = {port["output"]: port["peer"] for port in balance_entry(results, component)["ports"]}
+        assert {output: peers[output] for output in Expected.CHP_METERS} == Expected.CHP_METERS, component
+    assert not report["unmetered"]["ports"]
+    meters = {meter["meter"]: meter for meter in report["meters"]}
+    assert {name: meter["carrier"] for name, meter in meters.items()} == {"ElectricityMeter": "electricity", "HydrogenMeter": "hydrogen"}
+    assert all(meter["verdict"] == "agrees" and meter["failing_steps"] == 0 for meter in meters.values())
+    assert {(read["component"], read["output"]) for read in meters["HydrogenMeter"]["reads"]} == {
+        ("CHP1", "GasDemandReal"),
+        ("CHP2", "GasDemandReal"),
+    }
+
+
+@pytest.mark.extendedbase2
+@pytest.mark.parametrize("setup_results", ["electrolyzer_with_renewables"], indirect=True)
 def test_the_ports_no_component_reads_are_unlinked_and_unmetered_and_not_enforced(setup_results: Tuple[str, Path]) -> None:
     """Without a meter the electricity and hydrogen ports nobody reads are unlinked and unmetered, reported, not failing.
 
-    The CHPs' hydrogen comes from the "hydrogen supply" boundary, unmetered. A port that moves nothing in the week (every
-    port of the idle CHPs) is not listed as unlinked, but still as unmetered. Catches a port of these components linked
-    to a controller (which decides and moves no energy), and an unmetered finding that fails the run while a component
-    is still undeclared.
+    Catches a port of these components linked to a controller (which decides and moves no energy), and an unmetered
+    finding that fails the run while a component is still undeclared.
     """
     setup, results = setup_results
     report = report_of(results)
@@ -150,9 +173,7 @@ def test_the_ports_no_component_reads_are_unlinked_and_unmetered_and_not_enforce
     unmetered = report["unmetered"]
     assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
     unmetered_ports = {(port["component"], port["output"]): port["peer"] for port in unmetered["ports"]}
-    for component, output in Expected.UNLINKED[setup] - {(name, "ThermalOutputPower") for name in new_components}:
+    for component, output in Expected.UNLINKED[setup]:
         assert unmetered_ports[(component, output)] == "unlinked"
-    if setup == "dynamic_components":
-        assert unmetered_ports[("CHP1", "GasDemandReal")] == "hydrogen supply"
     assert not report["links"] and not report["meters"]
     assert not new_components & {entry["component"] for entry in report["undeclared"]}

@@ -60,6 +60,18 @@ components:
       - heating_curve
       - input: WaterTemperatureInputFromWaterStorage
         from: hds.WaterTemperatureOutput
+  gas_meter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    inputs:
+      - from: boiler.EnergyDemandSh
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: boiler.EnergyDemandDhw
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard

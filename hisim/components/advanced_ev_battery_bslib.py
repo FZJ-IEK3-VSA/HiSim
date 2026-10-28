@@ -19,8 +19,10 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
+from hisim.components.advanced_battery_bslib import Battery
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
+from hisim.energy_port import EnergyPort
+from hisim.loadtypes import ComponentType, EnergyBalanceCarrier, EnergyRole, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.economics.facts import CostRelevance
@@ -81,11 +83,17 @@ class CarBatteryConfig(ConfigBase):
 
 
 class CarBattery(PhysicsComponent):
-    """Car Battery class.
+    """The battery of one electric car: it charges from the house and discharges into the car's drive.
 
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
+
+    Its energy ports: the AC charging power is electricity the electricity meter reads (``CONSUMPTION``); the
+    discharging power is electricity the car reads straight from the battery, past every meter (``PRODUCTION`` of
+    the carrier ``VEHICLE_ELECTRICITY``, which no meter reads); the inverter and the cells lose energy while it charges
+    (two ``LOSS`` ports) and the stored energy changes (``STORED_CHANGE``). The discharge is modelled without loss:
+    the car's consumption per kilometre already contains it.
 
     Components to connect to:
     (1) CarBattery controller (controller_l1_generic_ev_charge)
@@ -104,6 +112,16 @@ class CarBattery(PhysicsComponent):
     #: moves. The charge controller decides on it (``controller_l1_generic_ev_charge.L1Controller``).
     StateOfChargeAtStartOfStep = "StateOfChargeAtStartOfStep"  # [0..1]
     AcBatteryDischargingPower = "AcBatteryDischargingPower"  # W
+    #: The increase of the energy stored in the cells over the step, in Wh; negative while the battery discharges.
+    StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
+    #: The inverter's loss over the step, in W: the AC charging power minus the DC charging power.
+    InverterLossInWatt = "InverterLossInWatt"
+    #: The cells' loss over the step, in W: the DC power into the cells minus the increase of the stored energy per
+    #: second.
+    CellLossInWatt = "CellLossInWatt"
+
+    #: Watt hours per kilowatt hour: the configuration states the capacity in kWh, the stored energy is in Wh.
+    WATT_HOURS_PER_KILOWATT_HOUR: ClassVar[float] = 1000.0
 
     #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged car battery, which
     #: can take a charge and cover a first trip from the first step, rather than an empty or a full one.
@@ -134,6 +152,8 @@ class CarBattery(PhysicsComponent):
         self.p_inv_custom = self.battery_config.p_inv_custom
 
         self.e_bat_custom = self.battery_config.e_bat_custom
+        #: The capacity the state of charge is a share of, in Wh.
+        self.capacity_in_watt_hour = self.e_bat_custom * self.WATT_HOURS_PER_KILOWATT_HOUR
 
         # Component has states
         self.state = EVBatteryState(soc=self.INITIAL_STATE_OF_CHARGE)
@@ -164,8 +184,13 @@ class CarBattery(PhysicsComponent):
             postprocessing_flag=[
                 InandOutputType.CHARGE,
                 ComponentType.CAR_BATTERY,
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
             ],
-            output_description="Charging power of the battery in Watt (Alternating current)",
+            output_description=(
+                "The AC power the battery charges with, in W, >= 0: the electricity the car takes from the house, "
+                "which the electricity meter reads and the KPIs count as consumption."
+            ),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.p_bat: ComponentOutput = self.add_output(
@@ -203,7 +228,48 @@ class CarBattery(PhysicsComponent):
                 InandOutputType.DISCHARGE,
                 ComponentType.CAR_BATTERY,
             ],
-            output_description="Discharging power of the battery in Watt (Alternating current)",
+            output_description=(
+                "The power the battery discharges into the car's drive, in W, >= 0. The car reads it; it passes no "
+                "meter, and the KPIs do not count it as production."
+            ),
+            # the car takes this electricity straight from its battery, past every meter
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.VEHICLE_ELECTRICITY),
+        )
+        self.stored_energy_increase_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StoredEnergyIncreaseInWattHour,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            postprocessing_flag=[InandOutputType.STORED_ENERGY_INCREASE, ComponentType.CAR_BATTERY],
+            output_description=(
+                "The increase of the energy stored in the cells over the step, in Wh: the change of the state of "
+                "charge times the capacity, negative while the battery discharges."
+            ),
+            energy_port=EnergyPort(EnergyRole.STORED_CHANGE, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        # bslib is a black box that publishes the AC power, the DC power and the state of charge; the two losses are
+        # their differences, so the energy balance checks that the published flows agree with each other.
+        self.inverter_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.InverterLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The inverter's loss over the step, in W: the AC charging power minus the DC charging power. The "
+                "discharge is modelled without loss, so it is zero while the battery discharges."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.cell_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CellLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The cells' loss over the step, in W: the DC power into the cells minus the increase of the stored "
+                "energy divided by the step's duration."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.add_default_connections(self.get_default_connections_from_charge_controller())
@@ -272,7 +338,8 @@ class CarBattery(PhysicsComponent):
             timestep: Current simulation timestep index.
             stsv: Single-time-step values container used to read inputs and write
                 outputs (AcBatteryChargingPower, DcBatteryChargingPower,
-                StateOfCharge, StateOfChargeAtStartOfStep, AcBatteryDischargingPower).
+                StateOfCharge, StateOfChargeAtStartOfStep, AcBatteryDischargingPower,
+                StoredEnergyIncreaseInWattHour, InverterLossInWatt, CellLossInWatt).
             force_convergence: Unused by this component.
         """
         # Parameters
@@ -281,6 +348,7 @@ class CarBattery(PhysicsComponent):
         # Load input values
         target_power_to_or_from_car_battery_in_watt = stsv.get_input_value(self.p_set)
         soc = self.state.soc
+        state_of_charge_at_start_of_step = soc
         stsv.set_output_value(self.state_of_charge_at_start_of_step_channel, soc)
 
         # Simulate battery charging
@@ -313,6 +381,17 @@ class CarBattery(PhysicsComponent):
         stsv.set_output_value(self.p_bat, dc_charging_power_in_watt)
         stsv.set_output_value(self.soc, soc)
         stsv.set_output_value(self.p_bs_discharge, discharging_power_ac_in_watt)
+        stored_energy_increase_in_watt_hour = (soc - state_of_charge_at_start_of_step) * self.capacity_in_watt_hour
+        stsv.set_output_value(self.stored_energy_increase_channel, stored_energy_increase_in_watt_hour)
+        # the discharge is loss-free, so it is the same power on the AC and on the DC side
+        inverter_loss_in_watt, cell_loss_in_watt = Battery.losses_in_watt(
+            ac_power_in_watt=ac_charging_power_in_watt - discharging_power_ac_in_watt,
+            dc_power_in_watt=dc_charging_power_in_watt - discharging_power_ac_in_watt,
+            stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
+            seconds_per_timestep=seconds_per_timestep,
+        )
+        stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
+        stsv.set_output_value(self.cell_loss_channel, cell_loss_in_watt)
 
         # write values to state
         self.state.soc = soc

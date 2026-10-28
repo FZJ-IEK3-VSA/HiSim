@@ -87,8 +87,13 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
   (§4.4).
 - **Metered port**: an `IN` or `OUT` port of electricity or of a bought carrier (`EnergyPort.is_metered`). Its flow
   must pass a meter; a metered port whose peer is no meter and no component is **unmetered** (§4.4).
+- **Vehicle electricity**: the carrier `VEHICLE_ELECTRICITY`, the electricity a car battery gives its car's drive
+  (Q-K). It flows from one component straight into the other, past every meter, so it is a carrier of its own: no
+  meter reads it and no port of it is metered. The battery takes its charge as `ELECTRICITY` through the meter.
+- **Driving energy**: the carrier `DRIVING`, the energy a car's drive takes to move the car, whatever it runs on
+  (Q-L). It leaves the system at the boundary node `driving`.
 - **Boundary node**: where energy enters or leaves the system: grid import, grid export, the supply of each bought
-  carrier, ambient heat, sun, the residents' body heat, hot water drawn at the taps, outdoors.
+  carrier, ambient heat, sun, the residents' body heat, hot water drawn at the taps, outdoors, driving.
 - **Loss node**: one per `LOSS` port, named after its component and port (`Battery · inverter loss`).
 - **Storage node**: one per component with a `STORED_CHANGE` port (`Battery · stored`).
 - **Residual**: `ΣIN − ΣOUT − ΣLOSS − ΣSTORED_CHANGE` of a component over the run, drawn to or from the red
@@ -176,6 +181,8 @@ preferring declared readers. Three changes make D1 and Q-J hold:
 | `AMBIENT_HEAT` | `ambient heat` (as today) | `ambient heat` (heat rejected by a cooling device) | outdoors |
 | `SOLAR` | `sun` (today `solar`) | none: an error | outdoors |
 | heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | outdoors |
+| `VEHICLE_ELECTRICITY` (Q-K) | none: the car's input port names the car battery it reads | none: the car reads it | outdoors |
+| `DRIVING` (Q-L) | none: an error | none: the car's port names `driving` | outdoors |
 
 So the heat pump's electricity ports drop `peer_output` and link to the electricity meter that reads them;
 the boiler's fuel ports drop `peer_output=EnergyDemandSh` and link to the gas or fuel meter that reads them; the
@@ -397,7 +404,7 @@ has ports after this epic; "exempt" means it is never a node.
 | Component (module) | Kind | Verdict | Carriers (in / out / loss / stored) or reason | PR |
 |---|---|---|---|---|
 | `Battery` (advanced_battery_bslib) | physics | declares | §5.3 | 2 |
-| `CarBattery` (advanced_ev_battery_bslib) | physics | declares | el in from its meter (`AcBatteryChargingPower`), el out to the car (discharge for driving), inverter and cell loss, stored | 5b |
+| `CarBattery` (advanced_ev_battery_bslib) | physics | declares | el in from its meter (`AcBatteryChargingPower`, which also takes the KPI consumption flag from the charge controller's copy), vehicle electricity out to the car (`AcBatteryDischargingPower`, carrier `VEHICLE_ELECTRICITY`, Q-K: the car reads it, no meter does), new `InverterLossInWatt` and `CellLossInWatt` (el), new `StoredEnergyIncreaseInWattHour` (el) (built in 5b) | 5b |
 | `CHP` (advanced_fuel_cell) | physics | declares | hydrogen or gas in; el out to its meter, SH heat out; conversion loss | 5c |
 | `AirConditioner` (air_conditioner) | physics | declares | el in; heating: ambient in, SH heat out to the building; cooling: `COOLING` in from the building, heat rejected to ambient | 5a |
 | `AirConditionerController` | L1 | exempt (kind) | controller | – |
@@ -413,7 +420,7 @@ has ports after this epic; "exempt" means it is never a node.
 | `ComponentName` (example_template) | physics | declares one example port | the template teaches the pattern (`CLAUDE.md`, "Adding a new component") | 5 |
 | `CalculateOperation`, `SumBuilderForTwoInputs`, `SumBuilderForThreeInputs` (sumbuilder) | physics | exempt (reason) | arithmetic helpers; summing energy is not moving it | 5 |
 | `GenericBoiler`, `MoreAdvancedHeatPumpHPLib`, `DistrictHeating`, `ElectricHeating`, `SolarThermalSystem` | physics | declare (built) | §5.2 | 1, 3 |
-| `Car` (generic_car) | physics | declares | electric: el in from the car battery, driving energy out to a boundary `driving`; fuel: `DIESEL` in from `diesel supply`, driving out | 5b |
+| `Car` (generic_car) | physics | declares | electric: vehicle electricity in from the car battery (the new input `ElectricityFromCarBatteryInWatt`, wired to the battery's discharge, carries the `CONSUMPTION` port of `VEHICLE_ELECTRICITY`, an input port under D9 of `roadmap/fluid_loops_spec.md`), driving energy out (`ElectricityOutput`, new carrier `DRIVING`) to the new boundary `driving` (Q-L) (built in 5b); fuel: `DIESEL` in from `diesel supply`, driving out (not built: its fuel is published in litres) | 5b |
 | `SimpleCHP` (generic_chp) | physics | declares | gas or hydrogen in; el out, SH heat out; loss | 5c |
 | `AdvancedElectrolyzer`, `Electrolyzer` | physics | declare | el in; hydrogen out; `EnergyLosses` loss | 5c |
 | `HydrogenStorage` | physics | declares | hydrogen in, out, `HydrogenLosses`, `StorageDelta` stored | 5c |
@@ -454,6 +461,9 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
   connected diagram, one HTML per carrier as filters.
 - `lt.EnergyBalanceCarrier.ROOM_HEAT`, `lt.EnvironmentNode` members of §4.3, `HydronicPort.carrier`,
   `Component.metered_exchanges()` with `MeteredExchange` (Q-J).
+- PR 5b: `lt.EnergyBalanceCarrier.DRIVING` and `lt.EnvironmentNode.DRIVING` ("driving"), the energy a car's drive
+  takes (Q-L), and `lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY` ("vehicle_electricity"), the electricity a car
+  battery gives its car past every meter (Q-K). The energy-system and assembly schemas list both carriers.
 - New outputs of §5 (named with their units). No output is renamed.
 
 ### 6.3 What does not change
@@ -469,6 +479,7 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
 | B1 | `Building` | The mass carries its step-average temperature into the next step, so it keeps half of the energy the step's flows put into it | with B2 declared: per step up to 2.56 kW; Σ\|residual\| 4,470 kWh/yr against 19,806 kWh/yr of gains; the run's net only −19.7 kWh because it telescopes; 34,903 of 35,040 steps beyond tolerance (gas twin: 3,280 kWh/yr, 34,876 steps) | carry `θ_m,next` as the state (ISO 13790 and RC_BuildingSimulator do): a model change, results move (the building's response to gains is today as slow as with twice its heat capacity) |
 | B2 | `Building` | ISO 13790's gain split leaves `H_tr_w/(9.1 A_t)` of the gains on no node | 46.7 kWh/yr, 0.24 % of the gains | declared as the loss `GainsLostThroughWindowsInWatt`; no result change |
 | B3 | `DistrictHeating` without buffer | bills the heat its controller asks for, not what the HDS receives (hisim-energy-sankeys-9uoo.12) | 30.8 kWh/yr (bead) | hisim-pnw7, before PR 3 declares the HDS in the district-heating twin |
+| B4 | `ElectricityMeter` in the car twin | read the car's charging from the charge controller's copy (`BatteryChargingPowerToEMS`), which reads the battery's output of the pass before, so in a step the last pass moved the meter billed up to 1.9e-5 W other than the battery took | car twin, 2021 at 900 s: 146 of 35,040 steps, grid import −9.8e-8 kWh/yr (relative 5e-11) | in PR 5b, inseparable from it: the meter reads the battery's charging port by its role and the by-name read goes; KPIs move by at most 5e-11 relative, within the golden tolerance (1e-9) |
 
 The window opening (Q-E) is not an imbalance of the declared ports: it moves no energy in the model.
 
@@ -530,6 +541,8 @@ reads in every step once the electricity devices declare their ports.
 | Q-H when the meter check fails the run (2026-10-20) | it is always computed and written to the report, and fails the run only once no component is undeclared; until then the report says `enforced: false` and why (built in PR 1, #1086). From PR 6 on undeclared components fail the run anyway, so the check is then always enforced. Under Q-J it applies to both meter findings: a meter that publishes other than it reads, and an unmetered port |
 | Q-I static Sankey images for the PDF report (2026-10-20) | a P3 bead: PNG/SVG export of the connected diagram, after PR 6 and preferably with the arrow renderer (hisim-energy-sankeys-9uoo.19) |
 | Q-J no bus; meters are nodes and follow their wiring (2026-10-20) | "HiSim explicitly does not use buses as a concept, since they bring a whole host of problems." The house electricity bus of the first D1 is removed with its derived residual: it closed by construction, so electricity a port got wrong or missed vanished into grid import or export. And: "verifying if all the electricity is metered is a really good check", so D1 is revised for meters: every meter is a node under its own name, between its boundary node and the devices whose flows it reads through explicit connections, traced through exempt controllers (§4.3); grid import and export are the meter's published outputs; per step what a meter publishes equals what it reads, a gap is a red `unaccounted` flow at the meter and a failing entry; every metered port passes a meter, or it is an `unmetered` finding. Both findings follow Q-H. Controllers stay exempt and are never nodes. Built in PR 1 (#1086). Follow-up answers the same day: a meter keeps its component name as its label; a residual (component, meter or transfer) is drawn only beyond the tolerance and always listed in the report; the setups that buy a carrier without a meter get one in hisim-meter-bought-carriers-lyfl, not in PR 1 |
+| Q-K the car battery's electricity to the car (2026-10-27) | "a separate carrier instead" of a flag on the port that would exempt it from the meter: the electricity that flows from the car battery into the car, past every meter, is booked under the carrier `VEHICLE_ELECTRICITY`, which the electricity meter never reads (it reads only `ELECTRICITY`). The battery's discharge is its `PRODUCTION` port, the car's battery input its `CONSUMPTION` port (an input port, D9 of `roadmap/fluid_loops_spec.md`). Built in PR 5b |
+| Q-L the energy a car drives with (2026-10-27) | kept as built in PR 5b: the carrier `DRIVING` and the boundary node `lt.EnvironmentNode.DRIVING` ("driving"); the electric car's `ElectricityOutput` is its `PRODUCTION` port to that node, and a diesel car will declare the same port (hisim-diesel-car-ports-q3v8) |
 
 
 - **Q-B. Where the exemption list lives.** A component is exempt either by kind or by a reason. (a) *Kind plus a

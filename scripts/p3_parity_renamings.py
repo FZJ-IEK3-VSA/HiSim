@@ -109,9 +109,8 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
-            "Input_L1EVChargeControl_1_BatteryChargingPowerToEMS_6": (
-                "BatteryChargingPowerToEMSFromL1EVChargeControl_1"
-            ),
+            # The car battery's charging, which the meter reads from the battery itself (Sankey PR 5b).
+            "Input_CarBattery_1_AcBatteryChargingPower_6": "AcBatteryChargingPowerFromCarBattery_1",
             # The battery, the last participant, so its index counts the devices before it.
             "Input_Battery_ChargingPower_2": "ChargingPowerFromBattery",
             "Input_Battery_ChargingPower_3": "ChargingPowerFromBattery",

@@ -336,6 +336,11 @@ class EnergyBalanceCarrier(str, enum.Enum):
     the same name. ``ROOM_HEAT`` is heat released into or lost from the heated zone: the carrier of
     the internal gains, of the building's losses and of its thermal mass, so that ``SPACE_HEATING_HEAT``
     stays the heat the heating system delivers up to the building (complete Sankey spec, Q-G).
+    ``DRIVING`` is the energy a car's drive takes to move the car, whatever it runs on: an electric car
+    turns the electricity of its battery into it, a diesel car its fuel; it leaves the system at the
+    ``DRIVING`` environment node. ``VEHICLE_ELECTRICITY`` is the electricity a car battery gives its car's drive: it
+    flows from one component straight into the other, past every meter, so it is a carrier of its own, which no meter
+    reads and the KPIs do not count; the battery takes its charge as ``ELECTRICITY`` through the meter.
     A port whose wiring names no peer takes its carrier's boundary default where one exists
     (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
     unlinked.
@@ -355,6 +360,8 @@ class EnergyBalanceCarrier(str, enum.Enum):
     AMBIENT_HEAT = "ambient_heat"
     SOLAR = "solar"
     ROOM_HEAT = "room_heat"
+    DRIVING = "driving"
+    VEHICLE_ELECTRICITY = "vehicle_electricity"
 
 
 @enum.unique
@@ -367,7 +374,7 @@ class EnvironmentNode(str, enum.Enum):
     (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
-    at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as
+    at the taps, ``RESIDENTS`` the residents' body heat and ``DRIVING`` the energy cars use to drive. The supply node of a bought carrier, such as
     "natural gas supply", is derived from its carrier and not listed here
     (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
@@ -379,6 +386,7 @@ class EnvironmentNode(str, enum.Enum):
     GRID_EXPORT = "grid export"
     HOT_WATER_USE = "hot water drawn at the taps"
     RESIDENTS = "residents' body heat"
+    DRIVING = "driving"
 
 
 @enum.unique

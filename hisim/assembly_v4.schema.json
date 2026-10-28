@@ -374,7 +374,9 @@
             "cooling",
             "ambient_heat",
             "solar",
-            "room_heat"
+            "room_heat",
+            "driving",
+            "vehicle_electricity"
           ]
         },
         "outputs": {

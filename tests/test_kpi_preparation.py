@@ -701,3 +701,29 @@ class TestElectricityKpisReadTheDeclaredUnit:
             preparation.filter_results_according_to_postprocessing_flags(
                 all_outputs=outputs, results=frame, building_objects_in_district=building
             )
+
+
+class TestSelfSufficiencyWithinRounding:
+    """The self-sufficiency rate is at most 100 %, and only the consumption's rounding may push it above."""
+
+    @pytest.mark.base
+    def test_a_rate_up_to_100_percent_is_returned_as_it_is(self) -> None:
+        """Catches the bound changing a rate it has no reason to touch."""
+        assert KpiPreparation.self_sufficiency_within_rounding(99.5, 199.0, 200.0) == 99.5
+        assert KpiPreparation.self_sufficiency_within_rounding(100.0, 200.0, 200.0) == 100.0
+
+    @pytest.mark.base
+    def test_a_rate_above_100_percent_by_the_rounding_of_the_consumption_is_100_percent(self) -> None:
+        """Catches a run whose production covers its consumption in every step failing on the rounded consumption.
+
+        5,272,971.74 kWh self-consumed against the consumption rounded down to 5,272,971.7 kWh is 100.0000008 %.
+        """
+        rate = 100 * 5_272_971.74 / 5_272_971.7
+        assert rate > 100
+        assert KpiPreparation.self_sufficiency_within_rounding(rate, 5_272_971.74, 5_272_971.7) == 100.0
+
+    @pytest.mark.base
+    def test_a_self_consumption_beyond_the_consumption_by_more_than_its_rounding_is_refused(self) -> None:
+        """Catches the bound hiding a self-consumption that exceeds the consumption: a fault of the computation."""
+        with pytest.raises(ValueError, match="should not be over 100 %"):
+            KpiPreparation.self_sufficiency_within_rounding(100 * 201.0 / 200.0, 201.0, 200.0)

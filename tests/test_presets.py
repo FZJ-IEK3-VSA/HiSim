@@ -588,7 +588,7 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     heat_distribution = describe_config(HeatDistributionConfig)
     assert [preset.name for preset in heat_distribution.presets] == ["building_derived"]
     assert heat_distribution.presets[0].pinned == ()
-    assert len(heat_distribution.sizable_fields) == 3
+    assert len(heat_distribution.sizable_fields) == 4
     assert not heat_distribution.facts_provided
 
     assert not describe_config(HeatDistributionConfig).constructors

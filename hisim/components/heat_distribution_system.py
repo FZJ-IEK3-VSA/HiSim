@@ -70,9 +70,9 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
 class HeatDistributionConfig(ConfigBase):
     """Configuration of the HeatDistribution class, the water circuit between generator and rooms.
 
-    Every value it needs is a property of the building it serves — the emitter type, the mass
-    flow the circuit carries and the floor area it heats — so all three fields are sizable and
-    :meth:`preset_building_derived` pins none of them.
+    Every value it needs is a property of the building it serves or a choice of its controller — the emitter type,
+    the mass flow the circuit carries, the floor area it heats and whether the circuit may cool — so these four fields
+    are sizable and :meth:`preset_building_derived` pins none of them.
     """
 
     MAIN_CLASS = "hisim.components.heat_distribution_system.HeatDistribution"
@@ -85,6 +85,9 @@ class HeatDistributionConfig(ConfigBase):
         rule=Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND.rounded(2)
     )
     absolute_conditioned_floor_area_in_m2: Sizable[float] = sized_field(rule=Size.CONDITIONED_FLOOR_AREA_IN_M2)
+    #: Whether the circuit may cool, copied from the heat distribution controller's ``cooling_enabled``. Sizable: left
+    #: ``AUTO`` it is the controller's own choice. The system refuses a cooling command (``State`` -1) when it is false.
+    cooling_enabled: Sizable[bool] = sized_field(rule=Size.HEAT_DISTRIBUTION_COOLING_ENABLED)
     position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
         PositionHotWaterStorageInSystemSetup.PARALLEL
     )
@@ -130,12 +133,19 @@ class HeatDistribution(cp.PhysicsComponent):
 
     In the energy balance (complete Sankey spec §5.1, hydronic stage E) the system declares its ports behind a
     buffer (``PARALLEL``), where it books this step's heat on the buffer's start-of-step temperature: its end of the
-    buffer's circuit (the fluid loop ``distribution``, which the buffer supplies) and the heat it delivers to the building
-    (``ThermalPowerDelivered``, ``PRODUCTION``, space-heating heat up to the building's input). Without a buffer it declares
+    buffer's circuit (the fluid loop ``distribution``, which the buffer supplies), the heat it delivers to the building
+    while it heats (``HeatDeliveredInWatt``, ``PRODUCTION``, space-heating heat) and the heat it takes from the building
+    while its controller cools (``HeatDrawnForCoolingInWatt``, ``CONSUMPTION`` of ``COOLING``): the two directions of
+    its signed ``ThermalPowerDelivered``, which the building computes with and which carries no port, since a port
+    books one direction only. Without a buffer it declares
     none yet: there its outputs lag one step behind its circuit, and the boiler of ``gas_boiler_household`` books a
     flow of its own on the same circuit, so its balance would not close (beads hisim-pnw7, the pipe water as a
     start-of-step node, and hisim-boiler-circuit-flow-gap-g2mx, who pumps a circuit without a buffer); until they
     land it is drawn as undeclared.
+
+    The circuit cools only where its configuration allows it (``cooling_enabled``, copied from its controller's
+    configuration and off in every preset): a cooling command (``State`` -1) received while cooling is not enabled
+    is refused with a ``ValueError``, since only a controller that may cool sends one.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -155,6 +165,10 @@ class HeatDistribution(cp.PhysicsComponent):
     WaterTemperatureOutput = "WaterTemperatureOutput"
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    #: The positive part of ThermalPowerDelivered, the heat delivered while heating, in W.
+    HeatDeliveredInWatt = "HeatDeliveredInWatt"
+    #: Minus the negative part of ThermalPowerDelivered, the heat taken from the building while cooling, in W.
+    HeatDrawnForCoolingInWatt = "HeatDrawnForCoolingInWatt"
     WaterMassFlowHDS = "WaterMassFlowHDS"
     #: The actual part-load ratio: the fraction of the step the circuit ran, reported back to the controller.
     ActualPartLoadRatio = "ActualPartLoadRatio"
@@ -198,6 +212,8 @@ class HeatDistribution(cp.PhysicsComponent):
         self.absolute_conditioned_floor_area_in_m2: float = concrete(
             self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
         )
+        #: Whether the circuit may cool; a cooling command is refused when it is false.
+        self.cooling_enabled: bool = concrete(self.heat_distribution_system_config.cooling_enabled)
 
         self.position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             self.heat_distribution_system_config.position_hot_water_storage_in_system
@@ -222,15 +238,16 @@ class HeatDistribution(cp.PhysicsComponent):
             self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL
         )
         #: The circuit as a fluid loop (complete Sankey spec §5.1), tagged on its channels only where the system
-        #: declares its energy ports. Its generator end supplies it; it may cool whenever its controller opens the
-        #: valve for cooling. Whether it pumps the loop or passes its generator's flow on depends on the system and is
-        #: stated in stage 1b of the hydraulic circuits spec.
+        #: declares its energy ports. Its generator end supplies it; it may cool exactly where the configuration
+        #: enables cooling (``cooling_enabled``), so one configuration line decides both what the circuit does and
+        #: what its loop declares. Whether it pumps the loop or passes its generator's flow on depends on the system
+        #: and is not stated yet.
         self.distribution_loop = FluidLoop(
             "distribution",
             carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
             fluid=LoopFluid.WATER,
             supplies=False,
-            may_cool=True,
+            may_cool=self.cooling_enabled,
         )
 
         self.build()
@@ -316,8 +333,37 @@ class HeatDistribution(cp.PhysicsComponent):
                 "negative while it cools. Behind a buffer it is the heat of this step's circuit, m c (T_sup - T_ret); "
                 "without a buffer it lags one step."
             ),
+        )
+        # The signed heat above is the physics channel the building computes with and carries no port, since a port
+        # books one direction only; its two directions, each >= 0, carry the ports: heating is space-heating heat
+        # produced for the building, cooling (the controller's cooling mode, running water cooler than the room) is
+        # heat taken from the building, booked as COOLING the system consumes.
+        self.heat_delivered_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDeliveredInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the circuit delivers to the building while it heats, in W, >= 0: {self.ThermalPowerDelivered} "
+                "in a step in which it is positive, else 0."
+            ),
             energy_port=(
                 EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT)
+                if self.declares_energy_ports
+                else None
+            ),
+        )
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the circuit takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0."
+            ),
+            energy_port=(
+                EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING)
                 if self.declares_energy_ports
                 else None
             ),
@@ -489,10 +535,19 @@ class HeatDistribution(cp.PhysicsComponent):
         circuit runs the requested ratio, the fraction of the step its controller commands (``RequestedPartLoadRatio``):
         it publishes that fraction of its flow and of its heat, and reports the actual ratio, the fraction it ran
         (``ActualPartLoadRatio``).
+
+        Raises:
+            ValueError: If the controller commands cooling (``State`` -1) while the configuration does not enable it.
         """
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
         state_controller = stsv.get_input_value(self.state_channel)
+        if state_controller == -1 and not self.cooling_enabled:
+            raise ValueError(
+                f"{self.component_name}: the controller commands cooling (State -1) in timestep {timestep}, but "
+                "cooling_enabled is false in this heat distribution system's configuration. Enable cooling in the heat "
+                "distribution controller's configuration, which the system copies, or find why its controller cools."
+            )
         theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
             self.theoretical_thermal_building_demand_channel
         )
@@ -583,6 +638,8 @@ class HeatDistribution(cp.PhysicsComponent):
             published.water_input_temperature_in_celsius - published.water_output_temperature_in_celsius,
         )
         stsv.set_output_value(self.thermal_power_delivered_channel, published.thermal_power_delivered_in_watt)
+        stsv.set_output_value(self.heat_delivered_channel, max(0.0, published.thermal_power_delivered_in_watt))
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -published.thermal_power_delivered_in_watt))
         stsv.set_output_value(
             self.water_mass_flow_channel,
             water_mass_flow_rate_in_kg_per_second,
@@ -970,9 +1027,9 @@ class HeatDistributionControllerConfig(ConfigBase):
     """Configuration of the heat-distribution controller: the emitter of the water circuit and the load it is sized for.
 
     The controller switches the circuit's valve; what it contributes to the components around it at configuration
-    time is the emitter type and the water mass flow the circuit carries at the building's heating load. The emitter
-    is the author's choice between floor heating and radiators, the heating load a property of the building, so
-    :meth:`preset_building_derived` pins nothing.
+    time is the emitter type, the water mass flow the circuit carries at the building's heating load and whether the
+    circuit may cool. The emitter and the cooling are the author's choices, the heating load a property of the
+    building, so :meth:`preset_building_derived` pins nothing.
     """
 
     MAIN_CLASS = "hisim.components.heat_distribution_system.HeatDistributionController"
@@ -981,35 +1038,44 @@ class HeatDistributionControllerConfig(ConfigBase):
     #: Which emitter the water circuit feeds; an author choice, contributed onwards as a fact.
     heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING
     heating_load_of_building_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT.rounded(2))
+    #: Whether the controller may open the valve for cooling on a negative theoretical demand of the building; an
+    #: author choice, contributed onwards as a fact, so the distribution system refuses a cooling command when it is
+    #: false. Off by default and in every preset (owner decision, 2026-10-27): cooling through the circuit needs a
+    #: generator that can cool and emitters fit for it, and without them buffer water cooler than the room takes the
+    #: room's heat into the buffer (in 2021 at 900 s, 18.3 kWh in the heat-pump and 25.0 kWh in the gas twin).
+    cooling_enabled: bool = False
 
     @staticmethod
     def sizing_facts(config: "HeatDistributionControllerConfig", ctx: SizingContext) -> dict:
-        """Return the facts the emitter circuit decides for the components around it: the mass flow and the emitter.
+        """Return the facts the emitter circuit decides for the components around it: mass flow, emitter and cooling.
 
         The water mass flow is the one :class:`HeatDistributionControllerInformation` derives, the flow that carries
-        the building's heating load at the emitter's design temperature difference.
+        the building's heating load at the emitter's design temperature difference. The emitter type and whether the
+        circuit may cool are copied from the configuration.
 
         Args:
             config: This controller's configuration, fully resolved.
             ctx: The sizing context; unused, the configuration carries the heating load itself.
 
         Returns:
-            The two facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            The three facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
         information = HeatDistributionControllerInformation(config=config)
         return {
             "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
             "heat_distribution_system_type": config.heating_system,
+            "heat_distribution_cooling_enabled": config.cooling_enabled,
         }
 
     #: Sizing facts this config contributes: the water mass flow it derives via
-    #: :class:`HeatDistributionControllerInformation`, and the emitter type.
+    #: :class:`HeatDistributionControllerInformation`, the emitter type and whether the circuit may cool.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=(
                 "water_mass_flow_rate_in_kg_per_second",
                 "heat_distribution_system_type",
+                "heat_distribution_cooling_enabled",
             ),
             compute=sizing_facts,
         ),
@@ -1020,8 +1086,8 @@ class HeatDistributionControllerConfig(ConfigBase):
     def preset_building_derived(cls, name: str) -> "HeatDistributionControllerConfig":
         """The one heat distribution controller, derived entirely from the building it serves.
 
-        The heating load is a property of the building, so the preset pins nothing but the emitter type, which is the
-        author's choice between floor heating and radiators and is a one-line override in the file.
+        The heating load is a property of the building, so the preset pins nothing but the author's choices: the emitter
+        type, floor heating unless a one-line override in the file says radiators, and cooling, off.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -1051,8 +1117,9 @@ class HeatDistributionController(cp.L1ControllerComponent):
     """L1 controller of the heat distribution: it opens the circuit's valve for heating or cooling, or closes it.
 
     The valve follows the building's theoretical demand (:meth:`next_valve_mode`): a closed valve opens for heating
-    on a positive demand and for cooling on a negative one, and an open valve closes when the demand is zero. A
-    valve open for heating passes heat only in the heating season, which the heating curve
+    on a positive demand and, where the configuration enables cooling (``cooling_enabled``, off in every preset), for
+    cooling on a negative one; an open valve closes when the demand is zero. A valve open for heating passes heat
+    only in the heating season, which the heating curve
     (:class:`hisim.components.heating_curve.HeatingCurveController`) decides. The controller publishes ``State``:
     1 for heating, -1 for cooling, and 0 for a closed valve or for a valve open for heating outside the heating season.
 
@@ -1273,7 +1340,11 @@ class HeatDistributionController(cp.L1ControllerComponent):
             self.theoretical_thermal_building_demand_channel
         )
         is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
-        valve_mode = self.next_valve_mode(self.state.valve_mode, theoretical_thermal_building_demand_in_watt)
+        valve_mode = self.next_valve_mode(
+            self.state.valve_mode,
+            theoretical_thermal_building_demand_in_watt,
+            cooling_enabled=self.hsd_controller_config.cooling_enabled,
+        )
         self.end_of_step_state = HeatDistributionControllerState(valve_mode=valve_mode)
         state = self.valve_state(valve_mode, is_heating_season=is_heating_season)
         stsv.set_output_value(self.state_channel, state)
@@ -1300,23 +1371,30 @@ class HeatDistributionController(cp.L1ControllerComponent):
 
     @staticmethod
     def next_valve_mode(
-        mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float
+        mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float, *, cooling_enabled: bool
     ) -> HeatDistributionValveMode:
-        """Return the valve's mode for this pass, from its mode and the building's theoretical demand.
+        """Return the valve's mode for this pass, from its mode, the building's theoretical demand and the cooling option.
 
-        A closed valve opens for heating on a positive demand and for cooling on a negative one; an open valve closes
-        when the demand is exactly zero and otherwise stays in its mode. For example, a valve open for heating stays
-        open on a demand of 300 W and closes on 0 W.
+        A closed valve opens for heating on a positive demand. On a negative demand it opens for cooling where cooling
+        is enabled and stays closed where it is not. An open valve closes when the demand is exactly zero and
+        otherwise stays in its mode. For example, a valve open for heating stays open on a demand of 300 W and closes
+        on 0 W; a closed valve stays closed on -300 W unless cooling is enabled.
 
         Args:
             mode: The valve's mode before this pass.
             theoretical_thermal_building_demand_in_watt: The building's theoretical heating demand, in W; negative
                 for a cooling demand.
+            cooling_enabled: Whether the configuration lets the valve open for cooling.
 
         Returns:
             The valve's mode.
+
+        Raises:
+            ValueError: If the valve is open for cooling although cooling is not enabled.
         """
         match mode:
+            case HeatDistributionValveMode.COOLING if not cooling_enabled:
+                raise ValueError("The heat distribution valve is open for cooling, but cooling is not enabled.")
             case HeatDistributionValveMode.HEATING | HeatDistributionValveMode.COOLING:
                 if theoretical_thermal_building_demand_in_watt == 0:
                     return HeatDistributionValveMode.OFF
@@ -1324,7 +1402,7 @@ class HeatDistributionController(cp.L1ControllerComponent):
             case HeatDistributionValveMode.OFF:
                 if theoretical_thermal_building_demand_in_watt > 0:
                     return HeatDistributionValveMode.HEATING
-                if theoretical_thermal_building_demand_in_watt < 0:
+                if theoretical_thermal_building_demand_in_watt < 0 and cooling_enabled:
                     return HeatDistributionValveMode.COOLING
                 return mode
             case _:

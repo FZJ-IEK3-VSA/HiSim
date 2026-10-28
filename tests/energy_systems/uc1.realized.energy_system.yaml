@@ -98,6 +98,7 @@ components:
     config: # built from preset: building_derived
       heating_system: FLOORHEATING
       heating_load_of_building_in_watt: 7780.75 # sized from building.heating_load_in_watt=7780.752200000001
+      cooling_enabled: false
     inputs:
       - building
       - heating_curve
@@ -109,6 +110,7 @@ components:
       heating_system: FLOORHEATING # sized from hds_controller.heat_distribution_system_type=FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.27 # sized from hds_controller.water_mass_flow_rate_in_kg_per_second=0.2659176349965824
       absolute_conditioned_floor_area_in_m2: 121.2 # sized from building.conditioned_floor_area_in_m2=121.2
+      cooling_enabled: false # sized from hds_controller.heat_distribution_cooling_enabled=False
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX # overrides preset default PARALLEL
       device_co2_footprint_in_kg: null
       investment_costs_in_euro: null
@@ -124,6 +126,7 @@ components:
       heat_distribution_system_type: hds_controller.heat_distribution_system_type # unique provider, written for re-execution
       water_mass_flow_rate_in_kg_per_second: hds_controller.water_mass_flow_rate_in_kg_per_second # unique provider, written for re-execution
       conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
+      heat_distribution_cooling_enabled: hds_controller.heat_distribution_cooling_enabled # unique provider, written for re-execution
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     config: # built from preset: condensing_gas

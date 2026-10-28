@@ -119,6 +119,7 @@ class FlagPortAgreement:
         conditioned_floor_area_in_m2=120.0,
         water_mass_flow_rate_in_kg_per_second=0.5,
         heat_distribution_system_type=HeatDistributionSystemType.RADIATOR,
+        heat_distribution_cooling_enabled=False,
         number_of_residents=3,
         maximal_thermal_power_in_watt=12000.0,
         minimal_thermal_power_in_watt=3000.0,

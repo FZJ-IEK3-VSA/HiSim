@@ -46,9 +46,9 @@ def test_electrolyzer_controller() -> None:
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
         "FakeProvidedLoad",
-        "ProvidedLoad",
+        "ProvidedLoadInWatt",
         lt.LoadTypes.ELECTRICITY,
-        lt.Units.KILOWATT,
+        lt.Units.WATT,
         component_id=ComponentID("FakeProvidedLoad"),
     )
 
@@ -60,7 +60,8 @@ def test_electrolyzer_controller() -> None:
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_controller, load_input])
-    stsv.values[load_input.global_index] = 1700.0
+    # 1,700 kW offered in W, the unit the controller reads, against its loads in kW
+    stsv.values[load_input.global_index] = 1_700_000.0
 
     # Simulate
     my_controller.i_restore_state()

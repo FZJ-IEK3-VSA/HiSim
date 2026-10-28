@@ -8,7 +8,8 @@ components:
     class: hisim.components.transformer_rectifier.Transformer
     preset: standard
     config:
-      rated_power_in_kilowatt: 1028.225
+      rated_power_in_kilowatt: 5000.0
+      received_carrier: WIND_ELECTRICITY
     inputs:
       - input: Input1
         from: CSV.CSVProfile
@@ -35,8 +36,8 @@ components:
       warm_start_time: 30.0
       cold_start_time: 600.0
     inputs:
-      - input: ProvidedLoad
-        from: StandardTransformerAndRectifier.MyTransformerOutput
+      - input: ProvidedLoadInWatt
+        from: StandardTransformerAndRectifier.ElectricityDeliveredInWatt
   Electrolyzer:
     class: hisim.components.generic_electrolyzer_h2.Electrolyzer
     config:
@@ -58,3 +59,26 @@ components:
         from: L1ElectrolyzerController.CurrentMode
       - input: LoadInput
         from: L1ElectrolyzerController.DistributedLoad
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: Electrolyzer.CurrentLoad
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: StandardTransformerAndRectifier.ElectricityDeliveredInWatt
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+  HydrogenMeter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    config:
+      gas_loadtype: GREEN_HYDROGEN # pinned: no provider of energy_carrier in this system yet
+    inputs:
+      - from: Electrolyzer.CurrentHydrogenFlowRate
+        tags:
+          - GAS_PRODUCTION
+          - MASS_FLOW
+        weight: 999

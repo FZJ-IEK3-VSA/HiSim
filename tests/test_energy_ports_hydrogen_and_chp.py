@@ -3,8 +3,8 @@
 Complete Sankey spec, PR 5c: the electrolyzers, the hydrogen tank, the fuel cell, the two CHPs and the transformer and
 rectifier state the energy they take, give, lose and store as energy ports. Hydrogen and the CHPs' fuel count by the
 fuel's lower heating value; where they hand hydrogen over as a mass flow, the port sits on that channel in kg/s (the
-owner's decision of 2026-10-28 on hisim-m4tx): the advanced electrolyzer's ``HydrogenOutput``, the tank's input
-``ChargingHydrogenAmount`` and the modulating CHP's ``GasDemandReal``. Most of these components are run by no setup,
+owner's decision of 2026-10-28 on hisim-m4tx): the advanced electrolyzer's ``HydrogenOutput``, the electrolyzer's
+``CurrentHydrogenFlowRate``, the tank's input ``ChargingHydrogenAmount`` and the modulating CHP's ``GasDemandReal``. Most of these components are run by no setup,
 so each is driven here for one step with fake inputs, and its ports, on outputs and on inputs, are summed:
 consumption minus production, losses and stored change must be zero, as the energy balance requires in every step of
 a run. ``tests/test_energy_balance_hydrogen.py`` runs the two setups that use some of them.
@@ -140,44 +140,66 @@ def hydrogen_lower_heating_value_in_joule_per_kg() -> float:
     return PhysicsConfig.get_properties_for_energy_carrier(lt.LoadTypes.GREEN_HYDROGEN).lower_heating_value_in_joule_per_kg
 
 
-def test_the_transformer_receives_delivers_and_loses_electricity() -> None:
-    """1000 kW received at 95 % are 950 kW delivered and 50 kW lost, and the three close.
+@pytest.mark.parametrize(
+    "received_carrier", [lt.EnergyBalanceCarrier.ELECTRICITY, lt.EnergyBalanceCarrier.WIND_ELECTRICITY]
+)
+def test_the_transformer_receives_delivers_and_loses_electricity(received_carrier: lt.EnergyBalanceCarrier) -> None:
+    """Within its rating, 1000 kW received at 95 % are 950 kW delivered and 50 kW lost; beyond it, the rest is curtailed.
 
-    Catches the received electricity booked as production, a loss with the wrong sign, and a delivered power that
-    the new outputs changed.
+    The standard unit is rated 1000 kW: offered 2000 kW, it receives 1052.6 kW and curtails the other 947.4 kW, which
+    no port books. Both steps close, whichever carrier the unit receives. Catches the received power booked as
+    production, a loss with the wrong sign, a unit that delivers more than its rating, and a curtailment booked.
     """
-    step = OneStep(Transformer(OneStep.parameters(), TransformerConfig.preset_standard("Transformer")))
+    config = TransformerConfig.preset_standard("Transformer")
+    config.received_carrier = received_carrier
+    step = OneStep(Transformer(OneStep.parameters(), config))
     assert step.ports() == {
-        Transformer.TransformerOutput: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
-        Transformer.ElectricityReceivedInKilowatt: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
-        Transformer.ConversionLossInKilowatt: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
+        Transformer.ElectricityDeliveredInWatt: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        Transformer.ElectricityReceivedInWatt: (lt.EnergyRole.CONSUMPTION, received_carrier),
+        Transformer.ConversionLossInWatt: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
     }
     values = step.run({Transformer.TransformerInput: 1000.0})
-    assert values[Transformer.TransformerOutput] == pytest.approx(950.0, rel=1e-12)
-    assert values[Transformer.ElectricityReceivedInKilowatt] == 1000.0
-    assert values[Transformer.ConversionLossInKilowatt] == pytest.approx(50.0, rel=1e-12)
+    assert values[Transformer.ElectricityDeliveredInWatt] == pytest.approx(950_000.0, rel=1e-12)
+    assert values[Transformer.ElectricityReceivedInWatt] == 1_000_000.0
+    assert values[Transformer.ConversionLossInWatt] == pytest.approx(50_000.0, rel=1e-12)
+    assert values[Transformer.CurtailedInputInWatt] == 0.0
+    assert step.residual_in_watt(values) == pytest.approx(0.0, abs=1e-9)
+    values = step.run({Transformer.TransformerInput: 2000.0})
+    assert values[Transformer.ElectricityDeliveredInWatt] == pytest.approx(1_000_000.0, rel=1e-12)
+    assert values[Transformer.ElectricityReceivedInWatt] == pytest.approx(1_000_000.0 / 0.95, rel=1e-12)
+    assert values[Transformer.CurtailedInputInWatt] == pytest.approx(2_000_000.0 - 1_000_000.0 / 0.95, rel=1e-12)
     assert step.residual_in_watt(values) == pytest.approx(0.0, abs=1e-9)
 
 
 def test_the_electrolyzer_turns_electricity_into_hydrogen_and_loses_the_rest() -> None:
-    """A running step books its load as electricity in, its hydrogen by its heating value out, and the rest as loss.
+    """A running step books its load as electricity in, its hydrogen mass flow in kg/s out, and the rest as loss.
 
-    The hydrogen rate is computed in kg/h, so the hydrogen power is the rate divided by 3600 times the heating
-    value. Catches the rate read as kg/s (3600 times too much hydrogen, a negative loss), and a loss that does not
-    close the step.
+    The production rates are computed in kg/h and published in kg/s, so the step's flow times the step is the
+    hydrogen the electrolyzer adds to its total in kg, and the oxygen and water flows keep their stoichiometric ratio
+    to it. Catches a rate in kg/h published as kg/s (3600 times too much hydrogen, a negative loss), and a loss that
+    does not close the step.
     """
     config = ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name="HTecME450")
     step = OneStep(Electrolyzer(OneStep.parameters(), config))
     assert step.ports() == {
         Electrolyzer.CurrentLoad: (lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
-        Electrolyzer.HydrogenProductionInWatt: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
+        Electrolyzer.CurrentHydrogenFlowRate: (lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
         Electrolyzer.ConversionLossInWatt: (lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
     }
     values = step.run({Electrolyzer.LoadInput: config.nom_load, Electrolyzer.InputState: 1.0})
-    hydrogen_in_watt = values[Electrolyzer.CurrentHydrogenFlowRate] / 3600.0 * hydrogen_lower_heating_value_in_joule_per_kg()
-    assert values[Electrolyzer.HydrogenProductionInWatt] == pytest.approx(hydrogen_in_watt, rel=1e-12)
-    assert 0.4 < values[Electrolyzer.HydrogenProductionInWatt] / values[Electrolyzer.CurrentLoad] < 0.8
-    assert values[Electrolyzer.ConversionLossInWatt] > 0.0
+    hydrogen_in_kilogram_per_second = values[Electrolyzer.CurrentHydrogenFlowRate]
+    assert hydrogen_in_kilogram_per_second * OneStep.SECONDS_PER_TIMESTEP == pytest.approx(
+        values[Electrolyzer.TotalHydrogenProduced], rel=1e-12
+    )
+    assert values[Electrolyzer.CurrentOxygenFlowRate] / hydrogen_in_kilogram_per_second == pytest.approx(
+        0.5 * 31.9988 / 2.01588, rel=1e-12
+    )
+    assert values[Electrolyzer.CurrentWaterFlowRate] / hydrogen_in_kilogram_per_second == pytest.approx(
+        18.01528 / 2.01588, rel=1e-12
+    )
+    hydrogen_in_watt = hydrogen_in_kilogram_per_second * hydrogen_lower_heating_value_in_joule_per_kg()
+    assert 0.4 < hydrogen_in_watt / values[Electrolyzer.CurrentLoad] < 0.8
+    assert values[Electrolyzer.ConversionLossInWatt] == pytest.approx(values[Electrolyzer.CurrentLoad] - hydrogen_in_watt, rel=1e-12)
     assert step.residual_in_watt(values) == pytest.approx(0.0, abs=1e-6)
 
 

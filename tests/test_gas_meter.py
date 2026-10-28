@@ -372,16 +372,25 @@ def test_the_opex_record_reports_the_gas_the_meter_actually_measured() -> None:
 
 
 class MassFlowFixtures:
-    """A hydrogen meter fed by a boiler's energy per step in Wh and a CHP's mass flow in kg/s, run for one step."""
+    """A hydrogen meter fed by a boiler's energy per step in Wh, a CHP's and an electrolyzer's mass flow in kg/s.
+
+    The boiler and the CHP burn hydrogen, the electrolyzer produces it; the meter is run for one step.
+    """
 
     #: The step's duration, in s.
     SECONDS_PER_TIMESTEP: int = 900
 
-    #: The two feeds as ``(source, output, unit)``; the CHP's tags are the test's to choose.
+    #: The three feeds as ``(source, output, unit)``; the CHP's tags are the test's to choose.
     FEEDS: Tuple[Tuple[str, str, lt.Units], ...] = (
         ("Boiler", "EnergyDemandSh", lt.Units.WATT_HOUR),
         ("CHP", "GasDemandReal", lt.Units.KG_PER_SEC),
+        ("Electrolyzer", "CurrentHydrogenFlowRate", lt.Units.KG_PER_SEC),
     )
+    #: The tags of the feeds whose tags the test does not choose, by source.
+    FIXED_TAGS: Dict[str, List[lt.InandOutputType]] = {
+        "Boiler": [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+        "Electrolyzer": [lt.InandOutputType.GAS_PRODUCTION, lt.InandOutputType.MASS_FLOW],
+    }
 
     def __init__(self, mass_flow_tags: List[lt.InandOutputType]) -> None:
         """Build the meter with one feed from each source, the CHP's tagged ``mass_flow_tags``.
@@ -397,7 +406,7 @@ class MassFlowFixtures:
         #: The fake output each source publishes, by source name.
         self.sources: Dict[str, cp.ComponentOutput] = {}
         for source, output, unit in self.FEEDS:
-            tags = mass_flow_tags if source == "CHP" else [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED]
+            tags = mass_flow_tags if source == "CHP" else self.FIXED_TAGS[source]
             self.meter.add_component_input_and_connect(
                 source_object_name=source,
                 source_component_output=output,
@@ -411,10 +420,10 @@ class MassFlowFixtures:
         fft.add_global_index_of_components([self.meter, *self.sources.values()])
 
     def run(self, values: Dict[str, float]) -> Dict[str, float]:
-        """Simulate the meter's first step with each source's value by source name; return its outputs by name."""
+        """Simulate the meter's first step with each source's value by source name, 0 if not named; return its outputs."""
         stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([self.meter, *self.sources.values()]))
         for source, output in self.sources.items():
-            stsv.values[output.global_index] = values[source]
+            stsv.values[output.global_index] = values.get(source, 0.0)
         self.meter.i_simulate(0, stsv, False)
         return {output.field_name: stsv.values[output.global_index] for output in self.meter.outputs}
 
@@ -437,6 +446,44 @@ def test_the_meter_counts_a_mass_flow_by_the_lower_heating_value_of_its_gas() ->
     assert outputs[gas_meter.GasMeter.GasFromGrid] == outputs[gas_meter.GasMeter.GasConsumption]
     assert [component_input.src_object_name for component_input in fixture.meter.consumption_uncontrolled_inputs] == ["Boiler"]
     assert [component_input.src_object_name for component_input in fixture.meter.consumption_mass_flow_inputs] == ["CHP"]
+    assert [component_input.src_object_name for component_input in fixture.meter.production_mass_flow_inputs] == [
+        "Electrolyzer"
+    ]
+    assert not fixture.meter.production_inputs
+
+
+@pytest.mark.base
+def test_the_meter_passes_out_what_a_producer_gives_beyond_the_consumption() -> None:
+    """An electrolyzer's hydrogen beyond what the burners take leaves through the meter's export, and a shortfall is bought.
+
+    0.002 kg/s produced against 0.001 kg/s and 500 Wh burned leaves 0.001 kg/s minus 500 Wh to the export and buys
+    nothing; with 0.0005 kg/s produced, 0.0005 kg/s plus 500 Wh are bought and nothing leaves. In both steps the
+    import minus the export is the consumption minus the production, which the energy balance checks the meter by.
+    Catches a production mass flow summed as watt-hours, a surplus that leaves no output, and an export and an
+    import published in the same step.
+    """
+    fixture = MassFlowFixtures([lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW])
+    watt_hours_per_kilogram_per_second = 1e3 * EnergyPort.kilowatt_hours_per_step(
+        lt.Units.KG_PER_SEC, MassFlowFixtures.SECONDS_PER_TIMESTEP, lt.EnergyBalanceCarrier.HYDROGEN
+    )
+    surplus = fixture.run({"Boiler": 500.0, "CHP": 0.001, "Electrolyzer": 0.002})
+    assert surplus[gas_meter.GasMeter.GasProduction] == pytest.approx(0.002 * watt_hours_per_kilogram_per_second, rel=1e-12)
+    assert surplus[gas_meter.GasMeter.GasToGridInWattHour] == pytest.approx(
+        0.001 * watt_hours_per_kilogram_per_second - 500.0, rel=1e-12
+    )
+    assert surplus[gas_meter.GasMeter.GasFromGrid] == 0.0
+    shortfall = fixture.run({"Boiler": 500.0, "CHP": 0.001, "Electrolyzer": 0.0005})
+    assert shortfall[gas_meter.GasMeter.GasToGridInWattHour] == 0.0
+    assert shortfall[gas_meter.GasMeter.GasFromGrid] == pytest.approx(
+        0.0005 * watt_hours_per_kilogram_per_second + 500.0, rel=1e-12
+    )
+    exchange = fixture.meter.metered_exchanges()[0]
+    assert (exchange.carrier, exchange.import_output, exchange.export_output) == (
+        lt.EnergyBalanceCarrier.HYDROGEN,
+        gas_meter.GasMeter.GasFromGrid,
+        gas_meter.GasMeter.GasToGridInWattHour,
+    )
+    assert exchange.export_node() == "hydrogen export"
 
 
 @pytest.mark.base

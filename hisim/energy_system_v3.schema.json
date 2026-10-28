@@ -6015,6 +6015,27 @@
                   "rated_power_in_kilowatt": {
                     "type": "number"
                   },
+                  "received_carrier": {
+                    "enum": [
+                      "ELECTRICITY",
+                      "NATURAL_GAS",
+                      "HEATING_OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "HYDROGEN",
+                      "DIESEL",
+                      "DISTRICT_HEAT",
+                      "SPACE_HEATING_HEAT",
+                      "DOMESTIC_HOT_WATER_HEAT",
+                      "COOLING",
+                      "AMBIENT_HEAT",
+                      "SOLAR",
+                      "ROOM_HEAT",
+                      "DRIVING",
+                      "VEHICLE_ELECTRICITY",
+                      "WIND_ELECTRICITY"
+                    ]
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -6392,7 +6413,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {
@@ -6483,7 +6505,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {

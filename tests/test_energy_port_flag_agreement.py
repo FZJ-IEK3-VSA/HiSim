@@ -34,7 +34,6 @@ from hisim.component import Component
 from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.advanced_fuel_cell import CHP
 from hisim.components.fuel_meter import FuelMeterConfig
-from hisim.components.generic_electrolyzer_h2 import Electrolyzer
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.components.idealized_electric_heater import IdealizedElectricHeater
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
@@ -156,8 +155,8 @@ class FlagPortAgreement:
     )
     #: The reason an electricity port of a device in a golden setup carries no flag.
     RESULTS_KEEP_REASON: ClassVar[str] = (
-        "a port and no flag: the device runs in a golden setup (dynamic_components, electrolyzer_with_renewables) "
-        "whose KPIs would move if they counted this electricity."
+        "a port and no flag: the device runs in a golden setup (dynamic_components) whose KPIs would move if they "
+        "counted this electricity."
     )
 
     #: Every output that carries one of the two tags without the other, as (component class, output name), with the
@@ -180,13 +179,17 @@ class FlagPortAgreement:
             "STORED_ENERGY_INCREASE output; flagged as production, the discharging would count as generation."
         ),
         (CHP, CHP.ElectricityOutput): RESULTS_KEEP_REASON,
-        (Electrolyzer, Electrolyzer.CurrentLoad): RESULTS_KEEP_REASON,
         (IdealizedElectricHeater, IdealizedElectricHeater.ElectricityConsumptionInWatt): (
             "a port and no flag: the idealized heater holds a building at its set points to measure the building's "
             "demand; nothing bills it, and a consumption flag would put its electricity into the KPIs of the building "
             "tests that run it."
         ),
-        (Transformer, Transformer.ElectricityReceivedInKilowatt): RESULTS_KEEP_REASON,
+        (Transformer, Transformer.ElectricityReceivedInWatt): (
+            "a port and no flag: the preset's unit receives electricity, which no setup feeds it (electrolyzer_with_"
+            "renewables feeds it a wind turbine's electricity, another carrier); the KPIs count what it delivers as "
+            "production, and whether they also count what it receives as consumption is decided with the first setup "
+            "that feeds it from the grid."
+        ),
     }
 
     @classmethod

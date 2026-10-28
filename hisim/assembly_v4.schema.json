@@ -376,7 +376,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {

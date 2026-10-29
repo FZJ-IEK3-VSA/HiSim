@@ -16,6 +16,7 @@ from typing import Mapping
 from epc.engines.at.balance import MONTH_DAYS, Balance, Dynamics
 from epc.engines.at.climate import Climate
 from epc.engines.at.envelope import Envelope
+from epc.engines.at.hot_water import RecoverableLosses
 from epc.engines.at.table_reading import Monthly
 from epc.model.result import EpcResult
 
@@ -42,6 +43,7 @@ class Computation:
         site_climate: The site climate.
         reference: The balance under the reference climate.
         site: The balance under the site climate.
+        recoverable: The recoverable hot-water losses Q_TW,beh, in the site climate's heating days.
         constants: The prose constants of the tables.
     """
 
@@ -55,6 +57,7 @@ class Computation:
     site_climate: Climate
     reference: Balance
     site: Balance
+    recoverable: RecoverableLosses
     constants: Mapping[str, float]
 
 
@@ -83,8 +86,8 @@ def fill(result: EpcResult, computation: Computation) -> None:
     )
     result.add_indicator(
         "heating_demand_site_climate", computation.site.annual_heating_demand / bgf, "kWh/(m2 a)",
-        cites="B 8110-6-1 Eq. (51), (53), (64); H 5056-1 7.1", label="HWB_SK",
-        note="stage 1: without recoverable hot-water losses (Q_TW,beh = 0)",
+        cites="B 8110-6-1 Eq. (51), (53), (64); H 5056-1 7.1, Eq. (15), (51)", label="HWB_SK",
+        note="heating days with the recoverable hot-water losses Q_TW,beh (stage 1b)",
     )
     result.add_indicator("indicator_reference_area", bgf, "m2", cites="B 8110-6-1 Section 4", label="BGF")
     result.add_indicator(
@@ -102,8 +105,12 @@ def fill(result: EpcResult, computation: Computation) -> None:
     result.add_indicator("lek_t", lek_t, "1", cites="B 8110-6-1 Eq. (63b)", label="LEK_T")
     for climate, balance_ in (("reference_climate", computation.reference), ("site_climate", computation.site)):
         result.add_indicator(f"heating_days_{climate}", sum(balance_.heating_days), "d",
-                             cites="H 5050-1 Eq. (9); H 5056-1 Eq. (49)")
+                             cites="H 5050-1 Eq. (9); H 5056-1 Eq. (49)–(52b)")
     _terms(result, computation)
+    recoverable = computation.recoverable
+    result.add_term("recoverable_hot_water_losses", sum(recoverable.total), "kWh/a", cites="H 5056-1 Eq. (15)")
+    result.add_term("hot_water_pipe_heat_flow", recoverable.pipe_heat_flow_in_w, "W", cites="H 5056-1 Eq. (26)")
+    result.add_monthly("recoverable_hot_water_losses", recoverable.total, "kWh")
 
 
 def _terms(result: EpcResult, computation: Computation) -> None:

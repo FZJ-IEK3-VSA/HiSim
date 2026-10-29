@@ -46,8 +46,8 @@ A result lists the digests of the tables it was computed with under `provenance.
 Licensed (Austrian Standards); local and git-ignored (`.gitignore`: `epc/data/at/`). The norms can be
 purchased from Austrian Standards International (https://www.austrian-standards.at); the engine reads
 their tables and constants in the form this section states. Edition package
-2024-03 (D5): OENORM B 8110-5:2024-03, B 8110-6-1:2024-03, B 8110-6-2:2024-03. The loader is
-`epc/engines/at/data_tables.py` with `climate_tables.py`; its columns and row counts are the single
+2024-03 (D5): OENORM B 8110-5:2024-03, B 8110-6-1:2024-03, B 8110-6-2:2024-03, H 5056-1:2024-03. The loader
+is `epc/engines/at/data_tables.py` with `climate_tables.py` and `hot_water_tables.py`; its columns and row counts are the single
 source of this section (I-6). Months are `1` (January) … `12` (December). Climate regions are the
 codes of B 8110-5:2024 Bild 1: `W`, `NF`, `N`, `ZA`, `SB`, `S/SO`, `N/SO`. Values stand exactly as the
 norm prints them: no rounding, no unit conversion, no interpolation, no value the norm does not print.
@@ -61,6 +61,8 @@ norm prints them: no rounding, no unit conversion, no interpolation, no value th
 | `usage_profiles_b8110_5_2024_tab7_tab9.csv` | B 8110-5 Tab. 7 and 9, the residential rows | 3 |
 | `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | B 8110-6-1 Tab. 3–5, one row per key below | 14 |
 | `prose_constants_b8110_5_6_1_2024.csv` | B 8110-6-1 and B 8110-5: the single constants of the prose clauses the engine computes with, one row per key below (D7) | 23 |
+| `hot_water_h5056_1_2024_tab3_15.csv` | H 5056-1:2024-03 Tab. 3, 4, 6–10, 15: the values of the recoverable hot-water losses, Eq. (15) | 46 |
+| `operation_b8110_5_2024_tab4_5_8.csv` | B 8110-5 Tab. 4, 5 (usage days) and Tab. 8 (daily operating hours), the residential rows | 36 |
 | `validation_examples_b8110_6_2_2024.csv` | B 8110-6-2 Sections 4 and 5: inputs and expected values of the worked examples, read only by the local tests in `epc/tests/at/reference_cases/` (D41) | – |
 | `SOURCES.md` | per file: norm, edition, tables, pages, transcription, cross-checks, SHA-256 | – |
 
@@ -162,6 +164,40 @@ Keys (the loader's list in `epc/engines/at/data_tables.py` is the single source)
 `construction_factor_light`, `construction_factor_medium`, `construction_factor_heavy` (9.1.2, after
 Eq. (50)); `utilisation_a0`, `utilisation_tau0` (Eq. (59)); `lek_factor`, `lek_length` (Eq. (63b)); of
 B 8110-5 `heating_degree_day_limit` (Eq. (4)).
+### `hot_water_h5056_1_2024_tab3_15.csv`
+
+| Column | Unit | Meaning |
+|---|---|---|
+| `table` | – | the table of H 5056-1:2024-03 the row comes from |
+| `key` | – | one key of the list below, each once |
+| `value` | as `unit` | the value as printed, finite and not negative |
+| `unit` | – | the unit of the value |
+| `row_text` | – | the row text of the norm |
+
+Keys (the loader's list in `epc/engines/at/hot_water_tables.py` is the single source): Tab. 3
+`armatures_two_handle`, `armatures_single_lever`, `armatures_thermostatic`; Tab. 4 `metering_individual`,
+`metering_flat_rate`; Tab. 6 the lengths, a constant and a factor of BF: `length_distribution_constant`,
+`length_distribution_per_bf`, `length_riser_per_bf`, `length_circulation_distribution_constant`,
+`length_circulation_distribution_per_bf`, `length_circulation_riser_per_bf`, `length_stub_residential_per_bf`;
+Tab. 7 `stub_loss_steel_or_unknown`, `stub_loss_copper`, `stub_loss_plastic`; Tab. 8
+`temperature_circulation_other_buildings`, `temperature_circulation_single_family_otherwise`, and without
+circulation the three coefficients of the formula of Tab. 8: `temperature_no_circulation_base`,
+`temperature_no_circulation_span`, `temperature_no_circulation_scale_bf`; Tab. 9
+`pipe_loss_insulation_<ratio>` for the ratios `2`, `1.5`, `1`, `2/3`, `1/3`; Tab. 10
+`fero_<1|2>_<3/3|2/3|1/3|0>_<uninsulated|insulated>` (16 keys); Tab. 15
+`storage_temperature_solar_heat_pump_compact`, `storage_temperature_solar_heat_pump_compact_single_family`,
+`storage_temperature_indirect`, `storage_temperature_indirect_single_family`, `storage_temperature_direct`.
+
+### `operation_b8110_5_2024_tab4_5_8.csv`
+
+| Column | Unit | Meaning |
+|---|---|---|
+| `class` | – | a dwelling-unit class of `usage_profiles_b8110_5_2024_tab7_tab9.csv` |
+| `month` | – | 1 … 12 |
+| `d_nutz_d` | d | d_Nutz of the month, Tab. 4 and 5, 0 … 31 |
+| `t_h_d_h` | h/d | t_h,d, Tab. 8, in (0, 24], one value per class |
+
+Rows: 3 classes × 12 months.
 
 ### `validation_examples_b8110_6_2_2024.csv`
 

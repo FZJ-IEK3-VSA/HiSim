@@ -7,10 +7,11 @@ the month with its share of the heating period:
 - **reference climate** (Eq. (52)): f_h of H 5050-1:2024-03 Eq. (9a)–(9j), from γ of the month and the
   means with the month before and after, December next to January; a month whose losses are not
   positive has no rule there and is refused (``E-14``, D-R1);
-- **site climate** (Eq. (53)): the heating days d_Heiz of H 5056-1:2024-03 7.1, Eq. (49)–(52b),
-  which replaces the γ of a month without positive losses by that of the next month with positive
-  losses; such a month is outside the heating period (H 5050-1:2024-03 6.1, read as f = 0 where
-  θ_e ≥ θ_i,h). Recoverable hot-water losses Q_TW,beh are 0 in stage 1.
+- **site climate** (Eq. (53)): the heating days d_Heiz of H 5056-1:2024-03 7.1, Eq. (49)–(52b), from γ_H
+  of Eq. (51) with the recoverable hot-water losses Q_TW,beh (stage 1b, D44), which replaces the γ_H of a
+  month without positive losses by that of the next month with positive losses; such a month is outside
+  the heating period (H 5050-1:2024-03 6.1, read as f = 0 where θ_e ≥ θ_i,h). The utilisation η keeps the
+  γ of B 8110-6-1 Eq. (58), without Q_TW,beh.
 
 The constants of Eq. (59) are read by key from the tables (D7). Nothing is rounded between the steps
 (IEEE double).
@@ -106,6 +107,7 @@ def balance(
     climate: Climate,
     gains: Sequence[float],
     reference: bool,
+    recoverable: Optional[Sequence[float]] = None,
 ) -> Balance:
     """The monthly heating balance under one climate.
 
@@ -116,6 +118,8 @@ def balance(
         climate: The climate's monthly outdoor temperatures.
         gains: Q_g = Q_i + Q_s per month, in kWh, under this climate.
         reference: ``True`` for the reference climate (Eq. (52)), ``False`` for the site climate (Eq. (53)).
+        recoverable: Q_TW,beh per month, in kWh, for γ_H of H 5056-1 Eq. (51) under the site climate;
+            ``None`` is 0.
 
     Returns:
         The balance.
@@ -141,8 +145,12 @@ def balance(
         shares = heating_shares([ratio for ratio in ratios if ratio is not None], inertia.gain_loss_ratio_limit)
         days = tuple(share * month_days for share, month_days in zip(shares, MONTH_DAYS))
     else:
+        extra = tuple(recoverable) if recoverable is not None else (0.0,) * len(losses)
+        heating_ratios: List[Optional[float]] = [
+            (gain + q_tw) / loss if loss > 0 else None for gain, q_tw, loss in zip(gains, extra, losses)
+        ]
         days = tuple(
-            share * month_days for share, month_days in zip(site_heating_shares(ratios, inertia), MONTH_DAYS)
+            share * month_days for share, month_days in zip(site_heating_shares(heating_ratios, inertia), MONTH_DAYS)
         )
         shares = tuple(heating_days / month_days for heating_days, month_days in zip(days, MONTH_DAYS))
     utilisation = tuple(None if ratio is None else utilisation_factor(ratio, inertia.utilisation_parameter)

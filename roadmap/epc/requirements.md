@@ -156,7 +156,7 @@ B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real ce
 **Non-goals (stage 1)**, kept as the parking lot of §11.2
 
 - Headline indicators beyond the heating demand (final or primary energy, CO₂, classes), and the
-  Austrian hot-water loss chain. `[given]`
+  Austrian hot-water loss chain beyond the recoverable losses Q_TW,beh (D44). `[given]`
 - Any change to HiSim in the calculator's pull requests; HiSim's building record (issue #949) and the
   site fields (D23) are separate changes to HiSim. `[decided 2026-10-12, D30]`
 - Resolving the site from a municipality or cadastral code. `[given]`
@@ -208,7 +208,7 @@ refused naming the value and, for the dwelling units, HiSim's `number_of_apartme
   "indicators": {
     "heating_demand_reference_climate": {"value": 304.1, "unit": "kWh/(m2 a)", "label": "HWB_RK", "cites": "B 8110-6-1 Eq. (52), (64); H 5050-1 Eq. (9)"},
     "heating_demand_site_climate":      {"value": 287.6, "unit": "kWh/(m2 a)", "label": "HWB_SK", "cites": "B 8110-6-1 Eq. (53), (64)",
-                                         "note": "stage 1: without recoverable hot-water losses (Q_TW,beh = 0)"},
+                                         "note": "heating days with the recoverable hot-water losses Q_TW,beh (stage 1b)"},
     "indicator_reference_area":         {"value": 150.0, "unit": "m2", "label": "BGF", "cites": "B 8110-6-1 Sec. 4"},
     "heating_degree_days_22_14_site_climate": {"value": 3650, "unit": "Kd", "cites": "B 8110-5 Eq. (4)"}
   },
@@ -331,7 +331,7 @@ volume, a thermal-bridging default, a ventilation default, a living-area fractio
 | R5.9 | Solar gains | Eq. (43), (44) with A_g as stated (8.3 a)) or by Eq. (40) (8.3 b), an assumption; D38), F_g of Eq. (44); F_S,h by dwelling-unit class, **a terraced house in the smallest** (8.3.1.2.2), by dwelling units alone when the building type is `null` (an assumption); g from the building; window areas per direction as HiSim states them. |
 | R5.10 | Thermal mass, utilisation | Eq. (50) with f_BW per Bauweise as stated after the equation, by HiSim's five classes mapped very light + light → leicht, medium → mittel, heavy + very heavy → schwer (D3); Eq. (49); Eq. (57a/b)–(59). |
 | R5.11 | Heating period, reference climate | H 5050-1 Eq. (9a)–(9m); γ ≤ 0 refused, not patched. |
-| R5.12 | Heating period, site climate | B 8110-6-1 Eq. (53) with d_Heiz from H 5056-1 Eq. (49)–(52), negative γ_H replaced by the next positive month; a month with θ_e ≥ θ_i,h has no heating share (D35); Q_TW,beh = 0 in stage 1, stated as a `note`. |
+| R5.12 | Heating period, site climate | B 8110-6-1 Eq. (53) with d_Heiz from H 5056-1 Eq. (49)–(52), negative γ_H replaced by the next positive month; a month with θ_e ≥ θ_i,h has no heating share (D35); γ_H with the recoverable hot-water losses Q_TW,beh of H 5056-1 Eq. (15), stated as a `note` (D44, D45). |
 | R5.13 | Annual values | Eq. (51), (64) per BGF, (63a), (1), heating days, HGT 22/14 per B 8110-5 Eq. (4) with the month's days. |
 
 **R6 — The building is HiSim's, taken as it is.** `[decided 2026-10-07, D9; 2026-10-11, D24, D25]`
@@ -479,7 +479,7 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | P2 | Site lookup from municipality or cadastral code (Austria), climate zone from municipality (Spain) | D10 |
 | P3 | The 2025-10 Austrian edition package as a second engine | D5 |
 | P4 | Manual tests against real certificates (Muggauberg, Ludersdorf, Kalsdorf) after merge; they confirm A1 and need P10 | D6 |
-| P5 | The Austrian hot-water loss chain (H 5056-1 Ch. 6, H 5056-2 as oracle), reading the run's hot-water components from the record | D1 |
+| P5 | The rest of the Austrian hot-water loss chain beyond Q_TW,beh (D44): a storage, an uninsulated pipe and circulation in the conditioned area (E-20, D45), H 5056-2 as oracle (B 8110-6-2 cases 3 and 4), reading the run's hot-water components from the record | D1, D45 |
 | P6 | Headline indicators and classes per country, which need the heating system from the record | D14 |
 | P7 | A package of its own, later a repository of its own, once the record seam is stable (the path-filtered CI job: D40) | D15 |
 | P8 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), SFH variant 2 case 1 and MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
@@ -533,6 +533,9 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | D40 | 2026-10-13 | HiSim's `tests.yml` runs pytest from `tests/`, where `testpaths` is not read, so its base job runs none of the calculator's tests. The calculator gets a workflow of its own, `.github/workflows/epc.yml`: on changes to `epc/`, `pytest.ini` or the workflow, for pull requests to any branch (the stacked PRs of design §10 included), it runs `pytest epc/tests -m base` with only pytest and PyYAML installed. HiSim's workflows skipping changes confined to `epc/` (`paths-ignore`) is a separate change to HiSim, outside this work. |
 | D41 | 2026-10-13 | Tests by country. The country-independent ones lie in `epc/tests/`. A country's tests on synthetic data lie in `epc/tests/<cc>/synthetic/`, committed, each module headed by a disclaimer: the values are invented, none comes from a norm table, none may be used for a study or a real calculation, and the norms can be purchased from their publisher (Austria: Austrian Standards International). A country's tests against its real data lie in `epc/tests/<cc>/reference_cases/`, test code included, local and git-ignored; the data they read (Austria: the tables and the B 8110-6-2 examples) stay in `epc/data/<cc>/`. |
 | D42 | 2026-10-13 | `python -m epc countries` states per engine whether its tables load: `ready`, or the error ID and a pointer to `epc/data/README.md`; its exit code stays 0. |
+| D43 | 2026-10-15 | A hand-written description may state an element's temperature-correction factor (a certificate prints one per element); the Austrian engine then takes it instead of the Tab. 3–5 row of the element's situation, with no assumption. 0 < f ≤ 1, not for a conditioned neighbour (E-18). HiSim's record never states it. |
+| D44 | 2026-10-19 | Stage 1b, strictly by the wording of the norms: the recoverable hot-water losses Q_TW,beh of H 5056-1:2024-03 Eq. (15) (emission Eq. (22), pipes in the conditioned area Eq. (24), (26), stub lines Eq. (28)) enter γ_H of Eq. (51), hence the heating days d_Heiz of Eq. (49)–(52b), and through B 8110-6-1 Eq. (53) the heating demand under the site climate. The reference climate (H 5050-1) and η (B 8110-6-1 Eq. (58)) stay without them. A certificate software that deviates from this wording is a finding about the software. |
+| D45 | 2026-10-19 | The hot-water system is an optional part of the description, stated where a certificate prints it; without it the engine takes the default systems of the OIB guideline to Directive 6 (2015) for a central supply (circulation; distribution and risers outside, stub lines inside the conditioned area; uninsulated fittings; two-handle fittings; indirect storage), the storage outside the conditioned area (the engine's choice), the stub material unknown, and records the assumption. Circulation lines lie and are insulated like their run. Refused with E-20 until decided: a storage in the conditioned area, an uninsulated pipe in the conditioned area (the unit of d_ro in Tab. 9), circulation in the conditioned area (Tab. 8 distinguishes single-family houses, which the norm does not define). |
 
 ## 12. Glossary
 

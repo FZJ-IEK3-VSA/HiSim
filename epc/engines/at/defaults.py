@@ -19,6 +19,7 @@ from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 from epc.model.building import BuildingDescription, Element, Situation, Window
 from epc.model.errors import EpcError, EpcErrorKind
+from epc.model.hot_water import HotWaterSystem, PipeRun
 from epc.model.result import Assumption
 
 #: B 8110-6-1:2024-03 Section 4, p. 8: the reference area BF of a residential building as a share of BGF.
@@ -153,6 +154,35 @@ def ventilation() -> Assumption:
         "ventilation",
         "natural ventilation, n_nL = n_L,hyg",
         "B 8110-6-1:2024-03 6.2.2, Eq. (15a), (15b); the record states no ventilation system",
+    )
+
+
+#: The hot-water system of a building that states none (D45): the default systems of the OIB guideline
+#: to Directive 6 (2015) for a central supply — with circulation, distribution and risers outside and the
+#: stub lines inside the conditioned area, fittings uninsulated, two-handle fittings (H 5056-1 Tab. 3, fixed
+#: value), an indirectly heated storage — and, the engine's own choice, the storage outside the conditioned
+#: area; the stub material is unknown (H 5056-1 Tab. 7) and the metering individual (Tab. 4, fixed value).
+DEFAULT_HOT_WATER_SYSTEM = HotWaterSystem(
+    circulation=True,
+    distribution=PipeRun(conditioned=False, insulation="0", fittings_insulated=False),
+    risers=PipeRun(conditioned=False, insulation="0", fittings_insulated=False),
+    stub_material="steel_or_unknown",
+    storage_kind="indirect",
+    storage_conditioned=False,
+)
+
+
+def hot_water_system(building: BuildingDescription) -> Tuple[HotWaterSystem, Optional[Assumption]]:
+    """The hot-water system the recoverable losses are computed from: the stated one, else the default (D45)."""
+    if building.hot_water is not None:
+        return building.hot_water, None
+    return DEFAULT_HOT_WATER_SYSTEM, Assumption(
+        "hot_water_system",
+        "central supply with circulation; distribution and risers outside, stub lines inside the conditioned "
+        "area; storage outside the conditioned area; stub material unknown; two-handle fittings, individual "
+        "metering",
+        "OIB guideline to Directive 6 (2015), default systems for a central supply; storage location the "
+        "engine's choice (D45); H 5056-1:2024-03 Tab. 3, 4, 7",
     )
 
 

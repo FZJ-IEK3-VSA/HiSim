@@ -1,0 +1,62 @@
+# The EPC calculator's functionality tests (roadmap/epc/requirements.md D40), on every change to
+# epc/ and only then.
+#
+# A workflow of its own rather than a shard of tests.yml: that workflow runs pytest from tests/,
+# where pytest does not read the testpaths of pytest.ini, so it never collects epc/tests. The
+# calculator imports nothing of HiSim -- a committed check enforces it
+# (epc/tests/test_import_boundary.py) -- so this job needs neither HiSim, its dependencies nor
+# the test image: pytest and PyYAML are all it installs.
+#
+# The validation against the Austrian norm (marker epc_norm_data) needs licensed tables that are
+# never committed; it runs where they exist and is not selected here.
+
+name: epc
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - epc/**
+      - pytest.ini
+      - .github/workflows/epc.yml
+  # No branch filter, unlike the other workflows: the EPC pull requests are stacked, each based
+  # on the one below it, and every one of them is tested.
+  pull_request:
+    paths:
+      - epc/**
+      - pytest.ini
+      - .github/workflows/epc.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: epc-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  pytest:
+    name: pytest (epc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install the calculator's dependencies
+        run: pip install pytest pyyaml
+      - name: Test with pytest
+        run: python -m pytest epc/tests -m base
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

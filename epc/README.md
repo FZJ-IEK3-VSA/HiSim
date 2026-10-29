@@ -47,7 +47,7 @@ editions and whether their tables load (`ready`, or the error id of the missing 
 The run path is the run directory relative to the results root. A batch writes only into an output
 directory that is new or empty, and records a refused run in the summary and continues.
 
-Every refusal carries an id (`E-01` … `E-18`) and names what is missing; the ids and messages are in
+Every refusal carries an id (`E-01` … `E-19`) and names what is missing; the ids and messages are in
 `model/errors.py` (design §8).
 
 ## Where everything is

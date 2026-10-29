@@ -178,6 +178,12 @@ class BuildingDescription:
                 "a finite number > 0 or null",
             ),
             ("dwelling_units", self.dwelling_units, self.dwelling_units >= 1, "at least 1"),
+            (
+                "windows",
+                tuple(window.name for window in self.windows),
+                len({window.name for window in self.windows}) == len(self.windows),
+                "one window surface per name",
+            ),
         ]
         for element in self.elements:
             checks += [

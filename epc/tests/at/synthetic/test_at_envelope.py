@@ -1,0 +1,162 @@
+"""T-5: the conductances and the gains of the Austrian engine, each against a hand computation.
+
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
+The building is written by hand with placeholder values; the tables come from
+:mod:`epc.tests.at.synthetic.at_tables`. No value of a licensed table appears here (R8.5).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Optional, Tuple
+
+import pytest
+
+from epc.engines.at import climate, defaults, envelope, gains, usage
+from epc.engines.at.data_tables import AustrianTables, load_tables
+from epc.model.building import BuildingDescription, Element, ElementName, Provenance, Site, Situation, Window
+from epc.tests.at.synthetic.at_tables import PROSE_CONSTANTS, f_h, synthetic_tables, write
+
+pytestmark = pytest.mark.base
+
+#: The synthetic constants the expectations below are computed with.
+C = PROSE_CONSTANTS
+
+#: (name, area, U, factor, situation, Tab. 3–5 row) of the hand-written building.
+ELEMENTS: Tuple[Tuple[ElementName, float, float, float, Situation, Optional[str]], ...] = (
+    ("floor", 50.0, 0.4, 0.5, Situation.UNCONDITIONED_CELLAR, "CEILING_TO_UNCONDITIONED_CELLAR_UNINSULATED"),
+    ("wall", 120.0, 0.3, 1.0, Situation.OUTSIDE_AIR, "OUTSIDE_AIR"),
+    ("wall", 30.0, 0.9, 0.0, Situation.CONDITIONED_NEIGHBOUR, None),
+    ("roof", 50.0, 0.2, 0.5, Situation.UNCONDITIONED_ATTIC, "CEILING_TO_UNCONDITIONED_ATTIC"),
+    ("window", 20.0, 1.2, 1.0, Situation.OUTSIDE_AIR, "OUTSIDE_AIR"),
+    ("door", 2.0, 1.5, 1.0, Situation.OUTSIDE_AIR, "OUTSIDE_AIR"),
+)
+WINDOWS = (
+    Window("south", 0.0, 90.0, 12.0, 0.6, None, None, None),
+    Window("north", 180.0, 90.0, 8.0, 0.5, None, None, None),
+)
+
+
+def _building(dwelling_units: int = 1, building_type: str | None = "detached") -> BuildingDescription:
+    """The hand-written building."""
+    return BuildingDescription(
+        name="hand-written",
+        building_type=building_type,  # type: ignore[arg-type]
+        conditioned_floor_area_in_m2=100.0,
+        gross_volume_in_m3=None,
+        dwelling_units=dwelling_units,
+        dwelling_units_configured=True,
+        heat_capacity_class="medium",
+        elements=tuple(Element(name, area, u, b, situation, "hand") for name, area, u, b, situation, _ in ELEMENTS),
+        windows=WINDOWS,
+        thermal_bridging_surcharge_used_by_hisim=0.0,
+        site=Site(None, None),
+        provenance=Provenance("hand", "hand", "hand", ()),
+    )
+
+
+@pytest.fixture(name="tables")
+def fixture_tables(tmp_path: Path) -> AustrianTables:
+    """The synthetic tables, loaded."""
+    return load_tables(write(tmp_path, synthetic_tables()))
+
+
+def test_the_envelope_follows_eq_10a_11a_13_to_15_63a_and_1(tables: AustrianTables) -> None:
+    """Σ f A U over the envelope, Eq. (11a), L_T, A, U_m, ℓ_c and L_V, recomputed by hand."""
+    profile = usage.usage(tables, _building())
+    result = envelope.envelope(tables, _building(), profile, 125.0, 375.0)
+    in_envelope = [(area, u, f_h(row)) for _, area, u, _, _, row in ELEMENTS if row is not None]
+    element_conductance = sum(factor * area * u for area, u, factor in in_envelope)
+    area = sum(area for area, _, _ in in_envelope)
+    bridges = max(C["thermal_bridge_factor"] * (C["thermal_bridge_u_offset"] - element_conductance / area)
+                  * element_conductance, C["thermal_bridge_minimum_share"] * element_conductance)
+    assert result.element_conductance_in_w_per_k == element_conductance
+    assert result.envelope_area_in_m2 == area == 242.0
+    assert result.thermal_bridge_conductance_in_w_per_k == bridges
+    assert result.transmission_conductance_in_w_per_k == element_conductance + bridges
+    assert result.mean_u_value_in_w_per_m2_per_k == (element_conductance + bridges) / area
+    assert result.characteristic_length_in_m == 375.0 / area
+    air_volume = C["reference_area_share"] * 125.0 * C["net_room_height"]
+    assert result.air_volume_in_m3 == air_volume
+    assert result.air_change_per_h == profile.hygienic_air_change_per_h
+    assert result.ventilation_conductance_in_w_per_k == (
+        C["air_heat_capacity"] * profile.hygienic_air_change_per_h * air_volume)
+    assert [element.row for element in result.elements] == [row for *_, row in ELEMENTS]
+
+
+def test_a_conditioned_neighbour_is_in_neither_the_conductance_nor_the_area(tables: AustrianTables) -> None:
+    """I-10: the factor-0 wall adds nothing, its area is not part of A (Section 4, p. 8)."""
+    profile = usage.usage(tables, _building())
+    result = envelope.envelope(tables, _building(), profile, 125.0, 375.0)
+    neighbour = result.elements[2]
+    assert (neighbour.row, neighbour.factor, neighbour.conductance_in_w_per_k) == (None, None, 0.0)
+    assert result.envelope_area_in_m2 == 242.0
+
+
+def test_the_rows_taken_by_default_are_assumptions(tables: AustrianTables) -> None:
+    """D29: the cellar and the attic rows are recorded; outside air and the neighbour are not defaults."""
+    result = envelope.envelope(tables, _building(), usage.usage(tables, _building()), 125.0, 375.0)
+    keys = [assumption.key for assumption in result.assumptions]
+    assert keys == ["correction_factor_floor", "correction_factor_roof"]
+
+
+@pytest.mark.parametrize(
+    "element_conductance, area, expected",
+    [(100.0, 500.0, C["thermal_bridge_factor"] * (C["thermal_bridge_u_offset"] - 0.2) * 100.0),
+     (300.0, 500.0, C["thermal_bridge_minimum_share"] * 300.0), (0.0, 500.0, 0.0)],
+    ids=["formula above the bound", "the lower bound", "no conductance"],
+)
+def test_eq_11a_never_falls_below_its_lower_bound(element_conductance: float, area: float, expected: float) -> None:
+    """Eq. (11a) with the constants of the tables, never below its lower bound (I-4)."""
+    result = envelope.thermal_bridge_conductance(C, element_conductance, area)
+    assert result == expected
+    assert result >= C["thermal_bridge_minimum_share"] * element_conductance
+
+
+def test_internal_gains_follow_eq_37(tables: AustrianTables) -> None:
+    """Eq. (37) with the reference-area share of the tables and the hours of the month."""
+    profile = usage.usage(tables, _building())
+    result = gains.internal_gains(C, profile, 125.0)
+    expected = tuple(profile.internal_gains_heating_in_w_per_m2 * 125.0 * C["reference_area_share"] * hours / 1000
+                     for hours in usage.MONTH_DURATION_IN_H)
+    assert result == expected
+    assert result[0] / result[1] == pytest.approx(31 / 28)
+
+
+def test_solar_gains_follow_eq_40_43_44(tables: AustrianTables) -> None:
+    """Eq. (40), (44) per surface with the given glass share and shading factor; Q_s by Eq. (43)."""
+    areas = gains.collector_areas(C, WINDOWS, 0.6, 0.5)
+    reduction = C["glazing_non_perpendicular_factor"] * C["glazing_soiling_factor"]
+    for window in WINDOWS:
+        assert areas[window.name] == 0.6 * window.area_in_m2 * 0.5 * window.g_value * reduction
+    reference = climate.reference_climate(tables, WINDOWS)
+    result = gains.solar_gains(areas, reference)
+    for month in range(12):
+        expected = sum(reference.radiation_in_kwh_per_m2[name][month] * area for name, area in areas.items())
+        assert result[month] == expected
+
+
+@pytest.mark.parametrize(
+    "units, building_type, expected",
+    [(1, "detached", "small"), (3, None, "small"), (4, "multi_family", "medium"), (8, "apartment_block", "medium"),
+     (9, "apartment_block", "large"), (6, "terraced", "small")],
+)
+def test_the_shading_factor_follows_8_3_1_2_2(units: int, building_type: str | None, expected: str) -> None:
+    """The smallest class of units or a terraced house, the middle class, the rest, by the limits (R5.9)."""
+    result = defaults.shading_factor(C, _building(units, building_type))
+    assert result.value == C[f"shading_factor_{expected}"]
+    assert result.assumption is not None and "8.3.1.2.2" in result.assumption.source
+    assert ("building type not stated" in result.assumption.value) == (building_type is None)
+
+
+def test_the_glass_share_is_the_simplified_approach_of_eq_40() -> None:
+    """A_g = f_g A_W with the glass share of the tables, recorded as an assumption (I-4)."""
+    result = defaults.glass_share(C)
+    assert result.value == C["glass_share"]
+    assert result.assumption is not None and "Eq. (40)" in result.assumption.source

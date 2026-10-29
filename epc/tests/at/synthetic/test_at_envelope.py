@@ -13,6 +13,7 @@ The building is written by hand with placeholder values; the tables come from
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -99,6 +100,18 @@ def test_a_conditioned_neighbour_is_in_neither_the_conductance_nor_the_area(tabl
     assert result.envelope_area_in_m2 == 242.0
 
 
+def test_a_stated_factor_replaces_the_row_without_assumption(tables: AustrianTables) -> None:
+    """D43: a factor the description states, as a certificate prints it, is taken as stated: no row, no assumption."""
+    building = _building()
+    floor = dataclasses.replace(building.elements[0], stated_correction_factor=0.6)
+    stated = dataclasses.replace(building, elements=(floor,) + building.elements[1:])
+    result = envelope.envelope(tables, stated, usage.usage(tables, stated), 125.0, 375.0)
+    taken = result.elements[0]
+    assert (taken.row, taken.factor, taken.conductance_in_w_per_k) == (None, 0.6, 0.6 * 50.0 * 0.4)
+    assert result.envelope_area_in_m2 == 242.0
+    assert [assumption.key for assumption in result.assumptions] == ["correction_factor_roof"]
+
+
 def test_the_rows_taken_by_default_are_assumptions(tables: AustrianTables) -> None:
     """D29: the cellar and the attic rows are recorded; outside air and the neighbour are not defaults."""
     result = envelope.envelope(tables, _building(), usage.usage(tables, _building()), 125.0, 375.0)
@@ -156,7 +169,21 @@ def test_the_shading_factor_follows_8_3_1_2_2(units: int, building_type: str | N
 
 
 def test_the_glass_share_is_the_simplified_approach_of_eq_40() -> None:
-    """A_g = f_g A_W with the glass share of the tables, recorded as an assumption (I-4)."""
-    result = defaults.glass_share(C)
+    """A_g = f_g A_W with the glass share of the tables for windows without a stated glass area, assumed (I-4)."""
+    result = defaults.glass_share(C, WINDOWS)
     assert result.value == C["glass_share"]
     assert result.assumption is not None and "Eq. (40)" in result.assumption.source
+    assert "every window" in result.assumption.value
+
+
+def test_a_stated_glass_area_is_approach_a_without_assumption() -> None:
+    """8.3 a): a stated glass area replaces that of Eq. (40) in Eq. (44); only the other windows are assumed."""
+    stated = (dataclasses.replace(WINDOWS[0], glass_area_in_m2=9.5), WINDOWS[1])
+    areas = gains.collector_areas(C, stated, 0.6, 0.5)
+    reduction = C["glazing_non_perpendicular_factor"] * C["glazing_soiling_factor"]
+    assert areas["south"] == 9.5 * 0.5 * stated[0].g_value * reduction
+    assert areas["north"] == 0.6 * stated[1].area_in_m2 * 0.5 * stated[1].g_value * reduction
+    partly = defaults.glass_share(C, stated)
+    assert partly.assumption is not None and partly.assumption.value.endswith("for north")
+    every = tuple(dataclasses.replace(window, glass_area_in_m2=window.area_in_m2 / 2) for window in WINDOWS)
+    assert defaults.glass_share(C, every).assumption is None

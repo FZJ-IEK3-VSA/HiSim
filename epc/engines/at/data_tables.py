@@ -59,8 +59,8 @@ TABLE_FILES: Tuple[str, ...] = (
 
 USAGE_CLASSES = 3
 
-#: The single constants of the prose clauses of B 8110-6-1 the engine computes with, by key; their values
-#: are local like the tables (D7), the clause of each stands in the file.
+#: The single constants of the prose clauses of B 8110-6-1 and B 8110-5 the engine computes with, by key;
+#: their values are local like the tables (D7), the clause of each stands in the file.
 PROSE_CONSTANT_KEYS: Tuple[str, ...] = (
     "reference_area_share",
     "gross_storey_height",
@@ -77,6 +77,14 @@ PROSE_CONSTANT_KEYS: Tuple[str, ...] = (
     "air_heat_capacity",
     "glazing_non_perpendicular_factor",
     "glazing_soiling_factor",
+    "construction_factor_light",
+    "construction_factor_medium",
+    "construction_factor_heavy",
+    "utilisation_a0",
+    "utilisation_tau0",
+    "heating_degree_day_limit",
+    "lek_factor",
+    "lek_length",
 )
 
 #: The constants that count dwelling units and must be whole numbers.

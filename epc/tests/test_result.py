@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
 
 from epc.inputs import record
 from epc.model.errors import EpcError
-from epc.model.result import COMMON_CORE, SITE_CLIMATE_KEY, EpcResult, RunInfo
+from epc.model.result import COMMON_CORE, SITE_CLIMATE_KEY, EpcResult, RunInfo, building_to_dict
 from epc.tests import support
 
 pytestmark = pytest.mark.base
@@ -85,6 +86,15 @@ def test_a_result_without_its_run_is_not_written() -> None:
     result.run = None
     with pytest.raises(ValueError, match="states no run"):
         result.to_dict()
+
+
+def test_a_stated_correction_factor_is_written_only_where_stated() -> None:
+    """D43: HiSim's elements write no stated factor; an element that states one writes it."""
+    building = record.describe(record.load(support.FIXTURES / support.CONFIGURED).buildings[0])
+    floor = dataclasses.replace(building.elements[0], stated_correction_factor=0.6)
+    stated = dataclasses.replace(building, elements=(floor,) + building.elements[1:])
+    assert all("stated_correction_factor" not in element for element in building_to_dict(building)["elements"])
+    assert building_to_dict(stated)["elements"][0]["stated_correction_factor"] == 0.6
 
 
 def test_to_dict_has_the_shape_of_mockup_a() -> None:

@@ -3,9 +3,9 @@
 - **Internal gains** of a residential building, B 8110-6-1:2024-03 Eq. (37), with q_i,h of the usage
   profile and the duration of the month.
 - **Solar gains** of a residential building, Eq. (43), over the window surfaces, with the collector area
-  of Eq. (44), the glass area of Eq. (40), the window surface's area and HiSim's g-value. The glass share
-  and the shading factor are the norm's lump values (:mod:`epc.engines.at.defaults`); F_g is part of
-  Eq. (44). The constants are read by key from the tables (D7).
+  of Eq. (44), the glass area as stated (8.3 a)) or by Eq. (40) (8.3 b)), and the surface's g-value. The
+  glass share and the shading factor are the norm's lump values (:mod:`epc.engines.at.defaults`); F_g is
+  part of Eq. (44). The constants are read by key from the tables (D7).
 
 Both are computed per climate from the same building; only I_S,ON,j differs between them (I-3).
 """
@@ -38,14 +38,22 @@ def internal_gains(constants: Mapping[str, float], usage: Usage, gross_floor_are
 def collector_areas(
     constants: Mapping[str, float], windows: Sequence[Window], glass_share: float, shading_factor: float
 ) -> Mapping[str, float]:
-    """A_trans,h of every window surface by B 8110-6-1:2024-03 Eq. (40) and (44), in m², by surface name."""
+    """A_trans,h of every window surface by B 8110-6-1:2024-03 Eq. (44), in m², by surface name.
+
+    The glass area A_g is the surface's stated glass area (8.3 a)) or, without one, that of Eq. (40).
+    """
     reduction = constants[GLAZING_NON_PERPENDICULAR_FACTOR] * constants[GLAZING_SOILING_FACTOR]
     return MappingProxyType(
         {
-            window.name: glass_share * window.area_in_m2 * shading_factor * window.g_value * reduction
+            window.name: glass_area(window, glass_share) * shading_factor * window.g_value * reduction
             for window in windows
         }
     )
+
+
+def glass_area(window: Window, glass_share: float) -> float:
+    """A_g of a window surface: its stated glass area, else that of B 8110-6-1:2024-03 8.3, Eq. (40)."""
+    return window.glass_area_in_m2 if window.glass_area_in_m2 is not None else glass_share * window.area_in_m2
 
 
 def solar_gains(areas: Mapping[str, float], climate: Climate) -> Monthly:

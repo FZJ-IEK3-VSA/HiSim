@@ -57,6 +57,8 @@ WINDOW_DIRECTIONS: Tuple[Tuple[str, float, float], ...] = (
 )
 
 #: The fields of the ``glazing`` block, the same for every window surface and named as on :class:`Window`.
+#: All four are required numbers, as the contract types them (§2.3), although :class:`Window` allows the
+#: three reduction factors to be ``None`` for descriptions written by hand.
 GLAZING_FIELDS: Tuple[str, ...] = ("g_value", "frame_factor", "non_perpendicular_factor", "external_shading_factor")
 
 #: The unconditioned space behind an element of factor 0.5, by element class (D25).

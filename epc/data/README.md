@@ -60,7 +60,7 @@ norm prints them: no rounding, no unit conversion, no interpolation, no value th
 | `transposition_factors_b8110_5_2024_annex_e.csv` | B 8110-5 Annex E, Tab. E.1–E.7: transposition factors F_T of Eq. (3) | 5 292 |
 | `usage_profiles_b8110_5_2024_tab7_tab9.csv` | B 8110-5 Tab. 7 and 9, the residential rows | 3 |
 | `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | B 8110-6-1 Tab. 3–5, one row per key below | 14 |
-| `prose_constants_b8110_5_6_1_2024.csv` | B 8110-6-1: the single constants of the prose clauses the engine computes with, one row per key below (D7) | 15 |
+| `prose_constants_b8110_5_6_1_2024.csv` | B 8110-6-1 and B 8110-5: the single constants of the prose clauses the engine computes with, one row per key below (D7) | 23 |
 | `validation_examples_b8110_6_2_2024.csv` | B 8110-6-2 Sections 4 and 5: inputs and expected values of the worked examples, read only by the local tests in `epc/tests/at/reference_cases/` (D41) | – |
 | `SOURCES.md` | per file: norm, edition, tables, pages, transcription, cross-checks, SHA-256 | – |
 
@@ -158,7 +158,10 @@ Keys (the loader's list in `epc/engines/at/data_tables.py` is the single source)
 (Eq. (40)); `shading_factor_small`, `shading_factor_medium`, `shading_factor_large`,
 `shading_small_up_to_units`, `shading_medium_up_to_units` (8.3.1.2.2); `thermal_bridge_factor`,
 `thermal_bridge_u_offset`, `thermal_bridge_minimum_share` (Eq. (11a)); `net_room_height` (Eq. (13));
-`air_heat_capacity` (Eq. (14)); `glazing_non_perpendicular_factor`, `glazing_soiling_factor` (Eq. (44)).
+`air_heat_capacity` (Eq. (14)); `glazing_non_perpendicular_factor`, `glazing_soiling_factor` (Eq. (44));
+`construction_factor_light`, `construction_factor_medium`, `construction_factor_heavy` (9.1.2, after
+Eq. (50)); `utilisation_a0`, `utilisation_tau0` (Eq. (59)); `lek_factor`, `lek_length` (Eq. (63b)); of
+B 8110-5 `heating_degree_day_limit` (Eq. (4)).
 
 ### `validation_examples_b8110_6_2_2024.csv`
 

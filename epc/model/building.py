@@ -35,13 +35,20 @@ BUILDING_TYPES: Tuple[BuildingType, ...] = ("detached", "terraced", "multi_famil
 
 @enum.unique
 class Situation(enum.Enum):
-    """What an element borders on, from HiSim's adjustment factor and the element class (design §7.2)."""
+    """What an element borders on, from HiSim's adjustment factor and the element class (design §7.2).
+
+    ``UNCONDITIONED_GARAGE`` and ``GROUND`` are never derived from a record: a description written by
+    hand, such as a norm's worked example or a real certificate, states them for a floor above a closed
+    garage or a floor on the ground.
+    """
 
     OUTSIDE_AIR = "OUTSIDE_AIR"
     CONDITIONED_NEIGHBOUR = "CONDITIONED_NEIGHBOUR"
     UNCONDITIONED_ATTIC = "UNCONDITIONED_ATTIC"
     UNCONDITIONED_CELLAR = "UNCONDITIONED_CELLAR"
     UNCONDITIONED_SPACE = "UNCONDITIONED_SPACE"
+    UNCONDITIONED_GARAGE = "UNCONDITIONED_GARAGE"
+    GROUND = "GROUND"
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,9 @@ class Element:
             situation follows.
         situation: What the element borders on.
         u_value_origin: HiSim's origin string of the U-value, verbatim.
+        stated_correction_factor: The heating-case temperature-correction factor, if stated (a
+            certificate prints one per element); the engine then takes it instead of the row of the
+            situation (D43). HiSim's record never states it.
     """
 
     name: ElementName
@@ -64,6 +74,7 @@ class Element:
     adjustment_factor_used_by_hisim: float
     situation: Situation
     u_value_origin: str
+    stated_correction_factor: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +90,12 @@ class Window:
         frame_factor: HiSim's reduction factor for the frame area fraction, if stated.
         non_perpendicular_factor: HiSim's reduction factor for non-perpendicular radiation, if stated.
         external_shading_factor: HiSim's reduction factor for external vertical shading, if stated.
+        glass_area_in_m2: The glass area of the surface, if stated (a certificate or a norm example states
+            it; HiSim's record does not). Without it an engine takes its norm's default share.
+
+    The three reduction factors may be ``None`` here although the expanded record always states them
+    (input_contract §2.3): a description written by hand, such as a norm's worked example, has none, and
+    an engine that uses them decides what it does without. The reader of the record stays strict.
     """
 
     name: str
@@ -89,6 +106,7 @@ class Window:
     frame_factor: Optional[float]
     non_perpendicular_factor: Optional[float]
     external_shading_factor: Optional[float]
+    glass_area_in_m2: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -206,6 +224,15 @@ class BuildingDescription:
                     element.name != "window" or not element.area_in_m2 > 0 or bool(self.windows),
                     f"a window element of {element.area_in_m2} m² needs at least one window surface",
                 ),
+                (
+                    f"elements.{element.name}.stated_correction_factor",
+                    element.stated_correction_factor,
+                    element.stated_correction_factor is None
+                    or (element.situation is not Situation.CONDITIONED_NEIGHBOUR
+                        and _at_least(element.stated_correction_factor, 0, inclusive=False)
+                        and element.stated_correction_factor <= 1),
+                    "null, or > 0 and <= 1 for an element of the envelope (not a conditioned neighbour)",
+                ),
             ]
         for window in self.windows:
             checks += [
@@ -220,6 +247,14 @@ class BuildingDescription:
                     window.g_value,
                     _at_least(window.g_value, 0, inclusive=False) and window.g_value <= 1,
                     "a number in (0, 1]",
+                ),
+                (
+                    f"windows.{window.name}.glass_area_in_m2",
+                    window.glass_area_in_m2,
+                    window.glass_area_in_m2 is None
+                    or (_at_least(window.glass_area_in_m2, 0, inclusive=False)
+                        and window.glass_area_in_m2 <= window.area_in_m2),
+                    "a finite number > 0 and at most the window's area, or null",
                 ),
             ]
         for field, value, admissible, rule in checks:

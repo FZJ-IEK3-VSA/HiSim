@@ -58,3 +58,5 @@ redirect
 
 # br runtime lock sidecars (beads.db-lock-pending/-reserved/-shared)
 *.db-lock-*
+# br vacuum lock sidecars (.beads.vacuum.<pid>.<stamp>.tmp-lock-*)
+*.tmp-lock-*

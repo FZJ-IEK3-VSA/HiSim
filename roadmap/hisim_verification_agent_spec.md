@@ -2,9 +2,28 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 4, 2026-11-02 (revision 1: 2026-10-15; revisions 2 and 3: 2026-11-02)
+**Status:** Draft, revision 5, 2026-11-02 (revision 1: 2026-10-15; revisions 2 to 4: 2026-11-02)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 5** (decisions on §3.2.1, 3.2.3 and 3.2.4; standards opened, 2026-11-02)
+
+- §3.2.1, 3.2.3 and 3.2.4 decided as recommended: printed U-values and no thermal bridges; the
+  ISO 13786 effective-thickness rule with all three conditions; actual A_tot and A_m by formula
+  (gap analysis D10 to D12).
+- The explicit building description takes κ per element; the layer-to-κ rule of §3.2.3 is applied
+  in the suite's system builder, not in HiSim (FR2, §11 steps 2 and 3; two step-2 PRs).
+- ISO 13790 is available as the FDIS text of 2007, the text HiSim was built from; ISO 13786 is
+  not available. The ISO 13790 [verify] marks of §3.1, §3.2 and Appendix B are resolved against
+  the FDIS; conditions (a) and (b) of §3.2.3 stay [verify] (§7.1).
+- The agent reads the standards in the private folder to resolve [verify] marks; only clause and
+  table numbers and the suite's own derived values enter the repository (§A, §12). Added
+  2026-11-03: the standards are read in place; no text of a standard is extracted or copied
+  into any file, not even a temporary one.
+- Added 2026-11-03: `verification_spec` branched from `main` on 2026-10-12 and `main` has moved
+  since (building, weather, CSV loader, component base, pytest configuration). Before step 2,
+  `origin/main` is merged into `verification_spec` and the gap-analysis rows for the changed
+  files are re-checked (§A).
 
 **Changes in revision 4** (decisions of the human on the gap analysis,
 `docs/verification/gap_analysis.md`, 2026-11-02)
@@ -87,8 +106,15 @@ human reviewer.
       program cannot model; note the result in `docs/verification/README.md`. *Before step 6.*
 - [ ] Fill `iso52016_tables_28_34.json` from Tables 28 to 34, using the corrected Case 900
       columns (§7.3). *Before step 7; deferred with the ISO suite (§2.1).*
-- [ ] Verify the [verify] items of §3.2 and Appendix B against the standards, in particular
-      the effective-thickness rule of ISO 13786 (§3.2.3) and the layer data of Appendix B.
+- [ ] Merge `origin/main` into `verification_spec` (the human merges) and re-check the gap-analysis
+      rows and line references for the files changed on `main` since 2026-10-12:
+      `building.py`, `information.py`, `solar_gains.py`, `weather/weather.py`,
+      `weather/calculation.py`, `csvloader.py`, `component.py`, `loadtypes.py`, `pytest.ini`.
+      *Before step 2 (bead hisim-x6c7.7).*
+- [ ] Verify the [verify] items of §3.2 and Appendix B against the standards. ISO 13790 items
+      checked against the FDIS 2007 text on 2026-11-02 (§3.1, §3.2.3 to 3.2.5, 3.2.9, 3.2.10,
+      Appendix B.4). Open: the ASHRAE 140 items, the layer data of Appendix B (Tables 7-2,
+      7-27) and conditions (a) and (b) of the ISO 13786 rule (standard not available).
       *Before step 3.*
 - [ ] Optional: IEA BESTEST 1995 report for the public report.
 
@@ -110,8 +136,12 @@ human reviewer.
 - [x] Gap analysis reviewed on 2026-11-02; decisions D1 to D9 recorded in
       `docs/verification/gap_analysis.md` §4 and in this revision.
 - [x] Warm-up: two-pass run (§3.2.11), decided 2026-11-02.
-- [ ] Confirm the input-mapping decisions of §3.2.1, 3.2.3 and 3.2.4 (items marked *[decision]*);
-      §3.2.8 to 3.2.11 were decided on 2026-11-02. *Before step 3.*
+- [x] Input-mapping decisions of §3.2.1, 3.2.3 and 3.2.4 confirmed on 2026-11-02 as
+      recommended (gap analysis D10 to D12); §3.2.8 to 3.2.11 were decided on 2026-11-02.
+- [x] The agent reads the standards in the private folder to resolve [verify] marks; only
+      clause and table numbers and the suite's own derived values enter the repository
+      (2026-11-02, gap analysis D13). The standards are read in place; no text of a standard
+      is extracted or copied into any file, not even a temporary one (2026-11-03).
 - [x] Thermostat variable: air control with a register entry (§3.2.10), decided 2026-11-02; the
       ideal heater stays unchanged.
 - [x] `iso52016` suite deferred (2026-11-02): phase 1 runs `ashrae140` only (§2.1).
@@ -264,7 +294,8 @@ change the formal result at all.
 - The thermal-mass update divides C_m by the simulation time step, not by 3600 s
   (`hisim/components/building/building.py`, equation (C.4)), so the scheme is time-step aware and
   consistent at 900 s and 60 s (gap analysis §6.1). The state carried into the next step is the
-  mid-step average of equation (C.9), not θ_m,t: the dynamics are those of a 2·C_m network.
+  mid-step average of equation (C.9), not θ_m,t (equations (C.4) and (C.9) checked against the
+  FDIS 2007 text): the dynamics are those of a 2·C_m network.
   Decision of 2026-11-02: no change before the first full report; `model` register entry (gap
   analysis F1).
 - Solar gains enter the model as irradiance on each window's plane times the window's
@@ -279,7 +310,8 @@ change the formal result at all.
 
 The test cases are described as layered constructions, areas and windows; the model takes
 conductances and one capacity. These rules fix the bridge. They are applied in
-`system_builder.py`, every derived value is written to `parameters/<case>.json` (FR3), and
+`system_builder.py` (rules 1 to 3 and 6 to 11) and in HiSim's explicit building pipeline (rules 4
+and 5, FR2); every derived value is written to `parameters/<case>.json` (FR3), and
 the values for cases 600 and 900 are checked against the hand calculation of Appendix B
 (`test_parameter_derivation.py`). Items marked *[decision]* are confirmed by the human (§A).
 Every rule that departs from the standard's description is also an entry in the deviation
@@ -293,23 +325,30 @@ register (§8.3).
    layers serves only as a check (pyBuildingEnergy notes a 0.01 m²K/W discrepancy between
    Table 7-28 and the layers of Table 7-27 for the Case 900 floor [verify]). The floor
    faces outdoor air in both suites (ASHRAE 7.2.1.5 raised floor; ISO Table 23 footnote a
-   [verify]) and receives no solar radiation. *[decision]*
+   [verify]) and receives no solar radiation. *[decided 2026-11-02: as stated; the printed
+   value wins where the layer recomputation differs]*
 2. **Window transmission.** H_tr_w = Σ U_w·A_w with the printed air-to-air window U-values
    (ASHRAE Tables 7-10, 7-11 and the 660/670 tables; ISO clause 7.2.2.6 [verify]).
 3. **Internal heat capacity.** C_m = Σ κ_j·A_j over all elements facing the zone (ISO 13790
-   12.3.1 [verify]). κ_j = Σ ρ·c·d over the layers from the inside up to the effective
-   thickness of ISO 13786, Annex A, for a period of one day [verify]: the smallest of
-   (a) half the total thickness of the element, (b) the thickness up to the first thermal
-   insulation layer, (c) 0.10 m. The heat-capacity class table of ISO 13790 is not used.
+   12.3.1; FDIS 2007: 12.3.1.1, equation (68)). κ_j = Σ ρ·c·d over the layers from the inside up
+   to the effective thickness of ISO 13786, Annex A, for a period of one day: the smallest of
+   (a) half the total thickness of the element [verify], (b) the thickness up to the first
+   thermal insulation layer [verify], (c) 0.10 m (the cap ISO 13790 states for a one-day period,
+   FDIS 2007 Table 11, referring to ISO 13786 for the method). The heat-capacity class table of
+   ISO 13790 is not used. κ is derived in the system builder; the explicit building description
+   receives κ per element.
    pyBuildingEnergy sums all layers because its model distributes the mass differently;
    that value must not be reused. Appendix B applies the rule to cases 600 and 900 and
-   shows where condition (a) matters. *[decision]*
-4. **Effective mass area and total internal surface.** A_m = C_m² / Σ A_j·κ_j² (same clause).
-   A_tot is the actual area of all surfaces facing the zone (floor, ceiling, four walls
-   including the windows), not the ISO default Λ_at·A_f with Λ_at = 4.5 [verify].
-   Appendix B gives the value. *[decision]*
+   shows where condition (a) matters. *[decided 2026-11-02: rule with all three conditions;
+   (a) and (b) stay [verify] until ISO 13786 is available]*
+4. **Effective mass area and total internal surface.** A_m = C_m² / Σ A_j·κ_j² (ISO 13790
+   12.2.2; FDIS 2007 equation (66)). A_tot is the actual area of all surfaces facing the zone
+   (floor, ceiling, four walls including the windows), which is how ISO 13790 7.2.2.2 defines
+   it; Λ_at = 4.5 is the value the clause offers as an assumption and is not used.
+   Appendix B gives the value. *[decided 2026-11-02: actual A_tot, A_m by the formula]*
 5. **Coupling conductances.** H_tr_is = 3.45 W/(m²K)·A_tot, H_tr_ms = 9.1 W/(m²K)·A_m,
-   H_tr_em = 1 / (1/H_tr_op − 1/H_tr_ms) (ISO 13790 12.2.2 [verify]). Already implemented;
+   H_tr_em = 1 / (1/H_tr_op − 1/H_tr_ms) (ISO 13790 12.2.2, FDIS 2007 equations (64) and (65);
+   h_is = 3.45 in 7.2.2.2). Already implemented;
    unchanged.
 6. **Ventilation.** H_ve = (ρ·c)_air · n · V / 3600. HiSim's constant is
    0.34 Wh/(m³K) = 1224 J/(m³K) (`information.py`). ASHRAE specifies 0.5 h⁻¹ at site
@@ -339,14 +378,14 @@ register (§8.3).
    *[decided 2026-11-02]*
 9. **Opaque solar absorption and sky radiation.** α = 0.6 (Table 7-5 [verify]). HiSim
    implements neither the opaque solar gain nor the sky radiation term of ISO 13790 11.3.4 and
-   11.3.5 [verify]; H_tr_em sees the outdoor air temperature and α is not used. Register entry
+   11.3.5 (clause numbers checked against the FDIS 2007 text); H_tr_em sees the outdoor air temperature and α is not used. Register entry
    `model`; no sol-air temperature or other workaround through the inputs. *[decided 2026-11-02]*
 10. **Thermostat.** ASHRAE: zone air temperature, non-proportional, unlimited capacity,
     setpoints 20/27 °C; 685, 695, 985, 995 use 20/20 °C; 640 and 940 heat to 10 °C from
     23:00 to 07:00 and to 20 °C from 07:00 to 23:00, cooling at 27 °C at all hours [verify].
     ISO: control on the operative temperature (7.2.2.1 [verify]), same setpoints and the same
     setback for 640 and 940 (7.2.2.15 [verify]). Operative temperature in the 5R1C model:
-    θ_op = 0.3·θ_air + 0.7·θ_s (ISO 13790 Annex C [verify]). The thermostat is the
+    θ_op = 0.3·θ_air + 0.7·θ_s (ISO 13790 Annex C, equation (C.12)). The thermostat is the
     Building's C.4 step, not the heater's (gap analysis F2), so an operative-temperature option
     would be a Building change. Decided 2026-11-02: air control in every suite, register entry
     `model` ("Thermostat acts on θ_air (ISO 13790, clause C.4 procedure); EN ISO 52016-1 controls
@@ -370,7 +409,7 @@ register (§8.3).
 | ID | Requirement |
 |---|---|
 | FR1 | Test cases are defined declaratively in YAML files, one file per case, validated against a schema. A case may declare `derives_from: <case>` and override fields; the loader resolves the inheritance and writes the resolved case to the output. |
-| FR2 | The building can be created from an explicit description without a TABULA code: zone geometry (floor area, volume, internal surface area), opaque elements (area, U-value, κ or layers), windows (orientation, area, U, g_n, frame fraction, F_w), infiltration in ACH, thermal-bridge allowance. Implemented as a second parameter source beside TABULA, not as overrides of a TABULA row (decided 2026-11-02: `building_code` optional, new field `explicit_description`, derivation pipeline in `hisim/components/building/explicit.py`; gap analysis D6, option C). |
+| FR2 | The building can be created from an explicit description without a TABULA code: zone geometry (floor area, volume, internal surface area), opaque elements (area, U-value, κ), windows (orientation, area, U, g_n, frame fraction, F_w), infiltration in ACH, thermal-bridge allowance. Implemented as a second parameter source beside TABULA, not as overrides of a TABULA row (decided 2026-11-02: `building_code` optional, new field `explicit_description`, derivation pipeline in `hisim/components/building/explicit.py`; gap analysis D6, option C). |
 | FR3 | The 5R1C parameters (H_tr_op, H_tr_w, H_tr_em, H_tr_ms, H_tr_is, H_ve, C_m, A_m, A_tot, scaled ACH, F_w per window) are derived by the rules of §3.2 and written to `parameters/<case>.json`. |
 | FR4 | Ideal heating and cooling with setpoints (`BuildingConfig`), unlimited capacity, the 640/940 setback through `NightSetbackController` and `BuildingTemperatureModifier`, control on the air temperature; the ideal heater is used unchanged as a pass-through of the demand and its output is the delivered thermal power. No power limit and no control-variable option in phase 1 (decided 2026-11-02). |
 | FR5 | Free-floating mode (no heating/cooling). |
@@ -485,6 +524,8 @@ parent) is public and lives in `suite.yaml`; reference *values* are private.
 | EN ISO 52016-1:2017 | case definitions (clause 7.2.2), reference results (clause 7.2.4, Tables 28 to 34) | `iso52016_2017` | available, `06_Norms/EN-ISO-52016/` |
 | ISO 52016-1 BESTEST climate spreadsheet `ISO_52016_1_BESTEST_ClimData_2016.08.24.xls` | weather of the `iso52016` suite (clause 7.2.2.12) | `iso52016_climate` | available, `06_Norms/EN-ISO-52016/` |
 | EPB Center, collection of comments on EN ISO 52016-1:2017, comment no. 28 [verify] | corrected Case 900 heating and cooling columns of Tables 28 and 29 | `epb_center_comments` | public web page, <https://epb.center/support/documents/iso_52016-1_details/> |
+| ISO 13790 | clause and equation numbers behind the register entries and §3.1, §3.2.3 to 3.2.5, 3.2.9, 3.2.10, Appendix B.4 | `iso13790` | available as the FDIS text of 2007, `06_Norms/HiSim_Base-ISO-FDIS-13790/`, the text HiSim was built from; numbers checked against it on 2026-11-02 (the published 2008 edition may number equations differently) |
+| ISO 13786:2007, Annex A | conditions (a) and (b) of the effective-thickness rule (§3.2.3) | `iso13786` | not available on 2026-11-02; the rule is implemented with all three conditions and (a), (b) stay [verify] |
 | pyBuildingEnergy repository (EURAC, BSD-3, Zenodo DOI 10.5281/zenodo.10887919) | case data (layers, windows, site, infiltration correction), reference-file templates, report structure | `pybuildingenergy` | local clone, `02_Repositories/pyBuildingEnergy/` |
 | Optional: IEA BESTEST report (Judkoff & Neymark 1995, NREL/TP-472-6231) | public context for the report; not a criterion | `iea_bestest_1995` | free (OSTI) |
 
@@ -776,8 +817,8 @@ imported inside the scope (bead hisim-o6a.22); the verification runner sets
 | Step | Content | Needs from §A |
 |---|---|---|
 | 1 | Gap analysis (§5) — **stop for review** | – |
-| 2 | Missing capabilities, each with unit tests: explicit building source as a second parameter source with the §3.2 derivation, the explicit window list and explicit ACH and volume (FR2, FR3; gap analysis D6, option C); EPW reader with time-zone parameter and Denver catalogue entry (FR6); marker `verification`. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
-| 3 | Schema, case loader with inheritance, system builder, deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified, §3.2.1/3.2.3/3.2.4 decisions |
+| 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader with time-zone parameter and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, marker `verification` (bead hisim-x6c7.4). 2b: explicit building source as a second parameter source with the derivation of §3.2.4 and 3.2.5 from κ, areas and U-values, the explicit window list and explicit ACH and volume (FR2, FR3; gap analysis D6, option C; bead hisim-x6c7.6); the layer-to-κ rule of §3.2.3 belongs to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
+| 3 | Schema, case loader with inheritance, system builder, deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2) | – |
 | 5 | Export (§10) and CLI (FR14) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |
@@ -924,7 +965,9 @@ human before they enter the test.
 
 Condition (a) is decisive for the Case 900 wall only. Confirm in ISO 13786, Annex A,
 whether the half-thickness condition is part of the rule; the test takes the confirmed
-variant. For comparison, pyBuildingEnergy uses 14 534 (600 wall) and 145 154 (900 wall)
+variant. ISO 13790 itself (FDIS 2007, 12.3.1.1 and Table 11) states only the 0.10 m cap and
+refers to ISO 13786 for the method; ISO 13786 was not available on 2026-11-02, so the rule is
+implemented with all three conditions and (a), (b) stay [verify] (decision of 2026-11-02). For comparison, pyBuildingEnergy uses 14 534 (600 wall) and 145 154 (900 wall)
 by summing all layers, which is the wrong rule for a 13790 model.
 
 ### B.4 C_m, A_m and the ISO class defaults
@@ -936,7 +979,7 @@ by summing all layers, which is the wrong rule for a 13790 model.
 | Σ A_j·κ_j² [J²/(m²K²)] | 2.7141 × 10¹⁰ | 1.5111 × 10¹² | 1.8517 × 10¹² |
 | A_m = C_m² / Σ A_j·κ_j² [m²] | 137.0 | 117.9 | 116.1 |
 
-ISO 13790 Table 12 defaults [verify], for comparison only: "very light" C_m = 80 000·A_f =
+ISO 13790 Table 12 defaults (FDIS 2007 12.3.1.2, checked 2026-11-02), for comparison only: "very light" C_m = 80 000·A_f =
 3.84 MJ/K with A_m = 2.5·A_f = 120 m²; "heavy" 260 000·A_f = 12.48 MJ/K with 3.0·A_f =
 144 m²; "very heavy" 370 000·A_f = 17.76 MJ/K with 3.5·A_f = 168 m². The Case 600 cell is
 lighter than the lightest class, which is why §3.2.3 does not use the class table.

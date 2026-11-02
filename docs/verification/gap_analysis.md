@@ -7,7 +7,9 @@ decisions below are carried into revision 4).
 (`requirements.txt` pins pandas 3.0.6; the checks below do not depend on pandas).
 **Status:** step 1 reviewed. The human's decisions of 2026-11-02 are recorded in §4 and under each
 finding; the spec corrections of §5 are applied (spec revision 4). Nothing in the model or the
-components was changed.
+components was changed. §7 re-checks §1 to §3 against `origin/main` of 2026-11-03 (commit
+`d3a1ddc3`, merged as `389ac8c0`): F1 is fixed on `main` since PR #1079, the ideal heater has a
+controller, and the test markers follow a new rule (decisions D14, D15 open).
 
 The four things the spec asked to be flagged come first (§1). §2 is the §5 table of the spec, confirmed
 or corrected row by row with the proposed change. §3 lists every change to a public interface, §4 the
@@ -367,3 +369,64 @@ elements and setpoints). The whole phase-1 matrix, 18 ASHRAE cases × 3 time ste
 therefore of the order of an hour on this machine, and the pairs are independent. All three runs
 completed the simulation and the post-processing and then exited with code 1 because the collected
 stray write of row 18 is reported at the end.
+
+## 7. Re-check after the merge of `origin/main` (2026-11-03)
+
+**Code read at:** commit `d3a1ddc3` (tip of `origin/main`, merged into `verification_spec` as
+`389ac8c0`). §1 to §6 describe the code at `88c40a22` (branch point of 2026-10-12) and are left as
+written; this section says where `main` has moved since and what follows for the decisions. Files
+cited above that `main` changed: `building.py`, `information.py`, `solar_gains.py`,
+`weather/weather.py`, `weather/calculation.py`, `csvloader.py`, `idealized_electric_heater.py`,
+`night_setback_controller.py`, `component.py`, `simulator.py`, `simulationparameters.py`,
+`loadtypes.py`, `write_guard.py`, `pytest.ini`, `tests/conftest.py`, `system_docs/testing.md`,
+`energy_system_v3.schema.json`. Unchanged: `window.py`, `weather/config.py`,
+`calculation_scope.py`, `hisim_main.py`, `scripts/golden_check.py`.
+
+### 7.1 Findings
+
+| Finding | State on `main` | Consequence |
+|---|---|---|
+| F1 mass state | **Fixed on `main`** (PR #1079, commit `97ae8430`, bead hisim-b5u7, found there independently): `Building.i_simulate` stores θ_m,t (`next_thermal_mass_temperature_in_celsius`, building.py line 724); the output `TemperatureMeanThermalMass` keeps publishing the step average of (C.9). The goldens were re-blessed on `main`. | D1 is superseded: option (a) happened on `main`. Proposal D15 (§7.4): close hisim-x6c7.1 and drop the F1 `model` register entry from the spec. The rows "HiSim (average)" of the F1 table and the script of §6.1 describe the code before that PR. |
+| F2 thermostat | The thermostat is still the Building's C.4 step on θ_air. The ideal heater is no longer a pass-through (PR #924): `IdealizedElectricHeater` (now `cp.PhysicsComponent`, input `ThermalPowerSetInWatt`) delivers what its L1 controller `IdealizedElectricHeaterController` (`IdealizedHeaterControllerConfig.preset_standard`) sets, and the controller copies `TheoreticalThermalBuildingDemand`. The setpoint fields of `IdealizedHeaterConfig` are still dead (hisim-component-physics-4g9.70). The Building's setback input is renamed `BuildingTemperatureModifierInKelvin` (unit K); `NightSetbackController` (now `cp.L2ControllerComponent`) emits it under that name. | D2 and D7 stand: air control, unlimited capacity, no change to heater or controller. The suite wires three components, Building → controller → heater → Building, as `tests/idealized_heater_rig.py` (`controller_between`) does; the delivered power is still exactly the demand. |
+| F3 window optics | `window.py` unchanged. `solar_gains.py`: the producer DTO carries `window_start` and reads the `Weather.RUN_WINDOW_*` series (one value per time step of the run) instead of `YEARLY_*`. | Decision unchanged; the suite's full-year runs make the run window the whole year. |
+| F4 opaque absorption, sky radiation | unchanged | – |
+
+### 7.2 Capability table (§2): rows that moved
+
+| # | Row | What changed on `main` | Consequence |
+|---|---|---|---|
+| 1, 2, 3 | explicit building | `information.py`: only bead ids in comments; the TABULA pipeline and both traps are unchanged. `BuildingState` now also carries the indoor air temperature (keyword argument `indoor_air_temperature_in_celsius`); `Building` is a `cp.PhysicsComponent` with the new output `TemperatureIndoorAirAtStartOfStepInCelsius`. `energy_system_v3.schema.json` was regenerated on `main`; `tests/test_energy_system_schema.py` grew. | D6 unchanged; the schema is regenerated after the config change, as planned. |
+| 7 | ideal heater | see F2 | three-component wiring in the system builder |
+| 8 | free float | `thermal_power_delivered_channel` still optional; `enable_opening_windows` still `False` by default (the opening rule gained a 0.01 K margin, irrelevant when disabled) | unchanged |
+| 9 | EPW weather | `Weather` is a `cp.DataSourceComponent`. Every source must supply a relative-humidity column (`calculation.RelativeHumidity`, new output `RelativeHumidity`; an EPW has one). The produced frame (`ProducedFrame`) is indexed by the rows' labels in the source's **standard time** (`timestep_labels`, `WindowOffset.standard_time_labels`); the run's window is looked up in it (`WindowOffset.resolve`) and published as `RUN_WINDOW_*`. The station header is read by labels per format (`StationHeader`), so `get_coordinates` needs an EPW branch. `interpolate(series, year, pad_start_with_first_sample)` still pads with hard-coded `Europe/Berlin` timestamps (calculation.py lines 629 and 631) and the hourly readers still index at hh:30 `Europe/Berlin`; `DURATION_DEPENDENT_SOURCES` is gone (the frame always covers the year). | The plan stands and gains three items: the humidity column, an EPW entry in `StationHeader`/`get_coordinates`, labels in the EPW's fixed standard time (UTC−7, no DST; `Etc/GMT+7` has that standard time). The `tz` parameter of `interpolate` is needed exactly as planned. |
+| 11 | sub-hourly interpolation | unchanged | unchanged |
+| 12 | constant gains via `CSVLoader` | `CSVLoader` is a `cp.DataSourceComponent` with an optional `time_column` (ISO 8601 labels in standard time; finer rows are averaged); without it the file serves only a run starting on 1 January. The `dataframe` argument and `inputs_dir` remain. | unchanged for the suite: full-year runs start on 1 January; the constant 200 W frame needs no time column |
+| 15 | θ_op in the runner | `TemperatureIndoorAir` and `TemperatureInternalSurface` unchanged; a start-of-step air output was added | unchanged |
+| 16 | time steps, convergence | `Simulator`: `force_convergence` still after 10 passes; the abort limit scales with the step, 100 passes at 60 s, 1500 at 900 s, 6000 at 3600 s (`maximum_passes_for_step_length`). Components are evaluated kind by kind: data sources, L2 controllers, L1 controllers, physics, meters (`EVALUATION_ORDER_OF_KINDS`); every component class must inherit exactly one kind base class. | the runner still records passes and frozen steps |
+| 17 | warm-up | `SimulationParameters.validated_window`: a window starts at midnight, covers whole days and **lies within one calendar year**. Mid-year windows work now (weather and CSV loader look the start up by label); "January in disguise" is history. | **D3 stands**: a 13-month run or a December start across the year is still refused; two-pass run unchanged |
+| 18 | write guard | `write_guard.py`: a bead id only; `CalculationScope` unchanged | D8 unchanged; the Windows refusal is re-tested on the merged tree before step 3 |
+| 21 | markers, CI | **New rule** (PRs #1039, #1044; `system_docs/testing.md` §2, `tests/job_markers.py`, registered by `tests/conftest.py`): every test carries exactly one job marker of the guide's table, otherwise the collection fails. A new job marker goes into the table, `pytest.ini` and `JobMarkers.NAMES` together, and into `tests.yml` only if it gets a job of its own; a marker without a job runs in `pytest (others)`, whose `-m` expression excludes only the markers that have jobs. | **D14 (§7.4)**: "marker `verification` in `pytest.ini`" alone would fail every collection. |
+| facts | convergence loop, results access | see row 16; `results_data_frame` and `PostProcessingOptions.EXPORT_TO_CSV` unchanged | – |
+
+### 7.3 Interfaces (§3) after the merge
+
+- `Building`: still no change by this work; `main` renamed the input to `BuildingTemperatureModifierInKelvin`.
+- `IdealizedElectricHeater` and its controller: no change; the suite adds the controller to its systems.
+- `WeatherDataSourceEnum`, `LocationEnum`, `WeatherSourceFiles`, `interpolate`: as planned, plus the EPW entries in `RelativeHumidity` and `StationHeader`.
+- `CSVLoader`: no change.
+- `pytest.ini`: per D14, together with `tests/job_markers.py` and `system_docs/testing.md`.
+
+### 7.4 Decisions
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D14 | Job marker of the suite under the rule of `system_docs/testing.md` §2: (a) a new job marker `verification` in the table, `pytest.ini` and `JobMarkers.NAMES`, run by the catch-all job `pytest (others)` without a `tests.yml` change (like `mpc`), the suite tests skipping when `HISIM_VERIFICATION_DATA` is unset, the unit tests of step 2 carrying `base`; (b) existing markers only, `base` for the unit tests and `extendedbase2` for the suite runs | (a): one marker names the suite, no workflow edit, GitHub CI sees skips only | open | hisim-x6c7.4 |
+| D15 | F1 is fixed on `main` (#1079): close hisim-x6c7.1 as superseded and drop the F1 register entry from the spec (§3.1, §8.3) | yes | open | hisim-x6c7.1 |
+
+### 7.5 Spec corrections applied (revision 6, 2026-11-03)
+
+- §3.1: the F1 bullet states the fix on `main`; the thermostat bullet names the heater's controller.
+- §3.2.10, FR4: `BuildingTemperatureModifierInKelvin`; three-component wiring.
+- §5 row "test framework", §9.1, §9.2, §11 step 2a: the job-marker rule and D14.
+- §8.3: the F1 entry leaves the `model` category (pending D15).
+- §A: merge item ticked; D14 and D15 listed before step 2a.

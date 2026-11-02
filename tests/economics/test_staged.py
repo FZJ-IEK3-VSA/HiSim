@@ -474,7 +474,7 @@ class TestAgeingFromTheStagesOwnYear:
         """The operating view's sinking fund pays for the plan's replacements, not a stage's.
 
         Under OPERATING_ONLY no capital is charged at all; the replacements are levelized into an
-        annual reserve instead (``cost_spec.md`` §4.2). With the envelope and the heat pump bought
+        annual reserve instead (``roadmap/cost_spec.md`` §4.2). With the envelope and the heat pump bought
         in year 1 their re-purchases fall in year 11, so that is the year the fund has to discount
         from — a fund built on the stage's own year-10 schedule would be a year's interest too
         large.

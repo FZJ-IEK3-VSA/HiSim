@@ -36,6 +36,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 from hisim.config import ComponentID
 from hisim.energy_system.executor import run_energy_system
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import ConstantFlowPump
 from tests import functions_for_testing as fft
 
 
@@ -208,29 +209,39 @@ class SingleStep:
     """One step of a heat pump whose every input is a fake output holding a value."""
 
     @staticmethod
-    def heat_pump(position: PositionHotWaterStorageInSystemSetup) -> MoreAdvancedHeatPumpHPLib:
+    def heat_pump(
+        position: PositionHotWaterStorageInSystemSetup, seconds_per_timestep: int = 60, cycling_mode: bool = False
+    ) -> MoreAdvancedHeatPumpHPLib:
         """A 10 kW generic air/water heat pump with hot-water preparation, running for ten minutes already.
 
         Args:
             position: Where its storage sits: ``PARALLEL`` (hplib's flow) or ``SERIES`` (the nominal flow).
+            seconds_per_timestep: The step length of its simulation, in s; above 600 s it runs part-load ratios.
+            cycling_mode: Whether it keeps a minimum running and idle time, 3600 s each; off by default, so a step
+                runs the mode the inputs command.
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
         config.heating_reference_temperature_in_celsius = -7.0
         config.flow_temperature_in_celsius = 52.0
-        config.cycling_mode = False
+        config.cycling_mode = cycling_mode
+        config.minimum_running_time_in_seconds = 3600
+        config.minimum_idle_time_in_seconds = 3600
         config.minimum_thermal_output_power_in_watt = 1500.0
         config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
         config.with_domestic_hot_water_preparation = True
         config.position_hot_water_storage_in_system = position
         heat_pump = MoreAdvancedHeatPumpHPLib(
-            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep)
         )
         heat_pump.state = MoreAdvancedHeatPumpHPLibState(
             time_on_heating=600,
             time_off=0,
             time_on_cooling=0,
             on_off_previous=1,
+            published_time_on_heating=600,
+            published_time_off=0,
+            published_on_off_previous=1,
             cumulative_thermal_energy_tot_in_watt_hour=0,
             cumulative_thermal_energy_space_heating_in_watt_hour=0,
             cumulative_thermal_energy_dhw_in_watt_hour=0,
@@ -253,13 +264,15 @@ class SingleStep:
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
-        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one.
+        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one, and
+        the space-heating part-load ratio is 1, the whole step, unless ``values`` names one.
 
         Returns:
             Every output of the heat pump by field name.
         """
         values = {
             MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
+            MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioSh: 1.0,
             **values,
         }
         fakes: List[cp.ComponentOutput] = []
@@ -424,6 +437,74 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    ("lift_in_kelvin", "time_on_heating_in_seconds", "expected_heat_power_in_watt"),
+    [
+        (5.0, 1e9, 0.333 * 4180.0 * 5.0),
+        (5.0, 600.0, 0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0))),
+        (0.5, 1e9, 1800.0),
+        (5.0, 0.0, 0.0),
+    ],
+    ids=["running at the lift", "starting up for ten minutes", "below the minimal power", "just switched on"],
+)
+def test_the_fixed_flow_operating_point_runs_the_nominal_flow_and_the_outlet_follows_the_started_up_power(
+    lift_in_kelvin: float, time_on_heating_in_seconds: float, expected_heat_power_in_watt: float
+) -> None:
+    """A fixed-flow step that ignored the minimal power, the start-up ramp or the nominal flow would set a wrong outlet.
+
+    At 0.333 kg/s the heat pump aims at the power that flow carries over the lift, 6959.7 W over 5 K, at least its
+    1800 W minimum, and delivers ``1 - e^(-t / 360 s)`` of it; the outlet is the return plus that power over ``m c``.
+    """
+    point = MoreAdvancedHeatPumpHPLib.fixed_flow_operating_point(
+        pump=ConstantFlowPump(design_mass_flow_in_kg_per_second=0.333),
+        return_temperature_in_celsius=40.0,
+        lift_in_kelvin=lift_in_kelvin,
+        minimal_thermal_power_in_watt=1800.0,
+        time_on_heating_in_seconds=time_on_heating_in_seconds,
+    )
+    assert point.mass_flow_in_kg_per_second == 0.333
+    assert not point.flow_is_clamped
+    assert point.supply_temperature_in_celsius == pytest.approx(40.0 + expected_heat_power_in_watt / (0.333 * 4180.0), rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "position", [PositionHotWaterStorageInSystemSetup.SERIES, PositionHotWaterStorageInSystemSetup.PARALLEL]
+)
+@pytest.mark.parametrize("mass_flow_in_kg_per_s", [-0.333, float("nan")])
+def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
+    position: PositionHotWaterStorageInSystemSetup, mass_flow_in_kg_per_s: float
+) -> None:
+    """Catches a negative nominal flow that would only fail at the first fixed-flow step, without naming the field."""
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = mass_flow_in_kg_per_s
+    config.position_hot_water_storage_in_system = position
+    with pytest.raises(
+        ValueError,
+        match=rf"massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least 0 kg/s, "
+        rf"got {mass_flow_in_kg_per_s!r} kg/s",
+    ):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("field_name", ["minimum_running_time_in_seconds", "minimum_idle_time_in_seconds"])
+@pytest.mark.parametrize("seconds", [-900, float("nan"), float("inf")])
+def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_pump_is_built(
+    field_name: str, seconds: float
+) -> None:
+    """Catches a negative minimum time that would mean no minimum in cycling mode without a word."""
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    setattr(config, field_name, seconds)
+    with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
+        MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+
+
+@pytest.mark.base
 def test_active_cooling_books_the_heat_its_flow_draws_and_that_heat_over_the_eer() -> None:
     """Cooling at 30 °C outside from a 22.04 °C return: a negative flow heat, electricity at hplib's EER."""
     outputs = SingleStep.step(
@@ -545,9 +626,9 @@ class DhwControllerTable:
     """The transitions of the heat pump's hot-water controller with the default 40/60 °C band, a namespace.
 
     Each row is (state before, tank start temperature in °C, energy manager's raise in K, state after). The rows
-    cover every transition of :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` and the boundary values of
-    each condition: the switch-on below 40 °C, the switch-off within 0.5 K of 60 °C plus the raise, and the surplus
-    switch-on below 59.5 °C while a raise is active.
+    cover every transition of :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` with the default charge end of
+    2 K and the boundary values of each condition: the switch-on below 40 °C, the switch-off 2 K below 60 °C plus the
+    raise, and the surplus switch-on below 58 °C while a raise is active.
     """
 
     OFF = HeatPumpDhwState.OFF
@@ -557,13 +638,13 @@ class DhwControllerTable:
         (OFF, 40.0, 0.0, OFF),  # at the minimum: no switch-on (strict)
         (OFF, 50.0, 0.0, OFF),  # inside the band: keeps off
         (ON, 50.0, 0.0, ON),  # inside the band: keeps on
-        (ON, 59.49, 0.0, ON),  # just below the switch-off point
-        (ON, 59.5, 0.0, OFF),  # at the switch-off point: off
-        (OFF, 59.49, 10.0, ON),  # surplus switch-on just below 59.5 °C
-        (OFF, 59.5, 10.0, OFF),  # surplus switch-on stops at 59.5 °C: keeps off in the raised band
-        (ON, 65.0, 10.0, ON),  # charging in the raised band [59.5, 69.5)
-        (ON, 69.49, 10.0, ON),  # just below the raised switch-off point
-        (ON, 69.5, 10.0, OFF),  # at the raised switch-off point: off
+        (ON, 57.99, 0.0, ON),  # just below the switch-off point
+        (ON, 58.0, 0.0, OFF),  # at the switch-off point: off
+        (OFF, 57.99, 10.0, ON),  # surplus switch-on just below 58 °C
+        (OFF, 58.0, 10.0, OFF),  # surplus switch-on stops at 58 °C: keeps off in the raised band
+        (ON, 65.0, 10.0, ON),  # charging in the raised band [58, 68)
+        (ON, 67.99, 10.0, ON),  # just below the raised switch-off point
+        (ON, 68.0, 10.0, OFF),  # at the raised switch-off point: off
         (ON, 61.0, 0.0, OFF),  # the raise came and went: off without it
     ]
 
@@ -575,7 +656,7 @@ def test_the_hot_water_controller_takes_every_transition_of_its_table(
 ) -> None:
     """A transition off its edge would start or end charges at the wrong tank temperature.
 
-    The surplus switch-on stopping at 59.5 °C rather than 60 °C is the row that keeps a raise that comes and goes
+    The surplus switch-on stopping at 58 °C rather than 60 °C is the row that keeps a raise that comes and goes
     within a step from toggling the charge.
     """
     assert (
@@ -585,9 +666,65 @@ def test_the_hot_water_controller_takes_every_transition_of_its_table(
             raise_in_kelvin=raise_in_kelvin,
             minimum_temperature_in_celsius=40.0,
             maximum_temperature_in_celsius=60.0,
+            charge_end_below_target_in_kelvin=MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+                "HeatPumpControllerDHW"
+            ).charge_end_below_target_in_kelvin,
         )
         == expected
     )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("state", "storage_temperature_in_celsius", "raise_in_kelvin", "expected"),
+    [
+        (HeatPumpDhwState.ON, 57.0, 0.0, HeatPumpDhwState.OFF),  # switch-off 3 K below 60 °C, not 2 K
+        (HeatPumpDhwState.OFF, 57.5, 10.0, HeatPumpDhwState.OFF),  # surplus switch-on stops 3 K below 60 °C
+    ],
+)
+def test_the_hot_water_controller_ends_a_charge_at_its_configured_distance_below_the_target(
+    state: HeatPumpDhwState, storage_temperature_in_celsius: float, raise_in_kelvin: float, expected: HeatPumpDhwState
+) -> None:
+    """With a 3 K charge end, the switch-off and the surplus switch-on both sit at 57 °C, not the default's 58 °C.
+
+    The table above runs the default 2 K only, so a 2 K written into
+    :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` in place of its argument would pass it; each row here
+    sits between 57 and 58 °C, where the two disagree.
+    """
+    assert (
+        MoreAdvancedHeatPumpHPLibControllerDHW.next_state(
+            state=state,
+            storage_temperature_in_celsius=storage_temperature_in_celsius,
+            raise_in_kelvin=raise_in_kelvin,
+            minimum_temperature_in_celsius=40.0,
+            maximum_temperature_in_celsius=60.0,
+            charge_end_below_target_in_kelvin=3.0,
+        )
+        == expected
+    )
+
+
+@pytest.mark.base
+def test_the_hot_water_charge_ends_two_kelvin_below_its_target_by_default() -> None:
+    """A charge that runs on to within 0.5 K of its capped supply empties the space-heating buffer.
+
+    The heat pump's hot-water supply is capped at the target, so the tank's last kelvins come at a power falling
+    towards zero (3.0, 1.5 and 0.9 kW in the last steps at 900 s) while space heating waits. The owner decided on
+    2026-10-21 (hisim-room-air-dhw-dip-a5by) that the charge ends 2 K below the target, as a configuration field.
+    """
+    config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+    assert config.charge_end_below_target_in_kelvin == 2.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("charge_end_below_target_in_kelvin", [0.0, -1.0, 20.0, 25.0, float("nan"), float("inf")])
+def test_a_charge_end_outside_the_band_is_refused(charge_end_below_target_in_kelvin: float) -> None:
+    """A charge end of 0 K never ends a charge against the capped supply, one at or beyond the band ends it at once."""
+    with pytest.raises(ValueError, match="charge_end_below_target_in_kelvin"):
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig(
+            component_id=ComponentID(name="HeatPumpControllerDHW"),
+            charge_end_below_target_in_kelvin=charge_end_below_target_in_kelvin,
+        )
 
 
 def dhw_controller_with_fake_inputs() -> Tuple[MoreAdvancedHeatPumpHPLibControllerDHW, cp.SingleTimeStepValues, Dict[str, cp.ComponentOutput]]:
@@ -611,9 +748,9 @@ def dhw_controller_with_fake_inputs() -> Tuple[MoreAdvancedHeatPumpHPLibControll
 @pytest.mark.base
 @pytest.mark.parametrize(
     ("start_temperature_in_celsius", "raise_in_kelvin", "expected_state", "expected_set_temperature_in_celsius"),
-    [(59.4, 0.0, HeatPumpDhwState.ON, 60.0), (59.5, 0.0, HeatPumpDhwState.OFF, 60.0), (69.4, 10.0, HeatPumpDhwState.ON, 70.0), (69.5, 10.0, HeatPumpDhwState.OFF, 70.0)],
+    [(57.9, 0.0, HeatPumpDhwState.ON, 60.0), (58.0, 0.0, HeatPumpDhwState.OFF, 60.0), (67.9, 10.0, HeatPumpDhwState.ON, 70.0), (68.0, 10.0, HeatPumpDhwState.OFF, 70.0)],
 )
-def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
+def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
     start_temperature_in_celsius: float,
     raise_in_kelvin: float,
     expected_state: HeatPumpDhwState,

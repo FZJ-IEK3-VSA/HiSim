@@ -13,33 +13,35 @@ from hisim.components.generic_district_heating import (
 )
 from hisim import hydronics
 from hisim import simulator as sim
+from hisim.subcomponents.pumps import FixedLiftPump
+from tests.part_load_rigs import AllInputsRig
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
     [
         "with_warm_water",
-        "daily_avg_outside_temperature_deg_c",
+        "is_heating_season",
         "sh_current_water_temperature",
         "sh_target_water_temperature",
         "dhw_input_temperature",
         "expected_mode",
     ],
     [
-        (False, 0, 20, 70, None, HeatingMode.SPACE_HEATING),
-        (False, 0, 55, 25, None, HeatingMode.OFF),
-        (False, 0, 40, 23, None, HeatingMode.OFF),
-        (False, 20, 20, 25, None, HeatingMode.OFF),
-        (True, 0, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 20, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 0, 40, 25, 50, HeatingMode.OFF),
-        (True, 0, 25, 60, 50, HeatingMode.SPACE_HEATING),
-        (True, 20, 25, 30, 50, HeatingMode.OFF),
+        (False, True, 20, 70, None, HeatingMode.SPACE_HEATING),
+        (False, True, 55, 25, None, HeatingMode.OFF),
+        (False, True, 40, 23, None, HeatingMode.OFF),
+        (False, False, 20, 25, None, HeatingMode.OFF),
+        (True, True, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, False, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, True, 40, 25, 50, HeatingMode.OFF),
+        (True, True, 25, 60, 50, HeatingMode.SPACE_HEATING),
+        (True, False, 25, 30, 50, HeatingMode.OFF),
     ],
 )
 def test_controller_determine_operating_mode(
     with_warm_water: bool,
-    daily_avg_outside_temperature_deg_c: float,
+    is_heating_season: bool,
     sh_current_water_temperature: float,
     sh_target_water_temperature: float,
     dhw_input_temperature: float | None,
@@ -50,7 +52,7 @@ def test_controller_determine_operating_mode(
     testee = given_default_controller_testee(with_warm_water=with_warm_water)
 
     testee.determine_operating_mode(
-        daily_avg_outside_temperature_deg_c,
+        is_heating_season,
         sh_current_water_temperature,
         sh_target_water_temperature,
         dhw_input_temperature,
@@ -107,6 +109,7 @@ def test_the_hot_water_circuit_reaches_the_set_temperature_within_the_connected_
         lift_in_kelvin=lift_in_kelvin,
         supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
         connected_load_in_watt=connected_load_in_watt,
+        pump=FixedLiftPump(target_lift_in_kelvin=100.0),
     )
     assert circuit.power_w == pytest.approx(expected_power_in_watt, rel=1e-12, abs=1e-9)
     assert circuit.t_supply_c == pytest.approx(expected_supply_temperature_in_celsius, rel=1e-15)
@@ -171,7 +174,6 @@ def given_default_controller_testee(
     )
     config = DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController")
     config.with_domestic_hot_water_preparation = with_warm_water
-    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
     return DistrictHeatingController(simulation_parameters, config)
 
 
@@ -188,36 +190,6 @@ def given_default_component_testee(with_warm_water: bool = False) -> DistrictHea
     return DistrictHeating(simulation_parameters, config)
 
 
-def step_with_fake_inputs(component: object, values: dict) -> dict:
-    """Step ``component`` once with every input reading a fake output set from ``values`` by field name.
-
-    Args:
-        component: The component to step.
-        values: Input values by field name; a missing one is 0.
-
-    Returns:
-        Every output of the component by field name.
-    """
-    from hisim import component as cp  # pylint: disable=import-outside-toplevel  # keeps the test module light
-    from hisim import loadtypes as lt  # pylint: disable=import-outside-toplevel  # as above
-    from hisim.config import ComponentID  # pylint: disable=import-outside-toplevel  # as above
-    from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel  # as above
-
-    fakes = []
-    for component_input in component.inputs:  # type: ignore[attr-defined]  # any component
-        fake = cp.ComponentOutput(
-            "Fake", component_input.field_name, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake")
-        )
-        component_input.source_output = fake
-        fakes.append(fake)
-    fft.add_global_index_of_components([*fakes, component])
-    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, component]))
-    for fake in fakes:
-        stsv.values[fake.global_index] = values.get(fake.field_name, 0.0)
-    component.i_simulate(0, stsv, False)  # type: ignore[attr-defined]  # any component
-    return {output.field_name: stsv.values[output.global_index] for output in component.outputs}  # type: ignore[attr-defined]  # any component
-
-
 @pytest.mark.base
 @pytest.mark.parametrize("tank_temperature_in_celsius", [45.0, 65.0])
 def test_the_controller_sets_the_tank_s_start_temperature_plus_the_lift_it_asks_for(
@@ -228,13 +200,13 @@ def test_the_controller_sets_the_tank_s_start_temperature_plus_the_lift_it_asks_
     Without a request the lift is 0 and the set temperature the start temperature itself, not a 0 °C marker.
     """
     controller = given_default_controller_testee(with_warm_water=True)
-    outputs = step_with_fake_inputs(
+    outputs = AllInputsRig.step_once(
         controller,
         {
             DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage: tank_temperature_in_celsius,
-            DistrictHeatingController.DailyAverageOutsideTemperature: 20.0,
+            DistrictHeatingController.HeatingSeason: 0.0,
             DistrictHeatingController.WaterTemperatureInputFromHeatDistributionSystem: 30.0,
-            DistrictHeatingController.HeatingFlowTemperatureFromHeatDistributionSystem: 30.0,
+            DistrictHeatingController.SpaceHeatingSupplyTemperatureSetInCelsius: 30.0,
         },
     )
     lift_in_kelvin = outputs[DistrictHeatingController.DeltaTemperatureNeededForDHW]

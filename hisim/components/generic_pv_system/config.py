@@ -178,8 +178,9 @@ class PVSystemConfig(ConfigBase):
     #: The array's resolved peak power, contributed for the components that are sized from the
     #: generator they stand beside (the battery, the charging station). The compute runs after
     #: this config was sized, so ``power_in_watt`` is a number here whether an author pinned it or
-    #: the rooftop law derived it. With two arrays in one scenario each is addressable as
-    #: "<its name>.pv_peak_power_in_watt" and a consumer names the one it means.
+    #: the rooftop law derived it. With several arrays in one system each contributes its own value:
+    #: the battery's laws sum all of them (``Sum(Many(...))``), and a consumer that means some of
+    #: them names each as "<its name>.pv_peak_power_in_watt" in its ``sizing_sources``.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=("pv_peak_power_in_watt",),

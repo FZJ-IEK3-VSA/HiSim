@@ -10,7 +10,9 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,19 @@ def test_load_config_happy_path(tmp_path: Path) -> None:
     assert ps.nondeterministic is False
 
 
+def test_load_config_reads_the_recorded_seconds_and_refuses_a_malformed_entry(tmp_path: Path) -> None:
+    """The runner reads the weights the matrix reads, for the per-pair timeout, and refuses a typo alike."""
+    data = _minimal_config_dict()
+    data["setups"][0]["seconds"] = {"one_week_60s": 42}
+    setup = load_config(_write_config(tmp_path, data)).setups[0]
+    assert setup.recorded_seconds("one_week_60s") == 42.0
+    assert setup.recorded_seconds("unrecorded") == 120.0  # golden_matrix.DEFAULT_PAIR_SECONDS
+
+    data["setups"][0]["seconds"] = {"one_week_60s": "42"}
+    with pytest.raises(ValueError, match="positive numbers"):
+        load_config(_write_config(tmp_path, data))
+
+
 def test_load_config_missing_file_raises(tmp_path: Path) -> None:
     """A missing config file raises ``FileNotFoundError``."""
     with pytest.raises(FileNotFoundError):
@@ -118,14 +133,23 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
 
 
 def test_load_config_real_file_setups_and_params() -> None:
-    """The shipped config declares a non-empty set of uniquely-named setups and 2 parameter sets."""
+    """The shipped config declares uniquely-named setups and 5 parameter sets.
+
+    They are the January week, the July week and the full year at 60 s, and the January week and the full
+    year at 900 s, RenoVisor's step length (hisim-repo-cleanup-o6a.35). Each id ends in the set's step length,
+    so a golden's file name says which step it pins.
+    """
     cfg = load_config(REAL_CONFIG)
     assert cfg.setups  # non-empty
     ids = [s.id for s in cfg.setups]
     assert len(ids) == len(set(ids))  # setup ids are unique
-    assert len(cfg.parameter_sets) == 2
-    factories = {p.factory for p in cfg.parameter_sets}
-    assert factories == {"one_week_only", "full_year"}
+    assert [(p.id, p.factory, p.seconds_per_timestep) for p in cfg.parameter_sets] == [
+        ("one_week_60s", "one_week_only", 60),
+        ("july_week_60s", "one_week_july", 60),
+        ("full_year_60s", "full_year", 60),
+        ("one_week_900s", "one_week_only", 900),
+        ("full_year_900s", "full_year", 900),
+    ]
     for ps in cfg.parameter_sets:
         assert set(ps.post_processing_options) == {
             "COMPUTE_OPEX",
@@ -136,11 +160,12 @@ def test_load_config_real_file_setups_and_params() -> None:
 
 
 def test_load_config_real_file_setups_exist_on_disk() -> None:
-    """Every setup path in the shipped config resolves to an existing ``.py`` file."""
+    """Every entry of the shipped config resolves to an existing ``.py`` setup or energy-system file."""
     cfg = load_config(REAL_CONFIG)
     for setup in cfg.setups:
         resolved = resolve_setup_path(setup, REPO_ROOT)
-        assert resolved.exists() and resolved.suffix == ".py"
+        assert resolved.exists()
+        assert resolved.suffix == ".py" or setup.is_energy_system_file()
 
 
 # --------------------------------------------------------------------------- #
@@ -222,6 +247,85 @@ def test_resolve_setup_path_missing_raises() -> None:
     """``resolve_setup_path`` raises ``FileNotFoundError`` for a missing setup file."""
     with pytest.raises(FileNotFoundError):
         resolve_setup_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
+
+
+# --------------------------------------------------------------------------- #
+# Entries that name an energy-system file instead of a Python setup
+# --------------------------------------------------------------------------- #
+GAS_BOILER_HOUSEHOLD = SetupConfig("gas_boiler_household", "energy_systems/gas_boiler_household.energy_system.yaml")
+
+
+def test_an_energy_system_file_is_told_apart_from_a_python_setup() -> None:
+    """The entry kind follows the suffixes the command line dispatches on, and nothing else.
+
+    A ``.py`` setup, a plain ``.yaml`` file (a simulation-parameters file carries that suffix too)
+    and a ``.json`` file are not energy-system files; both spellings of the compound suffix are.
+    """
+    assert GAS_BOILER_HOUSEHOLD.is_energy_system_file()
+    assert SetupConfig("b", "energy_systems/other.energy_system.yml").is_energy_system_file()
+    assert not SetupConfig("c", "system_setups/simple_system_setup_one.py").is_energy_system_file()
+    assert not SetupConfig("d", "simulation_parameters/one_day.simulation.yaml").is_energy_system_file()
+    assert not SetupConfig("e", "system_setups/basic_household.simulation.json").is_energy_system_file()
+
+
+def test_the_shipped_config_lists_the_gas_boiler_household_file_for_every_horizon() -> None:
+    """The YAML-only reference system is a golden entry, as itself, with a pair for each parameter set."""
+    cfg = load_config(REAL_CONFIG)
+    entry = next(setup for setup in cfg.setups if setup.id == GAS_BOILER_HOUSEHOLD.id)
+    assert entry.path == GAS_BOILER_HOUSEHOLD.path
+    pairs = [param.id for setup, param in select_pairs(cfg) if setup.id == entry.id]
+    assert pairs == ["one_week_60s", "july_week_60s", "full_year_60s", "one_week_900s", "full_year_900s"]
+
+
+def test_resolve_setup_path_accepts_an_energy_system_file_and_refuses_other_files() -> None:
+    """An energy-system file resolves like a ``.py`` setup; a file of another kind is refused by name."""
+    resolved = resolve_setup_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT)
+    assert resolved == (REPO_ROOT / GAS_BOILER_HOUSEHOLD.path).resolve()
+    parameters_file = SetupConfig("params", "simulation_parameters/one_day_15min_export.simulation.yaml")
+    assert (REPO_ROOT / parameters_file.path).exists()
+    with pytest.raises(FileNotFoundError, match="energy_system.yaml"):
+        resolve_setup_path(parameters_file, REPO_ROOT)
+
+
+def test_an_energy_system_file_is_its_own_yaml_twin() -> None:
+    """YAML mode runs the entry's own file: it has no recorded twin, and none is looked for."""
+    own_file = (REPO_ROOT / "energy_systems" / "gas_boiler_household.energy_system.yaml").resolve()
+    assert resolve_twin_path(GAS_BOILER_HOUSEHOLD, REPO_ROOT) == own_file
+
+
+def test_python_mode_runs_an_energy_system_file_through_the_declarative_executor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In python mode an energy-system entry goes to ``run_energy_system_file``, a ``.py`` setup to ``hisim_main``.
+
+    No simulation runs: both entry points are replaced by recorders that raise, and ``run_one``
+    files the raise as the pair's ``run_error``. Catches an energy-system file handed to
+    ``hisim_main.main`` (which imports it as a Python module), and a Python setup that would no
+    longer reach ``hisim_main.main``.
+    """
+    called: list[tuple[str, str]] = []
+
+    def fake_run_energy_system_file(path: Path, _params: Any) -> None:
+        called.append(("run_energy_system_file", Path(path).name))
+        raise RuntimeError("recorded")
+
+    def fake_hisim_main(path_to_module: str, _params: Any = None) -> str:
+        called.append(("hisim_main.main", Path(path_to_module).name))
+        raise RuntimeError("recorded")
+
+    monkeypatch.setattr("scripts.runner.run_energy_system_file", fake_run_energy_system_file)
+    monkeypatch.setattr("hisim.hisim_main.main", fake_hisim_main)
+    week = ParameterSetConfig("p", "one_week_only", 2021, 60, ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"])
+    python_setup = SetupConfig("simple", "system_setups/simple_system_setup_one.py")
+
+    for setup in (GAS_BOILER_HOUSEHOLD, python_setup):
+        result = run_one(setup, week, str(tmp_path / setup.id), REPO_ROOT)
+        assert result.error is not None and "recorded" in result.error
+
+    assert called == [
+        ("run_energy_system_file", "gas_boiler_household.energy_system.yaml"),
+        ("hisim_main.main", "simple_system_setup_one.py"),
+    ]
 
 
 def test_all_golden_setups_have_recorded_twins() -> None:
@@ -444,6 +548,139 @@ def test_a_child_that_dies_is_a_run_error_of_its_pair(tmp_path: Path, monkeypatc
         assert result.error is not None
         assert "killed by signal 9" in result.error and "out-of-memory" in result.error
         assert "dying" in result.error
+
+
+WEEK_60S = ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])
+YEAR_60S = ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"])
+
+
+def test_a_child_timeout_is_a_multiple_of_its_recorded_seconds_with_a_minimum() -> None:
+    """A full-year pair gets three times its recorded wall time; a short pair gets the minimum."""
+    setup = SetupConfig("car", "a.py", seconds={"one_week_60s": 124, "full_year_60s": 690})
+
+    assert ChildRuns.timeout_in_seconds(setup, YEAR_60S, REPO_ROOT) == 2070.0
+    assert ChildRuns.timeout_in_seconds(setup, WEEK_60S, REPO_ROOT) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+
+
+def test_a_local_lpg_week_pair_gets_the_lpg_year_allowance_on_top() -> None:
+    """A week with a local LPG household gets max(3 x recorded, minimum) plus the allowance for its LPG year.
+
+    On a cache miss the pair first computes the household's whole calendar year, which its recorded
+    time does not contain; without the allowance CI killed such weeks at 600 s (#1030).
+    """
+    gas = SetupConfig(
+        "household_gas_building_sizer",
+        "system_setups/household_gas_building_sizer.py",
+        seconds={"one_week_60s": 115, "full_year_60s": 397},
+    )
+    solar = SetupConfig(
+        "household_gas_solar_thermal_building_sizer",
+        "system_setups/household_gas_solar_thermal_building_sizer.py",
+        seconds={"one_week_60s": 254, "full_year_60s": 303},
+    )
+
+    assert ChildRuns.timeout_in_seconds(gas, WEEK_60S, REPO_ROOT) == (
+        ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS + ChildRuns.LPG_YEAR_ALLOWANCE_IN_SECONDS
+    )
+    assert ChildRuns.timeout_in_seconds(solar, WEEK_60S, REPO_ROOT) == 762.0 + ChildRuns.LPG_YEAR_ALLOWANCE_IN_SECONDS
+
+
+def test_a_week_without_local_lpg_and_a_local_lpg_full_year_keep_their_limit() -> None:
+    """A household from a shipped profile needs no LPG year, and a full year's recorded time already holds it."""
+    basic = SetupConfig("basic_household", "system_setups/basic_household.py", seconds={"one_week_60s": 17})
+    gas = SetupConfig(
+        "household_gas_building_sizer",
+        "system_setups/household_gas_building_sizer.py",
+        seconds={"one_week_60s": 115, "full_year_60s": 397},
+    )
+
+    assert ChildRuns.timeout_in_seconds(basic, WEEK_60S, REPO_ROOT) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+    assert ChildRuns.timeout_in_seconds(gas, YEAR_60S, REPO_ROOT) == 3 * 397.0
+
+
+def test_every_golden_setup_with_a_local_lpg_household_is_recognised() -> None:
+    """The recorded energy systems name a local LPG household exactly where the setups ask for one.
+
+    The runner reads the household's data source from the recorded twin; a twin that lost the
+    setting, or a setup reading it from somewhere new, would quietly drop the allowance.
+    """
+    recognised = {setup.id for setup in load_config(REAL_CONFIG).setups if setup.runs_local_lpg_household(REPO_ROOT)}
+    asked_for = {
+        setup.id
+        for setup in load_config(REAL_CONFIG).setups
+        if "LpgDataAcquisitionMode.USE_LOCAL_LPG" in (REPO_ROOT / setup.path).read_text(encoding="utf-8")
+    }
+
+    assert recognised == asked_for
+    assert "household_gas_building_sizer" in recognised and "basic_household" not in recognised
+
+
+def test_a_child_that_hangs_is_killed_and_fails_its_pair_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child past its timeout is killed and becomes a run error naming its pair, not a hung CI job."""
+    hang = "import time; print('hanging', flush=True); time.sleep(60)"
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", hang]))
+    monkeypatch.setattr(ChildRuns, "MINIMAL_TIMEOUT_IN_SECONDS", 2.0)
+    monkeypatch.setattr(ChildRuns, "TIMEOUT_TO_RECORDED_SECONDS_RATIO", 0.0)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)
+
+    assert [(r.setup_id, r.parameter_set_id) for r in results] == [("s1", "p1"), ("s2", "p1")]
+    for result in results:
+        assert result.error is not None
+        assert "ran longer than its timeout of 2 s" in result.error
+        assert f"recorded for {result.setup_id} / p1 in golden_config.json" in result.error
+        assert "hanging" in result.error
+        assert result.duration_s is not None and result.duration_s < 30
+
+
+@pytest.mark.skipif(not ChildRuns.KILLS_PROCESS_GROUP, reason="needs POSIX process groups")
+def test_a_child_that_hangs_is_killed_with_the_processes_it_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A timed-out child's own children (an LPG binary in CI) die with it instead of running on as orphans."""
+    pid_directory = tmp_path / "grandchildren"
+    pid_directory.mkdir()
+    grandchild = "import time; time.sleep(60)"
+    hang = (
+        "import os, subprocess, sys, time; "
+        f"p = subprocess.Popen([sys.executable, '-c', {grandchild!r}]); "
+        f"open(os.path.join({str(pid_directory)!r}, str(p.pid)), 'w').close(); "
+        "print('hanging', flush=True); time.sleep(60)"
+    )
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", hang]))
+    monkeypatch.setattr(ChildRuns, "MINIMAL_TIMEOUT_IN_SECONDS", 3.0)
+    monkeypatch.setattr(ChildRuns, "TIMEOUT_TO_RECORDED_SECONDS_RATIO", 0.0)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)  # one job would run the pairs in-process
+
+    assert all(r.error is not None and "ran longer than its timeout" in r.error for r in results)
+    grandchild_pids = [int(path.name) for path in pid_directory.iterdir()]
+    assert len(grandchild_pids) == 2
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and any(_process_is_running(pid) for pid in grandchild_pids):
+        time.sleep(0.1)
+    assert not any(_process_is_running(pid) for pid in grandchild_pids)
+
+
+def _process_is_running(pid: int) -> bool:
+    """Return whether a process with this id runs and is not a zombie waiting to be reaped.
+
+    The killed grandchild's parent is gone, so init reaps it; until then it is a zombie, which
+    ``os.kill(pid, 0)`` still finds. ``/proc/<pid>/stat`` tells the two apart where it exists.
+    """
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.exists():
+        try:
+            return stat.read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0] != "Z"
+        except (OSError, IndexError):
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 def test_run_modes_runs_each_pair_in_every_mode_side_by_side(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

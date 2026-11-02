@@ -77,7 +77,7 @@ class EconomicsDocument:
     #: award per row), so a reader sums or picks rows rather than reading one number. The
     #: twenty-year monthly figure is ``monthly_equivalent_cost_in_euro``, the equivalent annual
     #: cost over twelve — not ``monthly_cost_year1_in_euro``, which is year 1's cash and equals it
-    #: only when the cost is flat (hisim-cyc.6); its horizon is stated in :attr:`CAVEATS`. Two
+    #: only when the cost is flat (hisim-economics-engine-cyc.6); its horizon is stated in :attr:`CAVEATS`. Two
     #: :class:`CostField` members have no entry: ``property_value_increase_in_percent``, which
     #: moved nowhere because nothing anywhere produces it (decision A13), and
     #: ``monthly_net_cost_10y_in_euro``, which no key of a document evaluated over one horizon can

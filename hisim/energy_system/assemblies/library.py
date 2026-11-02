@@ -9,9 +9,9 @@ It covers the names (the file's ``name`` is its library path, no parameter takes
 the parameters (description, default, and for a number a unit of ``lt.Units`` and a range), the units
 of the parameters against the config fields they feed (D16 b: ``EF-78`` for a mismatch, ``EF-79``
 for a fed field declaring none), that every parameter does something and every enum value selects
-something of its own, the ``exactly_one_of`` constraints, that the variants partition their selector,
-that every port names members that exist in every option where it can be active, the placeholders,
-the display templates, and the test contract. What needs the constructed components — default
+something of its own, the ``exactly_one_of`` and ``all_or_none_of`` constraints, that the variants
+partition their selector, that every port names members that exist in every option where it can be
+active, the placeholders, the display templates, and the test contract. What needs the constructed components — default
 connections, inputs, outputs, KPIs — is checked where they are constructed, by the wiring stage.
 """
 
@@ -22,7 +22,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, 
 
 from hisim import loadtypes as lt
 from hisim.config.sizing import declared_field_unit
-from hisim.energy_system.assemblies.model import AssemblyFile, MemberTemplate, ParameterType
+from hisim.energy_system.assemblies.model import AssemblyFile, ConstraintKind, MemberTemplate, ParameterType
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
@@ -138,24 +138,48 @@ class LibraryChecker:
                     self.add(path + ("values",), f"the enum '{name}' lists 'none', which spells no value.")
 
     def _constraints(self) -> None:
-        """Every ``exactly_one_of`` names declared parameters, none shared with another, and the defaults satisfy it."""
+        """Every constraint names declared parameters, none shared with another, and the defaults satisfy it.
+
+        A member of an ``all_or_none_of`` must also have a value that states it — a stated default, a
+        range, or a stated value among its allowed ones — or the constraint could only ever leave every
+        member unstated, and the harness would have nothing to state it with (D31).
+        """
         defaults = {name: declaration.default for name, declaration in self.model.parameters.items()}
         first: Dict[str, int] = {}
-        for index, names in enumerate(self.model.exactly_one_of):
+        for index, constraint in enumerate(self.model.constraints):
+            names, kind = constraint.names, constraint.kind.value
             for name in names:
                 if first.setdefault(name, index) != index:
                     self.add(
                         ("constraints", index),
-                        f"'{name}' is named by the exactly_one_of constraints {first[name]} and {index}; a parameter "
+                        f"'{name}' is named by the constraints {first[name]} and {index}; a parameter "
                         "belongs to one constraint at most, or stating it would decide two of them at once.",
                     )
             unknown = [name for name in names if name not in self.model.parameters]
             if unknown:
-                self.add(("constraints", index), f"exactly_one_of names {', '.join(unknown)}, which are no parameters.")
-            elif ParameterChecks.violation(names, defaults) is not None:
-                self.add(
-                    ("constraints", index), f"the defaults violate it: {ParameterChecks.violation(names, defaults)}."
-                )
+                self.add(("constraints", index), f"{kind} names {', '.join(unknown)}, which are no parameters.")
+                continue
+            violation = (
+                ParameterChecks.violation(names, defaults)
+                if constraint.kind == ConstraintKind.EXACTLY_ONE_OF
+                else ParameterChecks.partly_stated(names, defaults)
+            )
+            if violation is not None:
+                self.add(("constraints", index), f"the defaults violate it: {violation}.")
+            if constraint.kind == ConstraintKind.ALL_OR_NONE_OF:
+                for name in names:
+                    declaration = self.model.parameters[name]
+                    statable = (
+                        ParameterChecks.is_stated(declaration.default)
+                        or declaration.range is not None
+                        or any(ParameterChecks.is_stated(value) for value in declaration.allowed_values or ())
+                    )
+                    if not statable:
+                        self.add(
+                            ("constraints", index),
+                            f"'{name}' has no value that states it (a stated default, a range or a stated allowed "
+                            "value), so the all_or_none_of could never be stated.",
+                        )
 
     def _variants(self) -> None:
         """Every internal variant partitions its selector's values; one member name, one class (§2.6)."""

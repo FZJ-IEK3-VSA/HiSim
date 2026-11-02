@@ -1,4 +1,4 @@
-"""Actor model: who pays which cost among owner-occupier, landlord and tenant (cost_spec.md §6).
+"""Actor model: who pays which cost among owner-occupier, landlord and tenant.
 
 After the timeline is built, an allocation ruleset stamps a payer on every entry and splits entries where a law splits
 them. The German ruleset covers apportionable operating costs (BetrKV), energy pass-through (Heizkostenverordnung), the
@@ -26,7 +26,7 @@ LevyBasisParts = Tuple[UncertainValue, UncertainValue, UncertainValue]
 
 @dataclass
 class ModernizationLevySubjectBasis:
-    """One measure's contribution to the §559/§559e levy basis (§6.4).
+    """One measure's contribution to the §559/§559e levy basis.
 
     §559e BGB charges a different rate for heating measures than §559 does for everything else, so the levy basis is
     kept per measure. The evaluator fills one record per costed subject (one costed thing on the timeline, such as a
@@ -46,7 +46,7 @@ class ModernizationLevySubjectBasis:
 
 @dataclass
 class AllocationContext:
-    """Building and tenancy facts the allocation rules need (§6).
+    """Building and tenancy facts the allocation rules need.
 
     Holds the tenancy facts that cap the modernization levy (living area, current cold rent per m² and month), the
     building's simulated emission intensity that selects the CO2KostAufG tier, and the three levy-basis figures from
@@ -54,7 +54,7 @@ class AllocationContext:
     without an emission intensity the tenant pays the whole carbon price, and without a living area the levy is
     uncapped.
 
-    `levy_subjects` breaks the three aggregate levy-basis figures down by measure (§6.4). When it is empty the whole
+    `levy_subjects` breaks the three aggregate levy-basis figures down by measure. When it is empty the whole
     levy is charged under §559; when it is non-empty it decides the §559/§559e split and must add up to the aggregates.
     """
 
@@ -68,7 +68,7 @@ class AllocationContext:
     modernization_cost_in_euro: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
     subsidies_received_in_euro: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
     avoided_maintenance_in_euro: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
-    #: Per-measure breakdown of the three figures above, for the §559/§559e split (§6.4).
+    #: Per-measure breakdown of the three figures above, for the §559/§559e split.
     levy_subjects: List[ModernizationLevySubjectBasis] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -98,7 +98,7 @@ class AllocationContext:
 
 
 class AllocationRuleset(Protocol):
-    """Country-specific allocation of timeline entries to payers (§6.1).
+    """Country-specific allocation of timeline entries to payers.
 
     A ruleset turns a timeline without payers into one with payers. The legal percentages are data files; a ruleset
     encodes the structure (which category is whose, whether a levy exists). It is a `Protocol`, so a new country's
@@ -171,7 +171,7 @@ class ModernizationLevyParameters:
 
 @dataclass
 class ModernizationLevyOutcome:
-    """One year's rent increase, split into its §559 and §559e legs after both caps (§6.4).
+    """One year's rent increase, split into its §559 and §559e legs after both caps.
 
     Returned by :meth:`DE2024Ruleset.compute_modernization_levy`. The timeline books only the sum as one transfer pair,
     so the legs are visible only here. All amounts are annual nominal euro bands (a band is a minimum, best estimate
@@ -205,7 +205,7 @@ def _ordered_band(slots: dict) -> UncertainValue:
 
     Needed by the §559e leg split: the room the general cap leaves the §559 leg shrinks as the heating leg grows, so
     the outer slots can come out in the wrong order. The best estimate is kept and the two outer values are sorted
-    around it (§3.9 defines `minimum` as the best case).
+    around it (a band's `minimum` is its best case).
 
     Args:
         slots: Mapping with the keys ``minimum``, ``best_estimate`` and ``maximum``.
@@ -223,7 +223,7 @@ def _ordered_band(slots: dict) -> UncertainValue:
 
 
 def _heating_measure_component_types(raw: List[str], path: str) -> FrozenSet[str]:
-    """Validate the §559e heating-measure list against `loadtypes.ComponentType` (§6.4).
+    """Validate the §559e heating-measure list against `loadtypes.ComponentType`.
 
     A typo would silently move a heat pump into the 8 % paragraph, so every entry is checked at load time and the error
     names the file, the bad name and the closest valid names.
@@ -259,7 +259,7 @@ def _heating_measure_component_types(raw: List[str], path: str) -> FrozenSet[str
 
 @dataclass
 class Co2CostSplitTier:
-    """One tier of the CO2KostAufG table that splits the carbon-price component of the heating bill (§6.3).
+    """One tier of the CO2KostAufG table that splits the carbon-price component of the heating bill.
 
     A tier holds an upper bound on the building's specific emissions and the tenant's share below it. The worse the
     building, the less the tenant pays, because the law puts the carbon cost on whoever can renovate. Tiers are read in
@@ -271,7 +271,7 @@ class Co2CostSplitTier:
 
 
 class DE2024Ruleset:
-    """German allocation for rented buildings: BetrKV, HeizKV, CO2KostAufG and §559/§559e BGB (§6.2).
+    """German allocation for rented buildings: BetrKV, HeizKV, CO2KostAufG and §559/§559e BGB.
 
     Capital costs stay with the landlord. Apportionable operating costs (chimney sweep, metering and billing) and the
     energy bill go to the tenant. The carbon-price component is split by the CO2KostAufG tier table, maintenance by a
@@ -332,7 +332,7 @@ class DE2024Ruleset:
 
     @classmethod
     def load(cls, base_path: Optional[str] = None) -> "DE2024Ruleset":
-        """Load the ruleset from ``allocation_DE_2024.json`` (§6.1).
+        """Load the ruleset from ``allocation_DE_2024.json``.
 
         The ``modernization_levy`` block, including the §559e fields (``heating_levy_rate_per_year``,
         ``heating_cap_in_euro_per_m2_per_month``, ``heating_measure_component_types``), and the
@@ -381,7 +381,7 @@ class DE2024Ruleset:
         )
 
     def tenant_co2_share(self, emissions_in_kg_per_m2_a: Optional[float]) -> float:
-        """Return the tenant's share of the carbon-price component for the building's emission intensity (§6.3).
+        """Return the tenant's share of the carbon-price component for the building's emission intensity.
 
         Example: in the shipped table a building below 12 kg CO2/m²·a puts 100 % on the tenant, and the share falls in
         steps to 5 % for the worst tier. The intensity is simulated, so a retrofit variant can move the building to
@@ -444,7 +444,7 @@ class DE2024Ruleset:
         return allocated
 
     def is_heating_measure(self, asset_class_name: Optional[str]) -> bool:
-        """Return True if a measure of this `ComponentType` name is levied under §559e (§6.4).
+        """Return True if a measure of this `ComponentType` name is levied under §559e.
 
         The lookup is against the data file's ``heating_measure_component_types``. A measure without a known asset
         class (``None``) is never a heating measure, so it stays under §559.
@@ -463,7 +463,7 @@ class DE2024Ruleset:
 
         This is the deduction rule of §559 Abs. 2 BGB, which §559e repeats for heating measures, so both paragraphs
         call it. Only the configured share of the avoided maintenance is deducted, and subsidies are deducted as
-        received nominal support (§5.6). The floor applies per slot.
+        received nominal support. The floor applies per slot.
 
         Args:
             modernization_cost: Allocatable modernization cost of the pool, nominal euro.
@@ -520,7 +520,7 @@ class DE2024Ruleset:
         return (heating[0], heating[1], heating[2]), (general[0], general[1], general[2])
 
     def compute_modernization_levy(self, ctx: AllocationContext) -> ModernizationLevyOutcome:
-        """Return the annual rent increase, split into its §559 and §559e legs and capped (§6.4).
+        """Return the annual rent increase, split into its §559 and §559e legs and capped.
 
         Both paragraphs use :meth:`levy_basis` and differ in rate and cap: §559 charges 8 %/year of the general pool,
         §559e 10 %/year of the heating pool. Two caps then apply in order:
@@ -643,7 +643,7 @@ class DE2024Ruleset:
         """Return the §559/§559e levy as transfer pairs: the tenant pays a rent increase, the landlord receives it.
 
         Each levy year gets a positive TENANT entry and a mirrored negative LANDLORD entry, so the pair nets to zero in
-        the best-estimate slot (§6.4). The amount is a fixed nominal rent increase, not escalated. The §559 and §559e
+        the best-estimate slot. The amount is a fixed nominal rent increase, not escalated. The §559 and §559e
         legs are booked as one pair: with a banded basis a single leg can come out with its slots out of order while
         the sum cannot, so per-paragraph figures are read from :meth:`compute_modernization_levy`, not from entries.
 
@@ -682,7 +682,7 @@ class DE2024Ruleset:
 
 
 def get_ruleset(actor_scope_is_rented: bool, country: str, base_path: Optional[str] = None) -> AllocationRuleset:
-    """Return the allocation ruleset: DE_2024 for rented German buildings, owner-occupier otherwise (§6.1).
+    """Return the allocation ruleset: DE_2024 for rented German buildings, owner-occupier otherwise.
 
     Rented buildings outside Germany get a generic fallback: the German ruleset with no levy, no CO2 tier table (the
     tenant pays the whole carbon price) and no apportionable maintenance. It is structurally plausible, not legally
@@ -716,7 +716,7 @@ def assert_zero_sum(
     tolerance: float = 1e-6,
     require_per_slot_equality: bool = False,
 ) -> None:
-    """Assert that allocation moved money between payers without creating any (§6.5).
+    """Assert that allocation moved money between payers without creating any.
 
     Two checks:
 

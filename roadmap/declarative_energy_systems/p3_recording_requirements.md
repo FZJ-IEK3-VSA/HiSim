@@ -182,7 +182,7 @@ extension of the golden gate and it blesses nothing.
   reference is produced, so a setup needs no entry in `golden_config.json` to be covered, and nothing has to be
   re-blessed when a P4 batch changes a number.
 - R11.2 **Exact equality, not a tolerance.** Both runs happen on one machine, where determinism is byte-exact
-  (`golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
+  (`roadmap/golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
   rig does not have. So the comparison demands equality. A triple that only passes with a tolerance is a finding to
   investigate, not a threshold to widen.
 - R11.3 **Three comparisons, in this order:** the component set and the wire set (R3.3); then **every** column of
@@ -276,7 +276,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.17 `[amended 2026-09-06]` | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; every runnable window appears for every triple. That is the January window alone while the July one is fenced (R11.5 as amended, because a July window reads January's profiles today); a dispatch that asks for July is refused with that reason rather than quietly given January. The criterion returns to "both windows" when the mid-year-start epic unfences it. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
 | AC-P3.19 `[amended 2026-09-05]` | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. The unavailable stage fails the triple in the summary table (R11.4 as amended); what the criterion pins is that the failure is a named verdict with both structural comparisons made, never an exception. | R11.4, R11.3 |
-| AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 | → hisim-b3b.22
+| AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 | → hisim-declarative-systems-b3b.22
 | AC-P3.21 | Recording a setup whose parameters equal a shipped `energy_systems/*.simulation.yaml` writes no parameter file and references that one; changing one option makes it write exactly one new file. | R8.2, R8.3 |
 | AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |
 | AC-P3.23 | Two setups differing only in `cache_dir_path` produce the same parameter file, and no written file contains a machine-specific path. | R8.4 |

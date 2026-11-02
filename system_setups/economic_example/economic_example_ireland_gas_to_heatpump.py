@@ -5,7 +5,7 @@ system (`household_gas_building_sizer` setup), the *variant* installs the heat-p
 (`household_heatpump_building_sizer` setup) — evaluated with **Irish** cost data
 (price basis 2026: banded AI estimates, IE carbon-tax/ETS2 CO2 path, high Irish standing
 charges; Ireland has no subsidy catalog yet, so the SEAI-like flat shares in the device data
-apply, see cost_module_issues.md #25).
+apply, see roadmap/cost_module_issues.md #25).
 
 The assumed house: 1995 bungalow, 140 m² living area, owner-occupied, 20 kW gas boiler from
 2012 that is still functional. The variant additionally gets a scenario analysis over gas/

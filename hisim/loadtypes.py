@@ -116,6 +116,8 @@ class LoadTypes(str, enum.Enum):
 
     TEMPERATURE = "Temperature"
     PRESSURE = "Pressure"
+    # The relative humidity of air, in percent; a physical quantity like the two above
+    HUMIDITY = "Humidity"
     TIME = "Time"
     PRICE = "Price"
     # Substance
@@ -144,6 +146,8 @@ class Units(str, enum.Enum):
     # Unphysical
     ANY = "-"
     PERCENT = "%"
+    # A dimensionless fraction from 0 to 1, such as a part-load ratio; aggregated as a mean, never summed
+    FRACTION = "fraction"
 
     # Power
     WATT = "W"
@@ -209,28 +213,85 @@ class Units(str, enum.Enum):
     BINARY = "binary"
 
 
-#: Units whose cumulative post-processing value is a *mean* over all
-#: timesteps rather than a *sum*.  This mirrors the distinction made in
-#: :func:`hisim.simulator.HiSimSimulator.get_std_results`: rate-like
-#: quantities (power, temperature, pressure, ...) are averaged so they keep
-#: their unit, while extensive quantities (energy, volume, mass, cost, ...)
-#: are summed to a total.  Keeping this set in one place avoids the system
-#: chart and the simulator drifting apart on which units are aggregated how.
-UNITS_USING_MEAN_AGGREGATION: frozenset[Units] = frozenset(
-    {
-        Units.CELSIUS,
-        Units.KELVIN,
-        Units.ANY,
-        Units.METER_PER_SECOND,
-        Units.DEGREES,
-        Units.WATT,
-        Units.KILOWATT,
-        Units.WATT_PER_SQUARE_METER,
-        Units.KG_PER_SEC,
-        Units.PERCENT,
-        Units.PASCAL,
-    }
-)
+@enum.unique
+class OutputAggregation(str, enum.Enum):
+    """How the time steps of one output are combined into a monthly, daily or hourly value and a run total.
+
+    Every component output has one of these (``ComponentOutput.aggregation``). Post-processing
+    reads it to form the monthly bar charts, the monthly, daily and hourly result tables, the run
+    totals and the values on the network chart. An output that declares nothing gets the rule of
+    its unit (:meth:`of_unit`): a rate or a state such as W, °C or a fraction is averaged, an
+    amount such as Wh is summed.
+
+    The unit is not enough for every output, so a component declares the aggregation where the
+    unit's rule is wrong:
+
+    - a running total or a counter (``CumulativeConsumption`` in Wh, ``CounterOnOff``) is ``LAST``:
+      its monthly value is its value at the end of the month, its run total the final value;
+    - a stored energy (``ThermalEnergyInStorage`` in Wh) is ``MEAN``: the energy held on average;
+    - an on/off flag (``HeatingSeason``, 0 or 1) is ``MEAN``: the share of the time it was on;
+    - a state with more than two values (a controller mode such as -1 cooling, 0 off, 1 heating),
+      a timer that restarts at every switch, or an angle of the sun is ``NONE``: no monthly
+      value or run total of it means anything. Such an output gets no charts, and its cells in
+      the aggregated tables are empty (NaN); the per-time-step exports still contain it.
+
+    The KPIs do not read these aggregations; they are computed from the time series.
+    """
+
+    #: The sum over the period, for amounts per time step such as an energy in Wh.
+    SUM = "sum"
+    #: The mean over the period, for rates and states such as a power in W or a temperature.
+    MEAN = "mean"
+    #: The value of the period's last time step, for running totals and counters.
+    LAST = "last"
+    #: No aggregate: a monthly value or run total of this output means nothing.
+    NONE = "none"
+
+    @classmethod
+    def units_averaged_by_default(cls) -> frozenset[Units]:
+        """Return the units whose outputs are averaged when they declare no aggregation.
+
+        These are rates and states, which keep their unit when averaged: a power, a temperature,
+        a pressure, a fraction. Every other unit (an energy, a volume, a mass, a cost) is summed
+        to a total. Example: ``Units.WATT`` is in the set, ``Units.WATT_HOUR`` is not.
+
+        Returns:
+            The units averaged by default.
+        """
+        return frozenset(
+            {
+                Units.CELSIUS,
+                Units.KELVIN,
+                Units.ANY,
+                Units.METER_PER_SECOND,
+                Units.DEGREES,
+                Units.WATT,
+                Units.KILOWATT,
+                Units.WATT_PER_SQUARE_METER,
+                Units.KG_PER_SEC,
+                Units.PERCENT,
+                Units.FRACTION,
+                Units.PASCAL,
+            }
+        )
+
+    @classmethod
+    def of_unit(cls, unit: typing.Any) -> "OutputAggregation":
+        """Return the aggregation an output of this unit gets when it declares none.
+
+        This is the rule post-processing applied to every output before outputs declared their
+        aggregation, so an output that declares nothing is aggregated as before. Example:
+        ``of_unit(Units.WATT)`` is ``MEAN``, ``of_unit(Units.WATT_HOUR)`` is ``SUM``.
+
+        Args:
+            unit: The output's unit, a :class:`Units` member or its string value.
+
+        Returns:
+            ``MEAN`` for the units in :meth:`units_averaged_by_default`, ``SUM`` for all others.
+        """
+        unit_value = unit.value if isinstance(unit, Units) else unit
+        mean_unit_values = {mean_unit.value for mean_unit in cls.units_averaged_by_default()}
+        return cls.MEAN if unit_value in mean_unit_values else cls.SUM
 
 
 @enum.unique
@@ -244,7 +305,7 @@ class OutputPostprocessingRules(str, enum.Enum):
 @enum.unique
 class EnergyRole(str, enum.Enum):
 
-    """What an energy port of a component is in that component's energy balance (hisim-9uoo.1).
+    """What an energy port of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
     The balance a component closes is ``sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE) = 0``
     over all its ports, per timestep. A port's value is read with its own sign: a negative ``IN``
@@ -265,14 +326,19 @@ class EnergyRole(str, enum.Enum):
 @enum.unique
 class EnergyBalanceCarrier(str, enum.Enum):
 
-    """The energy carrier an energy port carries, for the balance check and the Sankey (hisim-9uoo.1).
+    """The energy carrier an energy port carries, for the balance check and the Sankey (hisim-energy-sankeys-9uoo.1).
 
     Distinct from :class:`hisim.economics.carriers.EnergyCarrier`, which names what is *priced* at the
     system boundary: this one also names the heat inside the house. Heat is split by what it is used
     for, space heating, domestic hot water and cooling, and a water flow counts by the heat it
     carries, ``m c dT``, never by its mass. ``AMBIENT_HEAT`` and ``SOLAR`` are what the environment
     gives a heat pump or a collector; a port of either carrier is linked to the environment node of
-    the same name.
+    the same name. ``ROOM_HEAT`` is heat released into or lost from the heated zone: the carrier of
+    the internal gains, of the building's losses and of its thermal mass, so that ``SPACE_HEATING_HEAT``
+    stays the heat the heating system delivers up to the building (complete Sankey spec, Q-G).
+    A port whose wiring names no peer takes its carrier's boundary default where one exists
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
+    unlinked.
     """
 
     ELECTRICITY = "electricity"
@@ -288,20 +354,31 @@ class EnergyBalanceCarrier(str, enum.Enum):
     COOLING = "cooling"
     AMBIENT_HEAT = "ambient_heat"
     SOLAR = "solar"
+    ROOM_HEAT = "room_heat"
 
 
 @enum.unique
 class EnvironmentNode(str, enum.Enum):
 
-    """The environment as the balance and the Sankey see it: where energy comes from or goes to outside the house.
+    """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.
 
-    An ``IN`` port of carrier ``AMBIENT_HEAT`` or ``SOLAR`` comes from the node of that name and a
-    ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself.
+    An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
+    ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    electricity meter's published import comes from and its export goes to, which no port names
+    (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
+    at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as
+    "natural gas supply", is derived from its carrier and not listed here
+    (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
 
     AMBIENT_HEAT = "ambient heat"
-    SOLAR = "solar"
+    SOLAR = "sun"
     OUTDOORS = "outdoors"
+    GRID_IMPORT = "grid import"
+    GRID_EXPORT = "grid export"
+    HOT_WATER_USE = "hot water drawn at the taps"
+    RESIDENTS = "residents' body heat"
 
 
 @enum.unique
@@ -358,9 +435,9 @@ class ComponentType(str, enum.Enum):
     HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
-    # Building envelope measures (lifecycle cost engine, cost_spec.md Q7). These are cost
-    # subjects sized in m2 of the respective envelope element (EXTERIOR_DOOR and
-    # VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
+    # Building envelope measures (lifecycle cost engine, roadmap/cost_spec.md Q7). These are cost
+    # subjects sized in m2 of the respective envelope element, the door in m2 of door
+    # (VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
     # The taxonomy follows the renovation measure database, element by element: external wall,
     # roof, top floor ceiling, basement ceiling, basement walls, ground-contacting components,
     # windows (review round 3, PR 556).
@@ -422,6 +499,10 @@ class InandOutputType(str, enum.Enum):
     ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
     ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
+    #: The increase of the energy a storage holds over the step, in Wh; negative while it gives energy up. Summed
+    #: over a run it is the stored energy at the end minus the stored energy at the start, which a storage's losses
+    #: subtract from what was charged minus what was discharged.
+    STORED_ENERGY_INCREASE = "StoredEnergyIncrease"
     #: The largest power a storage can take in the current step, given its state at the step's start.
     MAXIMUM_CHARGING_POWER = "MaximumChargingPower"
     #: The smallest power a storage charges with; an offer at or below it is not taken.

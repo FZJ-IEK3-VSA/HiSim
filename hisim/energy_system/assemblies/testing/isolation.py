@@ -8,7 +8,10 @@ circuit end of the assembly brings, as the cylinder a collector charges is the o
 reads, the engine's default rule binding the one candidate in scope), a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
-it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
+it observes, and a ``controllable: {target_input}`` output the controller ranking it. A partner that another
+partner requires does not join when a member of the assembly has its class: the member meets the requirement
+(:meth:`~.partners.TestPartnerRegistry.closure`), as the energy manager under test is the one the grid meter
+observes. A sizing fact
 a member's class reads that no member provides and no fact port names crosses the boundary by the
 engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
 registered provider of that fact as well (:func:`add_fact_providers`, which recomputes what is
@@ -138,7 +141,8 @@ def facts_needed(
         partner_facts: The facts the classes of the partners already in the system contribute.
 
     Returns:
-        Each fact still to be provided, as its alternatives, in the order the members read them.
+        Each fact still to be provided, as its alternatives: sorted per member class, the members in
+        declaration order, each fact once.
     """
     classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
     provided = facts_declared_by(classes)
@@ -150,7 +154,9 @@ def facts_needed(
     ]
 
 
-def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Set[str]:
+def facts_of_partners(
+    registry: TestPartnerRegistry, names: Sequence[str], member_classes: Collection[str] = ()
+) -> Set[str]:
     """The sizing facts the classes of the partners and of every partner they require contribute.
 
     Example: an oil boiler partner contributes ``energy_carrier``, so a fuel meter beside it reads
@@ -159,11 +165,15 @@ def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Se
     Args:
         registry: The test partners.
         names: The partners in the system so far.
+        member_classes: The short class names of the subject's members: a requirement of one of these classes is met
+            by the member and does not join (:meth:`TestPartnerRegistry.closure`), so it contributes nothing here.
 
     Returns:
         The union of the facts their classes declare.
     """
-    return facts_declared_by(registry.config_class_of(name) for name in registry.closure(names))
+    return facts_declared_by(
+        registry.config_class_of(name) for name in registry.closure(names, member_classes)
+    )
 
 
 def add_fact_providers(
@@ -192,8 +202,9 @@ def add_fact_providers(
         TestPartnerRegistryError: When the partner registered for a fact does not contribute it.
     """
     added: Set[str] = set()
+    member_classes = [member.entry.class_path.rsplit(".", 1)[-1] for member in members.values()]
     while True:
-        needed = facts_needed(port_facts, members, facts_of_partners(registry, partners))
+        needed = facts_needed(port_facts, members, facts_of_partners(registry, partners, member_classes))
         if not needed:
             return
         fact = needed[0][0][1]
@@ -309,13 +320,62 @@ def isolation_document(
     add_fact_providers(partners, port_facts, selection.members, registry, assembly.path)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
+    # A partner's requirement a member of the subject has the class of is met by that member (partners.py).
+    components = registry.document(partners, f"the test partners of '{assembly.path}'", classes.values())
+    bind_optional_partner_ports(components, classes)
     return {
         "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
         "name": f"isolation_{assembly.path.replace('/', '_')}",
         "description": f"The isolation system of {assembly.path} (assemblies_spec.md §9.4).",
-        "components": registry.document(partners, f"the test partners of '{assembly.path}'"),
+        "components": components,
         "imports": {SUBJECT: entry},
     }
+
+
+def bind_optional_partner_ports(components: Dict[str, Dict[str, Any]], member_classes: Mapping[str, str]) -> None:
+    """Write ``optional-bind:`` for every optional partner port of a test partner that has exactly one candidate.
+
+    A test partner stands beside every assembly whose ports it serves, so the component its optional port reads may
+    sit in the subject in one isolation system, among the other partners in another, and nowhere in a third. One
+    verb in the registry cannot name all three, and the engine refuses an optional port with a candidate and no verb.
+    The harness therefore writes the verb per system, as it does for the subject's own optional ports: the subject
+    when exactly one member of the subject has the port's partner class and no other partner has it, the partner when
+    exactly one other partner has it and no member does, and no verb when none has it (the port stays unbound).
+    Several candidates write no verb either, and the engine refuses the binding as ambiguous. A port the entry already
+    gives a verb keeps it. Example: the heat distribution controller's ``buffer`` port (partner
+    ``SimpleHotWaterStorage``) binds the subject beside a heating assembly with a buffer, the partner ``Buffer``
+    beside a hot-water cylinder whose heat pump charges one, and nothing beside district heating. A port naming several
+    partner classes counts a candidate of any of them: the building's ``heating`` port (``HeatDistribution`` or
+    ``ElectricHeating``) binds the subject's direct heater beside ``heating/electric_resistive`` and the partner
+    ``HeatDistributionSystem`` beside a boiler.
+
+    Args:
+        components: The partners' site entries by name, changed in place.
+        member_classes: The class name of every member of the subject, by member name.
+    """
+    for name, component in components.items():
+        written = {
+            port
+            for verb in ("bind", "optional-bind")
+            for port in (component.get(verb) or {})
+        } | set(component.get("none") or ())
+        for port_name, port in (component.get("ports") or {}).items():
+            if not isinstance(port, Mapping) or not port.get("optional") or "partner" not in port:
+                continue
+            if port_name in written:
+                continue
+            partner = port["partner"]
+            wanted = set(partner) if isinstance(partner, list) else {partner}
+            in_subject = sum(1 for class_name in member_classes.values() if class_name in wanted)
+            in_partners = [
+                other
+                for other, entry in components.items()
+                if other != name and str(entry.get("class", "")).rsplit(".", 1)[-1] in wanted
+            ]
+            if in_subject == 1 and not in_partners:
+                component.setdefault("optional-bind", {})[port_name] = SUBJECT
+            elif in_subject == 0 and len(in_partners) == 1:
+                component.setdefault("optional-bind", {})[port_name] = in_partners[0]
 
 
 def refusal_in(error: Optional[BaseException]) -> Optional[ConfigurationRefusedError]:
@@ -354,6 +414,8 @@ class IsolationRun:
         results: The result frame of a finished run.
         outputs: The simulator's outputs, matching the frame's columns.
         members: Member name of the assembly under test to its constructed component.
+        components: Runtime name to constructed component, for every component of the system: the subject's members
+            and the test partners (the heat checks read the partners, :class:`~.checks.HeatDelivery`).
         runtime: Member name to its runtime name in the expanded system.
         released: Whether :meth:`release` dropped the run; no check reads it afterwards.
     """
@@ -365,6 +427,7 @@ class IsolationRun:
     results: Optional[pd.DataFrame] = None
     outputs: List[Any] = field(default_factory=list)
     members: Dict[str, Any] = field(default_factory=dict)
+    components: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, str] = field(default_factory=dict)
     released: bool = False
     _finder: Optional[KpiFinder] = field(default=None, repr=False)
@@ -389,6 +452,7 @@ class IsolationRun:
         self.results = None
         self.outputs = []
         self.members = {}
+        self.components = {}
         self._finder = None
         self.released = True
         if self.directory.exists():
@@ -427,6 +491,7 @@ def run_isolation(
     run.runtime = members_of(built.imports.addresses)
     components = dict(built.wired.components)
     run.members = {member: components[name] for member, name in run.runtime.items()}
+    run.components = components
     return run
 
 

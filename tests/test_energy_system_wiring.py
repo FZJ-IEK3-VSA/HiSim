@@ -164,23 +164,25 @@ def test_an_explicit_wire_connects_exactly_the_two_ports_it_names(tmp_path: Path
     entries = (
         Systems.WEATHER
         + Systems.BUILDING
-        + """  hds_controller:
+        + """  heating_curve:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
+      - input: DailyAverageOutsideTemperature
+        from: weather.DailyAverageOutsideTemperatures
+  hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
       - building
-      - input: DailyAverageOutsideTemperature
-        from: weather.DailyAverageOutsideTemperatures
+      - heating_curve
 """
     )
 
     wired = Systems.build(entries, tmp_path)
 
     names = Systems.wire_names(wired)
-    assert (
-        "weather.DailyAverageOutsideTemperatures -> hds_controller.DailyAverageOutsideTemperature"
-        in names
-    )
+    assert "weather.DailyAverageOutsideTemperatures -> heating_curve.DailyAverageOutsideTemperature" in names
 
 
 @pytest.mark.base
@@ -409,7 +411,7 @@ def test_a_mandatory_input_nothing_feeds_is_rejected(tmp_path: Path) -> None:
     """Catches a half-wired system starting and producing numbers from an unconnected port.
 
     This is the failure mode the whole format exists to remove: an unfed mandatory input reads
-    as zero, and a zero outside temperature is a perfectly plausible number.
+    as zero, and a zero heating-season signal is a perfectly plausible "no heating today".
     """
     entries = (
         Systems.WEATHER
@@ -426,7 +428,7 @@ def test_a_mandatory_input_nothing_feeds_is_rejected(tmp_path: Path) -> None:
         Systems.build(entries, tmp_path)
 
     assert failure.value.error_id.value == "EF-31"
-    assert "hds_controller.DailyAverageOutsideTemperature" in str(failure.value)
+    assert "hds_controller.HeatingSeason" in str(failure.value)
 
 
 @pytest.mark.base

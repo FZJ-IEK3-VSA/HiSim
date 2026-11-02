@@ -1,4 +1,4 @@
-"""Spot-series parsing, validation gaps, and result serialization round-trips (cost_spec.md §7.2, §9.6).
+"""Spot-series parsing, validation gaps, and result serialization round-trips (roadmap/cost_spec.md §7.2, §9.6).
 
 Second of the three data/integration test files (split per the PR-3 review's 500-line rule):
 strict spot-series CSV parsing (review finding 25), the validation harness's gap findings,
@@ -446,7 +446,7 @@ class TestSerializationRoundtrip:
         assert restored.total_npv_in_euro.minimum == pytest.approx(original.total_npv_in_euro.minimum)
 
     def test_a_stored_result_reads_back_its_monthly_equivalent_or_derives_it(self):
-        """`monthly_equivalent_cost_in_euro` round-trips, and a pre-hisim-cyc.6 file gets EAC / 12.
+        """`monthly_equivalent_cost_in_euro` round-trips, and a pre-hisim-economics-engine-cyc.6 file gets EAC / 12.
 
         Twelve is a literal on purpose, for the reason the staged document's test gives: comparing
         with the constant the loader used would pass whatever that constant said.
@@ -1096,7 +1096,7 @@ class TestTheResultRecordsRefuseWhatTheyCannotVouchFor:
             EmbodiedCo2Basis.from_json({**basis.to_json(), "per_installation_in_kg": 999.0})
 
     def test_a_negative_energy_attribution_is_refused_on_both_sides_of_the_round_trip(self):
-        """Direction is the role, so a negative kWh would be drawn on the wrong side of the bus."""
+        """Direction is the role, so a negative kWh would be drawn on the wrong side of the balance."""
         from hisim.economics.calculators.aggregation import annual_energy_attribution
         from hisim.economics.serialization import _attribution_from_json, inputs_from_json
 

@@ -1,4 +1,4 @@
-"""Tariff provider component (cost_spec.md §8.3).
+"""Tariff provider component (roadmap/cost_spec.md §8.3).
 
 Evolved out of `generic_price_signal.py` — which ran beside it during the parallel phase and
 has since been retired to `obsolete/components/` (component sweep decision D-16, 2026-09-10) —
@@ -96,7 +96,7 @@ class TariffProviderConfig(ConfigBase):
         )
 
 
-class TariffProvider(cp.Component):
+class TariffProvider(cp.DataSourceComponent):
     """Publishes per-timestep tariff signals from a TariffContract (§8.3).
 
     A pure signal source: it consumes no energy, produces none, and never influences the physics

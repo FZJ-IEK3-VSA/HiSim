@@ -14,6 +14,8 @@ from typing import Any, Callable, ClassVar, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
+from hisim.subcomponents.base import Subcomponent
+
 
 @unique
 class ScopApplication(str, Enum):
@@ -23,7 +25,7 @@ class ScopApplication(str, Enum):
     W55 = "W55"
 
 
-class StandardizedSeasonalCop:
+class StandardizedSeasonalCop(Subcomponent):
     """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
 
     What a manufacturer states on the datasheet or ErP fiche is a SCOP rated this way, so
@@ -159,14 +161,14 @@ class StandardizedSeasonalCop:
         for outdoor, hours in cls.BINS:
             demand = design_load * cls.part_load(outdoor)
             output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > 1 else 0.0
+            by_heat_pump = min(demand, output) if cop > HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
             heat += hours * demand
             electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
         return heat / electricity
 
 
-class ScopCalibration:
-    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-4g9.15).
+class ScopCalibration(Subcomponent):
+    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
 
     hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole
     database group, so the simulated machine is the average unit of its group. A stated
@@ -414,7 +416,7 @@ class ScopCalibration:
         if not self.factors or mode != 1:
             return results
         cop = float(results["COP"])
-        if cop <= 1:
+        if cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
             return results
         factor = self.factor(float(results["T_out"]))
         p_th = float(results["P_th"])
@@ -469,13 +471,24 @@ class HplibResult:
     cop: float
     #: The energy efficiency ratio of cooling, dimensionless (``EER``).
     eer: float
+    #: Whether hplib itself runs its heating rod alone at this operating point: its own, uncalibrated coefficient of
+    #: performance of heating is at most :attr:`HEATING_ROD_ALONE_MAXIMAL_COP`. A stated SCOP's calibration scales the
+    #: compressor's COP (:class:`ScopCalibration`), so the calibrated :attr:`cop` can fall below 1 while hplib still
+    #: runs the compressor; this flag keeps hplib's verdict. Always False for cooling.
+    heating_rod_alone: bool
 
     @staticmethod
-    def from_hplib(results: Mapping[str, Any]) -> "HplibResult":
-        """Return the fields of an hplib result dictionary, as floats.
+    def from_hplib(results: Mapping[str, Any], *, heating_rod_alone: bool) -> "HplibResult":
+        """Return the fields of an hplib result dictionary, as floats, with hplib's verdict on its heating rod.
+
+        For example, a calibrated compressor result next to the switch has a COP of 0.88 and
+        ``heating_rod_alone=False``, because hplib's own COP there is 1.0033. The flag is not read from ``results``,
+        because those may be calibrated (:meth:`runs_the_heating_rod_alone` reads hplib's own result).
 
         Args:
-            results: hplib's result, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``, ``COP`` and ``EER``.
+            results: hplib's result, calibrated or not, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``,
+                ``COP`` and ``EER``.
+            heating_rod_alone: Whether hplib itself runs its heating rod alone at this operating point.
 
         Returns:
             The typed result.
@@ -487,7 +500,25 @@ class HplibResult:
             electrical_power_in_watt=float(results["P_el"]),
             cop=float(results["COP"]),
             eer=float(results["EER"]),
+            heating_rod_alone=heating_rod_alone,
         )
+
+    @staticmethod
+    def runs_the_heating_rod_alone(hplib_results: Mapping[str, Any], mode: int) -> bool:
+        """Return whether hplib runs its heating rod alone, read from its own, uncalibrated result.
+
+        hplib heats with its rod alone where its fitted coefficient of performance is at most 1; it then reports a COP
+        of exactly 1. For example, hplib's result at a COP of 1.0 in heating mode gives True, one at 1.0033 False.
+        Cooling (mode 2) has no heating rod and gives False.
+
+        Args:
+            hplib_results: hplib's own result, before any calibration, with the key ``COP``.
+            mode: hplib's mode, 1 heating, 2 cooling.
+
+        Returns:
+            Whether hplib's heating rod alone delivers the heat.
+        """
+        return mode == 1 and float(hplib_results["COP"]) <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
 
     #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
     #: books its reference thermal power as both heat and electricity.
@@ -498,9 +529,14 @@ class HplibResult:
         """Return whether hplib runs its heating rod alone at exactly one of two neighbouring operating points.
 
         hplib switches from its compressor to its heating rod alone where its fitted coefficient of performance falls
-        to 1, and its thermal power jumps there: for example from 5.0 kW (compressor at a COP of 1.01) to the 7.55 kW
-        of the rod. A linear interpolation between a grid point on either side of that switch turns the jump into a
-        ramp of about 25 kW/K over 0.1 K.
+        to 1, and its thermal power jumps there: for example, for one machine, from 5.0 kW (compressor at a COP of
+        1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
+        turns that jump into a ramp of about 25 kW/K over 0.1 K.
+
+        The check compares hplib's own verdicts (:attr:`heating_rod_alone`), not the COPs: a stated SCOP below
+        hplib's fit calibrates the compressor's COP next to the switch below 1 (1.0033 x 0.876 = 0.879), and a
+        comparison of the calibrated COPs would count both points as the rod's and interpolate across the jump
+        (hisim-g0dp).
 
         Args:
             lower: hplib's result at the lower grid point.
@@ -509,15 +545,15 @@ class HplibResult:
         Returns:
             Whether one result is the heating rod's and the other is not.
         """
-        limit = HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
-        return (lower.cop <= limit) != (upper.cop <= limit)
+        return lower.heating_rod_alone != upper.heating_rod_alone
 
     @staticmethod
     def interpolated(*, lower: "HplibResult", upper: "HplibResult", share_of_upper: float) -> "HplibResult":
         """Return the linear interpolation between hplib's results at two neighbouring return temperatures.
 
-        Every field is ``lower + share_of_upper (upper - lower)``. For example, a return of 47.04 °C on the 0.1 K
-        grid takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C.
+        Every numeric field is ``lower + share_of_upper (upper - lower)``; :attr:`heating_rod_alone` is the lower
+        point's, because two points interpolated lie on one side of the switch and share it. For example, a return of
+        47.04 °C on the 0.1 K grid takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C.
 
         Args:
             lower: The result at the lower grid point.
@@ -541,6 +577,7 @@ class HplibResult:
             electrical_power_in_watt=between(lower.electrical_power_in_watt, upper.electrical_power_in_watt),
             cop=between(lower.cop, upper.cop),
             eer=between(lower.eer, upper.eer),
+            heating_rod_alone=lower.heating_rod_alone,
         )
 
 
@@ -582,6 +619,25 @@ class HeatPumpRunTimers:
     time_on_cooling_in_seconds: int
     #: How long the machine has been off, in s.
     time_off_in_seconds: int
+
+
+@dataclass(frozen=True)
+class HeatPumpModeTrack:
+    """The heat pump's mode in a step and its run timers after that step, on one of its two tracks.
+
+    The control track holds the mode the heat pump runs on after its minimum running and idle times; its timers feed
+    those minimum times and the start-up ramp, so it decides what the machine does. The published track holds the
+    mode the machine ran, where a space-heating step at a part-load ratio of 0 is off; its mode and timers are what
+    the heat pump publishes as its on/off state, ``TimeOnHeating`` and ``TimeOff``, and what its switch counters and
+    KPIs count. For example, at 900 s a space-heating step at ratio 0 after 600 s of heating is
+    ``HeatPumpModeTrack(1, HeatPumpRunTimers(1500, 0, 0))`` on the control track and
+    ``HeatPumpModeTrack(0, HeatPumpRunTimers(0, 0, 900))`` on the published one.
+    """
+
+    #: The mode: 1 space heating, 2 hot water, -1 cooling, 0 off.
+    on_off: float
+    #: The run timers after the step in that mode, in s.
+    timers: HeatPumpRunTimers
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import dataclasses
+import math
 from typing import ClassVar, List, Tuple, Optional
 from dataclasses import dataclass
 from bslib import bslib as bsl
@@ -11,7 +12,7 @@ import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    PhysicsComponent,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
@@ -33,11 +34,12 @@ from hisim.config import (
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
+from hisim.energy_port import EnergyPort
 from hisim.economics.uncertainty import UncertainValue
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType, EnergyBalanceCarrier, EnergyRole
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 
@@ -53,10 +55,19 @@ class BatteryConfig(ConfigBase):
     line they read every array of the system. The named default battery, :meth:`preset_sized_to_pv`,
     leaves both fields ``AUTO`` to these laws (D27). Over one array the sum is that array's peak
     power, so a battery beside one array — every recorded twin — is sized as before. An author who
-    knows the device pins the two fields instead.
+    knows the device pins the two fields instead, always both: a battery that states one of them and
+    leaves the other ``AUTO`` is refused at sizing (:data:`SIZED_TOGETHER`).
     """
 
     MAIN_CLASS = "hisim.components.advanced_battery_bslib.Battery"
+
+    #: The capacity and the inverter power are stated together or not at all (owner, 2026-10-15). Each
+    #: has its own law from the PV peak power, so a capacity stated alone would be built with the power
+    #: the array gives, a C-rate nobody chose; the sizing kernel refuses it with "state both or neither"
+    #: (``hisim.config.sizing.SizedTogether``, ``EF-4J`` in an energy-system file).
+    SIZED_TOGETHER: ClassVar[Tuple[Tuple[str, ...], ...]] = (
+        ("custom_battery_capacity_generic_in_kilowatt_hour", "custom_pv_inverter_power_generic_in_watt"),
+    )
 
     #: Sizing law of the battery's capacity: one kilowatt hour of storage per kilowatt peak of
     #: every PV array the battery is sized to, summed, rounded to two decimals. Named as a ClassVar
@@ -111,7 +122,7 @@ class BatteryConfig(ConfigBase):
         """The fleet's home battery, scaled to the PV arrays it is installed beside.
 
         The field defaults are this battery: a single ``SG1`` lithium-ion system from the bslib
-        database, first in the energy management hierarchy, starting empty and rated for five
+        database, first in the energy management hierarchy, starting half charged and rated for five
         thousand full cycles. What the preset does not fix is how big the device is:
         ``custom_battery_capacity_generic_in_kilowatt_hour`` and
         ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that :data:`CAPACITY_LAW`
@@ -149,33 +160,84 @@ class BslibChargingParameters:
     #: The smallest AC power the converter charges with, in W; bslib charges nothing at or below it.
     minimum_charging_power_in_watt: float
     #: The state of charge, dimensionless between 0 and 1, the battery must fall below before it charges again once
-    #: it has been full (bslib's recharge hysteresis).
+    #: bslib's recharge hysteresis has been set, which happens only when the state of charge passes 1 (see
+    #: :meth:`recharging_is_blocked`).
     recharge_threshold_state_of_charge: float
 
+    def __post_init__(self) -> None:
+        """Refuse a parameter that is not a finite number of at least 0, or a recharge threshold above 1.
+
+        bslib describes some systems only partly: the DC-coupled systems ``S3`` and ``S4`` give NaN rated and minimum
+        charging powers, and ``INV1`` also a NaN capacity. A NaN bound would reach the energy manager as the battery's
+        published charging power and fail there in the first step; refusing it here fails the battery's construction
+        instead, with the field that is wrong. For example, SG1 with 10 kWh and 5 kW (10,000 Wh, 5,000 W, 91.15 W,
+        0.98) is accepted; a NaN minimum charging power, a capacity of -1 Wh or a recharge threshold of 1.5 is
+        refused. The recharge threshold is a state of charge, so it must also be at most 1: above 1, a battery whose
+        recharge hysteresis is set would be let charge past full.
+
+        Raises:
+            ValueError: If any field is not finite or is below 0, or the recharge threshold is above 1.
+        """
+        for field_name, value in (
+            ("capacity_in_watt_hour", self.capacity_in_watt_hour),
+            ("rated_charging_power_in_watt", self.rated_charging_power_in_watt),
+            ("minimum_charging_power_in_watt", self.minimum_charging_power_in_watt),
+            ("recharge_threshold_state_of_charge", self.recharge_threshold_state_of_charge),
+        ):
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(
+                    f"The bslib battery's {field_name} must be a finite number of at least 0, got {value!r}: the "
+                    "battery's charging limits are computed from it."
+                )
+        if self.recharge_threshold_state_of_charge > 1.0:
+            raise ValueError(
+                "The bslib battery's recharge_threshold_state_of_charge must be a state of charge of at most 1, got "
+                f"{self.recharge_threshold_state_of_charge!r}."
+            )
+
     @classmethod
-    def of_battery(cls, battery: bsl.ACBatMod) -> "BslibChargingParameters":
+    def of_battery(cls, battery: bsl.ACBatMod, *, system_id: str) -> "BslibChargingParameters":
         """Return the charging parameters of a bslib battery, read from its private attributes.
 
         Args:
             battery: The bslib battery model.
+            system_id: The bslib system the model was built for, e.g. ``"SG1"``; it names the system in a refusal.
 
         Returns:
             Its charging parameters.
+
+        Raises:
+            ValueError: If bslib gives a parameter that is not a finite number of at least 0 for this system, as it
+                does for the DC-coupled systems ``S3``, ``S4`` and ``INV1``.
         """
-        # bslib keeps these only as private attributes.
-        return cls(
-            capacity_in_watt_hour=float(battery._E_BAT),  # pylint: disable=protected-access  # bslib has no accessor
-            rated_charging_power_in_watt=float(battery._P_AC2BAT_IN),  # pylint: disable=protected-access  # bslib has no accessor
-            minimum_charging_power_in_watt=float(battery._P_AC2BAT_MIN),  # pylint: disable=protected-access  # bslib has no accessor
-            recharge_threshold_state_of_charge=float(battery._SOC_THRESHOLD),  # pylint: disable=protected-access  # bslib has no accessor
-        )
+        # bslib keeps these only as private attributes and has no accessor for them.
+        # pylint: disable=protected-access
+        capacity_in_watt_hour = float(battery._E_BAT)
+        rated_charging_power_in_watt = float(battery._P_AC2BAT_IN)
+        minimum_charging_power_in_watt = float(battery._P_AC2BAT_MIN)
+        recharge_threshold_state_of_charge = float(battery._SOC_THRESHOLD)
+        # pylint: enable=protected-access
+        try:
+            return cls(
+                capacity_in_watt_hour=capacity_in_watt_hour,
+                rated_charging_power_in_watt=rated_charging_power_in_watt,
+                minimum_charging_power_in_watt=minimum_charging_power_in_watt,
+                recharge_threshold_state_of_charge=recharge_threshold_state_of_charge,
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"The bslib system {system_id!r} cannot be simulated as an AC-coupled battery: {error}"
+            ) from error
 
     @staticmethod
     def recharging_is_blocked(battery: bsl.ACBatMod) -> bool:
         """Return whether a bslib battery waits, after its last simulated step, to fall below its recharge threshold.
 
-        bslib sets this flag once the battery is full and clears it when the state of charge falls below the
-        recharge threshold; while it is set, the battery does not charge.
+        bslib sets this flag only when a step ends with a state of charge above 1, and clears it when the state of
+        charge falls below the recharge threshold; while it is set, the battery does not charge. The battery never
+        passes 1: bslib caps the AC power at what fills the battery (``avoid_overcharging``), and the minimum charging
+        power stops it at about 0.99985 (SG1, 60 s steps). So for SG1 and S2 the flag stays False, and the battery
+        reads it only as a defensive half of the adapter, in case a bslib system or version sets it.
 
         Args:
             battery: The bslib battery model, after a call of its ``simulate``.
@@ -186,7 +248,7 @@ class BslibChargingParameters:
         return bool(battery._threshold)  # pylint: disable=protected-access  # bslib has no accessor
 
 
-class Battery(Component):
+class Battery(PhysicsComponent):
     """Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery
@@ -197,11 +259,18 @@ class Battery(Component):
     (1) Energy Management System
     """
 
-    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 
     #: The seconds in an hour, which convert between energy in Wh and power over a step in s.
     SECONDS_PER_HOUR: ClassVar[float] = 3600.0
+
+    #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged battery. A run
+    #: that starts on an empty battery cannot discharge on its first night and one that starts full cannot store
+    #: its first day's PV surplus; half charged, the battery can do either from the first step. Neither
+    #: the "Battery losses" KPI nor the battery's OPEX counts the energy it holds at the start as a loss: both subtract
+    #: the change of the stored energy from the charged minus the discharged energy.
+    INITIAL_STATE_OF_CHARGE: ClassVar[float] = 0.5
 
     # Inputs
     LoadingPowerInput = "LoadingPowerInput"  # W
@@ -214,6 +283,13 @@ class Battery(Component):
     DischargingPower = "DischargingPower"
     MaximumChargingPowerInWatt = "MaximumChargingPowerInWatt"
     MinimumChargingPowerInWatt = "MinimumChargingPowerInWatt"
+    #: The increase of the energy stored in the cells over the step, in Wh; negative while the battery discharges.
+    StoredEnergyIncreaseInWattHour = "StoredEnergyIncreaseInWattHour"
+    #: The inverter's loss over the step, in W: the AC power minus the DC power.
+    InverterLossInWatt = "InverterLossInWatt"
+    #: The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the step's
+    #: duration.
+    CellLossInWatt = "CellLossInWatt"
 
     def __init__(
         self,
@@ -221,7 +297,13 @@ class Battery(Component):
         config: BatteryConfig,
         my_display_config: Optional[DisplayConfig] = None,
     ):
-        """Loads the parameters of the specified battery storage."""
+        """Loads the parameters of the specified battery storage.
+
+        Raises:
+            ValueError: If the capacity or the inverter power is not finite or not above 0
+                (:meth:`refuse_an_impossible_size`), or if bslib gives a charging parameter that is not a finite
+                number of at least 0 for the system (:meth:`BslibChargingParameters.of_battery`).
+        """
         if my_display_config is None:
             my_display_config = DisplayConfig()
         self.battery_config = config
@@ -241,16 +323,13 @@ class Battery(Component):
 
         self.system_id = self.battery_config.system_id
 
-        self.custom_pv_inverter_power_generic_in_watt = concrete(
-            self.battery_config.custom_pv_inverter_power_generic_in_watt
-        )
-
-        self.custom_battery_capacity_generic_in_kilowatt_hour = concrete(
-            self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-        )
+        (
+            self.custom_battery_capacity_generic_in_kilowatt_hour,
+            self.custom_pv_inverter_power_generic_in_watt,
+        ) = self.refuse_an_impossible_size(self.battery_config)
 
         # Component has states
-        self.state = BatteryState()
+        self.state = BatteryState(state_of_charge=self.INITIAL_STATE_OF_CHARGE)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
@@ -259,7 +338,9 @@ class Battery(Component):
             p_inv_custom=self.custom_pv_inverter_power_generic_in_watt,
             e_bat_custom=self.custom_battery_capacity_generic_in_kilowatt_hour,
         )
-        self.charging_parameters = BslibChargingParameters.of_battery(self.ac_coupled_battery_object)
+        self.charging_parameters = BslibChargingParameters.of_battery(
+            self.ac_coupled_battery_object, system_id=self.system_id
+        )
 
         # Define component inputs
         self.loading_power_input_channel: ComponentInput = self.add_input(
@@ -302,6 +383,8 @@ class Battery(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=f"here a description for {self.ChargingPower} will follow.",
+            # the electricity meter reads this port, and the discharging port below, by their roles
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.discharging_power_channel: ComponentOutput = self.add_output(
@@ -310,6 +393,7 @@ class Battery(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description=f"here a description for {self.DischargingPower} will follow.",
+            energy_port=EnergyPort(EnergyRole.OUT, EnergyBalanceCarrier.ELECTRICITY, negated=True),
         )
         self.maximum_charging_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -318,7 +402,8 @@ class Battery(Component):
             unit=Units.WATT,
             output_description=(
                 "The largest AC power the battery can take in this step, from its state at the step's start, in W; "
-                "zero or positive. Zero while it is full or waits to fall below its recharge threshold."
+                "zero or positive. Zero while it is full, while it waits to fall below its recharge threshold, and "
+                "while what it could take is not above its minimum charging power."
             ),
         )
         self.minimum_charging_power_channel: ComponentOutput = self.add_output(
@@ -329,6 +414,45 @@ class Battery(Component):
             output_description=(
                 "The smallest AC power the battery charges with, in W; positive. An offer at or below it is not taken."
             ),
+        )
+        self.stored_energy_increase_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StoredEnergyIncreaseInWattHour,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            postprocessing_flag=[InandOutputType.STORED_ENERGY_INCREASE, ComponentType.BATTERY],
+            output_description=(
+                "The increase of the energy stored in the cells over the step, in Wh: the change of the state of "
+                "charge times the capacity, negative while the battery discharges. Summed over the run it is the "
+                "stored energy at the end minus the stored energy at the start, which the battery's losses subtract."
+            ),
+            energy_port=EnergyPort(EnergyRole.STORED_CHANGE, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        # bslib is a black box that publishes three numbers: the AC power, the DC power and the state of charge.
+        # The two losses are their differences, so the energy balance checks that the published flows agree with
+        # each other (complete Sankey spec, §5.3), not bslib's physics.
+        self.inverter_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.InverterLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The inverter's loss over the step, in W: the AC power minus the DC power. While the battery charges "
+                "the inverter takes more AC than it gives the cells, while it discharges it gives less AC than it "
+                "takes from them."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.cell_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CellLossInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the "
+                "step's duration."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
 
     def i_save_state(self) -> None:
@@ -400,6 +524,18 @@ class Battery(Component):
         stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
+        stored_energy_increase_in_watt_hour = (
+            state_of_charge - self.state.state_of_charge
+        ) * self.charging_parameters.capacity_in_watt_hour
+        stsv.set_output_value(self.stored_energy_increase_channel, stored_energy_increase_in_watt_hour)
+        inverter_loss_in_watt, cell_loss_in_watt = self.losses_in_watt(
+            ac_power_in_watt=ac_battery_power_used_for_charging_or_discharging_in_watt,
+            dc_power_in_watt=dc_battery_power_used_for_charging_or_discharging_in_watt,
+            stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
+            seconds_per_timestep=time_increment_in_seconds,
+        )
+        stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
+        stsv.set_output_value(self.cell_loss_channel, cell_loss_in_watt)
         stsv.set_output_value(self.charging_power_channel, charging_power_in_watt)
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
@@ -408,6 +544,77 @@ class Battery(Component):
             state_of_charge=state_of_charge,
             recharging_is_blocked=BslibChargingParameters.recharging_is_blocked(self.ac_coupled_battery_object),
         )
+
+    @classmethod
+    def losses_in_watt(
+        cls,
+        *,
+        ac_power_in_watt: float,
+        dc_power_in_watt: float,
+        stored_energy_increase_in_watt_hour: float,
+        seconds_per_timestep: float,
+    ) -> Tuple[float, float]:
+        """Return the inverter's and the cells' loss of one step from the three numbers bslib publishes, in W.
+
+        The inverter loss is the AC power minus the DC power and the cell loss the DC power minus the stored
+        energy's increase divided by the step's duration (complete Sankey spec, §5.3). Charging and discharging power, both losses and
+        the stored change then close the battery's balance by construction, so the balance check proves that the
+        published flows agree with each other in sign and unit. For example, a step of one hour charging with
+        1000 W AC, 950 W DC and 930 Wh more in the cells loses 50 W in the inverter and 20 W in the cells; one
+        discharging with -1000 W AC, -1060 W DC and 1080 Wh less in the cells loses 60 W and 20 W.
+
+        Args:
+            ac_power_in_watt: The AC power the battery used, in W; positive while it charges.
+            dc_power_in_watt: The DC power at the cells, in W; positive while they charge.
+            stored_energy_increase_in_watt_hour: The increase of the energy stored in the cells over the step, in Wh.
+            seconds_per_timestep: The step's duration, in s.
+
+        Returns:
+            The inverter loss and the cell loss, in W.
+        """
+        stored_energy_increase_in_watt = (
+            stored_energy_increase_in_watt_hour * cls.SECONDS_PER_HOUR / seconds_per_timestep
+        )
+        return ac_power_in_watt - dc_power_in_watt, dc_power_in_watt - stored_energy_increase_in_watt
+
+    @staticmethod
+    def refuse_an_impossible_size(config: BatteryConfig) -> Tuple[float, float]:
+        """Return the battery's capacity and inverter power, refusing either if it is not finite or not above 0.
+
+        Both fields have sizing laws from the PV peak power, but a size stated in a configuration replaces the
+        law, so nothing else checks it. bslib's generic systems take both numbers as they are: with a capacity of
+        0 kWh the first step divides by zero, with an inverter power of 0 W the battery never charges or
+        discharges, and with -5000 W it charges 5000 W when offered 3000 W. For example, 10 kWh with 5000 W
+        returns ``(10.0, 5000.0)``; 0 kWh, -5000 W or a NaN capacity is refused.
+
+        The check covers every bslib system. A non-generic system takes both sizes from bslib's database, but its
+        capacity still prices the battery and counts its cycles. Its inverter power is read by nothing, and it is
+        refused all the same, so that one rule holds for the field whatever the system.
+
+        There is no upper bound: bslib's generic systems scale linearly with both numbers, and no datasheet limit
+        applies to a configured battery of unknown make.
+
+        Args:
+            config: The battery's configuration, with both sizes resolved.
+
+        Returns:
+            Tuple[float, float]: The capacity in kWh and the inverter power in W, unchanged.
+
+        Raises:
+            ValueError: If the capacity or the inverter power is not finite or is at or below 0.
+        """
+        capacity_in_kilowatt_hour = concrete(config.custom_battery_capacity_generic_in_kilowatt_hour)
+        inverter_power_in_watt = concrete(config.custom_pv_inverter_power_generic_in_watt)
+        for field_name, value, unit in (
+            ("custom_battery_capacity_generic_in_kilowatt_hour", capacity_in_kilowatt_hour, "kWh"),
+            ("custom_pv_inverter_power_generic_in_watt", inverter_power_in_watt, "W"),
+        ):
+            if not (math.isfinite(value) and value > 0.0):
+                raise ValueError(
+                    f"{config.component_id.name}: the bslib battery's {field_name} must be a finite number above "
+                    f"0 {unit}, got {value!r} {unit}: bslib sizes the battery from it."
+                )
+        return capacity_in_kilowatt_hour, inverter_power_in_watt
 
     @staticmethod
     def maximum_charging_power_in_watt(
@@ -420,8 +627,12 @@ class Battery(Component):
         fills its remaining capacity within the step. For example, 11,100 Wh at a state of charge of 0.999 leave
         11.1 Wh, which fill within a 60 s step at 666 W; at 0.5 the rated 11,100 W bound it.
 
-        The bound does not include the minimum charging power: an offer at or below that minimum is not taken even
-        when the bound is larger (:attr:`BslibChargingParameters.minimum_charging_power_in_watt`).
+        bslib charges nothing with a power at or below its minimum charging power
+        (:attr:`BslibChargingParameters.minimum_charging_power_in_watt`). So when the bound is not above that minimum,
+        which happens just below full, the battery takes nothing and the maximum is 0 W. For example, the same battery
+        at 0.999 and 900 s steps could fill its 11.1 Wh at 44.4 W, but its minimum of 202.4 W stops it, so the maximum
+        is 0 W. Publishing 44.4 W instead would announce a power the battery refuses. An offer at or below the
+        minimum is also not taken when the bound is larger.
 
         Args:
             parameters: The battery's capacity, rated and minimum charging powers and recharge threshold.
@@ -430,7 +641,7 @@ class Battery(Component):
             seconds_per_timestep: The step length, in s.
 
         Returns:
-            The largest AC power the battery takes in this step, in W; zero or positive.
+            The largest AC power the battery takes in this step, in W; either 0 or above the minimum charging power.
 
         Raises:
             ValueError: If the step length is not positive.
@@ -442,7 +653,10 @@ class Battery(Component):
             return 0.0
         remaining_capacity_in_watt_hour = parameters.capacity_in_watt_hour * (1.0 - state_of_charge)
         filling_power_in_watt = remaining_capacity_in_watt_hour * Battery.SECONDS_PER_HOUR / seconds_per_timestep
-        return max(0.0, min(parameters.rated_charging_power_in_watt, filling_power_in_watt))
+        bound_in_watt = min(parameters.rated_charging_power_in_watt, filling_power_in_watt)
+        if bound_in_watt <= parameters.minimum_charging_power_in_watt:
+            return 0.0
+        return bound_in_watt
 
     def write_to_report(self) -> List[str]:
         """Write to report."""
@@ -472,7 +686,7 @@ class Battery(Component):
         """Returns investment cost, CO2 emissions and lifetime."""
 
         # Note for the parity harness: the legacy computation below scales the kWh capacity by
-        # 1e-3 (latent unit bug, cost_module_issues.md #20a); get_cost_facts() declares the
+        # 1e-3 (latent unit bug, roadmap/cost_module_issues.md #20a); get_cost_facts() declares the
         # physically correct size, so the parity report shows an explained battery delta.
         component_type = ComponentType.BATTERY
         kpi_tag = KpiTagEnumClass.BATTERY
@@ -510,7 +724,7 @@ class Battery(Component):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the battery as one priced subject: a `BATTERY` entry of the cost database, sized
         by its **capacity in kWh** — the unit batteries are quoted in (EUR/kWh), and the
@@ -554,24 +768,57 @@ class Battery(Component):
         )
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of maintenance costs."""
-        battery_losses_in_kwh: float = 0.0
+        """Calculate the OPEX: the maintenance, and the electricity the battery lost, priced and with its CO2.
+
+        The lost electricity is what was charged minus what was discharged minus the increase of the stored energy over
+        the run (:meth:`KpiHelperClass.compute_storage_losses_in_kilowatt_hour`), so energy the battery still holds at
+        the end, or held already at the start, is not booked as a loss. The three energies enter unrounded, the same
+        sums the KPI "Battery losses" uses, and only the loss is rounded, to 0.01 kWh, the resolution of the OPEX
+        table. Rounding each term first could put the loss up to 0.15 kWh off the KPI, and below zero for a battery
+        that barely cycles.
+
+        The charged and the discharged energy are also stored on the config, rounded to 0.1 kWh, as
+        ``charge_in_kwh`` and ``discharge_in_kwh``; :meth:`get_battery_aging_information` counts the charge cycles from
+        them.
+
+        Raises:
+            ValueError: If ``all_outputs`` holds no stored-energy output of this battery, which would book the energy
+                it holds at the end as lost.
+        """
+        stored_energy_increase_in_kwh: Optional[float] = None
+        charged_energy_in_kwh = 0.0
+        discharged_energy_in_kwh = 0.0
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and output.component_name == self.component_name:
+                if InandOutputType.STORED_ENERGY_INCREASE in output.postprocessing_flag:
+                    stored_energy_increase_in_kwh = float(postprocessing_results.iloc[:, index].sum()) / 1e3
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
-                    self.battery_config.charge_in_kwh = round(
+                    charged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(lower=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     )
-                    self.battery_config.discharge_in_kwh = round(
+                    discharged_energy_in_kwh = float(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
+                        / 3.6e6
                     ) * (-1)
-                    battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
+                    self.battery_config.charge_in_kwh = round(charged_energy_in_kwh, 1)
+                    self.battery_config.discharge_in_kwh = round(discharged_energy_in_kwh, 1)
+        if stored_energy_increase_in_kwh is None:
+            raise ValueError(
+                f"The outputs passed to the OPEX of battery {self.component_name} hold no output flagged "
+                f"{InandOutputType.STORED_ENERGY_INCREASE.name}, so its losses cannot subtract the change of its "
+                "stored energy."
+            )
+        battery_losses_in_kwh = round(
+            KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=charged_energy_in_kwh,
+                discharged_energy_in_kilowatt_hour=discharged_energy_in_kwh,
+                stored_energy_increase_in_kilowatt_hour=stored_energy_increase_in_kwh,
+            ),
+            2,
+        )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
@@ -605,9 +852,11 @@ class BatteryState:
     converged pass's state the next step's start.
     """
 
-    #: state of charge of the battery, dimensionless between 0 and 1
-    state_of_charge: float = 0
-    #: Whether bslib's recharge hysteresis blocks charging: set once the battery was full, cleared below the threshold.
+    #: State of charge of the battery, dimensionless between 0 and 1. No default: the battery states its start value
+    #: once, as :attr:`Battery.INITIAL_STATE_OF_CHARGE`.
+    state_of_charge: float
+    #: Whether bslib's recharge hysteresis blocks charging: set only when a step ended above a state of charge of 1,
+    #: cleared below the threshold (see :meth:`BslibChargingParameters.recharging_is_blocked`).
     recharging_is_blocked: bool = False
 
     def clone(self) -> "BatteryState":

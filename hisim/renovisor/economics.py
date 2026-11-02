@@ -15,12 +15,13 @@ Four things go into it, and each answers a question the run cannot:
   presence switches the engine from greenfield accounting (everything is bought new into an empty
   building) to brownfield accounting: kept equipment is not charged, replaced equipment adds its
   removal cost and its written-off book value, and an improvement that the building would partly
-  have paid for anyway is credited with that share (``cost_spec.md`` §4.1);
+  have paid for anyway is credited with that share (``roadmap/cost_spec.md`` §4.1);
 * **the envelope cost subjects** — one per envelope measure, sized in square metres of the element
   it covers. HiSim prices no envelope measure of its own here: the price comes from the request's
   ``cost`` block, written there by the frontend out of the contract's material table, and a
   measure that arrives without one is added to the plan **unpriced** rather than silently left
-  out, so the result says what it does not know. Beside them, every element the package keeps is
+  out, so the result says what it does not know; its embodied CO2 is as unknown as its price and
+  booked as zero, as a kept element's renewal is (hisim-hq4z). Beside them, every element the package keeps is
   a subject of its own, ``envelope_<element>``, which the engine renews like-for-like at the end
   of its service life: the do-nothing reference renews the fabric too (hisim-ryw1). Its renewals
   are unpriced -- no cost band reaches a kept element -- but their years are stated;
@@ -687,7 +688,8 @@ class MainSubjects:
 
     The tables travel to the staged command as plain rules
     (:class:`~hisim.economics.staged_record.MainSubjectRule`, :meth:`rules`) in every stage's
-    economics stage record, which applies them with the same code :meth:`resolve` does.
+    economics stage record, and the staged command resolves each quote with
+    :meth:`~hisim.economics.staged_record.MainSubjectRule.resolve`.
     """
 
     #: Measures whose main subject is the subject named by the measure id.
@@ -733,31 +735,6 @@ class MainSubjects:
             if rule is not None:
                 rules[measure_id] = rule
         return rules
-
-    @classmethod
-    def resolve(
-        cls, measure_id: str, stage: int, subjects: Mapping[str, Optional[ComponentType]]
-    ) -> Tuple[str, Tuple[str, ...]]:
-        """The main subject of one quoted measure in one stage, and the measure's other subjects.
-
-        Args:
-            measure_id: The quoted measure.
-            stage: The stage it is quoted for, for the message.
-            subjects: Every subject the translator stamped with the measure, among those the stage
-                has -> its asset class, or None for a subject the stage holds no cost facts for
-                (a measure-only subject).
-
-        Returns:
-            ``(main subject, the measure's other subjects in the stage, sorted)``.
-
-        Raises:
-            MainSubjectError: If the measure is in neither set of the table, or the stage's
-                subjects do not single out exactly one main subject.
-        """
-        rule = cls.rule_of(measure_id)
-        if rule is None:
-            raise MainSubjectRule.undeclared(measure_id, stage)
-        return rule.resolve(measure_id, stage, subjects)
 
 
 class EconomicsStageRecords:
@@ -1180,7 +1157,7 @@ class EconomicContextBuilder:
 
     #: The technical attribute the peak power of the photovoltaic array is published under. It is
     #: published as information for condition authors — a scheme that conditions on array size
-    #: can read it — and no shipped scheme reads it: since hisim-cyc.3 the Irish PV grant is
+    #: can read it — and no shipped scheme reads it: since hisim-economics-engine-cyc.3 the Irish PV grant is
     #: tiered on the cost facts' own size, which every array has. It is only published when the
     #: request pins the array's power, because an array sized as a share of the roof has no peak
     #: power until the simulation has run.
@@ -1189,10 +1166,12 @@ class EconomicContextBuilder:
     #: Watt per kilowatt, for the conversion into that attribute's unit.
     WATT_PER_KILOWATT: ClassVar[float] = 1000.0
 
-    #: The note an unpriced envelope subject carries into the mapping report.
+    #: The note an unpriced envelope subject carries into the mapping report. It covers the
+    #: carbon as well as the money: an unpriced measure books no embodied CO2 (hisim-hq4z).
     UNPRICED_NOTE: ClassVar[str] = (
         "no cost block on the measure, so the subject is in the economics with an investment of "
-        "zero and flagged unpriced; HiSim does not estimate envelope prices (decisions Q8/Q9)"
+        "zero and flagged unpriced; HiSim does not estimate envelope prices (decisions Q8/Q9); its "
+        "cost and embodied CO2 are unknown, not zero, and are left out of every total"
     )
 
     #: The note of every kept envelope element's subject (hisim-ryw1).
@@ -1251,11 +1230,14 @@ class EconomicContextBuilder:
         "TABULA row's area scaled to the conditioned floor area"
     )
 
-    #: What the build refuses with when a priced envelope subject's element has no area at all.
+    #: What the build refuses with when an envelope measure's element has no area at all, priced
+    #: or not (owner decision of 2026-10-18, hisim-nrg3): the house has none of the element, so a
+    #: measure on it is a wrong request, not something to book at a made-up size.
     ELEMENT_AREA_MESSAGE: ClassVar[str] = (
-        "the envelope measure '{measure_id}' carries a price per square metre, but its element "
-        "'{element}' has no area: the request states none and the Building's TABULA row gives it "
-        "an area of zero. Pricing it at no area would publish a price for nothing."
+        "the envelope measure '{measure_id}' acts on the element '{element}', but the house has "
+        "none of it: the request states no area for it (house.building.{element}.area_in_m2) and "
+        "the Building's TABULA row gives it an area of zero. A measure on an element the house "
+        "does not have is a wrong request: drop the measure, or state the element's area."
     )
 
     #: The note a stated applicant role carries.
@@ -1644,7 +1626,7 @@ class EconomicContextBuilder:
         that installs electric heating leaves a twin with no buffer and no emitters. Such an entry
         is *not* declared replaced by its own class -- nothing of that class is bought -- and its
         ``replaced_by_asset_classes`` stays empty, which the mapping report words as a removal. The
-        engine has no booking for a removal without a successor (``cost_spec.md`` §4.1 books the
+        engine has no booking for a removal without a successor (``roadmap/cost_spec.md`` §4.1 books the
         removal cost and the written-off book value only through the subject that replaces an
         asset, ``calculators/context_resolution.py``), so neither is counted, and the note says so
         rather than inventing a booking here (hisim-tqkn).
@@ -1812,9 +1794,10 @@ class EconomicContextBuilder:
         row of its investment build-up. Its size is the element's area as the ``Building``
         simulates it: the request's own when stated, the TABULA row's scaled one when not
         (:meth:`_element_area`). A measure without a price is still added — a measure the plan
-        carries out must appear in the economics — with the ``unpriced`` flag and an investment of
-        zero; a priced measure over an element of no area fails the translation, because pricing
-        per square metre without a square metre is not a smaller answer, it is a wrong one.
+        carries out must appear in the economics — with the ``unpriced`` flag, an investment of
+        zero and an embodied CO2 of zero (:meth:`_envelope_subject`). A measure over an element
+        of no area fails the translation, priced or not (hisim-nrg3): the house has none of the
+        element, so the measure is a wrong request, not a subject of some made-up size.
         """
         facts: List[SubjectCostFacts] = []
         for layer in self._applied.layers:
@@ -1862,8 +1845,10 @@ class EconomicContextBuilder:
         database has no entry for the class the engine's fallback, marked as such
         (``lifetime_is_engine_fallback``), so the row's due years are stated either way.
 
-        The size is the element's area (:meth:`_element_area`) in square metres, except for the
-        door, which the cost database lists per door (``per_unit: null``), so it is one door.
+        The size is the element's area (:meth:`_element_area`) in square metres, for the door as for
+        every other element: the cost database prices the class of each of the five elements per
+        square metre (``VENTILATION_SYSTEM``, priced per unit, is no element), which is the unit the
+        register row and the measure's own subject declare too.
 
         Each subject enters the report's ``subjects`` map with no measure (``None``), as every
         subject of the house as it was, so every unpriced subject is a named one and the result
@@ -1887,7 +1872,6 @@ class EconomicContextBuilder:
                 continue
             asset_class = EnvelopeAssets.of_element(element)
             subject = EnvelopeAssets.subject_of(element)
-            size, size_unit = (1.0, Units.ANY) if element is ThermalElement.DOOR else (float(area), Units.SQUARE_METER)
             has_life = database.has_device_entry(asset_class, country)
             note = self.KEPT_ELEMENT_UNPRICED_NOTE + (
                 "" if has_life else self.KEPT_ELEMENT_FALLBACK_LIFE_NOTE.format(
@@ -1905,8 +1889,8 @@ class EconomicContextBuilder:
                     subject=subject,
                     facts=ComponentCostFacts(
                         asset_class=asset_class,
-                        size=size,
-                        size_unit=size_unit,
+                        size=float(area),
+                        size_unit=Units.SQUARE_METER,
                         investment_cost_override_in_euro=zero,
                         installation_cost_override_in_euro=zero,
                         maintenance_rate_override=zero,
@@ -1965,20 +1949,46 @@ class EconomicContextBuilder:
     ) -> SubjectCostFacts:
         """One envelope measure as a cost subject, with its price or with the absence of one.
 
-        A priced subject is sized with the area the Building simulates (:meth:`_element_area`),
-        and its ``override_source`` says whether the request stated that area or the TABULA row
-        supplied it. A measure without a price stays unpriced whatever its area.
+        Every subject is sized with the area the Building simulates (:meth:`_element_area`), and a
+        priced one's ``override_source`` says whether the request stated that area or the TABULA
+        row supplied it. A measure without a price stays unpriced whatever its area.
+
+        **A measure on an element the house does not have is refused**, priced or not (owner
+        decision of 2026-10-18, hisim-nrg3). Example: a ``window_replacement`` on a TABULA row
+        without windows, with no window area in the request, fails the translation with
+        :attr:`ELEMENT_AREA_MESSAGE`. Such a measure used to be booked over a surrogate 1 m² when
+        it carried no price; that square metre of an element the house lacks was made up, and
+        the rule of the package is to fail loudly.
+
+        **An unpriced measure books no embodied CO2** (owner decision of 2026-10-15, hisim-hq4z).
+        Its carbon is treated like its money and like a kept element's renewal
+        (:meth:`_kept_element_facts`): unknown, booked as exactly zero, and named in
+        :attr:`UNPRICED_NOTE` -- never the cost database's per-m² estimate for the class. Example:
+        a ``door_replacement`` without a cost block on 2.7 m² of door books 0 kg, where the
+        database's 43.0 kg/m² would have booked 116.1 kg; the same door with a cost block books
+        the 116.1 kg. A priced measure sets no carbon override, so the engine takes the
+        database's figure over the area.
+
+        Args:
+            measure_id: The catalogue measure, which is also the subject's name.
+            element: The thermal element the measure acts on, for its area.
+            asset_class: The cost class the subject is priced and dated under.
+            result: The result being assembled, for the subject map, the unpriced flags and their
+                notes.
+
+        Returns:
+            The measure's cost subject.
 
         Raises:
-            TranslatorError: If the measure is priced and its element has no area at all -- the
+            TranslatorError: If the measure's element has no area at all, priced or not -- the
                 request states none and the Building's own area for it is zero.
         """
         area = self._element_area(element)
+        if area is None:
+            raise TranslatorError(self.ELEMENT_AREA_MESSAGE.format(measure_id=measure_id, element=element.value))
         price = self._measure_price(measure_id)
         result.subjects[measure_id] = measure_id
-        if price is not None and area is None:
-            raise TranslatorError(self.ELEMENT_AREA_MESSAGE.format(measure_id=measure_id, element=element.value))
-        if price is None or area is None:
+        if price is None:
             result.unpriced_subjects.append(measure_id)
             result.subject_notes[measure_id] = self.UNPRICED_NOTE
             unpriced = True
@@ -1995,7 +2005,7 @@ class EconomicContextBuilder:
             subject=measure_id,
             facts=ComponentCostFacts(
                 asset_class=asset_class,
-                size=float(area) if area else 1.0,
+                size=float(area),
                 size_unit=Units.SQUARE_METER,
                 investment_cost_override_in_euro=investment,
                 installation_cost_override_in_euro=UncertainValue.exact(0.0),
@@ -2004,6 +2014,8 @@ class EconomicContextBuilder:
                     if unpriced
                     else f"the request's measures[{measure_id}].cost block, over {self._area_origin(element)}"
                 ),
+                # Unknown, like the money: never the cost database's estimate (hisim-hq4z).
+                embodied_co2_override_in_kg=0.0 if unpriced else None,
                 # The zero is a placeholder: a fixed-amount grant is not capped at it (#77).
                 price_is_unknown=unpriced,
             ),

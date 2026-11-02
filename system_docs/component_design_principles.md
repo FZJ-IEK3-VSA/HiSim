@@ -6,7 +6,11 @@ them, and a component that breaks one gets a bead. Agreed with the owner on 2026
 
 ## A. Component kinds
 
-Every component is exactly one of four kinds; controllers come in two levels.
+Every component is exactly one of four kinds; controllers come in two levels. A component class states its kind
+by inheriting the one matching base class from `hisim/component.py`: `DataSourceComponent`, `PhysicsComponent`,
+`L1ControllerComponent`, `L2ControllerComponent` or `MeterComponent` (for example
+`class ElectricityMeter(DynamicComponent, MeterComponent)`). The class is the declaration; the simulator refuses a
+component whose class inherits none or more than one.
 
 | Kind | Examples | Reads | Sends | Decides |
 |---|---|---|---|---|
@@ -14,7 +18,7 @@ Every component is exactly one of four kinds; controllers come in two levels.
 | Physics | heat pump, boiler, storage tank, building, heat distribution, PV, battery | data sources, port quantities of the physics it is connected to, commands of its L1 controller | port quantities to the physics it is connected to; sensor values | nothing; it only enforces its own physical and safety limits, including minimum run and idle times (device protection) |
 | L1 controller | heat pump controller, boiler controller, heat distribution controller | data sources, sensor values of physics, signals of L2 controllers | commands to exactly one device | on/off, mode, set point and run fraction of its device |
 | L2 controller | energy management system, PtX energy management, heating curve | anything except meters | incentive signals to L1 controllers, never to a device | coordination between devices: priorities, prices, set-point shifts |
-| Meter | electricity, gas, heat and fuel meters | port quantities of physics | reports for KPIs and post-processing; nothing in the simulation reads a meter | nothing; it never acts on what it reads |
+| Meter | electricity, gas, heat and fuel meters | port quantities of physics | reports for KPIs and post-processing; nothing in the simulation reads a meter, except the listed exceptions of bead hisim-repo-cleanup-o6a.22 | nothing; it never acts on what it reads |
 
 - A data source does not react to the simulation: its outputs for a step are the same in every iteration.
 - A command to a device comes only from an L1 controller, and every device has exactly one L1 controller, which
@@ -25,8 +29,19 @@ Every component is exactly one of four kinds; controllers come in two levels.
   controller, never from one L1 controller to another.
 - Minimum run and idle times protect the device, so physics enforces them, like a maximum temperature. A
   controller may hold stricter times of its own.
-- Nothing in the simulation reads a meter. A controller that needs a balance, such as the energy manager's grid
-  balance, sums the physics ports itself; the meter sums them independently for the bill.
+- Nothing in the simulation reads a meter, except the listed exceptions of bead hisim-repo-cleanup-o6a.22 (for example
+  `GenericHeatPumpController` reading `ElectricityMeter.ElectricityAvailable`, hisim-gpim). A controller that needs
+  a balance, such as the energy manager's grid balance, sums the physics ports itself; the meter sums them
+  independently for the bill.
+- The simulator evaluates a pass kind by kind: data sources, L2 controllers, L1 controllers, physics, meters
+  (`Simulator.EVALUATION_ORDER_OF_KINDS`). Within one kind the components keep the order they were added in, except
+  that an L2 controller goes after the L2 controllers it reads, and every device an L1 controller commands goes
+  before the other physics that controller reads (`hisim/evaluation_order.py`). Components that require one another
+  first in a cycle are placed as one block, in the order added, where the first of them would go, and the simulator
+  warns of the cycle; so an ordering rule is broken only between the members of a cycle. An L2 signal read by
+  another L2 controller, such as the energy manager's raise the heating curve applies, thus reaches the reader in
+  the same pass; a command reaches its device in the same pass, and the device's answer reaches the controller in the
+  next pass together with the answer of the store it charges.
 
 ## B. Principles
 
@@ -63,3 +78,64 @@ Every component is exactly one of four kinds; controllers come in two levels.
     are next touched.
 11. **A component's KPIs come from its own outputs and its own configuration.** A KPI does not re-derive another
     component's physics or repeat its constants; it reads that component's outputs or KPIs instead.
+
+## C. Subcomponents
+
+A **subcomponent** is a plain class that models part of a device's behaviour: a burner's modulation band, a
+boiler's circulation pump, a collector's efficiency curve, an emitter's design point. Agreed with the owner on
+2026-10-23 (bead hisim-repo-cleanup-o6a.28).
+
+- **Used inside a component.** A component builds its subcomponents from its own configuration and calls them in
+  its own code, in `i_simulate` and its helpers. A subcomponent has no ports and no lifecycle, and the simulator
+  never sees it, so it costs no convergence pass. It is tested alone, without building a simulation.
+- **Hierarchy: assembly -> component -> subcomponent.** An assembly wires components, a component owns its
+  subcomponents. A subcomponent never holds or calls a component.
+- **Classes are shared, instances are not.** Any component may use a subcomponent class: one pump class
+  (`FixedLiftPump`) serves the solar collector and district heating's hot water. Each component
+  builds its own instances; an instance is never reachable from two components. Two components that must agree on
+  a value do so through the same configuration value, a sizing rule or a port, never through a shared object.
+- **Marked.** Every subcomponent class inherits `hisim.subcomponents.base.Subcomponent`, a marker without behaviour.
+  `tests/subcomponents/` checks that no subcomponent is also a component and that no instance is shared.
+- **Location.** A subcomponent used by two or more components lives in the package `hisim/subcomponents/`. One
+  used by a single component stays in that component's module and moves into the package when a second user
+  appears. `hisim/hydronics.py` stays where it is: plain physics functions and constants that subcomponents use.
+- **Imports.** A module in `hisim/subcomponents/` imports only the standard library, numpy, `hisim.config`,
+  `hisim.hydronics`, `hisim.loadtypes`, `hisim.units` and other subcomponent modules; never `hisim.component`,
+  `hisim.components`, the simulator, post-processing, `hisim.energy_system` or `hisim.renovisor`.
+  `tests/test_subcomponent_import_lint.py` checks it.
+- **Not a sizing law.** A sizing law (`hisim/config/laws.py`: `SizingLaw`, the `*_LAW` constants) says how a
+  configuration value follows from the surrounding system before the run. It is a different concept and keeps its
+  name.
+- **Not every helper class is a subcomponent.** Per-step results (`BoilerFiring`, `PumpOperatingPoint`,
+  `HplibResult`), state records (`HotWaterPriorityTimer`, `HeatPumpRunTimers`), cache keys and input bundles
+  (`PvSeriesInputs`), channel groups (`BoilerCircuitChannels`) and infrastructure (`PylpgWorkspace`) are not.
+
+### Interface
+
+- **Plain values in.** Arguments are plain values, keyword-only, with their units in their names
+  (`heat_power_in_watt=...`). No `SingleTimeStepValues`, no `ComponentInput` or `ComponentOutput`, no simulation
+  parameters object: the component reads its inputs and passes the values.
+- **Built once, checked when built.** A component builds its subcomponents once, through their constructors or a
+  classmethod that holds a sizing formula, from values it got from its configuration or a sizing rule
+  (`ControllerLiftPump.sized_for(...)`). `__post_init__` refuses an invalid setting, so a bad subcomponent fails when
+  its component is built, not in the first step.
+- **One class per law.** Interchangeable laws of one part are one class each, with only their own fields and a
+  method that takes exactly the values that law reads (a strategy, `coding_style.md` §3): the pumps
+  `ConstantFlowPump`, `FixedLiftPump`, `ControllerLiftPump` and `TargetSupplyTemperaturePump`. Not one class with a
+  mode Enum, fields that only some modes read and a branch over the mode in every call. Agreed with the owner on
+  2026-10-25.
+- **Stateless.** A subcomponent holds no state across steps. State that changes from step to step stays in the
+  component's state dataclass, and the component passes it in.
+
+### Performance
+
+A subcomponent is called in every pass of every step, so its result objects are part of the hot path. Measured on
+2026-10-23 with Python 3.12, the cost per call of returning a three-field result on top of a pump-sized law of
+179 ns: a tuple +28 ns, a slots dataclass +110 ns, a `NamedTuple` +152 ns, a frozen dataclass +271 ns, a frozen
+dataclass built with keywords +361 ns (its `__init__` goes through `object.__setattr__`). Hence:
+
+1. **Instances are frozen dataclasses.** They are built once, so their construction cost does not matter.
+2. **Per-call results in the hot path are `NamedTuple`s**: immutable, named and typed, at about half the cost of a
+   frozen dataclass. A single value is returned as a plain float, its unit in the method name
+   (`lift_in_kelvin(...)`).
+3. **No frozen dataclass is constructed per call in an `i_simulate` path** (`coding_style.md`, §2 rule 12).

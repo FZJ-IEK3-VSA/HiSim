@@ -1,9 +1,9 @@
-"""Data-driven subsidy engine (cost_spec.md §5).
+"""Data-driven subsidy engine.
 
 Schemes live in ``hisim/subsidy_catalog/<COUNTRY>.json``. Eligibility conditions are a small data-only predicate
 language over a typed applicant and building context; an unanswered question makes a scheme UNDETERMINED rather than
-ineligible (§5.7). The cumulation solver picks the admissible scheme combination with the highest best-estimate value
-and values it in all three band slots (§5.4). The package returns abstract awards (`SubsidyDecision`);
+ineligible. The cumulation solver picks the admissible scheme combination with the highest best-estimate value
+and values it in all three band slots. The package returns abstract awards (`SubsidyDecision`);
 `calculators/subsidy_application.py` turns them into timeline entries.
 
 ``context`` holds the applicant and building facts, ``catalog`` the scheme data and its loader, ``assessment`` the

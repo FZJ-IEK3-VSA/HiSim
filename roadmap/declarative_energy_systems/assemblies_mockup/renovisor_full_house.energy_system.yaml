@@ -144,7 +144,7 @@ imports:
                                                     # wood_chip_boiler, log_boiler (biomass), air_source_heat_pump,
                                                     # ground_source_heat_pump, hybrid_heat_pump (†, an explicit assembly
                                                     # with both generators as members: no nesting in v1, D26),
-                                                    # electric_heating, district_heating, solid_fuel_boiler (†, hisim-vsq0.2)
+                                                    # electric_heating, district_heating, solid_fuel_boiler (†, hisim-renovisor-not-modelled-vsq0.2)
                                                     # heating/air_source_heat_pump_direct is the heat pump without
                                                     # a buffer (D25), † until hydronic stage D
     installation_year: 2012                         # R: heating.installation_year (reserved field, economics)

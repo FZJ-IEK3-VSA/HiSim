@@ -98,6 +98,42 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
 
 
 @pytest.mark.assemblies
+def test_a_constraint_is_read_with_its_kind() -> None:
+    """Catches the constraint list losing its kinds: both are read, in written order, each with its parameters."""
+    text = MINIMAL + "constraints: [{all_or_none_of: [a, b]}, {exactly_one_of: [c, d]}]\n"
+    model, _lines = AssemblyReader.read_text(text, "test/minimal.assembly.yaml")
+    jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+    assert [constraint.text for constraint in model.constraints] == ["all_or_none_of [a, b]", "exactly_one_of [c, d]"]
+    assert model.all_or_none_of == (("a", "b"),) and model.exactly_one_of == (("c", "d"),)
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        ("{all_or_none_of: [a, b], exactly_one_of: [c, d]}", "exactly one of the keys"),
+        ("{all_or_none_of: [a]}", "two or more parameters"),
+        ("{all_or_none_of: a}", "two or more parameters"),
+        ("{all_or_none_of: [a, a]}", "each named once"),
+        ("{exactly_one_of: [a, b, a]}", "each named once"),
+    ],
+)
+def test_a_malformed_all_or_none_of_is_refused(block: str, expected: str) -> None:
+    """Catches one item carrying two constraints, or a constraint naming fewer than two parameters or one twice.
+
+    ``[a, a]`` would be an all_or_none_of that never fires: its one member is always all stated or none.
+
+    The reader refuses each, and the schema an editor validates against does too.
+    """
+    text = MINIMAL + f"constraints: [{block}]\n"
+    with pytest.raises(EnergySystemFormatError) as refusal:
+        read_assembly(text)
+    assert expected in str(refusal.value)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+
+
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
@@ -139,6 +175,28 @@ def test_a_port_both_optional_and_required_when_is_refused() -> None:
         read_assembly(MINIMAL + "interface:\n  needs:\n" + port)
     for name in ("weather", "optional: true", "required_when", "active_when"):
         assert name in str(refusal.value)
+
+
+@pytest.mark.assemblies
+def test_an_electricity_need_may_name_no_consuming_outputs_a_fuel_need_must() -> None:
+    """Electricity has no link, so its need may name no outputs (D32); a fuel's need still names the feeds it lands.
+
+    Catches the relaxation reaching the fuels, whose consumers' feeds land in the meter, and the reader and the
+    schema an editor validates against disagreeing on either case.
+    """
+    electricity = MINIMAL + "interface:\n  needs:\n    grid: {carrier: electricity, optional: true}\n"
+    read_assembly(electricity)
+    jsonschema.validate(yaml.safe_load(electricity), AssemblySchemaBuilder().build())
+    model, _ = AssemblyReader.read_text(electricity, "test/minimal.assembly.yaml")
+    assert model.ports["grid"].kind == PortKind.CARRIER and model.ports["grid"].outputs == ()
+
+    gas = MINIMAL + "interface:\n  needs:\n    fuel: {carrier: natural_gas}\n"
+    with pytest.raises(EnergySystemFormatError, match="EF-07") as refusal:
+        read_assembly(gas)
+    assert "interface.needs.fuel.outputs" in str(refusal.value)
+    assert "a non-empty list of consuming outputs" in str(refusal.value)
+    with pytest.raises(jsonschema.ValidationError, match="'outputs' is a required property"):
+        jsonschema.validate(yaml.safe_load(gas), AssemblySchemaBuilder().build())
 
 
 @pytest.mark.assemblies

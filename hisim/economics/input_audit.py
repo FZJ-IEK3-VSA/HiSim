@@ -1,4 +1,4 @@
-"""The resolved-input audit as data: which price each declared fact resolved to, from where (cost_spec.md §2.4, §9.5).
+"""The resolved-input audit as data: which price each declared fact resolved to, from where.
 
 Both `cost_audit.csv` (written by `audit.py`) and the input section of the HTML report render these types, so they
 agree on override precedence. A wrong unit price makes everything downstream wrong yet arithmetically correct, so this
@@ -34,7 +34,7 @@ class OriginKind(str, Enum):
 
 @dataclass(frozen=True)
 class ResolvedInputRow:
-    """One declared cost subject with everything resolving it produced (§9.5).
+    """One declared cost subject with everything resolving it produced.
 
     It carries the chain from declaration to money: what was declared (subject, asset class, size and unit), how it was
     priced (origin, override source, database entry, sources, unit price, lifetime) and what that produced (gross
@@ -170,7 +170,7 @@ class InputAuditReport:
 
     price_basis_year: int
     rows: List[ResolvedInputRow] = field(default_factory=list)
-    #: The §3.10 registry entries this evaluation cited, sorted by id — from the cost database's
+    #: The registry entries this evaluation cited, sorted by id — from the cost database's
     #: registry and, through the result's ledger, the subsidy catalog's.
     sources: List[ResolvedSource] = field(default_factory=list)
 

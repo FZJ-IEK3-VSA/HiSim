@@ -12,7 +12,7 @@ import pydot
 
 from hisim import log
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
+from hisim.loadtypes import OutputAggregation, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 
@@ -37,6 +37,17 @@ def _cumulative_unit_for_sum(unit: Units) -> str:
     if text.endswith(suffix):
         return text[: -len(suffix)]
     return text
+
+
+class GraphvizRenderError(RuntimeError):
+    """Graphviz's ``dot`` ran and failed to render a network chart.
+
+    Raised by :meth:`SystemChart.render_png` when ``dot`` exits with a non-zero code; the message
+    carries what ``dot`` printed on stderr. Example: a graph with a malformed attribute makes ``dot``
+    exit with code 1 and "syntax error in line 3". Why a class of its own: ``make_graphviz_chart``
+    catches exactly this failure and a missing ``dot``, so that any other ``RuntimeError`` (such as a
+    ``NotImplementedError`` or a ``RecursionError`` in the chart code) still reaches the caller.
+    """
 
 
 class _ChartSpecRequired(TypedDict):
@@ -74,40 +85,57 @@ class SystemChart:
         without edge labels (with and without class names), with edge labels,
         and with edge labels plus cumulative result values. Each successfully
         generated chart is appended to the returned list; failed charts are
-        skipped.
+        skipped. The variant with result values reads the sums and means over
+        the run from ``results_cumulative``, which the simulator computes
+        whenever ``MAKE_NETWORK_CHARTS`` is set.
 
         Returns:
             A list of :class:`SystemChartEntry` objects, one per successfully
             generated chart variant.
+
+        Raises:
+            ValueError: When ``results_cumulative`` is None, which no run with
+                ``MAKE_NETWORK_CHARTS`` produces; the result variant could not
+                be labelled.
         """
-        fig_format = self.ppdt.simulation_parameters.figure_format
+        fig_format = self.ppdt.simulation_parameters.figure_format.value
         chart_specs: list[_ChartSpec] = [
             {
                 "with_labels": False,
                 "with_class_names": True,
                 "filename": f"System_no_Edge_with_class_labels{fig_format}",
-                "caption": "System Chart of all components",
+                "caption": "System chart: every component with its class.",
             },
             {
                 "with_labels": False,
                 "with_class_names": False,
                 "filename": f"System_no_Edge_labels{fig_format}",
-                "caption": "System Chart of all components and all outputs.",
+                "caption": "System chart: every component and its connections.",
             },
             {
                 "with_labels": True,
                 "with_class_names": False,
                 "filename": f"System_with_Edge_labels{fig_format}",
-                "caption": "System Chart with labels on all edges.",
+                "caption": "System chart: every connection labelled with its output, input and unit.",
             },
             {
                 "with_labels": True,
                 "with_class_names": False,
                 "filename": f"System_with_Edge_labels_and_results{fig_format}",
-                "caption": "System Chart with labels and cumulative result values on all edges.",
+                "caption": (
+                    "System chart: every connection labelled with its output, input and unit, "
+                    "and the output's sum, mean or final value over the run where it has one."
+                ),
                 "with_results": True,
             },
         ]
+        if self.ppdt.results_cumulative is None:
+            # Checked here, so that the result variant does not fail inside Graphviz's guarded call and get
+            # logged as if Graphviz were missing.
+            raise ValueError(
+                "The network charts need the sums and means over the run (results_cumulative), which the "
+                "simulator computes whenever MAKE_NETWORK_CHARTS is set; this data transfer object has none."
+            )
         files: List[SystemChartEntry] = []
         for spec in chart_specs:
             entry = self.make_graphviz_chart(**spec)
@@ -143,26 +171,31 @@ class SystemChart:
 
         Returns:
             A :class:`SystemChartEntry` for the generated chart, or ``None`` if
-            chart generation failed (e.g., Graphviz is not installed on the
-            system). Failures are logged and swallowed rather than raised.
+            Graphviz could not draw it: ``dot`` is not on ``PATH``
+            (``FileNotFoundError``) or ``dot`` failed (:class:`GraphvizRenderError`).
+            Those two failures are logged and the run goes on without the chart,
+            since Graphviz is an optional system program.
+
+        Raises:
+            Exception: Any other error, from building the graph or from the
+                rendering, reaches the caller unchanged: it is a bug in the chart
+                code, not a missing Graphviz.
         """
-
-        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
-
+        graph = self._build_graph(
+            with_labels=with_labels,
+            with_class_names=with_class_names,
+            with_results=with_results,
+        )
+        fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
         try:
-            graph = self._build_graph(
-                with_labels=with_labels,
-                with_class_names=with_class_names,
-                with_results=with_results,
-            )
-            fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
             self.render_png(graph, fullpath)
-        except Exception as exc:  # noqa
-            log.error(
-                f"Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: {exc}"
-            )
-            system_chart_entry = None
-        return system_chart_entry
+        except FileNotFoundError as exc:
+            log.error(f"Failed to generate network chart {filename}: Graphviz is not installed. {exc}")
+            return None
+        except GraphvizRenderError as exc:
+            log.error(f"Failed to generate network chart {filename}: {exc}")
+            return None
+        return SystemChartEntry(filename, caption)
 
     @staticmethod
     def render_png(graph: pydot.Dot, fullpath: Path) -> None:
@@ -182,7 +215,7 @@ class SystemChart:
 
         Raises:
             FileNotFoundError: When Graphviz's ``dot`` is not on ``PATH``.
-            RuntimeError: When ``dot`` fails; the message carries what it printed on stderr.
+            GraphvizRenderError: When ``dot`` fails; the message carries what it printed on stderr.
         """
         dot_executable = shutil.which("dot")
         if dot_executable is None:
@@ -195,7 +228,7 @@ class SystemChart:
         )
         if completed.returncode != 0:
             stderr = completed.stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(
+            raise GraphvizRenderError(
                 f"Graphviz's dot failed with exit code {completed.returncode} writing '{fullpath}': {stderr}"
             )
 
@@ -221,11 +254,12 @@ class SystemChart:
         and unit, with the ``°C`` unit replaced by its HTML entity
         (``&#8451;``). When ``with_results`` is set, the cumulative result
         value for the connected output is appended to the label, annotated
-        with its own derived unit and the aggregation kind (``mean`` or
-        ``sum``) so that the number is not mistaken for the input field's
-        instantaneous value: a mean keeps the source output's unit, while a
-        sum is a cumulative total (e.g. ``"kWh per timestep"`` sums to
-        ``"kWh"``).
+        with its own derived unit and the output's declared aggregation
+        (``mean``, ``sum`` or ``last``; an output declared ``none`` gets no
+        value) so that the number is not mistaken for the input field's
+        instantaneous value: a mean or a last value keeps the source output's
+        unit, while a sum is a cumulative total (e.g. ``"kWh per timestep"``
+        sums to ``"kWh"``).
 
         Args:
             with_labels: If True, edges carry the constructed label text;
@@ -318,31 +352,26 @@ class SystemChart:
     ) -> Optional[str]:
         """Build the cumulative result ``": value unit (kind)"`` suffix for an edge.
 
-        Looks up the cumulative result value for ``source_output`` in
-        ``self.ppdt.results_cumulative``, determines whether the value is a
-        *mean* (for rate-like units such as W, °C) or a *sum* (for extensive
-        units such as Wh, L, kg, Euro) of the source output over all timesteps,
-        derives the unit to display next to the aggregated value, and returns
-        the annotation suffix.
-
-        A mean keeps the source output's unit, but a sum is a cumulative total
-        whose unit may differ from the input field's unit (e.g.
-        ``"kWh per timestep"`` sums to ``"kWh"``). The ``"in <unit>"`` clause of
-        the edge label describes the input field, not this aggregated value, so
-        the value is annotated with its own derived unit and the aggregation
-        kind (mean/sum) to avoid a unit-label mismatch.
+        Looks up the run value of ``source_output`` in ``self.ppdt.results_cumulative``. How that
+        value was formed is the output's declared aggregation
+        (:class:`~hisim.loadtypes.OutputAggregation`): a *mean* (a power in W, a temperature)
+        and a *last* value (a running total at the end of the run) keep the output's unit, a
+        *sum* (an energy per time step in Wh, a volume, a cost) is a total whose unit may differ
+        from the input field's unit (``"kWh per timestep"`` sums to ``"kWh"``). The ``"in <unit>"``
+        clause of the edge label describes the input field, not this value, so the value is
+        annotated with its own unit and the aggregation kind. Example: ``": 1234.5 Wh (sum)"``.
 
         Args:
-            source_output: The :class:`ComponentOutput` whose cumulative result
-                is annotated. ``None`` (or any non-:class:`ComponentOutput`)
-                yields no annotation.
+            source_output: The :class:`ComponentOutput` whose run value is annotated. ``None``
+                (or any non-:class:`ComponentOutput`) yields no annotation.
 
         Returns:
-            The ``": <value> <unit> (<kind>)"`` suffix, or ``None`` when
-            ``source_output`` is not a :class:`ComponentOutput` and there is no
-            cumulative value to annotate.
+            The ``": <value> <unit> (<kind>)"`` suffix, or ``None`` when ``source_output`` is not
+            a :class:`ComponentOutput` or declares the aggregation ``NONE`` and so has no run value.
         """
         if not isinstance(source_output, ComponentOutput):
+            return None
+        if source_output.aggregation == OutputAggregation.NONE:
             return None
         assert self.ppdt.results_cumulative is not None
         # The unit is runtime-determined from source_output.unit and tracked
@@ -351,13 +380,11 @@ class SystemChart:
             0, source_output.get_pretty_name()
         ]
         output_unit = source_output.unit
-        if output_unit in UNITS_USING_MEAN_AGGREGATION:
-            cumulative_unit = output_unit.value
-            aggregation_kind = "mean"
-        else:
+        if source_output.aggregation == OutputAggregation.SUM:
             cumulative_unit = _cumulative_unit_for_sum(output_unit)
-            aggregation_kind = "sum"
+        else:
+            cumulative_unit = output_unit.value
         return (
             f": {round(output_cumulative_result_value, 3)} {cumulative_unit}"
-            f" ({aggregation_kind})"
+            f" ({source_output.aggregation.value})"
         )

@@ -14,5 +14,5 @@
   "source_ids": [
     "src_ai_estimates"
   ],
-  "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Per-asset-class table deliberately empty (cost_spec.md Q2)."
+  "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Per-asset-class table deliberately empty (roadmap/cost_spec.md Q2)."
 }

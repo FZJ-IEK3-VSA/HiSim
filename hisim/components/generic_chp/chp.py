@@ -125,7 +125,7 @@ class GenericCHPState:
         return GenericCHPState(state=self.state)
 
 
-class SimpleCHP(cp.Component):
+class SimpleCHP(cp.PhysicsComponent):
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
     Components to connect to:

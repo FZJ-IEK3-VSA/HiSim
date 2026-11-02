@@ -414,7 +414,7 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     description = describe_config(GenericBoilerConfig)
     assert description.config_class_name == "GenericBoilerConfig"
     field_names = {field.name for field in description.fields}
-    assert {"component_id", "energy_carrier", "eff_th_min"} <= field_names
+    assert {"component_id", "energy_carrier", "seasonal_efficiency"} <= field_names
     assert {field.name for field in description.fields if field.sizable} == {
         "minimal_thermal_power_in_watt",
         "maximal_thermal_power_in_watt",

@@ -4,12 +4,12 @@ The mock library and the real one, ``energy_systems/assemblies/``, by default; `
 --assembly-library DIR`` runs another one instead, with the test partners of its
 ``test_partners.yaml``. Each assembly gets its library check, and each of its samples one
 isolation run (one day at 900 s, the energy balance and ``i_doublecheck`` on) that one test per
-check kind reads: the run, the energy balance, finiteness, the member contract, every
-applicable ``bounds`` entry, and ``expect`` at the defaults. Every ``monotone`` entry sweeps its
-parameter from the samples admitting a sweep, once per distinct point set
-(:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
+check kind reads: the run, the energy balance, finiteness, the member contract, the heat delivered
+to what it heats, every applicable ``bounds`` entry, and ``expect`` and the heated room at the
+defaults. Every ``monotone`` entry sweeps its parameter from the samples admitting a sweep, once
+per distinct point set (:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
 samples run under the ``assemblies`` marker (the PR gate's job ``pytest (assemblies)``), the Latin
-hypercube under ``nightly`` (the golden-year workflow), sized and seeded by ``--samples`` and
+hypercube under ``nightly`` (the daily workflow ``assemblies-nightly.yml``), sized and seeded by ``--samples`` and
 ``--seed``. A failure reads ``pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in
 [-100, 33000]: …``.
 
@@ -17,7 +17,9 @@ A sample's run is made once by the module's run cache, which keeps the run of on
 time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each other, and the
 run of a sample (its frames and its directory) is released when the next sample's run is made.
 Under ``xdist`` every sample is one ``xdist_group``, so ``--dist loadgroup`` keeps its tests on one
-worker.
+worker; every monotone sweep and every library check is a group of its own too, so the PR tier (``pytest
+(assemblies)``, ``--dist loadgroup``) spreads the module's tests over all four workers, each worker making
+only the runs of the samples it was given.
 
 A sample a member's component refuses at construction (``ConfigurationRefusedError``, such as a heat
 pump's W55 SCOP above its W35 SCOP) is handled, not failed: its tests are skipped, naming the
@@ -131,7 +133,10 @@ class ContractLibrary:
                         pytest.param(
                             Sweep(self.directory, path, declaration, base),
                             id=f"{path}:{base.sample_id}:monotone[{index}]",
-                            marks=pytest.mark.nightly if base.nightly else pytest.mark.assemblies,
+                            marks=[
+                                pytest.mark.nightly if base.nightly else pytest.mark.assemblies,
+                                pytest.mark.xdist_group(f"{path}:{base.sample_id}:monotone{index}"),
+                            ],
                         )
                     )
 
@@ -183,7 +188,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize(
             "library, assembly_path",
             [
-                pytest.param(library.directory, path, id=path, marks=pytest.mark.assemblies)
+                pytest.param(
+                    library.directory,
+                    path,
+                    id=path,
+                    marks=[pytest.mark.assemblies, pytest.mark.xdist_group(f"{path}:library_check")],
+                )
                 for library in libraries
                 for path in library.paths
             ],
@@ -196,7 +206,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             "case, declaration", [item for library in libraries for item in library.declarations(kind)]
         )
     elif "case" in metafunc.fixturenames:
-        metafunc.parametrize("case", [case.param() for library in libraries for case in library.cases])
+        cases = [case for library in libraries for case in library.cases]
+        if metafunc.function.__name__ == "test_room_heated":
+            # Only the defaults size the members for the house; a sample at the bottom of a power range does not.
+            cases = [case for case in cases if case.sample.origins[0] == "defaults"]
+        metafunc.parametrize("case", [case.param() for case in cases])
 
 
 class RunCache:
@@ -268,6 +282,16 @@ def test_member_contract(case: Case, runs: RunCache, request: pytest.FixtureRequ
     tests = library_of(request.config, case.library).assembly(case.assembly).model.tests
     assert tests is not None
     checks.check_member_contract(runs.get(case), tests)
+
+
+def test_heat_delivered(case: Case, runs: RunCache) -> None:
+    """No heat input a component of the system serves is left unconnected: the heat the system makes arrives."""
+    checks.check_heat_delivered(runs.get(case))
+
+
+def test_room_heated(case: Case, runs: RunCache) -> None:
+    """At the defaults, a heated building's room air averages within 1 K of its set heating temperature."""
+    checks.check_room_heated(runs.get(case))
 
 
 def test_bounds(case: Case, declaration: BoundsDeclaration, runs: RunCache) -> None:

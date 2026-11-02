@@ -6,7 +6,7 @@ person has checked it yet, so two different things are asserted here and both ma
 needing examination, and every context field it conditions on has a question a user can answer in
 both shipped languages — a placeholder nobody can see is worse than no placeholder at all. And
 the **behaviour**: the amounts the solver actually awards for the cases the pages state outright,
-including the pro-rata solar PV grant (one TIERED_PER_UNIT scheme since hisim-cyc.3, exact at
+including the pro-rata solar PV grant (one TIERED_PER_UNIT scheme since hisim-economics-engine-cyc.3, exact at
 every size) and the one pair of grants that shares an asset class and must never both fire
 (cavity fill versus internal dry lining).
 
@@ -338,7 +338,7 @@ class TestTheAmountsThePagesState:
         [(1.0, 700.0), (2.0, 1400.0), (2.5, 1500.0), (3.0, 1600.0), (4.0, 1800.0), (6.0, 1800.0)],
     )
     def test_the_solar_pv_grant_is_paid_pro_rata(self, peak_power_in_kwp: float, expected_in_euro: float) -> None:
-        """700 EUR/kWp to 2 kWp, 200 EUR/kWp to 4 kWp, at most 1,800 EUR (hisim-cyc.3).
+        """700 EUR/kWp to 2 kWp, 200 EUR/kWp to 4 kWp, at most 1,800 EUR (hisim-economics-engine-cyc.3).
 
         2.5 kWp -> 1,500 EUR is the example SEAI's own page gives; the four steps this scheme
         replaced paid 1,400 EUR there. The size is the cost facts' own, so the grant needs no

@@ -12,7 +12,7 @@ from typing import ClassVar
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import PhysicsComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -59,7 +59,7 @@ class ExampleTransformerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class ExampleTransformer(Component):
+class ExampleTransformer(PhysicsComponent):
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.

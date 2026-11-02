@@ -1,8 +1,8 @@
-"""Cost database: loads and validates the versioned cost data files (cost_spec.md §3.5, §3.10).
+"""Cost database: loads and validates the versioned cost data files.
 
 Reads ``devices_<COUNTRY>.json``, ``energy_prices_<COUNTRY>.json``, ``co2_price_paths.json``,
 ``escalation_defaults_<COUNTRY>.json`` and ``sources.json`` from ``hisim/cost_database/``. Every entry must cite at
-least one source in ``sources.json`` (§9.6). A lookup for year Y returns the entry with the greatest `valid_from_year`
+least one source in ``sources.json``. A lookup for year Y returns the entry with the greatest `valid_from_year`
 (devices) or `year` (prices) not exceeding Y, so repricing means adding a row, never editing one. Bad data raises
 `CostDataError`. Tariffs and the subsidy catalog have their own modules.
 """
@@ -23,6 +23,7 @@ from hisim.economics.catalog_entries import (
     EnergyContent,
     EnergyPriceEntry,
     EscalationDefaults,
+    FeedInKind,
     ResolvedDeviceEntry,
     ResolvedPriceEntry,
     _band,
@@ -83,13 +84,50 @@ def _energy_carrier_from_name(name: Any, context: str) -> EnergyCarrier:
     raise CostDataError(f"{context}: unknown carrier {name!r} (known carriers: {known}).")
 
 
+def _feed_in_kind_of_row(item: Dict[str, Any], carrier: EnergyCarrier, context: str) -> FeedInKind:
+    """Return the remuneration structure an energy price row declares, FIXED_TARIFF when it declares none.
+
+    Example: Ireland's `ELECTRICITY_FEED_IN` row states `"feed_in_kind": "MARKET_LINKED"` (the Clean Export
+    Guarantee), Germany's states nothing and is an EEG fixed tariff. Only the two kinds that pay a flat rate per kWh
+    can be declared by a price row; a spot-referenced remuneration needs a tariff contract with its spot series.
+
+    Args:
+        item: The raw JSON object of the row.
+        carrier: The row's carrier, already resolved.
+        context: The `file:carrier@year` location string, quoted in the error.
+
+    Returns:
+        The declared kind, or FIXED_TARIFF.
+
+    Raises:
+        CostDataError: If a row of another carrier than ELECTRICITY_FEED_IN states a kind, or the kind is not one a
+            price row can declare.
+    """
+    raw = item.get("feed_in_kind")
+    if raw is None:
+        return FeedInKind.FIXED_TARIFF
+    if carrier != EnergyCarrier.ELECTRICITY_FEED_IN:
+        raise CostDataError(
+            f"{context}: feed_in_kind is stated on a {carrier.value} row; only an ELECTRICITY_FEED_IN row is paid "
+            "for exported electricity."
+        )
+    admissible = [kind for kind in FeedInKind if kind.pays_rate_per_kwh]
+    for kind in admissible:
+        if raw == kind.value:
+            return kind
+    raise CostDataError(
+        f"{context}: feed_in_kind {raw!r} is not one a price row can declare "
+        f"({', '.join(kind.value for kind in admissible)}); a spot-referenced remuneration needs a tariff contract."
+    )
+
+
 class CostDatabase:
     """All cost data files of one directory, loaded and validated.
 
     One instance is one dataset. Countries are discovered from file names, so adding a country is a data change.
     Everything is parsed and validated in `__init__`, so a malformed or unsourced datapoint fails before any simulation
-    starts (§9.6). The engine treats an instance as immutable; `with_overlays` returns a modified copy for scenario
-    sweeps (§4.6).
+    starts. The engine treats an instance as immutable; `with_overlays` returns a modified copy for scenario
+    sweeps.
     """
 
     #: Default on-disk location of the shipped cost database.
@@ -114,7 +152,7 @@ class CostDatabase:
         self.energy_prices: Dict[str, List[EnergyPriceEntry]] = {}
         self.co2_price_paths: Dict[Tuple[str, str], Co2PricePath] = {}
         self.escalation_defaults: Dict[str, EscalationDefaults] = {}
-        #: Provenance records of applied scenario overlays (§4.6); empty for the shipped data.
+        #: Provenance records of applied scenario overlays; empty for the shipped data.
         self.overlay_records: List[ParameterProvenance] = []
         self._load_all()
 
@@ -143,9 +181,9 @@ class CostDatabase:
                 self.escalation_defaults[country] = self._load_escalation_defaults(path, country)
 
     def _load_devices(self, path: str, file_name: str) -> List[DeviceEntry]:
-        """Parse one ``devices_<COUNTRY>.json`` into validated `DeviceEntry` rows (§3.5).
+        """Parse one ``devices_<COUNTRY>.json`` into validated `DeviceEntry` rows.
 
-        Each row must cite resolvable sources (§3.10). Monetary fields may be a bare number (an exact band) or a band
+        Each row must cite resolvable sources. Monetary fields may be a bare number (an exact band) or a band
         (minimum, best estimate, maximum). Three constraints are enforced: service life must be positive, `per_unit`
         must be a known unit, and `energy_related_cost_share` must lie in [0, 1]. Optional fields default to zero cost,
         share 1.0 and no override.
@@ -219,12 +257,12 @@ class CostDatabase:
         return entries
 
     def _load_energy_prices(self, path: str, file_name: str) -> List[EnergyPriceEntry]:
-        """Parse one ``energy_prices_<COUNTRY>.json`` into `EnergyPriceEntry` rows (§3.5).
+        """Parse one ``energy_prices_<COUNTRY>.json`` into `EnergyPriceEntry` rows.
 
         Each row holds a working price and a standing charge, the emission factor and `co2_price_exposure` for the CO2
-        accounting (§3.8), `tax_and_levy_share` for the macroeconomic view (§4.5), and `quantity_unit`, since a price
-        may be quoted per liter or per ton. The rule that a working price excludes the explicit carbon price is not
-        checked here.
+        accounting, `tax_and_levy_share` for the macroeconomic view, and `quantity_unit`, since a price may be quoted
+        per liter or per ton. A feed-in row may also state its `feed_in_kind`. The rule that a working price excludes
+        the explicit carbon price is not checked here.
 
         Args:
             path: Absolute path of the file.
@@ -234,7 +272,8 @@ class CostDatabase:
             The entries in file order; the `(carrier, year)` lookup selects between them.
 
         Raises:
-            CostDataError: On an unknown carrier, a missing or unresolvable source, or a malformed band.
+            CostDataError: On an unknown carrier, a missing or unresolvable source, a malformed band, or a
+                `feed_in_kind` a row cannot state.
         """
         with open(path, encoding="utf-8") as file:
             raw = json.load(file)
@@ -246,9 +285,10 @@ class CostDatabase:
             field_sources = {key: tuple(value) for key, value in (item.get("field_sources") or {}).items()}
             for ids in field_sources.values():
                 self.sources.resolve(ids, context)
+            carrier = _energy_carrier_from_name(item.get("carrier"), context)
             entries.append(
                 EnergyPriceEntry(
-                    carrier=_energy_carrier_from_name(item.get("carrier"), context),
+                    carrier=carrier,
                     year=int(item["year"]),
                     working_price_in_euro_per_kwh=_band(item, "working_price_in_euro_per_kwh", context),
                     standing_charge_in_euro_per_year=_band(item, "standing_charge_in_euro_per_year", context, 0.0),
@@ -261,12 +301,13 @@ class CostDatabase:
                     field_sources=field_sources,
                     notes=item.get("notes"),
                     data_file=file_name,
+                    feed_in_kind=_feed_in_kind_of_row(item, carrier, context),
                 )
             )
         return entries
 
     def _load_co2_price_paths(self, path: str) -> None:
-        """Load the named carbon-price paths into `self.co2_price_paths`, keyed by `(country, name)` (§3.4).
+        """Load the named carbon-price paths into `self.co2_price_paths`, keyed by `(country, name)`.
 
         A path is a list of (year, EUR/t) points per country and scenario name (`low`, `central`, `high`); downstream,
         the last point at or before a year applies. Segments shared by all EU states live once under `eu_shared` and
@@ -320,14 +361,14 @@ class CostDatabase:
     # ------------------------------------------------------------------ lookups
 
     def get_device_entry(self, component_type: ComponentType, year: int, country: str) -> DeviceEntry:
-        """Return the device entry with the greatest `valid_from_year` <= year (§3.5).
+        """Return the device entry with the greatest `valid_from_year` <= year.
 
         This raw lookup records no provenance, so it is for code that inspects data (checks, audit tables); pricing
         code calls :meth:`resolve_device_entry`. A year before the earliest row is rejected, not extrapolated.
 
         Args:
             component_type: The asset class to price.
-            year: The price basis year (§3.5), not necessarily the simulated year.
+            year: The price basis year, not necessarily the simulated year.
             country: Country code, the ``devices_<COUNTRY>.json`` suffix.
 
         Returns:
@@ -355,7 +396,7 @@ class CostDatabase:
         return max(candidates, key=lambda entry: entry.valid_from_year)
 
     def has_device_entry(self, component_type: ComponentType, country: str) -> bool:
-        """Return whether any entry exists for the type and country, in any year (coverage check, §9.6)."""
+        """Return whether any entry exists for the type and country, in any year (coverage check)."""
         return any(entry.component_type == component_type for entry in self.devices.get(country, []))
 
     def earliest_device_year(self, country: str) -> Optional[int]:
@@ -438,7 +479,7 @@ class CostDatabase:
         """Return the price entry with the greatest year <= the requested year, in EUR/kWh.
 
         Records no provenance; pricing code calls :meth:`resolve_energy_price`. The engine reads this entry once, for
-        the price basis year, and then escalates it over the horizon (§3.6 rule 5). Rows quoted per ton or per liter
+        the price basis year, and then escalates it over the horizon. Rows quoted per ton or per liter
         are returned as a copy whose working price and emission factor are divided by the energy content
         (:meth:`energy_content_of`), with `converted_from` recording the division; the stored row is unchanged.
 
@@ -470,7 +511,7 @@ class CostDatabase:
         """Return whether any price entry exists for the carrier and country, in any year.
 
         `evaluator.resolve_check` uses it to report a carrier the meters billed but the dataset never priced before the
-        simulation starts (§9.3).
+        simulation starts.
         """
         return any(entry.carrier == carrier for entry in self.energy_prices.get(country, []))
 
@@ -478,7 +519,7 @@ class CostDatabase:
         """Return the named CO2-price path, or None for scenario ``"none"``.
 
         ``"none"`` turns carbon pricing off. The path prices the ENERGY_CO2_PRICE part of the energy bill; it is
-        unrelated to the macroeconomic CO2 damage cost (§4.5, §3.8).
+        unrelated to the macroeconomic CO2 damage cost.
 
         Raises:
             CostDataError: If `scenario` is not ``"none"`` and no path of that name exists for the country.
@@ -493,7 +534,7 @@ class CostDatabase:
     def get_escalation_defaults(self, country: str) -> EscalationDefaults:
         """Return the country's escalation defaults, or empty defaults if no file ships for the country.
 
-        This is the middle step of the §3.2 fallback (explicit `EconomicParameters` value, then this file, then the
+        This is the middle step of the fallback (explicit `EconomicParameters` value, then this file, then the
         general escalation rate), so a missing file is not an error.
         """
         return self.escalation_defaults.get(country, EscalationDefaults(country=country))
@@ -508,7 +549,7 @@ class CostDatabase:
         ledger: ProvenanceLedger,
         fields: Sequence[str],
     ) -> ResolvedDeviceEntry:
-        """Return the device entry and record the provenance of the fields the caller will price from (§3.5, §3.10).
+        """Return the device entry and record the provenance of the fields the caller will price from.
 
         Resolving and recording in one step means an entry cannot reach a calculation without its provenance.
 
@@ -563,7 +604,7 @@ class CostDatabase:
         are not a band, float or string are stringified so the ledger can be serialized.
 
         Returns:
-            The interned ledger id, stored on the cash-flow entries the field contributed to (§3.10).
+            The interned ledger id, stored on the cash-flow entries the field contributed to.
         """
         source_ids = entry.field_sources.get(parameter_field, entry.source_ids)
         value: Any = getattr(entry, parameter_field, None)
@@ -610,10 +651,13 @@ class CostDatabase:
         """Add a DATABASE_ENTRY provenance record for one field of an energy price entry and return its id.
 
         Same `field_sources` rule and return value as :meth:`provenance_for_device`. The record's `detail` describes
-        the unit conversion of a row quoted per ton or per liter (:meth:`conversion_detail`).
+        the unit conversion of a row quoted per ton or per liter (:meth:`conversion_detail`). The feed-in kind is
+        recorded as its plain string, e.g. "MARKET_LINKED".
         """
         source_ids = entry.field_sources.get(parameter_field, entry.source_ids)
         value: Any = getattr(entry, parameter_field, None)
+        if isinstance(value, FeedInKind):
+            value = value.value
         if not isinstance(value, (UncertainValue, float, str)):
             value = str(value)
         return ledger.record(
@@ -629,11 +673,11 @@ class CostDatabase:
 
     # ------------------------------------------------------------------ scenario overlays (§4.6)
 
-    #: EconomicParameters fields that must not be swept (§4.6).
+    #: EconomicParameters fields that must not be swept.
     NON_SWEEPABLE_FIELDS = ("cost_database_path", "subsidy_catalog_path", "country")
 
     def with_overlays(self, overlays: Dict[str, Any], scenario_id: str) -> "CostDatabase":
-        """Return a copy of the database with individual datapoints overlaid (§4.6).
+        """Return a copy of the database with individual datapoints overlaid.
 
         Example: ``{"devices_DE.HEAT_PUMP.specific_investment": 900}`` changes the specific investment of every heat
         pump row; ``devices_DE.HEAT_PUMP@2030.specific_investment`` pins one row. Everything not named keeps the

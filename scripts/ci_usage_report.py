@@ -37,17 +37,20 @@ backlog that is growing rather than draining is visible from the report alone.
 from __future__ import annotations
 
 import argparse
+import http.client
 import io
 import json
 import os
+import random
 import statistics
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 RESOURCE_COLLECTION_DEADLINE = timedelta(hours=24)
@@ -68,6 +71,25 @@ class RateLimitExhausted(RuntimeError):
     Caught by the collector, which stops sweeping and marks the report partial rather than
     failing: a report covering four of the last five days is worth having, and a sweep that
     goes red because GitHub was busy trains everyone to ignore it.
+    """
+
+
+class ApiRequestFailed(RuntimeError):
+    """Raised when one API request still fails after its retries, or fails with a status no retry helps.
+
+    Example: five answers of HTTP 500 in a row for one page of a job listing. The collector catches
+    it where it can skip what that request was for -- the jobs of one run, one artifact, the rest of
+    a listing -- names the skipped part in the report, and goes on with the rest of the sweep.
+    """
+
+
+class TooManyFailedRequests(RuntimeError):
+    """Raised when so many requests failed that the collector stops sweeping.
+
+    Every failed request has already waited through its retries, so a sweep while the API is down
+    would otherwise spend most of an hour skipping one run after another. Caught like
+    :class:`RateLimitExhausted`: the sweep stops, is marked partial, and the report keeps whatever
+    was already collected.
     """
 
 
@@ -92,7 +114,14 @@ class GitHubApi:
     # Requests kept in reserve so a sweep that stops still has room to upload its index.
     RATE_LIMIT_FLOOR = 25
     RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
-    MAX_ATTEMPTS = 3
+    # Statuses of an artifact that has expired or been deleted, which is an answer, not a failure.
+    MISSING_STATUS = frozenset({404, 410})
+    MAX_ATTEMPTS = 5
+    # The wait before the n-th retry is drawn from [d/2, d] with d = BACKOFF_BASE_SECONDS * 2**(n-1),
+    # at most BACKOFF_CAP_SECONDS: 1-2 s, 2-4 s, 4-8 s and 8-16 s, at most 30 s for one request.
+    BACKOFF_BASE_SECONDS = 2.0
+    BACKOFF_CAP_SECONDS = 30.0
+    TIMEOUT_SECONDS = 120
 
     def __init__(self, repository: str, token: Optional[str], max_requests: int) -> None:
         self.repository = repository
@@ -100,6 +129,8 @@ class GitHubApi:
         self.max_requests = max_requests
         self.requests_made = 0
         self.rate_limit_remaining: Optional[int] = None
+        # How the client waits between attempts; a test replaces it to run without waiting.
+        self.sleep: Callable[[float], None] = time.sleep
 
     def _headers(self) -> Dict[str, str]:
         """Return the request headers, with authorization only when a token was supplied."""
@@ -119,47 +150,96 @@ class GitHubApi:
         if self.rate_limit_remaining is not None and self.rate_limit_remaining <= self.RATE_LIMIT_FLOOR:
             raise RateLimitExhausted(f"GitHub rate limit nearly exhausted ({self.rate_limit_remaining} left)")
 
-    def _request(self, url: str, *, binary: bool = False) -> Any:
+    def backoff_seconds(self, retry: int) -> float:
+        """Return how long to wait before the ``retry``-th retry of a request, jitter included.
+
+        Exponential backoff with jitter: the ceiling doubles with every retry, from
+        :attr:`BACKOFF_BASE_SECONDS` up to :attr:`BACKOFF_CAP_SECONDS`, and the wait is drawn
+        from its upper half. The jitter keeps the hourly sweep and the other workflows that hit
+        the same failing endpoint from retrying in lockstep.
+
+        Args:
+            retry: 1 for the first retry, 2 for the second, and so on.
+
+        Returns:
+            The wait in seconds.
+        """
+        ceiling_seconds = min(self.BACKOFF_CAP_SECONDS, self.BACKOFF_BASE_SECONDS * 2.0 ** (retry - 1))
+        wait_seconds: float = ceiling_seconds / 2 + random.uniform(0, ceiling_seconds / 2)
+        return wait_seconds
+
+    def _fetch(self, request: urllib.request.Request, opener: Optional[urllib.request.OpenerDirector]) -> bytes:
+        """Send one request and return the response body, recording the rate limit it reports.
+
+        The one place that touches the network, so a test can replace it with canned answers.
+
+        Args:
+            request: the prepared request.
+            opener: the opener to send it with, or None for :func:`urllib.request.urlopen`.
+
+        Returns:
+            The response body.
+        """
+        send = opener.open if opener is not None else urllib.request.urlopen
+        with send(request, timeout=self.TIMEOUT_SECONDS) as response:
+            remaining = response.headers.get("x-ratelimit-remaining")
+            if remaining is not None:
+                self.rate_limit_remaining = int(remaining)
+            body: bytes = response.read()
+            return body
+
+    def _request(self, url: str, *, binary: bool = False, opener: Optional[urllib.request.OpenerDirector] = None,
+                 missing_ok: bool = False) -> Any:
         """Issue one GET and return the parsed JSON, or the raw bytes when ``binary``.
+
+        A transient failure -- a status in :attr:`RETRYABLE_STATUS`, a refused or reset
+        connection, a timeout -- is retried up to :attr:`MAX_ATTEMPTS` attempts in all, waiting
+        :meth:`backoff_seconds` before each retry. Every attempt counts against the budget.
 
         Args:
             url: the absolute URL to fetch.
             binary: return the response body as bytes rather than parsing it as JSON.
+            opener: the opener to send the request with, or None for the default one.
+            missing_ok: return None for a status in :attr:`MISSING_STATUS` instead of failing.
 
         Returns:
-            The decoded JSON document, or the response bytes.
+            The decoded JSON document, the response bytes, or None for a missing resource when
+            ``missing_ok``.
 
         Raises:
             RateLimitExhausted: if the budget is used up, or the API answered 403 for rate
                 limiting rather than for permissions.
-            urllib.error.HTTPError: for any other unsuccessful status.
+            ApiRequestFailed: if the last attempt failed, or a status came back that no retry
+                changes.
         """
         self._check_budget()
         request = urllib.request.Request(url, headers=self._headers())
-        last_error: Optional[Exception] = None
-        for attempt in range(self.MAX_ATTEMPTS):
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
             self.requests_made += 1
             try:
-                with urllib.request.urlopen(request, timeout=120) as response:
-                    remaining = response.headers.get("x-ratelimit-remaining")
-                    if remaining is not None:
-                        self.rate_limit_remaining = int(remaining)
-                    payload = response.read()
-                return payload if binary else json.loads(payload.decode("utf-8"))
+                payload = self._fetch(request, opener)
             except urllib.error.HTTPError as error:
                 remaining = error.headers.get("x-ratelimit-remaining") if error.headers else None
                 if remaining is not None:
                     self.rate_limit_remaining = int(remaining)
                 if error.code == 403 and self.rate_limit_remaining == 0:
                     raise RateLimitExhausted("GitHub rate limit reached") from error
-                if error.code not in self.RETRYABLE_STATUS or attempt == self.MAX_ATTEMPTS - 1:
-                    raise
-                last_error = error
-            except urllib.error.URLError as error:
-                if attempt == self.MAX_ATTEMPTS - 1:
-                    raise
-                last_error = error
-        raise RuntimeError(f"unreachable retry loop for {url}: {last_error!r}")
+                if missing_ok and error.code in self.MISSING_STATUS:
+                    return None
+                if error.code not in self.RETRYABLE_STATUS:
+                    raise ApiRequestFailed(f"HTTP {error.code} {error.reason}") from error
+                failure: Exception = error
+            except (OSError, http.client.HTTPException) as error:
+                # URLError, timeouts and reset connections are OSErrors; a truncated response
+                # is an HTTPException.
+                failure = error
+            else:
+                return payload if binary else json.loads(payload.decode("utf-8"))
+            if attempt == self.MAX_ATTEMPTS:
+                raise ApiRequestFailed(f"failed {self.MAX_ATTEMPTS} times, last with {failure}") from failure
+            self._check_budget()
+            self.sleep(self.backoff_seconds(attempt))
+        raise AssertionError("unreachable: the last attempt returns or raises")
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """Return the JSON body of ``path``, which is relative to the repository."""
@@ -192,20 +272,12 @@ class GitHubApi:
 
         The zip lives behind a redirect to blob storage, which rejects a request that still
         carries a GitHub token, so the redirect is followed with the authorization header
-        stripped.
+        stripped. Transient failures are retried like every other request.
         """
         url = f"{self.API_ROOT}/repos/{self.repository}/actions/artifacts/{artifact_id}/zip"
-        self._check_budget()
-        self.requests_made += 1
         opener = urllib.request.build_opener(_StripAuthorizationOnRedirect())
-        request = urllib.request.Request(url, headers=self._headers())
-        try:
-            with opener.open(request, timeout=120) as response:
-                return response.read()
-        except urllib.error.HTTPError as error:
-            if error.code in (404, 410):
-                return None
-            raise
+        payload: Optional[bytes] = self._request(url, binary=True, opener=opener, missing_ok=True)
+        return payload
 
 
 class _StripAuthorizationOnRedirect(urllib.request.HTTPRedirectHandler):
@@ -581,6 +653,9 @@ class UsageCollector:
     # Artifact pages are scanned back only this far past the sweep start; the listing is
     # newest-first and every page costs a request.
     MAX_ARTIFACT_PAGES = 40
+    # Requests that may fail after their retries before the sweep stops; each one has already
+    # waited up to half a minute.
+    MAX_FAILED_REQUESTS = 10
 
     def __init__(self, api: GitHubApi, index: UsageIndex) -> None:
         self.api = api
@@ -597,6 +672,8 @@ class UsageCollector:
             # from the listing, never downloaded.
             "artifacts_off_branch": 0,
             "records_expired": 0,
+            # What a failed request made the sweep skip, one line each: what was skipped, and why.
+            "skipped": [],
             "partial": False,
             "stopped_because": None,
         }
@@ -605,7 +682,9 @@ class UsageCollector:
         """Fetch every run created since ``since`` and record each of its jobs.
 
         Runs still in progress are skipped rather than recorded half-finished; the next sweep's
-        overlap picks them up once they have concluded.
+        overlap picks them up once they have concluded. A run whose job listing fails is skipped
+        and named, and so is the rest of the run listing when one of its pages fails; the next
+        sweep's overlap reads them again when they lie within it.
         """
         try:
             for run in self.api.paginate("actions/runs", "workflow_runs",
@@ -617,27 +696,33 @@ class UsageCollector:
                     continue
                 self.diagnostics["runs_fetched"] += 1
                 self._record_jobs(run)
-        except RateLimitExhausted as error:
+        except (RateLimitExhausted, TooManyFailedRequests) as error:
             self._stop(str(error))
+        except ApiRequestFailed as error:
+            self._note_skipped("the rest of the run listing", error)
+            self._stop(f"the run listing failed: {error}")
 
     def _record_jobs(self, run: Dict[str, Any]) -> None:
         """Record every job of ``run`` that actually executed."""
         run_id = run.get("id")
         if not isinstance(run_id, int):
             return
-        for job in self.api.paginate(f"actions/runs/{run_id}/jobs", "jobs", {"filter": "latest"}):
-            record = JobRecord.from_api(run, job)
-            if record is None:
-                continue
-            existing = self.index.get(JobRecord.key(record))
-            if existing is not None:
-                # The overlap re-reads runs a previous sweep already saw. Their resource data
-                # was joined then and the artifact behind it may since have expired, so it is
-                # carried over rather than re-fetched -- and re-fetching it would be the most
-                # expensive thing this script could possibly do.
-                JobRecord.carry_resources(existing, record)
-            self.index.add(record)
-            self.diagnostics["jobs_recorded"] += 1
+        try:
+            for job in self.api.paginate(f"actions/runs/{run_id}/jobs", "jobs", {"filter": "latest"}):
+                record = JobRecord.from_api(run, job)
+                if record is None:
+                    continue
+                existing = self.index.get(JobRecord.key(record))
+                if existing is not None:
+                    # The overlap re-reads runs a previous sweep already saw. Their resource data
+                    # was joined then and the artifact behind it may since have expired, so it is
+                    # carried over rather than re-fetched -- and re-fetching it would be the most
+                    # expensive thing this script could possibly do.
+                    JobRecord.carry_resources(existing, record)
+                self.index.add(record)
+                self.diagnostics["jobs_recorded"] += 1
+        except ApiRequestFailed as error:
+            self._skip(f"the jobs of run {run_id}", error)
 
     def sweep_resources(self, since: datetime, wanted_runs: Sequence[int], max_downloads: int,
                         memory_branch: Optional[str] = None) -> None:
@@ -687,7 +772,11 @@ class UsageCollector:
                 if downloaded >= max_downloads:
                     self.diagnostics["artifacts_waiting"] += 1
                     continue
-                metrics = self._read_metrics(artifact)
+                try:
+                    metrics = self._read_metrics(artifact)
+                except ApiRequestFailed as error:
+                    self._skip(f"artifact {artifact.get('id')} of run {run_id}", error)
+                    metrics = None
                 downloaded += 1
                 if metrics is None:
                     continue
@@ -697,8 +786,11 @@ class UsageCollector:
                     self.diagnostics["artifacts_unjoined"] += 1
                     continue
                 JobRecord.attach_resources(target, metrics)
-        except RateLimitExhausted as error:
+        except (RateLimitExhausted, TooManyFailedRequests) as error:
             self._stop(str(error))
+        except ApiRequestFailed as error:
+            self._note_skipped("the rest of the artifact listing", error)
+            self._stop(f"the artifact listing failed: {error}")
         if downloaded >= max_downloads and not self.diagnostics["partial"]:
             # Said after the listing rather than instead of reading it, and never over a
             # budget message: running out of requests is the more urgent of the two.
@@ -726,6 +818,25 @@ class UsageCollector:
         """Mark the sweep partial and record why it stopped."""
         self.diagnostics["partial"] = True
         self.diagnostics["stopped_because"] = reason
+
+    def _note_skipped(self, what: str, error: ApiRequestFailed) -> None:
+        """Record that ``what`` was skipped because a request for it failed, for the report."""
+        print(f"::warning::skipped {what}: {error}")
+        self.diagnostics["skipped"].append(f"{what}: {error}")
+
+    def _skip(self, what: str, error: ApiRequestFailed) -> None:
+        """Record a skipped part of the sweep, and stop the sweep once too many requests failed.
+
+        Args:
+            what: the part of the sweep the failed request was for, such as ``the jobs of run 7``.
+            error: the failure.
+
+        Raises:
+            TooManyFailedRequests: when this is the :attr:`MAX_FAILED_REQUESTS`-th failure.
+        """
+        self._note_skipped(what, error)
+        if len(self.diagnostics["skipped"]) >= self.MAX_FAILED_REQUESTS:
+            raise TooManyFailedRequests(f"{self.MAX_FAILED_REQUESTS} API requests failed after their retries")
 
 
 class JobStatistics:
@@ -886,6 +997,18 @@ class UsageReport:
     SECONDS_PER_MINUTE = 60.0
     TOP_WORKFLOWS = 20
     TOP_JOBS = 15
+    # The weekly run without any cache (weekly-cold-cache.yml), whose outcome gets a section of
+    # its own: it is the only run that exercises the code a warm cache skips, so its failure is
+    # the one that must not drown in the averages. At most this many failed jobs are named.
+    COLD_CACHE_WORKFLOW_PATH = ".github/workflows/weekly-cold-cache.yml"
+    COLD_CACHE_FAILURES_LISTED = 10
+    # The daily assembly nightly tier (assemblies-nightly.yml), which no pull request runs, so its
+    # failure would otherwise show only on the Actions page. Reported like the cold run.
+    ASSEMBLIES_NIGHTLY_WORKFLOW_PATH = ".github/workflows/assemblies-nightly.yml"
+    # The job conclusions that do not count as a failed job of the cold run: a skipped job did
+    # not run (the called workflows' own merge jobs), a cancelled one makes the run cancelled.
+    # Every other conclusion -- failure, timed_out, action_required, ... -- is a failed job.
+    COLD_CACHE_NOT_FAILED = frozenset({"success", "skipped", "cancelled"})
 
     def __init__(self, index: UsageIndex, window_start: datetime, recent_start: datetime,
                  diagnostics: Dict[str, Any]) -> None:
@@ -985,6 +1108,8 @@ class UsageReport:
         """Return the full report as markdown."""
         sections = [
             self._render_header(),
+            self._render_last_scheduled_run(self.COLD_CACHE_WORKFLOW_PATH, "weekly cold-cache"),
+            self._render_last_scheduled_run(self.ASSEMBLIES_NIGHTLY_WORKFLOW_PATH, "nightly assemblies"),
             self._render_duration_regressions(),
             self._render_memory_regressions(),
             self._render_memory_pressure(),
@@ -1009,6 +1134,79 @@ class UsageReport:
             f"- **{total_seconds / self.SECONDS_PER_MINUTE:,.0f} runner-minutes** "
             f"({total_seconds / self.SECONDS_PER_MINUTE / days:,.0f} per day)\n"
         )
+
+    def _render_last_scheduled_run(self, workflow_path: str, title: str) -> str:
+        """Return the outcome of the most recent run of a scheduled workflow in the window.
+
+        Used for the weekly cold-cache run (:attr:`COLD_CACHE_WORKFLOW_PATH`, title
+        ``weekly cold-cache``) and the assembly nightly tier (:attr:`ASSEMBLIES_NIGHTLY_WORKFLOW_PATH`,
+        title ``nightly assemblies``): runs no pull request starts, whose failure must not drown in the
+        averages. Read from the job records of the index, like everything else here: the run is the
+        newest one of ``workflow_path``, and of each of its jobs only the latest attempt counts,
+        since a re-run gives the jobs it repeats new ids and the earlier attempt's records stay in
+        the index. Skipped jobs did not run and are not counted. The outcome is ``failure`` when any
+        job ended in a conclusion outside :attr:`COLD_CACHE_NOT_FAILED` (``timed_out`` too), else
+        ``cancelled`` when any job was cancelled, else ``success``. A run still in progress has no
+        records yet, since the sweep skips unfinished runs, so the previous one is reported until it
+        finishes. Example::
+
+            ## Last weekly cold-cache run
+
+            Run 123 of 2026-10-19T05:00:00Z: **failure**, 2 of 64 jobs failed: `tests / pytest (utsp)`, ...
+
+        Args:
+            workflow_path: The workflow file whose runs count, as the runs API reports it.
+            title: What the heading and the empty-window line call the run.
+
+        Returns:
+            The section as markdown.
+        """
+        runs: Dict[Any, Dict[str, Dict[str, Any]]] = {}
+        for record in self.index.values():
+            if record.get("workflow_path") != workflow_path:
+                continue
+            created = Timestamps.parse(record.get("created_at"))
+            if created is None or created < self.window_start:
+                continue
+            jobs = runs.setdefault(record.get("run_id"), {})
+            name = str(record.get("job_name", ""))
+            held = jobs.get(name)
+            if held is None or self._attempt_order(record) > self._attempt_order(held):
+                jobs[name] = record
+        lines = [f"\n## Last {title} run\n"]
+        if not runs:
+            lines.append(f"No run of the {title} workflow finished in the window.")
+            return "\n".join(lines) + "\n"
+        latest = max(runs.values(), key=lambda jobs: str(next(iter(jobs.values())).get("created_at") or ""))
+        first = next(iter(latest.values()))
+        ran = [record for record in latest.values() if record.get("conclusion") != "skipped"]
+        failed = sorted(str(record.get("job_name", "")) for record in ran
+                        if record.get("conclusion") not in self.COLD_CACHE_NOT_FAILED)
+        if failed:
+            outcome = "failure"
+        elif any(record.get("conclusion") == "cancelled" for record in ran):
+            outcome = "cancelled"
+        else:
+            outcome = "success"
+        line = (f"Run {first.get('run_id')} of {first.get('created_at')}: **{outcome}**, "
+                f"{len(failed)} of {len(ran)} jobs failed")
+        if failed:
+            named = ", ".join(f"`{name}`" for name in failed[:self.COLD_CACHE_FAILURES_LISTED])
+            more = len(failed) - self.COLD_CACHE_FAILURES_LISTED
+            line += ": " + named + (f" and {more} more" if more > 0 else "")
+        lines.append(line + ".")
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _attempt_order(record: Dict[str, Any]) -> Tuple[int, int]:
+        """Return the order of a job record among the attempts of the same job of one run.
+
+        The later attempt has the higher ``run_attempt``; within one attempt the higher job id is
+        the later job. Missing values count as attempt 1 and job id 0.
+        """
+        attempt = record.get("run_attempt")
+        job_id = record.get("job_id")
+        return (attempt if isinstance(attempt, int) else 1, job_id if isinstance(job_id, int) else 0)
 
     def _render_duration_regressions(self) -> str:
         """Return the duration regression table, or a line saying there were none."""
@@ -1137,6 +1335,10 @@ class UsageReport:
                  f"- API requests used: {self.diagnostics.get('requests_made', 0)}"]
         if self.diagnostics.get("artifacts_unjoined"):
             lines.append(f"- resource artifacts that matched no job: {self.diagnostics['artifacts_unjoined']}")
+        skipped = self.diagnostics.get("skipped") or []
+        if skipped:
+            lines.append(f"- ⚠️ skipped because an API request failed after its retries: {len(skipped)}")
+            lines.extend(f"  - {entry}" for entry in skipped)
         if self.diagnostics.get("partial"):
             lines.append(f"- ⚠️ **partial sweep**: {self.diagnostics.get('stopped_because')}")
         lines.append("")

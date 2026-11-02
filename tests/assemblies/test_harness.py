@@ -6,11 +6,13 @@ function of its seed, and splits an ``exactly_one_of`` into its branches. The mo
 tested on synthetic series. The deliberately wrong mock under ``mock_assemblies/wrong`` must fail by
 name; a port without a registered test partner refuses with the class it needs; a registry that
 does not read is refused whole; the member contract names an unbounded output, a wrong unit and a
-KPI the member does not report.
+KPI the member does not report; a heat input left unconnected beside its source is named, and the test
+building that read none of the tested heat fails both heat checks.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import re
 import subprocess
@@ -29,11 +31,17 @@ from hisim.energy_system.assemblies.model import MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing import checks
-from hisim.energy_system.assemblies.testing.checks import AssemblyCheckFailure, MemberContract, offending_pair
+from hisim.energy_system.assemblies.testing.checks import (
+    AssemblyCheckFailure,
+    HeatDelivery,
+    MemberContract,
+    offending_pair,
+)
 from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
     IsolationRunError,
+    bind_optional_partner_ports,
     brought_by_circuit_end,
     facts_needed,
     facts_of_partners,
@@ -63,9 +71,10 @@ from hisim.energy_system.assemblies.testing.samples import (
 )
 from hisim.energy_system.model import ComponentEntry
 from hisim.postprocessing.kpi_computation import tolerances
+from hisim.simulationparameters import SimulationParameters
 from scripts import golden_kpis
 from tests.assemblies.helpers import Library, Mocks, Real
-from tests.assemblies.mock_components import MockHeater
+from tests.assemblies.mock_components import MockHeater, MockHeaterConfig, MockTank, MockTankConfig
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
 BOX = f"""
@@ -136,6 +145,69 @@ def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> N
     samples = hypercube_samples(space, 6, 1)
     assert len(samples) == 12 and not any(space.problems(sample.values) for sample in samples)
     assert sum(1 for sample in samples if sample.values["power_in_watt"] is None) == 6
+
+
+#: The box's share and switch stated together or not at all; both default to unstated.
+ALL_OR_NONE = "constraints:\n  - {all_or_none_of: [share, boost]}"
+
+
+@pytest.mark.assemblies
+def test_a_deterministic_sample_stating_one_member_of_an_all_or_none_of_states_the_others(tmp_path: Path) -> None:
+    """Catches a boundary sample stating one member alone, which the import would refuse (D31).
+
+    A value that states a member brings the others at their companion values (the share at the middle
+    of its range, the switch at its first stated value); a value that unstates one unstates the others.
+    """
+    space = box(tmp_path, ALL_OR_NONE)
+    by_origin = {origin: sample.values for sample in deterministic_samples(space) for origin in sample.origins}
+    assert (by_origin["defaults"]["share"], by_origin["defaults"]["boost"]) == (None, False)
+    assert (by_origin["min of share"]["share"], by_origin["min of share"]["boost"]) == (0.0, True)
+    assert (by_origin["boost = True"]["share"], by_origin["boost = True"]["boost"]) == (0.5, True)
+    assert (by_origin["boost = False"]["share"], by_origin["boost = False"]["boost"]) == (None, False)
+    assert space.problems({**by_origin["defaults"], "share": 0.3}) == [
+        "all_or_none_of [share, boost]: share = 0.3 is stated but boost is not; state both or neither"
+    ]
+
+
+@pytest.mark.assemblies
+def test_the_hypercube_states_every_member_of_an_all_or_none_of(tmp_path: Path) -> None:
+    """Catches the switch's stratified dimension drawing false beside a stated share, which breaks the constraint."""
+    space = box(tmp_path, ALL_OR_NONE)
+    samples = hypercube_samples(space, 8, 2)
+    assert len(samples) == 8 and not any(space.problems(sample.values) for sample in samples)
+    assert all(sample.values["boost"] is True and sample.values["share"] is not None for sample in samples)
+
+
+@pytest.mark.assemblies
+def test_a_sweep_of_an_all_or_none_of_member_from_an_unstated_base_states_the_others(tmp_path: Path) -> None:
+    """Catches a sweep moving one member beside unstated others, the one-sided case the import refuses."""
+    space = box(tmp_path, ALL_OR_NONE)
+    defaults = deterministic_samples(space)[0]
+    points = sweep(space, defaults, "share")
+    assert points is not None
+    assert [point["share"] for point in points] == pytest.approx([0.0, 1 / 3, 2 / 3, 1.0])
+    assert all(point["boost"] is True and not space.problems(point) for point in points)
+
+
+@pytest.mark.assemblies
+def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
+    """Catches the real battery losing coverage to the constraint: every sample but the defaults states both sizes.
+
+    The PR tier keeps five samples (the defaults and each size's min and max, the other at the middle of its
+    range) and the capacity sweep runs at a stated power from every base, never beside an AUTO power.
+    """
+    _, space = mock("storage/battery", Real.LIBRARY)
+    samples = deterministic_samples(space)
+    assert [(sample.values["capacity_in_kwh"], sample.values["power_in_watt"]) for sample in samples] == [
+        ("AUTO", "AUTO"),
+        (1.0, 7750.0),
+        (30.0, 7750.0),
+        (15.5, 500.0),
+        (15.5, 15000.0),
+    ]
+    swept = sweeps(space, samples, space.model.tests.monotone[0])  # type: ignore[union-attr]
+    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 15000.0]
+    assert all(ParameterChecks.is_stated(point["power_in_watt"]) for _, points in swept for point in points)
 
 
 @pytest.mark.assemblies
@@ -235,23 +307,23 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
     """The site and both circuit ends for a boiler, a consumer for a connection, an array and a manager for a battery.
 
-    The real library's assemblies and partners, and the mock heater for the ports a variant switches.
+    The real library's assemblies and partners, and the mock heater for the ports a variant switches, with the grid
+    meter its electricity need binds.
     """
     real = AssemblyResolver([Real.LIBRARY])
     registries = {
         Real.LIBRARY: TestPartnerRegistry.from_directories(real.directories),
         Mocks.LIBRARY: TestPartnerRegistry.from_directories([Mocks.LIBRARY]),
     }
-    heating_site = ["Weather", "UTSPConnector", "Building", "HeatDistributionController"]
+    heating_site = ["Weather", "UTSPConnector", "Building", "HeatingCurveController"]
     for path, root, components, verbs in (
         (
             "heating/gas_condensing_boiler",
             Real.LIBRARY,
-            heating_site + ["DHWStorage", "GasMeter", "HeatDistributionSystem"],
+            heating_site + ["DHWStorage", "GasMeter", "HeatDistributionController", "HeatDistributionSystem"],
             {
                 "bind": {
-                    "weather": "Weather",
-                    "flow_temperature": "HeatDistributionController",
+                    "heating_curve": "HeatingCurveController",
                     "dhw_temperature": "DHWStorage",
                     "space_heating": "HeatDistributionSystem",
                     "dhw": "DHWStorage",
@@ -261,7 +333,15 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         (
             "supply/gas_connection",
             Real.LIBRARY,
-            heating_site + ["GasBoilerController", "HeatDistributionSystem", "GasBuffer", "GasCylinder", "GasBoiler"],
+            heating_site
+            + [
+                "GasBoilerController",
+                "HeatDistributionController",
+                "HeatDistributionSystem",
+                "GasBuffer",
+                "GasCylinder",
+                "GasBoiler",
+            ],
             {},
         ),
         ("storage/battery", Real.LIBRARY, ["Weather", "UTSPConnector", "Building", "PVArray", "EnergyManager"], {}),
@@ -269,7 +349,7 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         (
             "mock/variant_heater",
             Mocks.LIBRARY,
-            ["Occupancy", "Tank", "Ems"],
+            ["Occupancy", "Tank", "Ems", "Grid"],
             {"bind": {"tank_temperature": "Tank"}, "optional-bind": {"ems_modifier": "Ems"}},
         ),
     ):
@@ -278,6 +358,126 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         assert list(document["components"]) == components, path
         entry = document["imports"][SUBJECT]
         assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == verbs, path
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("member_classes", "partner_classes", "expected"),
+    [
+        ({"Buffer": "SimpleHotWaterStorage"}, {}, SUBJECT),  # a heating assembly's own buffer
+        ({"Cylinder": "SimpleDHWStorage"}, {"Buffer": "SimpleHotWaterStorage"}, "Buffer"),  # a partner's buffer
+        ({"DistrictHeating": "DistrictHeating"}, {}, None),  # no buffer: the port stays unbound
+        ({"Buffer": "SimpleHotWaterStorage"}, {"Other": "SimpleHotWaterStorage"}, None),  # two: no verb
+    ],
+)
+def test_an_optional_partner_port_binds_its_one_candidate_in_the_subject_or_among_the_partners(
+    member_classes: Dict[str, str], partner_classes: Dict[str, str], expected: Optional[str]
+) -> None:
+    """The harness writes ``optional-bind:`` per system: the subject, the one partner, or nothing."""
+    components: Dict[str, Dict[str, Any]] = {
+        "Controller": {
+            "class": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "ports": {"buffer": {"partner": "SimpleHotWaterStorage", "optional": True}},
+        },
+        **{
+            name: {"class": f"hisim.components.simple_water_storage.{class_name}"}
+            for name, class_name in partner_classes.items()
+        },
+    }
+    bind_optional_partner_ports(components, member_classes)
+    assert components["Controller"].get("optional-bind", {}).get("buffer") == expected
+
+
+@pytest.mark.assemblies
+def test_an_optional_partner_port_keeps_a_verb_its_entry_writes() -> None:
+    """A port the registry entry already binds or declines is left as written."""
+    components: Dict[str, Dict[str, Any]] = {
+        "Controller": {
+            "class": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "ports": {"buffer": {"partner": "SimpleHotWaterStorage", "optional": True}},
+            "none": ["buffer"],
+        },
+    }
+    bind_optional_partner_ports(components, {"Buffer": "SimpleHotWaterStorage"})
+    assert "optional-bind" not in components["Controller"]
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribution_beside_it() -> None:
+    """Catches the test building losing the heat of the assembly under test again (hisim-fob3).
+
+    Example: beside ``heating/electric_resistive`` the building's ``heating`` port binds the subject's heater, beside
+    a boiler the partner ``HeatDistributionSystem``, beside district heating the distribution without storage; beside
+    a PV array nothing heats the house and the port stays unbound.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    for path, expected in (
+        ("heating/electric_resistive", {"heating": SUBJECT}),
+        ("heating/gas_condensing_boiler", {"heating": "HeatDistributionSystem"}),
+        ("heating/district_heating", {"heating": "HeatDistributionSystemWithoutStorage"}),
+        ("supply/oil_tank", {"heating": "HeatDistributionSystem"}),
+        ("pv/array", None),
+    ):
+        assembly = resolver.resolve(path, "test")
+        document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
+        assert document["components"]["Building"].get("optional-bind") == expected, path
+
+
+@pytest.mark.assemblies
+def test_a_heat_input_left_unconnected_beside_the_component_serving_it_is_named() -> None:
+    """The ``heat delivered`` check names a heat input its source stands beside unconnected, and passes it wired.
+
+    Example: a mock tank whose ``ThermalPower`` its class reads from a ``MockHeater`` by default, beside such a
+    heater and not connected, is the shape of the test building that read none of the tested heat (hisim-fob3).
+    """
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    heater = MockHeater(parameters, MockHeaterConfig.preset_standard("Heater"))
+    tank = MockTank(parameters, MockTankConfig.preset_standard("Tank"))
+    components = {"Heater": heater, "Tank": tank}
+    assert HeatDelivery.lost(components) == [
+        "Tank.ThermalPower is not connected, although Heater (MockHeater.ThermalPower) serves it by default"
+    ]
+    assert not HeatDelivery.lost({"Tank": tank}), "an input no component serves loses nothing"
+    tank.connect_input("ThermalPower", "Heater", "ThermalPower")
+    assert not HeatDelivery.lost(components)
+    assert not HeatDelivery.heated_buildings(components), "the room check reads buildings only"
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both_heat_checks(tmp_path: Path) -> None:
+    """The wiring before hisim-fob3 fails loudly: the building beside the heater, reading only weather and residents.
+
+    The real ``Building`` partner with its ``heating`` port taken out is the partner every heating assembly stood
+    beside before: the heater followed the building's demand all day and the room air fell to about 9 °C.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    real = TestPartnerRegistry.from_directories(resolver.directories)
+    unheated = dict(real.partners["Building"].component)
+    unheated["inputs"] = ["Weather", "UTSPConnector"]
+    del unheated["ports"]
+    registry = TestPartnerRegistry(
+        [
+            dataclasses.replace(partner, component=unheated) if name == "Building" else partner
+            for name, partner in real.partners.items()
+        ],
+        real.files,
+    )
+    assembly = resolver.resolve("heating/electric_resistive", "test")
+    label = "heating/electric_resistive sample s000"
+    run = run_isolation(
+        assembly, ParameterSpace(assembly.model).defaults(), registry, resolver, tmp_path / "run", label
+    )
+    checks.check_run(run)
+    with pytest.raises(AssemblyCheckFailure) as caught:
+        checks.check_heat_delivered(run)
+    assert str(caught.value) == (
+        f"{label} heat delivered every heat input: Building.ThermalPowerDelivered is not connected, although "
+        "subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default: the heat never arrives"
+    )
+    with pytest.raises(AssemblyCheckFailure, match=r"room heated .* the room air of Building averages 1\d\.\d\d °C"):
+        checks.check_room_heated(run)
+    run.release()
 
 
 @pytest.mark.assemblies
@@ -329,6 +529,30 @@ def test_the_real_site_entries_of_the_test_helpers_equal_the_real_test_partners(
         shared = set(entry) & set(partner)
         assert "class" in shared and shared & {"preset", "config"}, (name, shared)
         assert {key: entry[key] for key in shared} == {key: partner[key] for key in shared}, name
+
+
+@pytest.mark.assemblies
+def test_a_requirement_a_member_has_the_class_of_is_met_by_the_member_and_joins_otherwise() -> None:
+    """The grid meter requires the energy manager it observes: beside the manager under test, no second one joins.
+
+    Catches a second manager beside ``control/ems_self_consumption`` (the meter would read both balances, twice the
+    house), and a requirement dropped where no member meets it: beside ``heating/electric_resistive``, which has no
+    manager, the meter still brings the registry's ``EnergyManager``. A partner named among the ones the ports need
+    always joins, whatever the members' classes.
+    """
+    registry = TestPartnerRegistry.from_directories([Real.LIBRARY])
+    manager = "L2GenericEnergyManagementSystem"
+    assert registry.class_of("EnergyManager") == manager
+    assert registry.closure(["Grid"]) == ["EnergyManager", "Grid"]
+    assert registry.closure(["Grid"], [manager]) == ["Grid"]
+    assert registry.closure(["Grid", "EnergyManager"], [manager]) == ["EnergyManager", "Grid"]
+
+    ems, ems_space = mock("control/ems_self_consumption", Real.LIBRARY)
+    components = isolation_document(ems, ems_space.defaults(), registry)["components"]
+    assert "Grid" in components and "EnergyManager" not in components
+    heater, heater_space = mock("heating/electric_resistive", Real.LIBRARY)
+    components = isolation_document(heater, heater_space.defaults(), registry)["components"]
+    assert {"Grid", "EnergyManager"} <= set(components)
 
 
 @pytest.mark.assemblies
@@ -661,6 +885,9 @@ def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_
             preset: standard
             config:
               power_in_watt: {{$param: power_in_watt}}
+        interface:
+          needs:
+            grid: {{carrier: electricity, outputs: [Heater.ElectricityInput]}}
         tests:
           bounds:
             - {{output: Heater.ThermalPower, unit: KWH, min: 0}}

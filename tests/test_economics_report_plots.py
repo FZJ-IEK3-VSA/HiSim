@@ -35,6 +35,7 @@ import pytest
 from matplotlib import image as mpl_image
 from matplotlib.figure import Figure
 from matplotlib.patches import PathPatch, Rectangle
+from PIL import Image as PilImage
 
 from hisim.economics import report_plots, views
 from hisim.economics.database import CostDatabase
@@ -66,6 +67,7 @@ from hisim.economics.report_prose import payback_interval_sentence, treemap_disc
 from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.timeline import CostCategory
 from hisim.economics.subsidies import SubsidyCatalog
+from hisim.postprocessing.chartbase import SavedChartResolution
 
 # The oracle's fixture, reused rather than rebuilt: it is the run these charts are meant to draw —
 # banded, subsidised, multi-perspective, multi-subject — and a second fixture here would be a
@@ -341,6 +343,9 @@ def _assert_is_a_real_png(path: str) -> None:
     painted = float((packed != packed[0, 0]).mean())
     assert len(numpy.unique(packed)) > 16, f"{path} carries too few colours to be a drawn figure"
     assert painted > 0.01, f"{path} is {100 * (1 - painted):.1f} % background — a blank frame"
+    # Every chart is drawn at the one resolution of all HiSim charts, not at one of its own
+    with PilImage.open(path) as image:
+        assert image.info["dpi"] == pytest.approx((SavedChartResolution.DPI,) * 2, abs=0.01), path
 
 
 class TestWrittenFiles:

@@ -1,0 +1,92 @@
+# The assembly nightly tier (assemblies_spec.md §9.4, D24, lean v1 §13.1): the seeded Latin
+# hypercube sample of every assembly's parameter box, `pytest -m nightly
+# tests/assemblies/test_library_contracts.py`, over the mock library under
+# tests/assemblies/mock_assemblies/library and the real one, energy_systems/assemblies/.
+#
+# WHEN. Daily at 02:00 UTC, and by hand (Actions > assemblies nightly > Run workflow), e.g. on a
+# branch that changes an assembly's parameter box. Until 2026-10-19 the tier was a job of
+# golden-year.yml and ran on every push to main and every pull request commit, 26 to 28 minutes
+# on one runner each time; the spec placed it there "for now ... a schedule comes with the real
+# library", and the real library is on main since assemblies step 5 (owner decision 2026-10-19:
+# a nightly job of its own). A schedule runs on the default branch only, so the nightly run
+# tests main as it stands that night. The deterministic samples (defaults, boundaries, values,
+# variants) still run on every pull request, in the job `pytest (assemblies)` of tests.yml.
+#
+# NO FORK GUARD. Neither trigger runs for a pull request, so no fork's code reaches the
+# self-hosted runners through this workflow.
+#
+# A failed check fails the job, named in pytest's summary; opening a bead for it, as for a golden
+# drift, is the owner's manual step today. The hourly ci-usage report lists the outcome of the last
+# run (scripts/ci_usage_report.py, "Last nightly assemblies run").
+
+name: assemblies nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  # A run started by hand while the scheduled one is still going waits for it rather than cancelling it.
+  group: assemblies-nightly
+  cancel-in-progress: false
+
+jobs:
+  assemblies-nightly:
+    name: assemblies nightly tier
+    # On the self-hosted runners; see the runs-on comment in tests.yml. No pull request runs this
+    # workflow, so the expression the other workflows use to send a fork's pull request to a
+    # GitHub-hosted runner is not needed here.
+    runs-on: [self-hosted, hisim-local]
+    # A hung isolation run must not hold a runner until GitHub's six-hour default: about three
+    # times the 26 to 28 minutes measured.
+    timeout-minutes: 90
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: assemblies-nightly
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      # The weather series and LoadProfileGenerator profiles earlier runs computed: the most recent
+      # shared entry, which every job of every workflow restores; see the action.
+      - name: Restore the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: restore
+      # Every sample is one xdist_group, so loadgroup keeps the checks of one isolation run on
+      # one worker, which makes the run once.
+      - name: Assembly test contracts, nightly tier
+        run: >-
+          python -m pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py
+          --samples 16 --seed 20261003
+      # This job's additions merged into the most recent shared entry and saved there, in this job:
+      # it is the workflow's only user of the cache, so it needs no merge job. Kept even when the
+      # job failed; see the action for why that is safe.
+      - name: Save the HiSim inputs cache
+        if: always()
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: save
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: assemblies-nightly

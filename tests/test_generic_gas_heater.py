@@ -101,12 +101,19 @@ def test_gas_heater() -> None:
     my_gas_heater.i_simulate(timestep, stsv, False)
     log.information(str(stsv.values))
 
+    # Full load on a 30 °C return: the current condensing gas curve gives 0.877 + 0.0030 * (60 - 30) = 0.967,
+    # so 12 kW of gas become 11604 W of heat, carried over 10 K: 11604 / (4180 * 10) = 0.2776 kg/s
+    heat_in_watt = 12_000 * (0.877 + 0.0030 * 30)
     # Mass-Flow out of Gas-Heater to heat up Storages or House
-    assert stsv.values[my_gas_heater.water_output_mass_flow_sh_channel.global_index] == 0.2583732057416268
+    assert stsv.values[my_gas_heater.water_output_mass_flow_sh_channel.global_index] == pytest.approx(
+        heat_in_watt / (4180 * temperature_delta_in_celsius), rel=1e-12
+    )
     # Temperature of Water out of GasHeater
     assert (
         stsv.values[my_gas_heater.water_output_temperature_sh_channel.global_index]
         == temperature_delta_in_celsius + stsv.values[mass_flow_input_temperature_channel.global_index]
     )
     # Real Power of GasHeater
-    assert stsv.values[my_gas_heater.thermal_output_power_sh_channel.global_index] == 10_800
+    assert stsv.values[my_gas_heater.thermal_output_power_sh_channel.global_index] == pytest.approx(
+        heat_in_watt, rel=1e-12
+    )

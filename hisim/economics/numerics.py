@@ -1,4 +1,4 @@
-"""The package's one root finder, shared by the views and the scenario break-even (cost_spec.md §4.6).
+"""The package's one root finder, shared by the views and the scenario break-even.
 
 `scenarios.find_break_even` uses it to find where two variants' KPI difference crosses zero, and
 `views._effective_annual_rate` to find a loan's effective rate. It bisects because both functions are only piecewise

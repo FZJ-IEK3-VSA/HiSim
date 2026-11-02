@@ -1,4 +1,4 @@
-"""Property tests: actor allocation (cost_spec.md §6).
+"""Property tests: actor allocation (roadmap/cost_spec.md §6).
 
 Part of the invariant test files (split per the PR-3 review's 500-line rule): the zero-sum
 allocation invariant and the CO2/levy split properties across random timelines. Band and

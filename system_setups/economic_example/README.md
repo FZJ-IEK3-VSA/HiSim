@@ -1,7 +1,7 @@
 # Economic examples: the lifecycle cost engine end to end
 
 Worked, reproducible examples of the lifecycle cost engine (`hisim/economics/`, see its
-README and `cost_spec.md`). Two scripts:
+README and `roadmap/cost_spec.md`). Two scripts:
 
 | Script | What it shows |
 |---|---|
@@ -34,7 +34,7 @@ first, then `cost_summary.md`. For the Ireland example the comparison lives in t
   R290 unit, capped at 70 % of 30 k€ eligible cost) and the envelope schemes (15 % + 5 % iSFP
   bonus), with the §35c tax credit correctly excluded. The report's subsidy cards show the
   full solver audit trail.
-- **All perspectives** (cost_spec.md §7.1): brownfield gross/net, operating (with replacement
+- **All perspectives** (roadmap/cost_spec.md §7.1): brownfield gross/net, operating (with replacement
   reserve), owner_monthly (financed), landlord, tenant (DE_2024 allocation with modernization
   levy), macroeconomic. The report's **Who pays what** and **Who pays whom** sections show
   where each euro lands.

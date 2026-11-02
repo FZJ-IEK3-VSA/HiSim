@@ -1,4 +1,4 @@
-"""TABULA's estimated door for a row without a reference door area (hisim-4g9.1 review).
+"""TABULA's estimated door for a row without a reference door area (hisim-component-physics-4g9.1 review).
 
 Many TABULA rows state no door: ``A_Door_1`` is 0 on 241 national generic-example rows (every
 Danish and Norwegian one, several Irish, Belgian, French and Slovenian bands) and on many

@@ -298,7 +298,7 @@ class TestTheEndToEndDocument:
         assert [stage["from_year"] for stage in document["stages"]] == [0, 0]
 
     def test_the_package_stage_names_the_measures_it_carried_out(self, document) -> None:
-        """hisim-cyc.4: the stage timeline labels itself from this list, so it must be filled.
+        """hisim-economics-engine-cyc.4: the stage timeline labels itself from this list, so it must be filled.
 
         The package's five measures, in catalogue order and with the not-implemented ones left
         out -- the baseline names nothing, because it carries out nothing.
@@ -380,7 +380,7 @@ class TestTheEndToEndDocument:
         assert amount["best"] == pytest.approx(-4000.0)
 
     def test_the_solar_pv_grant_is_the_tiered_formula_on_the_arrays_cost_facts_size(self, runs, document) -> None:
-        """hisim-cyc.3 through the production wiring: the grant prices the size the stage extracted.
+        """hisim-economics-engine-cyc.3 through the production wiring: the grant prices the size the stage extracted.
 
         The size is read from the package stage's ``economic_inputs.json`` — the cost facts the
         adapter built from ``PVSystem.power_in_watt`` — and the awarded row must be SEAI's rule on
@@ -449,7 +449,7 @@ class TestTheEndToEndDocument:
                 assert stack == pytest.approx(evaluation["totals"]["npv_in_euro"][slot], abs=0.01)
 
     def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, document) -> None:
-        """hisim-cyc.6 on a real run: both evaluations carry EAC / 12, and so does the comparison."""
+        """hisim-economics-engine-cyc.6 on a real run: both evaluations carry EAC / 12, and so does the comparison."""
         for variant in ("reference", "plan"):
             totals = document[variant]["totals"]
             assert totals["monthly_equivalent_cost_in_euro"]["best"] == pytest.approx(
@@ -490,7 +490,7 @@ class TestTheEndToEndDocument:
                 ), (variant, slot)
 
     def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
-        """hisim-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
+        """hisim-economics-engine-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
         StagedDocument.assert_subsidies_reconciled(document)
         awarded = [row for row in document["plan"]["subsidies"] if row["status"] == "awarded"]
         booked = sum(year["by_group"]["Subsidies"]["best"] for year in document["plan"]["annual"])

@@ -77,11 +77,17 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector]}"
+        "inputs: [Weather, UTSPConnector, {$port: heating}], "
+        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}}}"
     )
     HEAT_DISTRIBUTION_CONTROLLER: ClassVar[str] = (
         "HeatDistributionController: "
         "{class: hisim.components.heat_distribution_system.HeatDistributionController, preset: building_derived}"
+    )
+    #: The heating curve, the partner of every heating assembly's ``heating_curve`` need.
+    HEATING_CURVE: ClassVar[str] = (
+        "HeatingCurveController: "
+        "{class: hisim.components.heating_curve.HeatingCurveController, preset: building_derived}"
     )
     HEAT_DISTRIBUTION: ClassVar[str] = (
         "HeatDistributionSystem: {class: hisim.components.heat_distribution_system.HeatDistribution, "
@@ -100,18 +106,16 @@ class Real:
     )
     #: A PV array at a stated power, which a build sizes without a building.
     PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000}}"
-    #: The energy manager, and the grid whose meter observes the manager's balance alone (ems_with_battery).
+    #: The energy manager, and the grid, whose meter reads every electricity port, beside a manager too.
     CONTROL: ClassVar[str] = "control: {assembly: control/ems_self_consumption}"
-    GRID_ON_BALANCE: ClassVar[str] = (
-        "grid: {assembly: supply/electricity_grid, observes: [{output: TotalElectricityToOrFromGrid}]}"
-    )
+    GRID: ClassVar[str] = "grid: {assembly: supply/electricity_grid}"
 
     @classmethod
     def heating_site(cls, *extra: str) -> str:
-        """The site a heating assembly binds to in an expansion: weather, residents, heat distribution, its controller.
+        """The site a heating assembly binds to: weather, residents, heat distribution, its controller, the curve.
 
         Example: ``Real.heating_site() + imports("gas: {assembly: supply/gas_connection}", ...)``. The
-        distribution is the other end of every heating assembly's ``space_heating`` circuit. The site has
+        distribution is the other end of every space-heating assembly's ``space_heating`` circuit. The site has
         no building, so it expands but does not build; a build of a heating assembly reads a composed file.
 
         Args:
@@ -120,7 +124,14 @@ class Real:
         Returns:
             The text of a version-4 file without imports.
         """
-        return site(cls.WEATHER, cls.OCCUPANCY, cls.HEAT_DISTRIBUTION_CONTROLLER, cls.HEAT_DISTRIBUTION, *extra)
+        return site(
+            cls.WEATHER,
+            cls.OCCUPANCY,
+            cls.HEAT_DISTRIBUTION_CONTROLLER,
+            cls.HEATING_CURVE,
+            cls.HEAT_DISTRIBUTION,
+            *extra,
+        )
 
 
 #: The test contract of an inline assembly without a numeric parameter.

@@ -1,4 +1,4 @@
-"""Provenance ledger: from any result value back to its data sources (cost_spec.md §3.10).
+"""Provenance ledger: from any result value back to its data sources.
 
 During parameter resolution each resolved input is recorded once as an immutable `ParameterProvenance` and gets a small
 integer id; every `CashFlowEntry` carries the ids of the records behind its amount. Since every published figure is a
@@ -37,7 +37,7 @@ class ParameterOrigin(str, enum.Enum):
     #: fixtures. No source registry stands behind it, so the record cites none and `detail` names
     #: the definition. Never used for shipped catalog data.
     IN_MEMORY_DEFINITION = "IN_MEMORY_DEFINITION"
-    #: A value from the pre-catalog implementation kept by a migration shim (§10.1): only
+    #: A value from the pre-catalog implementation kept by a migration shim: only
     #: `DeviceEntry.legacy_flat_subsidy_share`, whose file's sources document the device price
     #: rather than the subsidy. Nothing records it any more; the origin stays so archived ledgers
     #: still load.
@@ -49,7 +49,7 @@ class ParameterOrigin(str, enum.Enum):
         """Return whether a record of this origin must cite sources; all do except four exempt origins.
 
         Simulation outputs, engine defaults, in-memory data and legacy-shim values are exempt; each explains itself in
-        `detail` instead. `ProvenanceLedger.record` enforces this (§3.10).
+        `detail` instead. `ProvenanceLedger.record` enforces this.
         """
         return self not in (
             ParameterOrigin.SIMULATION_OUTPUT,
@@ -96,7 +96,7 @@ class ProvenanceLedger:
 
     Built once per variant; `CashFlowEntry.provenance_ids` point into it. An id is the record's index, so ids survive
     serialization. `record` refuses a record that needs sources and has none, so an unsourced datapoint cannot enter a
-    calculation (§3.10).
+    calculation.
     """
 
     def __init__(self) -> None:
@@ -117,7 +117,7 @@ class ProvenanceLedger:
             The record's stable id, for `CashFlowEntry.provenance_ids`.
 
         Raises:
-            ValueError: If the record's origin requires sources and it carries none (§3.10).
+            ValueError: If the record's origin requires sources and it carries none.
         """
         if record.origin.requires_sources and not record.source_ids:
             raise ValueError(
@@ -211,7 +211,7 @@ class ProvenanceReportEntry:
 
 @dataclass
 class ProvenanceReport:
-    """A tree answering "where does this value come from" (§3.10).
+    """A tree answering "where does this value come from".
 
     Levels: the addressed value (`perspective/field`, the names the exports use), the timeline entries that make it up,
     each entry's parameter records, and the full citations at the leaves. `discounting_parameters` holds the rates and

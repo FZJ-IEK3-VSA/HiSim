@@ -1,4 +1,4 @@
-"""Applicant and building context for subsidy eligibility (cost_spec.md §5.3, §5.7).
+"""Applicant and building context for subsidy eligibility.
 
 Holds the country-neutral facts that the questionnaire fills and eligibility conditions read: who applies
 (`ApplicantActor`, `ApplicantProfile`), the building (`SubsidyBuildingContext`), what the evaluation installs
@@ -28,12 +28,12 @@ class SubsidyDataError(ValueError):
 
     Raised at load time (unknown benefit kind, missing ``legal_basis``, a condition on a field no context provides, an
     unsourced scheme) and at solve time (a candidate set too large for the solver). A scheme that parsed wrongly would
-    yield a plausible euro amount no legal text backs, so the engine fails instead (§3.10).
+    yield a plausible euro amount no legal text backs, so the engine fails instead.
     """
 
 
 class HeritageStatus(str, enum.Enum):
-    """Heritage-protection status of the building (§5.3).
+    """Heritage-protection status of the building.
 
     Several programmes relax their technical thresholds for protected buildings (the BEG, for example, accepts a lower
     SCOP for a listed monument). The members are legal categories, not a severity order, so conditions compare them
@@ -47,7 +47,7 @@ class HeritageStatus(str, enum.Enum):
 
 
 class DwellingType(str, enum.Enum):
-    """How the dwelling is attached to its neighbours, in the bands that fixed-amount grants use (§5.3).
+    """How the dwelling is attached to its neighbours, in the bands that fixed-amount grants use.
 
     Some programmes pay a different fixed amount per measure depending on this: Ireland's SEAI pays EUR 2,000 for attic
     insulation in a detached house and EUR 1,400 in a mid-terrace house. Semi-detached and end-of-terrace houses are
@@ -81,10 +81,10 @@ class ApplicantActor(str, enum.Enum):
 
 @dataclass
 class ApplicantProfile:
-    """Facts about the person applying for the subsidy (§5.3).
+    """Facts about the person applying for the subsidy.
 
     The applicant half of the eligibility context; the building half is :class:`SubsidyBuildingContext`. No simulation
-    produces these facts, so the questionnaire asks them (§5.7). ``None`` means unanswered: a condition touching it
+    produces these facts, so the questionnaire asks them. ``None`` means unanswered: a condition touching it
     makes its scheme UNDETERMINED instead of ineligible.
     """
 
@@ -111,10 +111,10 @@ class ApplicantProfile:
 
 @dataclass
 class SubsidyBuildingContext:
-    """Building facts read by eligibility conditions (§5.3).
+    """Building facts read by eligibility conditions.
 
     Age, size, usage split, heritage status and the heating system being replaced. The caller fills what the building
-    model knows (construction year, floor areas); the rest are questionnaire answers (§5.7). ``None`` means unanswered
+    model knows (construction year, floor areas); the rest are questionnaire answers. ``None`` means unanswered
     and makes a condition UNDETERMINED; the non-optional fields default to a single dwelling unit and no commercial
     floor area.
     """
@@ -138,10 +138,10 @@ class SubsidyBuildingContext:
 
     @property
     def residential_share(self) -> Optional[float]:
-        """Residential fraction of the floor area in [0, 1], derived and never asked separately (§5.7).
+        """Residential fraction of the floor area in [0, 1], derived and never asked separately.
 
         Read by conditions of residential-only programmes (``building.residential_share >= 0.5``) and by the
-        ``RESIDENTIAL_SHARE`` proration of the eligible cost in mixed-use buildings (§5.2).
+        ``RESIDENTIAL_SHARE`` proration of the eligible cost in mixed-use buildings.
 
         Returns:
             The share, or ``None`` when the residential area is unanswered or both areas are zero, which makes
@@ -240,12 +240,12 @@ def _known_context_fields(context_roots: Dict[str, type], derived: Dict[str, Tup
 
 
 class SubsidyContextFields:
-    """Namespace for the field names an eligibility condition may use (§5.7).
+    """Namespace for the field names an eligibility condition may use.
 
     Holds which root (``applicant``, ``building``, ``package``) resolves against which dataclass, which fields are
     computed rather than asked, and the resulting set of legal names. The catalog loader uses it to reject a typo like
-    ``applicant.incom`` (§5.3), and the data-file checks use it to prove every referenced field has a localized
-    question (§9.6).
+    ``applicant.incom``, and the data-file checks use it to prove every referenced field has a localized
+    question.
     """
 
     #: Condition roots and the dataclass each resolves against. `measure.*` is deliberately
@@ -264,11 +264,11 @@ class SubsidyContextFields:
 
     @classmethod
     def is_computed(cls, fieldname: str) -> bool:
-        """Whether a condition field is computed by the engine rather than asked (§5.7)."""
+        """Whether a condition field is computed by the engine rather than asked."""
         return fieldname.split(".", 1)[0] in cls.COMPUTED_ROOTS
 
     #: Fields that are computed from other fields and therefore never asked directly: the
-    #: derived field maps to the user-answerable fields whose answers determine it (§5.7). This
+    #: derived field maps to the user-answerable fields whose answers determine it. This
     #: registry is the *only* place that knowledge lives — the question derivation
     #: (`required_questions`) and the question-coverage validation
     #: (`validation.validate_subsidy_catalog`) both read it.
@@ -279,13 +279,13 @@ class SubsidyContextFields:
         ),
     }
 
-    #: Statically enumerable context fields conditions may reference (§5.7) — derived, not
+    #: Statically enumerable context fields conditions may reference — derived, not
     #: typed out.
     KNOWN_CONTEXT_FIELDS: FrozenSet[str] = _known_context_fields(CONTEXT_ROOTS, DERIVED_CONTEXT_FIELDS)
 
 
 def question_targets(fieldname: str) -> Tuple[str, ...]:
-    """Return the user-answerable field(s) whose answers determine `fieldname` (§5.7).
+    """Return the user-answerable field(s) whose answers determine `fieldname`.
 
     Plain fields map to themselves; derived fields map to the questions behind them, so ``building.residential_share``
     becomes the two floor-area questions. Both :func:`required_questions` and the coverage check in ``validation.py``

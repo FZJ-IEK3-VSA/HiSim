@@ -12,9 +12,18 @@ from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
-from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
+from hisim.loadtypes import (
+    EnergyBalanceCarrier,
+    EnergyRole,
+    LoadTypes,
+    Units,
+    InandOutputType,
+    ComponentType,
+    OutputAggregation,
+)
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
@@ -30,20 +39,18 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
-    SizingLaw,
     concrete,
-    law,
     preset,
     sized_field,
 )
 from hisim.components.building import Building
-from hisim.components.weather import Weather
-from hisim.components.heat_distribution_system import HeatDistributionControllerConfig
+from hisim.components.heating_curve import HeatingCurveController
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.subcomponents.pumps import ControllerLiftPump
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
@@ -161,7 +168,7 @@ class SpaceHeatingDelivery:
     energy_in_watt_hour: float
 
 
-class ElectricHeating(Component):
+class ElectricHeating(PhysicsComponent):
     """Electric Heating class.
 
     This component refers to direct electric heating like radiators, electric boilers, fan heaters etc.
@@ -181,7 +188,6 @@ class ElectricHeating(Component):
     #: The hot-water supply temperature the controller aims at: the heater's hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
-    WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
     #: The lift at which the hot-water side runs at its maximal power, in K: it regulates its power as
     #: ``P = P_max lift / 100 K``, so a 25 K lift draws a quarter of the maximal power.
@@ -219,6 +225,10 @@ class ElectricHeating(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        #: The hot-water circuit's pump: it carries the power the heater regulates over the lift the controller asks
+        #: for, ``m = P / (c lift)``, without bounds. For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s. The rooms
+        #: are heated directly, without a pump.
+        self.hot_water_pump: ControllerLiftPump = ControllerLiftPump()
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -266,13 +276,6 @@ class ElectricHeating(Component):
                 Units.CELSIUS,
                 True,
             )
-            self.water_input_mass_flow_rate_dhw_channel: ComponentInput = self.add_input(
-                self.component_name,
-                ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                LoadTypes.WARM_WATER,
-                Units.KG_PER_SEC,
-                True,
-            )
 
         # Outputs Space Heating
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
@@ -297,9 +300,7 @@ class ElectricHeating(Component):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for space heating",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputShPower
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -350,9 +351,7 @@ class ElectricHeating(Component):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for domestic hot water",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputDhwPower
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electric_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -421,8 +420,17 @@ class ElectricHeating(Component):
 
     def get_default_connections_from_simple_dhw_storage(
         self,
-    ):
-        """Get simple dhw storage default connections."""
+    ) -> List[ComponentConnection]:
+        """Return the default connection from the hot-water tank: the tank's step mean, the hot-water circuit's return.
+
+        The heater pumps the hot-water circuit itself and books its heat from its own flow, so it reads only the
+        temperature the tank sends back, not a flow of the tank. For example, a tank whose step mean is 50 °C sends
+        50 °C back to the heater, which heats that water to its hot-water supply temperature.
+
+        Returns:
+            The one connection from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
+            ``WaterInputTemperatureDhw``.
+        """
 
         component_class = SimpleDHWStorage
         hws_classname = component_class.get_classname()
@@ -431,11 +439,6 @@ class ElectricHeating(Component):
                 ElectricHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
-            ),
-            ComponentConnection(
-                ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                hws_classname,
-                component_class.WaterMassFlowRateOfDHW,
             ),
         ]
 
@@ -476,13 +479,10 @@ class ElectricHeating(Component):
         if force_convergence:
             return
         heating_mode = HeatingMode(stsv.get_input_value(self.heating_mode_channel))
-        if heating_mode in (
-            HeatingMode.DOMESTIC_HOT_WATER,
-            HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
-        ):
+        if heating_mode in DiverterValve.CHARGING_MODES:
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
-            hot_water = hydronics.CircuitStep.idle(
+            hot_water = hydronics.FluidStream.idle(
                 t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
         else:
@@ -490,7 +490,7 @@ class ElectricHeating(Component):
         space_heating = self.space_heating_delivery(stsv, heating_mode, hot_water.power_w)
         self.publish_heat(stsv, space_heating, hot_water)
 
-    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
+    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.FluidStream:
         """Return the hot-water circuit of a step that charges the tank, from the controller's lift and set point.
 
         Raises:
@@ -508,6 +508,7 @@ class ElectricHeating(Component):
             ),
             maximal_supply_temperature_in_celsius=self.config.maximal_dhw_supply_temperature_in_celsius,
             maximal_power_in_watt=concrete(self.config.maximum_electric_power_w),
+            pump=self.hot_water_pump,
         )
 
     def space_heating_delivery(
@@ -550,7 +551,7 @@ class ElectricHeating(Component):
         )
 
     def publish_heat(
-        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingDelivery", hot_water: hydronics.CircuitStep
+        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingDelivery", hot_water: hydronics.FluidStream
     ) -> None:
         """Publish the rooms' heat, the hot-water circuit and the electricity, which equals the heat."""
         hot_water_energy_in_watt_hour = (
@@ -595,13 +596,14 @@ class ElectricHeating(Component):
         supply_temperature_set_in_celsius: float,
         maximal_supply_temperature_in_celsius: float,
         maximal_power_in_watt: float,
-    ) -> hydronics.CircuitStep:
+        pump: ControllerLiftPump,
+    ) -> hydronics.FluidStream:
         """Return the electric heater's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
         The heater holds the lift its controller asks for and regulates its power as
-        ``P = P_max lift / REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN``, at most ``P_max``; it pumps
-        ``m = P / (c lift)`` and supplies the return plus the lift, capped at the lower of its maximal supply
-        temperature and the controller's set temperature
+        ``P = P_max lift / REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN``, at most ``P_max``; its pump
+        (:attr:`hot_water_pump`) runs ``m = P / (c lift)`` and the heater supplies the return plus the
+        lift, capped at the lower of its maximal supply temperature and the controller's set temperature
         (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`). The heat is what the water carries,
         ``m c (T_sup - T_ret)``, which is ``P`` while nothing caps the supply. Without a lift the circuit moves no
         water. For example, a 6 kW heater asked for a 25 K lift on a 50 °C return heats with 1.5 kW at
@@ -613,33 +615,33 @@ class ElectricHeating(Component):
             supply_temperature_set_in_celsius: The supply temperature the controller aims at, in °C.
             maximal_supply_temperature_in_celsius: The heater's maximal hot-water supply temperature, in °C.
             maximal_power_in_watt: The heater's maximal electric power, in W.
+            pump: The heater's hot-water pump, :attr:`hot_water_pump`.
 
         Returns:
             The circuit's mass flow, supply temperature and heat.
         """
         if lift_in_kelvin <= 0:
-            return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+            return hydronics.FluidStream.idle(t_return_c=return_temperature_in_celsius)
         regulated_power_in_watt = min(
             maximal_power_in_watt * lift_in_kelvin / ElectricHeating.REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN,
             maximal_power_in_watt,
         )
-        mass_flow_in_kg_per_second = regulated_power_in_watt / (
-            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
+        pumped = pump.operating_point(
+            heat_power_in_watt=regulated_power_in_watt,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            lift_to_supply_set_temperature_in_kelvin=lift_in_kelvin,
         )
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
         supply_temperature_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
-            unthrottled_supply_c=return_temperature_in_celsius + lift_in_kelvin,
+            unthrottled_supply_c=pumped.supply_temperature_in_celsius,
             return_c=return_temperature_in_celsius,
             maximal_supply_c=maximal_supply_temperature_in_celsius,
             set_supply_c=supply_temperature_set_in_celsius,
         )
-        return hydronics.CircuitStep(
+        return hydronics.FluidStream.carrying(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
-            power_w=hydronics.circuit_power_w(
-                mass_flow_kg_per_s=mass_flow_in_kg_per_second,
-                t_supply_c=supply_temperature_in_celsius,
-                t_return_c=return_temperature_in_celsius,
-            ),
+            t_return_c=return_temperature_in_celsius,
         )
 
     def get_cost_opex(
@@ -849,48 +851,16 @@ class ElectricHeatingControllerConfig(ConfigBase):
     """Configuration of the direct electric heating appliance's controller.
 
     The switch in front of the appliance: each time step it decides whether the heat goes to
-    space heating, to domestic hot water, to both at once or nowhere, and it stops space
-    heating once the daily average outside temperature has risen above the heating threshold.
-    The named default is :meth:`preset_standard`; the two fields that describe the building
-    rather than the appliance are sizable, so the preset leaves them ``AUTO`` and
-    ``.resolve(ctx)`` derives both from the building's facts::
-
-        ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController").resolve(
-            SizingContext(heating_load_in_watt=7780.75, conditioned_floor_area_in_m2=121.2)
-        )
-
-    Direct electric heating has no water circuit and therefore no heat distribution controller
-    whose threshold could be copied, so the threshold is derived here from the building's
-    efficiency -- by reusing that controller's law rather than restating its step table, which
-    is what keeps an electrically heated house switching off on the same day a water-heated
-    one of the same efficiency does.
+    space heating, to domestic hot water, to both at once or nowhere. Space heating runs only in
+    the heating season, which the heating curve (:class:`~hisim.components.heating_curve.HeatingCurveController`)
+    publishes from the building's heating threshold; the controller reads it from there instead of
+    keeping a threshold of its own, so an electrically heated house switches off on the same day a
+    water-heated one of the same efficiency does. The named default is :meth:`preset_standard`.
     """
 
     MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeatingController"
 
-    #: Sizing law of the building's specific heating load: its design heating load divided by
-    #: its conditioned floor area. Law terms carry no division, so this is a function law over
-    #: the two building facts; the operands and their order are the ones the setups divided by
-    #: hand, because the recorded value is the unrounded quotient.
-    SPECIFIC_HEATING_LOAD_LAW: ClassVar[SizingLaw] = law(
-        lambda ctx: ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2,
-        reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
-        description="Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2",
-    )
-
     component_id: ComponentID
-    #: Daily average outside temperature above which space heating stops. Sizable: left ``AUTO``
-    #: it is the heat distribution controller's step table over the building's specific heating
-    #: load -- 16 °C up to 50 W/m², 18 °C up to 80 W/m², 20 °C above that -- because a badly
-    #: insulated house cools out in the mornings and evenings of the shoulder season and has to
-    #: be heated earlier in the year.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW,
-        note=(
-            "the heat distribution controller's step table: 16 °C up to 50 W/m² of specific"
-            " heating load, 18 °C up to 80 W/m², 20 °C above that"
-        ),
-    )
     #: Whether the appliance this controls also prepares domestic hot water, in which case the
     #: controller reads the vessel's temperature and can prioritise it over space heating.
     with_domestic_hot_water_preparation: bool = False
@@ -901,42 +871,37 @@ class ElectricHeatingControllerConfig(ConfigBase):
     #: Whether space heating and hot water may be served in the same time step. False makes the
     #: two exclusive, with hot water taking precedence.
     parallel_space_heating_and_dhw_option: bool = False
-    #: The building's design heating load per square metre of conditioned floor area. No code
-    #: path reads it -- neither controller nor appliance touches the field -- it is recorded
-    #: provenance for the threshold above, which the same ratio decides. Sizable so that the
-    #: number recorded is the one the threshold was derived from, and not a second hand-typed one.
-    specific_heating_load_of_building_in_watt_per_m2: Sizable[float] = sized_field(
-        rule=SPECIFIC_HEATING_LOAD_LAW,
-        note="the building's heating load per m² of conditioned floor area",
-    )
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "ElectricHeatingControllerConfig":
-        """The one electric heating controller the fleet runs, derived from the building it heats.
+        """The one electric heating controller the fleet runs.
 
         The field defaults are that controller: space heating only, exclusive of hot water
         where the appliance prepares it as well, and a fifteen-kelvin hysteresis band on the
-        vessel temperature. What the preset does not fix is the heating threshold and the
-        specific heating load behind it, which stay ``AUTO`` so that both come from the
-        building instead of being written down twice.
+        vessel temperature.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its two sizable fields still ``AUTO``.
+            The configuration.
         """
         return cls(component_id=ComponentID(name=name))
 
 
-class ElectricHeatingController(Component):
-    """Electric Heating Controller."""
+class ElectricHeatingController(L1ControllerComponent):
+    """Electric Heating Controller.
+
+    It decides the heater's mode on the hot-water tank's start-of-step temperature and the heating season the heating
+    curve publishes.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    #: 1 on a day of the heating season, 0 otherwise, as the heating curve publishes it.
+    HeatingSeason = "HeatingSeason"
 
     # Relevant when used for dhw as well
     WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
@@ -979,11 +944,11 @@ class ElectricHeatingController(Component):
                 Units.CELSIUS,
                 True,
             )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+        self.heating_season_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            self.HeatingSeason,
+            LoadTypes.ANY,
+            Units.BINARY,
             True,
         )
 
@@ -1015,9 +980,10 @@ class ElectricHeatingController(Component):
             LoadTypes.ANY,
             Units.ANY,
             output_description="Operating mode of electric heating.",
+            aggregation=OutputAggregation.NONE,
         )
 
-        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
 
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
@@ -1038,17 +1004,18 @@ class ElectricHeatingController(Component):
             ),
         ]
 
-    def get_default_connections_from_weather(
-        self,
-    ):
-        """Get weather default connections."""
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the default connection from the heating curve: the heating season it publishes.
 
-        weather_classname = Weather.get_classname()
+        Returns:
+            The one connection of ``HeatingSeason``.
+        """
         return [
             ComponentConnection(
-                ElectricHeatingController.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
+                ElectricHeatingController.HeatingSeason,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.HeatingSeason,
             ),
         ]
 
@@ -1063,6 +1030,12 @@ class ElectricHeatingController(Component):
         # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
+        DiverterValve.require_valid_hysteresis(
+            hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
+            set_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+            field_name="hysteresis_water_temperature_offset",
+            controller_description="The electric heater's controller",
+        )
         # the supply temperature a hot-water charge aims at: the warm-water aim plus the hysteresis
         self.hot_water_supply_temperature_set_in_celsius: float = (
             self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset
@@ -1098,7 +1071,7 @@ class ElectricHeatingController(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the electric heating comtroller."""
+        """Decide the heater's mode on the tank's start-of-step temperature and the heating season."""
 
         if force_convergence:
             return
@@ -1111,13 +1084,9 @@ class ElectricHeatingController(Component):
                 self.water_temperature_input_channel_dhw
             )
 
-        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-            self.daily_avg_outside_temperature_input_channel
-        )
-
         # Determine which operating mode to use in dual-circuit system
         delta_temperature_for_dhw_in_celsius = self.determine_operating_mode(
-            daily_avg_outside_temperature_in_celsius,
+            stsv.get_input_value(self.heating_season_channel) > 0.5,
             water_temperature_input_from_warm_water_storage_in_celsius,
         )
         stsv.set_output_value(
@@ -1131,14 +1100,23 @@ class ElectricHeatingController(Component):
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
     def determine_operating_mode(
-        self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]
+        self, is_heating_season: bool, dhw_current_temperature_deg_c: Optional[float]
     ) -> float:
-        """Determine operating mode."""
+        """Set the controller's mode from the heating season and the tank's temperature, and return the hot-water lift.
+
+        Args:
+            is_heating_season: Whether the heating curve publishes this day as one of the heating season.
+            dhw_current_temperature_deg_c: The hot-water tank's start-of-step temperature, in °C; None without hot
+                water.
+
+        Returns:
+            The lift the hot-water charge asks for, in K; 0 when no charge runs.
+        """
 
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+            is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=0,  # artificial because no sh water used
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None
@@ -1147,9 +1125,6 @@ class ElectricHeatingController(Component):
                 set_temperature_space_heating_in_celsius=60,  # artificial because no sh water used
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold_in_celsius=concrete(
-                    self.config.set_heating_threshold_outside_temperature_in_celsius
-                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

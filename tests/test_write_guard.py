@@ -1,4 +1,4 @@
-"""Tests for the write guard (``hisim.write_guard``) and the calculation scope around it (bead hisim-epc.23).
+"""Tests for the write guard (``hisim.write_guard``) and the calculation scope around it (bead hisim-renovisor-translator-epc.23).
 
 The base tests exercise the guard and the registry it reads (``CalculationDirectories``): the guard
 refuses a write outside the calculation's result and cache directories, naming the path and the line

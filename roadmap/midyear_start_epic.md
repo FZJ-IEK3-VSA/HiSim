@@ -69,12 +69,57 @@ always come from its wired inputs — its own solar cache is dead code, see the 
 collector already follows `start_date`), and the whole occupancy/car chain is fixed inside the LPG
 connector, which is the profile owner for both.
 
+## Owner decisions of 2026-10-14 (PR2, hisim-midyear-windows-9g2.4)
+
+Three points below were settled when PR2 was implemented, because the text above and below them
+contradicted itself or had been overtaken by the cache-service work:
+
+1. **The clock is standard time.** `start_date` is read in the delivered frame's *standard* time
+   (UTC+1 all year for a Berlin frame, UTC for a UTC frame), not in German wall-clock time. The
+   results index is an even grid from `start_date` without daylight saving, so a full-year run
+   labels row 260 640 of a minutely Berlin frame "1 July 00:00"; with the wall-clock reading a July
+   window would be one hour off the full-year run's July labels and the oracle could never be exact.
+   On the delivered Aachen frame (padded to midnight) 1 July is therefore row **260 640**; the
+   wall-clock row is 260 580. On a frame still anchored at 00:30 the numbers of trap 1 become
+   260 610 (standard time, correct), 260 550 (wall clock) and 260 640 (counted from the first row
+   as if it were midnight). `hisim/window_offset.py` holds the lookup; `tests/test_window_offset.py`
+   pins all of these.
+2. **Caches: producer keys, no epoch.** Weather, PV and the building's solar gains were already
+   producers whose key fingerprints their code (cache-service work after this plan was written); the
+   solar-thermal sun position and the car profile followed (hisim-caching-hi1.4). The manual
+   `CacheEpoch` below is dropped: a producer's key moves when its code does. What a key cannot see
+   by itself -- that two runs read different windows of the same weather year -- is carried as the
+   `window_start` field of every window-sensitive producer's inputs (PV, building solar gains, solar
+   thermal, car). The weather's own key stays window-free: it produces the whole year, which is the
+   point of B′. The LoadProfileGenerator connector still keys legacy-style; PR3 must make its key
+   follow the conversion it rewrites.
+3. **The building solar-gain cache is kept.** It was dead when this plan was written; #735 made it a
+   live producer. It is keyed on the window start instead of deleted.
+
+The oracle perturbs the numeric `initial_*` configuration fields for its self-calibration, compares
+a fixed set (weather, occupancy, the building's solar gains) exactly whatever the calibration says,
+and lists the components whose state no `initial_*` field sets as false alarms.
+
+## Owner decision of 2026-10-16: the CSV loader (hisim-midyear-windows-9g2.14)
+
+The CSV loader is a profile owner of the "slice a kept year" shape, but its configuration named no
+time column, so it read timestep 0 as 1 January whatever `start_date` said. `CSVLoaderConfig` now has
+an optional `time_column`: its labels are ISO 8601 dates and times without a UTC offset, read in the
+run's standard time like the weather's, and the loader resolves the window with `WindowOffset` and
+reads the window's rows. A file without a time column serves only a run that starts on 1 January;
+any other start is refused. A file finer than the run is averaged over each timestep (15 one-minute
+rows give one 900 s value, which keeps the energy of a power column); a file coarser than the run,
+or one whose row step does not divide the run's step, is refused (hisim-xgzf, the same day).
+`electrolyzer_with_renewables` names its wind profile's time column and runs the July pairs.
+
 ## The two traps that decide success (write their tests before the code)
 
-1. **The offset must never be arithmetic.** The Berlin-anchored weather sources index elapsed
-   instants: for 1 July 2021, the correct row is **260 550**; naive minutes from the series' own
+1. **The offset must never be arithmetic.** (The clock was decided on 2026-10-14 as standard time;
+   see the owner decisions above for what the numbers below became.) The Berlin-anchored weather sources index elapsed
+   instants: for 1 July 2021, the wall-clock row is 260 550; naive minutes from the series' own
    start give 260 610 (the March DST hour), naive minutes from Jan 1 give 260 640 (DST plus the
-   source's 00:30 anchor). The error is *energy-neutral over whole days* — no aggregate or KPI
+   source's 00:30 anchor). Under the decided standard-time clock, 260 610 is the correct row of
+   a frame anchored at 00:30, and 260 640 that of the delivered frame padded to midnight. The error is *energy-neutral over whole days* — no aggregate or KPI
    test can ever catch it — and only a per-timestep phase test against wall-clock labels can. Pin
    the three numbers, and pin a December window too (where the DST correction is zero again).
    The LPG frame, by contrast, is gapless naive local time (uniform 1-minute diffs across all
@@ -91,7 +136,10 @@ connector, which is the profile owner for both.
 all keyword construction; every factory routes through it). It gains four validations: start at
 midnight; whole days; `start` and `end − 1 timestep` in the same year (a window crossing Dec 31
 has no single-year source and the DST surgery is keyed to one year — refuse loudly); duration
-divisible by `seconds_per_timestep` (today `timesteps` truncates silently). **Leap-year refusal
+divisible by `seconds_per_timestep` (today `timesteps` truncates silently). A fifth was added on the
+review of #982 (owner, 2026-10-15): the step length divides a day of 86 400 s, so every day starts a
+timestep; the single-day chart and the weather's daily average take the one exact
+`SimulationParameters.timesteps_per_day` from it. **Leap-year refusal
 does not live here** — whether an 8760-row source can serve 2020 is the source's answer, so it
 lands in the offset resolver, next to the lookup that discovers the missing label.
 
@@ -118,7 +166,7 @@ epic that changes what a cached producer writes bumps it, with the PR number as 
 history reads. CI never shares a cache across the epic's branches (the per-run empty cache
 directory pattern the parity rig already uses).
 
-## Initial states (storages, thermal mass, batteries) → hisim-9g2.2, hisim-4g9.14
+## Initial states (storages, thermal mass, batteries) → hisim-midyear-windows-9g2.2, hisim-component-physics-4g9.14
 
 The inventory, measured and cited in the analyses, in one line each: building thermal mass starts
 at 22 °C (winter-typical; still 4.9 % off on day 7 after a 6 K perturbation — the largest and
@@ -143,6 +191,18 @@ self-assigns) — fix those on their own merits before checkpointing is discussa
 untangle before any building-side seasonal default: `initial_internal_temperature_in_celsius`
 doubles as the *permanent* window-opening comfort floor in the building's free-cooling rule — a
 field named "initial" that is silently a model parameter.
+
+**Superseded for the storages (hisim-component-physics-4g9.64, owner request 2026-10-14, decisions 2026-10-15):**
+every storage now states one start value as a class constant, and the state classes lost their
+contradicting defaults. Half charged: the house battery and the car battery at a state of charge of
+0.5 (the "Battery losses" KPI now subtracts the change of the stored energy, so the charge held at
+the start is no loss), the hydrogen tank half way between its floor and its capacity (250 kg of the
+500 kg preset), the hot-water tank at 50 °C (half its usable charge: half way from the 40 °C tap
+temperature, below which its water is no longer usable, to the 60 °C warm-water aim), the example
+storage at half its capacity. The space-heating buffer keeps 35 °C by the owner's decision: its
+half-charged value depends on the emitter it feeds (floor heating 28–35 °C, radiator 55–70 °C),
+which the buffer does not know. The thermal mass and the controllers are not storages and are
+unchanged.
 
 ## Validation: the split oracle
 
@@ -185,7 +245,7 @@ anchors — Berlin 00:30, Berlin 00:00 after the padding row ``Weather.interpola
 UTC 00:00 — which is exactly why "resolve against the delivered frame" is the rule); and the
 cold-then-warm cache equality assertion.
 
-## The PR plan → hisim-9g2.3, hisim-9g2.4, hisim-9g2.5, hisim-9g2.6, hisim-9g2.7, hisim-9g2.8, hisim-9g2.9
+## The PR plan → hisim-midyear-windows-9g2.3, hisim-midyear-windows-9g2.4, hisim-midyear-windows-9g2.5, hisim-midyear-windows-9g2.6, hisim-midyear-windows-9g2.7, hisim-midyear-windows-9g2.8, hisim-midyear-windows-9g2.9
 
 ```
 PR1 (window contract; YEARLYFORECAST→window renames; plot labels; delete dead smart device)
@@ -215,7 +275,7 @@ blesses the first true July references. The PR8+ series moves no golden at all: 
 default to today's constants, and each PR's proof is its component's columns going exactly to zero
 in the seeded oracle.
 
-## Independent repairs surfaced by the analyses → hisim-9g2.10, hisim-9g2.11, hisim-4g9.12, hisim-4g9.13, hisim-4g9.14, hisim-9g2.2
+## Independent repairs surfaced by the analyses → hisim-midyear-windows-9g2.10, hisim-midyear-windows-9g2.11, hisim-component-physics-4g9.12, hisim-component-physics-4g9.13, hisim-component-physics-4g9.14, hisim-midyear-windows-9g2.2
 
 In scope, batched as noted: the leap-year refusal (PR2 — the offset lookup is where "this source
 cannot serve this date" is decidable); the DWD_15MIN reader sizing its index from the *run's*
@@ -230,7 +290,7 @@ Out of scope, each with its trigger: `generic_price_signal` emits a constant (el
 forever) — not profile-driven, cannot be made wrong by this epic; fix when a setup needs a
 time-varying tariff. The `i_save_state` reference/self-assignment bugs — live convergence-loop
 defects, prerequisite for checkpointing; on the cleanup list. The initial-state default
-contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settle when the
-season-aware storage seed lands. The MPC's uninterpretable `10/15` Wh literal — flag for whoever
+contradictions (storage 25 vs 35 °C, EV SOC 0 vs 0.5, H₂ 0 vs 400 kg) — settled by hisim-component-physics-4g9.64,
+every storage states one start value. The MPC's uninterpretable `10/15` Wh literal — flag for whoever
 touches the MPC. The building's dual-purpose `initial_internal_temperature_in_celsius` — split
 before any building-side seasonal default.

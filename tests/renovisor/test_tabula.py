@@ -5,7 +5,7 @@ typology of their own and are approximations); the age band is the one whose yea
 the construction year, clamped at both ends; the variant is the one ``building.retrofit_status``
 selects (``001`` when absent, ``001`` with a note where the band lacks it). Every generic-example
 row is selectable: the ``Building`` component guards a zero door or window area and gives a row
-without a door area TABULA's estimated door (hisim-4g9.1), so the former usable-row workaround --
+without a door area TABULA's estimated door (hisim-component-physics-4g9.1), so the former usable-row workaround --
 a row without door or window geometry was skipped for the nearest band that had one -- is gone.
 
 ``IE.N.SFH.05`` (1967-1977), the row the workaround used to skip for the mockup's 1975 house, is

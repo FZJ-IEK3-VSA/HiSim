@@ -101,3 +101,30 @@ def test_report_image_entry_both_none_raises_component_name_first() -> None:
             output_description=None,
             unit=None,
         )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("file_name", "expected_caption"),
+    [
+        ("line.png", "Fig. 7: PVSystem ElectricityOutput, line chart over the run"),
+        ("carpet.png", "Fig. 7: PVSystem ElectricityOutput, carpet plot by day and time of day"),
+        ("days_m0_d0.png", "Fig. 7: PVSystem ElectricityOutput, single day"),
+        ("bar.png", "Fig. 7: PVSystem ElectricityOutput, monthly bar chart"),
+        ("other.png", "Fig. 7: PVSystem ElectricityOutput"),
+    ],
+)
+def test_the_report_caption_names_the_kind_of_chart(file_name: str, expected_caption: str) -> None:
+    """The four charts of one output had the same caption; each now says which chart it is."""
+    from hisim.postprocessing.postprocessing_main import PostProcessor  # pylint: disable=import-outside-toplevel
+
+    entry = ReportImageEntry(
+        component_name="PVSystem",
+        output_type="ElectricityOutput",
+        file_path=f"/results/PVSystem/ElectricityOutput/{file_name}",
+        component_output_folder_path="/results/PVSystem/ElectricityOutput",
+        category=None,
+        output_description="PV output",
+        unit="W",
+    )
+    assert PostProcessor.figure_caption(7, entry) == expected_caption

@@ -59,7 +59,12 @@ from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.simulationparameters import SimulationParameters, WeatherYearError
+from hisim.simulationparameters import (
+    PartLoadThresholdError,
+    SimulationParameters,
+    SimulationWindowError,
+    WeatherYearError,
+)
 
 
 class SimulationParametersReader:
@@ -137,7 +142,9 @@ class SimulationParametersReader:
 
         Raises:
             EnergySystemFormatError: ``EF-07`` if a date or an option cannot be interpreted, if
-                a key is not a parameter at all, or if ``weather_year`` is not a year in range.
+                a key is not a parameter at all, if the window breaks the window contract
+                (:meth:`SimulationParameters.validated_window`), if ``weather_year`` is not a year in
+                range, or if ``part_load_above_seconds`` is not a step length.
         """
         prepared = dict(values)
         for key in cls.DATE_KEYS:
@@ -146,7 +153,7 @@ class SimulationParametersReader:
         prepared[cls.OPTIONS_KEY] = cls._options(prepared.get(cls.OPTIONS_KEY) or [], location)
         try:
             return SimulationParameters(**prepared)
-        except (TypeError, WeatherYearError) as error:
+        except (TypeError, SimulationWindowError, WeatherYearError, PartLoadThresholdError) as error:
             raise EnergySystemFormatError(
                 EnergySystemErrorId.MALFORMED_BLOCK,
                 location,
@@ -582,6 +589,55 @@ def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str,
     return record_path, audit_path, wire_path, parameters_path
 
 
+def simulate_energy_system(
+    energy_system_path: Any,
+    simulation_parameters: SimulationParameters,
+    *,
+    rerun: bool = False,
+    simulation_parameters_path: Any = "",
+    assembly_resolver: Optional[AssemblyResolver] = None,
+) -> BuiltEnergySystem:
+    """Builds an energy-system file against parameters in hand, writes its run records and simulates it.
+
+    The run itself, shared by :func:`run_energy_system`, which reads the parameters from a file, and by
+    callers that build them in memory (the golden runner, ``scripts/runner.py``). It does not open a
+    calculation: the caller runs it inside one (:class:`~hisim.calculation_scope.CalculationScope`), so
+    that its writes are guarded. For example, ``run_energy_system`` calls it with the parameters it read
+    and the path of their file, the golden runner with the parameters of a golden parameter set.
+
+    Args:
+        energy_system_path: Path of the ``*.energy_system.yaml`` file.
+        simulation_parameters: Parameters of the run, their result directory set or left to the simulator.
+        rerun: Whether a generated run record is being re-run, which is what makes a
+            ``metadata`` block acceptable.
+        simulation_parameters_path: Path of the parameters file, when the caller read them from one; the
+            run record names it.
+        assembly_resolver: Finds the assemblies the file imports; this machine's search path when omitted.
+
+    Returns:
+        The built system, after the simulation has finished; its simulator's parameters carry the result
+        directory the run wrote to.
+
+    Raises:
+        EnergySystemError: For any condition of the error catalogue.
+    """
+    built = build_energy_system(
+        energy_system_path,
+        simulation_parameters,
+        rerun=rerun,
+        simulation_parameters_path=simulation_parameters_path,
+        assembly_resolver=assembly_resolver,
+    )
+    write_records(built, built.simulator.get_simulation_parameters().result_directory)
+    log.information(f"Starting the simulation of '{built.model.name}'.")
+    built.simulator.run_all_timesteps()
+    log.information(
+        f"Finished the simulation of '{built.model.name}'; results are in "
+        f"{built.simulator.get_simulation_parameters().result_directory}."
+    )
+    return built
+
+
 def run_energy_system(
     energy_system_path: Any,
     simulation_parameters_path: Any,
@@ -625,18 +681,10 @@ def run_energy_system(
         if result_directory is not None:
             parameters.result_directory = result_directory
             os.makedirs(result_directory, exist_ok=True)
-        built = build_energy_system(
+        return simulate_energy_system(
             energy_system_path,
             parameters,
             rerun=rerun,
             simulation_parameters_path=simulation_parameters_path,
             assembly_resolver=assembly_resolver,
         )
-        write_records(built, built.simulator.get_simulation_parameters().result_directory)
-        log.information(f"Starting the simulation of '{built.model.name}'.")
-        built.simulator.run_all_timesteps()
-        log.information(
-            f"Finished the simulation of '{built.model.name}'; results are in "
-            f"{built.simulator.get_simulation_parameters().result_directory}."
-        )
-        return built

@@ -7,7 +7,6 @@ The component with the lowest source weight is activated first.
 """
 
 import dataclasses
-import math
 from dataclasses import dataclass, field
 
 from types import MappingProxyType
@@ -45,10 +44,11 @@ class EMSConfig(ConfigBase):
     strategy: str = "optimize_own_consumption"
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float = 0
-    # increase building set temperatures for heating when PV surplus is available.
+    # Raise of the building's heating set temperature while PV surplus is available, a temperature difference in K:
+    # the value of the output BuildingTemperatureModifierInKelvin, also in K, while the raise is on.
     # Must be smaller than difference of set_heating_temperature and set_cooling_temperature.
-    # The three offsets are declared in °C, the unit of the modifier outputs they become.
-    building_indoor_temperature_offset_value: float = field(default=2, metadata={"unit": lt.Units.CELSIUS})
+    # The two storage offsets below are declared in °C, the unit of the storage modifier outputs they become.
+    building_indoor_temperature_offset_in_kelvin: float = field(default=2, metadata={"unit": lt.Units.KELVIN})
     # increase in dhw buffer set temperatures when PV surplus is available for heating
     domestic_hot_water_storage_temperature_offset_value: float = field(
         default=10, metadata={"unit": lt.Units.CELSIUS}
@@ -91,11 +91,16 @@ class EMSState:
     """The energy manager's state from one time step to the next: whether it raised the set temperatures.
 
     The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
-    storage while PV electricity is left over after the battery has charged. Close to zero surplus it keeps the
+    storage while generated electricity is left over after the battery has charged. Close to zero surplus it keeps the
     decision of the step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision
-    is the one value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes
-    the decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
-    the next step's start.
+    is the one value the manager carries from step to step.
+
+    The manager keeps two of them. ``previous_state`` is the start of the step: a pass reads only it, and no pass
+    changes it. ``state`` is the end of the step: every unforced pass overwrites it with its decision, a forced pass
+    leaves it alone, and ``i_restore_state`` does not reset it. ``i_save_state`` makes it the next step's start. So the
+    step ends with the decision of its last unforced pass, which is the decision the held outputs of a forced pass
+    show. For example, if the last unforced pass raises the set temperatures, the modifiers stay raised through
+    the forced passes and the next step starts from a raise, whatever surplus the forced passes see.
     """
 
     #: Whether the set temperatures are raised, in the step this state ends.
@@ -119,7 +124,9 @@ class BatteryChargingLimitInputs:
 class SurplusAfterParticipants:
     """What is left of the electricity balance after every ranked participant has taken its share, in W.
 
-    Positive means electricity goes to the grid. The two values differ only in how they count a battery from a surplus.
+    Positive means electricity goes to the grid. The two values differ in how a battery is counted. The grid balance
+    books its realized power; the decision surplus counts it only as a sink: its charging share in a surplus, and
+    nothing in a deficit.
     """
 
     #: The balance with every participant's realized power, the battery's included; the manager publishes it.
@@ -129,7 +136,7 @@ class SurplusAfterParticipants:
     surplus_after_battery_in_watt: float
 
 
-class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
+class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2ControllerComponent):
     """Surplus electricity controller - time step based.
 
     Iteratively goes through connected inputs by hierachy of
@@ -198,7 +205,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
-    BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
+    BuildingTemperatureModifierInKelvin = "BuildingTemperatureModifierInKelvin"  # read by Building, heating curve
     DomesticHotWaterStorageTemperatureModifier = (
         "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
     )
@@ -335,7 +342,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.operating_mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
-        self.building_indoor_temperature_offset_value = self.ems_config.building_indoor_temperature_offset_value
+        self.building_indoor_temperature_offset_in_kelvin = self.ems_config.building_indoor_temperature_offset_in_kelvin
         self.domestic_hot_water_storage_temperature_offset_value = (
             self.ems_config.domestic_hot_water_storage_temperature_offset_value
         )
@@ -379,10 +386,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         self.building_indoor_temperature_modifier: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.BuildingIndoorTemperatureModifier,
+            field_name=self.BuildingTemperatureModifierInKelvin,
             load_type=lt.LoadTypes.TEMPERATURE,
-            unit=lt.Units.CELSIUS,
-            output_description=f"here a description for {self.BuildingIndoorTemperatureModifier} will follow.",
+            unit=lt.Units.KELVIN,
+            output_description=(
+                "The raise of the building's heating set temperature, a temperature difference in K. It equals "
+                "the configured building offset (building_indoor_temperature_offset_in_kelvin) while the PV "
+                "surplus after the battery raises the set temperatures and a heat pump heating the building "
+                "(HEAT_PUMP_BUILDING) is among the ranked participants, else 0. The building and the heating curve "
+                "add it to the room set temperature."
+            ),
         )
 
         self.domestic_hot_water_storage_temperature_modifier: cp.ComponentOutput = self.add_output(
@@ -736,12 +749,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """Save the state the step ends with, the decision of the converged pass, as the next step's start."""
+        """Make the decision the step ends with, that of its last unforced pass, the next step's start."""
         self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restore the state the step started with, so every pass decides from the previous step's decision."""
-        self.state = dataclasses.replace(self.previous_state)
+        """Restore nothing: a pass reads only the start-of-step state, which no pass changes.
+
+        The end-of-step state is not reset either. An unforced pass overwrites it; under forced convergence the
+        manager holds its decision, so the step ends with the decision of its last unforced pass, the one its held
+        set-temperature modifiers show (:class:`EMSState`).
+        """
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -765,15 +782,39 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         and sends updated signal back.
         This function controls how surplus electricity is distributed and how much of each components'
         electricity need is covered onsite or from grid.
+
+        The signal a participant gets depends on what it does with it. The house battery decides its power from
+        the signal, and so does an electric car at or above its set point; below it the car charges at full
+        station power whatever it is offered. Both get the surplus offered to them, before their own share is
+        subtracted. Every other consumer gets what is left after its own consumption, negative for the part it
+        takes from the grid; that signal only books the consumer's grid share. For example, with 3,000 W of
+        surplus left, a car above its set point is offered 3,000 W, charges at 3,000 W and leaves 0 W; a heat
+        pump after it that draws 2,000 W is then sent 0 - 2,000 = -2,000 W, the 2,000 W it takes from the grid,
+        and leaves -2,000 W.
+
+        Why the car gets the offer: at or above its set point its charge controller charges with the signal. Sent
+        the surplus left after its own charging, it would answer every pass with that remainder, the next pass
+        would send it the surplus minus that remainder, and its charging would alternate between the passes of a
+        step.
+
+        Args:
+            available_surplus_electricity_in_watt: The surplus left before this participant, in W.
+            stsv: The step values the participant's consumption is read from and its signal written to.
+            current_component_type: The participant's component type.
+            current_input: The input measuring the participant's consumption.
+            current_output: The participant's signal output.
+
+        Returns:
+            The surplus left after this participant, in W.
         """
         # get electricity demand from input component and substract from (or add to) available surplus electricity
         electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
 
-        # if available_surplus_electricity > 0: electricity is fed into battery
-        # if available_surplus_electricity < 0: electricity is taken from battery
-        if current_component_type == lt.ComponentType.BATTERY:
+        # The house battery, and the electric car at or above its set point, decide their power from the signal,
+        # so both get the surplus offered to them (negative: the deficit the battery may cover); what they really
+        # draw is subtracted. Below its set point the car charges at full station power whatever it is offered.
+        if current_component_type in (lt.ComponentType.BATTERY, lt.ComponentType.CAR_BATTERY):
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # difference between what is fed into battery and what battery really used
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
@@ -783,7 +824,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.RESIDENTS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
-            lt.ComponentType.CAR_BATTERY,
             lt.ComponentType.HEAT_PUMP_DHW,
             lt.ComponentType.HEAT_PUMP,
             lt.ComponentType.HEAT_PUMP_BUILDING,
@@ -832,13 +872,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     @staticmethod
     def raises_set_temperatures(*, surplus_after_battery_in_watt: float, raised_in_previous_step: bool) -> bool:
-        """Return whether the energy manager raises the set temperatures, from the PV surplus and its previous decision.
+        """Return whether the energy manager raises the set temperatures, from the surplus and its previous decision.
 
         The surplus after the battery is the electricity left over once every participant has taken its share, a
         battery counted only as a sink: it takes from a surplus what its charging limits for the step allow,
-        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means PV electricity would go to the
-        grid. So only PV electricity keeps a raise: when keeping it needs the battery to discharge, the surplus is
-        negative and the raise ends.
+        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means generated electricity (PV in
+        the household twins) would go to the grid. So only generated electricity keeps a raise: when keeping it needs
+        the battery to discharge, the surplus is negative and the raise ends.
 
         The transitions, from the decision of the previous step:
 
@@ -859,14 +899,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         Returns:
             Whether the set temperatures are raised in this pass.
-
-        Raises:
-            ValueError: If the surplus is NaN or infinite.
         """
-        if not math.isfinite(surplus_after_battery_in_watt):
-            raise ValueError(
-                f"The surplus after the battery must be a finite power in W, got {surplus_after_battery_in_watt!r}."
-            )
         band_in_watt = L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
         if surplus_after_battery_in_watt > band_in_watt:
             return True
@@ -897,15 +930,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             The power the battery takes, in W; zero or positive.
 
         Raises:
-            ValueError: If a value is not finite, or a charging limit is negative.
+            ValueError: If a charging limit is negative.
         """
-        for name, value in (
-            ("surplus", surplus_in_watt),
-            ("maximum charging power", maximum_charging_power_in_watt),
-            ("minimum charging power", minimum_charging_power_in_watt),
-        ):
-            if not math.isfinite(value):
-                raise ValueError(f"The {name} must be a finite power in W, got {value!r}.")
         if maximum_charging_power_in_watt < 0 or minimum_charging_power_in_watt < 0:
             raise ValueError(
                 "A battery's charging limits must not be negative, got a maximum of "
@@ -991,7 +1017,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 if set_temperatures_are_raised:
                     stsv.set_output_value(
                         self.building_indoor_temperature_modifier,
-                        self.building_indoor_temperature_offset_value,
+                        self.building_indoor_temperature_offset_in_kelvin,
                     )
                     stsv.set_output_value(
                         self.space_heating_water_storage_temperature_modifier,
@@ -1081,7 +1107,28 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates iteration of surplus controller."""
+        """Distribute the surplus, publish the grid balance, and decide the set-temperature raise.
+
+        Every pass distributes the surplus from the realized values: the offers to the battery and the car, the grid
+        balance, the total consumption, the district pass-through and the consumers' grid shares. The set-temperature
+        raise, the manager's one on/off decision, is taken only in an unforced pass: under ``force_convergence`` its
+        three modifiers keep the values of the last unforced pass, and the end-of-step state keeps that pass's
+        decision (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first
+        forced pass sees -2,000 W because the raised heat pump draws more, the modifiers stay raised while the grid
+        balance shows the -2,000 W and the battery is offered the surplus of this pass.
+
+        The offers are not held: the battery's power follows the surplus continuously within its limits, so it has no
+        edge to flip across, and holding its offer would let it charge from the grid on a surplus that is gone. Its
+        own decisions belong in a battery controller of its own.
+
+        Why: the raise moves the surplus it is decided on. Where no raise decision is consistent with its own
+        effect, re-deciding on every pass flips the raise until the simulator gives up.
+
+        Args:
+            timestep: The index of the step.
+            stsv: The step values the inputs are read from and the outputs written to.
+            force_convergence: Whether the simulator forces the step to converge, so the manager holds its decisions.
+        """
         if timestep == 0:
             (
                 self.inputs_sorted,
@@ -1123,17 +1170,18 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 outputs_sorted=self.outputs_sorted,
             )
             available_surplus_electricity_in_watt = surplus_after_participants.grid_balance_in_watt
-            set_temperatures_are_raised = self.raises_set_temperatures(
-                surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
-                raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
-            )
-            self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
-            self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
-                set_temperatures_are_raised=set_temperatures_are_raised,
-                stsv=stsv,
-                inputs_sorted=self.inputs_sorted,
-                component_types_sorted=self.component_types_sorted,
-            )
+            if not force_convergence:
+                set_temperatures_are_raised = self.raises_set_temperatures(
+                    surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
+                    raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
+                )
+                self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
+                self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+                    set_temperatures_are_raised=set_temperatures_are_raised,
+                    stsv=stsv,
+                    inputs_sorted=self.inputs_sorted,
+                    component_types_sorted=self.component_types_sorted,
+                )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(
@@ -1199,25 +1247,23 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             return None
         return None
 
-    def dispatch_target_kpi_source(self, field_name: str) -> KpiSource:
-        """The source of the participant one of this controller's dispatch outputs steers.
+    def dispatch_measuring_input(self, field_name: str) -> ComponentInput:
+        """Return the input that measures the participant one of this controller's dispatch outputs steers.
 
-        The grid-share KPIs are reported on behalf of the participant, so they carry its
-        :class:`KpiSource` and not the manager's. The participant is found the way the dispatch
-        pairs it (:meth:`sort_source_weights_and_components`): the dispatch output and the input
-        that measures the participant share one source weight and one component type. That input
-        is connected to the participant's own output, which carries the participant's identity
-        and display configuration, so the source is built exactly as the participant builds it.
+        The participant is found the way the dispatch pairs it (:meth:`sort_source_weights_and_components`): the
+        dispatch output and the input that measures the participant share one source weight and one component type.
+        For example, the dispatch output ``DispatchToL1EVChargeControl_1_ElectricityTargetFromEMS`` pairs with the
+        input fed by ``L1EVChargeControl_1.BatteryChargingPowerToEMS``, the car's realized charging power.
 
         Args:
             field_name: The dispatch output's field name.
 
         Returns:
-            The participant's source.
+            The measuring input, connected to the participant's own output.
 
         Raises:
-            ValueError: If the output is no dispatch output of this controller, if not exactly one
-                input pairs with it, or if that input is not connected to a component's output.
+            ValueError: If the output is no dispatch output of this controller, if not exactly one input pairs with
+                it, or if that input is not connected to a component's output.
         """
         dispatch_entries = [
             entry for entry in self.my_component_outputs if entry.source_output_field_name == field_name
@@ -1253,7 +1299,63 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 f"(source '{measuring_input.src_object_name}.{measuring_input.src_field_name}'), so "
                 "the participant's identity is unknown."
             )
-        return KpiSource.for_component(participant_output.component_id, participant_output.display_config)
+        return measuring_input
+
+    def dispatch_target_kpi_source(self, field_name: str) -> KpiSource:
+        """The source of the participant one of this controller's dispatch outputs steers.
+
+        The grid-share KPIs are reported on behalf of the participant, so they carry its
+        :class:`KpiSource` and not the manager's. The participant is the one its measuring input
+        (:meth:`dispatch_measuring_input`) is connected to; that input's source output carries the
+        participant's identity and display configuration, so the source is built exactly as the
+        participant builds it.
+
+        Args:
+            field_name: The dispatch output's field name.
+
+        Returns:
+            The participant's source.
+
+        Raises:
+            ValueError: As :meth:`dispatch_measuring_input`.
+        """
+        participant_output = cast(ComponentOutput, self.dispatch_measuring_input(field_name).source_output)
+        return KpiSource.for_component(
+            participant_output.component_id, cast(DisplayConfig, participant_output.display_config)
+        )
+
+    @staticmethod
+    def offered_participant_grid_draw_in_watt(
+        surplus_offered_in_watt: pd.Series, realized_draw_in_watt: pd.Series
+    ) -> pd.Series:
+        """Return what a participant that is offered the surplus takes from the grid, per step, in W.
+
+        A participant offered the surplus (the electric car) covers its draw from the offer as far as the offer
+        reaches, and takes the rest from the grid. A negative offer is a deficit and covers nothing. For example,
+        an offer of 3,000 W and a draw of 11,000 W give 8,000 W from the grid; an offer of 5,000 W and a draw of
+        4,000 W give 0 W; an offer of -2,000 W and a draw of 11,000 W give 11,000 W.
+
+        Why: the car's dispatch signal is the surplus offered to it, not what is left after it, so its negative part
+        is no longer its grid share, as it is for the other consumers.
+
+        Args:
+            surplus_offered_in_watt: The surplus offered to the participant in every step, in W.
+            realized_draw_in_watt: The participant's realized draw in every step, in W, zero or positive.
+
+        Returns:
+            The participant's draw from the grid in every step, in W, zero or positive.
+
+        Raises:
+            ValueError: If the two series differ in length.
+        """
+        if len(surplus_offered_in_watt) != len(realized_draw_in_watt):
+            raise ValueError(
+                f"The offer ({len(surplus_offered_in_watt)} steps) and the realized draw "
+                f"({len(realized_draw_in_watt)} steps) must cover the same steps."
+            )
+        offer_in_watt = surplus_offered_in_watt.to_numpy(dtype=float).clip(min=0.0)
+        draw_in_watt = realized_draw_in_watt.to_numpy(dtype=float)
+        return pd.Series((draw_in_watt - offer_in_watt).clip(min=0.0), index=surplus_offered_in_watt.index)
 
     def get_component_kpi_entries(
         self,
@@ -1290,10 +1392,28 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 continue
             kpi_name = kpi_by_dispatch_target[dispatch_target]
 
-            # A negative dispatch is what the participant had to take from the grid.
-            electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                postprocessing_results.iloc[:, index] < 0.0
-            ]
+            if dispatch_target == lt.ComponentType.CAR_BATTERY:
+                # The car is offered the surplus; it takes from the grid what its draw exceeds the offer by.
+                # The draw's column is its global index, its position in all_outputs; an output that was never
+                # registered there (global index -1) would read another column without a word.
+                draw_output = cast(ComponentOutput, self.dispatch_measuring_input(output.field_name).source_output)
+                if not (
+                    0 <= draw_output.global_index < len(all_outputs)
+                    and all_outputs[draw_output.global_index] is draw_output
+                ):
+                    raise ValueError(
+                        f"The car's draw {draw_output.full_name} is not at its global index "
+                        f"{draw_output.global_index} in the outputs, so its result column is unknown."
+                    )
+                electricity_from_grid_in_watt_series = self.offered_participant_grid_draw_in_watt(
+                    surplus_offered_in_watt=postprocessing_results.iloc[:, index],
+                    realized_draw_in_watt=postprocessing_results.iloc[:, draw_output.global_index],
+                )
+            else:
+                # A negative dispatch is what the participant had to take from the grid.
+                electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                    postprocessing_results.iloc[:, index] < 0.0
+                ]
             electricity_from_grid_in_kilowatt_hour = abs(
                 KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=electricity_from_grid_in_watt_series,

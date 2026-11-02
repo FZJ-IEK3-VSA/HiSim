@@ -7,7 +7,7 @@
       "publication_year": 2023,
       "retrieved": "2026-07-07",
       "kind": "STATUTE",
-      "notes": "Base 30 %, speed bonus 20 % (degressive), income bonus 30 % (taxable household income <= 40 kEUR, self-occupied), efficiency bonus 5 %, combined cap 70 %; eligible cost 30 kEUR first unit / 15 kEUR units 2-6 / 8 kEUR further. Values need legal verification (cost_module_issues.md #11)."
+      "notes": "Base 30 %, speed bonus 20 % (degressive), income bonus 30 % (taxable household income <= 40 kEUR, self-occupied), efficiency bonus 5 %, combined cap 70 %; eligible cost 30 kEUR first unit / 15 kEUR units 2-6 / 8 kEUR further. Values need legal verification (roadmap/cost_module_issues.md #11)."
     },
     {
       "id": "src_estg_35c",

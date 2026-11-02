@@ -2,7 +2,12 @@
 # configurations means. Edited through the workbook, committed in this form.
 setup: system_setups/household_gas_solar_thermal.py
 probes: energy_systems/household_gas_solar_thermal.probes.yaml
-assignments: {}
+assignments:
+  Building:
+    assign: override
+    note: Only the apartment count moves. The DHW storage, the boiler and the collector
+      are sized from it by their laws and stay AUTO in the file, so a second dwelling
+      is a number a consumer sets, not a component that comes or goes.
 configurations:
   baseline: {}
   two_dwellings: {}

@@ -1,7 +1,7 @@
 """Produces the processed weather series that :mod:`hisim.components.weather` simulates from.
 
-What this module produces is one artifact: the full-year frame of eleven columns -- irradiances, air
-temperature, sun position, wind speed, pressure -- read from a weather data file, interpolated to one
+What this module produces is one artifact: the full-year frame of twelve columns -- irradiances, air
+temperature, sun position, wind speed, pressure, relative humidity -- read from a weather data file, interpolated to one
 minute, aggregated to the simulation's timestep and handed back as a :class:`pandas.DataFrame`. It is the
 first producer under ``roadmap/cache_service_spec.md`` (§3, §12), which is why it is a module of its own
 rather than a section of the component.
@@ -51,6 +51,8 @@ import pandas as pd
 import pvlib
 
 from hisim.caching.keys import KeyMaterial
+from hisim.simulation_day import SimulationDay
+from hisim.window_offset import WindowOffset
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -279,6 +281,10 @@ class WeatherSeriesInputs:
     The path is the payload that pairs with :attr:`source_content_hash` -- the producer needs it to open
     the file, the key must not contain it -- and is excluded from the key by
     :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`.
+
+    The run's window is not a field. The frame covers the source's whole year whatever the run's start
+    and end are, and the component takes the run's window out of it, so every window of a station at
+    one resolution shares one entry.
     """
 
     #: Which reader understands the file, and therefore which columns and resampling path apply.
@@ -301,72 +307,100 @@ class WeatherSeriesInputs:
     #: Longitude of the station in degrees, from the data file's own header. Used for the sun position.
     longitude_in_degrees: float
 
-    #: The length of the simulated span in whole days, for the one data source whose raw frame is
-    #: sized by it (``DWD_15MIN``, whose reader builds exactly ``24 * 4 * days`` rows). ``None`` for
-    #: every other source, whose frame covers the full year whatever the run's start and end are --
-    #: which is why a one-week run and a one-year run of the same station now share one entry.
-    duration_in_days: Optional[int]
-
     #: Where the file is on this machine. Payload, not key material: it differs between a checkout, a
     #: container and the cluster while naming the same bytes, which :attr:`source_content_hash` covers.
     source_path: str = field(metadata=KeyMaterial.PAYLOAD)
 
-    #: The sources whose raw frame is sized by the simulated span rather than by the year alone.
-    DURATION_DEPENDENT_SOURCES: ClassVar[FrozenSet[WeatherDataSourceEnum]] = frozenset(
-        {WeatherDataSourceEnum.DWD_15MIN}
-    )
 
-    def __post_init__(self) -> None:
-        """Refuse inputs whose span does not match what the data source's reader reads.
+class RelativeHumidity:
+    """The outdoor relative humidity every reader delivers, and the check every delivered series passes.
 
-        The field is key material for every source, but only the readers of
-        :attr:`DURATION_DEPENDENT_SOURCES` size their frame by it. Both ways of getting that wrong are
-        silent: an unset span for a source that needs it computes a shorter frame than the run (or
-        stops far downstream), and a set span for a source that ignores it files the same series under
-        one key per horizon, so a one-week run never reuses the full year's entry. Neither is visible
-        in the result, which is why it is refused here, where the DTO is built.
+    The relative humidity is the water vapour pressure of the outdoor air as a share of its saturation
+    pressure over water at the air temperature, in percent: 0 is dry air, 100 is saturated air. Every
+    data source carries it in its file, under its own column name (:attr:`FILE_COLUMNS`), and every
+    reader renames that column to :attr:`COLUMN`. Example: row 1 of a DWD test reference year with
+    ``RF`` = 88 delivers 88.0 in the hour it stands for.
 
-        Raises:
-            ValueError: if ``duration_in_days`` is unset for a source whose reader is sized by it, or
-                set for one whose reader is not.
-        """
-        sized_by_the_span = self.data_source in self.DURATION_DEPENDENT_SOURCES
-        if sized_by_the_span and self.duration_in_days is None:
-            raise ValueError(
-                f"The weather data source {self.data_source.value} sizes its raw frame by the simulated "
-                "span, but duration_in_days is not set in the calculation inputs."
-            )
-        if not sized_by_the_span and self.duration_in_days is not None:
-            raise ValueError(
-                f"The weather data source {self.data_source.value} produces the whole year whatever the "
-                f"run's span, but duration_in_days is set to {self.duration_in_days} in the calculation "
-                "inputs. It is key material, so a value no reader reads would file the same series under "
-                "one key per horizon; leave it at None for this source."
-            )
+    Where each source's humidity comes from:
 
-    def required_duration_in_days(self) -> int:
-        """Return :attr:`duration_in_days` for a source whose reader is sized by it.
+    - ``DWD_TRY``: the ``RF`` column of the test reference year itself.
+    - ``NSRDB`` and ``NSRDB_15MIN``: a ``Relative Humidity`` column from the same data set, site and
+      period as the other columns of the file: NSRDB's Meteosat Prime Meridian data of 2019, and for the
+      Seville file, which is a PVGIS typical year, that year's humidity.
+    - ``DWD_10MIN`` and ``DWD_15MIN``: ``RF_10`` of the DWD ten-minute air temperature product, combined
+      over the stations exactly as the file's temperature is.
+    - ``ERA5``: the ``relative_humidity`` column of the export; ERA5 publishes the 2 m dew point, from
+      which the export computes it.
 
-        :meth:`__post_init__` has already refused an unset span for such a source, so this narrows the
-        optional field rather than checking it a second time.
+    The provenance of the shipped files is in ``hisim/inputs/weather/humidity_provenance.md``.
+
+    An hourly source is padded back to midnight with its first humidity sample, not with the zero the
+    other columns get (:func:`interpolate`).
+
+    A file without the column, or with a value that is missing or outside 0 to 100, is refused: the
+    humidity feeds the defrosting of an air-source heat pump, and a fabricated series would change its
+    efficiency without anyone noticing.
+    """
+
+    #: The column name of the relative humidity in the raw frame and in the produced frame.
+    COLUMN: ClassVar[str] = "relative_humidity_in_percent"
+
+    #: The lowest relative humidity a source may deliver: perfectly dry air.
+    MINIMUM_IN_PERCENT: ClassVar[float] = 0.0
+
+    #: The highest relative humidity a source may deliver: saturated air.
+    MAXIMUM_IN_PERCENT: ClassVar[float] = 100.0
+
+    #: The name of the relative humidity column in each data source's file, as its reader finds it.
+    FILE_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, str]] = {
+        WeatherDataSourceEnum.DWD_TRY: "RF",
+        WeatherDataSourceEnum.NSRDB: "Relative Humidity",
+        WeatherDataSourceEnum.NSRDB_15MIN: "Relative Humidity",
+        WeatherDataSourceEnum.DWD_10MIN: "relative_humidity",
+        WeatherDataSourceEnum.DWD_15MIN: "relative_humidity",
+        WeatherDataSourceEnum.ERA5: "relative_humidity",
+    }
+
+    @classmethod
+    def checked(cls, raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) -> pd.DataFrame:
+        """Return the raw frame with its relative humidity as floats, refusing a series that is not one.
+
+        Example: a DWD ten-minute file written before the humidity was added has no
+        ``relative_humidity`` column and is refused with the name of the file and of the column.
+
+        Args:
+            raw_data: the raw frame a reader returned, with the humidity renamed to :attr:`COLUMN`.
+            inputs: the calculation's inputs; supply the data source and the file for the message.
 
         Returns:
-            int: the simulated span in whole days.
+            pd.DataFrame: the same frame, its :attr:`COLUMN` converted to float.
 
         Raises:
-            ValueError: if the field is unset although this data source's reader is sized by it, which
-                the invariant above makes unreachable.
+            ValueError: if the frame has no humidity column, or a value of it is missing or outside
+                :attr:`MINIMUM_IN_PERCENT` to :attr:`MAXIMUM_IN_PERCENT`.
         """
-        if self.duration_in_days is None:
+        file_column = cls.FILE_COLUMNS[inputs.data_source]
+        if cls.COLUMN not in raw_data.columns:
             raise ValueError(
-                f"The weather data source {self.data_source.value} sizes its raw frame by the simulated "
-                "span, but duration_in_days is not set in the calculation inputs."
+                f"The weather file {inputs.source_path!r} ({inputs.data_source.value}) has no relative humidity "
+                f"column {file_column!r}. Every weather source publishes the outdoor relative humidity; add the "
+                "column from the file's own upstream source (see hisim/inputs/weather/humidity_provenance.md)."
             )
-        return self.duration_in_days
+        humidity = raw_data[cls.COLUMN].astype(float)
+        outside = humidity.isna() | (humidity < cls.MINIMUM_IN_PERCENT) | (humidity > cls.MAXIMUM_IN_PERCENT)
+        if outside.any():
+            raise ValueError(
+                f"The relative humidity column {file_column!r} of the weather file {inputs.source_path!r} "
+                f"({inputs.data_source.value}) is missing or outside {cls.MINIMUM_IN_PERCENT} to "
+                f"{cls.MAXIMUM_IN_PERCENT} % at {int(outside.sum())} of {len(humidity)} rows, the first at "
+                f"{humidity.index[outside][0]} with {humidity[outside].iloc[0]!r}."
+            )
+        raw_data[cls.COLUMN] = humidity
+        return raw_data
 
 
 #: The raw columns every reader provides and the producer carries forward to one-minute resolution.
-RAW_COLUMNS: Tuple[str, ...] = ("DNI", "T", "DHI", "GHI", "Wspd", "Pressure")
+RAW_COLUMNS: Tuple[str, ...] = ("DNI", "T", "DHI", "GHI", "Wspd", "Pressure", RelativeHumidity.COLUMN)
 
 #: Data sources that arrive at a resolution finer than an hour: their columns are resampled to one
 #: minute and linearly interpolated in place. The hourly sources go through :func:`interpolate`, which
@@ -393,7 +427,19 @@ PRODUCED_COLUMNS: Tuple[str, ...] = (
     "Pressure",
     "DNIextra",
     "t_out_daily_average",
+    RelativeHumidity.COLUMN,
 )
+
+
+class ProducedFrame:
+    """What the produced frame carries besides its columns: the name of its index.
+
+    The index is each row's label in the source's standard time (:func:`timestep_labels`). It is also
+    the first column of the cached CSV, under this name, so a cache hit gets the same labels back.
+    """
+
+    #: The name of the produced frame's index and of the cached CSV's first column.
+    INDEX_NAME: ClassVar[str] = "standard_time"
 
 
 def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
@@ -409,7 +455,8 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: one row per timestep of the simulated year, with the columns of
-            :data:`PRODUCED_COLUMNS`.
+            :data:`PRODUCED_COLUMNS`, indexed by each row's label in the source's standard time
+            (:func:`timestep_labels`). The labels are what a run's window is looked up in.
     """
     raw_data = read_source_data(inputs)
     # todo: check if this should indeed be daily resample or if another time frequency would be needed.
@@ -426,6 +473,7 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     columns["azimuth"] = solar_position["azimuth"]
     columns["apparent_zenith"] = solar_position["apparent_zenith"]
     per_timestep = aggregate_to_timestep(columns, inputs.seconds_per_timestep)
+    labels = timestep_labels(one_minute["DNI"], inputs.seconds_per_timestep)
     temperature_list = per_timestep["T"]
     daily_average = calculate_daily_average_outside_temperature(
         temperature_list=temperature_list, seconds_per_timestep=inputs.seconds_per_timestep
@@ -442,8 +490,9 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         per_timestep["Pressure"],
         per_timestep["DNIextra"],
         daily_average,
+        per_timestep[RelativeHumidity.COLUMN],
     ]
-    return pd.DataFrame(np.transpose(series), columns=list(PRODUCED_COLUMNS))
+    return pd.DataFrame(np.transpose(series), columns=list(PRODUCED_COLUMNS), index=labels)
 
 
 def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
@@ -452,29 +501,32 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
     Based on the tsib project @[tsib-kotzur] (Check header)
 
     Args:
-        inputs: the calculation's inputs; supplies the path, the year and, where a reader needs it,
-            the simulated span.
+        inputs: the calculation's inputs; supplies the path and the year.
 
     Returns:
-        pd.DataFrame: the raw frame, indexed by time at the file's own resolution.
+        pd.DataFrame: the raw frame, indexed by time at the file's own resolution, with the relative
+        humidity checked by :meth:`RelativeHumidity.checked`.
 
     Raises:
-        ValueError: if no reader is registered for the data source.
+        ValueError: if no reader is registered for the data source, or the file's relative humidity is
+            missing or out of range.
     """
     filepath = inputs.source_path
     if inputs.data_source == WeatherDataSourceEnum.NSRDB:
-        return read_nsrdb_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_TRY:
-        return read_dwd_try_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-        return read_nsrdb_15min_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_10MIN:
-        return read_dwd_10min_data(filepath, inputs.year)
-    if inputs.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        return read_dwd_15min_data(filepath, inputs.year, inputs.required_duration_in_days())
-    if inputs.data_source == WeatherDataSourceEnum.ERA5:
-        return read_era5_data(filepath, inputs.year)
-    raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
+        raw_data = read_nsrdb_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_TRY:
+        raw_data = read_dwd_try_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
+        raw_data = read_nsrdb_15min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_10MIN:
+        raw_data = read_dwd_10min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.DWD_15MIN:
+        raw_data = read_dwd_15min_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.ERA5:
+        raw_data = read_era5_data(filepath, inputs.year)
+    else:
+        raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
+    return RelativeHumidity.checked(raw_data, inputs)
 
 
 def resample_to_one_minute(raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) -> Dict[str, pd.Series]:
@@ -496,7 +548,12 @@ def resample_to_one_minute(raw_data: pd.DataFrame, inputs: WeatherSeriesInputs) 
             column: raw_data[column].resample("1min").asfreq().interpolate(method="linear")
             for column in RAW_COLUMNS
         }
-    return {column: interpolate(raw_data[column], inputs.year) for column in RAW_COLUMNS}
+    return {
+        column: interpolate(
+            raw_data[column], inputs.year, pad_start_with_first_sample=column == RelativeHumidity.COLUMN
+        )
+        for column in RAW_COLUMNS
+    }
 
 
 def aggregate_to_timestep(columns: Mapping[str, pd.Series], seconds_per_timestep: int) -> Dict[str, List[float]]:
@@ -522,24 +579,58 @@ def aggregate_to_timestep(columns: Mapping[str, pd.Series], seconds_per_timestep
     return aggregated
 
 
-def interpolate(pd_database: Any, year: int) -> Any:
+def timestep_labels(one_minute_series: pd.Series, seconds_per_timestep: int) -> pd.DatetimeIndex:
+    """Return the label of every row of the produced frame, in the source's standard time.
+
+    The rows are those :func:`aggregate_to_timestep` makes: the one-minute series itself at a timestep
+    of 60 s, and its resampling bins otherwise. Each label is the start of its row, without time zone,
+    in the standard time of the zone the source's index carries (:meth:`WindowOffset.standard_time_labels`).
+    Example: the hourly rows of an Aachen test reference year are labelled 2021-01-01 00:00, 01:00, ...
+    and the row of 1 July 01:00 summer time is labelled 2021-07-01 00:00.
+
+    Args:
+        one_minute_series: one of the one-minute series, all of which share one index.
+        seconds_per_timestep: the simulation's timestep.
+
+    Returns:
+        pd.DatetimeIndex: one label per produced row, named ``standard_time``.
+    """
+    if seconds_per_timestep != 60:
+        index = one_minute_series.resample(str(seconds_per_timestep) + "s").mean().index
+    else:
+        index = one_minute_series.index
+    labels = WindowOffset.standard_time_labels(pd.DatetimeIndex(index))
+    return labels.set_names(ProducedFrame.INDEX_NAME)
+
+
+def interpolate(pd_database: Any, year: int, pad_start_with_first_sample: bool = False) -> Any:
     """Interpolates a time series to one minute, padding the year's first and last hour.
+
+    The hourly sources label each hour at its middle, 00:30 to 23:30. A zero is prepended at midnight
+    (the first sample instead when ``pad_start_with_first_sample`` is set: a zero is the irradiance of
+    the night before, but a relative humidity of zero would be air drier than any outdoor air),
+    and the last sample is repeated at the end of the hour it stands for -- 29 minutes after it, which
+    for a source that covers the year is the year's last minute, 23:59. The end padding never reaches
+    past that hour: a source of 365 days laid onto a leap year ends on 30 December, and padding it to
+    31 December would invent a day of weather the source does not have. Such a source ends on
+    30 December, and a window that needs 31 December is refused when it is looked up.
 
     Args:
         pd_database: the hourly series.
         year: the simulated year.
+        pad_start_with_first_sample: pad midnight with the series' first sample rather than with zero.
 
     Returns:
         Any: the one-minute series.
     """
+    start_value = float(pd_database.iloc[0]) if pad_start_with_first_sample else 0.0
     firstday = pd.Series(
-        [0.0],
+        [start_value],
         index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
     )
-    lastday = pd.Series(
-        pd_database.iloc[-1],
-        index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")],
-    )
+    end_of_year = pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")
+    end_of_last_hour = pd_database.index[-1] + pd.Timedelta(minutes=29)
+    lastday = pd.Series(pd_database.iloc[-1], index=[min(end_of_year, end_of_last_hour)])
     pd_database = pd.concat([pd_database, firstday, lastday])
     pd_database = pd_database.sort_index()
     return pd_database.resample("1min").asfreq().interpolate(method="linear")
@@ -564,18 +655,18 @@ def calculate_daily_average_outside_temperature(
     Returns:
         List[float]: one average per timestep, held constant within a day.
 
+    The block is one day of the run, :meth:`SimulationDay.timesteps_per_day` timesteps long -- the
+    same exact number the window contract makes whole and the single-day chart slices by. For every
+    step the contract accepts it equals the ``int(24 * 3600 / seconds_per_timestep)`` used before, so
+    no average changes.
+
     Raises:
-        ValueError: if a timestep is longer than the day the average is taken over, which leaves no
-            block to average. The loop this replaces returned a series of NaN for it, which the
-            building would have simulated with.
+        ValueError: if the timestep does not divide a day of 86400 s -- among them every timestep
+            longer than a day, which leaves no block to average. The loop this replaces returned a
+            series of NaN for a step longer than a day, which the building would have simulated with,
+            and averaged blocks that were not days for a step that does not divide one.
     """
-    timestep_24h = int(24 * 3600 / seconds_per_timestep)
-    if timestep_24h < 1:
-        raise ValueError(
-            f"A timestep of {seconds_per_timestep} s is longer than the 24 h this average is taken over, "
-            "so there is no block of timesteps to average; the daily average outside temperature needs a "
-            "timestep of at most 86400 s."
-        )
+    timestep_24h = SimulationDay.timesteps_per_day(seconds_per_timestep)
     if not temperature_list:
         return []
     temperatures = np.asarray(temperature_list, dtype=float)
@@ -601,59 +692,125 @@ def calculate_daily_average_outside_temperature(
     return daily_averages
 
 
-def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
-    """Reads the station name and its coordinates from the header of a weather data file.
+class StationHeader:
+    """Where each weather file format names its station and coordinates, and how to read them by name.
 
-    Based on the tsib project @[tsib-kotzur] (Check header)
+    Every format states the station in a header, under labels of its own: the CSV exports (NSRDB
+    15-minute, DWD 10- and 15-minute, ERA5) in a first row of column names over a second row of values,
+    the ``.dat`` files of the DWD test reference years and the hourly NSRDB data in ``label : value``
+    lines. The header is read by those labels and never by position, because the formats do not agree
+    on an order: the DWD and ERA5 exports put the longitude before the latitude, and a reader that took
+    the second column for the latitude computed the sun position of Düsseldorf near 6°N / 50.8°E.
+    """
+
+    #: Per CSV format, the column names of the station's name, latitude and longitude, in that order.
+    CSV_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, Tuple[str, str, str]]] = {
+        WeatherDataSourceEnum.NSRDB_15MIN: ("Location ID", "Latitude", "Longitude"),
+        WeatherDataSourceEnum.DWD_10MIN: ("location", "latitude", "longitude"),
+        WeatherDataSourceEnum.DWD_15MIN: ("location", "latitude", "longitude"),
+        WeatherDataSourceEnum.ERA5: ("location", "latitude", "longitude"),
+    }
+
+    #: The labels of the station's name, latitude and longitude in a ``.dat`` header (German: place,
+    #: degree of latitude, degree of longitude).
+    DAT_LABELS: ClassVar[Tuple[str, str, str]] = ("Ort", "Breitengrad", "Längengrad")
+
+    #: How many lines of a ``.dat`` file the header is looked for in; the station block is at the top.
+    DAT_HEADER_LINES: ClassVar[int] = 3
+
+    @classmethod
+    def read(cls, filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
+        """Read the station's name, latitude and longitude from the header of a weather file.
+
+        Example: the DWD 15-minute file of Düsseldorf, whose header is ``location,longitude,latitude``
+        over ``Duesseldorf,6.7686,51.296``, yields ``{"name": "Duesseldorf", "latitude": 51.296,
+        "longitude": 6.7686}``.
+
+        Args:
+            filepath: the configured source path: the file itself for the CSV formats, the stem of the
+                ``.dat`` for the others.
+            source_enum: the data source, which decides the header's layout and labels.
+
+        Returns:
+            Dict[str, Any]: ``name`` (str), ``latitude`` and ``longitude`` (float, in degrees).
+
+        Raises:
+            ValueError: if the header lacks one of the labels; the message names it.
+        """
+        if source_enum in cls.CSV_COLUMNS:
+            header = cls.read_csv_header(filepath)
+            labels = cls.CSV_COLUMNS[source_enum]
+        else:
+            filepath = filepath + ".dat"
+            header = cls.read_dat_header(filepath)
+            labels = cls.DAT_LABELS
+        name_label, latitude_label, longitude_label = labels
+        for label in labels:
+            if label not in header:
+                raise ValueError(
+                    f"The weather file {filepath} ({source_enum.value}) states no '{label}' in its header; "
+                    f"it has {sorted(header)}."
+                )
+        return {
+            "name": header[name_label],
+            "latitude": float(header[latitude_label]),
+            "longitude": float(header[longitude_label]),
+        }
+
+    @classmethod
+    def read_csv_header(cls, filepath: str) -> Dict[str, str]:
+        """Pair the column names of a CSV file's first row with the values of its second.
+
+        Args:
+            filepath: the CSV file.
+
+        Returns:
+            Dict[str, str]: each column name with its value, as the file spells it.
+        """
+        with open(filepath, encoding="utf-8") as csvfile:
+            rows = csv.reader(csvfile)
+            names = next(rows, [])
+            values = next(rows, [])
+        return dict(zip(names, values))
+
+    @classmethod
+    def read_dat_header(cls, filepath: str) -> Dict[str, str]:
+        """Read the ``label : value`` lines at the top of a ``.dat`` file.
+
+        A byte order mark before the first label and the tabs and spaces around the colon are dropped.
+
+        Args:
+            filepath: the ``.dat`` file.
+
+        Returns:
+            Dict[str, str]: each label with its value, as the file spells it.
+        """
+        header: Dict[str, str] = {}
+        with open(filepath, encoding="utf-8-sig") as file_stream:
+            for _, line in zip(range(cls.DAT_HEADER_LINES), file_stream):
+                label, separator, value = line.partition(":")
+                if separator:
+                    header[label.strip()] = value.strip()
+        return header
+
+
+def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
+    """Read the station name and its coordinates from the header of a weather data file.
+
+    The header is read by its labels (:class:`StationHeader`), so a format that lists the longitude
+    before the latitude yields each under its own name.
 
     Args:
         filepath: the configured source path.
-        source_enum: the data source, which decides where in the file the header is.
+        source_enum: the data source, which decides where in the file the header is and how it is labelled.
 
     Returns:
-        Dict[str, Any]: ``name``, ``latitude`` and ``longitude``.
+        Dict[str, Any]: ``name``, ``latitude`` and ``longitude``, the coordinates in degrees.
+
+    Raises:
+        ValueError: if the header lacks the station's name, latitude or longitude.
     """
-    if source_enum == WeatherDataSourceEnum.NSRDB_15MIN:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[1]
-                    lat = float(row[5])
-                    lon = float(row[6])
-                elif i > 1:
-                    break
-
-    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    elif source_enum == WeatherDataSourceEnum.ERA5:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    else:
-        # get the geoposition
-        with open(filepath + ".dat", encoding="utf-8") as file_stream:
-            lines = file_stream.readlines()
-            location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
-            lat = float(lines[1][20:37])
-            lon = float(lines[2][15:30])
-    return {"name": location_name, "latitude": lat, "longitude": lon}
+    return StationHeader.read(filepath, source_enum)
 
 
 def read_station_coordinates(filepath: str) -> Tuple[Any, Any]:
@@ -698,6 +855,9 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     if os.path.isfile(filepath + ".csv"):
         data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
         data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
+        data = data.rename(
+            columns={RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_TRY]: RelativeHumidity.COLUMN}
+        )
     # else read from .dat and calculate DNI etc.
     else:
         # get data
@@ -715,6 +875,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
                 "HH": "Hour",
                 "p": "Pressure",
                 "WR": "Wdir",
+                RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_TRY]: RelativeHumidity.COLUMN,
             }
         )
 
@@ -749,6 +910,7 @@ def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
             "Wind Direction": "Wdir",
             "GHI": "GHI",
             "DNI": "DNI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.NSRDB]: RelativeHumidity.COLUMN,
         }
     )
     return data
@@ -771,6 +933,7 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
         columns={
             "Temperature": "T",
             "Wind Speed": "Wspd",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.NSRDB_15MIN]: RelativeHumidity.COLUMN,
         }
     )
     return data
@@ -806,6 +969,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
             "pressure": "Pressure",
             "wind_direction": "Wdir",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_10MIN]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal
@@ -815,15 +979,19 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.DataFrame:
+def read_dwd_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of DWD data in 15 min resolution.
 
     https://github.com/earthobservations/wetterdienst/tree/main
 
+    The index has one quarter hour per row of the file, from 1 January 00:00 UTC of the simulated year,
+    like the other readers lay their file onto the year by position. It used to have one per quarter
+    hour of the run instead, so any run whose span was not the file's raised a length mismatch, and
+    no window could be sliced out of the frame.
+
     Args:
         filepath: the data file, whose second row carries the station coordinates.
         year: the simulated year.
-        duration_in_days: the simulated span in whole days; this reader alone sizes its frame by it.
 
     Returns:
         pd.DataFrame: the quarter-hourly raw frame.
@@ -834,12 +1002,7 @@ def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.D
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
 
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00",
-        periods=24 * 4 * int(duration_in_days),
-        freq="900s",
-        tz="UTC",
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=len(data), freq="900s", tz="UTC")
 
     data = data.rename(
         columns={
@@ -853,6 +1016,7 @@ def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.D
             "pressure": "Pressure",
             "wind_direction": "Wdir",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.DWD_15MIN]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal
@@ -891,6 +1055,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
             "wind_direction": "Wdir",
             "wind_speed": "Wspd",
             "global_irradiance": "GHI",
+            RelativeHumidity.FILE_COLUMNS[WeatherDataSourceEnum.ERA5]: RelativeHumidity.COLUMN,
         }
     )
     # calculate direct normal

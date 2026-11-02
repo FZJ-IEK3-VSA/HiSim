@@ -213,7 +213,9 @@ finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — s
 backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json`, a
 report without its `economics_stage` record or with a record of another schema version, stages
 whose records state different measure tables, any parameter key it does not accept — and exit 3
-for an engine failure they cannot. There is no exit 2 without the file.
+for an engine failure they cannot. Every exit 2 writes the file but one: an `--out` that is a bare
+file name, such as `--out economics_result.json`, names no directory to write it to, so the command
+refuses it with exit 2 and a message on standard error only.
 
 A stage directory is a finished job's `economic_inputs.json` (in the directory or its `results/`)
 and its `mapping_report.json` (in the directory or its parent) — the two files a backend's worker
@@ -292,7 +294,9 @@ tax credit, a soft loan's repayment grant) cannot be stated on an unpriced measu
 measure without a `cost` block and without a quote): its maximum is null with a note saying why, and
 a grant the answers would award stays `undetermined`, books nothing, and asks for the measure's
 price in `open_questions` (renovisorissues #77); a soft loan without a repayment grant and a per-kWh
-payment keep their rules. The energy-management
+payment keep their rules. An unpriced envelope measure books no embodied CO2 either: its carbon is
+unknown like its price, booked as zero and said so in the row's `note`, as for a kept element's
+renewal (hisim-hq4z); a quote prices its money, not its carbon. The energy-management
 controller that comes with a battery is part of the battery system: a subject of its own, costless
 (no investment, maintenance or renewal cost), dated and renewed with the battery (no due years of
 its own), carrying `battery_system` where the package installs the battery (renovisorissues #77).

@@ -45,9 +45,6 @@ def test_hydrogen_generator() -> None:
             "ElectrolyzerWithHydrogenStorage"
         )
     )
-    # The expected storage delta below is the charge into an empty tank, which is the one
-    # figure the preset does not carry: it ships the 400 kg the module has always defaulted to.
-    my_hydrogen_storage_config.starting_fill = 0
 
     my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
         my_simulation_parameters=my_simulation_parameters,
@@ -142,9 +139,6 @@ def test_display_config_instance_isolation() -> None:
     storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig.preset_standard(
         "HydrogenStorage"
     )
-    # The tank starts empty here, which is the one figure the preset does not carry: it ships
-    # the 400 kg the module has always defaulted to.
-    storage_config.starting_fill = 0
 
     # Create multiple instances without passing my_display_config
     electrolyzer_1 = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(

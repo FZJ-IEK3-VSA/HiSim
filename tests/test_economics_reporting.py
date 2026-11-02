@@ -1,4 +1,4 @@
-"""Reporting tests: plausibility panel, markdown summary, and the HTML report's sections (cost_spec.md §7.2, §7.4).
+"""Reporting tests: plausibility panel, markdown summary, and the HTML report's sections (roadmap/cost_spec.md §7.2, §7.4).
 
 First of the two reporting test files (split per the PR-3 review's 500-line rule): the
 plausibility checks and their rendering, the diffable markdown summary, the HTML report's

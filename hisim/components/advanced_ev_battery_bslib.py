@@ -3,7 +3,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import importlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, ClassVar, List
 
 import pandas as pd
 from bslib import bslib as bsl
@@ -11,7 +11,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    PhysicsComponent,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
@@ -80,7 +80,7 @@ class CarBatteryConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class CarBattery(Component):
+class CarBattery(PhysicsComponent):
     """Car Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery
@@ -100,7 +100,14 @@ class CarBattery(Component):
     AcBatteryChargingPower = "AcBatteryChargingPower"  # W
     DcBatteryChargingPower = "DcBatteryChargingPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
+    #: The state of charge the step starts with, between 0 and 1: the committed state, which no pass of the step
+    #: moves. The charge controller decides on it (``controller_l1_generic_ev_charge.L1Controller``).
+    StateOfChargeAtStartOfStep = "StateOfChargeAtStartOfStep"  # [0..1]
     AcBatteryDischargingPower = "AcBatteryDischargingPower"  # W
+
+    #: The state of charge before the first step, dimensionless between 0 and 1: a half-charged car battery, which
+    #: can take a charge and cover a first trip from the first step, rather than an empty or a full one.
+    INITIAL_STATE_OF_CHARGE: ClassVar[float] = 0.5
 
     def __init__(
         self,
@@ -129,7 +136,7 @@ class CarBattery(Component):
         self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
-        self.state = EVBatteryState(soc=0.5)
+        self.state = EVBatteryState(soc=self.INITIAL_STATE_OF_CHARGE)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
@@ -176,6 +183,16 @@ class CarBattery(Component):
             unit=Units.ANY,
             postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
             output_description="State of charge of the battery.",
+        )
+        self.state_of_charge_at_start_of_step_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StateOfChargeAtStartOfStep,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            output_description=(
+                "State of charge of the battery at the start of the step, between 0 and 1. It is the state the "
+                "previous step ended with, so it is the same in every pass of a step."
+            ),
         )
         self.p_bs_discharge: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -245,11 +262,17 @@ class CarBattery(Component):
         model (losses are accounted for in the car consumption component) and a
         ValueError is raised if the SOC would drop below zero.
 
+        Beside the end-of-step state of charge the battery publishes the state of charge the step starts
+        with. For example, a battery at 0.396 that charges 0.005 in the step publishes 0.396 as its start and
+        0.401 as its end. Why: a controller that decides "charge while below 0.4" on the end-of-step value
+        has no consistent answer in that step (charging lifts the value above 0.4, which stops the charging,
+        which leaves it below 0.4), so the passes of the step alternate until the simulator forces them.
+
         Args:
             timestep: Current simulation timestep index.
             stsv: Single-time-step values container used to read inputs and write
                 outputs (AcBatteryChargingPower, DcBatteryChargingPower,
-                StateOfCharge, AcBatteryDischargingPower).
+                StateOfCharge, StateOfChargeAtStartOfStep, AcBatteryDischargingPower).
             force_convergence: Unused by this component.
         """
         # Parameters
@@ -258,6 +281,7 @@ class CarBattery(Component):
         # Load input values
         target_power_to_or_from_car_battery_in_watt = stsv.get_input_value(self.p_set)
         soc = self.state.soc
+        stsv.set_output_value(self.state_of_charge_at_start_of_step_channel, soc)
 
         # Simulate battery charging
         if target_power_to_or_from_car_battery_in_watt >= 0.0:
@@ -454,10 +478,14 @@ class CarBattery(Component):
 
 @dataclass
 class EVBatteryState:
-    """Electric vehicle battery state class."""
+    """The car battery's state between steps: its state of charge.
 
-    # state of charge of the battery
-    soc: float = 0
+    The state of charge has no default: the car battery states its start value once, as
+    :attr:`CarBattery.INITIAL_STATE_OF_CHARGE`.
+    """
+
+    #: State of charge of the battery, dimensionless between 0 and 1.
+    soc: float
 
     def clone(self):
         """Creates a copy of the Car Battery State."""

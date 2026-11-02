@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Controller of EV battery with configuration and state."""
+"""Charge controller of an electric car's battery, with its configuration."""
 
+import math
 from typing import ClassVar, List, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -37,9 +38,10 @@ class ChargingStationConfig(ConfigBase):
             "L1EVChargeControl_1", ChargingStationSets.Charging_At_Home_with_11_kW
         )
 
-    The controller charges the car whenever it is at the station and its state of charge is
-    below :attr:`battery_set_soc`, and refuses a charging power below
-    :attr:`lower_threshold_charging_power_in_watt`, at which the station's efficiency collapses.
+    The controller charges the car at full station power whenever it is at the station and its
+    state of charge is below :attr:`battery_set_soc`. At or above the set point it charges only
+    with the surplus the energy manager offers, and only when that offer exceeds
+    :attr:`lower_threshold_charging_power_in_watt`, below which the station's efficiency collapses.
     """
 
     MAIN_CLASS = "hisim.components.controller_l1_generic_ev_charge.L1Controller"
@@ -56,7 +58,8 @@ class ChargingStationConfig(ConfigBase):
     lower_threshold_charging_power_in_watt: float
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int = 1
-    #: set point for state of charge of battery
+    #: set point for the battery's state of charge, from 0 to 1 (the controller refuses any other value): below it
+    #: the car charges at full station power, at or above it only with an offered surplus above the lower threshold
     battery_set_soc: float = field(default=0.8, metadata={"unit": lt.Units.ANY})
     #: CO2 footprint of investment in kg. estimated value  # Todo: check value
     device_co2_footprint_in_kg: float = 100.0
@@ -152,20 +155,33 @@ class ChargingStationConfig(ConfigBase):
         )
 
 
-class L1ControllerState:
-    """Data class, which saves the state of the controller."""
+class L1Controller(cp.StatelessComponent, cp.L1ControllerComponent):
+    """Commands an electric car's battery: its charging at the station and its discharging while the car drives.
 
-    def __init__(self, power_in_watt: float) -> None:
-        """Initializes power for battery charge/discharge in state."""
-        self.power_in_watt = power_in_watt
+    The controller decides every pass from its inputs alone and keeps no state from one step to the next, so it
+    inherits :class:`~hisim.component.StatelessComponent`, whose save and restore do nothing:
 
-    def clone(self) -> "L1ControllerState":
-        """Copy state efficiently."""
-        return L1ControllerState(power_in_watt=self.power_in_watt)
+    * the car drives: the battery gives the car's consumption;
+    * the car is parked away from its charging station: nothing;
+    * the car is parked at its station and the battery's state of charge at the start of the step is below
+      :attr:`ChargingStationConfig.battery_set_soc`: full station power, whatever surplus the energy manager offers;
+    * the car is parked at its station at or above its set point: the surplus the energy manager offers the car, up
+      to the station power, when that offer is above
+      :attr:`ChargingStationConfig.lower_threshold_charging_power_in_watt`, and nothing otherwise.
 
+    For example, with an 11 kW station and a set point of 0.4, a car starting the step at 0.396 charges at 11 kW
+    whether it is offered nothing or 3,000 W of surplus, a car at 0.6 offered 3,000 W charges at 3,000 W, and a car
+    at 0.6 offered 500 W, below the 1,100 W threshold, does not charge.
 
-class L1Controller(cp.Component):
-    """Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.
+    Why the set point comes first: it is there to have the car charged before it drives. Charged with a surplus
+    below the station power, a car below its set point might not reach the set point before it leaves, and its
+    charging power would fall from the station power to the offer as soon as the offer crossed the threshold, to a
+    tenth of the station power at the threshold itself.
+
+    Why both inputs are taken as they are: the start-of-step state of charge does not move while the step
+    iterates, and the offer is the surplus before the car takes its share, so the car's own charging changes
+    neither. A decision on the end-of-step state of charge, or on the surplus left after the car, would feed the
+    car's charging back into its own decision and alternate between the passes of a step.
 
     Components to connect to:
     (1) Car (generic_car)
@@ -178,7 +194,7 @@ class L1Controller(cp.Component):
     # Inputs
     ElectricityNeededByCar = "ElectricityNeededByCar"
     CarLocation = "CarLocation"
-    StateOfCharge = "StateOfCharge"
+    StateOfChargeAtStartOfStep = "StateOfChargeAtStartOfStep"
     ElectricityTargetFromEMS = "ElectricityTargetFromEMS"
     AcBatteryChargingPower = "AcBatteryChargingPower"
 
@@ -187,9 +203,6 @@ class L1Controller(cp.Component):
     BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
     # Instance attributes declared for static type analysis
-    state: L1ControllerState
-    previous_state: L1ControllerState
-    processed_state: L1ControllerState
     location: str
     charging_location: Optional[int]
     power_delivered_at_charging_station_in_watt: float
@@ -210,9 +223,6 @@ class L1Controller(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.state = L1ControllerState(power_in_watt=0)
-        self.previous_state = self.state.clone()
-        self.processed_state = self.state.clone()
         self.charging_location = None
         self.build(config=config)
 
@@ -231,9 +241,9 @@ class L1Controller(cp.Component):
             lt.Units.ANY,
             mandatory=True,
         )
-        self.state_of_charge_channel: cp.ComponentInput = self.add_input(
+        self.state_of_charge_at_start_of_step_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.StateOfCharge,
+            self.StateOfChargeAtStartOfStep,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             mandatory=True,
@@ -298,9 +308,11 @@ class L1Controller(cp.Component):
         battery_classname = advanced_ev_battery_bslib.CarBattery.get_classname()
         connections.append(
             cp.ComponentConnection(
-                L1Controller.StateOfCharge,
+                L1Controller.StateOfChargeAtStartOfStep,
                 battery_classname,
-                advanced_ev_battery_bslib.CarBattery.StateOfCharge,
+                # the state of charge the step starts with: the controller decides on a value the step's
+                # iteration does not move
+                advanced_ev_battery_bslib.CarBattery.StateOfChargeAtStartOfStep,
             )
         )
         connections.append(
@@ -311,22 +323,6 @@ class L1Controller(cp.Component):
             )
         )
         return connections
-
-    def i_save_state(self) -> None:
-        """Saves actual state."""
-        self.previous_state = self.state.clone()
-
-    def i_restore_state(self) -> None:
-        """Restores previous state."""
-        self.state = self.previous_state.clone()
-
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Checks statements."""
-        pass
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
 
     def _handle_discharging_power_in_watt(self, car_consumption_in_watt: float) -> float:
         """Handle discharging case when car is consuming energy.
@@ -349,38 +345,30 @@ class L1Controller(cp.Component):
         soc: float,
         electricity_target_in_watt: float
     ) -> float:
-        """Handle charging case when car is at charging location.
+        """Return the charging power of a car parked at its charging station, in W.
 
-        Charging logic:
-        - If SOC is below threshold, charge at full power
-        - If EMS has surplus energy above threshold, charge with surplus (may override SOC-based charging)
+        Below its set point the car charges at full station power, whatever surplus it is offered. At or above its
+        set point it charges with the offered surplus, up to the station power, when the offer exceeds the lower
+        charging threshold, and does not charge otherwise. For example, with an 11 kW station, a set point of 0.4
+        and a threshold of 1,100 W: at 0.3 offered 3,000 W the car charges at 11,000 W; at 0.6 offered 3,000 W at
+        3,000 W; at 0.6 offered 1,000 W not at all.
 
-        Note: The original implementation had both conditions as separate if statements,
-        meaning EMS surplus logic takes precedence over SOC threshold. This behavior is
-        preserved for backward compatibility, though the precedence is now explicit in the code.
+        Why the set point comes first: the set point is there to have the car charged before it drives, so a
+        surplus never slows the charging below it.
 
         Args:
-            soc: Current state of charge of the battery (0-1)
-            electricity_target_in_watt: Surplus energy from EMS in watts
+            soc: The battery's state of charge at the start of the step, between 0 and 1.
+            electricity_target_in_watt: The surplus the energy manager offers the car, in W: what is left before
+                the car takes its share, negative when there is none.
 
         Returns:
-            Power to charge the car battery in watts (positive value)
+            The power to charge the car battery with, in W, at least 0.
         """
-        charging_power_in_watt = 0.0
-
-        # If SOC is below threshold, charge at full power
         if soc < self.config.battery_set_soc:
-            charging_power_in_watt = self.power_delivered_at_charging_station_in_watt
-
-        # If EMS has surplus energy above threshold, use it for charging
-        # Note: This takes precedence over SOC-based charging (original behavior)
+            return self.power_delivered_at_charging_station_in_watt
         if electricity_target_in_watt > self.config.lower_threshold_charging_power_in_watt:
-            charging_power_in_watt = min(
-                electricity_target_in_watt,
-                self.power_delivered_at_charging_station_in_watt
-            )
-
-        return charging_power_in_watt
+            return min(electricity_target_in_watt, self.power_delivered_at_charging_station_in_watt)
+        return 0.0
 
     def control_power_in_watt(
         self,
@@ -400,8 +388,9 @@ class L1Controller(cp.Component):
         Args:
             car_consumption_in_watt: Current power consumption of the car in watts (positive when consuming)
             car_location: Current location of the car (1=Home, 2=Work, etc.)
-            soc: Current state of charge of the battery (0-1)
-            electricity_target_in_watt: Surplus energy from EMS in watts
+            soc: The battery's state of charge at the start of the step, between 0 and 1.
+            electricity_target_in_watt: The surplus the energy manager offers the car, in W, before the car takes
+                its share; negative when there is none.
 
         Returns:
             Power to/from the car battery in watts. Positive = charging, Negative = discharging
@@ -427,25 +416,36 @@ class L1Controller(cp.Component):
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
-        if force_convergence:
-            self.state = self.processed_state.clone()
+        """Command the car battery's power for this pass, and report the battery's charging power to the energy manager.
+
+        The command follows from the inputs alone (:meth:`control_power_in_watt`): the car's consumption and
+        location, the battery's state of charge at the start of the step and the surplus the energy manager offers
+        the car. For example, a parked car at its station starting the step at 0.396, below a set point of 0.4,
+        is commanded the station's 11,000 W in every pass of the step.
+
+        Under ``force_convergence`` the controller decides as in any other pass. Why: it keeps no state, so there
+        is no earlier decision to hold, and its decision on the inputs of the forced pass is the one consistent
+        with them.
+
+        Args:
+            timestep: The index of the current step.
+            stsv: The step values the inputs are read from and the outputs written to.
+            force_convergence: Whether the simulator forces the step to converge; it does not change the decision.
+        """
+        car_location = int(stsv.get_input_value(self.car_location_channel))
+        car_consumption_in_watt = stsv.get_input_value(self.car_consumption_channel)
+        state_of_charge_at_start_of_step = stsv.get_input_value(self.state_of_charge_at_start_of_step_channel)
+        if self.electricity_target_from_ems_channel.source_output is not None:
+            surplus_offered_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
         else:
-            car_location = int(stsv.get_input_value(self.car_location_channel))
-            car_consumption_in_watt = stsv.get_input_value(self.car_consumption_channel)
-            soc = stsv.get_input_value(self.state_of_charge_channel)
-            if self.electricity_target_from_ems_channel.source_output is not None:
-                electricity_target_from_ems_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
-            else:
-                electricity_target_from_ems_in_watt = 0
-            self.state.power_in_watt = self.control_power_in_watt(
-                car_consumption_in_watt,
-                car_location=car_location,
-                soc=soc,
-                electricity_target_in_watt=electricity_target_from_ems_in_watt,
-            )
-            self.processed_state = self.state.clone()
-        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, self.state.power_in_watt)
+            surplus_offered_in_watt = 0
+        power_in_watt = self.control_power_in_watt(
+            car_consumption_in_watt,
+            car_location=car_location,
+            soc=state_of_charge_at_start_of_step,
+            electricity_target_in_watt=surplus_offered_in_watt,
+        )
+        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, power_in_watt)
 
         # get current charging power from car battery
         ac_battery_power_in_watt = stsv.get_input_value(self.ac_battery_power_channel)
@@ -460,7 +460,22 @@ class L1Controller(cp.Component):
         self,
         config: ChargingStationConfig,
     ) -> None:
-        """Translates and assigns config parameters to controller class and completes initialization."""
+        """Translates and assigns config parameters to controller class and completes initialization.
+
+        The set point is checked here rather than when the configuration is made, because setups assign it after
+        building the configuration (``config.battery_set_soc = 0.4``). For example, 0.4 and 1.0 (always charge at
+        full station power) are accepted; 80, meant as a percentage, is refused: the battery's state of charge would
+        always be below it, so the car would charge at full station power and ignore every offered surplus.
+
+        Raises:
+            ValueError: If :attr:`ChargingStationConfig.battery_set_soc` is not a finite number from 0 to 1.
+        """
+        if not math.isfinite(config.battery_set_soc) or not 0.0 <= config.battery_set_soc <= 1.0:
+            raise ValueError(
+                f"The charge controller {config.component_id.name}'s battery_set_soc must be a state of charge from 0 "
+                f"to 1, got {config.battery_set_soc!r}: below it the car charges at full station power whatever "
+                "surplus it is offered."
+            )
         self.name = config.component_id.name
         self.source_weight = config.source_weight
         self.config = config

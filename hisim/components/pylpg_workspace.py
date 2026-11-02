@@ -8,14 +8,16 @@ the constant ``1``, which meant every local-LPG process in one virtual environme
 same ``pylpg/C1`` directory: two at once corrupted each other's sqlite files, and whichever finished
 first deleted the directory the other was still using.
 
-Since hisim-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
+Since hisim-renovisor-translator-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
 directories live below the calculation's cache directory (:meth:`PylpgWorkspace.work_root`) and
 :meth:`PylpgWorkspace.start_executor` builds the executor there, so a calculation writes nothing into
 the installed package. The binaries the calculations are copied from live in the cache directory as
 well (:meth:`PylpgWorkspace.binary_root`, versioned by the LoadProfileGenerator release pylpg
 downloads), and :meth:`PylpgWorkspace.install_binaries_if_missing` installs them there. Nothing in
 HiSim reads or writes the ``pylpg`` package directory any more; an installation an older HiSim left
-there is ignored.
+there is ignored. An image that ships the binaries (the CI test image, ``Dockerfile.test``) names its
+read-only installation in ``HISIM_LPG_BINARY_ROOT``; the calculations then copy them from there and
+nothing is downloaded (:meth:`PylpgWorkspace.preinstalled_binary_root`).
 
 This module owns the index arithmetic and the directory lifecycle instead, so the connector does not
 have to. The default index comes from the process, which removes the shared constant; the directory
@@ -31,6 +33,7 @@ those indices out and takes them back. It lives in this module so that the pool 
 """
 
 import contextlib
+import dataclasses
 import inspect
 import os
 import pathlib
@@ -38,9 +41,10 @@ import queue
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import time
-from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 from pylpg import lpg_execution
 
@@ -68,15 +72,36 @@ class PylpgWorkingDirectoryInUseError(RuntimeError):
 class LocalLpgCalculationFailedError(RuntimeError):
     """Raised when a local LoadProfileGenerator run left none of the results it was asked for.
 
-    ``pylpg`` runs the LoadProfileGenerator binary with ``subprocess.run`` and neither passes
-    ``check=True`` nor looks at the return code (``lpg_execution.LPGExecutor.execute_lpg_binaries``),
-    so a calculation that dies -- the sqlite errors this generator is known for, a crash, a killed
-    process -- returns to its caller looking exactly like one that worked. HiSim then reads the
-    result files it expects and fails on whichever one it happens to open first, which is how a
-    failed calculation used to be reported as ``FileNotFoundError`` on an arbitrary json file with
-    no mention of the LoadProfileGenerator at all. This error is raised instead, at the point the
-    absence is first detectable, and it carries what the binary itself printed.
+    ``pylpg``'s own runner (``lpg_execution.LPGExecutor.execute_lpg_binaries``) neither checks the
+    binary's return code nor captures what it prints, so a calculation that dies -- the sqlite errors
+    this generator is known for, a crash, a killed process -- returns to its caller looking exactly
+    like one that worked. HiSim then read the result files it expected and failed on whichever one
+    it happened to open first, which is how a failed calculation used to be reported as
+    ``FileNotFoundError`` on an arbitrary json file with no mention of the LoadProfileGenerator at
+    all. HiSim now runs the binary itself (:meth:`PylpgWorkspace.run_generator`) and raises this
+    error at the point the absence is first detectable. The message carries the binary's exit code,
+    the last lines it printed and the tail of its log file, whichever of them exist.
     """
+
+
+@dataclasses.dataclass(frozen=True)
+class GeneratorRun:
+    """What one run of the LoadProfileGenerator binary returned: its exit code and everything it printed.
+
+    Example: ``GeneratorRun(return_code=134, output="Unhandled exception. ... database is locked ...")``
+    for a run that died on a locked sqlite database before it wrote its log file.
+
+    The output is kept because the binary does not always write its log file before it dies: when it
+    fails in its post-processing, the only trace of the cause is the .NET stack trace it prints. The
+    result check quotes the end of it, and the retry looks for a locked database in all of it.
+
+    Attributes:
+        return_code: the exit code of the binary's process; negative when a signal ended it.
+        output: what the binary wrote to stdout and stderr, merged in the order it was written.
+    """
+
+    return_code: int
+    output: str
 
 
 class PylpgWorkspace:
@@ -235,12 +260,68 @@ class PylpgWorkspace:
         cls._release = releases.pop()
         return cls._release
 
+    #: The environment variable naming a preinstalled, read-only LoadProfileGenerator installation:
+    #: a directory holding ``<release>/LPG_linux/simengine2``, the layout of :meth:`binary_root`. The
+    #: CI test image (``Dockerfile.test``) sets it to ``/opt/hisim/pylpg``.
+    PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE: ClassVar[str] = "HISIM_LPG_BINARY_ROOT"
+
+    #: The reasons for not using the preinstalled binaries that were already logged by this process,
+    #: so a run of many households says it once rather than once per household.
+    _reported_preinstallation_problems: ClassVar[Set[str]] = set()
+
+    @classmethod
+    def preinstalled_binary_root(cls) -> Optional[pathlib.Path]:
+        """Returns the preinstalled LoadProfileGenerator installation to use, or ``None`` to use the cache.
+
+        Example: with ``HISIM_LPG_BINARY_ROOT=/opt/hisim/pylpg`` and pylpg downloading ``LPG10.10.0``,
+        this is ``/opt/hisim/pylpg/LPG10.10.0`` when ``/opt/hisim/pylpg/LPG10.10.0/LPG_linux/simengine2``
+        exists.
+
+        The CI test image ships the binaries so that no job has to download them: a job whose cache
+        missed used to fetch the 65 MB zip from loadprofilegenerator.de, and fails when that server
+        refuses the connection. The installation is only read. :meth:`start_executor` copies it into
+        the calculation's own directory, as it copies an installation in the cache directory, so the
+        write guard never has to admit it.
+
+        The release check stays: when the variable names an installation of another release than the
+        one pylpg downloads (an image built before a pylpg upgrade, say), or none at all, the reason is
+        logged once and ``None`` is returned, so the binaries are installed into the cache directory
+        exactly as without the variable.
+
+        Returns:
+            Optional[pathlib.Path]: ``<variable>/<release>``, or ``None`` when the variable is unset or
+            empty, or holds no executable of the release pylpg downloads.
+        """
+        configured = os.environ.get(cls.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE, "").strip()
+        if not configured:
+            return None
+        root = pathlib.Path(configured) / cls.lpg_release()
+        executable = root / cls.binary_folder_name() / cls.executable_name()
+        if executable.is_file():
+            return root
+        try:
+            releases = sorted(path.name for path in pathlib.Path(configured).iterdir() if path.is_dir())
+        except OSError:
+            releases = []
+        problem = (
+            f"{cls.PREINSTALLED_ROOT_ENVIRONMENT_VARIABLE}={configured} holds no LoadProfileGenerator executable "
+            f"at '{executable}' (releases there: {releases or 'none'}), but pylpg downloads {cls.lpg_release()}. "
+            "The binaries are installed into the cache directory instead. If this is the CI test image, it "
+            "was built for another pylpg and needs a rebuild (workflow 'Docker test image')."
+        )
+        if problem not in cls._reported_preinstallation_problems:
+            cls._reported_preinstallation_problems.add(problem)
+            log.warning(problem)
+        return None
+
     @classmethod
     def binary_root(cls, cache_directory: str) -> pathlib.Path:
-        """Returns the directory the LoadProfileGenerator binaries are installed in, below a cache directory.
+        """Returns the directory the LoadProfileGenerator binaries are taken from.
 
-        ``<cache_directory>/pylpg/<release>``, with ``LPG_linux`` (or ``LPG_win``) below it, the
-        layout ``LPGExecutor.retrieve_lpg_binaries`` extracts into the directory it is given.
+        The preinstalled installation when there is a usable one (:meth:`preinstalled_binary_root`),
+        otherwise ``<cache_directory>/pylpg/<release>``. Either has ``LPG_linux`` (or ``LPG_win``)
+        below it, the layout ``LPGExecutor.retrieve_lpg_binaries`` extracts into the directory it is
+        given.
 
         The binaries used to live in the installed pylpg package, where pylpg puts them. A
         calculation may not write there (``hisim.write_guard``), and a fresh environment -- every CI
@@ -254,8 +335,12 @@ class PylpgWorkspace:
             cache_directory: The calculation's cache write directory.
 
         Returns:
-            pathlib.Path: ``<cache_directory>/pylpg/<release>``.
+            pathlib.Path: The preinstalled ``<HISIM_LPG_BINARY_ROOT>/<release>``, or
+            ``<cache_directory>/pylpg/<release>``.
         """
+        preinstalled = cls.preinstalled_binary_root()
+        if preinstalled is not None:
+            return preinstalled
         return pathlib.Path(cache_directory) / cls.BINARY_DIRECTORY_NAME / cls.lpg_release()
 
     @staticmethod
@@ -263,13 +348,22 @@ class PylpgWorkspace:
         """Returns the folder ``retrieve_lpg_binaries`` extracts into on this platform."""
         return "LPG_win" if sys.platform.startswith("win") else "LPG_linux"
 
+    @staticmethod
+    def executable_name() -> str:
+        """Returns the file name of the LoadProfileGenerator executable on this platform.
+
+        The name is the one ``LPGExecutor.__init__`` expects, restated because the executor exposes it
+        nowhere a caller can reach before constructing one, and constructing one is the very thing
+        :meth:`start_executor` avoids.
+        """
+        return "simengine2.exe" if sys.platform.startswith("win") else "simengine2"
+
     @classmethod
     def binary_path(cls, cache_directory: str) -> pathlib.Path:
-        """Returns the LoadProfileGenerator executable's path below a cache directory.
+        """Returns the path of the LoadProfileGenerator executable the calculations copy.
 
-        The executable's name is the one ``LPGExecutor.__init__`` expects, restated because the
-        executor exposes it nowhere a caller can reach before constructing one, and constructing one
-        is the very thing :meth:`start_executor` avoids.
+        It lies below :meth:`binary_root`: in the preinstalled installation when there is a usable one,
+        otherwise below the cache directory. Its name is :meth:`executable_name`.
 
         Args:
             cache_directory: The calculation's cache write directory.
@@ -277,8 +371,7 @@ class PylpgWorkspace:
         Returns:
             pathlib.Path: ``<binary_root>/LPG_linux/simengine2`` (``LPG_win/simengine2.exe`` on Windows).
         """
-        executable = "simengine2.exe" if sys.platform.startswith("win") else "simengine2"
-        return cls.binary_root(cache_directory) / cls.binary_folder_name() / executable
+        return cls.binary_root(cache_directory) / cls.binary_folder_name() / cls.executable_name()
 
     @classmethod
     def install_binaries_if_missing(cls, cache_directory: str) -> pathlib.Path:
@@ -287,7 +380,8 @@ class PylpgWorkspace:
         The binaries are not shipped with pylpg; pylpg downloads a zip on first use. HiSim installs
         them itself, into :meth:`binary_root`, never into the pylpg package directory, and an
         installation an older HiSim or pylpg itself left in the package directory is neither read
-        nor removed.
+        nor removed. When a preinstalled installation is usable (:meth:`preinstalled_binary_root`),
+        :meth:`binary_path` already names its executable and nothing is installed or downloaded.
 
         The install has to be atomic with respect to every other process, because the check and the
         write are separate steps: several processes starting together in a fresh environment -- four
@@ -342,8 +436,9 @@ class PylpgWorkspace:
             shutil.rmtree(staging, ignore_errors=True)
         return executable
 
-    #: The fragments of a generator log that mark a failure worth trying again. Only sqlite's busy
-    #: error qualifies: it is the one failure that is about timing rather than about the request.
+    #: The fragments of a generator log or of the binary's output that mark a failure worth trying
+    #: again. Only sqlite's busy error qualifies: it is the one failure that is about timing rather
+    #: than about the request.
     RETRY_SIGNATURES: ClassVar[Tuple[str, ...]] = ("database is locked",)
 
     #: How long to wait before each retry, in seconds; the length of the tuple is the number of
@@ -351,6 +446,44 @@ class PylpgWorkspace:
     #: disk time to catch up. Each retry is also a full run of the generator, which costs what a run
     #: costs, so a genuinely stuck calculation takes three runs to fail instead of one.
     RETRY_DELAYS_IN_SECONDS: ClassVar[Tuple[float, ...]] = (5.0, 15.0)
+
+    @classmethod
+    def run_generator(cls, executor: "lpg_execution.LPGExecutor") -> GeneratorRun:
+        """Runs the LoadProfileGenerator binary of an executor once and captures what it printed.
+
+        The command is the one ``LPGExecutor.execute_lpg_binaries`` runs --
+        ``<binary> processhousejob -j calcspec.json`` in the executor's calculation directory -- but
+        stdout and stderr are captured, merged into one text, instead of going straight to the
+        terminal. pylpg's runner loses them, and with them the only trace of the cause when the binary
+        dies before it writes its log file: on CI runners it has died in its post-processing on
+        ``SQLiteException ... database is locked`` with the stack trace on stderr and no log on disk.
+        Bytes that are not valid text are replaced rather than raising.
+
+        A non-zero exit code does not by itself fail the run. Success is still decided by the result
+        files (:meth:`verify_results_were_produced`), as it was while pylpg ran the binary; the exit
+        code is returned so that a failure message can report it.
+
+        Example: ``PylpgWorkspace.run_generator(executor).return_code`` is ``0`` for a run that
+        finished normally.
+
+        Args:
+            executor: the pylpg executor whose binary and calculation directory are used; the
+                calculation's ``calcspec.json`` must already be in that directory.
+
+        Returns:
+            GeneratorRun: the exit code and the merged output of the binary.
+        """
+        calculation_directory = str(executor.calculation_directory)
+        log.information(f"Running the LoadProfileGenerator in '{calculation_directory}'.")
+        completed = subprocess.run(  # pylint: disable=subprocess-run-check
+            [executor.lpg_simengine_filepath(), "processhousejob", "-j", "calcspec.json"],
+            cwd=calculation_directory,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+        )
+        return GeneratorRun(return_code=completed.returncode, output=completed.stdout or "")
 
     @classmethod
     def execute_and_verify(
@@ -365,9 +498,12 @@ class PylpgWorkspace:
         The LoadProfileGenerator writes its results into sqlite files from several threads, and on a slow disk
         (a CI runner, typically) one of them can find the file busy; the run then dies with
         ``SQLiteException: database is locked`` although nothing about the request is wrong. That failure is
-        recognised by its text in the generator's log and retried after each delay in
-        :attr:`RETRY_DELAYS_IN_SECONDS`. Any other failure is raised immediately, because waiting would not
-        help and a retry would only delay the real message.
+        recognised by its text (:attr:`RETRY_SIGNATURES`) and retried after each delay in
+        :attr:`RETRY_DELAYS_IN_SECONDS`. The text is looked for in the failure message, which quotes the tail
+        of the generator's log, and in everything the binary printed (:meth:`run_generator`): the binary can
+        die before it writes its log, leaving the error only in its output, and the stack trace that follows
+        the error line can push that line out of the quoted tail. Any other failure is raised immediately,
+        because waiting would not help and a retry would only delay the real message.
 
         Each attempt reruns the binary in the same calculation directory, whose copy of the toolchain the
         executor set up once. The results folder is removed before a retry, so a partial result from a failed
@@ -376,7 +512,7 @@ class PylpgWorkspace:
         the pause would add to it rather than relieve it.
 
         Args:
-            executor: the pylpg executor whose ``execute_lpg_binaries`` runs the calculation.
+            executor: the pylpg executor whose binary :meth:`run_generator` runs.
             calculation_index: the calculation's index, named in the failure message.
             result_folder: where the generator writes its results.
             required_files: the result files that must exist for the run to count as successful.
@@ -388,18 +524,22 @@ class PylpgWorkspace:
         """
         attempts = len(cls.RETRY_DELAYS_IN_SECONDS) + 1
         for attempt in range(1, attempts + 1):
-            executor.execute_lpg_binaries()
+            run = cls.run_generator(executor)
             try:
-                cls.verify_results_were_produced(calculation_index, result_folder, required_files=required_files)
+                cls.verify_results_were_produced(
+                    calculation_index, result_folder, required_files=required_files, run=run
+                )
                 return
             except LocalLpgCalculationFailedError as error:
-                locked = any(signature in str(error) for signature in cls.RETRY_SIGNATURES)
+                locked = any(
+                    signature in str(error) or signature in run.output for signature in cls.RETRY_SIGNATURES
+                )
                 if not locked:
                     raise
                 if attempt == attempts:
                     raise LocalLpgCalculationFailedError(
-                        f"{error}\nThe calculation was attempted {attempts} times and the generator's log "
-                        f"mentioned a locked database after every attempt, so this is not the transient "
+                        f"{error}\nThe calculation was attempted {attempts} times and the generator reported "
+                        f"a locked database after every attempt, so this is not the transient "
                         "contention a retry is for."
                     ) from error
                 delay = cls.RETRY_DELAYS_IN_SECONDS[attempt - 1]
@@ -413,10 +553,17 @@ class PylpgWorkspace:
 
     LOG_FILE_NAME: ClassVar[str] = "Log.CommandlineCalculation.txt"
     LOG_LINES_TO_QUOTE: ClassVar[int] = 30
+    #: How many of the last lines the binary printed a failure message quotes. Its .NET stack traces
+    #: run to about 45 lines, so this keeps a whole one.
+    OUTPUT_LINES_TO_QUOTE: ClassVar[int] = 60
 
     @classmethod
     def verify_results_were_produced(
-        cls, calculation_index: int, result_folder: str, required_files: Optional[Sequence[str]] = None
+        cls,
+        calculation_index: int,
+        result_folder: str,
+        required_files: Optional[Sequence[str]] = None,
+        run: Optional[GeneratorRun] = None,
     ) -> None:
         """Checks that a finished calculation actually left results, and explains it if not.
 
@@ -428,7 +575,9 @@ class PylpgWorkspace:
         where the real cause -- an sqlite error, a bad household reference -- is stated. Its tail is
         quoted into the exception rather than left on a disk the reader may not have: on a CI runner
         the directory is deleted with the workspace, and on a developer box it is deleted by the
-        cleanup in :meth:`release` moments later.
+        cleanup in :meth:`release` moments later. The binary does not always get as far as writing
+        that log, so when the caller passes the run (:meth:`run_generator`), the binary's exit code and
+        the last lines it printed are quoted as well.
 
         Checking that the directory merely holds *something* is not enough, and the first version of
         this check made that mistake. A calculation can die partway and leave some of its outputs
@@ -444,6 +593,9 @@ class PylpgWorkspace:
             result_folder: the directory the caller is about to read results from.
             required_files: the result files this run must have produced. When omitted, only the
                 presence of any output at all is checked, which is the weaker test described above.
+            run: the run of the binary that should have produced the results. When given, a failure
+                message reports its exit code and the end of its output; the exit code alone never
+                decides the outcome.
 
         Raises:
             LocalLpgCalculationFailedError: if the directory is missing, holds no files, or is
@@ -466,19 +618,30 @@ class PylpgWorkspace:
         message = [
             f"The local LoadProfileGenerator calculation for index {calculation_index} produced no "
             f"results: '{results}' {reason}.",
-            "pylpg does not check the return code of the LoadProfileGenerator binary, so a "
-            "calculation that failed returns as though it had worked; this is that case.",
         ]
+        if run is not None:
+            message.append(f"The LoadProfileGenerator binary exited with code {run.return_code}.")
         log_file = results.parent / cls.LOG_FILE_NAME
         try:
             lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             lines = []
+        output_lines = run.output.splitlines() if run is not None and run.output.strip() else []
         if lines:
             message.append(f"The last lines of {log_file}:")
             message.extend("    " + line for line in lines[-cls.LOG_LINES_TO_QUOTE:])
+        elif run is None:
+            message.append(f"No log was found at {log_file}, and the binary's output was not captured.")
+        elif not output_lines:
+            message.append(
+                f"No log was found at {log_file} and the binary printed nothing, so it stopped before "
+                "it wrote anything that would say why."
+            )
         else:
-            message.append(f"No log was found at {log_file} either, so the binary failed early.")
+            message.append(f"No log was found at {log_file}.")
+        if output_lines:
+            message.append("The last lines the binary printed (stdout and stderr):")
+            message.extend("    " + line for line in output_lines[-cls.OUTPUT_LINES_TO_QUOTE:])
         raise LocalLpgCalculationFailedError("\n".join(message))
 
     @classmethod
@@ -566,7 +729,7 @@ class PylpgWorkspace:
         ``working_directory`` is set to the binary root rather than to the package, so no attribute
         of the executor names the package directory. None of the executor's methods HiSim calls reads
         it: ``make_default_lpg_settings`` names the database in the calculation directory,
-        ``execute_lpg_binaries`` runs the binary with the calculation directory as its working
+        :meth:`run_generator` runs the binary with the calculation directory as its working
         directory, and the connector reads the results from there itself.
 
         Args:

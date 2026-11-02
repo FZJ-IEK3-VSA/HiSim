@@ -1,4 +1,4 @@
-"""Tests for building-envelope measures in the lifecycle cost engine (cost_spec.md Q7).
+"""Tests for building-envelope measures in the lifecycle cost engine (roadmap/cost_spec.md Q7).
 
 **Surface.** Everything that makes insulation, windows, doors, air sealing and ventilation
 ordinary cost subjects: the thirteen envelope `ComponentType`s in the device data, the three
@@ -51,7 +51,7 @@ from hisim.loadtypes import ComponentType, Units
 pytestmark = pytest.mark.base
 
 #: The thirteen asset classes that make up the envelope (README §3.2b). All are sized in m2 of
-#: the respective element except EXTERIOR_DOOR and VENTILATION_SYSTEM, which are priced per unit.
+#: the respective element, EXTERIOR_DOOR in m2 of door, except VENTILATION_SYSTEM, which is priced per unit.
 ENVELOPE_CLASSES = [
     ComponentType.WALL_EXTERNAL_INSULATION,
     ComponentType.WALL_INTERNAL_INSULATION,

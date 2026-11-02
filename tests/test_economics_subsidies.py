@@ -332,7 +332,7 @@ class TestTypedBenefits:
 
 
 class TestTieredPerUnitBenefit:
-    """hisim-cyc.3: an amount per unit that changes by band, capped (SEAI's solar PV grant)."""
+    """hisim-economics-engine-cyc.3: an amount per unit that changes by band, capped (SEAI's solar PV grant)."""
 
     SEAI_PV = {
         "kind": "TIERED_PER_UNIT",

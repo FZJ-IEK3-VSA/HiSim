@@ -1,12 +1,12 @@
 # The air-to-water heat pump (hplib) with its two L1 controllers and its space-heating buffer (D12 b, D25: the
 # assembly WITH the buffer), charging a DHW cylinder through its `dhw` circuit. Control is hardcoded here (D21):
 # ControllerSH switches the heat pump on the buffer temperature against the flow temperature the site's
-# HeatDistributionController asks for, ControllerDHW on the cylinder temperature; an energy manager may only raise
+# HeatingCurveController sets, ControllerDHW on the cylinder temperature; an energy manager may only raise
 # the two L1 set points, through `ems_modifier` and `ems_modifier_dhw`.
 #
 # The members expand as one block in the order their lines stand here, the twin's ControllerSH, ControllerDHW,
 # HeatPump, Buffer. The sizing facts the members read from the site (heating load, design temperature, room set
-# point, emitter type, heating threshold) bind their one provider by the engine's bare-fact rule, as in the twin; the
+# point, emitter type) bind their one provider by the engine's bare-fact rule, as in the twin; the
 # buffer reads the heat pump's maximal thermal power inside the block. The defaults reproduce
 # household_heatpump_building_sizer (D9): a parameter at its preset's value, AUTO or none writes no config line (G9).
 #
@@ -43,8 +43,9 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
+      - HeatPump                                            # ActualPartLoadRatioSh
       - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   ControllerDHW:
@@ -52,6 +53,7 @@ components:
     preset: standard
     inputs:
       - {$port: ems_modifier_dhw}                           # DHWStorageTemperatureModifier
+      - ControllerSH                                        # SpaceHeatingStateFromController, for the priority limit
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
   HeatPump:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
@@ -84,7 +86,7 @@ interface:
                        wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,
                                TemperatureInputPrimary: DailyAverageOutsideTemperatures}}
                       # the class's default connections from Weather are not these two (G2): named as the twin writes them
-    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [ControllerSH], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     electricity:      {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerSH]}
     electricity_for_dhw: {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerDHW]}
     ems_modifier:     {into: [ControllerSH], partner: L2GenericEnergyManagementSystem, optional: true}
@@ -100,7 +102,7 @@ interface:
     electricity_dhw:  {output: HeatPump.ElectricalInputPowerDHW, controllable: {via: ems_modifier_dhw}}
 
 tests:
-  # One day at 900 s beside the site partners (an unheated building, its heat distribution, the cylinder, an energy
+  # One day at 900 s beside the site partners (the building it heats, its heat distribution, the cylinder, an energy
   # manager, the grid). Powers are bounded by the largest machine of the box (20 kW rated; hplib's output at a mild
   # ambient exceeds the rating, so 2x), per-step energies by power x 0.25 h, the day's cumulative ones by power x 24 h.
   # Water stays liquid, flows below hplib's 75 °C limit plus margin. The controllers have no energy-carrying or
@@ -113,7 +115,7 @@ tests:
     - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: -5000, max: 40000}
-      # ambient heat; hplib books a small negative value at part load (measured -1.2 kW)
+      # ambient heat; hplib books a small negative value at part load (measured -1.0 to 19.9 kW)
     - {output: HeatPump.ThermalPowerDeliveredForSpaceHeating, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ThermalPowerDrawnForCooling, unit: WATT, min: -40000, max: 40000}     # zero here; sign unchecked
     - {output: HeatPump.ThermalEnergySH, unit: WATT_HOUR, min: 0, max: 10000}
@@ -127,10 +129,16 @@ tests:
     - {output: HeatPump.CumulativeThermalEnergyTotal, unit: WATT_HOUR, min: 0, max: 1000000}
     - {output: HeatPump.CumulativeElectricalEnergyTotal, unit: WATT_HOUR, min: 0, max: 600000}
     - {output: HeatPump.DeltaTHeatpumpSecondarySide, unit: KELVIN, min: -10, max: 40}         # hydronic spreads, 3-15 K
+    - {output: HeatPump.ActualPartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge ran, reported back to the controller
+    - {output: ControllerSH.RequestedPartLoadRatioSh, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the space-heating charge runs: 1 at and below the part-load threshold
+    - {output: ControllerSH.TargetTemperatureShInCelsius, unit: CELSIUS, min: 0, max: 100}
+      # the heating curve's supply temperature plus the energy manager's raise, at which the charge ends the buffer
     - {output: HeatPump.ThermalOutputPowerDHW, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ElectricalInputPowerDHW, unit: WATT, min: 0, max: 25000}
       # a cylinder above about 63 °C runs hplib at COP 1, its heating-rod mode, where the electricity is the heat:
-      # the 20 kW rating, booked from the flow up to 0.5 % above it (measured 20.1 kW), with margin
+      # the 20 kW rating, booked from the flow up to 0.5 % above it, with margin (measured at most 10.5 kW)
     - {output: HeatPump.TemperatureInputDHW, unit: CELSIUS, min: 0, max: 90}                  # the cylinder's return
     - {output: HeatPump.TemperatureOutputDHW, unit: CELSIUS, min: 0, max: 95}                 # above the SH flow
     - {output: HeatPump.ThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 10000}
@@ -143,13 +151,20 @@ tests:
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtStartOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutSecondaryHeatGeneratorInCelsius, unit: CELSIUS, min: -300, max: 300}
+    - {output: Buffer.WaterTemperatureAtEndOfStepWithoutHeatDistributionInCelsius, unit: CELSIUS, min: -300, max: 300}
+      # hypothetical end temperatures without one circuit, from which the controllers set their fractions: a step's
+      # whole draw or charge without its counterpart can carry them far outside the range of liquid water
     - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}           # 1000 l at 100 °C: 116 kWh
     - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}
     - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}  # zero here
     - {output: Buffer.ThermalEnergyFromHeatDistribution, unit: WATT_HOUR, min: -10000, max: 10000}
     - {output: Buffer.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -20000, max: 20000}
     - {output: Buffer.StandbyHeatLoss, unit: WATT, min: -500, max: 500}
-      # a 1000 l vessel loses about 100-200 W; negative while it is colder than its room (measured -11 W)
+      # a 1000 l vessel loses about 100-200 W; negative while it is colder than its room (measured -17 to 174 W)
     - {output: Buffer.ThermalPowerConsumptionHeatDistribution, unit: WATT, min: -40000, max: 40000}
     - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -40000, max: 40000}
     - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}    # zero here
@@ -159,5 +174,5 @@ tests:
     - {parameter: buffer_volume_in_liter, kpi: Standby heat loss of Hot water storage, member: Buffer,
        direction: increasing}                               # a larger vessel has more surface
   expect:
-    - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.3, max: 4.2}
-      # 3.76 measured at the defaults on the test day (1 January, Aachen)
+    - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.4, max: 4.3}
+      # 3.84 measured at the defaults on the test day (1 January, Aachen)

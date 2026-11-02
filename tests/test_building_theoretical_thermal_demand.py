@@ -14,6 +14,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim.config import ComponentID, SizingContext
 from tests.testing_utils import TestingUtils
+from tests.idealized_heater_rig import controller_between
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -151,13 +152,6 @@ def _connect_components(
         my_idealized_electric_heater.ThermalPowerDelivered,
     )
 
-    # Fake Heater
-    my_idealized_electric_heater.connect_input(
-        my_idealized_electric_heater.TheoreticalThermalBuildingDemand,
-        my_building.component_name,
-        my_building.TheoreticalThermalBuildingDemand,
-    )
-
 
 def _assert_indoor_temperature(
     my_sim: sim.Simulator, my_building: building.Building
@@ -246,6 +240,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
+    my_sim.add_component(controller_between(my_building, my_idealized_electric_heater))
     my_sim.add_component(my_idealized_electric_heater)
 
     my_sim.run_all_timesteps()

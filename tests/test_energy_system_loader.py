@@ -94,14 +94,13 @@ def test_the_minimal_mockup_classifies_its_input_items() -> None:
     assert [item.source for item in building.inputs] == ["weather", "occupancy", "hds"]
     assert all(isinstance(item, DefaultInputs) for item in building.inputs)
     boiler_items = model.all_components()["boiler"].inputs
-    assert [type(item).__name__ for item in boiler_items] == ["DefaultInputs", "ExplicitWire"]
-    wire = boiler_items[1]
-    assert isinstance(wire, ExplicitWire)
-    assert (wire.input, wire.source, wire.output) == (
-        "WaterInputTemperatureSh",
-        "hds",
-        "WaterTemperatureOutput",
-    )
+    assert [type(item).__name__ for item in boiler_items] == ["DefaultInputs", "ExplicitWire", "ExplicitWire"]
+    wires = [item for item in boiler_items[1:] if isinstance(item, ExplicitWire)]
+    assert len(wires) == 2
+    assert [(wire.input, wire.source, wire.output) for wire in wires] == [
+        ("WaterInputTemperatureSh", "hds", "WaterTemperatureOutput"),
+        ("WaterInputMassFlowSh", "hds", "WaterMassFlowHDS"),
+    ]
     meter_feeds = [item for item in model.all_components()["meter"].inputs if isinstance(item, AggregatorFeed)]
     assert len(meter_feeds) == len(model.all_components()["meter"].inputs)
     assert [(item.source, item.output, item.weight) for item in meter_feeds] == [

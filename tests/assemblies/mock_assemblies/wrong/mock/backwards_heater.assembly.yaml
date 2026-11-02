@@ -27,6 +27,8 @@ components:
       - Controller
 
 interface:
+  needs:
+    grid: {carrier: electricity, outputs: [Heater.ElectricityInput]}     # the electricity it draws, metered
   provides:
     heat: {output: Heater.ThermalPower}
 

@@ -42,27 +42,36 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
+      - MoreAdvancedHeatPumpHPLibControllerSH
       - DHWStorage
   MoreAdvancedHeatPumpHPLibControllerSH:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
+      - MoreAdvancedHeatPumpHPLib
       - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - SimpleHotWaterStorage
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - SimpleHotWaterStorage
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - Weather
+      - HeatDistributionSystem
+      - HeatingCurveController
       - Building
+      - SimpleHotWaterStorage
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
+      - Weather
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer
@@ -81,13 +90,19 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
-        component_type: HEAT_PUMP_DHW
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
-        component_type: HEAT_PUMP_BUILDING
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999

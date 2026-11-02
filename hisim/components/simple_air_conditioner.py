@@ -94,7 +94,7 @@ class SimpleAirConditionerConfig(ConfigBase):
 # ==============================================================================
 
 
-class SimpleAirConditioner(cp.Component):
+class SimpleAirConditioner(cp.PhysicsComponent):
     """Simple air-conditioning component with a Carnot-efficiency cooling model.
 
     The component reads outside and inside temperatures plus a modulating power
@@ -592,7 +592,7 @@ class SimpleAirConditionerControllerState:
 # ==============================================================================
 
 
-class SimpleAirConditionerController(cp.Component):
+class SimpleAirConditionerController(cp.L1ControllerComponent):
     """Hysteresis controller for the :class:`SimpleAirConditioner`.
 
     Turns cooling on when the indoor temperature rises above

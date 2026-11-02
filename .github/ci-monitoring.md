@@ -31,7 +31,7 @@ request waits.
 
 ## Adding the monitor to a new job
 
-Two steps, next to the checkout and at the end, exactly like the `hisim-cache` action:
+Two steps, next to the checkout and at the end:
 
 ```yaml
     - uses: actions/checkout@v6
@@ -62,26 +62,37 @@ Thresholds live in `RegressionRules` in `scripts/ci_usage_report.py`:
 - **near the limit**: any job reaching ≥ 85% of the runner's RAM (16 GB on `ubuntu-latest`)
 - **holding a runner idle**: ≥ 5 min jobs using < 35% of the runner's cores
 
+Before those, the report states the outcome of the last **weekly cold-cache run**
+(`weekly-cold-cache.yml`, Mondays 05:00 UTC: tests, golden-check and golden-year without the inputs
+cache), with its failed jobs by name. It is the one run that exercises the code a warm cache skips
+(weather download, local LoadProfileGenerator calculation, PV and building series), so its failure
+gets its own line rather than a dent in a median. The cold run's jobs are recorded under its own
+workflow name, `weekly cold cache`, so their cold durations stay out of the warm jobs' baselines.
+The last run of the **assembly nightly tier** (`assemblies-nightly.yml`, daily at 02:00 UTC) gets
+the same line, since no pull request runs it and its failure would otherwise show only on the
+Actions page.
+
 The last of those is the one that caught the full-year golden gate. `golden-year.yml` used to
 wait for `quality`, `tests` and `golden-check` in an ordinary job that polled the runs API, so
 the wait held a runner: 28 idle minutes in a good run, an hour when it timed out, once per pull
-request. With eight pull requests re-running at once, eight idle gates sat on the runners the
-golden matrices were queued behind and the full-year tier stopped running at all. It now waits
-by not running: `workflow_run` fires it when a prerequisite completes, the gate classifies the
-three prerequisites with one API query each (`scripts/ci_prereqs_done.sh`) and exits in seconds
-unless it is the last completion with everything green. Because `workflow_run` runs are absent
-from a pull request's checks list, the result comes back as a `golden-year` commit status on the
-head commit instead. A wait that costs a runner is a bug, not a cost.
+request. Since CI moved to the self-hosted runners it waits for nothing: it starts on the same
+push or pull request as every other workflow. A wait that costs a runner is a bug, not a cost.
 
-The golden gates run as shards (`scripts/golden_matrix.py --shards 4`): four week jobs, each
-running four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has
-one, its composed file side by side in one pool (`golden_check.py --mode all`), and five
-full-year jobs (`--shards 5`) running two simulations at once, the composed files among them
-(`--mode python composed`). A shard is
-expected to use all four cores, so "holding a runner idle" on one of them means a pair ran far
-past its weight (`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit
-means a pair outgrew its horizon's `PAIRS_AT_ONCE`. Since the YAML twins are part of
-`golden-check`, a diverging twin also keeps `golden-year` from starting — deliberately.
+The week gate runs as shards (`scripts/golden_matrix.py --shards 4`): four jobs, each running
+four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has one, its
+composed file side by side in one pool (`golden_check.py --mode all`). A shard is expected to use
+all four cores, so "holding a runner idle" on one of them means a pair ran far past its weight
+(`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit means a pair
+outgrew its horizon's `PAIRS_AT_ONCE`. The full-year gate runs one job per run instead
+(`golden_matrix.py --runs`, about 30 jobs: every Python full-year pair, and each composed file's
+run separately), so its wall time is its slowest run; such a job uses one core of four by design,
+and a long one is flagged as holding a runner idle without anything being wrong.
+
+The slow pytest shards are split over several jobs (`tests/ci_split.py`, `--ci-group k/n`):
+`extendedbase` as three jobs of two workers, `extendedbase2` as two serial jobs. A split job
+that runs far longer than its siblings means the weights in `tests/ci_durations.json` are stale;
+each split job uploads its measured seconds per unit (`ci-durations-<job>`), and the docstring of
+`tests/ci_split.py` says how to merge them into the table.
 
 Both a proportional and an absolute threshold have to be crossed, and only successful runs
 form a baseline. Shared runners vary by tens of percent for reasons nobody controls, a
@@ -111,7 +122,7 @@ was pushed costs a handful of requests, and the request cap is 500.
 
 Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
 one download each, and the golden workflows uploaded 66 per push to `main` before they were
-sharded (about ten since) — so a
+sharded, and golden-year's one job per 60 s run plus four 900 s shards upload about 35 again — so a
 single sweep a day could never keep up with them, and they are collected for `main` and for
 flagged jobs rather than for everything. Pull-request jobs still produce and print their own
 numbers; they just don't feed the trend.
@@ -131,6 +142,16 @@ to hour rather than draining is the signal that the caps are too tight.
 When the budget runs out mid-sweep the report says so under **Collection** and covers less
 than its window claims. That is deliberate: a partial report is worth having, and a scheduled
 job that goes red because GitHub was busy trains everyone to ignore it.
+
+The same holds for API errors. A transient one (HTTP 500, 502, 503 or 504, a refused or reset
+connection, a timeout) is retried up to five attempts in all, with exponential backoff and
+jitter (`GitHubApi.backoff_seconds`, waits of 1-2, 2-4, 4-8 and 8-16 s). A request that still
+fails skips only what it was for: the jobs of one run, one artifact, or the rest of a listing.
+**Collection** names every skipped part, and the sweep goes on with the rest. The next sweep
+reads a skipped run again when it lies within its eight-hour overlap, which in an hourly sweep
+it does. After ten failed requests the sweep stops
+and is reported as partial (`UsageCollector.MAX_FAILED_REQUESTS`), so a GitHub outage does not
+keep the job waiting through retries for most of an hour. The job exits 0 either way.
 
 ## Known limits
 

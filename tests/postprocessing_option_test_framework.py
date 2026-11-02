@@ -89,14 +89,22 @@ class PostProcessingOptionTestFramework:
     _household_single_day_hourly_case: PreparedPostProcessingCase | None = None
     _runs_by_option: dict[PostProcessingOptions, Path] = field(default_factory=dict)
 
-    def run(self, option: PostProcessingOptions, expected_files: Sequence[str] | None = None) -> None:
+    def run(
+        self,
+        option: PostProcessingOptions,
+        expected_files: Sequence[str] | None = None,
+        extra_options: Sequence[PostProcessingOptions] = (),
+    ) -> None:
         """Run postprocessing for one option plus the minimal required support options.
 
         Args:
-            option: The PostProcessingOptions value to exercise.
+            option: The PostProcessingOptions value to exercise; it also chooses the prepared run.
             expected_files: Optional glob/path patterns that must each match at
                 least one file produced by postprocessing. When ``None``, no
                 file-pattern assertion is performed.
+            extra_options: Further options to switch on in the same run, after the option and its
+                support options; for a test of how several options work together, such as all the
+                chapters of the PDF report.
 
         Raises:
             AssertionError: If postprocessing creates or updates no files, or if
@@ -104,7 +112,7 @@ class PostProcessingOptionTestFramework:
         """
 
         case = self._case_for_option(option)
-        options = self._options_for(option)
+        options = _deduplicate([*self._options_for(option), *extra_options])
         run_directory = _result_directory_for(option)
         os.makedirs(run_directory, exist_ok=True)
         self._runs_by_option[option] = Path(run_directory)
@@ -174,6 +182,34 @@ class PostProcessingOptionTestFramework:
             )
         return self._yearly_hourly_case
 
+    def run_exactly(self, options: Sequence[PostProcessingOptions], test_name_prefix: str) -> Path:
+        """Post-process the yearly hourly run with exactly ``options``, adding no prerequisite.
+
+        :meth:`run` adds the options an option needs; a test that checks what happens without
+        one of them calls this instead. Example: ``run_exactly([GENERATE_PDF_REPORT,
+        WRITE_NETWORK_CHARTS_TO_REPORT], "no_network_charts")`` leaves out ``MAKE_NETWORK_CHARTS``.
+
+        Args:
+            options: The post-processing options of the run, as given.
+            test_name_prefix: Prefix of the result directory this run owns.
+
+        Returns:
+            The result directory the post-processing wrote into.
+        """
+        case = self._case_for_option(PostProcessingOptions.PLOT_LINE)
+        run_directory = _result_directory_for_prefix(test_name_prefix)
+        os.makedirs(run_directory, exist_ok=True)
+        simulation_parameters = _clone_simulation_parameters(
+            source=case.ppdt.simulation_parameters,
+            result_directory=run_directory,
+            post_processing_options=list(options),
+        )
+        ppdt = _clone_ppdt(case=case, simulation_parameters=simulation_parameters)
+        log.logger.reset()
+        log.logger.setup(run_directory)
+        postprocessing_main.PostProcessor().run(ppdt=ppdt)
+        return Path(run_directory)
+
     @staticmethod
     def _options_for(option: PostProcessingOptions) -> list[PostProcessingOptions]:
         options = list(DEPENDENCIES_BY_OPTION.get(option, ()))
@@ -189,6 +225,7 @@ def _prepare_case(
     test_name_prefix: str,
     scenario_name: str = "",
     description: str = "",
+    post_processing_options: Sequence[PostProcessingOptions] | None = None,
 ) -> PreparedPostProcessingCase:
     """Run one system setup once, so that several option tests can post-process its results.
 
@@ -202,6 +239,10 @@ def _prepare_case(
         scenario_name: The name the run gives itself, as a setup function would set it; the
             simulator falls back to the module file name when it is empty.
         description: The run's one-line description, as the Python entry point would set it.
+        post_processing_options: The options the simulator itself sees, for a test of what the
+            simulator prepares for them; the aggregates are then left as the simulator made them.
+            When None, the run has no options and every aggregate is computed afterwards, so
+            that any option can post-process it.
 
     Returns:
         The finished run and the transfer object over its results.
@@ -211,6 +252,8 @@ def _prepare_case(
         end_date=end_date,
         seconds_per_timestep=seconds_per_timestep,
     )
+    if post_processing_options is not None:
+        simulation_parameters.post_processing_options = list(post_processing_options)
     simulation_parameters.result_directory = _result_directory_for_prefix(test_name_prefix)
 
     simulator = Simulator(
@@ -237,6 +280,8 @@ def _prepare_case(
         all_result_lines.append(single_timestep_values.values.copy())
 
     ppdt = simulator.prepare_post_processing(all_result_lines, start_counter)
+    if post_processing_options is not None:
+        return PreparedPostProcessingCase(simulator=simulator, ppdt=ppdt)
     (
         ppdt.results_cumulative,
         ppdt.results_monthly,

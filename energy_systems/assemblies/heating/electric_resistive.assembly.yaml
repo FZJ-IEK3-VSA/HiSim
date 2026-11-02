@@ -4,8 +4,10 @@
 # used): the Heater reads the Building's theoretical heating demand and the Building reads the Heater's space-heating
 # heat, both through their classes' default connections, so the space-heating side is a need of this assembly (the
 # Building as its partner) and a need of the site's Building (this Heater as its partner), not a circuit. Control is
-# hardcoded here (D21): the Controller switches space heating on the daily mean outside temperature and the cylinder
-# on its temperature; it reads no energy manager, so the assembly offers no `ems_modifier`.
+# hardcoded here (D21): the Controller switches space heating on the heating season the site's HeatingCurveController
+# publishes (the one owner of the heating threshold; a house without a water circuit builds it with the preset
+# direct_room_heating) and the cylinder on its temperature; it reads no energy manager, so the assembly offers no
+# `ems_modifier`.
 #
 # The members expand as one block in the order their lines stand here, the twin's ElectricHeatingController,
 # ElectricHeating. The sizing facts the members read from the site (heating load, conditioned floor area) bind their one
@@ -25,7 +27,7 @@ parameters:
      description: 'Maximal electric power and so the maximal heat; AUTO is the building''s heating load. The heater
        caps only the steps that also heat water; a space-heating-only step follows the building''s demand.'}
      # range: the panel heaters of a small flat (2 kW) up to the direct heating of a large old house (20 kW)
-     # the uncapped space-heating-only steps are a component bug, hisim-4g9.30
+     # the uncapped space-heating-only steps are a component bug, hisim-component-physics-4g9.30
 
 components:
   Controller:
@@ -35,7 +37,7 @@ components:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
       parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: heating_curve}                              # HeatingSeason
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
   Heater:
     class: hisim.components.generic_electric_heating.ElectricHeating
@@ -50,7 +52,7 @@ components:
 
 interface:
   needs:
-    weather:          {into: [Controller], partner: Weather}
+    heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): the heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
     building:         {into: [Heater], partner: Building}
@@ -61,7 +63,7 @@ interface:
                       # the heater owns pump and supply leg, the cylinder the return leg
 
 tests:
-  # One day at 900 s beside the site partners (an unheated building, the cylinder, an energy manager, the grid). The
+  # One day at 900 s beside the site partners (the building it heats, the cylinder, an energy manager, the grid). The
   # heater turns every watt drawn into a watt of heat, at most the largest power of the box (20 kW): powers <= 25 kW,
   # per-step energies <= 25 kW x 0.25 h, both with a 25 % margin. The water the heater sends to the cylinder stays
   # liquid. The controller's one temperature output is the lift the cylinder asks for.
@@ -76,12 +78,14 @@ tests:
     - {output: Heater.ElectricOutputDhwPower, unit: WATT, min: 0, max: 25000}
     - {output: Heater.ElectricOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 6250}
     - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
-      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
+      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 35 K)
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (75 °C by default)
   monotone:
-    - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}
-      # a larger appliance covers at least as much of the demand: 66.4 kWh at 2 kW, 101.0 kWh at 20 kW on the test day
+    - {parameter: power_in_watt, kpi: Energy consumption for space heating, member: Heater, direction: increasing}
+      # a larger appliance covers at least as much of the space-heating demand. The total is not monotone on the one
+      # test day: with every hot-water charge running to the 60 °C aim, a stronger heater ends the day's last charge at
+      # a slightly different tank temperature (total 84.0 kWh at 8 kW, 83.8 kWh at 14 kW, measured in the kind order)
   expect:
-    - {kpi: Total energy consumption, member: Heater, min: 85, max: 115}
-      # 98.9 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+    - {kpi: Total energy consumption, member: Heater, min: 69, max: 95}
+      # 80.9 kWh measured at the defaults on the test day (1 January, Aachen), 8.9 kWh of it for DHW

@@ -299,9 +299,11 @@ class KpiGenerator(KpiPreparation):
         Builds a list of rows from the tag-sorted KPI collection
         (``kpi_collection_dict_sorted``). Each row has the columns
         ``["Object", "KPI", "Value", "Unit"]``; numeric KPI values are rounded
-        to two decimal places and every cell is wrapped at 80 characters so the
-        table fits the report layout. The table is returned but not persisted on
-        the instance.
+        to two decimal places and a KPI without a value reads ``n/a``. The cells
+        are not wrapped here: the report sets every cell as a paragraph, which
+        wraps a long KPI name between words (a hard cut every 80 characters split
+        words, e.g. "tempera" / "ture"). The table is returned but not persisted
+        on the instance.
         """
         sorted_collection = self.kpi_collection_dict_sorted
         if sorted_collection is None:
@@ -314,24 +316,16 @@ class KpiGenerator(KpiPreparation):
                 table.append(["--------", "--------------------", "", ""])
                 for kpi_name, kpi_entry in kpi_entries.items():
                     value = kpi_entry["value"]
-                    if value is not None:
-                        if not isinstance(value, str):
-                            value = round(value, 2)
+                    if value is None:
+                        value = "n/a"
+                    elif not isinstance(value, str):
+                        value = round(value, 2)
 
                     unit = kpi_entry["unit"]
                     table.append([f"{building_object}", f"{kpi_name}: ", f"{value}", f"{unit}"])
-                table.append(["\n", "\n", "\n", "\n"])
+                table.append(["", "", "", ""])
 
-        #  Insert line break for report
-        wrapped_table_data: List[List[str]] = []
-        for row in table:
-            wrapped_row = []
-            for cell in row:
-                wrapped_cell = "\n".join([cell[i : i + 80] for i in range(0, len(cell), 80)])
-                wrapped_row.append(wrapped_cell)
-            wrapped_table_data.append(wrapped_row)
-
-        return wrapped_table_data
+        return table
 
     def sort_kpi_collection_according_to_kpi_tags(
         self, kpi_collection_dict_unsorted: Dict[str, Dict[str, Dict[str, Any]]]

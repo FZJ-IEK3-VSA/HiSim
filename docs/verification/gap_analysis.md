@@ -128,7 +128,7 @@ accepted (`max_thermal_building_demand_in_watt` serves KPIs only, it does not ca
 Operative-temperature control: option (3); options (1) and (2) rejected. Register entry `model`:
 "Thermostat acts on θ_air (ISO 13790, clause C.4 procedure); EN ISO 52016-1 controls on the
 operative temperature (§3.2.10)". FR4 and §11 step 2 no longer name the heater. The dead setpoint
-fields of `IdealizedHeaterConfig` are bead hisim-4g9.60, not part of this work. Rule for the rest of
+fields of `IdealizedHeaterConfig` are bead hisim-component-physics-4g9.70, not part of this work. Rule for the rest of
 the work: a case is `not_modelled` when its defining feature is missing in HiSim (shading in 610,
 night ventilation in 650); a mechanism missing for all cases alike is a register entry and the
 cases run. No model or control code is added to HiSim to make a case runnable; the input-side
@@ -206,7 +206,7 @@ or similar in place of the outdoor air temperature.
 | 15 | Operative temperature output | `Building` outputs `TemperatureIndoorAir` **and** `TemperatureInternalSurface` (set every step from the C.10 surface temperature) | **corrected: the surface temperature is an output.** θ_op = 0.3·θ_air + 0.7·θ_s is computable from the two outputs | Compute θ_op in the runner from the two outputs (no interface change; decided with D2) |
 | 16 | Time steps 3600/900/60 s: supported? consistent? | `calc_next_thermal_mass_temperature_in_celsius`: C_m / seconds_per_timestep; weather and gains per time step | **supported, confirmed; consistency measured, see F1**: the scheme is consistent, the state rule is not Annex C | Decision F1 |
 | 17 | Warm-up period | `SimulationParameters` (start/end date, timesteps); every reader lays exactly one calendar year by position; mid-year windows "are January in disguise" (`roadmap/midyear_start_epic.md`); no pre-run in `Simulator` | **not supported, confirmed**: neither a 13-month run nor a December start is possible | **Decided (D3): two-pass run** per (case, time step): pass 1 the full year from `initial_internal_temperature_in_celsius`, pass 2 the full year from the mass temperature at the end of pass 1 (periodic steady state; cost: twice the run time). Warm-up method and the carried state go to the parameters output; register entry `input_mapping`. The ISO initialisation month, when that suite returns, cannot be used for the same reason |
-| 18 | Result directory and write guard for `BESTEST_output/` | `CalculationScope.open(label, run_directory=…)` (used so in `tests/test_dhw_chain_twins.py`), `ResultPathProviderSingleton`, `hisim/write_guard.py` | **exists, confirmed.** On Windows the guard refuses `open of '\\.\nul'` that `numpy.testing` performs when `pvlib` is imported inside the scope (every `hisim_main` run with a building fails on this machine); `HISIM_WRITE_GUARD=collect` lets the run proceed and lists it | Exporter writes `BESTEST_output/` under `ResultPathProviderSingleton.get_result_directory_name()` inside the scope. **Decided (D8):** the runner sets `HISIM_WRITE_GUARD=collect`; the Windows refusal stays bead hisim-o6a.22 and is not fixed in this work |
+| 18 | Result directory and write guard for `BESTEST_output/` | `CalculationScope.open(label, run_directory=…)` (used so in `tests/test_dhw_chain_twins.py`), `ResultPathProviderSingleton`, `hisim/write_guard.py` | **exists, confirmed.** On Windows the guard refuses `open of '\\.\nul'` that `numpy.testing` performs when `pvlib` is imported inside the scope (every `hisim_main` run with a building fails on this machine); `HISIM_WRITE_GUARD=collect` lets the run proceed and lists it | Exporter writes `BESTEST_output/` under `ResultPathProviderSingleton.get_result_directory_name()` inside the scope. **Decided (D8):** the runner sets `HISIM_WRITE_GUARD=collect`; the Windows refusal stays bead hisim-repo-cleanup-o6a.36 and is not fixed in this work |
 | 19 | Golden-reference integration (FR17) | `golden_references/*.json` per (setup, parameter set), keyed by KPI address; `scripts/golden_check.py`, `golden_config.json`; tolerance rel 1e-9 | **exists for setup KPIs, confirmed**; verification results are not KPIs of a setup | Own files `golden_references/bestest/<suite>__<case>__<timestep>.json` with HiSim values only, compared in `test_verification_suites.py` with the same numeric rule; blessing by the human through a `--bless` option of the CLI; the existing scripts stay untouched |
 | 20 | Run time of an annual simulation at 60 s | – | **measured**, §6.2 | Two passes (row 17) double it; all 24 (case, Δt) pairs of the matrix are independent and can run in parallel |
 | 21 | Test framework, markers, CI | `pytest.ini` (`--strict-markers`; markers base, extendedbase, buildingtest, …); `tests/conftest.py` fails a module that leaves the working tree dirty; `.github/workflows/` (tests, golden-check, golden-year, energy-system-freshness, quality, …) | **exists, confirmed** | Register marker `verification` in `pytest.ini`; suite tests write only under result directories (stray-file guard); `.env` is loaded by `hisim_main` and the CLI but not by pytest, so the suite's `conftest.py` calls `load_dotenv()` for `HISIM_VERIFICATION_DATA`; GitHub workflows untouched (§9.3) |
@@ -219,7 +219,7 @@ Further facts the implementation relies on:
   iteration and converges in a few passes; the runner records the average passes and the number of
   frozen steps per run (progress log "Avg. iterations") and the report prints them, because a frozen
   step delivers a power that is not the demand. Known defects of the loop for other components:
-  `roadmap/convergence_order_findings.md`, beads hisim-4g9.23 and hisim-4g9.28; none involves the
+  `roadmap/convergence_order_findings.md`, beads hisim-component-physics-4g9.23 and hisim-component-physics-4g9.28; none involves the
   three components of the verification systems.
 - **Case files and schema (FR1):** the repository's validation approach is pydantic v2 (`hisim_main`
   uses `TypeAdapter`, `hisim/energy_system/model.py`) with a committed JSON schema whose freshness a
@@ -251,7 +251,7 @@ Further facts the implementation relies on:
 | D5 | ISO climate: CSV converted once from the `.xls` in the private folder, or `xlrd` as a dependency | CSV | CSV, when the ISO suite returns | – |
 | D6 | Shape of the explicit building description (row 1) and where the derivation functions live (row 2) | as proposed, `hisim/components/building/explicit.py` | option C as proposed: `building_code` optional, `explicit_description`, second pipeline in `explicit.py`; option B (more overrides on a TABULA row) rejected because every untouched value would come silently from the row | hisim-x6c7.4 |
 | D7 | FR4: drop the power limit for phase 1; the heater stays unchanged | drop | drop | hisim-x6c7.4 |
-| D8 | Windows write-guard refusal of `\\.\nul` | separate bug; local runs use `HISIM_WRITE_GUARD=collect` meanwhile | workaround: the runner sets `HISIM_WRITE_GUARD=collect`; the bug stays open | hisim-o6a.22 |
+| D8 | Windows write-guard refusal of `\\.\nul` | separate bug; local runs use `HISIM_WRITE_GUARD=collect` meanwhile | workaround: the runner sets `HISIM_WRITE_GUARD=collect`; the bug stays open | hisim-repo-cleanup-o6a.36 |
 | D9 | ISO suite (`iso52016`) in phase 1, after F3: the §7.4 bypass needs a new Building input | option 2 of F3 (optional gain input as input infrastructure) | deferred: phase 1 runs the ASHRAE suite only; no new Building input | hisim-x6c7.5 |
 | D10 | Spec §3.2.1: printed air-to-air U-values, no thermal bridges, floor to outdoor air without a ground factor, no solar radiation on the floor; printed value over the layer recomputation (Case 900 floor) | as stated | as recommended | hisim-x6c7 (comment) |
 | D11 | Spec §3.2.3: κ per element by the ISO 13786 effective-thickness rule, conditions (a) half thickness, (b) up to the first insulation layer, (c) 0.10 m; no class table, no full-layer sum | rule with all three conditions | as recommended. ISO 13790 (FDIS 2007 text, 12.3.1.1 and Table 11) states only the 0.10 m cap and refers to ISO 13786, which is not in the private folder: (a) and (b) stay [verify]. The rule is applied in the suite's system builder (step 3); the explicit description takes κ per element | hisim-x6c7 (comment) |
@@ -260,8 +260,8 @@ Further facts the implementation relies on:
 
 Beads: epic hisim-x6c7 (the suite); hisim-x6c7.1 stays open as the `owner-decision` for D1 (a) and no
 longer blocks step 2; hisim-x6c7.2 and .3 are closed with their decisions; hisim-x6c7.4 (EPW weather, marker)
-and hisim-x6c7.6 (explicit building) are the two step-2 PRs with the scope of §3; hisim-x6c7.5 holds the deferred ISO suite; hisim-o6a.22 is the write-guard
-refusal under the repository-cleanup epic; hisim-4g9.60 the dead setpoint fields of
+and hisim-x6c7.6 (explicit building) are the two step-2 PRs with the scope of §3; hisim-x6c7.5 holds the deferred ISO suite; hisim-repo-cleanup-o6a.36 is the write-guard
+refusal under the repository-cleanup epic; hisim-component-physics-4g9.70 the dead setpoint fields of
 `IdealizedHeaterConfig` under the component-physics epic.
 
 ## 5. Corrections applied to the spec (revision 4, 2026-11-02)

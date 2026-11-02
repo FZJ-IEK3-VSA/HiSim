@@ -31,12 +31,13 @@ import pytest
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Coordinates
-from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, Sum, sized_field
+from hisim.component import Component, Coordinates, SingleTimeStepValues
+from hisim.config import ComponentID, ConfigBase, DisplayConfig, Many, Self, Sizable, Size, Sum, sized_field
 from hisim.config.contributions import FactContribution
 from hisim.config.engine import resolve_all
 from hisim.config.laws import SizingError
-from hisim.config.sizing import AUTO, SizedFieldMetadata
+from hisim.config.sizing import AUTO, SizedFieldMetadata, SizedTogether
+from hisim.components.advanced_battery_bslib import BatteryConfig
 from hisim.energy_system import (
     EnergySystemBindingError,
     EnergySystemErrorId,
@@ -47,9 +48,9 @@ from hisim.energy_system import (
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.document import RawDocument
-from hisim.components.solar_thermal_system import SolarThermalSystemConfig
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.sizing_bridge import KernelFailure, sizing_sources_bridge
+from hisim.simulationparameters import SimulationParameters
 
 
 class Systems:
@@ -68,29 +69,16 @@ class Systems:
     preset: condensing_gas
 """
 
-    #: A solar-thermal collector written as a complete ``config`` block. It is the fixture of
-    #: the two block-entry regressions below: its ``coordinates`` field holds a nested
-    #: dataclass, and a block entry is the one origin that is also the configuration itself.
-    COLLECTOR: ClassVar[str] = """  collector:
-    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    #: The nested-field probe written as a complete ``config`` block. It is the fixture of the two
+    #: block-entry regressions below: its ``coordinates`` field holds a nested dataclass, and a
+    #: block entry is the one origin that is also the configuration itself.
+    NESTED_PROBE: ClassVar[str] = """  probe:
+    class: tests.test_energy_system_configure._NestedProbe
     config:
       coordinates:
         latitude_in_degrees: 50.78
         longitude_in_degrees: 6.08
-      azimuth: 180.0
-      tilt: 30.0
-      area_m2: 4.0
-      eta_0: 0.78
-      a_1_w_m2_k: 3.2
-      a_2_w_m2_k: 0.015
-      old_solar_pump: false
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      source_weight: 1
-      delta_temperature_n_k: 10.0
+      tilt_in_degrees: 30.0
 """
 
     #: The weather every building is computed against. A building records which weather that is as a
@@ -250,6 +238,69 @@ class _CarrierConfig(ConfigBase):
     def get_main_classname(cls) -> str:
         """Returns a dummy classname, as the ConfigBase contract requires."""
         return "tests.test_energy_system_configure._CarrierConfig"
+
+
+@dataclass_json
+@dataclass
+class _NestedProbeConfig(ConfigBase):
+    """A configuration with one field that holds a nested dataclass, for the codec tests.
+
+    The energy-system codec rebuilds a nested mapping through the nested field's own class, both in a
+    complete ``config`` block and in a sparse override. These tests used the solar-thermal collector's
+    coordinates until that unread field left the format (hisim-midyear-windows-9g2.13), so the rule is pinned on this
+    test-only class.
+    """
+
+    component_id: ComponentID
+    #: A location, the nested dataclass the codec has to rebuild.
+    coordinates: Coordinates = dataclasses.field(
+        default_factory=lambda: Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
+    )
+    #: A plain number beside the nested field, so the block is more than the nested field alone.
+    tilt_in_degrees: float = 30.0
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns the full class name of the component this configuration belongs to."""
+        return _NestedProbe.get_full_classname()
+
+
+class _NestedProbe(Component):
+    """A component that exists only so a file can name :class:`_NestedProbeConfig`.
+
+    The class-bound stage resolves the dotted name under ``class:`` and pairs it with the
+    dataclass its constructor annotates, so a configuration cannot appear in a file without a
+    component to carry it. Nothing here ever runs a timestep.
+    """
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: _NestedProbeConfig) -> None:
+        """Builds the probe with no inputs and no outputs.
+
+        Args:
+            my_simulation_parameters: The run's simulation parameters.
+            config: The probe's configuration.
+        """
+        super().__init__(
+            name=config.component_id.key,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=DisplayConfig(),
+        )
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """No-op: the probe has nothing to simulate."""
+
+    def i_prepare_simulation(self) -> None:
+        """No-op: the probe needs no preparation."""
+
+    def i_save_state(self) -> None:
+        """No-op: the probe is stateless."""
+
+    def i_restore_state(self) -> None:
+        """No-op: the probe is stateless."""
+
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """No-op: there is nothing to double-check."""
 
 
 def kernel_message(configs: List[Any], sources: Any = None) -> str:
@@ -681,13 +732,13 @@ def test_a_value_that_does_not_fit_its_field_is_refused_naming_the_entry() -> No
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
     config:
-      eff_th_max: very high
+      seasonal_efficiency: very high
 """
         )
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
-    assert "boiler" in message and "eff_th_max" in message
+    assert "boiler" in message and "seasonal_efficiency" in message
 
 
 @pytest.mark.base
@@ -779,6 +830,35 @@ def test_the_kernels_duplicate_name_message_is_recognized() -> None:
 
 
 @pytest.mark.base
+def test_the_kernels_stated_in_part_message_is_recognized() -> None:
+    """Catches a battery stated in part degrading to the catch-all identifier (``EF-4J``).
+
+    A class lists fields it sizes together (``SIZED_TOGETHER``); the kernel refuses a
+    configuration stating only some of them before it looks for any fact, so the message names
+    no fact and only its own phrasing tells the wrapper which condition it is.
+    """
+    battery = BatteryConfig.preset_sized_to_pv("battery")
+    battery.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
+    message = kernel_message([battery])
+
+    assert KernelFailure.classify(message) is EnergySystemErrorId.SIZING_STATED_IN_PART
+    assert message.endswith("state both or neither.")
+
+
+@pytest.mark.base
+def test_a_group_sized_together_naming_a_field_without_a_law_is_a_class_error() -> None:
+    """Catches a ``SIZED_TOGETHER`` declaration naming a field the class does not size, which would never fire."""
+
+    class _Misdeclared(_CyclicConfig):
+        """The cyclic configuration with a group naming its identity, which is no sized field."""
+
+        SIZED_TOGETHER: ClassVar[Tuple[Tuple[str, ...], ...]] = (("first", "component_id"),)
+
+    with pytest.raises(TypeError, match="component_id is not"):
+        SizedTogether.groups_of(_Misdeclared)
+
+
+@pytest.mark.base
 def test_the_kernels_ambiguity_and_unprovided_messages_stay_distinguishable() -> None:
     """Catches the two provider-count failures collapsing into one identifier.
 
@@ -845,12 +925,13 @@ def test_a_complete_config_block_keeps_the_nested_objects_its_class_rebuilt() ->
     the simulation is already being prepared, so the failure surfaces as far from its cause as it
     can get.
 
-    The solar-thermal collector is the case that has one: its coordinates are a dataclass, and it
-    only reads them when it prepares a run.
+    No HiSim configuration holds a nested dataclass today (the solar-thermal collector's
+    coordinates were the last, removed in hisim-midyear-windows-9g2.13), so the test-only :class:`_NestedProbeConfig`
+    carries one: its coordinates are a dataclass.
     """
-    configured = Systems.configure(Systems.COLLECTOR)
+    configured = Systems.configure(Systems.NESTED_PROBE)
 
-    coordinates = configured.config_of("collector").coordinates
+    coordinates = configured.config_of("probe").coordinates
     assert isinstance(coordinates, Coordinates), (
         f"the nested dataclass was flattened to {type(coordinates).__name__}"
     )
@@ -868,13 +949,13 @@ def test_a_sparse_override_rebuilds_a_nested_dataclass_through_its_own_class() -
     onto the instance verbatim, and the component crashed on an attribute read during simulation
     preparation — as far from the override that caused it as the failure can land.
     """
-    codec = ConfigValueCodec(SolarThermalSystemConfig)
+    codec = ConfigValueCodec(_NestedProbeConfig)
 
     decoded = codec.decode(
         "coordinates",
         {"latitude_in_degrees": 50.78, "longitude_in_degrees": 6.08},
-        "components.collector.config.coordinates",
-        "collector",
+        "components.probe.config.coordinates",
+        "probe",
     )
 
     assert isinstance(decoded, Coordinates)
@@ -890,14 +971,14 @@ def test_a_mapping_that_does_not_fit_its_nested_class_is_refused_with_the_field_
     know must come back as the located EF-1A refusal every other override failure produces —
     naming the component, the field and the class — rather than as that class's bare traceback.
     """
-    codec = ConfigValueCodec(SolarThermalSystemConfig)
+    codec = ConfigValueCodec(_NestedProbeConfig)
 
     with pytest.raises(EnergySystemBindingError) as caught:
         codec.decode(
             "coordinates",
             {"latitude_in_degrees": 50.78, "elevation_in_m": 200.0},
-            "components.collector.config.coordinates",
-            "collector",
+            "components.probe.config.coordinates",
+            "probe",
         )
 
     assert caught.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
@@ -915,11 +996,33 @@ def test_a_block_entrys_origin_is_not_the_configuration_the_run_mutates() -> Non
     would quietly show the expanded value instead of the file's own spelling. The configuring
     stage now hands the block entry a copy, and this pins the two apart.
     """
-    configured = Systems.configure(Systems.COLLECTOR)
+    configured = Systems.configure(Systems.NESTED_PROBE)
 
-    origin = configured.origin_of("collector")
-    config = configured.config_of("collector")
+    origin = configured.origin_of("probe")
+    config = configured.config_of("probe")
 
     assert origin is not config
     assert origin == config
     assert origin.coordinates == config.coordinates
+
+
+@pytest.mark.base
+def test_a_collector_that_still_sets_its_removed_coordinates_is_refused() -> None:
+    """Catches the solar-thermal collector accepting a location it does not read.
+
+    The collector stands at the weather's location, and its ``coordinates`` field left the format
+    with hisim-midyear-windows-9g2.13. A file that still sets it must be refused with the key named, not run with a
+    value that has no effect.
+    """
+    entry = """  collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    preset: flat_plate
+    config:
+      coordinates:
+        latitude_in_degrees: 50.78
+        longitude_in_degrees: 6.08
+"""
+    with pytest.raises(EnergySystemBindingError) as caught:
+        Systems.configure(entry)
+
+    assert "coordinates" in str(caught.value)

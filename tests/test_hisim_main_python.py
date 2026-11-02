@@ -193,6 +193,7 @@ def test_validate_python_arguments(inputs, expected_config):
     assert hisim_main.validate_args(args) == expected_config
 
 
+@pytest.mark.base
 def test_validate_python_arguments_rejects_four_files():
     """Validate four arguments rejection."""
     args = argparse.Namespace(

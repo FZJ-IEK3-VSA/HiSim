@@ -26,7 +26,8 @@ concurrency:
 jobs:
   mypy:
     name: mypy
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -64,7 +65,8 @@ jobs:
 
   pylint:
     name: pylint
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -95,7 +97,8 @@ jobs:
 
   config-attrs:
     name: config attributes
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -126,7 +129,8 @@ jobs:
 
   codequality:
     name: prospector
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -185,7 +189,8 @@ jobs:
   # runner with setup-python avoids depending on the image's interpreter for its wheels.
   semgrep:
     name: semgrep (file writes)
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
     - uses: actions/checkout@v7
     # Wall time, CPU time and peak memory for this job; see the action.
@@ -210,7 +215,8 @@ jobs:
 
   basic-execution:
     name: basic execution
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -228,23 +234,24 @@ jobs:
     - name: Install HiSim package
       run: |
         uv pip install --system -e .
-    # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+    # The weather series and LoadProfileGenerator profiles earlier runs computed: the most recent
+    # shared entry, which every job of every workflow restores; see the action.
     - name: Restore the HiSim inputs cache
       uses: ./.github/actions/hisim-cache
       with:
         mode: restore
-        scope: ${{ github.workflow }}-basic-execution
     - name: Run hisim_main.py directly from the command line
       working-directory: ./system_setups/
       run: |
         python ../hisim/hisim_main.py household_heatpump_building_sizer.py
-    # Kept even when the job failed; see the action for why that is safe.
+    # This job's additions merged into the most recent shared entry and saved there, in this job:
+    # it is the workflow's only user of the cache, so it needs no merge job. Kept even when the
+    # job failed; see the action for why that is safe.
     - name: Save the HiSim inputs cache
       if: always()
       uses: ./.github/actions/hisim-cache
       with:
         mode: save
-        scope: ${{ github.workflow }}-basic-execution
     # Kept on failure too: a job killed for running out of memory is the one
     # whose measurement matters most.
     - name: Report the resource usage

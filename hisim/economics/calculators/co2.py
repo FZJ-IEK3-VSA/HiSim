@@ -1,4 +1,4 @@
-"""CO2 accounting: masses, the damage cost, and the figures that must never be added (cost_spec.md §3.8, §4.5).
+"""CO2 accounting: masses, the damage cost, and the figures that must never be added.
 
 The engine keeps four CO2 figures, and summing any two of them is an error: (1) embodied mass in kg, charged at every
 installation and replacement; (2) operational mass in kg per year, emission factor times energy bought; (3) the CO2
@@ -26,7 +26,7 @@ EMISSION_FACTOR_TOLERANCE_IN_KG_PER_KWH = 1e-12
 
 
 class Co2Constants:
-    """Labels and unit conversions of the CO2 accounting (§3.8, §4.5).
+    """Labels and unit conversions of the CO2 accounting.
 
     Holds the synthetic timeline subject the damage cost is booked under (it belongs to no component) and the
     kg-per-ton factor: emissions are tracked in kg, while damage costs are quoted per metric ton.
@@ -42,7 +42,7 @@ class Co2Constants:
 def accumulate_embodied_co2(
     co2_result: LifecycleCo2Result, subject: str, masses_in_kg: Iterable[float]
 ) -> None:
-    """Add one subject's embodied CO2 masses to the total and to its per-subject entry (§3.8).
+    """Add one subject's embodied CO2 masses to the total and to its per-subject entry.
 
     A device replaced twice within the horizon is counted three times, since every replacement is a new device. The
     masses are added in emit order, so the float sum is reproducible.
@@ -62,7 +62,7 @@ def accumulate_embodied_co2(
 def accumulate_operational_emissions(
     energy_result: EnergyFlowResult, co2_result: LifecycleCo2Result, horizon: int
 ) -> None:
-    """Add the per-carrier operational CO2 of the energy calculator to the lifecycle CO2 result (§3.8).
+    """Add the per-carrier operational CO2 of the energy calculator to the lifecycle CO2 result.
 
     Emissions are constant over the horizon: annualized year-1 purchases times the carrier's emission factor, repeated
     every year, so grid decarbonization is not modelled. Records are added carrier by carrier, year ascending. Run
@@ -117,7 +117,7 @@ def accumulate_operational_emissions(
 def build_co2_damage_entries(
     co2_result: LifecycleCo2Result, parameters: EconomicParameters, horizon: int
 ) -> List[CashFlowEntry]:
-    """Return the macroeconomic CO2 damage cost of the operational emissions (§4.5).
+    """Return the macroeconomic CO2 damage cost of the operational emissions.
 
     The damage cost is a shadow price, not money anyone pays: a flat rate per ton (default 250 EUR/t, the UBA
     recommendation) on the operational emissions only. Called only under MACROECONOMIC accounting, after the
@@ -152,10 +152,10 @@ def build_co2_damage_entries(
 
 
 def finalize_total_co2(co2_result: LifecycleCo2Result) -> None:
-    """Set the total lifecycle CO2 mass: embodied plus operational over the whole horizon (§3.8).
+    """Set the total lifecycle CO2 mass: embodied plus operational over the whole horizon.
 
-    The only place the two masses are added; the euro figures are never mixed in. Called after every subject and
-    carrier has contributed.
+    The only place in the evaluator where the two masses are added; the euro figures are never mixed in. Called after
+    every subject and carrier has contributed.
 
     Args:
         co2_result: The accumulator; mutated in place, setting `total_co2_in_kg`.

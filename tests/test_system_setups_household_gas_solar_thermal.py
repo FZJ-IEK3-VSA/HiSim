@@ -32,6 +32,12 @@ class ElectricityBalance:
     """
 
     RELATIVE_DEMAND_CEILING = 100.0
+
+    #: How far the grid import may exceed the total consumption, in kWh: half the 0.1 kWh the KPI layer
+    #: rounds "Total electricity consumption" to (``kpi_preparation.py``), while "Total energy from grid" is
+    #: not rounded. Example: 10.824 kWh drawn and consumed are reported as 10.824 from the grid and 10.8
+    #: consumed. A source counted twice doubles the import, far beyond this.
+    CONSUMPTION_ROUNDING_IN_KILOWATT_HOUR = 0.05
     REQUIRED = (
         "Total electricity consumption",
         "Total energy from grid",
@@ -85,7 +91,9 @@ def test_household_gas_solar_thermal() -> None:
         "very likely fed into the electricity meter twice, by hand and by default connection both."
     )
 
-    assert finder.value(name="Total energy from grid") <= finder.value(name="Total electricity consumption"), (
+    assert finder.value(name="Total energy from grid") <= finder.value(
+        name="Total electricity consumption"
+    ) + ElectricityBalance.CONSUMPTION_ROUNDING_IN_KILOWATT_HOUR, (
         "grid import exceeds total consumption, which is the same double-counting seen from the "
         "other side."
     )

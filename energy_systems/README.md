@@ -112,6 +112,76 @@ directory binds to with its first line. The schema is generated from the same de
 `describe` reads — regenerate it with `hisim energy-system schema` whenever a component gains a
 preset, a constructor or a field.
 
+### Stating a size instead of letting the system size it
+
+A preset that leaves a sizable field `AUTO` sizes the device from the system around it: the heat
+pump `MoreAdvancedHeatPumpHPLib` from the building's heating load, the battery `Battery` from the
+photovoltaic peak power. To build a device of a size you already know, add the number to the
+entry's `config:` block, beside the fields the file already records there; the field's law is then
+not evaluated and the number reaches the component unchanged. In
+`household_heatpump_building_sizer.energy_system.yaml` that reads:
+
+```yaml
+  MoreAdvancedHeatPumpHPLib:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water
+    config:
+      with_domestic_hot_water_preparation: true  # recorded
+      set_thermal_output_power_in_watt: 8000  # added: 8 kW, written in watt as the name says
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv
+    config:  # added, with both lines
+      custom_battery_capacity_generic_in_kilowatt_hour: 10
+      custom_pv_inverter_power_generic_in_watt: 5000
+```
+
+An entry keeps its place in the file: in the grouped twin
+`household_heatpump_building_sizer.grouped.energy_system.yaml` the battery is not a top-level
+component but sits in the `ems_with_battery` option of the `electricity_management` variant
+(`variants: electricity_management: options: ems_with_battery: components: Battery:`), and the
+lines go on that entry. Write the sizes into your own copy of a file: the recorded twins in this
+directory are regenerated from their Python setups (see below), which size both devices
+automatically, so a line added to a twin here is lost at the next recording.
+
+Components sized *from* the device follow the stated number: the heating-water buffer beside the
+heat pump reads the heat pump's power, whether computed or written. The battery's two fields are
+stated together or not at all: each has its own law from the photovoltaic power, so a capacity
+alone would be built with the power the array gives, a C-rate nobody chose. A battery that states
+one of them and leaves the other `AUTO` is refused at sizing, `EF-4J`, naming both fields and the
+value stated: "state both or neither". The class declares the pair in `BatteryConfig.SIZED_TOGETHER`,
+and the sizing kernel refuses it for a file and for a Python setup that sizes through it
+(`config.resolve`, `resolve_all`) alike. An import of the `storage/battery` assembly stating only
+one of `capacity_in_kwh` and `power_in_watt` is refused before sizing, by its `all_or_none_of`
+(`EF-77`, see the assemblies section below). Leaving both lines out keeps the automatic sizing. `tests/test_energy_system_explicit_sizes.py` checks all of
+this on the recorded grouped heat-pump twin. The RenoVisor translator always writes both battery
+fields: a request that states only the capacity gets a power of 500 W per kWh, a C-rate of 0.5, the
+rule the measure catalogue states for an unset power.
+
+### Several PV arrays
+
+A house with more than one array — an east and a west roof, or a garage beside the house — has one
+`PVSystem` entry per array, each with a name of its own and its own `power_in_watt`, `azimuth` and
+`tilt`. Nothing else needs to know how many there are:
+
+- the energy manager takes one production input per array and works on their sum, and so does the
+  electricity meter of a household without a manager (in the worked example the meter reads the
+  manager's grid balance instead);
+- the battery's `sized_to_pv` laws sum the peak power of every array (`Sum(Many(...))`); a
+  `sizing_sources: {pv_peak_power_in_watt: [PVSouth.pv_peak_power_in_watt]}` line sizes it to the
+  arrays it names instead;
+- each array is a cost subject of its own, priced at its own power, and the lifecycle cost engine
+  attributes to each array its own generation (`component_breakdowns` and
+  `annual_energy_attribution_by_subject_in_kwh` in `lifecycle_costs.json`);
+- the General KPIs (`PV production`, self-consumption, grid injection) are the building's totals
+  over all arrays; an array's own generation is in its result columns `ElectricityOutput` (power, W)
+  and `ElectricityEnergyOutput` (energy per step, Wh).
+
+A composed file imports `pv/array` once with one instance per array (`instances: {south: {...},
+west: {...}}`). `tests/energy_systems/two_pv_arrays.energy_system.yaml` (south 4 kWp, west 2 kWp)
+and its composed twin are the worked example, and `tests/test_multiple_pv_arrays.py` checks that
+each array generates exactly what it generates alone and that everything downstream sees the sum.
+
 ## Recording a Python setup
 
 Every `<setup>.energy_system.yaml` here is generated. It was produced by running the Python setup
@@ -163,7 +233,11 @@ would contribute it has not been converted — and the line reads
 `# pinned: no provider of <fact> in this system yet`. Those lines disappear by themselves on the
 re-record that follows that class's conversion, so the twins get shorter as the conversion
 proceeds. One rarer pin names its own reason: a fact several components in the system declare, so
-the file would be ambiguous and a twin writes no `sizing_sources`.
+the file would be ambiguous and a twin writes no `sizing_sources`. A law that sums its fact over
+every provider, the battery's `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`, is not ambiguous beside
+several arrays — the file sums all of them — so it is left to its preset when the setup summed every
+array, and pinned with `# pinned: pv_peak_power_in_watt: the law summed 1 value(s), 2 components
+declare it (…)` when the setup sized the battery to some of them only.
 
 A field whose *preset* pinned a law of its own — the pellet boiler's minimal power, a twelfth of
 its maximum instead of the class default of zero — needs no pin. Leaving the line out is exactly
@@ -182,7 +256,10 @@ Recording is deterministic: the same setup and the same parameters produce the s
 machine. A twin is therefore regenerated rather than edited — change the setup, re-record, and read
 the diff. `python scripts/record_all_setups.py --check` re-records every setup into a throwaway
 directory and fails on any difference, which is what the `energy-system-freshness` workflow runs on
-every pull request, so a setup cannot change without its twin.
+every pull request, so a setup cannot change without its twin. A setup with a committed
+`<setup>.grouping.yaml` has its grouped twin re-recorded and compared the same way, through
+`hisim energy-system record --grouping` (see "Groups and variants" below), so a change that moves a
+grouped twin, or that the grouping pass can no longer reproduce, fails the same job.
 
 There is no skip list. A setup that cannot be recorded is a defect in the setup or a gap in the
 format, and the driver names every one it could not record and exits non-zero. Every setup in the
@@ -282,7 +359,9 @@ An **assembly** is a fragment of an energy system in a file of its own,
 type, a default, a description, and for a number a `unit` of `lt.Units` and a `range`),
 `exactly_one_of` constraints (the defaults state exactly one member; an import that states one member
 unstates the others' defaults, which resolve to `none`; a member written as `none` is an explicit
-unstatement; one stating two is refused, `EF-77`),
+unstatement; one stating two is refused, `EF-77`), `all_or_none_of` constraints (every member stated
+or none, as the battery's `capacity_in_kwh` and `power_in_watt`; an import stating some members and
+leaving others at `AUTO` or `none` is refused, `EF-77`, and nothing is filled in for it),
 internal variants a parameter selects (`selected_by`, `when:`), an interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
 defaults). A file of `schema_version: 4` imports assemblies under `imports:`, once or as named
 instances:
@@ -344,8 +423,9 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
   its carrier (an `lt.EnergyBalanceCarrier` value), `provides: {connection: {carrier: natural_gas,
   meter: Meter}}`. For a fuel each named consuming output lands at the meter's `{$port: connection}`
   placeholder as the feed the meter's class declares for it, written explicitly (`from`, tags, weight)
-  by the wiring, which reads the constructed meter's declarations; a named output without a declared
-  feed is refused (`EF-7N`), an unnamed one is not metered (D30), and each consuming output's energy
+  by the wiring, which reads the constructed meter's declarations; a named output without exactly one
+  declared feed is refused (`EF-7N`), an unnamed one is not metered (D30; the wiring warns when it takes the
+  carrier in), and each consuming output's energy
   port must carry the carrier (`EF-7M`). Electricity has no link and no meter on the provision: the need only requires the one grid
   connection. Two providers of one carrier, a need without one and a fuel provider nobody consumes from
   are refused;
@@ -364,9 +444,10 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 - an **observer port**, `observes: {reading: {into: [Meter], default: declared}}`, and `observes:` on
   a site entry or an import (replacing its assembly's default): `declared` is every output the
   observer's class declares a dynamic default connection from among the components present —
-  HiSim's `connect_automatically` — and a list of selectors (`{component_type: PV}`, `{flow:
-  ELECTRICITY_PRODUCTION}`, `{output: TotalElectricityToOrFromGrid}`) filters it. The selection runs in
-  the wiring, on the constructed observer, and the realized record writes the selected feeds as
+  HiSim's `connect_automatically`; for the electricity meter every electricity port any component
+  declares, an `IN` port as consumption and an `OUT` port as production — and a list of selectors
+  (`{component_type: PV}`, `{flow: ELECTRICITY_PRODUCTION}`, `{output: ElectricityOutput}`) filters it.
+  The selection runs in the wiring, on the constructed observer, and the realized record writes the selected feeds as
   ordinary feeds, so `--rerun` selects nothing. A derived input or dispatch output name carries the
   source's runtime name with the address separator `-` mapped to `_` (`pv-east-PVSystem` feeds
   `ElectricityOutputFrompv_east_PVSystem`; `NameSyntax.port_name_part`). A controller — an observer whose class ranks a feed
@@ -382,13 +463,14 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-70` … `EF-72` | an assembly file of the wrong shape, not found, found twice |
 | `EF-73` | a construct v1 does not have, by name |
 | `EF-75`, `EF-78`, `EF-79` | the library check (every problem at once), units |
-| `EF-76`, `EF-77` | an import's parameter, a violated `exactly_one_of` |
+| `EF-76`, `EF-77` | an import's parameter, a violated `exactly_one_of` or `all_or_none_of` |
 | `EF-7A` … `EF-7F` | no partner, several and no verb, `none:` on a required port, an absent `bind:` partner, an undecided optional port, a verb on an inactive port |
 | `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
 | `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
-| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed for |
+| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed or more than one feed for |
 | `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
+| `EF-4J` | (sizing) a group of fields its class sizes together stated in part: a battery's capacity without its inverter power, or the other way round |
 
 ### Testing an assembly
 
@@ -409,7 +491,11 @@ tests:
 `tests/assemblies/test_library_contracts.py` draws the samples from the declarations — the defaults,
 the `min` and `max` of every `range`, every allowed value, every internal variant, and a seeded Latin
 hypercube per `exactly_one_of` branch (`--samples` points per branch, an upper bound for a branch whose
-dimensions are all discrete, where two points drawing the same values are one sample) — and runs each
+dimensions are all discrete, where two points drawing the same values are one sample) — every sample
+within the constraints: a value that states one member of an `all_or_none_of` states the others at
+their companion value (a stated default, else the middle of the range, else the first stated allowed
+value), the hypercube states every member, and a sweep of one member from a base that leaves the
+constraint unstated holds the others at their companion values — and runs each
 sample once in isolation: the assembly as one import beside a test partner for every active port whose
 binding changes what the assembly computes (optional ports included; a providing port gets none, except
 a consumer for a fuel it provides), and beside the provider of every sizing fact its members read from
@@ -439,7 +525,7 @@ Without `--assembly-library` the harness runs the mock library and the real one,
 `energy_systems/assemblies/` with its `test_partners.yaml`. `assemblies` is the deterministic tier, run in the PR
 gate's own job `pytest (assemblies)` (every test under `tests/assemblies/` carries that marker or `nightly`, and
 needs the local LoadProfileGenerator); `nightly` is the hypercube, run by
-the `assemblies-nightly` job of `golden-year.yml` (`--samples`, default 16 per branch, and `--seed`,
+the workflow `assemblies-nightly.yml`, daily at 02:00 UTC (`--samples`, default 16 per branch, and `--seed`,
 default 20261003). `--assembly-library DIR` tests another library: its assemblies and the
 `test_partners.yaml` beside them, which names the site entry standing in for each partner class,
 circuit end, carrier provider or consumer, fact provider, observed component and controller
@@ -479,9 +565,9 @@ of the heat-pump solar setup wait for hydronic stage C, whose ports on the cylin
 (§13 step 5). The table
 `hisim/energy_system/assemblies/twins.py` names every composed file, its twin and the rename of its members to the
 twin's names. `tests/assemblies/test_twin_gates.py`, on `tests/assemblies/twin_gate.py`, runs one gate per row: it
-expands the composed file, renames its members and asserts the twin outside the listed intended differences (G7, the
-battery's one-element `sizing_sources` list, and, where the generator has a buffer, one neutral swap of the
-sequence), and runs both for one day: every result column and KPI equal. The golden gate's `composed` mode runs each
+expands the composed file, renames its members and asserts the twin outside the listed intended differences: G7 (the
+battery's one-element `sizing_sources` list) and, where the generator has a buffer, one neutral swap of the
+sequence. It then runs both for one day: every result column and KPI equal. The golden gate's `composed` mode runs each
 composed file for the week and the full year and compares its KPIs, renamed through the same table, with the Python
 setup's goldens (`golden_references/README.md`).
 

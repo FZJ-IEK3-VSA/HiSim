@@ -1,11 +1,11 @@
-"""Checks whether each component's energy balance closes (hisim-9uoo.2).
+"""Checks whether each component's energy balance closes (hisim-energy-sankeys-9uoo.2).
 
 Per component and timestep, vectorised over the run:
 ``residual = sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE)`` over all its declared ports. The balance is
 the component's, not a carrier's: a converter turns one carrier into another, so only its total is
 conserved; the per-carrier totals are reported beside it.
 
-The tolerance is the owner's (decision 6 of hisim-9uoo): the run's residual is at most 0.1 % of the
+The tolerance is the owner's (decision 6 of hisim-energy-sankeys-9uoo): the run's residual is at most 0.1 % of the
 component's throughput over the run, and every step's residual at most
 ``max(1e-6 kWh, 0.001 * step throughput)``. A step's throughput is the larger of what enters the component
 (``IN``, energy taken from its store, and any port running backwards) and what leaves it; the run's is the sum
@@ -16,8 +16,9 @@ finite in every step, and every transfer between two declared components
 (:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``OUT`` port and its
 receiver's ``IN`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
 two. A transfer only one of two declared components books fails; one toward a component that declares no ports at
-all, an environment node or nobody does not. The check runs in every simulation; whatever does not hold fails
-the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes.
+all, a meter, a boundary node or nobody does not. The check runs in every simulation; whatever does not hold fails
+the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes. The meters, what they
+publish against what they read, are :mod:`.meters`'s.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ class EnergyBalanceError(ValueError):
 
 @dataclass(frozen=True)
 class Tolerance:
-    """When a balance counts as closed (owner decision 6 of hisim-9uoo)."""
+    """When a balance counts as closed (owner decision 6 of hisim-energy-sankeys-9uoo)."""
 
     annual_relative: float = 1e-3
     step_relative: float = 1e-3

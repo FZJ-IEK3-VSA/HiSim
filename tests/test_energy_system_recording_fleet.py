@@ -20,7 +20,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import ClassVar, List, Sequence, Tuple
+from typing import ClassVar, List, Optional, Sequence, Tuple
 
 import pytest
 
@@ -42,6 +42,7 @@ from scripts.record_all_setups import (
     FreshnessCheck,
     Paths,
     Recorder,
+    Recording,
     Report,
     SetupDiscovery,
     SetupOutcome,
@@ -150,7 +151,9 @@ class StubRecorder:
         self.failing = set(failing)
         self.asked: List[str] = []
 
-    def record(self, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
+    def record(
+        self, setup: Path, parameters: Path, out_dir: Path, python: str, grouping: Optional[Path] = None
+    ) -> SetupOutcome:
         """Pretends to record one setup, remembering that it was asked.
 
         Args:
@@ -158,15 +161,18 @@ class StubRecorder:
             parameters: Ignored.
             out_dir: Ignored.
             python: Ignored.
+            grouping: The decision of a grouped twin, which the remembered name carries as the
+                ``.grouped`` mark; ``None`` for a twin.
 
         Returns:
             A successful outcome, or a failure for a stem this stub refuses.
         """
         del parameters, out_dir, python  # a stub records nothing, it only remembers being asked
-        self.asked.append(setup.stem)
-        if setup.stem in self.failing:
-            return SetupOutcome(stem=setup.stem, ok=False, message="stub refusal", log="EF-R5")
-        return SetupOutcome(stem=setup.stem, ok=True)
+        stem = Recording(setup, grouping).stem
+        self.asked.append(stem)
+        if stem in self.failing:
+            return SetupOutcome(stem=stem, ok=False, message="stub refusal", log="EF-R5")
+        return SetupOutcome(stem=stem, ok=True)
 
 
 @pytest.mark.base
@@ -308,10 +314,9 @@ def test_the_driver_records_every_setup_and_has_no_skip_list(monkeypatch: pytest
     monkeypatch.setattr(Recorder, "record", stub.record)
 
     assert main([]) == 0
-    assert sorted(stub.asked) == [path.stem for path in SetupDiscovery.all_setups()]
-    assert sorted(stub.asked) == sorted(
-        path.stem for path in Fleet.SETUPS.glob("*.py") if path.name != "__init__.py"
-    )
+    twins = sorted(path.stem for path in Fleet.SETUPS.glob("*.py") if path.name != "__init__.py")
+    assert sorted(stem for stem in stub.asked if not stem.endswith(Paths.GROUPED_MARK)) == twins
+    assert [path.stem for path in SetupDiscovery.all_setups()] == twins
 
 
 @pytest.mark.base
@@ -331,7 +336,9 @@ def test_the_driver_keeps_going_and_fails_naming_every_setup_it_could_not_record
     printed = capsys.readouterr().out
 
     assert exit_code == 1
-    assert sorted(stub.asked) == [path.stem for path in SetupDiscovery.all_setups()]
+    assert sorted(stub.asked) == sorted(recording.stem for recording in SetupDiscovery.recordings(
+        SetupDiscovery.all_setups()
+    ))
     for stem in refused:
         assert f"{stem}: stub refusal" in printed
 
@@ -523,7 +530,9 @@ class CopyingStubRecorder:
         self.altered = set(altered)
         self.silent = set(silent)
 
-    def record(self, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
+    def record(
+        self, setup: Path, parameters: Path, out_dir: Path, python: str, grouping: Optional[Path] = None
+    ) -> SetupOutcome:
         """Pretends to record one setup by copying (or perturbing) its committed twin.
 
         Args:
@@ -531,20 +540,23 @@ class CopyingStubRecorder:
             parameters: Ignored.
             out_dir: Where the pretended recording goes.
             python: Ignored.
+            grouping: The decision of a grouped twin, whose committed grouped file is copied
+                instead; ``None`` copies the twin.
 
         Returns:
             The outcome a real child with this behavior would produce.
         """
         del parameters, python
-        if setup.stem in self.failing:
-            return SetupOutcome(stem=setup.stem, ok=False, message="stub refusal", log="EF-R5")
-        if setup.stem not in self.silent:
-            committed = Fleet.ENERGY_SYSTEMS / f"{setup.stem}{Paths.RECORDED_SUFFIX}"
+        stem = Recording(setup, grouping).stem
+        if stem in self.failing:
+            return SetupOutcome(stem=stem, ok=False, message="stub refusal", log="EF-R5")
+        if stem not in self.silent:
+            committed = Fleet.ENERGY_SYSTEMS / f"{stem}{Paths.RECORDED_SUFFIX}"
             content = committed.read_text(encoding="utf-8")
-            if setup.stem in self.altered:
+            if stem in self.altered:
                 content += "# moved\n"
             (out_dir / committed.name).write_text(content, encoding="utf-8")
-        return SetupOutcome(stem=setup.stem, ok=True)
+        return SetupOutcome(stem=stem, ok=True)
 
 
 @pytest.mark.base
@@ -655,4 +667,45 @@ def test_a_parallel_fleet_run_reports_outcomes_in_the_setups_order(monkeypatch: 
 
     outcomes = Recorder.record_all(setups, Fleet.ONE_DAY, Fleet.ENERGY_SYSTEMS, sys.executable, jobs=4)
 
-    assert [outcome.stem for outcome in outcomes] == [setup.stem for setup in setups]
+    assert [outcome.stem for outcome in outcomes][: len(setups)] == [setup.stem for setup in setups]
+    assert [outcome.stem for outcome in outcomes] == [
+        recording.stem for recording in SetupDiscovery.recordings(setups)
+    ]
+
+
+@pytest.mark.base
+def test_the_driver_records_every_grouped_twin_and_a_check_run_fails_on_a_moved_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a freshness gate that never re-records the grouped twins.
+
+    Every setup with a committed ``*.grouping.yaml`` has a grouped twin, the file RenoVisor's
+    translator starts from. The gate once recorded the twins only, so the grouping pass of the
+    heat-pump sizer refused every re-recording with EF-R10 from 2026-09-14 on, and no job failed.
+    Two halves: every committed grouping decision is
+    recorded (through ``--grouping``, named ``<stem>.grouped``), and a grouped twin whose fresh
+    recording differs from the committed one fails ``--check`` with its diff.
+    """
+    decisions = sorted(path.name[: -len(Paths.GROUPING_SUFFIX)] for path in Fleet.ENERGY_SYSTEMS.glob(
+        f"*{Paths.GROUPING_SUFFIX}"
+    ))
+    assert decisions, "the repository commits grouping decisions; an empty list would make this test vacuous"
+    asking = StubRecorder()
+    monkeypatch.setattr(Recorder, "record", asking.record)
+
+    assert main([]) == 0
+    assert sorted(stem for stem in asking.asked if stem.endswith(Paths.GROUPED_MARK)) == [
+        f"{stem}{Paths.GROUPED_MARK}" for stem in decisions
+    ]
+
+    moved = f"{decisions[0]}{Paths.GROUPED_MARK}"
+    copying = CopyingStubRecorder(altered=[moved])
+    monkeypatch.setattr(Recorder, "record", copying.record)
+    capsys.readouterr()
+
+    exit_code = main(["--check"])
+    printed = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert f"The committed twin of {moved} is out of date:" in printed
+    assert f"+++ recorded/{moved}{Paths.RECORDED_SUFFIX}" in printed

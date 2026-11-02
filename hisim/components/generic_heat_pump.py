@@ -222,7 +222,7 @@ class GenericHeatPumpState:
         )
 
 
-class GenericHeatPump(cp.Component):
+class GenericHeatPump(cp.PhysicsComponent):
     """Heat pump class.
 
     It does support a refrigeration cycle.
@@ -369,6 +369,7 @@ class GenericHeatPump(cp.Component):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for {self.NumberOfCycles} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -664,7 +665,7 @@ class GenericHeatPump(cp.Component):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the heat pump as one priced subject of the database's `HEAT_PUMP` class, sized by
         its nominal heating power in kW.
@@ -695,7 +696,7 @@ class GenericHeatPump(cp.Component):
         return []
 
 
-class GenericHeatPumpController(cp.Component):
+class GenericHeatPumpController(cp.L1ControllerComponent):
     """Heat Pump Controller.
 
     It takes data from other
@@ -772,6 +773,7 @@ class GenericHeatPumpController(cp.Component):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for {self.State} will follow.",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.add_default_connections(self.get_default_connections_from_building())

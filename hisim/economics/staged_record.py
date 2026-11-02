@@ -176,7 +176,9 @@ class MainSubjectRule:
             The rule.
 
         Raises:
-            StageRecordError: If the rule names an unknown kind or asset class, or is not an object.
+            StageRecordError: If the rule is not an object, names an unknown kind or asset class, is an `ASSET_CLASS`
+                rule with no asset classes (it could single out no subject), or is a `NAMED_BY_MEASURE` rule with
+                asset classes (they would be dropped unread).
         """
         if not isinstance(raw, dict):
             raise StageRecordError(f"{path} is not an object.")
@@ -188,8 +190,19 @@ class MainSubjectRule:
                 f"{', '.join(item.value for item in MainSubjectRuleKind)}."
             ) from None
         if kind is MainSubjectRuleKind.NAMED_BY_MEASURE:
+            if raw.get(cls.ASSET_CLASSES_KEY):
+                raise StageRecordError(
+                    f"{path}.{cls.ASSET_CLASSES_KEY} is set on a {kind.value!r} rule, whose main subject is "
+                    "named by the measure id; asset classes belong to an "
+                    f"{MainSubjectRuleKind.ASSET_CLASS.value!r} rule."
+                )
             return cls(kind)
         names = StageRecordFields.strings(raw.get(cls.ASSET_CLASSES_KEY), f"{path}.{cls.ASSET_CLASSES_KEY}")
+        if not names:
+            raise StageRecordError(
+                f"{path}.{cls.ASSET_CLASSES_KEY} is empty, and an {kind.value!r} rule needs at least one asset "
+                "class to find the main subject by."
+            )
         try:
             return cls(kind, frozenset(ComponentType(name) for name in names))
         except ValueError as error:

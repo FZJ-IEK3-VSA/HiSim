@@ -35,10 +35,10 @@ today -- is a data gap and is refused with ``location.country.unsupported``. A c
 outside every band of its typology is clamped to the nearest band, and the note says which band
 was wanted. The former third answer -- rows whose door or window area is zero crash the
 ``Building`` component and are skipped for a neighbouring band -- is gone: the ``Building``
-guards a zero door or window area now (hisim-4g9.1) and gives a row without a door area
+guards a zero door or window area now (hisim-component-physics-4g9.1) and gives a row without a door area
 TABULA's estimated door, so every generic-example row is selectable. Only the door and the
 window are guarded: a zero floor, wall or roof reference area still divides by zero
-(hisim-4g9.16), and no generic-example row has one. A missing door area is the only zero area
+(hisim-component-physics-4g9.16), and no generic-example row has one. A missing door area is the only zero area
 those rows have.
 
 What the selected row makes of the envelope is not re-derived here: :class:`ArchetypeEnvelope`
@@ -330,7 +330,7 @@ class BuildingCodeSelector:
     Four inputs decide it -- the country, the kind of dwelling, the construction year and the
     retrofit status. Every generic-example row of the table is selectable: the one zero envelope
     area those rows have, a missing door area, no longer crashes the ``Building`` component
-    (hisim-4g9.1), so no row is skipped.
+    (hisim-component-physics-4g9.1), so no row is skipped.
     """
 
     @classmethod

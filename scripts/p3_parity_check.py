@@ -7,9 +7,8 @@ not the permanent golden gate, it produces no reference and it blesses nothing: 
 whether the declarative file recorded from a setup reproduces that setup.
 
 Every requested ``(setup, window)`` triple is run through the three comparisons of R11.3 in order;
-one invocation covers the whole requested set — the entire fleet over every runnable window by
-default, which is the January week alone while the July window is fenced (see
-``p3_parity_matrix.MatrixPaths.FENCED_WINDOWS``) — and prints one table over all of it. First the
+one invocation covers the whole requested set — the entire fleet over the January and the July
+week by default — and prints one table over all of it. First the
 component set and the wire set, through the declared port-renaming table, because two systems
 wired differently have nothing worth comparing numerically. Then **every** column of the result
 frame — the content of ``all_results.csv``, matched column by *name* — since a difference the KPI
@@ -58,7 +57,7 @@ from hisim.energy_system.parity import (
 )
 
 try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script from ``scripts/``
-    from p3_parity_matrix import MatrixPaths, covered_setups  # type: ignore[import-not-found]
+    from p3_parity_matrix import covered_setups  # type: ignore[import-not-found]
     from p3_parity_renamings import DeclaredPortRenamings  # type: ignore[import-not-found]
     from p3_parity_runs import (  # type: ignore[import-not-found]
         ColumnDifference,
@@ -78,7 +77,7 @@ try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script f
         last_line,
     )
 except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on the path
-    from scripts.p3_parity_matrix import MatrixPaths, covered_setups
+    from scripts.p3_parity_matrix import covered_setups
     from scripts.p3_parity_renamings import DeclaredPortRenamings
     from scripts.p3_parity_runs import (
         ColumnDifference,
@@ -437,13 +436,11 @@ def parse_arguments(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--setup", nargs="+", metavar="STEM", help="cover only these setups")
-    # Fenced windows stay valid choices so that asking for one is answered with the reason it is
-    # fenced rather than with argparse's bare "invalid choice"; main() refuses them before any run.
     parser.add_argument(
         "--window",
         nargs="+",
         choices=list(ParityWindows.names()),
-        help=f"cover only these windows (default: {' '.join(ParityWindows.runnable())})",
+        help=f"cover only these windows (default: {' '.join(ParityWindows.names())})",
     )
     parser.add_argument(
         "--rel-tol",
@@ -488,10 +485,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ``0`` when every triple reached parity, ``1`` otherwise.
 
     Raises:
-        SystemExit: If a fenced window was asked for, or if the window list came out empty. The
-            refusal happens before the first setup is imported, so that it costs nothing and
-            cannot be mistaken for a run — and only on the run path, because ``--summarize`` runs
-            no window and reads only what an earlier dispatch wrote.
+        SystemExit: If the window list came out empty. The refusal happens before the first setup
+            is imported, so that it costs nothing and cannot be mistaken for a run.
     """
     arguments = parse_arguments(argv)
     if arguments.summarize is not None:
@@ -502,18 +497,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         print(f"\n{without_parity} of {covered} triple(s) did not reach parity.")
         return 1 if without_parity else 0
-    try:
-        MatrixPaths.refuse_fenced(arguments.window or ())
-    except ValueError as refusal:
-        raise SystemExit(str(refusal)) from refusal
     tolerance = Tolerance(arguments.rel_tol, arguments.abs_tol)
     checker = ParityChecker(tolerance, DeclaredPortRenamings.port_renaming())
     stems = discover(arguments.setup)
-    windows = list(arguments.window or ParityWindows.runnable())
+    windows = list(arguments.window or ParityWindows.names())
     if not windows:
         # The matrix guards its empty product the same way: zero triples exiting 0 would read as
         # a green table over coverage nobody checked.
-        raise SystemExit("No runnable window: every window is fenced, so this dispatch would cover nothing.")
+        raise SystemExit("No window to run, so this dispatch would cover nothing.")
     print(f"Comparing {len(stems)} setup(s) over {len(windows)} window(s) at {tolerance.describe()}.\n")
 
     verdicts: List[TripleVerdict] = []

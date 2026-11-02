@@ -250,15 +250,12 @@ class BatteryLaw:
 
 
 class BoilerEfficiency:
-    """How a stated seasonal efficiency becomes a boiler's two efficiency bounds."""
+    """How a stated seasonal efficiency becomes a boiler's ``seasonal_efficiency``.
 
-    # Source: calculation-request.md §3.6 — "eff_th_max = value/100 and eff_th_min = eff_th_max
-    # − 0.3, floor 0.3". The spread stands in for the part-load curve HiSim's GenericBoiler
-    # interpolates between the two bounds (class defaults 0.90 / 0.60). TO BE REVIEWED.
-    SPREAD: ClassVar[float] = 0.3
-
-    # Source: the same sentence; a minimum efficiency below 0.3 describes no real boiler.
-    MINIMUM: ClassVar[float] = 0.3
+    The request states the Ecodesign seasonal space heating efficiency ``eta_s`` in percent, on the
+    gross calorific value; the boiler takes it as a fraction and scales its sourced part-load curve
+    to it (owner decision of 2026-10-20, hisim-component-physics-4g9.66).
+    """
 
     # Source: a percentage is a hundredth.
     PERCENT: ClassVar[float] = 100.0
@@ -327,7 +324,7 @@ class AnywayShareByPlacement:
     Every share here is an estimate and none of them is measured.
     """
 
-    # Source: cost_module_issues.md #12, which records that the anyway shares are rough and asks
+    # Source: roadmap/cost_module_issues.md #12, which records that the anyway shares are rough and asks
     # for a reviewed table. These three are the shares the RenoVisor translator writes; they are
     # estimates of the like-for-like share of a first-time envelope improvement, not measurements
     # and not taken from any price list. TO BE REVIEWED.

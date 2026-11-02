@@ -491,10 +491,11 @@ def test_a_judgement_note_appears_on_the_page_unfolded_and_in_full() -> None:
     """
     page = Committed.page().read_text(encoding="utf-8")
     assert (
-        "Present in every configuration and wired differently: fed by the energy manager's grid "
-        "balance when there is one, and by every participant directly when there is not. A group "
-        "can add and remove a component but cannot rewire one that survives, so this is the row "
-        "that forces a variant. Written out in full in both options."
+        "Present in every configuration and wired differently: it reads every electricity port by "
+        "its role, so beside the energy manager it also reads the battery's charging and "
+        "discharging, which exist only there. A group can add and remove a component but cannot "
+        "rewire one that survives, so this is the row that forces a variant. Written out in full in "
+        "both options."
     ) in page
 
 

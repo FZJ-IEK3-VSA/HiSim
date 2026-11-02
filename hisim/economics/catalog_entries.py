@@ -1,14 +1,16 @@
-"""Row types of the cost database: one dataclass per data-file entry (cost_spec.md §3.5).
+"""Row types of the cost database: one dataclass per data-file entry.
 
 Holds `CostDataError`, the dataclasses mirroring one row of `devices_*.json`, `energy_prices_*.json`,
-`co2_price_paths.json` and `escalation_defaults_*.json`, the resolved wrappers carrying a row's provenance ids, and the
-parsing helpers. Only single-row derivations live here; picking the entry for a year, overlays and caching are
-`database.py`'s job. It imports nothing from `sources` or `database`; both import from here.
+`co2_price_paths.json` and `escalation_defaults_*.json`, `FeedInKind` (which a feed-in row declares and a tariff
+contract carries), the resolved wrappers carrying a row's provenance ids, and the parsing helpers. Only single-row
+derivations live here; picking the entry for a year, overlays and caching are `database.py`'s job. It imports nothing
+from `sources` or `database`; both import from here.
 """
 
 from __future__ import annotations
 
 import copy
+import enum
 import os
 from dataclasses import dataclass, field
 from typing import ClassVar, Dict, List, Optional, Tuple
@@ -27,7 +29,7 @@ class CostDataError(ValueError):
 
 
 def _require_sources(entry: dict, context: str) -> Tuple[str, ...]:
-    """Return the entry's source ids, refusing an entry without any (§3.10).
+    """Return the entry's source ids, refusing an entry without any.
 
     This checks that an entry names sources; `SourceRegistry.resolve` checks that they exist. Called while parsing each
     row, so an unsourced datapoint fails the load and the `validate` CLI.
@@ -42,7 +44,7 @@ def _require_sources(entry: dict, context: str) -> Tuple[str, ...]:
 
 
 def _band(entry: dict, key: str, context: str, default: Optional[float] = None) -> UncertainValue:
-    """Read an uncertainty band field of a data row; a bare number means an exact value (§3.9).
+    """Read an uncertainty band field of a data row; a bare number means an exact value.
 
     Every monetary field of every row is read through this. Passing `default` makes the field optional (a missing
     removal cost is zero); omitting it makes it mandatory.
@@ -69,7 +71,7 @@ def _band(entry: dict, key: str, context: str, default: Optional[float] = None) 
 
 @dataclass
 class DeviceEntry:
-    """One device cost entry per (component_type, valid_from_year) (§3.5).
+    """One device cost entry per (component_type, valid_from_year).
 
     What one asset class costs in one price vintage: purchase, installation, planning, removal, maintenance and
     operation, service life, embodied CO2 and VAT basis. Components declare only class and size
@@ -120,7 +122,7 @@ class DeviceEntry:
     legacy_flat_subsidy_share: float = 0.0
     # -------------------------------------------------------------- end of the migration field
     # "AS_LEGACY" marks entries migrated 1:1 from configuration.py whose VAT status is
-    # undocumented; the FINANCIAL gross-up is a no-op for them (see cost_module_issues.md).
+    # undocumented; the FINANCIAL gross-up is a no-op for them (see roadmap/cost_module_issues.md).
     price_basis: str = "NET"
     notes: Optional[str] = None
     data_file: str = ""
@@ -140,7 +142,7 @@ class DeviceEntry:
         return DeviceEntry.PER_UNIT_TO_SIZE_UNIT[self.per_unit]
 
     def investment_for_size(self, size: float) -> UncertainValue:
-        """Return the device cost for a given size, with economies of scale (§3.5).
+        """Return the device cost for a given size, with economies of scale.
 
         Without `per_unit` the price is per device and the size is ignored; with a `scaling_exponent` the cost is
         `specific_investment * size ** exponent`; otherwise it is linear in the size. Installation, planning and
@@ -159,7 +161,7 @@ class DeviceEntry:
         return self.specific_investment.scale(size)
 
     def embodied_co2_for_size(self, size: float) -> float:
-        """Return the embodied CO2 in kg for one unit of the given size (§3.8).
+        """Return the embodied CO2 in kg for one unit of the given size.
 
         Linear in size, without a scaling exponent, and exact (emission factors are not banded). Feeds the lifecycle
         CO2 result, charged at installation and each replacement.
@@ -186,6 +188,37 @@ class DeviceEntry:
         return f"{stem}.{self.component_type.name}@{self.valid_from_year}"
 
 
+class FeedInKind(str, enum.Enum):
+    """How exported electricity is paid for, and so how the engine projects the payment over the horizon.
+
+    - FIXED_TARIFF: a statutory rate fixed for a contract duration, such as the German EEG tariff. The engine holds
+      the year-1 revenue nominally constant for `FeedIn.duration_in_years` and escalates it afterwards at
+      `EconomicParameters.feed_in_escalation_rate`.
+    - MARKET_LINKED: a rate the supplier sets and may change at any time, but which must reflect the market value of
+      the exported electricity, such as Ireland's Clean Export Guarantee (CRU decision CRU202454). Nothing holds it
+      fixed, so the engine escalates it from year 1 with the electricity price, at the escalation rate of the
+      contract's carrier.
+    - SPOT_REFERENCED: direct marketing, a share of the spot proceeds plus a markup.
+
+    A price entry may declare FIXED_TARIFF or MARKET_LINKED for its country's feed-in row
+    (`EnergyPriceEntry.feed_in_kind`); a tariff contract may declare any kind.
+    """
+
+    NONE = "NONE"
+    FIXED_TARIFF = "FIXED_TARIFF"  # EEG, nominally constant for its duration
+    SPOT_REFERENCED = "SPOT_REFERENCED"  # direct marketing
+    MARKET_LINKED = "MARKET_LINKED"  # supplier-set, follows the electricity market (IE Clean Export Guarantee)
+
+    @property
+    def pays_rate_per_kwh(self) -> bool:
+        """Return whether every kWh sold earns the contract's flat rate.
+
+        True for FIXED_TARIFF and MARKET_LINKED, the two kinds a price entry can declare; they differ only in how the
+        rate evolves over the horizon. SPOT_REFERENCED pays from the spot price, NONE pays nothing.
+        """
+        return self in (FeedInKind.FIXED_TARIFF, FeedInKind.MARKET_LINKED)
+
+
 @dataclass(frozen=True)
 class EnergyContent:
     """How many kWh one native billing unit (a ton, a litre) of a solid or liquid fuel holds.
@@ -204,7 +237,7 @@ class EnergyContent:
 
 @dataclass
 class EnergyPriceEntry:
-    """One energy price entry per (carrier, year): a two-part tariff with explicit CO2 (§3.5).
+    """One energy price entry per (carrier, year): a two-part tariff with explicit CO2.
 
     Two-part means a working price per quantity and a yearly standing charge (Grundpreis), kept apart because they
     escalate and are allocated differently. `grid_exit_fee_in_euro` is the one-off cost of disconnecting from a
@@ -216,7 +249,7 @@ class EnergyPriceEntry:
     CO2 double counting: when `co2_price_exposure > 0` the working price must exclude the carbon price, because the
     engine adds `emissions * co2_price(country, year)` on top; when the working price already contains it (as the
     migrated pre-2026 entries do) the exposure must be 0. `tax_and_levy_share` is the fraction stripped in the
-    MACROECONOMIC view (§4.5).
+    MACROECONOMIC view.
     """
 
     carrier: EnergyCarrier
@@ -234,6 +267,9 @@ class EnergyPriceEntry:
     data_file: str = ""
     #: Set on the EUR/kWh copy handed out by the database; None on an as-shipped or kWh-quoted row.
     converted_from: Optional[EnergyContent] = None
+    #: How the remuneration of an `ELECTRICITY_FEED_IN` row is paid: FIXED_TARIFF (the default, the EEG
+    #: convention) or MARKET_LINKED. Only a feed-in row may state it; the loader refuses it anywhere else.
+    feed_in_kind: FeedInKind = FeedInKind.FIXED_TARIFF
 
     @property
     def entry_key(self) -> str:
@@ -267,7 +303,7 @@ class EnergyPriceEntry:
 
 @dataclass
 class Co2PricePath:
-    """A named CO2-price trajectory for one country, in EUR per ton CO2 (§3.5).
+    """A named CO2-price trajectory for one country, in EUR per ton CO2.
 
     Carbon pricing is expressed as named `low`/`central`/`high` paths selected by
     `EconomicParameters.co2_price_scenario` ("none" disables it), not as a band, so a result says which path it
@@ -303,7 +339,7 @@ class Co2PricePath:
 
 @dataclass
 class EscalationDefaults:
-    """Country default escalation rates, the middle step of the §3.2 fallback chain.
+    """Country default escalation rates, the middle step of the fallback chain.
 
     An explicit `EconomicParameters` value wins, then this country file, then the general rate. `asset_class_rates`
     holds per-class learning curves; it ships empty, so the general investment escalation rate applies to every class.

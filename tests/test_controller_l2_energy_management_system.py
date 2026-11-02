@@ -7,13 +7,14 @@ Investigate total consumption, total grid consumption and grid injection.
 import os
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, cast
+from typing import ClassVar, List, Optional, Tuple, cast
 import pytest
 import numpy as np
 import pandas as pd
 import hisim.component as cp
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim.components import heating_curve
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
@@ -183,6 +184,24 @@ def test_house(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
+    # Build the heating curve, the L2 controller that sends the supply temperature and the heating season to the
+    # generator's controller and the heat distribution controller
+    my_heating_curve_config = heating_curve.HeatingCurveControllerConfig.preset_building_derived(
+        "HeatingCurveController"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+        )
+    )
+    my_heating_curve = heating_curve.HeatingCurveController(
+        my_simulation_parameters=my_simulation_parameters, config=my_heating_curve_config
+    )
+    my_sim.add_component(my_heating_curve, connect_automatically=True)
+
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
         more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
@@ -190,12 +209,9 @@ def test_house(
         ).resolve(
             SizingContext(
                 set_heating_temperature_in_celsius=concrete(
-                    my_heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius
+                    my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-                set_heating_threshold_outside_temperature_in_celsius=(
-                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
-                ),
             )
         )
     )
@@ -340,21 +356,11 @@ def test_house(
         src_object=loading_power_input_for_battery_in_watt,
     )
 
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Electricity Meter
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_electricity_controller.component_name,
-        source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=999,
-    )
-
     # =================================================================================================================================
     # Add Remaining Components to Simulation Parameters
 
-    my_sim.add_component(my_electricity_meter)
+    # the meter reads every electricity port by its role, never the energy manager's balance
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
@@ -784,15 +790,16 @@ def test_a_port_grown_while_wiring_becomes_a_result_column(tmp_path) -> None:
 
 
 @pytest.mark.base
-def test_a_meter_connected_automatically_beside_the_manager_reads_its_grid_balance_once(tmp_path) -> None:
-    """Catches the meter's declared feed from the manager's balance landing twice, or not at all.
+def test_a_meter_connected_automatically_beside_the_manager_reads_the_devices_not_the_balance(tmp_path) -> None:
+    """Catches the meter billing the manager's grid balance instead of the devices' electricity ports.
 
-    The real ``ElectricityMeter`` declares a dynamic default connection from the real manager's
-    ``TotalElectricityToOrFromGrid``; with both added with ``connect_automatically=True`` the
-    simulator resolves it to exactly one input of the meter.
+    A meter reads physics ports only (bead hisim-component-physics-4g9.39): with both added with
+    ``connect_automatically=True``, the meter reads each of the heat pump's electricity ports once and nothing of
+    the manager, whose ``TotalElectricityToOrFromGrid`` is a controller's sum for its own decisions.
     """
     my_sim = _simulator(str(tmp_path))
-    my_sim.add_component(_heat_pump("HeatPump"))
+    heat_pump = _heat_pump("HeatPump")
+    my_sim.add_component(heat_pump)
     manager = _energy_manager()
     my_sim.add_component(manager, connect_automatically=True)
     meter = electricity_meter.ElectricityMeter(
@@ -803,9 +810,15 @@ def test_a_meter_connected_automatically_beside_the_manager_reads_its_grid_balan
 
     my_sim.prepare_calculation()
 
-    balance = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.TotalElectricityToOrFromGrid
-    feeds = [item for item in meter.inputs if item.src_field_name == balance]
-    assert [(item.src_object_name, item.src_field_name) for item in feeds] == [(manager.component_name, balance)]
+    assert not [item for item in meter.inputs if item.src_object_name == manager.component_name]
+    heat_pump_reads = [
+        str(item.src_field_name) for item in meter.inputs if item.src_object_name == heat_pump.component_name
+    ]
+    assert sorted(heat_pump_reads) == [
+        "ElectricalInputPowerBrinePump",
+        "ElectricalInputPowerForCooling",
+        "ElectricalInputPowerSH",
+    ]
 
 
 @pytest.mark.base
@@ -907,15 +920,6 @@ class TestSurplusHysteresis:
         )
         assert decision is expected
 
-    @pytest.mark.base
-    @pytest.mark.parametrize("surplus_in_watt", [float("nan"), float("inf"), float("-inf")])
-    def test_a_surplus_that_is_not_finite_is_refused(self, surplus_in_watt: float) -> None:
-        """Catches a NaN surplus passing as "within the band" and silently keeping the previous decision."""
-        with pytest.raises(ValueError, match="finite"):
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
-                surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=False
-            )
-
     #: The battery's share: the surplus offered, the maximum and minimum charging powers in W, and the share in W.
     SHARES = [
         (1000.0, 5000.0, 200.0, 1000.0),
@@ -950,10 +954,10 @@ class TestSurplusHysteresis:
     @pytest.mark.base
     @pytest.mark.parametrize(
         ("surplus_in_watt", "maximum_in_watt", "minimum_in_watt"),
-        [(float("nan"), 5000.0, 200.0), (100.0, float("inf"), 200.0), (100.0, -1.0, 200.0), (100.0, 5000.0, -1.0)],
+        [(100.0, -1.0, 200.0), (100.0, 5000.0, -1.0)],
     )
     def test_an_invalid_battery_limit_is_refused(self, surplus_in_watt: float, maximum_in_watt: float, minimum_in_watt: float) -> None:
-        """Catches a NaN or negative limit turning into a share that silently decides the raise."""
+        """Catches a negative limit turning into a share that silently decides the raise."""
         with pytest.raises(ValueError):
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_charging_share_in_watt(
                 surplus_in_watt=surplus_in_watt,
@@ -1283,3 +1287,330 @@ class TestSurplusHysteresis:
             return list(stsv.values)
 
         assert outputs_after([(9000.0, 1500.0), (0.0, -800.0), (2600.0, 0.0)]) == outputs_after([])
+
+
+class TestHoldUnderForcedConvergence:
+    """The energy manager keeps its set-temperature raise under forced convergence and keeps booking realized values.
+
+    The house has PV, a space-heating heat pump at weight 2, a hot-water heat pump at weight 3, a car at weight 5 and
+    a battery at weight 6. An unforced pass with a surplus raises the set temperatures; a forced pass after it sees
+    a deficit, because the participants draw more.
+    """
+
+    #: The PV production of the unforced pass, in W: 3,000 W left after the two heat pumps' 1,000 W each.
+    UNFORCED_PV_PRODUCTION_IN_WATT: ClassVar[float] = 5000.0
+    #: The PV production of the forced pass, in W: 1,500 W short of the two heat pumps' draw.
+    FORCED_PV_PRODUCTION_IN_WATT: ClassVar[float] = 500.0
+
+    @dataclass
+    class House:
+        """A manager wired to its participants, the step values, and the outputs a test reads or sets."""
+
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+        stsv: cp.SingleTimeStepValues
+        pv: cp.ComponentOutput
+        space_heating_draw: cp.ComponentOutput
+        hot_water_draw: cp.ComponentOutput
+        car_draw: cp.ComponentOutput
+        battery_power: cp.ComponentOutput
+        space_heating_signal: cp.ComponentOutput
+        hot_water_signal: cp.ComponentOutput
+        car_offer: cp.ComponentOutput
+        battery_offer: cp.ComponentOutput
+
+        def value(self, output: cp.ComponentOutput) -> float:
+            """Return an output's value in the step values."""
+            return self.stsv.values[output.global_index]
+
+        def one_pass(
+            self, *, pv_production_in_watt: float, car_draw_in_watt: float, battery_power_in_watt: float, forced: bool
+        ) -> None:
+            """Run one pass, as the simulator does: restore, then simulate with these participant values.
+
+            Args:
+                pv_production_in_watt: The PV production, in W.
+                car_draw_in_watt: The car's realized charging power, in W.
+                battery_power_in_watt: The battery's realized power, in W; negative while it discharges.
+                forced: Whether the simulator forces the step to converge.
+            """
+            self.stsv.set_output_value(self.pv, pv_production_in_watt)
+            self.stsv.set_output_value(self.car_draw, car_draw_in_watt)
+            self.stsv.set_output_value(self.battery_power, battery_power_in_watt)
+            self.manager.i_restore_state()
+            self.manager.i_simulate(0, self.stsv, forced)
+
+    @staticmethod
+    def steered_participant(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        name: str,
+        component_type: lt.ComponentType,
+        weight: int,
+    ) -> Tuple[cp.ComponentOutput, cp.ComponentOutput]:
+        """Wire a participant's draw to the manager and grow the manager's signal output for it.
+
+        Returns:
+            The participant's draw output and the manager's signal output to it.
+        """
+        draw = _wire_measured_participant(manager, name, component_type, weight)
+        signal = manager.add_component_output(
+            source_output_name=f"SignalTo{name}_",
+            source_tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_weight=weight,
+            output_description=f"The manager's signal to {name}.",
+        )
+        return draw, signal
+
+    def house(self) -> "TestHoldUnderForcedConvergence.House":
+        """Build the house, index every output as the simulator would, and set the draws and battery limits.
+
+        Each heat pump draws 1,000 W; the battery takes up to 1,500 W and nothing below 200 W.
+
+        Returns:
+            The house, its start-of-step state saved.
+        """
+        manager, outputs = TestSurplusHysteresis.manager_with_pv_and_heat_pump_outputs()
+        space_heating_draw, space_heating_signal = self.steered_participant(
+            manager, "SpaceHeatingHeatPump", lt.ComponentType.HEAT_PUMP_BUILDING, 2
+        )
+        car_draw, car_offer = self.steered_participant(manager, "Car", lt.ComponentType.CAR_BATTERY, 5)
+        TestSurplusHysteresis.wire_battery(manager, outputs)
+        all_outputs = [*outputs.all(), space_heating_draw, car_draw, *manager.outputs]
+        for index, output in enumerate(all_outputs):
+            output.global_index = index
+        stsv = cp.SingleTimeStepValues(len(all_outputs))
+        stsv.set_output_value(outputs.heat_pump, 1000.0)
+        stsv.set_output_value(space_heating_draw, 1000.0)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_maximum_charging_power), 1500.0)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_minimum_charging_power), 200.0)
+        signals = {output.field_name: output for output in manager.outputs}
+        manager.i_save_state()
+        return self.House(
+            manager=manager,
+            stsv=stsv,
+            pv=outputs.pv,
+            space_heating_draw=space_heating_draw,
+            hot_water_draw=outputs.heat_pump,
+            car_draw=car_draw,
+            battery_power=cast(cp.ComponentOutput, outputs.battery),
+            space_heating_signal=space_heating_signal,
+            hot_water_signal=signals["ElectricityToOrFromGridOfDHWHeatPump_3"],
+            car_offer=car_offer,
+            battery_offer=signals["LoadingPowerInputForBattery_6"],
+        )
+
+    def raised_then_forced_into_a_deficit(self) -> "TestHoldUnderForcedConvergence.House":
+        """Run an unforced pass with a surplus and then a forced pass with a deficit.
+
+        The unforced pass leaves 3,000 W after the heat pumps: the car, drawing nothing, is offered 3,000 W, the
+        battery 3,000 W, and its share of 1,500 W leaves 1,500 W, so the set temperatures are raised. In the forced
+        pass the PV produces 500 W, the car draws 1,000 W and the battery discharges 200 W.
+
+        Returns:
+            The house after the forced pass.
+        """
+        house = self.house()
+        house.one_pass(
+            pv_production_in_watt=self.UNFORCED_PV_PRODUCTION_IN_WATT,
+            car_draw_in_watt=0.0,
+            battery_power_in_watt=0.0,
+            forced=False,
+        )
+        house.one_pass(
+            pv_production_in_watt=self.FORCED_PV_PRODUCTION_IN_WATT,
+            car_draw_in_watt=1000.0,
+            battery_power_in_watt=-200.0,
+            forced=True,
+        )
+        return house
+
+    @pytest.mark.base
+    def test_a_forced_pass_keeps_the_raise_and_offers_this_pass_s_surplus(self) -> None:
+        """Catches the manager re-deciding its raise under forced convergence, or holding the battery's offer.
+
+        The forced pass sees a deficit, on which an unforced pass would end the raise. The three modifiers keep the
+        values of the unforced pass. The car and the battery are offered the surplus of the forced pass itself: 500 W
+        of PV less 2,000 W of heat pumps leave the car -1,500 W, and its 1,000 W leave the battery -2,500 W. A held
+        offer of 3,000 W would let the battery charge from the grid on a surplus that is gone.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+
+        assert house.value(manager.building_indoor_temperature_modifier) == (
+            manager.building_indoor_temperature_offset_in_kelvin
+        )
+        assert house.value(manager.space_heating_water_storage_temperature_modifier) == (
+            manager.space_heating_water_storage_temperature_offset_value
+        )
+        assert house.value(manager.domestic_hot_water_storage_temperature_modifier) == (
+            manager.domestic_hot_water_storage_temperature_offset_value
+        )
+        assert manager.building_indoor_temperature_offset_in_kelvin != 0.0
+        assert house.value(house.car_offer) == pytest.approx(-1500.0)
+        assert house.value(house.battery_offer) == pytest.approx(-2500.0)
+
+    @pytest.mark.base
+    def test_a_forced_pass_books_the_realized_values(self) -> None:
+        """Catches the bookkeeping frozen with the decisions, which would put a wrong balance into the KPIs.
+
+        In the forced pass 500 W of PV meet 2,000 W of heat pumps and 1,000 W of car, and the battery covers 200 W:
+        the grid supplies 2,300 W. The total consumption sums the realized powers of the steered participants, the
+        battery's -200 W included, to 2,800 W, and the heat pumps' signals book their grid shares, 500 W and 1,000 W.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+
+        assert house.value(manager.total_electricity_to_or_from_grid) == pytest.approx(-2300.0)
+        assert house.value(manager.total_electricity_consumption_channel) == pytest.approx(2800.0)
+        assert house.value(house.space_heating_signal) == pytest.approx(-500.0)
+        assert house.value(house.hot_water_signal) == pytest.approx(-1000.0)
+
+    @pytest.mark.base
+    def test_the_step_after_a_forced_step_starts_from_the_held_decision(self) -> None:
+        """Catches a saved state that differs from the decision the held outputs show.
+
+        The step started without a raise, its last unforced pass raised, and the forced pass held the raise. The
+        saved state is the raise, so a pass of the next step with a surplus inside the hysteresis band keeps it.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        manager = house.manager
+        manager.i_save_state()
+
+        held_decision = controller_l2_energy_management_system.EMSState(set_temperatures_are_raised=True)
+        assert manager.previous_state == held_decision
+        house.one_pass(pv_production_in_watt=2000.0, car_draw_in_watt=0.0, battery_power_in_watt=0.0, forced=False)
+        assert house.value(manager.domestic_hot_water_storage_temperature_modifier) == (
+            manager.domestic_hot_water_storage_temperature_offset_value
+        )
+
+
+@pytest.mark.base
+def test_the_car_is_offered_the_surplus_before_its_own_charging() -> None:
+    """Catches the manager sending the car the surplus left after the car's own charging.
+
+    The car's charge controller charges with the signal it gets. Sent the remainder after its own charging, it
+    answered every pass with that remainder and the next pass sent it the surplus minus it, so its charging
+    alternated between the passes of a step. The car is offered what is left before it, as the house battery is,
+    and what it takes is subtracted for the participants after it. A heat pump after it keeps the booking signal:
+    with 3,000 W of surplus, a car above its set point is offered 3,000 W, charges at 3,000 W and leaves 0 W, and a
+    heat pump drawing 2,000 W is then sent -2,000 W, the part it takes from the grid.
+    """
+    manager = _energy_manager()
+
+    def output(component_name: str, field_name: str) -> cp.ComponentOutput:
+        return cp.ComponentOutput(
+            component_name, field_name, lt.LoadTypes.ELECTRICITY, lt.Units.WATT,
+            component_id=ComponentID(name=component_name),
+        )
+
+    car_draw = output("Car", "Draw")
+    heat_pump_draw = output("HeatPump", "Draw")
+    car_signal = output("Manager", "CarSignal")
+    heat_pump_signal = output("Manager", "HeatPumpSignal")
+    car_input = cp.ComponentInput("Manager", "CarDraw", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+    car_input.source_output = car_draw
+    heat_pump_input = cp.ComponentInput("Manager", "HeatPumpDraw", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+    heat_pump_input.source_output = heat_pump_draw
+    for position, each_output in enumerate([car_draw, heat_pump_draw, car_signal, heat_pump_signal]):
+        each_output.global_index = position
+    stsv = cp.SingleTimeStepValues(4)
+    stsv.values[car_draw.global_index] = 3000.0
+    stsv.values[heat_pump_draw.global_index] = 2000.0
+
+    left_after_car_in_watt = manager.control_electricity_component_iterative(
+        available_surplus_electricity_in_watt=3000.0,
+        stsv=stsv,
+        current_component_type=lt.ComponentType.CAR_BATTERY,
+        current_input=car_input,
+        current_output=car_signal,
+    )
+    left_after_heat_pump_in_watt = manager.control_electricity_component_iterative(
+        available_surplus_electricity_in_watt=left_after_car_in_watt,
+        stsv=stsv,
+        current_component_type=lt.ComponentType.HEAT_PUMP_BUILDING,
+        current_input=heat_pump_input,
+        current_output=heat_pump_signal,
+    )
+
+    assert stsv.values[car_signal.global_index] == 3000.0
+    assert left_after_car_in_watt == 0.0
+    assert stsv.values[heat_pump_signal.global_index] == -2000.0
+    assert left_after_heat_pump_in_watt == -2000.0
+
+
+@pytest.mark.base
+def test_the_car_takes_from_the_grid_what_its_draw_exceeds_the_offer_by() -> None:
+    """Catches the car's grid KPI booked from the offer's sign, as for the consumers that get a remainder.
+
+    Offered 3,000 W and drawing 11,000 W the car takes 8,000 W from the grid; offered 5,000 W and drawing 4,000 W
+    it takes nothing; offered a deficit of -2,000 W and drawing 11,000 W it takes all 11,000 W.
+    """
+    grid_draw_in_watt = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem.offered_participant_grid_draw_in_watt(
+            surplus_offered_in_watt=pd.Series([3000.0, 5000.0, -2000.0, 0.0]),
+            realized_draw_in_watt=pd.Series([11000.0, 4000.0, 11000.0, 0.0]),
+        )
+    )
+
+    assert grid_draw_in_watt.tolist() == [8000.0, 0.0, 11000.0, 0.0]
+    with pytest.raises(ValueError, match="same steps"):
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem.offered_participant_grid_draw_in_watt(
+            surplus_offered_in_watt=pd.Series([1.0]), realized_draw_in_watt=pd.Series([1.0, 2.0])
+        )
+
+
+@pytest.mark.base
+def test_the_car_grid_kpi_reads_the_draw_beside_the_offer() -> None:
+    """Catches the car's grid KPI computed from the offer alone.
+
+    Over two 15-minute steps the car is offered 3,000 W and -1,000 W and draws 11,000 W in both: 8,000 W and
+    11,000 W from the grid, 4.75 kWh. The negative part of the offer alone would book 0.25 kWh.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchToL1EVChargeControl_1_",
+        source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=5,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Surplus offered to the car. ",
+    )
+    car_output = _wire_measured_participant(manager, "L1EVChargeControl_1", lt.ComponentType.CAR_BATTERY, 5)
+    # The draw's column comes before the offer's, so the KPI finds it by the draw's own global index, not by its
+    # place beside the offer.
+    car_output.global_index = 0
+    dispatch_output.global_index = 1
+    results = pd.DataFrame({car_output.field_name: [11000.0, 11000.0], dispatch_output.field_name: [3000.0, -1000.0]})
+
+    kpi_entries = manager.component_kpi_entries(
+        all_outputs=[car_output, dispatch_output], postprocessing_results=results
+    )
+
+    car_entries = [entry for entry in kpi_entries if entry.name == "Electric car electricity consumption from grid"]
+    assert len(car_entries) == 1
+    assert car_entries[0].value == pytest.approx(4.75)
+
+
+@pytest.mark.base
+def test_the_car_grid_kpi_refuses_a_draw_without_its_column() -> None:
+    """Catches the car's grid KPI reading another column for a draw output that was never registered.
+
+    An unregistered output keeps the global index -1, which would read the last result column without a word.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchToL1EVChargeControl_1_",
+        source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=5,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Surplus offered to the car. ",
+    )
+    car_output = _wire_measured_participant(manager, "L1EVChargeControl_1", lt.ComponentType.CAR_BATTERY, 5)
+    car_output.global_index = -1
+    dispatch_output.global_index = 0
+    results = pd.DataFrame({dispatch_output.field_name: [3000.0, -1000.0]})
+
+    with pytest.raises(ValueError, match="global index"):
+        manager.component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)

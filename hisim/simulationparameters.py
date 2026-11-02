@@ -1,5 +1,7 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 from __future__ import annotations
+import math
+import numbers
 import os
 from typing import Any, ClassVar, List, Optional, Sequence, Tuple
 import enum
@@ -10,6 +12,15 @@ from dataclasses import dataclass
 from hisim import log
 from hisim.caching.locations import CacheLocations
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulation_day import SimulationDay
+
+
+class PartLoadThresholdError(ValueError):
+    """A ``part_load_above_seconds`` that is not a step length: not a number, a ``bool``, or negative.
+
+    Raised by :class:`SimulationParameters` at construction, so a simulation-parameters file with such a value is
+    refused before anything runs.
+    """
 
 
 class WeatherYearError(ValueError):
@@ -18,6 +29,26 @@ class WeatherYearError(ValueError):
     Raised by :class:`SimulationParameters` when the value is not an ``int`` (a ``bool`` included,
     which Python would otherwise accept as one) or lies outside
     :attr:`SimulationParameters.WEATHER_YEAR_RANGE`.
+    """
+
+
+class CacheDirectoriesError(ValueError):
+    """A ``cache_directories`` entry that is not an absolute path.
+
+    Raised by :class:`SimulationParameters` at construction. A relative cache directory would name a
+    different directory for every working directory, so two workers sharing a cache would not agree
+    on where it is.
+    """
+
+
+class SimulationWindowError(ValueError):
+    """A simulated period that breaks the window contract of :class:`SimulationParameters`.
+
+    The window is the span from ``start_date`` to ``end_date`` that a run simulates. It must start at
+    midnight, cover whole days, lie within one calendar year and divide into whole timesteps, with a step
+    length that divides a day; see
+    :meth:`SimulationParameters.validated_window`. Raised at construction, so a simulation-parameters
+    file with such a window is refused before anything runs.
     """
 
 
@@ -54,16 +85,25 @@ class SimulationParameters:
         log_connections: bool = False,
         cache_directories: Optional[Sequence[str]] = None,
         weather_year: Optional[int] = None,
+        part_load_above_seconds: Optional[float] = None,
     ):
         """Initialize the SimulationParameters.
 
         Defines how the simulation will proceed, including time resolution, time span,
         logging configuration, and various simulation options.
 
+        The window from ``start_date`` to ``end_date`` must obey the window contract of
+        :meth:`validated_window`: start at midnight, whole days, one calendar year, whole timesteps, a step
+        length that divides a day.
+
         Args:
-            start_date: The start date and time of the simulation period.
-            end_date: The end date and time of the simulation period.
-            seconds_per_timestep: The duration of each simulation timestep in seconds.
+            start_date: The start of the simulation period, at midnight.
+            end_date: The end of the simulation period, excluded, a whole number of days after
+                ``start_date``. The start of the last timestep, ``end_date - seconds_per_timestep``,
+                lies in the year of ``start_date``; ``end_date`` itself may be 1 January of the next
+                year, as it is for a full year.
+            seconds_per_timestep: The duration of each simulation timestep in seconds; it divides a day of
+                86 400 s, and with it the period, into whole timesteps.
             country: Country code for location-specific data (e.g., weather, tariffs).
                 Defaults to 'DE' (Germany).
             result_directory: Directory path where simulation results will be stored.
@@ -87,20 +127,47 @@ class SimulationParameters:
                 debugging and verification. Defaults to False.
             cache_directories: Ordered cache directories, read in order and written to the
                 first writable one, for a container that maps a read-only seed directory and a writable
-                one in (hisim-epc.22). Empty (the default) means the single
-                ``cache_dir_path``, exactly as before.
+                one in (hisim-renovisor-translator-epc.22). Empty (the default) means the single
+                ``cache_dir_path``, exactly as before. A single string is one directory, not a
+                sequence of one-letter ones. Every entry has to be absolute; see
+                :meth:`validated_cache_directories`.
             weather_year: The year whose weather the run reads, when it is not the calendar year
                 (``roadmap/weather_year.md``). ``None`` (the default) means today's behaviour: the
                 weather file's rows are laid onto the calendar year by position. ``self.year``
                 stays the calendar year either way. An int from 1900 to 2100; anything else raises
                 :class:`WeatherYearError`.
+            part_load_above_seconds: The step length above which a device its controller has switched on runs
+                only the fraction of the step that brings its store to the controller's target (:mod:`hisim.part_load`).
+                At and below it every device runs whole steps, as before. Five circuit ends read it today: the
+                boiler's hot-water charge and its space-heating charge
+                (:class:`~hisim.components.generic_boiler.GenericBoilerController`), the heat pump's space-heating
+                charge (``MoreAdvancedHeatPumpHPLibControllerSpaceHeating`` in
+                :mod:`hisim.components.more_advanced_heat_pump_hplib`),
+                the heat distribution system's circuit
+                (:class:`~hisim.components.heat_distribution_system.HeatDistributionController`) and the solar
+                collector's pump (:class:`~hisim.components.solar_thermal_system.SolarThermalSystemController`);
+                every other device, the heat pump's hot-water charge, district heating and the electric heaters among
+                them, runs whole steps at any step length. The space-heating buffer chooses its model by the same
+                threshold: an iterated mixed node at and below it, a start-of-step node above it, which relies on the
+                fractions. It refuses a step above 600 s with a threshold at or above that step
+                (:meth:`~hisim.components.simple_water_storage.SimpleHotWaterStorage.check_mixed_node_step_is_safe`).
+                ``None`` (the default) means
+                :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
+                :class:`PartLoadThresholdError`.
+
+        Raises:
+            SimulationWindowError: If the window breaks the window contract.
+            WeatherYearError: If ``weather_year`` is not a year in range.
+            PartLoadThresholdError: If ``part_load_above_seconds`` is not a step length.
+            CacheDirectoriesError: If an entry of ``cache_directories`` is not an absolute path.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
         self.seconds_per_timestep = seconds_per_timestep
         self.duration = end_date - start_date
-        total_seconds = self.duration.total_seconds()
-        self.timesteps: int = int(total_seconds / seconds_per_timestep)
+        # The one place that decides the run's window: everything a component, the simulator or the
+        # postprocessing derives from these dates relies on the contract checked here.
+        self.timesteps: int = self.validated_window(start_date, end_date, seconds_per_timestep)
         self.year: int = int(start_date.year)
         self.country: str = country
         if post_processing_options is None:
@@ -111,14 +178,14 @@ class SimulationParameters:
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
         self.cache_dir_path = cache_dir_path
-        self.cache_directories: List[str] = list(cache_directories or [])
+        self.cache_directories: List[str] = self.validated_cache_directories(cache_directories)
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
-        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # Parameters of the parallel lifecycle cost engine (roadmap/cost_spec.md §3.2). Deliberately a
         # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
         # byte-identical during the parallel phase; set via set_economic_parameters() or the
-        # RenoVisor request (see cost_module_issues.md #5).
+        # RenoVisor request (see roadmap/cost_module_issues.md #5).
         self.economic_parameters: Optional[Any] = None
         # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
         # envelope measures, tenancy data and scenario sets a system setup declares for the
@@ -131,6 +198,160 @@ class SimulationParameters:
         # than a dataclass field for the same round-trip reason as the three above: unset, every
         # key, record and file this object produces stays byte-identical.
         self.weather_year: Optional[int] = self.validated_weather_year(weather_year)
+        # The part-load threshold (hisim.part_load). A plain attribute for the same round-trip
+        # reason as the four above: at its default, every key, record and file this object produces stays
+        # byte-identical.
+        self.part_load_above_seconds: float = self.validated_part_load_above_seconds(part_load_above_seconds)
+
+    #: The length of the days a window is made of. A window is a whole number of these.
+    SECONDS_PER_DAY: ClassVar[int] = SimulationDay.SECONDS_PER_DAY
+
+    @property
+    def timesteps_per_day(self) -> int:
+        """The exact number of timesteps in each day of the run, which rule 5 of the window contract makes whole.
+
+        Example: 96 at 900 s, 24 at 3600 s. The single-day chart finds the same number from
+        ``seconds_per_timestep`` through :meth:`SimulationDay.timesteps_per_day`.
+
+        Returns:
+            The number of timesteps per day.
+        """
+        return SimulationDay.timesteps_per_day(self.seconds_per_timestep)
+
+    @classmethod
+    def validated_window(
+        cls, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int
+    ) -> int:
+        """Checks the run's window against the window contract and returns its number of timesteps.
+
+        The window is the span from ``start_date`` (included) to ``end_date`` (excluded). It must:
+
+        1. start at midnight, so that every day of the run begins at the start of a row of a carpet
+           plot and at the start of a day of every profile;
+        2. cover a whole number of days, at least one;
+        3. lie within one calendar year: ``start_date`` and the start of the last timestep,
+           ``end_date - seconds_per_timestep``, fall in the same year. The profiles a run reads are
+           one year long, so a window across 31 December has no single source to read from;
+        4. divide into whole timesteps: the duration is a multiple of ``seconds_per_timestep``;
+        5. split every day into whole timesteps: ``seconds_per_timestep`` divides the 86 400 s of a day.
+           Every day of the run then starts a timestep and has the same number of them
+           (:attr:`timesteps_per_day`), which the single-day chart, the carpet and the weather's daily
+           average outside temperature rely on. A step longer than a day is refused by this rule too.
+
+        Example: 1 July 2021 to 8 July 2021 at 900 s passes and gives 672 timesteps; 1 July 2021
+        06:00 to 8 July 2021 is refused (not midnight), as is 30 December 2021 to 2 January 2022
+        (two years), one day at 7000 s (86 400 s is not a multiple of 7000 s), and two days at 16 h
+        (three whole timesteps, but a day is one and a half of them). A full year,
+        1 January 2021 to 1 January 2022, passes: its last timestep starts on 31 December 2021.
+
+        Whether a profile source can serve the window's dates -- an 8760-row source and a leap year,
+        say -- is not decided here, but by the component that owns the source. The contract fixes the
+        window's shape, not that its dates are served: the weather and its readers deliver the window
+        (hisim-midyear-windows-9g2.4), while the other profiles read a window that starts after 1 January from
+        1 January until the later steps of the mid-year epic, as :meth:`one_week_july` explains.
+
+        Args:
+            start_date: The first moment of the run.
+            end_date: The moment the run ends; the last timestep ends here.
+            seconds_per_timestep: The length of one timestep, in seconds.
+
+        Returns:
+            The number of timesteps in the window.
+
+        Raises:
+            SimulationWindowError: If the window breaks any of the five rules, or if
+                ``seconds_per_timestep`` is not a positive, finite real number (``inf``, ``nan`` and
+                ``True`` are refused; a numpy integer or float is accepted).
+        """
+        # Any real number counts, numpy's included, as it did before the contract; a bool does not.
+        if isinstance(seconds_per_timestep, bool) or not isinstance(seconds_per_timestep, (int, float, numbers.Real)):
+            raise SimulationWindowError(
+                f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep!r}."
+            )
+        if not (math.isfinite(seconds_per_timestep) and seconds_per_timestep > 0):
+            raise SimulationWindowError(
+                f"seconds_per_timestep must be a positive number of seconds, not {seconds_per_timestep}."
+            )
+        if start_date.time() != datetime.time(0, 0):
+            raise SimulationWindowError(
+                f"The simulation must start at midnight, but start_date is {start_date.isoformat()}."
+            )
+        duration = end_date - start_date
+        one_day = datetime.timedelta(seconds=cls.SECONDS_PER_DAY)
+        if duration < one_day or duration % one_day:
+            raise SimulationWindowError(
+                f"The simulation must cover a whole number of days, at least one, but {start_date.isoformat()} "
+                f"to {end_date.isoformat()} is {duration}."
+            )
+        # timedelta takes no numpy scalar; float() is exact for every step length a run can have.
+        timestep = datetime.timedelta(seconds=float(seconds_per_timestep))
+        if duration % timestep:
+            raise SimulationWindowError(
+                f"The simulated duration of {duration} is not a whole number of {seconds_per_timestep} s "
+                f"timesteps."
+            )
+        last_timestep_start = end_date - timestep
+        if last_timestep_start.year != start_date.year:
+            raise SimulationWindowError(
+                f"The simulation must lie within one calendar year, but it starts in {start_date.year} and "
+                f"its last timestep starts in {last_timestep_start.year} ({last_timestep_start.isoformat()}). "
+                f"The profiles a run reads are one year long; split the run at 1 January."
+            )
+        if not SimulationDay.divides_a_day(seconds_per_timestep):
+            raise SimulationWindowError(
+                f"A step length of {seconds_per_timestep} s does not divide a day of {cls.SECONDS_PER_DAY} s, so "
+                f"the days of the run are not whole numbers of timesteps. Every day must start a timestep: the "
+                f"single-day plot, the carpet and the daily average outside temperature are taken per day. Use a "
+                f"step length that divides {cls.SECONDS_PER_DAY} s, such as 60, 900 or 3600 s."
+            )
+        return duration // timestep
+
+    #: The step length above which devices run part load, s, when the parameters name none. 600 s keeps every 60 s
+    #: run, the reference, on whole steps, and lets a 900 s run, RenoVisor's resolution, run part load.
+    PART_LOAD_ABOVE_SECONDS_DEFAULT: ClassVar[float] = 600.0
+
+    @classmethod
+    def validated_part_load_above_seconds(cls, part_load_above_seconds: Any) -> float:
+        """Returns the part-load threshold in seconds as a float: the value given, or the default for ``None``.
+
+        The default is :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`. Example: ``None`` gives 600.0; ``900`` and ``900.0``
+        both give 900.0, which keeps a 900 s run on whole steps. Returning a float for every number keeps one spelling
+        of one threshold in keys and records.
+
+        Args:
+            part_load_above_seconds: The threshold handed to the constructor, s, or ``None``.
+
+        Returns:
+            The threshold in seconds, as a float.
+
+        Raises:
+            PartLoadThresholdError: If ``part_load_above_seconds`` is a ``bool``, not a number, not finite, or
+                negative.
+        """
+        if part_load_above_seconds is None:
+            return cls.PART_LOAD_ABOVE_SECONDS_DEFAULT
+        if isinstance(part_load_above_seconds, bool) or not isinstance(part_load_above_seconds, (int, float)):
+            raise PartLoadThresholdError(
+                f"part_load_above_seconds must be a number of seconds, not {part_load_above_seconds!r} "
+                f"({type(part_load_above_seconds).__name__})."
+            )
+        if not part_load_above_seconds >= 0 or part_load_above_seconds == float("inf"):
+            raise PartLoadThresholdError(
+                f"part_load_above_seconds must be a finite number >= 0, not {part_load_above_seconds}."
+            )
+        return float(part_load_above_seconds)
+
+    def runs_part_load(self) -> bool:
+        """Whether this run's steps are longer than the part-load threshold, so generators may run part load.
+
+        Example: a 900 s run with the default 600 s threshold runs part load; a 60 s run never does, nor a 600 s
+        run, since the rule applies strictly above the threshold.
+        """
+        return self.seconds_per_timestep > self.part_load_above_seconds
+
+    def part_load_threshold_is_default(self) -> bool:
+        """Whether the part-load threshold is the default, so keys, records and files omit it."""
+        return self.part_load_above_seconds == self.PART_LOAD_ABOVE_SECONDS_DEFAULT
 
     #: The years a ``weather_year`` may name, inclusive.
     WEATHER_YEAR_RANGE: ClassVar[Tuple[int, int]] = (1900, 2100)
@@ -161,6 +382,39 @@ class SimulationParameters:
             raise WeatherYearError(f"weather_year must lie from {first} to {last}, not {weather_year}.")
         return weather_year
 
+    @classmethod
+    def validated_cache_directories(cls, cache_directories: Optional[Sequence[str]]) -> List[str]:
+        """Returns the cache directories as a list, refusing an entry that is not an absolute path.
+
+        Example: ``"/data/cache"`` gives ``["/data/cache"]``, ``["/seed", "/volume"]`` gives the same
+        two entries, ``None`` gives ``[]``. A single string is one directory: ``list()`` on it would
+        split the path into one-letter directories, which is what a scalar in a
+        ``*.simulation.yaml`` file would otherwise produce.
+
+        Args:
+            cache_directories: The value handed to the constructor: ``None``, one path, or a
+                sequence of paths.
+
+        Returns:
+            The directories, in the given order.
+
+        Raises:
+            CacheDirectoriesError: When an entry is not an absolute path, the empty string included.
+        """
+        if cache_directories is None:
+            return []
+        if isinstance(cache_directories, str):
+            directories = [cache_directories]
+        else:
+            directories = list(cache_directories)
+        relative = [entry for entry in directories if not os.path.isabs(entry)]
+        if relative:
+            raise CacheDirectoriesError(
+                f"cache_directories holds relative path(s) {relative!r}; every cache directory has to be "
+                "absolute, so two workers agree on where the cache is whatever their working directory is"
+            )
+        return directories
+
     def require_lifecycle_costs(self) -> None:
         """Makes a failure of the lifecycle cost engine fail the run instead of being logged.
 
@@ -173,7 +427,7 @@ class SimulationParameters:
         self.lifecycle_costs_required = True
 
     def set_economic_parameters(self, economic_parameters: Any) -> None:
-        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).
+        """Attaches EconomicParameters for the lifecycle cost engine (roadmap/cost_spec.md §3.2).
 
         The economy-wide assumptions of a run — country, price basis year, horizon, discount and
         escalation rates, subsidy catalog path — travel with the simulation parameters because
@@ -191,7 +445,7 @@ class SimulationParameters:
         self.economic_parameters = economic_parameters
 
     def set_economic_context(self, economic_context: Any) -> None:
-        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6).
+        """Attaches an EconomicContext for the lifecycle cost engine (roadmap/cost_spec.md §4-§6).
 
         The counterpart to the parameters above: not the economy, but *this* decision situation —
         what already stands in the building, who applies for which subsidy, which non-simulated
@@ -325,28 +579,20 @@ class SimulationParameters:
 
     @classmethod
     def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set whose dates are the first week of July. It does not yet deliver July.
+        """Generates a parameter set for the first week of July, the summer counterpart of ``one_week_only``.
 
-        The intent was a summer counterpart to ``one_week_only``: every week- and day-sized
-        parameter set of this class starts on the first of January, which measures a cooling
-        device, a solar-thermal collector or an air conditioner at its annual minimum, and a
-        component that does nothing for the whole run proves nothing about itself. Shifting the
-        same seven days into July was meant to exercise the cooling side. (The two three-month
-        sets do start mid-year — and are wrong in exactly the way described below.)
+        Every other week- and day-sized parameter set of this class starts on the first of January,
+        which measures a cooling device, a solar-thermal collector or an air conditioner at its annual
+        minimum, and a component that does nothing for the whole run proves nothing about itself. This
+        week exercises the summer side; the golden gate's ``july_week`` pairs and the parity rig's July
+        window run it.
 
-        **It does not do that today, and a caller must not assume it does.** HiSim has never
-        supported a mid-year start date. Every profile-driven component — the weather sources, the
-        PV model, the building, the LoadProfileGenerator occupancy, the cars, the smart devices,
-        the CSV loader, the seasonal gates of the heat pump and the CHP — indexes its year-long
-        profile by the timestep number, so timestep 0 is read as the 1st of January whatever this
-        start date says. A run over these dates therefore reproduces January for every component
-        that reads a profile, and pairs a July sun position with January irradiance in the few
-        that do compute from the date, such as a solar-thermal collector's geometry.
-
-        The set is kept, and only the parity rig used it: the rig has fenced its July window
-        (``scripts/p3_parity_matrix.py``) until the mid-year-start epic makes the profiles follow
-        the start date, at which point this becomes the window it was meant to be. Until then it
-        belongs in nothing that reports physics.
+        Every profile reads July (``roadmap/midyear_start_epic.md``): the weather looks the run's start
+        up in its series (``hisim/window_offset.py``), and with it the PV system, the building's solar
+        gains and the solar-thermal collector read July; the LoadProfileGenerator occupancy and its cars
+        read July from their profiles (``hisim/components/lpg_local_time.py``); the CHP controller's
+        heating season counts the days of the year. The CSV loader reads July from a file with a time
+        column and refuses a July run from a file without one (hisim-midyear-windows-9g2.14).
 
         Args:
             year: Calendar year the week is taken from.
@@ -401,7 +647,13 @@ class SimulationParameters:
         return simulation_parameters
 
     def get_unique_key(self) -> str:
-        """Gets a unique key from a simulation parameter class."""
+        """Gets a unique key from a simulation parameter class.
+
+        A part-load threshold other than the default is part of the key, spelled with ``:g`` (``900`` for 900 and
+        900.0 alike). ``utils.get_cache_file`` appends this key to the key material of an entry; the occupancy's
+        cache of the LoadProfileGenerator's minute profile does not, because its entries serve every window,
+        timestep and threshold of a year.
+        """
         return "###".join(
             str(value) for value in (
                 self.start_date,
@@ -411,7 +663,9 @@ class SimulationParameters:
                 self.timesteps,
                 self.country,
             )
-        ) + ("" if self.weather_year is None else f"###weather={self.weather_year}")
+        ) + ("" if self.weather_year is None else f"###weather={self.weather_year}") + (
+            "" if self.part_load_threshold_is_default() else f"###part_load_above={self.part_load_above_seconds:g}"
+        )
 
     def get_unique_key_as_list(self) -> List[str]:
         """Gets unique key from a simulation parameter class as list."""
@@ -422,13 +676,17 @@ class SimulationParameters:
             f"Seconds per timestep: {self.seconds_per_timestep}",
             f"Total number of timesteps: {self.timesteps}",
             f"Country: {self.country}",
-        ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"])
+        ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"]) + (
+            []
+            if self.part_load_threshold_is_default()
+            else [f"Part load above: {self.part_load_above_seconds:g} s per timestep"]
+        )
 
     def cache_locations(self) -> "CacheLocations":
         """The ordered cache directories this calculation reads, and the first writable one it writes.
 
         Every cache reader and writer of a run goes through this, so a container that maps a
-        read-only seed directory and a writable one in (hisim-epc.22) redirects the whole cache
+        read-only seed directory and a writable one in (hisim-renovisor-translator-epc.22) redirects the whole cache
         at once. Empty ``cache_directories`` means the single ``cache_dir_path``, exactly the
         behaviour every caller had before the list existed.
         """

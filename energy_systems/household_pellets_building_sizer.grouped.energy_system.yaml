@@ -41,9 +41,16 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
+      - HeatDistributionSystem
+      - HeatingCurveController
+      - Building
+      - SimpleHotWaterStorage
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
       - L2EMSElectricityController
       - Weather
-      - Building
   ConventionalPelletBoiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: pellets
@@ -55,13 +62,12 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: on_off
     config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
       minimum_runtime_in_seconds: 1800.0
       minimum_resting_time_in_seconds: 900.0
       with_domestic_hot_water_preparation: true
     inputs:
-      - Weather
-      - HeatDistributionController
+      - ConventionalPelletBoiler
+      - HeatingCurveController
       - DHWStorage
       - SimpleHotWaterStorage
   DHWStorage:
@@ -82,8 +88,8 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
-      - Building
       - HeatDistributionController
+      - Building
       - SimpleHotWaterStorage
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter
@@ -107,9 +113,22 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
-              - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
+              - from: Battery.ChargingPower
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: Battery.DischargingPower
                 tags:
                   - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: PVSystem.ElectricityOutput
+                component_type: PV
+                tags:
+                  - ELECTRICITY_PRODUCTION
+                weight: 999
+              - from: UTSPConnector.ElectricalPowerConsumption
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
           Battery:
             class: hisim.components.advanced_battery_bslib.Battery

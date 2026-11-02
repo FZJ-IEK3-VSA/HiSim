@@ -49,6 +49,7 @@ interface:
   needs:
     tank_temperature: {into: [Controller], partner: MockTank, required_when: {with_thermostat: [true]}}
     ems_modifier: {into: [Controller], partner: MockEms, optional: true, active_when: {with_thermostat: [true]}}
+    grid: {carrier: electricity, outputs: [Heater.ElectricityInput], optional: true}   # its electricity, metered
   provides:
     heat: {output: Heater.ThermalPower}
     electricity: {output: Heater.ElectricityInput}

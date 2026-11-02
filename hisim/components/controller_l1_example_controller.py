@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import L1ControllerComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
@@ -53,7 +53,7 @@ class SimpleControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SimpleController(Component):
+class SimpleController(L1ControllerComponent):
     """Example L1 controller that toggles a gas heater via storage fill-level hysteresis.
 
     Reads a storage fill-level percentage input and sets a gas-heater power

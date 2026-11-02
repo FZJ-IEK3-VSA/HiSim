@@ -1,7 +1,7 @@
-"""Annuity loan model, optionally subsidized (cost_spec.md §4.4).
+"""Annuity loan model, optionally subsidized.
 
 A loan barely changes the net present cost but changes the liquidity profile completely, replacing one year-0 outflow
-with years of payments (§4.3); that monthly figure is what the `owner_monthly` perspective shows. This module holds the
+with years of payments; that monthly figure is what the `owner_monthly` perspective shows. This module holds the
 plan description and the pure schedule mathematics. The principal basis, repayment grants and timeline entries are
 decided in `calculators/financing_application.py`; soft-loan overrides come from the subsidy package.
 """
@@ -33,14 +33,14 @@ class FinancingPlan:
 
     It is a plan, not a schedule: how much is borrowed, at what rate, over how long and in what shape; `loan_flows`
     turns it into cash flows. Only the year-0 investment is financed; replacements inside the horizon are paid in cash
-    or from the §4.2 reserve.
+    or from the reserve.
 
     Attributes:
         financed_share: Share of the year-0 investment net of upfront grants that is borrowed, in [0, 1].
         nominal_interest_rate: Annual loan rate as a fraction; zero is allowed.
         term_in_years: Loan term in years, at least 1.
         type: The repayment shape.
-        subsidized_by_scheme_id: A SOFT_LOAN subsidy scheme (§5.3) that may override rate and term, or None.
+        subsidized_by_scheme_id: A SOFT_LOAN subsidy scheme that may override rate and term, or None.
         repayment_grant_share: Repayment grant (Tilgungszuschuss) as a share of the principal, set by a SOFT_LOAN
             scheme.
     """

@@ -52,7 +52,9 @@ class EnergySystemErrorId(enum.Enum):
     a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
     tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
     ``EF-4H`` wrap the eight failure modes of the sizing
-    kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them. The
+    kernel one-to-one, ``EF-4J`` its refusal of a group of fields its class sizes together stated
+    only in part (a battery's capacity without its inverter power), with ``EF-4X`` for a kernel
+    failure that matches none of them. The
     ``EF-6x`` band closes the list with the two ways writing a run record can fail, neither
     of which an author can cause: a record that is not fully concrete, and a re-execution
     that did not reproduce the record it was handed.
@@ -68,10 +70,10 @@ class EnergySystemErrorId(enum.Enum):
     whose components do not stand in the sequence its import record states. Those are raised by the
     expansion of imports, from the files alone. The wiring raises the rest, on the constructed
     components: ``EF-7M`` for a consuming output whose energy port carries another carrier, ``EF-7N``
-    for a consuming output named that its meter's class declares no feed for (D30), ``EF-7S`` for an observer's
-    selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an actuation and ``EF-7V`` for a
-    derived weight that reaches another kind's base weight. The letters ``I``
-    and ``O`` are skipped, as they read like a one and a zero.
+    for a consuming output named that its meter's class declares no feed or more than one feed for
+    (D30), ``EF-7S`` for an observer's selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an
+    actuation and ``EF-7V`` for a derived weight that reaches another kind's base weight. The letters
+    ``I`` and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -136,6 +138,7 @@ class EnergySystemErrorId(enum.Enum):
     SIZING_FIELD_CYCLE = "EF-4F"
     SIZING_MANY_READ = "EF-4G"
     SIZING_DUPLICATE_NAME = "EF-4H"
+    SIZING_STATED_IN_PART = "EF-4J"
     SIZING_FAILED = "EF-4X"
     NESTED_GROUP = "EF-50"
     COMPONENT_IN_TWO_GROUPS = "EF-51"

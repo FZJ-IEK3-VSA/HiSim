@@ -14,6 +14,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —
   proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
 
+- **Documents go where `system_docs/documentation_map.md` says**: the root's only documents are README, AGENTS,
+  CLAUDE, CONTRIBUTING and HISTORY, beside what packaging, licensing and the tools need; binding guidelines are in
+  `system_docs/`, specs and plans in `roadmap/`.
+
 ## Project Overview
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems. It models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, and more. Each simulation consists of components wired together, iterated over all time steps until convergence per step.
@@ -34,7 +38,10 @@ pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
 Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `assemblies` (every test under
-`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job)
+`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job), `nightly` (the assembly
+Latin hypercube tier; run daily at 02:00 UTC by `.github/workflows/assemblies-nightly.yml`, not per PR), `renovisor_probes` (the
+tests that read RenoVisor's capability document or translation map; its own CI job, one process, so the
+document is built once)
 
 ### Run an energy system (declarative YAML — the declarative input)
 ```bash
@@ -78,7 +85,7 @@ UTSP_API_KEY
 ## Architecture
 
 ### Core simulation loop (`hisim/simulator.py`)
-`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked.
+`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked. A pass evaluates the components kind by kind (`Simulator.EVALUATION_ORDER_OF_KINDS`: data sources, L2 controllers, L1 controllers, physics, meters), in the order added within a kind, except that an L2 controller goes after the L2 controllers it reads and every device an L1 controller commands goes before the other physics that controller reads (`hisim/evaluation_order.py`); outputs and result columns keep the order added.
 
 ### Config layer (`hisim/config/`)
 The bottom layer, imported by everything else and importing nothing from the rest of HiSim.
@@ -91,9 +98,11 @@ them, so the layering is visible at every call site.
 ### Component model (`hisim/component.py`)
 The rules every component follows -- the component kinds (data source, physics, L1 and L2 controller, meter),
 black boxes that talk only through port quantities, who decides what -- are in
-`system_docs/component_design_principles.md`.
+`system_docs/component_design_principles.md`. How a component models physics -- the same energy at both ends of
+a port, stated signs, 60 s as the reference, clamp or fail at a limit, a source for every parameter -- is
+`system_docs/modelling_guide.md`.
 
-Every device is a `Component` subclass. Each component:
+Every device is a `Component` subclass, through the one kind base class it inherits (`PhysicsComponent`, `L1ControllerComponent`, ...; see "Adding a new component"). Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`
 - Implements four lifecycle methods:
   - `i_prepare_simulation()` — called once before the loop
@@ -140,7 +149,11 @@ deleted whole. Never write to the repository, `hisim/inputs`, the CWD, `~` or `/
 route caches through `hisim.caching`. The one exception under `hisim/inputs` is the default cache
 `hisim/inputs/cache`, used when no cache directory is configured (containers set
 `HISIM_CACHE_DIRECTORIES`); a result directory under `hisim/inputs` is refused. `HISIM_WRITE_GUARD=collect`
-lists all stray writes at the end instead of raising at the first. The static half:
+lists all stray writes at the end instead of raising at the first. The LoadProfileGenerator binaries are
+installed into the cache directory (`<cache>/pylpg/<release>`), unless `HISIM_LPG_BINARY_ROOT` names a
+preinstalled `<root>/<release>/LPG_linux` of the release pylpg downloads (the CI test image sets it to
+`/opt/hisim/pylpg`, built by `Dockerfile.test`); that installation is only read, never written, so it needs
+no entry in the registry. The static half:
 `semgrep --config .semgrep/ --error hisim/` (CI job `semgrep` in `quality.yml`) flags direct file writes
 outside the sanctioned writer modules listed in `.semgrep/file_writes.yml`.
 
@@ -201,7 +214,11 @@ has not implemented is a note in the mapping report and the calculation runs, bu
 `not_implemented_yet.yaml` says so; anything else that cannot be mapped fails the translator's own build.
 `tests/renovisor/test_capabilities.py` keeps that list honest in both directions.
 
-Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_setups`).
+Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_setups`) and the tests that read
+the session fixtures `capability_document`, `independent_capability_document` or `translation_map_page` of
+`tests/renovisor/conftest.py` (`renovisor_probes`: each build runs the whole probe set, about 100 s, so they
+run in one process in their own CI job). The conftest refuses such a test marked `base` or unmarked, and the
+marker on a test that reads none of them.
 
 ## Adding a new component
 
@@ -214,8 +231,12 @@ Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_set
    else. A field the surrounding system decides — a power from the building's heating load, a carrier
    from the generator beside it — is a `sized_field(rule=...)`, left `AUTO` by the preset; a class that
    computes such a value for others declares it in `SIZING_CONTRIBUTIONS`.
-3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods. Decide
-   first which kind it is (`system_docs/component_design_principles.md`) and keep to that kind's role.
+3. Decide first which kind it is (`system_docs/component_design_principles.md`) and subclass that kind's base
+   class from `hisim/component.py`, not `Component`: `DataSourceComponent`, `L2ControllerComponent`,
+   `L1ControllerComponent`, `PhysicsComponent` or `MeterComponent` (with `DynamicComponent` or
+   `StatelessComponent`, list both: `class MyMeter(DynamicComponent, MeterComponent)`). The simulator refuses a
+   class without exactly one kind base. Keep to that kind's role, declare inputs/outputs in `__init__`, implement
+   the four lifecycle methods.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
 5. `hisim energy-system describe hisim.components.my_component.MyComponent` prints what the class now
    offers — its presets, what each sets, and the law behind every sizable field.

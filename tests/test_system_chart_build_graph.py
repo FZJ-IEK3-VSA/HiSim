@@ -24,11 +24,12 @@ import pytest
 from hisim.calculation_scope import CalculationScope
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.config import ComponentID
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import LoadTypes, OutputAggregation, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing import system_chart
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.result_path_provider import ResultPathProviderSingleton
+from hisim.simulationparameters import FigureFormat
 from hisim.write_guard import GuardMode
 
 
@@ -496,6 +497,45 @@ def test_compute_result_annotation_celsius_keeps_literal_degree_sign() -> None:
 
 
 @pytest.mark.base
+def test_compute_result_annotation_of_a_running_total_keeps_its_unit() -> None:
+    """A running total in Wh declared LAST shows its final value in Wh, tagged ``(last)``, not a sum."""
+    output = ComponentOutput(
+        "Source",
+        "Out",
+        LoadTypes.ANY,
+        Units.WATT_HOUR,
+        component_id=ComponentID("Source"),
+        aggregation=OutputAggregation.LAST,
+    )
+    chart = _chart_with_results(output, 9876.5)
+    assert chart._compute_result_annotation(output) == ": 9876.5 Wh (last)"
+
+
+@pytest.mark.base
+def test_an_output_without_aggregate_gets_no_run_value_on_its_connection() -> None:
+    """An output declared NONE (a controller mode) has no run value, so its edge label carries none."""
+    output = ComponentOutput(
+        "Source",
+        "Out",
+        LoadTypes.ANY,
+        Units.ANY,
+        component_id=ComponentID("Source"),
+        aggregation=OutputAggregation.NONE,
+    )
+    chart = _chart_with_results(output, float("nan"))
+    cinput = _make_input(
+        target_name="Target",
+        field_name="In",
+        unit=Units.ANY,
+        src_object_name="Source",
+        src_field_name="Out",
+        source_output=output,
+    )
+    assert chart._compute_result_annotation(output) is None
+    assert chart._format_edge_label(cinput, with_results=True) == "Out -> In in -"
+
+
+@pytest.mark.base
 def test_compute_result_annotation_none_source_output_returns_none() -> None:
     """A ``None`` source output yields no annotation (``None``)."""
     chart = SystemChart(_make_ppdt(wrapped_components=[], results_cumulative=pd.DataFrame()))
@@ -536,9 +576,100 @@ def test_the_chart_is_rendered_into_the_result_directory_without_a_stray_write(t
 @pytest.mark.base
 def test_a_missing_graphviz_leaves_the_chart_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Without ``dot`` on ``PATH`` the chart is logged as failed and left out, as it always was."""
+    errors: list[str] = []
     monkeypatch.setattr(system_chart.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
     entry = _chart_writing_into(tmp_path).make_graphviz_chart(
         with_labels=False, with_class_names=False, filename="chart.png", caption="chart"
     )
     assert entry is None
     assert not (tmp_path / "chart.png").exists()
+    assert len(errors) == 1
+    assert "chart.png" in errors[0] and "Graphviz is not installed" in errors[0]
+
+
+@pytest.mark.base
+def test_a_failing_dot_leaves_the_chart_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When ``dot`` exits with an error, the chart is logged with what ``dot`` printed and left out."""
+    errors: list[str] = []
+    monkeypatch.setattr(system_chart.shutil, "which", lambda _name: "/usr/bin/dot")
+    monkeypatch.setattr(
+        system_chart.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stderr=b"syntax error in line 3"),
+    )
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
+    entry = _chart_writing_into(tmp_path).make_graphviz_chart(
+        with_labels=False, with_class_names=False, filename="chart.png", caption="chart"
+    )
+    assert entry is None
+    assert len(errors) == 1
+    assert "chart.png" in errors[0] and "syntax error in line 3" in errors[0]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("failing_method", ["_build_graph", "render_png"])
+def test_an_error_in_the_chart_code_reaches_the_caller(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing_method: str
+) -> None:
+    """A bug in the chart code fails the run instead of being logged as a missing Graphviz.
+
+    ``make_graphviz_chart`` caught every exception and logged it as "Probably Graphviz is missing";
+    it now catches only a missing ``dot`` and a failing one.
+    """
+
+    def raise_type_error(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("a bug in the chart code")
+
+    errors: list[str] = []
+    monkeypatch.setattr(system_chart.log, "error", errors.append)
+    chart = _chart_writing_into(tmp_path)
+    monkeypatch.setattr(chart, failing_method, raise_type_error)
+    with pytest.raises(TypeError, match="a bug in the chart code"):
+        chart.make_graphviz_chart(with_labels=False, with_class_names=False, filename="chart.png", caption="chart")
+    assert not errors
+
+
+@pytest.mark.base
+def test_every_chart_variant_is_named_with_the_figure_format_extension(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The four chart files end in the format's extension, ``.png``, not in the enum member's name.
+
+    The names were built with ``f"...{figure_format}"``, which formats a ``str``-mixin enum as
+    ``FigureFormat.PNG``: the files were called ``System_no_Edge_labelsFigureFormat.PNG``.
+    """
+    requested: list = []
+
+    def record(**spec):
+        requested.append(spec["filename"])
+
+    chart = _chart_writing_into(Path("unused"))
+    chart.ppdt.simulation_parameters = SimpleNamespace(figure_format=FigureFormat.PNG)  # type: ignore[assignment]
+    chart.ppdt.results_cumulative = pd.DataFrame()
+    monkeypatch.setattr(chart, "make_graphviz_chart", record)
+    chart.make_chart()
+    assert requested == [
+        "System_no_Edge_with_class_labels.png",
+        "System_no_Edge_labels.png",
+        "System_with_Edge_labels.png",
+        "System_with_Edge_labels_and_results.png",
+    ]
+
+
+@pytest.mark.base
+def test_the_charts_refuse_a_run_without_cumulative_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the sums and means over the run no chart is attempted, and the error names the option.
+
+    The simulator computes them whenever ``MAKE_NETWORK_CHARTS`` is set, so their absence is a caller's
+    bug. The result variant used to fail inside the guarded Graphviz call and was logged as "Graphviz is
+    missing"; later it was left out quietly.
+    """
+    requested: list = []
+    chart = _chart_writing_into(Path("unused"))
+    chart.ppdt.simulation_parameters = SimpleNamespace(figure_format=FigureFormat.PNG)  # type: ignore[assignment]
+    chart.ppdt.results_cumulative = None
+    monkeypatch.setattr(chart, "make_graphviz_chart", lambda **spec: requested.append(spec["filename"]))
+    with pytest.raises(ValueError, match="MAKE_NETWORK_CHARTS"):
+        chart.make_chart()
+    assert not requested

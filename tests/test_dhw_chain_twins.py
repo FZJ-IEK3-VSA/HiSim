@@ -14,13 +14,17 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
   times that), and every circuit charges on some step;
 * the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps reach
-  the simulator's ``force_convergence``. These are boiler charges that start kilowatts away from their final value
-  and need a pass or two more than the simulator allows to reach its absolute tolerance; they are forced within
-  about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). The heat-pump files are recorded, not
-  asserted: their forced steps come from the energy manager, which switches its set-temperature raise on the sign of
-  a surplus that includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from
-  controllers that decide once for a whole step, which a converged iteration cannot always reconcile with the
-  plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
+  the simulator's ``force_convergence`` (more than eleven passes). These are boiler charges that start kilowatts away
+  from their final value and need a pass or two more than the simulator allows to reach its absolute tolerance; they
+  are forced within about 1e-3 W of their fixed point (hisim-component-physics-4g9.50, accepted by the owner). Every partial step of
+  the part-load rule converges, so a forced step with a part-load ratio strictly between 0 and 1 counts against the
+  bound like any other, and a file over the bound fails with those steps named: they point at a regression of the
+  rule rather than of the boiler's own iteration. The simulator's
+  kind order already evaluates every controller before its device and the device before the tank. The heat-pump
+  files are recorded, not asserted: their forced steps come from the energy manager's set-temperature raise, which
+  cycles within a step where the heat pump's extra draw under the raise removes the surplus that raised it
+  (hisim-component-physics-4g9.53), and from controllers that decide once for a whole step, which a converged iteration cannot always
+  reconcile with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is
@@ -78,6 +82,10 @@ class DhwTwins:
     #: The kinds of derived file run beside the recorded twins: the grouped twins and the composed files.
     DERIVED_KINDS: Tuple[str, ...] = ("grouped", "composed")
 
+    #: The prefix of every controller's requested part-load ratio output. The actual ratios its devices report start
+    #: with ``ActualPartLoadRatio`` and so do not match it.
+    REQUESTED_PART_LOAD_RATIO_PREFIX: str = "RequestedPartLoadRatio"
+
     #: The car twin reads the generator's driving profile, which a predefined profile does not carry.
     NEEDS_THE_LOAD_PROFILE_GENERATOR: Tuple[str, ...] = ("household_heatpump_car_building_sizer",)
 
@@ -114,7 +122,7 @@ class DhwTwins:
 
     #: The largest share of a file's steps, dimensionless, that may reach ``force_convergence`` in a file without a
     #: heat pump. The gas twins force about 0.15 % of their steps over a year at 900 s and 2 of 1,920 steps (0.1 %)
-    #: in the solar window (hisim-4g9.50); a loop that stops converging forces far more.
+    #: in the solar window (hisim-component-physics-4g9.50); a loop that stops converging forces far more.
     MAXIMAL_FORCED_STEP_SHARE: float = 0.005
 
     @classmethod
@@ -322,6 +330,26 @@ def record_histogram(name: str, passes: Tuple[int, ...], forced: Tuple[bool, ...
     return summary
 
 
+def partial_part_load_steps(results: pd.DataFrame) -> np.ndarray:
+    """Return, per step, whether some controller ran its device at a part-load ratio strictly between 0 and 1 on it.
+
+    Every controller that sets a part-load ratio publishes its requested ratio under a field name starting with
+    ``RequestedPartLoadRatio``; the devices' reports of the actual ratio they ran start with ``ActualPartLoadRatio``
+    and are left out. A ratio of 1 is a whole-step charge, which the part-load rule does not iterate, so it does not
+    count.
+    """
+    columns = [
+        column
+        for column in results.columns
+        if column.split(" - ", 1)[-1].startswith(DhwTwins.REQUESTED_PART_LOAD_RATIO_PREFIX)
+    ]
+    running: np.ndarray = np.zeros(len(results), dtype=bool)
+    for column in columns:
+        ratios = results[column].to_numpy(dtype=float)
+        running |= (ratios > 0.0) & (ratios < 1.0)
+    return running
+
+
 def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Run one file and apply the three checks."""
     results, passes, forced, circuits = DhwTwins.run(name, str(tmp_path_factory.mktemp(name.replace(".", "_"))))
@@ -330,7 +358,13 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     classnames = {owner.split("|")[1] for owner in circuits.values()}
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
-        assert sum(forced) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
+        forced_steps = np.array(forced, dtype=bool)
+        forced_part_load_steps = np.flatnonzero(forced_steps & partial_part_load_steps(results)).tolist()
+        assert int(forced_steps.sum()) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), (
+            f"{int(forced_steps.sum())} forced steps, more than the bound allows; the forced steps with a part-load "
+            f"ratio strictly between 0 and 1 are {forced_part_load_steps}, which the part-load rule should settle.",
+            summary,
+        )
 
 
 @pytest.mark.extendedbase2

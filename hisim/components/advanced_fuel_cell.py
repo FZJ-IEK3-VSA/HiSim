@@ -11,7 +11,7 @@ import pandas as pd
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
     CapexCostDataClass,
-    Component,
+    PhysicsComponent,
     ComponentInput,
     ComponentOutput,
     OpexCostDataClass,
@@ -135,7 +135,7 @@ class CHPState:
             raise ValueError(f"Impossible CHPState: electricity_output={self.electricity_output}")
 
 
-class CHP(Component):
+class CHP(PhysicsComponent):
     """CHP class.
 
     Simulate chp efficiency (cop) as well as electrical (p_el) &
@@ -300,6 +300,7 @@ class CHP(Component):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for CHP {self.NumberofCycles} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
         self.th_power_channel: ComponentOutput = self.add_output(
             self.component_name,

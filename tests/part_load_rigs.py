@@ -1,0 +1,469 @@
+"""Rigs for the part-load tests: simulation parameters, components on fake inputs, and a tank iterated with the rule.
+
+A rig points every input a test drives at a fake output and steps the component on its own, the way
+``tests/test_dhw_storage_node.py`` steps the hot-water tank, so a test sets exactly the values the component reads.
+:class:`AllInputsRig` also serves other component tests that step a component once on fake inputs, such as the
+district-heating and electric-heating tests.
+"""
+
+from typing import Any, Dict, List, Optional, Tuple
+
+
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim.components import generic_boiler, simple_water_storage, solar_thermal_system
+from hisim.components.dual_circuit_system import HeatingMode
+from hisim.config import ComponentID, SizingContext
+from hisim.part_load import PartLoadRule
+from hisim.simulationparameters import SimulationParameters
+from tests import functions_for_testing
+
+
+class Parameters:
+    """Simulation parameters for the threshold tests."""
+
+    @staticmethod
+    def one_day(seconds_per_timestep: int = 3600, **extra: Any) -> SimulationParameters:
+        """Return one day of 2021 at a resolution, with the given extra constructor arguments.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further arguments of :class:`SimulationParameters`, such as ``part_load_above_seconds``.
+
+        Returns:
+            The simulation parameters.
+        """
+        day = SimulationParameters.one_day_only(2021, seconds_per_timestep)
+        return SimulationParameters(
+            start_date=day.start_date,
+            end_date=day.end_date,
+            seconds_per_timestep=seconds_per_timestep,
+            **extra,
+        )
+
+
+class Rig:
+    """A component whose inputs read fake outputs, and the step values they all write into."""
+
+    @staticmethod
+    def wire(component: Any, channels: List[Tuple[Any, Any, Any]]) -> Tuple[Any, List[Any]]:
+        """Point every listed input of ``component`` at a fake output; return the step values and the fakes.
+
+        The fakes take the first indices of the step values and the component's outputs the following ones, in the
+        order the component declared them, as the simulator registers them
+        (:func:`tests.functions_for_testing.add_global_index_of_components`).
+
+        Args:
+            component: The component under test.
+            channels: Its inputs, each with the load type and unit of the fake output that feeds it.
+
+        Returns:
+            The step values sized for the fakes and the component, and the fakes in the order of ``channels``.
+        """
+        fakes: List[Any] = []
+        for number, (channel, load_type, unit) in enumerate(channels):
+            fake = cp.ComponentOutput(
+                f"Fake{number}", f"Fake{number}", load_type, unit, component_id=ComponentID(f"Fake{number}")
+            )
+            channel.source_output = fake
+            fakes.append(fake)
+        functions_for_testing.add_global_index_of_components([*fakes, component])
+        stsv = cp.SingleTimeStepValues(len(fakes) + len(component.outputs))
+        return stsv, fakes
+
+    @staticmethod
+    def output(stsv: Any, channel: Any) -> float:
+        """Return the value a component set on one of its output channels in ``stsv``."""
+        return float(stsv.values[channel.global_index])
+
+
+class TankRig:
+    """A 250 l hot-water tank on fake inputs: the draw and one charging circuit's supply and flow."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, start_temperature_in_celsius: float) -> Tuple[Any, Any, List[Any]]:
+        """Return the tank, its step values and its fakes: consumption (l per step), supply (°C), flow (kg/s).
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            start_temperature_in_celsius: The tank's temperature at the start of the first step, °C.
+
+        Returns:
+            The tank, the step values and the three fakes.
+        """
+        parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
+        config = simple_water_storage.SimpleDHWStorageConfig(
+            component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0
+        )
+        tank = simple_water_storage.SimpleDHWStorage(my_simulation_parameters=parameters, config=config)
+        stsv, fakes = Rig.wire(
+            tank,
+            [
+                (tank.water_consumption_channel, lt.LoadTypes.WARM_WATER, lt.Units.LITER),
+                (tank.water_temperature_heat_generator_input_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+                (tank.water_mass_flow_rate_heat_generator_input_channel, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
+            ],
+        )
+        tank.state = simple_water_storage.DhwTankState(temperature_at_start_of_step_in_celsius=start_temperature_in_celsius)
+        return tank, stsv, fakes
+
+    @classmethod
+    def ruled_step(
+        cls,
+        *,
+        seconds_per_timestep: int,
+        start_temperature_in_celsius: float,
+        target_temperature_in_celsius: float,
+        draw_in_liter_per_step: float,
+        full_load_mass_flow_in_kg_per_second: float,
+        supply_temperature_in_celsius: float,
+        passes: int,
+    ) -> Tuple[List[float], float]:
+        """Iterate one tank step with :class:`PartLoadRule` commanding a heater's fraction, as the simulator would.
+
+        Each pass restores the tank to the step start, applies the rule to the ratio the heater ran in the previous
+        pass and the tank's end temperature for it, and steps the tank with the averaged flow at the new ratio:
+        controller, device and tank in that order. The first pass starts from the whole step, as a heater that ran
+        nothing before does under the rule. Nothing but the actual ratio and the end temperature carries from one pass to
+        the next, as in the simulator.
+
+        Args:
+            seconds_per_timestep: The step length, in s.
+            start_temperature_in_celsius: The tank's start temperature, in °C.
+            target_temperature_in_celsius: The controller's target, in °C.
+            draw_in_liter_per_step: The household's warm-water demand over the step, in l.
+            full_load_mass_flow_in_kg_per_second: The heater's flow at full load, in kg/s.
+            supply_temperature_in_celsius: The heater's supply temperature, in °C.
+            passes: How many passes to iterate.
+
+        Returns:
+            The ratio of every pass and the tank's end temperature for the last one, in °C.
+        """
+        tank, stsv, fakes = cls.build(seconds_per_timestep, start_temperature_in_celsius)
+        tank.i_save_state()
+        stsv.set_output_value(fakes[0], draw_in_liter_per_step)
+        stsv.set_output_value(fakes[1], supply_temperature_in_celsius)
+        end_temperature_in_celsius = start_temperature_in_celsius
+        actual_ratio = 0.0
+        ratios: List[float] = []
+        for _ in range(passes):
+            tank.i_restore_state()
+            actual_ratio = PartLoadRule.next_part_load_ratio(
+                actual_ratio=actual_ratio,
+                start_temperature_in_celsius=start_temperature_in_celsius,
+                end_temperature_in_celsius=end_temperature_in_celsius,
+                target_temperature_in_celsius=target_temperature_in_celsius,
+            )
+            ratios.append(actual_ratio)
+            stsv.set_output_value(fakes[2], actual_ratio * full_load_mass_flow_in_kg_per_second)
+            tank.i_simulate(0, stsv, False)
+            end_temperature_in_celsius = Rig.output(stsv, tank.water_temperature_at_end_of_step_in_celsius_channel)
+        return ratios, end_temperature_in_celsius
+
+
+class BoilerRig:
+    """A condensing gas boiler on fake inputs, charging the hot-water tank at the ratio its controller commands."""
+
+    #: The boiler's thermal power band, W.
+    MAXIMAL_POWER_W: float = 20000.0
+
+    @classmethod
+    def build(cls, seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the boiler, its step values and its fakes by input name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The boiler, the step values and the fakes keyed by a short name.
+        """
+        config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler").resolve(
+            SizingContext(heating_load_in_watt=cls.MAXIMAL_POWER_W / 1.1, number_of_apartments=1)
+        )
+        parameters = Parameters.one_day(seconds_per_timestep, **extra)
+        boiler = generic_boiler.GenericBoiler(my_simulation_parameters=parameters, config=config)
+        names = {
+            "signal": (boiler.control_signal_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
+            "mode": (boiler.operating_mode_channel, lt.LoadTypes.ANY, lt.Units.ANY),
+            "lift_k": (boiler.temperature_delta_channel, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
+            "set_c": (
+                boiler.supply_temperature_set_for_dhw_in_celsius_channel,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+            ),
+            "requested_ratio": (boiler.dhw_part_load_command.requested_ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            "return_sh_c": (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            "return_dhw_c": (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        }
+        stsv, fakes = Rig.wire(boiler, list(names.values()))
+        return boiler, stsv, dict(zip(names, fakes))
+
+    @classmethod
+    def charge(
+        cls, seconds_per_timestep: int, requested_ratio: float, mode: HeatingMode = HeatingMode.DOMESTIC_HOT_WATER
+    ) -> Dict[str, float]:
+        """Return the booked outputs of one step at full signal from a 55 °C tank mean, 15 K lift and 70 °C cap.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            requested_ratio: The requested part-load ratio the controller commands.
+            mode: The operating mode the controller commands.
+
+        Returns:
+            The flow (kg/s), supply (°C), heat (W), fuel (W) and fuel energy (Wh) of the hot-water circuit, the
+            ratio the boiler reports it ran with, and the space-heating heat (W).
+        """
+        boiler, stsv, fakes = cls.build(seconds_per_timestep)
+        for name, value in (
+            ("signal", 1.0),
+            ("mode", mode.value),
+            ("lift_k", 15.0),
+            ("set_c", 70.0),
+            ("requested_ratio", requested_ratio),
+            ("return_sh_c", 40.0),
+            ("return_dhw_c", 55.0),
+        ):
+            stsv.set_output_value(fakes[name], value)
+        boiler.i_simulate(0, stsv, False)
+        return {
+            "flow_kg_per_s": Rig.output(stsv, boiler.water_output_mass_flow_dhw_channel),
+            "supply_c": Rig.output(stsv, boiler.water_output_temperature_dhw_channel),
+            "heat_w": Rig.output(stsv, boiler.thermal_output_power_dhw_channel),
+            "fuel_w": Rig.output(stsv, boiler.total_fuel_input_power_channel),
+            "fuel_wh": Rig.output(stsv, boiler.energy_demand_dhw_channel),
+            "actual_ratio": Rig.output(stsv, boiler.dhw_part_load_command.actual_ratio_channel),
+            "space_heating_heat_w": Rig.output(stsv, boiler.thermal_output_power_sh_channel),
+        }
+
+
+class BoilerControllerRig:
+    """A modulating boiler controller with hot water on fake inputs."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the controller, its step values and its fakes by input name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The controller, the step values and the fakes keyed by a short name.
+        """
+        config = generic_boiler.GenericBoilerControllerConfig.preset_modulating("BoilerController").resolve(
+            SizingContext(maximal_thermal_power_in_watt=20000, minimal_thermal_power_in_watt=2000)
+        )
+        config.with_domestic_hot_water_preparation = True
+        controller = generic_boiler.GenericBoilerController(
+            my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra), config=config
+        )
+        names = {
+            "buffer_c": (
+                controller.water_temperature_space_heating_input_channel,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+            ),
+            "tank_start_c": (controller.water_temperature_dhw_input_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            "tank_end_c": (
+                controller.dhw_part_load.end_temperature_channel,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+            ),
+            "actual_ratio": (controller.dhw_part_load.actual_ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
+            "flow_set_c": (controller.supply_temperature_set_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            "heating_season": (controller.heating_season_channel, lt.LoadTypes.ANY, lt.Units.ANY),
+        }
+        stsv, fakes = Rig.wire(controller, list(names.values()))
+        return controller, stsv, dict(zip(names, fakes))
+
+    @staticmethod
+    def set_inputs(
+        stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float, actual_ratio: float = 1.0
+    ) -> None:
+        """Write a heating-season step with a warm buffer, the given tank temperatures and the boiler's actual ratio.
+
+        Args:
+            stsv: The controller's step values.
+            fakes: The fakes by name.
+            tank_start_c: The tank's start-of-step temperature, °C.
+            tank_end_c: The tank's end-of-step temperature, °C.
+            actual_ratio: The part-load ratio the boiler reports it ran with, from 0 to 1.
+        """
+        for name, value in (
+            ("buffer_c", 60.0),
+            ("tank_start_c", tank_start_c),
+            ("tank_end_c", tank_end_c),
+            ("actual_ratio", actual_ratio),
+            ("flow_set_c", 40.0),
+            ("heating_season", 1.0),
+        ):
+            stsv.set_output_value(fakes[name], value)
+
+
+class AllInputsRig:
+    """A component whose every input reads a fake output of its own, set and read by field name."""
+
+    @staticmethod
+    def build(component: Any) -> Tuple[Any, Dict[str, Any]]:
+        """Point every input of ``component`` at its own fake output; return the step values and the fakes by name.
+
+        Args:
+            component: The component under test.
+
+        Returns:
+            The step values and the fakes keyed by the field name of the input each one feeds.
+        """
+        channels = [(component_input, lt.LoadTypes.ANY, lt.Units.ANY) for component_input in component.inputs]
+        stsv, fakes = Rig.wire(component, channels)
+        return stsv, {component_input.field_name: fake for component_input, fake in zip(component.inputs, fakes)}
+
+    @staticmethod
+    def step(
+        component: Any,
+        stsv: Any,
+        fakes: Dict[str, Any],
+        values: Dict[str, float],
+        *,
+        timestep: int = 0,
+        force_convergence: bool = False,
+    ) -> Dict[str, float]:
+        """Write ``values`` into the fakes (every other fake reads 0), simulate one pass and return the outputs by name.
+
+        Args:
+            component: The component under test.
+            stsv: Its step values.
+            fakes: Its fakes by input field name.
+            values: The input values by field name.
+            timestep: The step number passed to ``i_simulate``.
+            force_convergence: Whether the pass is forced.
+
+        Returns:
+            Every output of the component by field name.
+        """
+        for field_name, fake in fakes.items():
+            stsv.set_output_value(fake, values.get(field_name, 0.0))
+        component.i_simulate(timestep, stsv, force_convergence)
+        return {output.field_name: Rig.output(stsv, output) for output in component.outputs}
+
+    @staticmethod
+    def step_once(component: Any, values: Dict[str, float]) -> Dict[str, float]:
+        """Wire every input of a fresh ``component`` to a fake, write ``values``, simulate step 0 once, return outputs.
+
+        It is :meth:`build` followed by one unforced :meth:`step`, for a test that needs a single pass of a component
+        with the inputs it names and 0 on every other input. For example, a district-heating controller stepped with
+        only its tank temperature set reads 0 °C outside.
+
+        Args:
+            component: The component under test, not yet wired.
+            values: The input values by field name; a missing one reads 0.
+
+        Returns:
+            Every output of the component by field name.
+        """
+        stsv, fakes = AllInputsRig.build(component)
+        return AllInputsRig.step(component, stsv, fakes, values)
+
+
+class CollectorRig:
+    """A flat-plate collector on a hot-water tank at noon, one step on fake inputs."""
+
+    @staticmethod
+    def charge(
+        seconds_per_timestep: int,
+        requested_ratio: float,
+        control_signal: float = 1.0,
+        *,
+        inlet_at_start_of_step_c: float = 45.0,
+        pump_ran_in_previous_step: bool = False,
+    ) -> Dict[str, float]:
+        """Return every output of one step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse irradiance.
+
+        The sun stands 30° from the zenith due south (no weather file, no cache); the air is at 20 °C.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            requested_ratio: The requested part-load ratio the controller commands.
+            control_signal: The controller's pump signal, 1 for running.
+            inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C; by default the
+                step mean.
+            pump_ran_in_previous_step: Whether the collector's pump ran in the previous step, its saved state.
+
+        Returns:
+            The collector's outputs by field name.
+        """
+        config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
+            SizingContext(number_of_apartments=1)
+        )
+        collector = solar_thermal_system.SolarThermalSystem(
+            config=config, my_simulation_parameters=Parameters.one_day(seconds_per_timestep)
+        )
+        collector.previous_state = solar_thermal_system.SolarThermalSystemState(pump_ran=pump_ran_in_previous_step)
+        system = solar_thermal_system.SolarThermalSystem
+        return AllInputsRig.step_once(
+            collector,
+            {
+                system.ControlSignal: control_signal,
+                system.GlobalHorizontalIrradianceWM2: 800.0,
+                system.DiffuseHorizontalIrradianceWM2: 100.0,
+                system.TemperatureOutsideDegC: 20.0,
+                system.ApparentZenith: 30.0,
+                system.Azimuth: 180.0,
+                system.TemperatureCollectorInletDegC: 45.0,
+                system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
+                system.RequestedPartLoadRatio: requested_ratio,
+            },
+        )
+
+
+class SolarControllerRig:
+    """The solar pump's controller on fake inputs: the storage's temperatures and the collector's answer."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the controller, its step values and its fakes by field name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The controller, its step values and its fakes.
+        """
+        config = solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
+        controller = solar_thermal_system.SolarThermalSystemController(
+            my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra), config=config
+        )
+        stsv, fakes = AllInputsRig.build(controller)
+        return controller, stsv, fakes
+
+    @staticmethod
+    def values(
+        *,
+        start_c: float,
+        end_c: Optional[float] = None,
+        actual_ratio: float = 1.0,
+        collector_above_storage_in_kelvin: float = 20.0,
+    ) -> Dict[str, float]:
+        """Return the controller's inputs: the storage's temperatures, the collector's sensor and the pump's actual ratio.
+
+        By default the collector is sunny, its sensor 20 K above the storage's start-of-step temperature, and the
+        storage ends the step where it started.
+
+        Args:
+            start_c: The storage's start-of-step temperature, °C.
+            end_c: The storage's end-of-step temperature, °C; ``start_c`` when omitted.
+            actual_ratio: The part-load ratio the collector reports its pump ran with.
+            collector_above_storage_in_kelvin: How far the collector's sensor reads above ``start_c``, K.
+
+        Returns:
+            The input values by field name.
+        """
+        controller_class = solar_thermal_system.SolarThermalSystemController
+        return {
+            controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
+            controller_class.StorageTemperatureAtEndOfStepInCelsius: start_c if end_c is None else end_c,
+            controller_class.CollectorSensorTemperatureAtStartOfStepInCelsius: start_c
+            + collector_above_storage_in_kelvin,
+            controller_class.ActualPartLoadRatio: actual_ratio,
+        }

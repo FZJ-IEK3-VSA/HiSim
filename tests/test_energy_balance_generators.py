@@ -1,13 +1,16 @@
-"""The heat generators state their energy flows and close their balance (hisim-9uoo.4).
+"""The heat generators state their energy flows and close their balance (hisim-energy-sankeys-9uoo.4).
 
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
-generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check runs a whole household,
-so all of them run in the ``extendedbase2`` shard: a winter day at 3600 s of the gas and the heat-pump household
-for the ports, the first three weeks of January of the solar-thermal one, in which its pump runs, and the second
-January week at 900 s of each recorded generator household. Each generator declares what it takes (fuel,
-electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it
-loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat distribution
-system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
+generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check but the fuel-carrier
+table's (``base``) runs a whole household, so those run in the ``extendedbase2`` shard: a winter day at 3600 s of
+the gas, heat-pump, district-heating and electric-heating households for the ports, the first three weeks of January
+of the solar-thermal one, in which its pump runs, the second January week at 900 s of each recorded generator
+household, and the same week of the gas household for the boiler's combustion loss. Each generator declares what it
+takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water)
+and what it loses; the Sankey links its fuel and electricity to the meter that reads them, which the carrier's supply
+node or the grid feeds (owner decision Q-J; never to a controller, which is exempt), and the generator to its
+storages, its loss nodes and the environment. The storages and the heat
+distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-hydronics-fxix.6).
 """
 
 import json
@@ -22,14 +25,18 @@ from hisim.energy_port import EnergyPort
 ROOT = Path(__file__).resolve().parents[1]
 
 #: Per setup: the generator, the carriers it takes in, the carriers it gives out, and links its Sankey must show.
+#: The fuel and the electricity come through the meter that reads them: the electricity meter reads every electricity
+#: port by its role (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way outdoors.
 GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
         {"natural_gas"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
-            ("natural_gas", "undeclared: GasMeter", "CondensingGasBoiler"),
-            ("natural_gas", "CondensingGasBoiler", "outdoors"),
+            ("natural_gas", "natural gas supply", "GasMeter"),
+            ("natural_gas", "GasMeter", "CondensingGasBoiler"),
+            ("natural_gas", "CondensingGasBoiler", "CondensingGasBoiler · CombustionHeatLoss"),
+            ("natural_gas", "CondensingGasBoiler · CombustionHeatLoss", "outdoors"),
             ("space_heating_heat", "CondensingGasBoiler", "undeclared: SimpleHotWaterStorage"),
             ("domestic_hot_water_heat", "CondensingGasBoiler", "undeclared: DHWStorage"),
         },
@@ -40,7 +47,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
             ("ambient_heat", "ambient heat", "MoreAdvancedHeatPumpHPLib"),
-            ("electricity", "undeclared: L2EMSElectricityController", "MoreAdvancedHeatPumpHPLib"),
+            ("electricity", "ElectricityMeter", "MoreAdvancedHeatPumpHPLib"),
+            ("electricity", "grid import", "ElectricityMeter"),
             ("space_heating_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: SimpleHotWaterStorage"),
             ("domestic_hot_water_heat", "MoreAdvancedHeatPumpHPLib", "undeclared: DHWStorage"),
         },
@@ -50,7 +58,8 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"district_heat"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
-            ("district_heat", "undeclared: FuelMeter", "DistrictHeating"),
+            ("district_heat", "district heat supply", "FuelMeter"),
+            ("district_heat", "FuelMeter", "DistrictHeating"),
             ("domestic_hot_water_heat", "DistrictHeating", "undeclared: DHWStorage"),
             ("space_heating_heat", "DistrictHeating", "undeclared: HeatDistributionSystem"),
         },
@@ -60,6 +69,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"electricity"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
+            ("electricity", "ElectricityMeter", "ElectricHeating"),
             ("space_heating_heat", "ElectricHeating", "undeclared: Building"),
             ("domestic_hot_water_heat", "ElectricHeating", "undeclared: DHWStorage"),
         },
@@ -70,8 +80,9 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"solar"},
         set(),
         {
-            ("solar", "solar", "SolarThermalSystem"),
-            ("solar", "SolarThermalSystem", "outdoors"),
+            ("solar", "sun", "SolarThermalSystem"),
+            ("solar", "SolarThermalSystem", "SolarThermalSystem · CollectorHeatLoss"),
+            ("solar", "SolarThermalSystem · CollectorHeatLoss", "outdoors"),
         },
     ),
 }
@@ -122,7 +133,7 @@ def port_roles(entry: Dict[str, Any]) -> Dict[str, Tuple[str, str]]:
 
 
 def sankey_links(results: Path) -> Set[Tuple[str, str, str]]:
-    """Every link of every carrier's diagram as (carrier, source, target)."""
+    """Every link of every carrier's view of the Sankey graph as (carrier, source, target)."""
     diagrams: Dict[str, Any] = json.loads((results / "energy_sankeys" / "energy_sankey.json").read_text("utf-8"))
     links = set()
     for carrier, diagram in diagrams.items():
@@ -156,6 +167,25 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ThermalPowerDeliveredForSpaceHeating": ("out", "space_heating_heat"),
             "ThermalPowerDrawnForCooling": ("in", "cooling"),
             "ThermalOutputPowerDHW": ("out", "domestic_hot_water_heat"),
+        },
+    ),
+    # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum.
+    "household_district_heating_building_sizer": (
+        "DistrictHeating",
+        {
+            "ThermalOutputShEnergy": ("in", "district_heat"),
+            "ThermalOutputDhwEnergy": ("in", "district_heat"),
+            "ThermalOutputShPower": ("out", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
+        },
+    ),
+    "household_electric_heating_building_sizer": (
+        "ElectricHeating",
+        {
+            "ElectricOutputShPower": ("in", "electricity"),
+            "ElectricOutputDhwPower": ("in", "electricity"),
+            "ThermalOutputShPower": ("out", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
         },
     ),
 }
@@ -210,7 +240,17 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
         assert entry["carriers"][carrier]["in_kwh"] > 0.0, carrier
     for carrier in carriers_out:
         assert entry["carriers"][carrier]["out_kwh"] > 0.0, carrier
-    assert expected_links <= sankey_links(results)
+    links = sankey_links(results)
+    assert expected_links <= links
+    report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
+    exempt = {item["component"] for item in report["exempt"]}
+    assert exempt, "the controllers of the household are exempt"
+    drawn = {node for _, source, target in links for node in (source, target)}
+    assert not {name for name in drawn if name.removeprefix("undeclared: ") in exempt}
+    if setup == "household_gas_building_sizer":
+        # the boiler is the gas meter's one consumer and declares its fuel: the meter publishes what it reads
+        meters = {meter["meter"]: meter for meter in report["meters"]}
+        assert meters["GasMeter"]["verdict"] == "agrees", meters["GasMeter"]
 
 
 @pytest.mark.extendedbase2
@@ -218,7 +258,7 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     """The pump runs on 20 January: the collector delivers hot-water heat and its pump's electricity is a loss.
 
     Not a summer day: a window that does not start on 1 January still reads the weather from 1 January
-    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
+    (hisim-midyear-windows-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
     at 900 s hold the year's first day on which the pump delivers more than 0.5 kWh (20 January; the pump stands
     whenever the boiler has charged the tank above 60 °C).
     """
@@ -233,16 +273,21 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     assert carriers["solar"]["in_kwh"] == pytest.approx(heat_out + carriers["solar"]["loss_kwh"], rel=1e-9)
     assert carriers["electricity"]["in_kwh"] > 0.0
     assert carriers["electricity"]["loss_kwh"] == pytest.approx(carriers["electricity"]["in_kwh"])
-    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {
-        (carrier, source) for carrier, source, _ in sankey_links(results)
-    }
+    links = sankey_links(results)
+    assert ("domestic_hot_water_heat", "SolarThermalSystem") in {(carrier, source) for carrier, source, _ in links}
+    # the meter reads the pump's re-pointed electricity port directly, by its role (spec §5.2)
+    assert ("electricity", "ElectricityMeter", "SolarThermalSystem") in links
 
 
 @pytest.mark.extendedbase2
 def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> None:
-    """The combustion loss is the billed fuel times one minus the efficiency: 10 to 40 % of the gas in a week."""
+    """The combustion loss is the billed fuel times one minus the efficiency: 2 to 13 % of the gas in a week.
+
+    The current condensing gas curve runs between 0.877 (full load, 60 °C return) and 0.978 (30 % load, 30 °C
+    return) on the gross calorific value, so no step loses more than 12.3 % or less than 2.2 % of its gas.
+    """
     results = run_household(tmp_path)
     boiler = balance_entry(results, "CondensingGasBoiler")
     gas = boiler["carriers"]["natural_gas"]
-    assert 0.1 * gas["in_kwh"] < gas["loss_kwh"] < 0.4 * gas["in_kwh"]
+    assert 0.02 * gas["in_kwh"] < gas["loss_kwh"] < 0.13 * gas["in_kwh"]
     assert boiler["out_kwh"] == pytest.approx(gas["in_kwh"] - gas["loss_kwh"], rel=1e-12)

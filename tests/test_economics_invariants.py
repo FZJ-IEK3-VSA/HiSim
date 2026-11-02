@@ -1,4 +1,4 @@
-"""Property tests: uncertainty bands and timeline aggregation (cost_spec.md §3.6, §3.9).
+"""Property tests: uncertainty bands and timeline aggregation (roadmap/cost_spec.md §3.6, §3.9).
 
 First of the three invariant test files (split per the PR-3 review's 500-line rule; the
 hypothesis strategies each file needs travel with it). Band arithmetic properties (ordering,

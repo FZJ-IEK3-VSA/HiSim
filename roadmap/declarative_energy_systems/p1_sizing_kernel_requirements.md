@@ -4,7 +4,7 @@
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, survey)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (principles E1–E8 apply by reference and are not repeated) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P1
-**Related:** `system_docs/config_defaults_spec.md` (design B — solution-design input); branch `config_presets` (`hisim/config/`, 18 commits); `roadmap/declarative_energy_systems/sizing_fact_inventory.md`
+**Related:** `roadmap/declarative_energy_systems/config_defaults_spec.md` (design B — solution-design input); branch `config_presets` (`hisim/config/`, 18 commits); `roadmap/declarative_energy_systems/sizing_fact_inventory.md`
 
 **Tags:** refactoring, behavior-change, technical-debt
 **Keywords:** sizing law, AUTO, sized_field, Catalog, preset, fact, provider, sizing_sources, cardinality, fact engine

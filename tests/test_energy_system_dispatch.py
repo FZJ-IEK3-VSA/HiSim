@@ -160,7 +160,17 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
-      - from: ems.TotalElectricityToOrFromGrid
+      - from: battery.ChargingPower
+        tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        weight: 999
+      - from: battery.DischargingPower
+        tags: [ELECTRICITY_PRODUCTION]
+        weight: 999
+      - from: occupancy.ElectricalPowerConsumption
+        tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        weight: 999
+      - from: pv.ElectricityOutput
+        component_type: PV
         tags: [ELECTRICITY_PRODUCTION]
         weight: 999
 """

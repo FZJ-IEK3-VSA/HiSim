@@ -18,7 +18,7 @@ branches on.
 import json
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pytest
 
@@ -244,34 +244,47 @@ class TestTheQuotesAgainstTheStages:
 class TestTheMainSubject:
     """``MainSubjects`` decides which subject a quote prices, and never guesses."""
 
+    @staticmethod
+    def _resolve(
+        measure_id: str, subjects: Mapping[str, Optional[ComponentType]]
+    ) -> Tuple[str, Tuple[str, ...]]:
+        """Resolve one quote in stage 1 the way the staged command does: the measure's declared rule, applied.
+
+        Args:
+            measure_id: The quoted measure; it must have a rule in ``MainSubjects``.
+            subjects: The measure's subjects in the stage -> their asset class, or None for a measure-only subject.
+
+        Returns:
+            ``(main subject, the measure's other subjects, sorted)``.
+        """
+        rule = MainSubjects.rule_of(measure_id)
+        assert rule is not None, f"{measure_id} has no main-subject rule"
+        return rule.resolve(measure_id, 1, subjects)
+
     def test_the_generator_is_the_main_subject_of_heating_system_and_the_buffer_is_not(self) -> None:
         """The buffer the measure installs with the generator is a further subject."""
-        main_subject, others = MainSubjects.resolve(
+        main_subject, others = self._resolve(
             "heating_system",
-            1,
             {"HeatPump": ComponentType.HEAT_PUMP, BUFFER_SUBJECT: ComponentType.SPACE_HEATING_STORAGE},
         )
         assert (main_subject, others) == ("HeatPump", (BUFFER_SUBJECT,))
 
     def test_an_envelope_measure_and_the_lagging_are_their_own_subjects(self) -> None:
         """Named by the measure id, with or without cost facts."""
-        assert MainSubjects.resolve(
-            "external_insulation", 1, {"external_insulation": ComponentType.WALL_EXTERNAL_INSULATION}
+        assert self._resolve(
+            "external_insulation", {"external_insulation": ComponentType.WALL_EXTERNAL_INSULATION}
         ) == ("external_insulation", ())
-        assert MainSubjects.resolve(LAGGING, 1, {LAGGING: None}) == (LAGGING, ())
+        assert self._resolve(LAGGING, {LAGGING: None}) == (LAGGING, ())
 
     def test_a_measure_with_no_matching_subject_is_an_error_not_a_guess(self) -> None:
-        """Zero or two candidates, or a measure the table does not know, raise."""
+        """Zero or two candidates raise, and a measure that costs nothing has no rule to apply."""
         with pytest.raises(MainSubjectError):
-            MainSubjects.resolve("heating_system", 1, {BUFFER_SUBJECT: ComponentType.SPACE_HEATING_STORAGE})
+            self._resolve("heating_system", {BUFFER_SUBJECT: ComponentType.SPACE_HEATING_STORAGE})
         with pytest.raises(MainSubjectError):
-            MainSubjects.resolve(
-                "heating_system", 1, {"HeatPump": ComponentType.HEAT_PUMP, "Boiler": ComponentType.GAS_HEATER}
-            )
+            self._resolve("heating_system", {"HeatPump": ComponentType.HEAT_PUMP, "Boiler": ComponentType.GAS_HEATER})
         with pytest.raises(MainSubjectError):
-            MainSubjects.resolve("external_insulation", 1, {"facade": ComponentType.WALL_EXTERNAL_INSULATION})
-        with pytest.raises(MainSubjectError):
-            MainSubjects.resolve("change_room_temperature", 1, {"change_room_temperature": None})
+            self._resolve("external_insulation", {"facade": ComponentType.WALL_EXTERNAL_INSULATION})
+        assert MainSubjects.rule_of("change_room_temperature") is None
 
     def test_every_catalogue_measure_the_translator_acts_on_has_a_main_subject_or_costs_nothing(self) -> None:
         """Build failure, not a guess: a measure the translator can act on is in the table.

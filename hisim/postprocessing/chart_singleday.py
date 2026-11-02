@@ -1,5 +1,6 @@
 """Charts for a single day."""
 
+import datetime
 from typing import Callable, List, Tuple
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -9,6 +10,8 @@ import pandas as pd
 
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim.postprocessing.report_image_entries import ReportImageEntry
+from hisim.simulation_day import SimulationDay
+from hisim.simulationparameters import FigureFormat
 
 
 class ChartSingleDay(Chart, ChartFontsAndSize):
@@ -20,31 +23,39 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         component_name: str,
         units: str,
         directory_path: str,
-        time_correction_factor_in_hours: float,
         output_description: str,
         data_with_units: pd.Series,
-        day: int = 0,
-        month: int = 0,
+        window_start: datetime.datetime,
+        seconds_per_timestep: int,
+        day_in_window: int = 0,
         output2_with_units: pd.Series | None = None,
-        figure_format: str | None = None,
+        figure_format: FigureFormat = FigureFormat.PNG,
         path_checker: Callable[[str], None] | None = None,
     ) -> None:
         """Initializes a single-day chart.
+
+        The chart takes the run's step length once, in seconds, and finds the rows of a day from it.
+        Example: ``seconds_per_timestep=900`` makes a day 96 rows, so day 1 of the run is rows 96 to
+        191. Nothing is sliced here; an invalid step length is refused when the chart plots.
 
         Args:
             output: The primary output data to plot.
             component_name: Name of the component producing the data.
             units: Units of the output values.
             directory_path: Directory path for saving the chart.
-            time_correction_factor_in_hours: Factor for time step correction.
             output_description: Description of the output.
             data_with_units: Time-series data to visualize; its physical unit
                 is carried separately by the ``units`` argument.
-            day: Day of the month to display (default 0).
-            month: Month of the year to display (default 0).
+            window_start: The first moment of the run, at midnight; the row ``0`` of
+                ``data_with_units`` belongs to it.
+            seconds_per_timestep: The step length of the run in seconds,
+                ``SimulationParameters.seconds_per_timestep``; it divides a day, as the window
+                contract demands, so a day of the run is a whole number of rows.
+            day_in_window: Which day of the run to display, counted from 0 for the
+                run's first day (default 0).
             output2_with_units: Optional secondary output data for comparison;
                 its physical unit is carried separately by ``units``.
-            figure_format: Format for the output figure (e.g., '.png').
+            figure_format: Format of the output figure; its value is the file extension (default PNG).
             path_checker: Optional callable to validate path length; defaults to
                 the global ``result_path_provider.check_path_length``.
         """
@@ -55,7 +66,6 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 chart_type="days",
                 units=units,
                 directory_path=directory_path,
-                time_correction_factor_in_hours=time_correction_factor_in_hours,
                 output_description=output_description,
                 output2=output2_with_units,
                 figure_format=figure_format,
@@ -68,17 +78,23 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 chart_type="days",
                 units=units,
                 directory_path=directory_path,
-                time_correction_factor_in_hours=time_correction_factor_in_hours,
                 output_description=output_description,
                 figure_format=figure_format,
                 path_checker=path_checker,
             )
 
-        self.month: int = month
-        self.day: int = day
+        self.window_start: datetime.datetime = window_start
+        self.day_in_window: int = day_in_window
+        self.seconds_per_timestep: int = seconds_per_timestep
+        displayed_date = self.date_of_day(window_start, day_in_window)
         self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
-        self.filename: str = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
+        # Named by the zero-based month and day of month of the displayed date: the first of January is m0_d0.
+        # The extension is the format's value: formatting the enum member itself named every file
+        # "days_m0_d0FigureFormat.PNG".
+        self.filename: str = (
+            f"{self.type.lower()}_m{displayed_date.month - 1}_d{displayed_date.day - 1}{self.figure_format.value}"
+        )
 
         self.filepath: str = str(Path(self.directory_path) / self.filename)
         self.filepath2: str = str(Path(self.component_output_folder_path) / self.filename)
@@ -86,13 +102,13 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
     @staticmethod
     def build_day_slice(
         data_with_units: "pd.Series",
-        month: int,
-        day: int,
-        time_correction_factor_in_hours: float,
+        window_start: datetime.datetime,
+        day_in_window: int,
+        seconds_per_timestep: int,
         label_months_lowercase: List[str],
         title: str,
     ) -> Tuple["pd.Series", str]:
-        """Compute the slice of ``data_with_units`` for a single day and the matching plot title.
+        """Compute the slice of ``data_with_units`` for a single day of the run and the matching plot title.
 
         This is the pure, side-effect-free core of :meth:`get_day_data`. It does
         neither touch ``self`` nor the filesystem, so it can be unit-tested with a
@@ -100,61 +116,78 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         ``Chart.__init__`` would otherwise wire up directory paths and the
         ``result_path_provider`` singleton).
 
+        The rows of ``data_with_units`` are the timesteps of the run, the first one at
+        ``window_start``, which is midnight; day ``d`` of the run is therefore the rows from
+        ``d`` times the timesteps per day on. The timesteps per day come from the step length,
+        exactly, through :meth:`SimulationDay.timesteps_per_day`, so a step above an hour (2 h) or
+        one that does not divide an hour (45 min) slices a day correctly too. The title names the
+        day by its calendar date. Example: hourly data (3600 s) of a run from 1 July 2021, day 2,
+        gives rows 48 to 71 and the title ``"{title} July 3rd"``; two-hour steps (7200 s) make a day
+        12 rows, so day 1 is rows 12 to 23.
+
         Args:
             data_with_units: The full time-series to slice; its physical unit
                 is carried separately by the caller (here via ``units``).
-            month: Zero-based month index (0 = January, ... 11 = December).
-            day: Zero-based day-of-month index within that month (0 = 1st).
-            time_correction_factor_in_hours: ``seconds_per_timestep / 3600``; its reciprocal
-                gives the number of timesteps per hour.
-            label_months_lowercase: The month labels indexed by ``month``.
+            window_start: The first moment of the run, at midnight.
+            day_in_window: The day of the run to slice, counted from 0.
+            seconds_per_timestep: The step length of the run in seconds, positive and dividing
+                the 86 400 s of a day, as the window contract demands.
+            label_months_lowercase: The month labels, January first.
             title: The base plot title the date string is appended to.
 
         Returns:
             A ``(data_slice, plot_title)`` tuple, where ``data_slice`` is the
-            sub-series covering the requested day (or the original ``data_with_units`` when
-            the computed slice would exceed the available data) and ``plot_title``
-            is the assembled title string ``"{title} {month} {day}{ordinal}"``.
+            sub-series covering the requested day with its own index and ``plot_title`` is the
+            assembled title string ``"{title} {month} {day}{ordinal}"``.
+
+        Raises:
+            ValueError: If ``day_in_window`` is negative or names a day the data does not reach,
+                so that the day plotted is always the day the title names; if
+                ``seconds_per_timestep`` is not positive; or if it does not divide a day, so that a
+                day of the run is not a whole number of rows.
         """
-        timesteps_per_hour = int(1 / time_correction_factor_in_hours)
-        firstindex = (month * 30 + day) * 24 * timesteps_per_hour
-        lastindex = firstindex + 24 * timesteps_per_hour
-        day_number = day + 1
-        if day_number == 1:
+        if day_in_window < 0:
+            raise ValueError(f"day_in_window counts the days of the run from 0, so it cannot be {day_in_window}.")
+        if seconds_per_timestep <= 0:
+            raise ValueError(f"A timestep lasts a positive number of seconds, not {seconds_per_timestep}.")
+        timesteps_per_day = SimulationDay.timesteps_per_day(seconds_per_timestep)
+        firstindex = day_in_window * timesteps_per_day
+        lastindex = firstindex + timesteps_per_day
+        date = ChartSingleDay.date_of_day(window_start, day_in_window)
+        day_number = date.day
+        if day_number in (1, 21, 31):
             ordinal = "st"
-        elif day_number == 2:
+        elif day_number in (2, 22):
             ordinal = "nd"
-        elif day_number == 3:
+        elif day_number in (3, 23):
             ordinal = "rd"
         else:
             ordinal = "th"
-        date = f"{label_months_lowercase[month]} {day_number}{ordinal}"
-        plot_title = f"{title} {date}"
+        plot_title = f"{title} {label_months_lowercase[date.month - 1]} {day_number}{ordinal}"
 
-        if abs(lastindex - firstindex) < len(data_with_units):
-            data_slice = data_with_units[firstindex:lastindex]
-            data_index = data_slice.index[firstindex:lastindex]
-            data_slice.index = data_index
-            return data_slice, plot_title
-        return data_with_units, plot_title
+        if lastindex > len(data_with_units):
+            raise ValueError(
+                f"Day {day_in_window} of the run, {date.isoformat()}, ends at row {lastindex}, but the data "
+                f"has {len(data_with_units)} rows."
+            )
+        return data_with_units.iloc[firstindex:lastindex], plot_title
 
     def get_day_data(self) -> pd.Series:
-        """Extract the sub-series for the configured month and day.
+        """Extract the sub-series for the configured day of the run.
 
-        Delegates to :meth:`build_day_slice` using the instance's ``month``,
-        ``day``, ``data_with_units``, ``time_correction_factor_in_hours``, ``label_months_lowercase``,
-        and ``title``. As a side effect, sets ``self.plot_title`` to the
+        Delegates to :meth:`build_day_slice` using the instance's ``window_start``,
+        ``day_in_window``, ``data_with_units``, ``seconds_per_timestep``,
+        ``label_months_lowercase``, and ``title``. As a side effect, sets ``self.plot_title`` to the
         assembled title string returned by ``build_day_slice``.
 
         Returns:
-            The pandas Series slice covering the requested day, or the full
-            ``self.data_with_units`` when the computed slice would exceed the available data.
+            The pandas Series slice covering the requested day.
         """
         data_with_units, self.plot_title = self.build_day_slice(
             data_with_units=self.data_with_units,
-            month=self.month,
-            day=self.day,
-            time_correction_factor_in_hours=self.time_correction_factor_in_hours,
+            window_start=self.window_start,
+            day_in_window=self.day_in_window,
+            seconds_per_timestep=self.seconds_per_timestep,
             label_months_lowercase=self.label_months_lowercase,
             title=self.title,
         )
@@ -174,8 +207,9 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """Plot the single-day time series and optionally save the figure.
 
         Rescales the y-axis units, draws the day's data as a green line with a
-        time-of-day formatted x-axis, and — when ``close`` is truthy — saves the
-        figure to ``self.filepath2`` and closes it.
+        time-of-day formatted x-axis under a title that names the day's date, and — when ``close`` is
+        truthy — saves the figure to ``self.filepath2`` and closes it. Every font size is set on its
+        own text, so drawing the chart leaves the matplotlib defaults of later charts untouched.
 
         Args:
             close: If truthy, persist the figure via :meth:`close` after drawing.
@@ -187,26 +221,30 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         """
         self.ensure_output_dir()
         single_day_data_with_units = self.get_day_data()
-        plt.rcParams["font.size"] = "30"
-        plt.rcParams["agg.path.chunksize"] = 10000
+        # Font sizes are set on each text and never in ``plt.rcParams``: a global font size here (it
+        # was 30 pt) outlived the figure and changed every chart drawn after it in the process --
+        # the colour-bar numbers of the carpets and the tick density of every later axis.
         _fig, a_x = plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.xticks(fontsize=self.fontsize_ticks)
-        plt.yticks(fontsize=self.fontsize_ticks)
 
-        single_day_data_with_units, self.units = self.rescale_y_axis(y_values=single_day_data_with_units, units=self.units)
-        plt.title(self.title, fontsize=self.fontsize_title)
+        single_day_data_with_units, self.units = self.rescale_y_axis(
+            y_values=single_day_data_with_units, units=self.declared_units
+        )
+        # The plot title is the chart title followed by the date; the date is wrapped as one piece.
+        date_of_the_day = self.plot_title[len(self.title):].strip()
+        plt.title(self.wrap_title(self.title, suffix=date_of_the_day), fontsize=self.fontsize_title)
         plt.plot(
             single_day_data_with_units.index,
             single_day_data_with_units,
             color="green",
             linewidth=1.0,
-            label=self.property,
         )
         plt.grid(True)
-        plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
-        plt.tight_layout()
+        plt.xlabel("Time of day", fontsize=self.fontsize_label)
+        plt.ylabel(self.axis_label(self.units), fontsize=self.fontsize_label)
         Axis.set_major_formatter(a_x.xaxis, DateFormatter("%H:%M"))
+        plt.xticks(fontsize=self.fontsize_ticks)
+        plt.yticks(fontsize=self.fontsize_ticks)
+        plt.tight_layout()
         if close:
             self.close()
         return ReportImageEntry(

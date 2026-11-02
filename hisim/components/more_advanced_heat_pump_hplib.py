@@ -15,7 +15,7 @@ import hashlib
 import importlib
 import math
 from enum import Enum, unique
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
@@ -25,7 +25,8 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
@@ -46,11 +47,14 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
-from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
+from hisim.components.heating_curve import HeatDistributionSystemType
+from hisim.components.dual_circuit_system import HotWaterPriorityLimit, HotWaterPriorityTimer
 from hisim.loadtypes import (
+    OutputAggregation,
     ComponentType,
     EnergyBalanceCarrier,
     EnergyRole,
@@ -67,10 +71,12 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.subcomponents.pumps import ConstantFlowPump, PumpedWater, PumpOperatingPoint
 from hisim.components.more_advanced_heat_pump_hplib_model import (
     CalculationRequest,
     HeatingCircuitPowers,
     HeatPumpEnergyTotals,
+    HeatPumpModeTrack,
     HeatPumpOperation,
     HeatPumpRunTimers,
     HeatPumpStepConditions,
@@ -155,7 +161,10 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: Whether the machine is allowed to cycle, which is what makes the minimum running and
     #: idle times below take effect.
     cycling_mode: bool = True
+    #: Shortest run once the machine switched on, in s, while :attr:`cycling_mode` is on. 0 means no
+    #: minimum; a negative or non-finite time is refused when the heat pump is built.
     minimum_running_time_in_seconds: Optional[int] = 3600
+    #: Shortest pause once the machine switched off, in s, refused and read as the running time is.
     minimum_idle_time_in_seconds: Optional[int] = 3600
     #: Lowest thermal power the machine modulates down to before it has to cycle.
     minimum_thermal_output_power_in_watt: float = 1800.0
@@ -214,9 +223,15 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
 
         Returns:
             dict: the one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+
+        Raises:
+            ValueError: If the power is not finite or is below 1 W
+                (:meth:`MoreAdvancedHeatPumpHPLib.refuse_an_impossible_thermal_power`), so no buffer is sized from it.
         """
         del ctx
-        return {"maximal_thermal_power_in_watt": concrete(config.set_thermal_output_power_in_watt)}
+        return {
+            "maximal_thermal_power_in_watt": MoreAdvancedHeatPumpHPLib.refuse_an_impossible_thermal_power(config)
+        }
 
     #: Sizing facts this config contributes: its resolved thermal output power, under the name
     #: the heating-generator family shares, so a buffer vessel sizes from a heat pump exactly
@@ -252,7 +267,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MoreAdvancedHeatPumpHPLib(Component):
+class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     """Simulate the heat pump.
 
     Outputs are heat pump efficiency (cop) as well as electrical (p_el) and
@@ -260,6 +275,25 @@ class MoreAdvancedHeatPumpHPLib(Component):
     Model will switch between both states, but priority is on dhw.
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
+
+    A space-heating charge its space-heating controller commands runs the requested part-load ratio the controller
+    sends (``RequestedPartLoadRatioSh``): 1, the whole step, at and below the part-load threshold, and above it the
+    fraction of the step that ends the space-heating buffer at the controller's target. Below 1 the heat pump publishes
+    the averaged flow at its full-load outlet, books ``P_th = m c (T_out - T_ret)`` and ``P_el = P_th / COP`` from that
+    flow, and the ratio of the brine pump's electricity (:meth:`part_loaded_space_heating`). A space-heating step the
+    heat pump keeps running against its controller (its minimum running time) runs the whole step. It reports the actual
+    ratio it ran with (``ActualPartLoadRatioSh``): the requested ratio, 1 for a step it keeps running on its own, 0 in
+    any other mode. The hot-water side runs whole steps.
+
+    The heat pump keeps two tracks of its mode and run timers. The control track is the mode its controllers command
+    after its minimum running and idle times, and the timers of that mode; only the control track decides what the
+    machine does (:meth:`on_off_after_minimum_times`, the start-up ramp). The published track counts what the machine
+    ran (:meth:`published_mode`): a space-heating step at an actual ratio of 0 runs nothing and is an off step there, so
+    ``OnOffStateHeatpump`` is 0, ``TimeOff`` grows, ``TimeOnHeating`` restarts and the next charge counts as a new start
+    in ``CounterOnOff`` and ``CounterSwitchToSH`` and in the start and heating-time KPIs. The control track stays in
+    space heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum
+    running time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are
+    the same.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -274,8 +308,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
+    #: The requested part-load ratio: the fraction of the step the space-heating controller commands a space-heating
+    #: charge to run.
+    RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
 
     # Outputs
+    #: The actual part-load ratio: the fraction of the step the space-heating charge ran, reported back to the
+    #: space-heating controller.
+    ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -331,7 +371,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
         config: MoreAdvancedHeatPumpHPLibConfig,
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
-        """Loads the parameters of the specified heat pump."""
+        """Loads the parameters of the specified heat pump.
+
+        Raises:
+            ValueError: If the set thermal output power is not a finite power of at least 1 W
+                (:meth:`refuse_an_impossible_thermal_power`), if the nominal secondary mass flow is negative or not
+                finite, or if it is unset or 0 in a setup whose water pump runs at that fixed flow (hot-water storage
+                in series or no storage).
+        """
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -353,7 +400,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.t_out_val = int(config.flow_temperature_in_celsius)
 
-        self.p_th_set = int(concrete(config.set_thermal_output_power_in_watt))
+        self.p_th_set = int(self.refuse_an_impossible_thermal_power(config))
 
         self.cycling_mode = config.cycling_mode
 
@@ -370,13 +417,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
-        # self.m_dot_ref = float(
-        #     config.massflow_nominal_secondary_side_in_kg_per_s.value
-        #     if config.massflow_nominal_secondary_side_in_kg_per_s
-        #     else config.massflow_nominal_secondary_side_in_kg_per_s
-        # )
-
         self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
+
+        # A negative nominal flow would only fail at the first fixed-flow step (NegativeMassFlowError), so it is
+        # refused here, where the field that is wrong can still be named.
+        if self.m_dot_ref is not None and not (math.isfinite(self.m_dot_ref) and self.m_dot_ref >= 0.0):
+            raise ValueError(
+                "The heat pump's massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least "
+                f"0 kg/s, got {self.m_dot_ref!r} kg/s: the water pump circulates this flow through the secondary side."
+            )
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIES,
@@ -388,24 +437,31 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     thermal power of the heat pump must be given an integer value due to constant massflow
                     of water pump."""
                 )
+        #: The secondary side's pump in the fixed-flow modes (a storage in series, or none): a constant pump at the
+        #: nominal flow; None for a machine without a nominal flow, which runs hplib's flow only.
+        self.fixed_flow_pump: Optional[ConstantFlowPump] = (
+            ConstantFlowPump(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
+        )
 
         self.fluid_primary_side = config.fluid_primary_side
 
         self.specific_heat_capacity_of_primary_fluid = config.specific_heat_capacity_of_primary_fluid
 
-        self.minimum_running_time_in_seconds = (
-            config.minimum_running_time_in_seconds
-            if config.minimum_running_time_in_seconds
-            else config.minimum_running_time_in_seconds
-        )
+        # A negative or non-finite minimum time would silently mean no minimum (or never switching), so it is
+        # refused here, where the field that is wrong can still be named.
+        for field_name, seconds in (
+            ("minimum_running_time_in_seconds", config.minimum_running_time_in_seconds),
+            ("minimum_idle_time_in_seconds", config.minimum_idle_time_in_seconds),
+        ):
+            if seconds is not None and not (math.isfinite(seconds) and seconds >= 0):
+                raise ValueError(
+                    f"The heat pump's {field_name} must be a finite time of at least 0 s, got {seconds!r} s: 0 means "
+                    "no minimum, and a negative time would silently mean no minimum as well."
+                )
+        self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
+        self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
-        self.minimum_idle_time_in_seconds = (
-            config.minimum_idle_time_in_seconds
-            if config.minimum_idle_time_in_seconds
-            else config.minimum_idle_time_in_seconds
-        )
-
-        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt
+        self.minimum_thermal_output_power_in_watt = config.minimum_thermal_output_power_in_watt
 
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(
@@ -413,6 +469,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             time_off=0,
             time_on_cooling=0,
             on_off_previous=0,
+            published_time_on_heating=0,
+            published_time_off=0,
+            published_on_off_previous=0,
             cumulative_thermal_energy_tot_in_watt_hour=0,
             cumulative_thermal_energy_space_heating_in_watt_hour=0,
             cumulative_thermal_energy_dhw_in_watt_hour=0,
@@ -432,8 +491,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump = hpl.HeatPump(self.parameters)
         self.heatpump.delta_t = 5
         self.scop_calibration = self.calibration_of(config, self.heatpump)
-
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
 
         # protect erros for Water/Water Heatpumps
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
@@ -472,6 +529,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
             field_name=self.OnOffSwitchSH,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
+            mandatory=False,
+        )
+
+        self.space_heating_part_load_command = PartLoadCommand(
+            self,
+            requested_ratio_input_name=self.RequestedPartLoadRatioSh,
+            actual_ratio_output_name=self.ActualPartLoadRatioSh,
+            device_description="the heat pump's space-heating charge",
             mandatory=False,
         )
 
@@ -556,9 +621,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power for SH in Watt",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerSH
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.p_el_cooling: ComponentOutput = self.add_output(
@@ -568,9 +631,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             unit=Units.WATT,
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for cooling in Watt",
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerForCooling
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.p_el_brine_pump: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -581,9 +642,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 "Electricity of the brine or well pump of a ground- or water-source heat pump in W, part of "
                 "ElectricalInputPowerTotalHeatpump; zero for an air-source heat pump."
             ),
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerBrinePump
-            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -607,6 +666,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="OnOffState",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.t_in_space_heating: ComponentOutput = self.add_output(
@@ -639,6 +699,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for heating",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.time_on_cooling: ComponentOutput = self.add_output(
@@ -647,6 +708,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for cooling",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -655,6 +717,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned off",
+            aggregation=OutputAggregation.NONE,
         )
 
         self.thermal_power_from_environment: ComponentOutput = self.add_output(
@@ -709,6 +772,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeThermalEnergySH} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.cumulative_hp_electrical_energy_space_heating_channel: ComponentOutput = self.add_output(
@@ -717,6 +781,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeElectricalEnergySH} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.counter_on_off_channel: ComponentOutput = self.add_output(
@@ -725,6 +790,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description=f"{self.CounterOnOff} is a counter of starting procedures hp.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.p_el_tot: ComponentOutput = self.add_output(
@@ -770,6 +836,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeThermalEnergyTotal} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.cumulative_hp_electrical_energy_tot_channel: ComponentOutput = self.add_output(
@@ -778,6 +845,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeElectricalEnergyTotal} will follow.",
+            aggregation=OutputAggregation.LAST,
         )
 
         self.delta_t_hp_secondary_side_channel: ComponentOutput = self.add_output(
@@ -807,9 +875,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT,
                 output_description="Electricity input power for DHW in Watt",
-                energy_port=EnergyPort(
-                    EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerDHW
-                ),
+                energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY),
             )
 
             self.t_in_dhw: ComponentOutput = self.add_output(
@@ -858,6 +924,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.HEATING,
                 unit=Units.WATT_HOUR,
                 output_description=f"here a description for {self.CumulativeThermalEnergyDHW} will follow.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.cumulative_hp_electrical_energy_dhw_channel: ComponentOutput = self.add_output(
@@ -866,6 +933,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT_HOUR,
                 output_description=f"here a description for {self.CumulativeElectricalEnergyDHW} will follow.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.counter_switch_space_heating_channel: ComponentOutput = self.add_output(
@@ -874,6 +942,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ANY,
                 unit=Units.ANY,
                 output_description=f"{self.CounterSwitchToSH} is a counter of switching the mode to SH, NOT counting starting of on_off.",
+                aggregation=OutputAggregation.LAST,
             )
 
             self.counter_switch_dhw_channel: ComponentOutput = self.add_output(
@@ -882,6 +951,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ANY,
                 unit=Units.ANY,
                 output_description=f"{self.CounterSwitchToDHW} is a counter of switching the mode to DHW, NOT counting starting of on_off.",
+                aggregation=OutputAggregation.LAST,
             )
 
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
@@ -935,6 +1005,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLib.OnOffSwitchSH,
                 hpc_classname,
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioSh,
+                hpc_classname,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.RequestedPartLoadRatioSh,
             )
         )
         return connections
@@ -1014,6 +1091,45 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
+    #: The smallest set thermal output power a configuration may state. hplib is given the power in whole watts
+    #: (``p_th_set`` is truncated), so a power below 1 W would reach its fit as 0 W.
+    MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT: ClassVar[float] = 1.0
+
+    @staticmethod
+    def refuse_an_impossible_thermal_power(config: MoreAdvancedHeatPumpHPLibConfig) -> float:
+        """Return the machine's set thermal output power in W, refusing one that is not finite or below 1 W.
+
+        The power is ``p_th_set`` of hplib's curve fit, and the buffer vessel beside the machine is sized from it.
+        Its sizing law gives the building's heating load, but a power stated in a configuration replaces the law,
+        so nothing else checks it. For example, 8000.0 is returned unchanged; 0, 0.5, -8000 and NaN are refused,
+        since hplib would scale its fit to 0 W or less and the buffer would get a volume of 0 l, a negative volume
+        or NaN. hplib takes the power in whole watts, so the smallest power accepted is
+        :attr:`MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT`. The heat pump calls this when it is built, and its
+        sizing facts call it before the buffer is sized from the power.
+
+        There is no upper bound. hplib's device database spans 2.4 to 69.9 kW of rated thermal power, but its
+        generic fit scales linearly with the stated power, so that range is not a limit of the model, and a heat
+        pump for a building with several units may lie above it.
+
+        Args:
+            config: The heat pump's configuration, with its power resolved.
+
+        Returns:
+            float: The set thermal output power in W, unchanged.
+
+        Raises:
+            ValueError: If the power is not finite or is below 1 W.
+        """
+        thermal_power_in_watt = float(concrete(config.set_thermal_output_power_in_watt))
+        minimal_power_in_watt = MoreAdvancedHeatPumpHPLib.MINIMAL_SET_THERMAL_OUTPUT_POWER_IN_WATT
+        if not (math.isfinite(thermal_power_in_watt) and thermal_power_in_watt >= minimal_power_in_watt):
+            raise ValueError(
+                f"{config.component_id.name}: the heat pump's set_thermal_output_power_in_watt must be a finite "
+                f"power of at least {minimal_power_in_watt:g} W, got {thermal_power_in_watt!r} W: hplib's fit takes "
+                "it in whole watts, and the buffer beside the machine is sized from it."
+            )
+        return thermal_power_in_watt
+
     #: The largest standardised SCOP a configuration may state.
     MAXIMUM_STANDARDIZED_SCOP: ClassVar[float] = 10.0
 
@@ -1064,14 +1180,17 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return lines
 
     def i_save_state(self) -> None:
-        """Save state."""
+        """Keep a copy of the state at the start of a time step, to restore before every pass of that step.
+
+        The state holds both tracks of the mode and run timers, the control track and the published one
+        (:class:`MoreAdvancedHeatPumpHPLibState`), together with the running totals and counters, so every pass of a
+        step starts from the same timers on both tracks and only the converged pass advances them.
+        """
         self.previous_state = self.state.self_copy()
-        # pass
 
     def i_restore_state(self) -> None:
-        """Restore state."""
+        """Restore the state saved at the start of the time step, both tracks of the mode and run timers."""
         self.state = self.previous_state.self_copy()
-        # pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doubelcheck."""
@@ -1100,8 +1219,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         ``0.4 * 4200 * 5.0 = 8400`` W.
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
-        pump books what the storage receives. While the outlet is hplib's own (not capped,
-        :meth:`capped_hot_water_outlet_in_celsius`), hplib's own thermal power differs from it only
+        pump books what the storage receives. While the outlet is hplib's own (not capped at the hot-water limit,
+        :meth:`hot_water_at_hplib_flow`), hplib's own thermal power differs from it only
         through its specific heat of water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is
         hplib's times 4180/4200, about 0.48 % less.
 
@@ -1116,8 +1235,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         Raises:
             ValueError: If ``cop`` is 0 or less, which would book infinite or negative electricity.
-            NonFiniteValueError: If an argument is NaN or infinite, or the power overflows the float range, as
-                :func:`hisim.hydronics.circuit_power_w` raises it.
             NegativeMassFlowError: If ``mass_flow_in_kg_per_second`` is negative, as
                 :func:`hisim.hydronics.circuit_power_w` raises it.
         """
@@ -1172,37 +1289,40 @@ class MoreAdvancedHeatPumpHPLib(Component):
     #: equal to the return is answered with this vanishing lift instead of zero.
     VANISHING_LIFT_IN_KELVIN: ClassVar[float] = 0.00000001
 
+    #: The lowest thermal power a hot-water step modulates down to, in W: none, so a hot-water charge follows the
+    #: tank's need. Space heating and cooling keep the configured ``minimum_thermal_output_power_in_watt``.
+    HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[float] = 0.0
+
     @staticmethod
-    def fixed_flow_outlet_temperature_in_celsius(
+    def fixed_flow_operating_point(
         *,
+        pump: ConstantFlowPump,
         return_temperature_in_celsius: float,
         lift_in_kelvin: float,
-        mass_flow_in_kg_per_second: float,
         minimal_thermal_power_in_watt: float,
         time_on_heating_in_seconds: float,
-        specific_heat_capacity_in_joule_per_kg_per_kelvin: float,
-    ) -> float:
-        """Return the outlet temperature of a circuit the heat pump runs at a fixed flow, in °C.
+    ) -> PumpOperatingPoint:
+        """Return the flow and the outlet temperature of a circuit the heat pump runs at a fixed flow.
 
-        In the fixed-flow mode (a storage in series, or none) the pump runs the nominal flow and the heat pump aims
-        at the power that flow carries over the lift, at least its minimal thermal power. While the machine starts,
-        it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it has
-        been heating. The outlet is the return plus that power over ``m c``. For example, 0.333 kg/s over a 5 K lift
-        aims at 6959.7 W; after ten minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
+        In the fixed-flow mode (a storage in series, or none) the constant pump runs the nominal flow and the heat pump
+        aims at the power that flow carries over the lift, at least its minimal thermal power. While the machine
+        starts, it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it
+        has been heating. The outlet is the return plus that power over ``m c``
+        (:meth:`ConstantFlowPump.operating_point`). For example, 0.333 kg/s over a 5 K lift aims at 6959.7 W; after ten
+        minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
 
         Args:
+            pump: The heat pump's constant secondary-side pump, at the nominal flow.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
             lift_in_kelvin: The lift the heat pump aims at, in K.
-            mass_flow_in_kg_per_second: The fixed flow, in kg/s, above 0.
             minimal_thermal_power_in_watt: The lowest thermal power the machine modulates down to, in W.
             time_on_heating_in_seconds: How long the machine has been heating before this step, in s.
-            specific_heat_capacity_in_joule_per_kg_per_kelvin: The specific heat of the circuit's water, in J/(kg K).
 
         Returns:
-            The outlet temperature, in °C.
+            The nominal flow and the outlet temperature.
         """
         thermal_power_at_lift_in_watt = (
-            mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin * lift_in_kelvin
+            pump.design_mass_flow_in_kg_per_second * PumpedWater.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * lift_in_kelvin
         )
         if thermal_power_at_lift_in_watt <= minimal_thermal_power_in_watt:
             target_power_in_watt = minimal_thermal_power_in_watt
@@ -1211,9 +1331,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         target_power_in_watt = target_power_in_watt * (
             1 - np.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
         )
-        return float(
-            return_temperature_in_celsius
-            + target_power_in_watt / (mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin)
+        return pump.operating_point(
+            heat_power_in_watt=float(target_power_in_watt), return_temperature_in_celsius=return_temperature_in_celsius
         )
 
     @staticmethod
@@ -1299,8 +1418,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Run the heat pump in the mode its controllers ask for and publish its circuits, powers and counters.
 
         Reads the controllers' signals and the circuits' return temperatures, applies the minimum running and idle
-        times in cycling mode, computes the step in the resulting mode (:meth:`operation_in_mode`) and publishes it
-        (:meth:`publish_operation`).
+        times in cycling mode on the control track, turns the requested space-heating ratio into the actual one it runs
+        (:meth:`space_heating_actual_ratio`), computes the step in the control mode (:meth:`operation_in_mode`, scaled
+        by :meth:`part_loaded_space_heating` for space heating), advances both tracks of its run timers, the control
+        track in the control mode and the published track in the mode it ran (:meth:`published_mode`), and publishes the
+        step with the actual ratio (:meth:`publish_operation`). For example, at 900 s a space-heating step at a ratio of
+        0 after 600 s of heating leaves the control track heating for 1500 s and the published track off for 900 s.
 
         Raises:
             ValueError: If the cycling mode lacks its minimum times or the signal is no known mode.
@@ -1334,11 +1457,141 @@ class MoreAdvancedHeatPumpHPLib(Component):
         elif self.cycling_mode is not False:
             raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
+        actual_ratio = self.space_heating_actual_ratio(stsv, on_off=on_off, on_off_space_heating=on_off_space_heating)
         operation = self.operation_in_mode(on_off, conditions, timers)
-        timers_after = self.advanced_run_timers(
-            on_off=on_off, timers=timers, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
+        if on_off == 1:
+            operation = self.part_loaded_space_heating(
+                operation,
+                part_load_ratio=actual_ratio,
+                return_temperature_in_celsius=conditions.space_heating_return_temperature_in_celsius,
+            )
+        self.space_heating_part_load_command.publish_actual_ratio(stsv, actual_ratio)
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        published_on_off = self.published_mode(on_off=on_off, actual_ratio=actual_ratio)
+        published_timers = HeatPumpRunTimers(
+            time_on_heating_in_seconds=self.state.published_time_on_heating,
+            time_on_cooling_in_seconds=self.state.time_on_cooling,
+            time_off_in_seconds=self.state.published_time_off,
         )
-        self.publish_operation(stsv, on_off, conditions, operation, timers_after)
+        self.publish_operation(
+            stsv,
+            conditions,
+            operation,
+            control=HeatPumpModeTrack(
+                on_off=on_off,
+                timers=self.advanced_run_timers(
+                    on_off=on_off, timers=timers, seconds_per_timestep=seconds_per_timestep
+                ),
+            ),
+            published=HeatPumpModeTrack(
+                on_off=published_on_off,
+                timers=self.advanced_run_timers(
+                    on_off=published_on_off, timers=published_timers, seconds_per_timestep=seconds_per_timestep
+                ),
+            ),
+        )
+
+    def space_heating_actual_ratio(
+        self, stsv: SingleTimeStepValues, *, on_off: float, on_off_space_heating: float
+    ) -> float:
+        """Return the actual ratio, the fraction of the step the space-heating charge runs.
+
+        A space-heating step the controller commands runs the requested ratio; a space-heating step the heat pump keeps
+        running against its controller (its minimum running time) runs the whole step, 1; a step in any other mode
+        runs 0. For example, a heat pump in space heating whose controller sends 0.4 runs 0.4 of the step.
+
+        Args:
+            stsv: The step's values, to read the requested ratio from.
+            on_off: The mode the heat pump runs after its minimum times, 1 for space heating.
+            on_off_space_heating: The space-heating controller's signal, 1 for heating.
+
+        Returns:
+            The actual ratio, from 0 to 1.
+
+        Raises:
+            ValueError: If the controller sent a ratio outside [0, 1].
+        """
+        if on_off == 1 and on_off_space_heating == 1:
+            return self.space_heating_part_load_command.requested_ratio(stsv)
+        if on_off == 1:
+            return 1.0
+        return 0.0
+
+    @staticmethod
+    def published_mode(*, on_off: float, actual_ratio: float) -> float:
+        """Return the mode the heat pump ran in, for its published state, timers, counters and KPIs only.
+
+        Bookkeeping, not control. Above the part-load threshold the space-heating controller stays in heating while
+        the buffer needs no charge and requests a ratio of 0; the heat pump then runs nothing, so the published track
+        counts the step as off: ``OnOffStateHeatpump`` is 0, the published ``TimeOff`` grows, ``TimeOnHeating``
+        restarts, and the next charge counts as a new start. A ratio between 0 and 1 counts as a whole step of heating,
+        since the heat pump did run in it. The control track keeps the mode ``on_off``: the minimum running and idle
+        times and everything else that decides what the machine does read it, so a ratio-0 step neither locks the
+        machine off for its minimum idle time nor ends its minimum running time; a real machine would not stop for
+        an hour because one step needed no charge. At and below the threshold the ratio is 1 whenever the heat pump
+        heats, so both modes are the same there. For example, mode 1 at ratio 0 gives 0, mode 1 at ratio 0.3 gives 1
+        and mode 2 (hot water) at ratio 0 gives 2.
+
+        Args:
+            on_off: The control mode, after the minimum times: 1 space heating, 2 hot water, -1 cooling, 0 off.
+            actual_ratio: The actual space-heating part-load ratio (:meth:`space_heating_actual_ratio`).
+
+        Returns:
+            The published mode.
+        """
+        if on_off == 1 and actual_ratio == 0.0:
+            return 0
+        return on_off
+
+    @classmethod
+    def part_loaded_space_heating(
+        cls, full_load: "HeatPumpOperation", *, part_load_ratio: float, return_temperature_in_celsius: float
+    ) -> "HeatPumpOperation":
+        """Return a space-heating step's flow and powers when the heat pump runs a fraction of the step at full load.
+
+        The circuit carries the averaged flow, the full-load flow times the ratio, at the full-load outlet
+        temperature; the thermal and electrical power follow from that flow at the step's COP
+        (:meth:`booked_heating_powers_in_watt`), and the brine pump, which runs only while the compressor does, draws
+        the ratio of its power. A ratio of 1 returns the full-load step unchanged. Example: 0.4 kg/s from 30 to 35 °C at
+        a COP of 4 and a 100 W brine pump, at a ratio of 0.25, give 0.1 kg/s, 2090 W of heat, 522.5 W of electricity
+        and 25 W for the brine pump. At a ratio of 0 the circuit idles as :class:`HeatPumpOperation` documents: nothing
+        flows, nothing is booked, the outlet is the return and the COP is 0. (The heat pump's control mode stays space
+        heating through such a step; only its published track counts it as off, :meth:`published_mode`.)
+
+        Args:
+            full_load: The space-heating step at full load over the whole step.
+            part_load_ratio: The fraction of the step the heat pump runs, from 0 to 1.
+            return_temperature_in_celsius: The circuit's return temperature, the buffer's start temperature, in °C.
+
+        Returns:
+            The space-heating step at that ratio.
+        """
+        if part_load_ratio >= 1.0:
+            return full_load
+        if part_load_ratio <= 0.0:
+            return replace(
+                full_load,
+                mass_flow_space_heating_in_kg_per_second=0.0,
+                thermal_power_space_heating_in_watt=0.0,
+                electrical_power_space_heating_in_watt=0.0,
+                electrical_power_brine_pump_in_watt=0.0,
+                outlet_temperature_space_heating_in_celsius=return_temperature_in_celsius,
+                cop=0.0,
+            )
+        mass_flow_in_kg_per_second = part_load_ratio * full_load.mass_flow_space_heating_in_kg_per_second
+        powers = cls.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=full_load.outlet_temperature_space_heating_in_celsius,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            cop=full_load.cop,
+        )
+        return replace(
+            full_load,
+            mass_flow_space_heating_in_kg_per_second=mass_flow_in_kg_per_second,
+            thermal_power_space_heating_in_watt=powers.thermal_power_in_watt,
+            electrical_power_space_heating_in_watt=powers.electrical_power_in_watt,
+            electrical_power_brine_pump_in_watt=part_load_ratio * full_load.electrical_power_brine_pump_in_watt,
+        )
 
     def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
         """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
@@ -1402,24 +1655,35 @@ class MoreAdvancedHeatPumpHPLib(Component):
     def hot_water(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
         """Return a hot-water step: at hplib's flow with a parallel storage, at the nominal flow otherwise.
 
-        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power.
+        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power
+        (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`); the configured minimum stays in force for space heating.
         """
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
-        self.minimum_thermal_output_power = 0.0
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             return self.hot_water_at_hplib_flow(conditions)
         return self.hot_water_at_fixed_flow(conditions, timers)
 
     def hplib_result(
-        self, conditions: "HeatPumpStepConditions", *, return_temperature_in_celsius: float, mode: int, operation_mode: str
+        self,
+        conditions: "HeatPumpStepConditions",
+        *,
+        return_temperature_in_celsius: float,
+        mode: int,
+        operation_mode: str,
+        minimal_thermal_power_in_watt: float,
     ) -> "HplibResult":
         """Return hplib's answer at the step's source and ambient temperatures and one circuit's return.
+
+        The minimal thermal power is the caller's: the configured minimum for space heating and cooling, none for
+        hot water (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`). The cache keys on ``operation_mode``, so each
+        circuit's cached answers are computed with that circuit's minimum only.
 
         Args:
             conditions: The step's temperatures.
             return_temperature_in_celsius: The return temperature of the circuit hplib is asked for, in °C.
             mode: hplib's mode, 1 heating, 2 cooling.
             operation_mode: The circuit hplib is evaluated for, part of the cache key.
+            minimal_thermal_power_in_watt: The lowest thermal power hplib modulates down to in this step, in W.
         """
         return self.get_cached_results_or_run_hplib_simulation(
             source_temperature_in_celsius=conditions.source_temperature_in_celsius,
@@ -1427,7 +1691,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             ambient_temperature_in_celsius=conditions.ambient_temperature_in_celsius,
             mode=mode,
             operation_mode=operation_mode,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
         )
 
     def space_heating_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
@@ -1439,7 +1703,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
@@ -1463,30 +1731,32 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Return a space-heating step in the fixed-flow mode: the nominal flow, the outlet from the target power.
 
         The heat pump aims at the lift to its space-heating set temperature, at most 5 K, and its outlet follows from
-        that power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`); it books the heat that
-        flow carries.
+        that power at the nominal flow (:meth:`fixed_flow_operating_point`); it books the heat that flow carries.
         """
         assert conditions.space_heating_set_temperature_in_celsius is not None
+        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
-        mass_flow_in_kg_per_second = self.m_dot_ref
         self.heatpump.delta_t = min(
             conditions.space_heating_set_temperature_in_celsius - return_in_celsius, self.NOMINAL_LIFT_IN_KELVIN
         )
         if self.heatpump.delta_t == 0:
             self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
-        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+        pumped = self.fixed_flow_operating_point(
+            pump=self.fixed_flow_pump,
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
-            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            ),
         )
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
+        outlet_in_celsius = pumped.supply_temperature_in_celsius
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,
@@ -1504,35 +1774,29 @@ class MoreAdvancedHeatPumpHPLib(Component):
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
         )
 
-    def capped_hot_water_outlet_in_celsius(
-        self, conditions: "HeatPumpStepConditions", outlet_temperature_in_celsius: float
-    ) -> float:
-        """Return the hot-water outlet after the cap at the maximal supply and the controller's set temperature, in °C.
-
-        hplib has no outlet limit, so the heat pump caps its hot-water supply at the lower of
-        ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
-        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, and the circuit carries
-        the heat of the capped supply.
-        """
-        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
-        return hydronics.capped_hot_water_supply_temperature_c(
-            unthrottled_supply_c=outlet_temperature_in_celsius,
-            return_c=conditions.hot_water_return_temperature_in_celsius,
-            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
-            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
-        )
-
     def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
         """Return a hot-water step with a parallel storage: hplib's flow, its outlet capped, the heat the flow carries.
 
-        hplib answers the tank's return; the outlet is capped (:meth:`capped_hot_water_outlet_in_celsius`), and the
-        heat pump books the heat the flow carries and that heat over hplib's COP.
+        hplib answers the tank's return. hplib has no outlet limit, so the heat pump caps its outlet at the lower of
+        ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
+        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, and the heat pump books the
+        heat the flow carries at the capped outlet and that heat over hplib's COP.
         """
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_dhw",
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
-        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, results.outlet_temperature_in_celsius)
+        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
+        outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=results.outlet_temperature_in_celsius,
+            return_c=return_in_celsius,
+            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
+            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
+        )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,
@@ -1554,25 +1818,34 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ) -> "HeatPumpOperation":
         """Return a hot-water step in the fixed-flow mode: the nominal flow, a 5 K target lift, the outlet capped.
 
-        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`)
-        and is capped (:meth:`capped_hot_water_outlet_in_celsius`); the heat pump books the heat the flow carries.
+        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_operating_point`) and is
+        capped at the lower of the maximal hot-water supply and the controller's set temperature, as in
+        :meth:`hot_water_at_hplib_flow`; the heat pump books the heat the flow carries.
         """
+        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
-        mass_flow_in_kg_per_second = self.m_dot_ref
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=1,
+            operation_mode="heating_dhw",
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
-        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+        pumped = self.fixed_flow_operating_point(
+            pump=self.fixed_flow_pump,
             return_temperature_in_celsius=return_in_celsius,
             lift_in_kelvin=self.heatpump.delta_t,
-            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            ),
         )
-        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, outlet_in_celsius)
+        mass_flow_in_kg_per_second = pumped.mass_flow_in_kg_per_second
+        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
+        outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=pumped.supply_temperature_in_celsius,
+            return_c=return_in_celsius,
+            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
+            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
+        )
         powers = self.booked_heating_powers_in_watt(
             mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
             outlet_temperature_in_celsius=outlet_in_celsius,
@@ -1603,15 +1876,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         if self.heatpump.delta_t == 0:
             self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
-        heat_drawn_in_watt = -(
-            mass_flow_in_kg_per_second
-            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            * self.heatpump.delta_t
-        )
-        outlet_in_celsius = return_in_celsius + (
-            heat_drawn_in_watt
-            / (mass_flow_in_kg_per_second * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
-        )
+        outlet_in_celsius = return_in_celsius - self.heatpump.delta_t
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=outlet_in_celsius, t_return_c=return_in_celsius
         )
@@ -1636,7 +1901,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
         results = self.hplib_result(
-            conditions, return_temperature_in_celsius=return_in_celsius, mode=2, operation_mode="cooling_building"
+            conditions,
+            return_temperature_in_celsius=return_in_celsius,
+            mode=2,
+            operation_mode="cooling_building",
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=results.mass_flow_in_kg_per_second,
@@ -1722,16 +1991,26 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
     @staticmethod
     def switch_counters(*, on_off: float, state: "MoreAdvancedHeatPumpHPLibState") -> "HeatPumpSwitchCounters":
-        """Return the space-heating, hot-water and on/off switch counters after a step.
+        """Return the space-heating, hot-water and on/off switch counters after a step, on the published track.
 
         A counter grows by one when the machine enters its mode in this step: space heating or hot water from any
-        other mode, and on from off. For example, a machine that was off and heats the building in this step counts
-        one more space-heating switch and one more switch on.
+        other mode, and on from off. The counters count what the machine ran, so both the mode of this step and the
+        mode before it are published modes (:meth:`published_mode`): a space-heating charge after a step at ratio 0
+        counts as a new start. For example, a machine that was off and heats the building in this step counts one more
+        space-heating switch and one more switch on.
+
+        Args:
+            on_off: The published mode of this step: 1 space heating, 2 hot water, -1 cooling, 0 off.
+            state: The state before the step, with the counters and the published mode of the step before.
+
+        Returns:
+            The counters after the step.
         """
+        previous = state.published_on_off_previous
         return HeatPumpSwitchCounters(
-            space_heating=state.counter_switch_space_heating + (1 if state.on_off_previous != on_off and on_off == 1 else 0),
-            hot_water=state.counter_switch_dhw + (1 if state.on_off_previous != on_off and on_off == 2 else 0),
-            on_off=state.counter_onoff + (1 if state.on_off_previous == 0 and on_off != 0 else 0),
+            space_heating=state.counter_switch_space_heating + (1 if previous != on_off and on_off == 1 else 0),
+            hot_water=state.counter_switch_dhw + (1 if previous != on_off and on_off == 2 else 0),
+            on_off=state.counter_onoff + (1 if previous == 0 and on_off != 0 else 0),
         )
 
     def publish_primary_side(
@@ -1740,7 +2019,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Publish the brine or water source circuit of a machine with a primary circuit of its own.
 
         The source circuit carries the heat taken from the environment at a fixed 5 K difference; while the machine
-        is off it moves nothing.
+        is off it moves nothing. ``on_off`` is the published mode (:meth:`published_mode`), so a space-heating step at
+        a part-load ratio of 0, which runs nothing, publishes the source circuit idle as well: no flow and 0 K.
 
         Raises:
             ValueError: If the primary fluid's specific heat is not configured.
@@ -1767,22 +2047,33 @@ class MoreAdvancedHeatPumpHPLib(Component):
     def publish_operation(
         self,
         stsv: SingleTimeStepValues,
-        on_off: float,
         conditions: "HeatPumpStepConditions",
         operation: "HeatPumpOperation",
-        timers: "HeatPumpRunTimers",
+        *,
+        control: "HeatPumpModeTrack",
+        published: "HeatPumpModeTrack",
     ) -> None:
         """Publish the step's circuits, powers, energies, totals and counters, and store them in the state.
 
         The energies and running totals come from :meth:`stepped_energy_totals`, the counters from
-        :meth:`switch_counters`.
+        :meth:`switch_counters`. The on/off state, ``TimeOnHeating``, ``TimeOnCooling``, ``TimeOff``, the counters and
+        the source circuit's flow come from the published track, what the machine ran; the state stores both tracks,
+        and the next step's minimum times read only the control track. For example, at 900 s a space-heating step at
+        ratio 0 publishes state 0 and a growing ``TimeOff`` while the control track keeps heating.
+
+        Args:
+            stsv: The step's values, to publish to.
+            conditions: The temperatures the heat pump read in this step.
+            operation: The step's powers, outlets and flows, at the actual ratio.
+            control: The control mode and its timers after the step.
+            published: The published mode and its timers after the step (:meth:`published_mode`).
         """
         totals = self.stepped_energy_totals(
             operation=operation, state=self.state, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
         )
-        counters = self.switch_counters(on_off=on_off, state=self.state)
+        counters = self.switch_counters(on_off=published.on_off, state=self.state)
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
-            self.publish_primary_side(stsv, on_off, conditions, operation)
+            self.publish_primary_side(stsv, published.on_off, conditions, operation)
 
         stsv.set_output_value(self.p_th_space_heating, operation.thermal_power_space_heating_in_watt)
         stsv.set_output_value(self.p_th_tot, operation.total_thermal_power_in_watt)
@@ -1792,13 +2083,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
         stsv.set_output_value(self.p_el_tot, operation.total_electrical_power_in_watt)
         stsv.set_output_value(self.cop, operation.cop)
         stsv.set_output_value(self.eer, operation.eer)
-        stsv.set_output_value(self.heatpump_state, on_off)
+        stsv.set_output_value(self.heatpump_state, published.on_off)
         stsv.set_output_value(self.t_in_space_heating, conditions.space_heating_return_temperature_in_celsius)
         stsv.set_output_value(self.t_out_space_heating, operation.outlet_temperature_space_heating_in_celsius)
         stsv.set_output_value(self.m_dot_space_heating, operation.mass_flow_space_heating_in_kg_per_second)
-        stsv.set_output_value(self.time_on_heating, timers.time_on_heating_in_seconds)
-        stsv.set_output_value(self.time_on_cooling, timers.time_on_cooling_in_seconds)
-        stsv.set_output_value(self.time_off, timers.time_off_in_seconds)
+        stsv.set_output_value(self.time_on_heating, published.timers.time_on_heating_in_seconds)
+        stsv.set_output_value(self.time_on_cooling, published.timers.time_on_cooling_in_seconds)
+        stsv.set_output_value(self.time_off, published.timers.time_off_in_seconds)
         stsv.set_output_value(self.thermal_power_from_environment, operation.thermal_power_from_environment_in_watt)
         stsv.set_output_value(
             self.thermal_power_delivered_for_space_heating, max(operation.thermal_power_space_heating_in_watt, 0.0)
@@ -1840,10 +2131,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
             stsv.set_output_value(self.counter_switch_dhw_channel, counters.hot_water)
             stsv.set_output_value(self.counter_switch_space_heating_channel, counters.space_heating)
 
-        self.state.time_on_heating = timers.time_on_heating_in_seconds
-        self.state.time_on_cooling = timers.time_on_cooling_in_seconds
-        self.state.time_off = timers.time_off_in_seconds
-        self.state.on_off_previous = on_off
+        self.state.time_on_heating = control.timers.time_on_heating_in_seconds
+        self.state.time_on_cooling = control.timers.time_on_cooling_in_seconds
+        self.state.time_off = control.timers.time_off_in_seconds
+        self.state.on_off_previous = control.on_off
+        self.state.published_time_on_heating = published.timers.time_on_heating_in_seconds
+        self.state.published_time_off = published.timers.time_off_in_seconds
+        self.state.published_on_off_previous = published.on_off
         self.state.cumulative_thermal_energy_tot_in_watt_hour = totals.cumulative_thermal_total_in_watt_hour
         self.state.cumulative_thermal_energy_space_heating_in_watt_hour = totals.cumulative_thermal_space_heating_in_watt_hour
         self.state.cumulative_thermal_energy_dhw_in_watt_hour = totals.cumulative_thermal_hot_water_in_watt_hour
@@ -1974,19 +2268,21 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         hplib is called, and its results are cached, at grid points 0.1 K apart. The source and ambient temperatures
         come from the weather and stay constant while a step iterates, so they are rounded to the grid. The return
-        temperature is the storage's step mean, which moves from iteration to iteration: it is not rounded, and the
-        results of the two neighbouring grid points are interpolated linearly in it, so the heat pump's answer is
-        continuous in the return and the storage's step mean has a fixed point. Every number of the result is
-        interpolated (:meth:`HplibResult.interpolated`). For example, a return of 47.04 °C takes 60 % of hplib's
-        results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
+        temperature is the storage's step mean, which moves from iteration to iteration: it is not rounded. Away from
+        hplib's switch to its heating rod alone, the results of the two neighbouring grid points are interpolated
+        linearly in it, field by field (:meth:`HplibResult.interpolated`), so the heat pump's answer changes without
+        steps between grid points and the storage's step mean has a fixed point. For example, a return of 47.04 °C
+        takes 60 % of hplib's results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
 
-        Between two grid points on either side of hplib's switch to its heating rod alone
-        (:meth:`HplibResult.straddle_the_heating_rod_switch`), hplib is evaluated at the return itself instead. The
-        interpolation would turn the jump of the thermal power there (about 2.5 kW) into a ramp of about 25 kW/K,
-        and the hot-water tank's step mean answers a watt more with some 3.5e-5 K at 60 s: together a loop that
-        contracts by only about 0.9 per pass and needs more than the simulator's 100 passes. With hplib's own
-        jump, a higher return gives more heat and the tank a higher return, so the iteration settles on one side of
-        the switch within a few passes.
+        Between two grid points on either side of that switch (:meth:`HplibResult.straddle_the_heating_rod_switch`),
+        hplib is evaluated at the return itself instead. The thermal power jumps at the switch: for the 8 kW air-water
+        heat pump at 0 °C outside that the rod-switch tests build, it jumps between a return of 64.0 and 64.1 °C from
+        the compressor's 4.8 kW to the rod's 8.1 kW, by 3.3 kW. The interpolation would turn that jump into a ramp of
+        about 33 kW/K, and the hot-water tank's step mean answers a watt more with some 3.5e-5 K at 60 s: together a
+        loop that contracts by only about 0.9 per pass and needs more than the simulator's 100 passes. With hplib's
+        own jump the iteration settles on one side of the switch within a few passes. Across the switch a higher
+        return gives more heat (the rod's); on the compressor side a higher return gives less (6.1 kW at 60 °C, 4.8 kW
+        at 64 °C).
 
         Args:
             source_temperature_in_celsius: The source temperature, in °C, rounded to the grid.
@@ -2090,8 +2386,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ) -> "HplibResult":
         """Return hplib's result at one operating point, computed by hplib with the stated SCOP's calibration applied.
 
-        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result is the calibrated
-        machine's.
+        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result's powers and COP
+        are the calibrated machine's. Whether hplib runs its heating rod alone is read before the calibration, from
+        hplib's own COP, so the heating-rod switch stays where hplib puts it (hisim-g0dp).
 
         Args:
             source_on_grid_in_celsius: The source temperature, in °C, on hplib's 0.1 K grid.
@@ -2110,7 +2407,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
             mode=mode,
             p_th_min=minimal_thermal_power_in_watt,
         )
-        return HplibResult.from_hplib(self.scop_calibration.apply(self.heatpump, results, mode))
+        return HplibResult.from_hplib(
+            self.scop_calibration.apply(self.heatpump, results, mode),
+            heating_rod_alone=HplibResult.runs_the_heating_rod_alone(results, mode),
+        )
 
     def get_component_kpi_entries(
         self,
@@ -2123,7 +2423,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         output_cooling_energy_in_kilowatt_hour: float = 0.0
         electrical_energy_for_heating_in_kilowatt_hour: float = 1.0
         electrical_energy_for_cooling_in_kilowatt_hour: float = 1.0
-        number_of_heat_pump_cycles: Optional[float] = None
+        number_of_heat_pump_starts: Optional[int] = None
+        number_of_space_heating_starts: Optional[int] = None
         seasonal_performance_factor: Optional[float] = None
         seasonal_energy_efficiency_ratio: Optional[float] = None
         total_electrical_energy_input_in_kilowatt_hour: Optional[float] = None
@@ -2137,10 +2438,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                number_of_heat_pump_cycles = self.get_heatpump_cycles(
-                    output=output, index=index, postprocessing_results=postprocessing_results
-                )
-                if output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
+                if output.field_name == self.TimeOff:
+                    number_of_heat_pump_starts = self.get_heatpump_cycles(
+                        output=output, index=index, postprocessing_results=postprocessing_results
+                    )
+                elif output.field_name == self.HeatPumpOnOffState:
+                    number_of_space_heating_starts = self.get_space_heating_starts(
+                        output=output, index=index, postprocessing_results=postprocessing_results
+                    )
+                elif output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
                     # take only output values for heating
                     heating_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] > 0.0
@@ -2261,14 +2567,26 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
-        number_of_heat_pump_cycles_entry = KpiEntry(
-            name="Number of SH heat pump cycles",
+        # Every start of the machine, into space heating, hot water or cooling. It stays in the group of the
+        # component's other machine KPIs (heating and cooling hours, electrical input) rather than opening a group
+        # of its own.
+        number_of_heat_pump_starts_entry = KpiEntry(
+            name="Number of heat pump starts",
             unit="-",
-            value=number_of_heat_pump_cycles,
+            value=number_of_heat_pump_starts,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(number_of_heat_pump_cycles_entry)
+        list_of_kpi_entries.append(number_of_heat_pump_starts_entry)
+
+        number_of_space_heating_starts_entry = KpiEntry(
+            name="Number of space-heating starts",
+            unit="-",
+            value=number_of_space_heating_starts,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(number_of_space_heating_starts_entry)
 
         seasonal_performance_factor_entry = KpiEntry(
             name="Seasonal performance factor of SH heat pump",
@@ -2353,20 +2671,64 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         return list_of_kpi_entries
 
-    # make kpi entries and append to list
-    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> float:
-        """Get the number of cycles of the heat pump for the simulated period."""
-        number_of_cycles = 0
-        if output.field_name == self.TimeOff:
-            for time_index, off_time in enumerate(postprocessing_results.iloc[:, index].values):
-                try:
-                    if off_time != 0 and postprocessing_results.iloc[:, index].values[time_index + 1] == 0:
-                        number_of_cycles = number_of_cycles + 1
-                except IndexError:
-                    # Expected on the last element: time_index + 1 is out of bounds.
-                    pass
+    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
+        """Return the number of starts of the heat pump in the simulated period, counted in its ``TimeOff`` column.
 
-        return number_of_cycles
+        A start is a step whose ``TimeOff`` is 0 after a step whose ``TimeOff`` is not: an idle period ended, and
+        the machine runs again, in space heating, hot water or cooling. For example, the series 0, 60, 60, 0, 120, 0
+        holds two starts. A start in the first step of the simulation has no idle step before it and is not counted,
+        so the count is the published ``CounterOnOff`` at the end of the run, less one if the machine ran in the first
+        step. The count is one vectorised comparison of the column with itself shifted by one step.
+
+        Args:
+            output: The output whose column is read; it must be ``TimeOff``.
+            index: The position of that output's column in ``postprocessing_results``.
+            postprocessing_results: The simulated values of all outputs, one column per output.
+
+        Returns:
+            The number of starts.
+
+        Raises:
+            ValueError: If ``output`` is not the ``TimeOff`` output: no other column holds the idle periods, and a
+                count read from it would be a silent 0.
+        """
+        if output.field_name != self.TimeOff:
+            raise ValueError(
+                f"The heat pump starts are counted in its {self.TimeOff} column, not in {output.field_name}."
+            )
+        time_off_in_seconds = postprocessing_results.iloc[:, index].to_numpy()
+        return int(np.count_nonzero((time_off_in_seconds[:-1] != 0) & (time_off_in_seconds[1:] == 0)))
+
+    def get_space_heating_starts(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
+        """Return the number of space-heating starts of the heat pump, counted in its published on/off state.
+
+        A space-heating start is a step whose ``OnOffStateHeatpump`` is 1 (space heating) after a step whose state
+        is 0 (off). Starts into hot water (2) or cooling (-1) are not counted, and neither is a switch from hot water
+        straight to space heating, since the machine did not stop. For example, the states 0, 1, 1, 0, 2, 0, 1, 2, 1
+        hold two space-heating starts and one hot-water start. As for :meth:`get_heatpump_cycles`, a start in the
+        first step has no step before it and is not counted. The state is the mode the heat pump ran in
+        (:meth:`published_mode`), the same track its ``TimeOff`` follows, so every space-heating start is also a start
+        in :meth:`get_heatpump_cycles`.
+
+        Args:
+            output: The output whose column is read; it must be ``OnOffStateHeatpump``.
+            index: The position of that output's column in ``postprocessing_results``.
+            postprocessing_results: The simulated values of all outputs, one column per output.
+
+        Returns:
+            The number of space-heating starts.
+
+        Raises:
+            ValueError: If ``output`` is not the ``OnOffStateHeatpump`` output, the only column that tells space
+                heating from hot water and off.
+        """
+        if output.field_name != self.HeatPumpOnOffState:
+            raise ValueError(
+                f"The space-heating starts are counted in the heat pump's {self.HeatPumpOnOffState} column, "
+                f"not in {output.field_name}."
+            )
+        mode = postprocessing_results.iloc[:, index].to_numpy()
+        return int(np.count_nonzero((mode[:-1] == 0) & (mode[1:] == 1)))
 
     def get_flow_and_return_temperatures(
         self,
@@ -2484,12 +2846,33 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
 @dataclass
 class MoreAdvancedHeatPumpHPLibState:
-    """MoreAdvancedHeatPumpHPLibState class."""
+    """The heat pump's state between steps: both tracks of its mode and run timers, its running totals and counters.
 
+    The control track (``time_on_heating``, ``time_off``, ``time_on_cooling``, ``on_off_previous``) is the mode the
+    heat pump ran on after its minimum times and how long it has been in it; the minimum running and idle times and
+    the start-up ramp read it. The published track (``published_time_on_heating``, ``published_time_off``,
+    ``published_on_off_previous``) is what the machine ran, where a space-heating step at a part-load ratio of 0 is
+    off (:meth:`MoreAdvancedHeatPumpHPLib.published_mode`); the published on/off state, timers, switch counters and
+    KPIs follow it. The cooling timer is the same on both tracks, since only a space-heating step differs, so it is
+    stored once. For example, at 900 s after a space-heating step at ratio 0 that followed 600 s of heating,
+    ``time_on_heating`` is 1500 and ``on_off_previous`` 1, while ``published_time_off`` is 900,
+    ``published_time_on_heating`` 0 and ``published_on_off_previous`` 0.
+    """
+
+    #: How long the control track has been heating, in s.
     time_on_heating: int
+    #: How long the control track has been off, in s.
     time_off: int
+    #: How long the heat pump has been cooling, in s; the same on both tracks.
     time_on_cooling: int
+    #: The control mode of the step before: 1 space heating, 2 hot water, -1 cooling, 0 off.
     on_off_previous: float
+    #: How long the published track has been heating, in s.
+    published_time_on_heating: int
+    #: How long the published track has been off, in s.
+    published_time_off: int
+    #: The published mode of the step before, as :attr:`on_off_previous`.
+    published_on_off_previous: float
     cumulative_thermal_energy_tot_in_watt_hour: float
     cumulative_thermal_energy_space_heating_in_watt_hour: float
     cumulative_thermal_energy_dhw_in_watt_hour: float
@@ -2505,12 +2888,19 @@ class MoreAdvancedHeatPumpHPLibState:
     def self_copy(
         self,
     ):
-        """Copy the Heat Pump State."""
+        """Return a copy of the state with both tracks of the mode and run timers, the totals and the counters.
+
+        :meth:`MoreAdvancedHeatPumpHPLib.i_save_state` and :meth:`MoreAdvancedHeatPumpHPLib.i_restore_state` use it,
+        so every field, the published track's as well, is copied here.
+        """
         return MoreAdvancedHeatPumpHPLibState(
             self.time_on_heating,
             self.time_off,
             self.time_on_cooling,
             self.on_off_previous,
+            self.published_time_on_heating,
+            self.published_time_off,
+            self.published_on_off_previous,
             self.cumulative_thermal_energy_tot_in_watt_hour,
             self.cumulative_thermal_energy_space_heating_in_watt_hour,
             self.cumulative_thermal_energy_dhw_in_watt_hour,
@@ -2531,12 +2921,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     """Configuration of the hplib heat pump's space-heating controller.
 
     The on/off logic in front of the machine's space-heating side: it compares the buffer
-    vessel's water temperature with the flow temperature the heat distribution system asks
-    for, and it stops heating once the daily average outside temperature has risen above
-    the heating threshold. The named default is :meth:`preset_standard`; the three fields
-    that belong to the building and its emitter circuit rather than to the machine --
-    :attr:`heat_distribution_system_type`,
-    :attr:`set_heating_threshold_outside_temperature_in_celsius` and
+    vessel's water temperature with the supply temperature the heating curve asks for, and it
+    heats only in the heating season the heating curve publishes. The named default is
+    :meth:`preset_standard`; the two fields that belong to the building and its emitter
+    circuit rather than to the machine -- :attr:`heat_distribution_system_type` and
     :attr:`set_heating_temperature_for_building_in_celsius` -- are sizable, so the preset
     leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the facts the building and
     the heat distribution controller contribute::
@@ -2547,29 +2935,21 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
             SizingContext(
                 set_heating_temperature_in_celsius=20.0,
                 heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
-                set_heating_threshold_outside_temperature_in_celsius=18.0,
             )
         )
 
     Copying rather than restating is the point: the building decides the room temperature it
-    is heated to, the emitter circuit decides which emitter it feeds and above which outside
-    temperature nothing heats, and a generator controller that disagreed with either would
-    heat water too cold for the room or into a circuit that has switched off.
+    is heated to and the emitter circuit decides which emitter it feeds, and a generator
+    controller that disagreed with either would heat water too cold for the room.
     """
 
     MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
 
     component_id: ComponentID
     #: Which control law runs: 1 is the plain on/off switch, 2 adds a cooling state and is
-    #: only admissible for floor heating, which is what the component checks before using it.
+    #: only admissible for floor heating. The controller refuses any other value, and mode 2
+    #: with another emitter, when it is built.
     mode: int = 1
-    #: Daily average outside temperature above which nothing heats, copied from the emitter
-    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
-    #: resolved to, so both switch off on the same day. ``None`` is a legal value and means
-    #: the machine never stops for the season, whatever the weather does.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[Optional[float]] = sized_field(
-        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS, optional=True
-    )
     #: Daily average outside temperature below which the machine does not cool in ``mode``
     #: 2. ``None`` means cooling is available at any outside temperature.
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float] = 20.0
@@ -2598,20 +2978,21 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
 
         The field defaults are that controller: the plain on/off law, a five-kelvin
         hysteresis band either side of the requested flow temperature, and no cooling below
-        20 °C outside. What the preset does not fix is the emitter type, the heating
-        threshold and the room setpoint, which stay ``AUTO`` so that they are copied from the
-        heat distribution controller and the building instead of repeating their choices here.
+        20 °C outside. What the preset does not fix is the emitter type and the room setpoint,
+        which stay ``AUTO`` so that they are copied from the heat distribution controller and the
+        building instead of repeating their choices here. The heating season comes from the
+        heating curve.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its three sizable fields still ``AUTO``.
+            The configuration, with its two sizable fields still ``AUTO``.
         """
         return cls(component_id=ComponentID(name=name))
 
 
-class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     """Heat Pump Controller for Space Heating.
 
     It takes data from other
@@ -2631,13 +3012,38 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     mode : int
         Mode index for operation type for this heat pump
 
+    The controller also owns how much of a step a space-heating charge runs
+    (:class:`hisim.part_load.StartOfStepPartLoadControl`): it switches heating on and off on the buffer's
+    start-of-step temperature as before, and commands the requested part-load ratio ``RequestedPartLoadRatioSh`` with
+    it. At and below the part-load threshold the requested ratio is 1 whenever the heat pump heats. Above it, with the
+    buffer wired, the requested ratio is :meth:`hisim.part_load.StartOfStepPartLoadRule.raising_ratio`: the fraction that ends the buffer at its
+    target (``TargetTemperatureShInCelsius``), the heating curve's supply temperature raised by the energy manager's
+    modifier and by half the upper offset of the hysteresis band (:meth:`space_heating_target_temperature_in_celsius`),
+    read from the buffer's end temperature and its end temperature without the heat pump. While the controller heats, a
+    buffer at or above its target that its draw would take below it is charged as well, for the fraction that ends it at
+    the target. The controller stays in heating while it requests a ratio of 0; the heat pump counts such a step as off
+    in its published state and counters, not in its minimum times (:meth:`MoreAdvancedHeatPumpHPLib.published_mode`).
+    Under ``force_convergence``, above the threshold with the buffer wired, the requested-ratio port carries the actual
+    ratio the heat pump reports it ran with (``ActualPartLoadRatioSh``); otherwise it keeps the value of the last
+    unforced pass
+    (:meth:`hisim.part_load.StartOfStepPartLoadControl.publish_held`).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInput = "WaterTemperatureInput"
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+    #: The buffer's temperature at the end of the step, which the requested part-load ratio is set against.
+    WaterTemperatureAtEndOfStepFromWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWaterStorageInCelsius"
+    #: The buffer's temperature at the end of the step without the heat pump's circuit.
+    WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius = (
+        "WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius"
+    )
+    #: The actual part-load ratio: the fraction of the step the heat pump's space-heating charge ran, as the heat pump
+    #: reports it.
+    ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
+    SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
+    HeatingSeason = "HeatingSeason"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
@@ -2645,6 +3051,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 
     # Outputs
     State_SH = "State_SH"
+    #: The requested part-load ratio: the fraction of the step the space-heating charge is to run.
+    RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
+    #: The buffer temperature the space-heating charge aims at.
+    TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
+
+    #: The share of the band's upper offset that the space-heating target lies above the supply temperature,
+    #: dimensionless (:meth:`space_heating_target_temperature_in_celsius`). Owner decision of 2026-10-19
+    #: (hisim-hydronics-fxix.27): half the upper offset, so a charge above the part-load threshold ends the buffer where the
+    #: on/off controller holds it on average at 60 s, and the heat pump charges at the COP of the 60 s run.
+    SHARE_OF_UPPER_OFFSET_IN_TARGET: ClassVar[float] = 0.5
 
     def __init__(
         self,
@@ -2682,11 +3098,18 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             True,
         )
 
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            self.SpaceHeatingSupplyTemperatureSetInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
+            True,
+        )
+        self.heating_season_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingSeason,
+            LoadTypes.ANY,
+            Units.BINARY,
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
@@ -2711,30 +3134,50 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             LoadTypes.ANY,
             Units.ANY,
             output_description=f"here a description for {self.State_SH} will follow.",
+            aggregation=OutputAggregation.NONE,
+        )
+
+        self.space_heating_part_load = StartOfStepPartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+            end_temperature_without_circuit_input_name=(
+                self.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius
+            ),
+            actual_ratio_input_name=self.ActualPartLoadRatioSh,
+            requested_ratio_output_name=self.RequestedPartLoadRatioSh,
+            device_description="the heat pump's space-heating charge",
+            target_output_name=self.TargetTemperatureShInCelsius,
         )
 
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get default connections."""
-        connections = []
-        hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
-        connections.append(
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the connections of the supply temperature set point and the heating season from the heating curve.
+
+        Returns:
+            The two connections.
+        """
+        curve_classname = heating_curve.HeatingCurveController.get_classname()
+        return [
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hdsc_classname,
-                heat_distribution_system.HeatDistributionController.HeatingFlowTemperature,
-            )
-        )
-        return connections
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SpaceHeatingSupplyTemperatureSetInCelsius,
+                curve_classname,
+                heating_curve.HeatingCurveController.SpaceHeatingSupplyTemperatureSetInCelsius,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingSeason,
+                curve_classname,
+                heating_curve.HeatingCurveController.HeatingSeason,
+            ),
+        ]
 
     def get_default_connections_from_weather(
         self,
@@ -2757,14 +3200,47 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         """Get simple hot water storage default connections."""
         connections = []
         hws_classname = simple_water_storage.SimpleHotWaterStorage.get_classname()
+        # the sensor is the buffer's start-of-step temperature, which no pass of the step moves, so the on/off
+        # decision cannot cycle with the temperatures the buffer publishes to its circuits
         connections.append(
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
-                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius,
+            )
+        )
+        controller = MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+        buffer = simple_water_storage.SimpleHotWaterStorage
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                controller.WaterTemperatureAtEndOfStepWithoutHeatPumpFromWaterStorageInCelsius,
+                hws_classname,
+                buffer.WaterTemperatureAtEndOfStepWithoutHeatGeneratorInCelsius,
             )
         )
         return connections
+
+    @staticmethod
+    def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
+        """Return the connection of the actual ratio the heat pump's space-heating charge ran, from the heat pump.
+
+        Returns:
+            The one connection of ``ActualPartLoadRatioSh``.
+        """
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ActualPartLoadRatioSh,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh,
+            )
+        ]
 
     def get_default_connections_from_energy_management_system(
         self,
@@ -2791,11 +3267,33 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
-        """Build function.
+        """Set the control law and the hysteresis band, and start the controller switched off.
 
-        The function sets important constants and parameters for the calculations.
+        The control law is refused here, when the controller is built, rather than in its first simulated step:
+        mode 1 (on/off) is accepted for every emitter, mode 2 (heating, cooling, off) only for floor heating,
+        because only a floor can be cooled through. For example, mode 2 with radiators, or a mode of 3, fails the
+        construction with the field that is wrong instead of failing the run at its first step.
+
+        Args:
+            mode: The control law, 1 or 2.
+            upper_temperature_offset_for_state_conditions_in_celsius: How far the water may rise above the requested
+                flow temperature before the machine switches off, in K.
+            lower_temperature_offset_for_state_conditions_in_celsius: How far it may fall below it before the machine
+                switches on, in K.
+
+        Raises:
+            ValueError: If ``mode`` is neither 1 nor 2, or is 2 while the emitter is not floor heating.
         """
-        # Sth
+        if mode not in (1, 2):
+            raise ValueError(
+                f"{self.component_name}: the space-heating controller's mode must be 1 (on/off) or 2 (heating, "
+                f"cooling, off), got {mode!r}."
+            )
+        if mode == 2 and self.heat_distribution_system_type != HeatDistributionSystemType.FLOORHEATING:
+            raise ValueError(
+                f"{self.component_name}: the space-heating controller's mode 2 cools through the emitter, which only "
+                f"floor heating can do, but the emitter is {self.heat_distribution_system_type!r}."
+            )
         self.controller_heatpumpmode = "off"
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
@@ -2829,17 +3327,23 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         return self.heatpump_controller_config.get_string_dict()
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat pump comtroller."""
+        """Decide heating, cooling or off on the buffer's start temperature, and the requested space-heating ratio.
+
+        Under ``force_convergence`` every output keeps the value of the last pass, except the requested ratio above the
+        threshold with the buffer wired: its port then carries the actual ratio the heat pump reports it ran with, so
+        the charge stops changing. At and below the threshold, or without the buffer, the requested ratio keeps its last
+        value too.
+        """
 
         if force_convergence:
-            pass
+            self.space_heating_part_load.publish_held(stsv)
         else:
             # Retrieves inputs
 
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
 
             heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
+                self.supply_temperature_set_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
@@ -2850,13 +3354,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 self.simple_hot_water_storage_temperature_modifier_channel
             )
 
-            # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
-            summer_heating_mode = self.summer_heating_condition(
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=concrete(
-                    self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                ),
-            )
+            # the heat pump heats only in the heating season the heating curve publishes
+            summer_heating_mode = "on" if stsv.get_input_value(self.heating_season_channel) > 0.5 else "off"
 
             # mode 1 is on/off controller
             if self.mode == 1:
@@ -2869,8 +3368,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                     lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
                 )
 
-            # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
-            elif self.mode == 2 and self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
+            # mode 2 is the regulated controller (heating, cooling, off); build() admits it only for floor heating
+            elif self.mode == 2:
                 # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
                 summer_cooling_mode = self.summer_cooling_condition(
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
@@ -2887,10 +3386,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 )
 
             else:
-                raise ValueError(
-                    "Either the Advanced HP Lib Controller Mode is neither 1 nor 2,"
-                    "or the heating system is not floor heating which is the condition for cooling (mode 2)."
-                )
+                raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
 
             if self.controller_heatpumpmode == "heating":
                 state = 1
@@ -2902,6 +3398,54 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 raise ValueError("Advanced HP Lib Controller State unknown.")
 
             stsv.set_output_value(self.state_channel, state)
+            self.space_heating_part_load.publish_raising(
+                stsv,
+                device_runs=state == 1,
+                target_temperature_in_celsius=self.space_heating_target_temperature_in_celsius(
+                    supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+                    upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
+                ),
+            )
+
+    @classmethod
+    def space_heating_target_temperature_in_celsius(
+        cls,
+        *,
+        supply_temperature_set_in_celsius: float,
+        storage_temperature_modifier_in_kelvin: float,
+        upper_temperature_offset_in_kelvin: float,
+    ) -> float:
+        """Return the buffer temperature a space-heating charge ends the step at above the part-load threshold, in °C.
+
+        It is the heating curve's supply temperature, raised by the energy manager's modifier and by half the upper
+        offset of the controller's hysteresis band (:attr:`SHARE_OF_UPPER_OFFSET_IN_TARGET`). Example: a 35 °C supply
+        temperature, a 5 K raise and the default 5 K upper offset give a 42.5 °C target; without a raise 37.5 °C.
+
+        Why half the upper offset (owner decision of 2026-10-19, hisim-hydronics-fxix.27): at 60 s the on/off controller lets the
+        buffer swing up to its switch-off point, the supply temperature plus the upper offset, so the heat pump charges
+        at a hotter outlet and a lower COP than a charge that stops at the supply temperature. A target at the supply
+        temperature made the heat pump's space-heating electricity of the heat-pump twin 4.3 % lower at 900 s than at
+        60 s; at half the upper offset it lies within 1 % (measured 2026-10-19). A target at the switch-off point itself
+        is worse, because the buffer then coasts down to the switch-on point for whole steps. The offset comes from the
+        controller's own band, so a configured band moves the target with it. The raise also lifts the buffer the
+        energy manager uses to store surplus electricity as heat.
+
+        Args:
+            supply_temperature_set_in_celsius: The heating curve's supply temperature, in °C.
+            storage_temperature_modifier_in_kelvin: The energy manager's raise of the buffer, in K; 0 without one.
+            upper_temperature_offset_in_kelvin: How far the buffer may rise above the supply temperature before the
+                on/off controller switches heating off, in K: the configuration's
+                ``upper_temperature_offset_for_state_conditions_in_celsius``.
+
+        Returns:
+            The target, in °C.
+        """
+        return (
+            supply_temperature_set_in_celsius
+            + storage_temperature_modifier_in_kelvin
+            + cls.SHARE_OF_UPPER_OFFSET_IN_TARGET * upper_temperature_offset_in_kelvin
+        )
 
     def conditions_on_off(
         self,
@@ -3048,32 +3592,6 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         else:
             raise ValueError("unknown mode")
 
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Set conditions for the heat pump."""
-
-        # if no heating threshold is set, the heat pump is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
-            heating_mode = "off"
-
-        # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
-            heating_mode = "on"
-
-        else:
-            raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
-            )
-        return heating_mode
-
     def summer_cooling_condition(
         self,
         daily_average_outside_temperature_in_celsius: float,
@@ -3130,7 +3648,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
 
     The hysteresis in front of the machine's hot-water side: it switches the machine on
     when the DHW vessel has cooled to :attr:`t_min_dhw_storage_in_celsius` and off again
-    when it has reached :attr:`t_max_dhw_storage_in_celsius`. The named default is
+    when it has come within :attr:`charge_end_below_target_in_kelvin` of
+    :attr:`t_max_dhw_storage_in_celsius` (58 °C by default). The named default is
     :meth:`preset_standard`, the 40/60 °C band the fleet runs::
 
         MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
@@ -3146,14 +3665,70 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     t_min_dhw_storage_in_celsius: float = 40.0
     #: upper set temperature of DHW Storage, given in °C
     t_max_dhw_storage_in_celsius: float = 60.0
+    #: How far below its target, ``t_max`` plus the energy manager's raise, a hot-water charge ends, in K: the charge
+    #: ends once the tank's start-of-step temperature is at or above the target less this. The heat pump's hot-water
+    #: supply is capped at the target, so the tank approaches it without reaching it and its last kelvins come slowly:
+    #: on household_heatpump_building_sizer (full year 2021, 900 s) a charge that ended 0.5 K below the target ran 75
+    #: minutes in the median and up to 195, its last steps at 3.0, 1.5 and 0.9 kW, while the space-heating buffer
+    #: emptied. A real cylinder is charged through a coil that needs its flow some kelvins above the water to pass a
+    #: useful power, so a charge whose flow is capped at the target stops a few kelvins short of it. 2 K is a stated
+    #: default, not a manufacturer's value: the owner's decision of 2026-10-21 (hisim-room-air-dhw-dip-a5by), where it
+    #: cut the quarter-hours with a room-air drop above 1 K during hot water from 160 to 101. The surplus switch-on
+    #: stops at the same distance below ``t_max`` (:meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state`).
+    charge_end_below_target_in_kelvin: float = field(default=2.0, metadata={"unit": Units.KELVIN})
+    #: How long a hot-water charge has priority over space heating before it is interrupted for
+    #: :attr:`space_heating_interval_after_hot_water_priority_in_seconds`, in s; 0 means absolute priority
+    #: (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`, which names the sources). Heat-pump
+    #: controllers ship 45 to 60 min. The default is 15 min, the owner's decision of 2026-10-21
+    #: (hisim-room-air-dhw-dip-a5by): the space-heating buffer empties after 20 to 25 min of priority, and the room
+    #: air, which has no heat capacity of its own in the building model, falls with it. On
+    #: household_heatpump_building_sizer (full year 2021, 900 s, charge end 2 K) the quarter-hours with a room-air
+    #: drop above 0.5 K during hot water were 164 with absolute priority, 144 with 60 / 30 min, 115 with 45 / 30 min
+    #: and 42 with 15 / 15 min.
+    maximum_hot_water_priority_time_in_seconds: float = field(default=900.0, metadata={"unit": Units.SECONDS})
+    #: How long space heating has the heat pump after an interrupted hot-water charge before the charge resumes, in
+    #: s. The default is 15 min, as long as the maximum priority time (the Siemens Albatros2 rule).
+    space_heating_interval_after_hot_water_priority_in_seconds: float = field(
+        default=900.0, metadata={"unit": Units.SECONDS}
+    )
+
+    def __post_init__(self) -> None:
+        """Refuse a charge end that is not above 0 K or not below the band, naming the field and the value.
+
+        For example, the default 2 K with the 40/60 °C band is accepted; 0 K is refused, since the capped supply never
+        brings the tank to its target and a charge would not end, and 20 K is refused, since the charge would end at
+        or below the 40 °C switch-on point and start and end on the same reading.
+
+        The hot-water priority times are checked by
+        :meth:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit.require_valid_times`.
+
+        Raises:
+            ValueError: If ``charge_end_below_target_in_kelvin`` is not a finite number above 0 K and below
+                ``t_max_dhw_storage_in_celsius - t_min_dhw_storage_in_celsius``, or the hot-water priority times are
+                invalid.
+        """
+        band_in_kelvin = self.t_max_dhw_storage_in_celsius - self.t_min_dhw_storage_in_celsius
+        end_in_kelvin = self.charge_end_below_target_in_kelvin
+        if not math.isfinite(end_in_kelvin) or not 0.0 < end_in_kelvin < band_in_kelvin:
+            raise ValueError(
+                f"The heat pump's hot-water controller needs charge_end_below_target_in_kelvin above 0 K and below "
+                f"its {band_in_kelvin} K band (t_max_dhw_storage_in_celsius - t_min_dhw_storage_in_celsius), got "
+                f"{end_in_kelvin!r} K: at 0 K the capped supply never brings the tank to the end of the charge, and "
+                "at the band or above the charge ends where it starts."
+            )
+        HotWaterPriorityLimit.require_valid_times(
+            maximum_priority_time_in_seconds=self.maximum_hot_water_priority_time_in_seconds,
+            space_heating_interval_in_seconds=self.space_heating_interval_after_hot_water_priority_in_seconds,
+            controller_description="The heat pump's hot-water controller",
+        )
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
-        """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
+        """The fleet's hot-water controller, reheating the vessel from 40 °C until 2 K below its 60 °C set temperature.
 
-        The field defaults are that controller: the 40/60 °C band that keeps the vessel above the
-        legionella temperature without cycling the machine on every tap.
+        The field defaults are that controller: the 40/60 °C band, which keeps the machine from cycling on every tap,
+        and a charge that ends 2 K below the 60 °C set temperature (:attr:`charge_end_below_target_in_kelvin`).
 
         Args:
             name: Instance name of the controller in the simulation.
@@ -3178,7 +3753,7 @@ class HeatPumpDhwState(int, Enum):
     ON = 2
 
 
-class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
+class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
     """Heat Pump Controller for DHW.
 
     It takes data from DHW Storage --> generic hot water storage modular
@@ -3191,19 +3766,14 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
     DHWStorageTemperatureModifier = "DHWStorageTemperatureModifier"
+    #: The space-heating controller's signal (1 heating), which tells whether space heating asks for the heat pump
+    #: while a hot-water charge has priority (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`).
+    SpaceHeatingStateFromController = "SpaceHeatingStateFromController"
 
     # Outputs
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
-
-    #: How far below its set temperature the tank's start temperature may stay for the charge to end, K. The heat
-    #: pump's hot-water supply stops at the set temperature (``t_max`` plus the energy manager's raise), so the tank
-    #: approaches it but never passes it; the charge ends once the tank is within 0.5 K of it, as a boiler's charge
-    #: ends at its target. The surplus switch-on stops at the same point below ``t_max``: were it at ``t_max``, a tank
-    #: between ``t_max - 0.5 K`` and ``t_max`` would be switched on by the raise and off without it, and the energy
-    #: manager's raise, which follows the heat pump's draw, would toggle it within a step.
-    SWITCH_OFF_TOLERANCE_IN_KELVIN: ClassVar[float] = 0.5
 
     def __init__(
         self,
@@ -3229,6 +3799,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         self.water_temperature_input_from_dhw_storage_in_celsius_previous: float
         self.water_temperature_input_from_dhw_storage_in_celsius: float
         self.supply_temperature_set_for_dhw_in_celsius: float
+        # the state the controller publishes: its own state, or OFF on a step the priority limit gives to space heating
+        self.published_state_dhw = HeatPumpDhwState.OFF
+        # the hot-water priority timer at the end of the last unforced pass, and at the start of the step
+        self.hot_water_priority_timer = HotWaterPriorityTimer()
+        self.hot_water_priority_timer_at_start_of_step = HotWaterPriorityTimer()
 
         self.build()
 
@@ -3248,6 +3823,15 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             mandatory=False,
         )
 
+        # without a space-heating controller nothing asks for space heating, and a charge is never interrupted
+        self.space_heating_state_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.SpaceHeatingStateFromController,
+            LoadTypes.ANY,
+            Units.ANY,
+            mandatory=False,
+        )
+
         self.state_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.State_dhw,
@@ -3256,6 +3840,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             output_description=(
                 "The hot-water mode the controller commands the heat pump: 2 charges the hot-water tank, 0 does not."
             ),
+            aggregation=OutputAggregation.NONE,
         )
 
         self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
@@ -3265,13 +3850,29 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             Units.CELSIUS,
             output_description=(
                 "The hot-water supply temperature the controller aims at, t_max plus the energy manager's raise "
-                "(60 °C by default). The heat pump's hot-water supply stops at it, so a charge ends at its target "
-                "inside the step."
+                "(60 °C by default). The heat pump's hot-water supply stops at it, and a charge ends once the tank "
+                "is within the controller's charge end (2 K by default) of it."
             ),
         )
 
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_space_heating_controller())
+
+    @staticmethod
+    def get_default_connections_from_space_heating_controller() -> List[ComponentConnection]:
+        """Return the connection of the space-heating controller's signal, which the priority limit reads.
+
+        Returns:
+            The connection of ``SpaceHeatingStateFromController`` to the space-heating controller's ``State_SH``.
+        """
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.SpaceHeatingStateFromController,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_classname(),
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
+            )
+        ]
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -3330,11 +3931,16 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state."""
+        """Save the current state, and the hot-water priority timer the step starts from.
+
+        Every unforced pass decides the step from the timer saved here; a forced pass keeps the timer of the last
+        unforced pass, as it keeps that pass's decision.
+        """
         self.previous_state_dhw = self.state_dhw
         self.water_temperature_input_from_dhw_storage_in_celsius_previous = (
             self.water_temperature_input_from_dhw_storage_in_celsius
         )
+        self.hot_water_priority_timer_at_start_of_step = self.hot_water_priority_timer
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
@@ -3362,6 +3968,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         raise_in_kelvin: float,
         minimum_temperature_in_celsius: float,
         maximum_temperature_in_celsius: float,
+        charge_end_below_target_in_kelvin: float,
     ) -> "HeatPumpDhwState":
         """Return the hot-water state after one decision on the tank's start-of-step temperature.
 
@@ -3370,13 +3977,18 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         | condition | next state |
         |---|---|
         | the tank is below ``minimum_temperature_in_celsius`` | ON |
-        | the tank is at or above ``maximum + raise - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | OFF |
-        | a raise above 0 and the tank below ``maximum - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | ON |
+        | the tank is at or above ``maximum + raise - charge_end_below_target_in_kelvin`` | OFF |
+        | a raise above 0 and the tank below ``maximum - charge_end_below_target_in_kelvin`` | ON |
         | none of these | the state as it was |
 
         The raise is the energy manager's increase of the set temperature while it has surplus electricity. For
-        example, with the 40/60 °C band and no raise a tank at 50 °C keeps its state, one at 39 °C switches on and
-        one at 59.5 °C switches off; with a 10 K raise, a tank at 59 °C switches on and charges until 69.5 °C.
+        example, with the 40/60 °C band, the default 2 K charge end and no raise, a tank at 50 °C keeps its state, one
+        at 39 °C switches on and one at 58 °C switches off; with a 10 K raise, a tank at 57 °C switches on and charges
+        until 68 °C.
+
+        Why the surplus switch-on stops at the charge end below ``maximum`` and not at ``maximum``: a tank between the
+        two would be switched on by the raise and off without it, and the energy manager's raise, which follows the
+        heat pump's draw, can come and go within a step, so the charge would toggle with it.
 
         Args:
             state: The state before the decision.
@@ -3384,6 +3996,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             raise_in_kelvin: The energy manager's raise of the set temperature, in K, 0 or more.
             minimum_temperature_in_celsius: The tank temperature below which a charge starts, in °C.
             maximum_temperature_in_celsius: The set temperature without a raise, in °C.
+            charge_end_below_target_in_kelvin: How far below the target, ``maximum + raise``, a charge ends, in K
+                (:attr:`MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin`).
 
         Returns:
             The state after the decision.
@@ -3391,14 +4005,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         next_state = state
         if storage_temperature_in_celsius < minimum_temperature_in_celsius:
             next_state = HeatPumpDhwState.ON
-        switch_off_tolerance_in_kelvin = MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
         if storage_temperature_in_celsius >= (
-            maximum_temperature_in_celsius + raise_in_kelvin - switch_off_tolerance_in_kelvin
+            maximum_temperature_in_celsius + raise_in_kelvin - charge_end_below_target_in_kelvin
         ):
-            # the tank has reached its target, to which the heat pump's supply is capped
+            # the tank has come as close to its target, to which the heat pump's supply is capped, as a charge goes
             next_state = HeatPumpDhwState.OFF
         if raise_in_kelvin > 0 and storage_temperature_in_celsius < (
-            maximum_temperature_in_celsius - switch_off_tolerance_in_kelvin
+            maximum_temperature_in_celsius - charge_end_below_target_in_kelvin
         ):
             # on with surplus electricity, below where the unraised charge ends, so a raise that comes and goes
             # within a step cannot switch the charge on and off
@@ -3409,14 +4022,20 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         """Decide whether the heat pump charges the hot-water tank, and publish the decision and the set temperature.
 
         The decision (:meth:`next_state`) is taken on the tank's start-of-step temperature, which does not change
-        while the step iterates. Under ``force_convergence`` the controller keeps its decision.
+        while the step iterates. A charge that has had priority for its maximum time while the space-heating
+        controller asks for heat yields its steps to space heating for the configured interval
+        (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`): the controller publishes OFF on them
+        and keeps its own state ON, so the charge resumes after the interval and ends at its target. Under
+        ``force_convergence`` the controller keeps its decision.
         """
         if not force_convergence:
             storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
             if storage_temperature_in_celsius == 0:
-                # The simulator starts every step from zeroed outputs, so a controller simulated before the tank
-                # reads 0 °C on the first pass and would start a charge; it keeps the temperature it read last
-                # instead. This guard goes once the controller restores its decision on every pass.
+                # Step-0 guard: only the first step starts from zeroed outputs, so on its first pass a controller
+                # simulated before the tank reads 0 °C and would start a charge; it keeps the temperature it read
+                # last instead. Every later step starts from the values the previous step converged to (the
+                # simulator's warm start), so the guard fires only at step 0. It goes once the controller restores
+                # its decision on every pass, since until then a decision taken on the 0 would latch.
                 storage_temperature_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
             self.water_temperature_input_from_dhw_storage_in_celsius = storage_temperature_in_celsius
             raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)
@@ -3427,14 +4046,26 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 raise_in_kelvin=raise_in_kelvin,
                 minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
                 maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+                charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
             )
+            charges, self.hot_water_priority_timer = HotWaterPriorityLimit.decide(
+                timer=self.hot_water_priority_timer_at_start_of_step,
+                charge_requested=self.state_dhw == HeatPumpDhwState.ON,
+                space_heating_requested=stsv.get_input_value(self.space_heating_state_channel) == 1,
+                maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
+                space_heating_interval_in_seconds=(
+                    self.config.space_heating_interval_after_hot_water_priority_in_seconds
+                ),
+                seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            )
+            self.published_state_dhw = self.state_dhw if charges else HeatPumpDhwState.OFF
 
         self.previous_state_dhw = self.state_dhw
         self.water_temperature_input_from_dhw_storage_in_celsius_previous = (
             self.water_temperature_input_from_dhw_storage_in_celsius
         )
 
-        stsv.set_output_value(self.state_dhw_channel, self.state_dhw.value)
+        stsv.set_output_value(self.state_dhw_channel, self.published_state_dhw.value)
         stsv.set_output_value(
             self.supply_temperature_set_for_dhw_in_celsius_channel, self.supply_temperature_set_for_dhw_in_celsius
         )

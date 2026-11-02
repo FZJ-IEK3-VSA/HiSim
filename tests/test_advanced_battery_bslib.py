@@ -1,13 +1,16 @@
 """Test for the advanced battery lib."""
 
+import dataclasses
 from typing import List, Tuple
 
+import pandas as pd
 import pytest
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.config import ComponentID, ConfigSizingError, SizingContext, auto_fields, concrete
 from tests import functions_for_testing as fft
 
@@ -82,7 +85,10 @@ def test_advanced_battery_bslib() -> None:
     # Check if set power is charged
     assert stsv.values[my_advanced_battery.ac_battery_power_channel.global_index] == 4000  # noqa B101
     assert stsv.values[my_advanced_battery.dc_battery_power_channel.global_index] == 3807.546  # noqa B101
-    assert stsv.values[my_advanced_battery.state_of_charge_channel.global_index] == 0.006185227970066665  # noqa B101
+    # The battery starts half charged, and one minute at 3807.546 W DC adds 0.0061852 to its state of charge.
+    assert stsv.values[my_advanced_battery.state_of_charge_channel.global_index] == pytest.approx(  # noqa B101
+        advanced_battery_bslib.Battery.INITIAL_STATE_OF_CHARGE + 0.006185227970066665, rel=1e-12
+    )
 
 
 @pytest.mark.base
@@ -274,7 +280,8 @@ class TestTheChargingLimits:
         (0.0, False, 60, 11100.0),
         (0.5, False, 60, 11100.0),
         (0.999, False, 60, 666.0),
-        (0.999, False, 900, 44.4),
+        (0.999, False, 900, 0.0),
+        (0.995, False, 900, 222.0),
         (1.0, False, 60, 0.0),
         (1.0000001, False, 60, 0.0),
         (0.99, True, 60, 0.0),
@@ -286,7 +293,11 @@ class TestTheChargingLimits:
     @pytest.mark.base
     @pytest.mark.parametrize(("state_of_charge", "blocked", "seconds_per_timestep", "expected_in_watt"), MAXIMA)
     def test_every_maximum_of_the_table(self, state_of_charge: float, blocked: bool, seconds_per_timestep: int, expected_in_watt: float) -> None:
-        """Catches a maximum beyond the rated power, beyond what fills the battery in the step, or one while it is full."""
+        """Catches a maximum beyond the rated power or what fills the battery in the step, or one it refuses.
+
+        The battery refuses any power while it is full and any power at or below its minimum charging power: 0.999 at
+        900 s could fill at 44.4 W, below the minimum of 202.4 W, so the maximum is 0 W there.
+        """
         maximum_in_watt = advanced_battery_bslib.Battery.maximum_charging_power_in_watt(
             self.PARAMETERS, state_of_charge=state_of_charge, recharging_is_blocked=blocked, seconds_per_timestep=seconds_per_timestep
         )
@@ -310,6 +321,96 @@ class TestTheChargingLimits:
         assert battery.charging_parameters.recharge_threshold_state_of_charge == 0.98
 
     @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("field_name", "value"),
+        [
+            ("capacity_in_watt_hour", float("nan")),
+            ("rated_charging_power_in_watt", float("inf")),
+            ("minimum_charging_power_in_watt", float("nan")),
+            ("minimum_charging_power_in_watt", -1.0),
+            ("recharge_threshold_state_of_charge", -0.5),
+        ],
+    )
+    def test_a_parameter_that_is_not_finite_or_is_negative_is_refused(self, field_name: str, value: float) -> None:
+        """Catches a NaN bound that would reach the energy manager in the first step instead of failing construction."""
+        with pytest.raises(ValueError, match=rf"{field_name} must be a finite number of at least 0, got {value!r}"):
+            dataclasses.replace(self.PARAMETERS, **{field_name: value})
+
+    @pytest.mark.base
+    def test_a_recharge_threshold_above_1_is_refused(self) -> None:
+        """Catches a recharge threshold above a full battery, which would let a blocked battery charge past full."""
+        with pytest.raises(ValueError, match=r"recharge_threshold_state_of_charge must be a state of charge of at"):
+            dataclasses.replace(self.PARAMETERS, recharge_threshold_state_of_charge=1.5)
+
+    @pytest.mark.base
+    def test_a_dc_coupled_bslib_system_is_refused_when_the_battery_is_built(self) -> None:
+        """S3 gives NaN charging powers; the battery refuses it at construction, naming the system and the field."""
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            system_id="S3",
+            custom_pv_inverter_power_generic_in_watt=5000.0,
+            custom_battery_capacity_generic_in_kilowatt_hour=10.0,
+        )
+        with pytest.raises(ValueError, match=r"bslib system 'S3' .*rated_charging_power_in_watt .* got nan"):
+            advanced_battery_bslib.Battery(
+                config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            )
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("capacity_in_kilowatt_hour", "inverter_power_in_watt", "field_name", "unit", "value"),
+        [
+            (0.0, 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", 0.0),
+            (-10.0, 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", -10.0),
+            (float("nan"), 5000.0, "custom_battery_capacity_generic_in_kilowatt_hour", "kWh", float("nan")),
+            (10.0, 0.0, "custom_pv_inverter_power_generic_in_watt", "W", 0.0),
+            (10.0, -5000.0, "custom_pv_inverter_power_generic_in_watt", "W", -5000.0),
+            (10.0, float("inf"), "custom_pv_inverter_power_generic_in_watt", "W", float("inf")),
+        ],
+    )
+    def test_a_size_that_is_not_finite_or_not_above_0_is_refused_when_the_battery_is_built(
+        self, capacity_in_kilowatt_hour: float, inverter_power_in_watt: float, field_name: str, unit: str, value: float
+    ) -> None:
+        """Catches a stated size that builds: 0 kWh divides by zero in the first step, 0 W never charges.
+
+        A size stated in the configuration replaces the sizing law, so the battery checks it when it is built.
+        """
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
+            custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
+        )
+        with pytest.raises(
+            ValueError, match=rf"Battery: the bslib battery's {field_name} must be a finite number above 0 {unit}, "
+            rf"got {value!r} {unit}"
+        ):
+            advanced_battery_bslib.Battery(
+                config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+            )
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("capacity_in_kilowatt_hour", "inverter_power_in_watt"), [(10.0, 5000.0), (0.001, 0.001)]
+    )
+    def test_a_battery_is_built_at_its_stated_sizes(
+        self, capacity_in_kilowatt_hour: float, inverter_power_in_watt: float
+    ) -> None:
+        """Catches a guard that refuses a valid size or changes it: bslib is given both sizes as stated.
+
+        0.001 kWh with 0.001 W lies just above the bound of 0, so a bound moved above it fails here.
+        """
+        config = advanced_battery_bslib.BatteryConfig(
+            component_id=ComponentID(name="Battery"),
+            custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
+            custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
+        )
+        battery = advanced_battery_bslib.Battery(
+            config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+        )
+        assert battery.charging_parameters.capacity_in_watt_hour == pytest.approx(capacity_in_kilowatt_hour * 1e3)
+        assert battery.charging_parameters.rated_charging_power_in_watt == pytest.approx(inverter_power_in_watt)
+
+    @pytest.mark.base
     def test_a_battery_offered_its_maximum_takes_it(self) -> None:
         """Catches a published maximum the battery does not take: the energy manager's share would then be wrong."""
         battery, set_point, stsv = battery_with_set_point_input()
@@ -323,6 +424,32 @@ class TestTheChargingLimits:
             battery.i_restore_state()
             battery.i_simulate(0, stsv, False)
             assert stsv.values[battery.ac_battery_power_channel.global_index] == pytest.approx(maximum_in_watt)
+
+    @pytest.mark.base
+    def test_the_battery_publishes_the_minimum_charging_power_it_reads_from_bslib(self) -> None:
+        """Catches a minimum-charging-power output that is never set or carries another value than the adapter's.
+
+        The energy manager takes nothing from a share at or below this output, so a wrong value there changes the
+        manager's distribution of the surplus. SG1 with 5 kW scales its minimum to 18.23 W per kW, 91.15 W.
+        """
+        battery, _, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.5)
+        battery.i_simulate(0, stsv, False)
+        assert stsv.values[battery.minimum_charging_power_channel.global_index] == pytest.approx(18.23 * 5)
+
+    @pytest.mark.base
+    def test_a_battery_that_could_take_no_more_than_its_minimum_publishes_0_watt_and_takes_nothing(self) -> None:
+        """Catches a published maximum below the minimum, a power the battery refuses.
+
+        At a state of charge of 0.99985 the 10 kWh battery has 1.5 Wh left, which fill within 60 s at 90 W, below its
+        minimum of 91.15 W. bslib then takes nothing even when offered 1,000 W, so the published maximum is 0 W.
+        """
+        battery, set_point, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.99985)
+        stsv.values[set_point.global_index] = 1000.0
+        battery.i_simulate(0, stsv, False)
+        assert stsv.values[battery.maximum_charging_power_channel.global_index] == 0.0
+        assert stsv.values[battery.ac_battery_power_channel.global_index] == 0.0
 
     @pytest.mark.base
     def test_the_battery_is_safe_to_iterate(self) -> None:
@@ -369,3 +496,206 @@ def battery_with_set_point_input() -> Tuple[advanced_battery_bslib.Battery, cp.C
     fft.add_global_index_of_components([battery, set_point])
     stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([battery, set_point]))
     return battery, set_point, stsv
+
+
+class TestStoredEnergyAndLosses:
+    """The battery publishes the change of its stored energy, and its OPEX losses subtract it."""
+
+    #: The capacity of the battery of :func:`battery_with_set_point_input`, in Wh.
+    CAPACITY_IN_WATT_HOUR = 10_000.0
+
+    @staticmethod
+    def run_steps(set_points_in_watt: List[float], state_of_charge_at_start: float) -> Tuple[
+        advanced_battery_bslib.Battery, List[cp.ComponentOutput], pd.DataFrame
+    ]:
+        """Step the battery once per set point, from the given start, and collect every output per step.
+
+        Args:
+            set_points_in_watt: The AC set point of each step, in W; positive charges.
+            state_of_charge_at_start: The state of charge before the first step.
+
+        Returns:
+            The battery, its outputs in column order, and one row of output values per step.
+        """
+        battery, set_point, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=state_of_charge_at_start)
+        rows = []
+        for timestep, set_point_in_watt in enumerate(set_points_in_watt):
+            stsv.values[set_point.global_index] = set_point_in_watt
+            battery.i_save_state()
+            battery.i_simulate(timestep, stsv, False)
+            battery.i_save_state()
+            rows.append([stsv.values[output.global_index] for output in battery.outputs])
+        return battery, list(battery.outputs), pd.DataFrame(rows)
+
+    @pytest.mark.base
+    def test_the_stored_energy_increase_sums_to_the_change_of_the_state_of_charge(self) -> None:
+        """Catches a stored-energy output that is not the step's state-of-charge change times the capacity.
+
+        One hour of charging at 4 kW from 0.2, then half an hour of discharging at 3 kW: summed over the run the output
+        must be the final minus the initial state of charge times the 10 kWh capacity, read from the published state
+        of charge.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 60 + [-3000.0] * 30, state_of_charge_at_start=0.2)
+        state_of_charge_column = outputs.index(battery.state_of_charge_channel)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        assert len(frame) == 90
+        expected_in_watt_hour = (frame.iloc[-1, state_of_charge_column] - 0.2) * self.CAPACITY_IN_WATT_HOUR
+        assert expected_in_watt_hour > 1000.0  # the run must leave the battery clearly fuller
+        # The per-step increases add up exactly to the state-of-charge change; 1e-9 absorbs float summation only.
+        assert frame.iloc[:, increase_column].sum() == pytest.approx(expected_in_watt_hour, rel=1e-9)
+
+    @pytest.mark.base
+    def test_energy_the_battery_still_holds_at_the_end_is_not_booked_as_a_loss(self) -> None:
+        """Catches the OPEX losses booking the charge the battery ends with as lost electricity.
+
+        Two hours of charging at 4 kW from empty and nothing discharged: the old formula, charged minus discharged,
+        reports all of the charged energy as lost. The losses are what was charged minus what the cells hold more at
+        the end, which for bslib's SG1 at 4 kW is a few percent of the charge, not all of it.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 120, state_of_charge_at_start=0.0)
+        ac_power_column = outputs.index(battery.ac_battery_power_channel)
+        charged_in_kilowatt_hour = round(frame.iloc[:, ac_power_column].sum() * 60 / 3.6e6, 1)
+        stored_in_kilowatt_hour = round(
+            frame.iloc[-1, outputs.index(battery.state_of_charge_channel)] * self.CAPACITY_IN_WATT_HOUR / 1e3, 1
+        )
+        opex = battery.get_cost_opex(all_outputs=outputs, postprocessing_results=frame)
+        assert charged_in_kilowatt_hour == pytest.approx(8.0, abs=0.05)
+        # Both sides are rounded to 0.1 kWh, so the expected losses are exact up to that rounding.
+        expected_losses_in_kilowatt_hour = charged_in_kilowatt_hour - stored_in_kilowatt_hour
+        assert opex.total_consumption_in_kwh == pytest.approx(expected_losses_in_kilowatt_hour, abs=0.11)
+        assert 0.0 < opex.total_consumption_in_kwh < 0.2 * charged_in_kilowatt_hour
+
+    @staticmethod
+    def bare_kpi_preparation(battery: advanced_battery_bslib.Battery) -> KpiPreparation:
+        """Build a KPI preparation that knows only the battery's simulation parameters.
+
+        ``KpiPreparation.__init__`` needs a finished simulation; the filter and the battery KPIs read only the time
+        step, so the object is created without the constructor.
+
+        Args:
+            battery: The battery whose simulation parameters the preparation reads.
+
+        Returns:
+            The preparation, ready for direct calls of its filter and its battery KPIs.
+        """
+        preparation = KpiPreparation.__new__(KpiPreparation)
+        preparation.simulation_parameters = battery.my_simulation_parameters
+        return preparation
+
+    @pytest.mark.base
+    def test_the_battery_kpis_subtract_the_stored_energy_the_filter_collects(self) -> None:
+        """Catches the KPI filter not collecting the battery's stored-energy output into the losses.
+
+        The battery's real outputs go through ``filter_results_according_to_postprocessing_flags`` and then
+        ``compute_battery_kpis``: one hour of charging at 4 kW from empty, then half an hour of discharging at 3 kW.
+        The losses must be charged minus discharged minus the state-of-charge change times the capacity, a few percent
+        of the charge, not the energy the battery still holds.
+        """
+        battery, outputs, frame = self.run_steps([4000.0] * 60 + [-3000.0] * 30, state_of_charge_at_start=0.0)
+        preparation = self.bare_kpi_preparation(battery)
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=battery.component_id.building_label
+        )
+        charged, discharged, losses = preparation.compute_battery_kpis(result_dataframe=filtered)
+        stored_increase_in_kilowatt_hour = (
+            frame.iloc[-1, outputs.index(battery.state_of_charge_channel)] * self.CAPACITY_IN_WATT_HOUR / 1e3
+        )
+        assert stored_increase_in_kilowatt_hour > 1.0  # the run must leave the battery clearly fuller
+        assert losses == pytest.approx(charged - discharged - stored_increase_in_kilowatt_hour, rel=1e-9)
+        assert 0.0 < losses < 0.2 * charged
+
+    @pytest.mark.base
+    def test_the_kpi_filter_refuses_a_battery_without_its_stored_energy_output(self) -> None:
+        """Catches a battery whose stored energy is missing from the KPIs silently booking what it holds as lost."""
+        battery, outputs, frame = self.run_steps([4000.0] * 10, state_of_charge_at_start=0.0)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        increase = battery.stored_energy_increase_channel
+        outputs_without_increase = [output for output in outputs if output is not increase]
+        frame_without_increase = frame.drop(columns=frame.columns[increase_column])
+        preparation = self.bare_kpi_preparation(battery)
+        with pytest.raises(ValueError, match="STORED_ENERGY_INCREASE"):
+            preparation.filter_results_according_to_postprocessing_flags(
+                all_outputs=outputs_without_increase,
+                results=frame_without_increase,
+                building_objects_in_district=battery.component_id.building_label,
+            )
+
+    @pytest.mark.base
+    def test_the_opex_refuses_outputs_without_the_stored_energy_output(self) -> None:
+        """Catches the OPEX falling back to charged minus discharged when its stored-energy output is not passed."""
+        battery, outputs, frame = self.run_steps([4000.0] * 10, state_of_charge_at_start=0.0)
+        increase_column = outputs.index(battery.stored_energy_increase_channel)
+        increase = battery.stored_energy_increase_channel
+        outputs_without_increase = [output for output in outputs if output is not increase]
+        frame_without_increase = frame.drop(columns=frame.columns[increase_column])
+        with pytest.raises(ValueError, match="STORED_ENERGY_INCREASE"):
+            battery.get_cost_opex(all_outputs=outputs_without_increase, postprocessing_results=frame_without_increase)
+
+    @pytest.mark.base
+    def test_a_battery_that_barely_cycles_books_its_small_loss_and_the_opex_equals_the_kpi(self) -> None:
+        """Catches the OPEX losses rounding each energy before subtracting, which books a negative loss.
+
+        Six minutes of charging at 1.4 kW from half full, then four minutes of discharging at 1 kW: about 0.14 kWh
+        charged, 0.067 kWh discharged and 0.051 kWh more stored, a loss of about 0.02 kWh. Rounding the three terms to
+        0.1 kWh first gives 0.1 - 0.1 - 0.1 = -0.1 kWh, a negative consumption, cost and CO2. The OPEX loss must be the
+        KPI "Battery losses" rounded to the OPEX table's 0.01 kWh, and above zero.
+        """
+        battery, outputs, frame = self.run_steps([1400.0] * 6 + [-1000.0] * 4, state_of_charge_at_start=0.5)
+        preparation = self.bare_kpi_preparation(battery)
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=battery.component_id.building_label
+        )
+        _, _, kpi_losses_in_kilowatt_hour = preparation.compute_battery_kpis(result_dataframe=filtered)
+        opex = battery.get_cost_opex(all_outputs=outputs, postprocessing_results=frame)
+        assert 0.01 < kpi_losses_in_kilowatt_hour < 0.05  # the scenario must stay a nearly idle battery
+        assert opex.total_consumption_in_kwh == round(kpi_losses_in_kilowatt_hour, 2)
+        assert opex.opex_energy_cost_in_euro > 0.0
+        assert opex.co2_footprint_in_kg > 0.0
+        # The config keeps the energies rounded to 0.1 kWh for the aging count.
+        assert battery.battery_config.charge_in_kwh == pytest.approx(0.1)
+        assert battery.battery_config.discharge_in_kwh == pytest.approx(0.1)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "ac_power_in_watt, dc_power_in_watt, stored_energy_increase_in_watt_hour, expected",
+    [
+        (1000.0, 950.0, 930.0, (50.0, 20.0)),  # charging for an hour
+        (-1000.0, -1060.0, -1080.0, (60.0, 20.0)),  # discharging for an hour
+        (0.0, 0.0, 0.0, (0.0, 0.0)),  # idle
+    ],
+)
+def test_the_losses_are_the_differences_of_the_three_published_numbers(
+    ac_power_in_watt: float,
+    dc_power_in_watt: float,
+    stored_energy_increase_in_watt_hour: float,
+    expected: Tuple[float, float],
+) -> None:
+    """Catches a sign or a unit error between the battery's AC, DC and stored-energy outputs in its two losses.
+
+    The inverter loss is the AC power minus the DC power, the cell loss the DC power minus the stored energy's
+    increase divided by the step's duration; with both, the battery's balance closes in W. An error would show in the
+    energy balance as a battery that does not close.
+    """
+    seconds_per_timestep = 3600.0
+    inverter_loss_in_watt, cell_loss_in_watt = advanced_battery_bslib.Battery.losses_in_watt(
+        ac_power_in_watt=ac_power_in_watt,
+        dc_power_in_watt=dc_power_in_watt,
+        stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour,
+        seconds_per_timestep=seconds_per_timestep,
+    )
+    assert (inverter_loss_in_watt, cell_loss_in_watt) == pytest.approx(expected)
+    charging_in_watt, discharging_in_watt = max(ac_power_in_watt, 0.0), max(-ac_power_in_watt, 0.0)
+    stored_energy_increase_in_watt = stored_energy_increase_in_watt_hour * 3600.0 / seconds_per_timestep
+    residual_in_watt = (
+        charging_in_watt - discharging_in_watt - inverter_loss_in_watt - cell_loss_in_watt - stored_energy_increase_in_watt
+    )
+    assert residual_in_watt == pytest.approx(0.0)
+    quarter_hour_losses_in_watt = advanced_battery_bslib.Battery.losses_in_watt(
+        ac_power_in_watt=ac_power_in_watt,
+        dc_power_in_watt=dc_power_in_watt,
+        stored_energy_increase_in_watt_hour=stored_energy_increase_in_watt_hour / 4.0,
+        seconds_per_timestep=900.0,
+    )
+    assert quarter_hour_losses_in_watt == pytest.approx(expected)

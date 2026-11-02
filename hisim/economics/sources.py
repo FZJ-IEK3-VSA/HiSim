@@ -1,7 +1,7 @@
-"""The source registry `sources.json` and its validation (cost_spec.md §3.5, §9.6).
+"""The source registry `sources.json` and its validation.
 
 Every datapoint in a data directory (`cost_database/`, `subsidy_catalog/`) must cite at least one registry entry, and
-an unknown id fails at load time, so every value can be traced to a citation (§3.10 "no unsourced numbers"). An
+an unknown id fails at load time, so every value can be traced to a citation ("no unsourced numbers"). An
 honestly labelled guess (`kind: EXPERT_ESTIMATE`) is admissible. The registry also records which ids were resolved, for
 the orphan and staleness checks and the "sources used" tables.
 """
@@ -20,7 +20,7 @@ from hisim.economics.provenance import ResolvedSource
 
 @dataclass
 class SourceEntry:
-    """One publication, standard, statute or estimate that a datapoint may cite (§3.5).
+    """One publication, standard, statute or estimate that a datapoint may cite.
 
     `kind` classifies the evidence (see `SourceRegistry.SOURCE_KINDS`), and `retrieved` is the date the staleness check
     compares against. `url` may be absent only when `notes` explains why (a printed standard, internal project data).
@@ -58,7 +58,7 @@ class SourceRegistry:
     between independently loaded databases.
     """
 
-    #: Admissible source kinds (§3.5).
+    #: Admissible source kinds.
     SOURCE_KINDS = (
         "MARKET_SURVEY",
         "STANDARD",
@@ -120,7 +120,7 @@ class SourceRegistry:
         return cls(entries, os.path.basename(path))
 
     def resolve(self, source_ids: Tuple[str, ...], context: str) -> List[SourceEntry]:
-        """Resolve source ids to entries and record them as referenced (§9.6).
+        """Resolve source ids to entries and record them as referenced.
 
         Called once per data entry while the cost database is parsed.
 
@@ -143,11 +143,11 @@ class SourceRegistry:
         return resolved
 
     def referenced_ids(self) -> List[str]:
-        """Return the ids this instance resolved, sorted; the audit's "sources used" table lists them (§3.10)."""
+        """Return the ids this instance resolved, sorted; the audit's "sources used" table lists them."""
         return sorted(self._referenced)
 
     def orphaned_ids(self) -> List[str]:
-        """Return the registry ids no data entry referenced, sorted (§9.6).
+        """Return the registry ids no data entry referenced, sorted.
 
         An orphan usually means a datapoint was deleted or re-sourced and its citation left behind. Meaningful only
         after a full database load.
@@ -155,7 +155,7 @@ class SourceRegistry:
         return sorted(set(self.entries.keys()) - self._referenced)
 
     def stale_ids(self, reference_date: Optional[date] = None, max_age_days: int = 365) -> List[str]:
-        """Return the ids whose `retrieved` date is older than the staleness threshold, sorted (§9.6).
+        """Return the ids whose `retrieved` date is older than the staleness threshold, sorted.
 
         Covers all entries, referenced or not; staleness is a warning, not a failure.
 

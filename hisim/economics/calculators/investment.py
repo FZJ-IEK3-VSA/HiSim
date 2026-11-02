@@ -1,10 +1,10 @@
-"""Investment schedule of one subject: year-0 capex, replacements, residual value (cost_spec.md §3.6 rules 1-3).
+"""Investment schedule of one subject: year-0 capex, replacements, residual value.
 
 Follows VDI 2067-1 / DIN EN 15459-1: re-purchase at every service life within the horizon, and a straight-line residual
 value for the part of the last unit's life past the horizon. Year 0 charges device and installation as INVESTMENT
 (PLANNING and REMOVAL split off) only for a new investment; a kept existing asset costs nothing today, and a stated
 purchase price replaces the database blocks in their proportions. Replacements are collected for the reserve and
-embodied CO2 even under OPERATING_ONLY, where their entries are dropped (§4.2). The residual value is credited at year
+embodied CO2 even under OPERATING_ONLY, where their entries are dropped. The residual value is credited at year
 T only for an installation the timeline charged. Amounts are nominal euro bands of their year; nothing is discounted
 here. Running totals are returned as ordered addend lists, because the float sum order is observable.
 """
@@ -21,7 +21,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class InvestmentDating:
-    """The two dating rules: when a subject is re-bought, and how much of its last unit is left at the horizon (§3.6).
+    """The two dating rules: when a subject is re-bought, and how much of its last unit is left at the horizon.
 
     Example::
 
@@ -34,7 +34,7 @@ class InvestmentDating:
 
     @staticmethod
     def replacement_years(first_replacement_year: int, service_life_years: float, horizon: int) -> List[int]:
-        """Return the years one subject is re-purchased in, ascending (§3.6 rule 2).
+        """Return the years one subject is re-purchased in, ascending.
 
         Replacements fall at the first replacement year and then every rounded service life, strictly before the
         horizon: one due exactly at year T is not bought. Years below 1 are skipped.
@@ -59,7 +59,7 @@ class InvestmentDating:
 
     @staticmethod
     def residual_fraction(last_install_year: int, service_life_years: float, horizon: int) -> float:
-        """Return the share of the last installed unit's life that extends past the horizon (§3.6 rule 3).
+        """Return the share of the last installed unit's life that extends past the horizon.
 
         Straight-line write-down: a unit installed in `last_install_year` with life L has `last_install + L - horizon`
         years left at T, and that share of L is credited back.
@@ -83,9 +83,9 @@ class InvestmentDating:
 
 @dataclass
 class InvestmentSchedule:
-    """One subject's dated capital expenditure and its contributions to the running totals (§3.6 rules 1-3).
+    """One subject's dated capital expenditure and its contributions to the running totals.
 
-    The orchestrator decides when each part reaches the timeline, because the §4.1 anyway credit (the avoided cost of a
+    The orchestrator decides when each part reaches the timeline, because the anyway credit (the avoided cost of a
     replacement that was due anyway) goes between the year-0 entries and the rest. Entries are cost-positive except the
     negative `residual_entry`. `reserve_flows` are nominal, escalated replacement amounts with their year, collected
     even when `replacement_entries` is empty (OPERATING_ONLY).
@@ -122,7 +122,7 @@ def build_investment_schedule(
     horizon: int,
     include_investment: bool,
 ) -> InvestmentSchedule:
-    """Build one subject's investment schedule (§3.6 rules 1-3).
+    """Build one subject's investment schedule.
 
     Replacements fall every rounded service life strictly before the horizon, each the gross investment escalated to
     its year: a 20-year horizon with an 18-year life buys again at year 18. For a kept existing asset the first
@@ -131,12 +131,12 @@ def build_investment_schedule(
     an in-horizon replacement); a kept asset that outlasts the horizon gets no residual.
 
     Args:
-        costing: The subject's resolved costing (§3.5, §4.1): cost blocks, service life, installation context and
+        costing: The subject's resolved costing: cost blocks, service life, installation context and
             provenance ids.
         gross: `costing.gross_investment` (device, installation and planning), a euro band at price-basis-year prices.
         asset_rate: Nominal annual investment escalation rate of the asset class as a fraction; may be negative.
         horizon: Observation period T in years; replacements fall at years < T, the residual at T.
-        include_investment: False under OPERATING_ONLY (§4.2); suppresses the year-0, replacement and residual entries,
+        include_investment: False under OPERATING_ONLY; suppresses the year-0, replacement and residual entries,
             but `reserve_flows` and the embodied CO2 masses are still collected.
 
     Returns:

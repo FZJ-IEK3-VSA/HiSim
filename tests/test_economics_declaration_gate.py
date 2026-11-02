@@ -3,7 +3,7 @@
 Every `Component` subclass must declare `cost_relevance`, because the cost adapter reads the
 declaration and infers nothing: a class that declares none is `UNDECLARED`, becomes an
 `UnresolvedSubject` in the postprocessing bridge and aborts the evaluation under decision D7. That
-abort is correct but arrives late — after a full simulation — so cost_spec.md §9.2 asks for the
+abort is correct but arrives late — after a full simulation — so roadmap/cost_spec.md §9.2 asks for the
 same refusal "at simulation start, not end". `Simulator.check_cost_declarations` is that refusal,
 and this file pins both halves of its contract: it fires when lifecycle costs were requested, and
 it stays out of the way when they were not.

@@ -26,7 +26,7 @@ that member for member, so the two cannot drift.
 from enum import Enum
 from typing import Optional, Tuple
 
-from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.components.heating_curve import HeatDistributionSystemType
 
 
 class HeatGenerator(str, Enum):
@@ -70,6 +70,29 @@ class HeatGenerator(str, Enum):
         SCOP only for them (renovisorissues #8).
         """
         return (cls.AIR_SOURCE_HEAT_PUMP, cls.GROUND_SOURCE_HEAT_PUMP, cls.HYBRID_HEAT_PUMP)
+
+    @classmethod
+    def boilers(cls) -> Tuple["HeatGenerator", ...]:
+        """Return the eleven generators that burn a fuel in a boiler HiSim simulates.
+
+        The translator runs them on a boiler twin and writes a stated seasonal efficiency only to
+        them; a request may state an Ecodesign seasonal efficiency of at most 97 % only for them
+        (hisim-component-physics-4g9.66). ``SOLID_FUEL_HEATING`` is not among them: it is refused by
+        name.
+        """
+        return (
+            cls.CONDENSING_GAS_HEATING,
+            cls.CONVENTIONAL_GAS_HEATING,
+            cls.CONVENTIONAL_LPG_HEATING,
+            cls.CONDENSING_LPG_HEATING,
+            cls.CONVENTIONAL_OIL_HEATING,
+            cls.CONDENSING_OIL_HEATING,
+            cls.HVO_HEATING,
+            cls.PELLET_HEATING,
+            cls.BIOMASS_HEATING,
+            cls.WOODCHIP_HEATING,
+            cls.HYDROGEN_HEATING,
+        )
 
 
 class HeatDistributionType(str, Enum):

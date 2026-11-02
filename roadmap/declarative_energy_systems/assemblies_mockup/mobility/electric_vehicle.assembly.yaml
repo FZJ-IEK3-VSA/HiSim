@@ -56,7 +56,7 @@ components:
       lower_threshold_charging_power_in_watt: 1100.0
       source_weight: 1                                     # † one car per house until G12
       battery_set_soc: {$param: battery_set_soc}
-    inputs: [CarBattery, Car]                              # StateOfCharge, AcBatteryChargingPower; ElectricityNeededByCar, CarLocation
+    inputs: [CarBattery, Car]                              # StateOfChargeAtStartOfStep, AcBatteryChargingPower; ElectricityNeededByCar, CarLocation
 
 interface:
   needs:

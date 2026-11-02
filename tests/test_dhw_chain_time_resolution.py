@@ -44,9 +44,11 @@ class ResolutionRuns:
     )
 
     #: The shard each twin runs in, by wall time (pytest.ini): with its 60 s reference a twin's runs take 11 to 33 s
-    #: on a local machine and about five times that in CI. The two heat-pump twins (about 60 s locally) join the
-    #: heat-pump booking runs in ``extendedbase2``, which runs serially; the other four (about 65 s locally) run in
-    #: ``extendedbase``, whose two workers take this module beside the participant canaries.
+    #: on a local machine and 60 to 150 s in CI. The two heat-pump twins join the heat-pump booking runs in
+    #: ``extendedbase2``, which runs serially; the other four run in ``extendedbase``. Each twin is an
+    #: ``xdist_group`` of its own (:meth:`twin_parameters`), so the CI split (``tests/ci_split.py``) can put the
+    #: twins of one shard in different jobs and on different workers; the two resolutions of a twin stay together,
+    #: since they share its 60 s reference run (:attr:`computed`).
     SHARDS: ClassVar[Dict[str, pytest.MarkDecorator]] = {
         "household_gas_building_sizer": pytest.mark.extendedbase,
         "household_district_heating_building_sizer": pytest.mark.extendedbase,
@@ -73,8 +75,19 @@ class ResolutionRuns:
 
     @classmethod
     def twin_parameters(cls) -> List[Any]:
-        """One parameter per twin of :attr:`TWINS`, marked with its shard from :attr:`SHARDS`."""
-        return [pytest.param(twin, marks=cls.SHARDS[twin], id=twin) for twin in cls.TWINS]
+        """One parameter per twin of :attr:`TWINS`, marked with its shard from :attr:`SHARDS` and a group of its own.
+
+        The group, ``tests/test_dhw_chain_time_resolution.py::<twin>``, is the twin's unit in the CI split and its
+        scheduling unit under ``--dist loadgroup``: the two resolutions of a twin run in one process.
+        """
+        return [
+            pytest.param(
+                twin,
+                marks=[cls.SHARDS[twin], pytest.mark.xdist_group(f"tests/test_dhw_chain_time_resolution.py::{twin}")],
+                id=twin,
+            )
+            for twin in cls.TWINS
+        ]
 
     @classmethod
     def sums(

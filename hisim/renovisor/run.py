@@ -446,7 +446,7 @@ class Calculation:
                 "image_digest": self._image_digest,
                 "period": self._period.value,
                 "options_added": SimulationSetup.option_names(),
-                # The cache directories the run read and wrote, in priority order (hisim-epc.22).
+                # The cache directories the run read and wrote, in priority order (hisim-renovisor-translator-epc.22).
                 # The realized parameter record deliberately omits them -- it describes the run,
                 # not the machine -- so this manifest is the one place a result directory says
                 # where its cache entries came from.

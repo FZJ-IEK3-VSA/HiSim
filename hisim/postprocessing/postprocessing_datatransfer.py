@@ -8,10 +8,6 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
 
 
-#: Number of seconds in one hour. Used to convert power [W] to energy [Wh].
-SECONDS_PER_HOUR: int = 3600
-
-
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
     """Bundles simulation results and metadata for post-processing routines.
 
@@ -67,12 +63,6 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         """
         if kpi_collection_dict is None:
             kpi_collection_dict = {}
-        # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy.
-        # Unit: hours per timestep (seconds_per_timestep / SECONDS_PER_HOUR).
-        # Multiplying a sum of power values [W] by this factor yields energy [Wh].
-        self.time_correction_factor_in_hours_per_timestep: float = (
-            simulation_parameters.seconds_per_timestep / SECONDS_PER_HOUR
-        )
         self.results: pd.DataFrame = results
         self.all_outputs: List[ComponentOutput] = all_outputs
         self.simulation_parameters: SimulationParameters = simulation_parameters

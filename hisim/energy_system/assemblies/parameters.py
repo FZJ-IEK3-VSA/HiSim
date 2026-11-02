@@ -3,15 +3,17 @@
 ``assemblies_spec.md`` §2.6, §3.1. The resolved parameter set of one import (or instance) is the
 assembly's defaults overridden by the values the import writes. Every value is checked against its
 declaration — the type, the allowed values, the range of a numeric parameter — and the
-``exactly_one_of`` constraints are checked on the resolved set. Nothing is converted and nothing is
-defaulted beyond the declarations: a value that does not fit is a load error naming the import, the
-parameter and what would fit.
+``exactly_one_of`` and ``all_or_none_of`` constraints are checked on the resolved set. Nothing is
+converted and nothing is defaulted beyond the declarations: a value that does not fit is a load
+error naming the import, the parameter and what would fit.
 
 A parameter is *stated* for a constraint when its resolved value is neither ``none``, nor ``AUTO``,
 nor ``false``; ``0`` is a stated value. Stating one member of an ``exactly_one_of`` unstates the
 others' defaults (D27): when the import writes one member, the others resolve to ``none`` whatever
 their defaults; an import writing two members is refused. Written nothing, the defaults stand, and
-the library check has made sure exactly one of them is stated.
+the library check has made sure exactly one of them is stated. An ``all_or_none_of`` (D31) states
+every member or none: an import stating some of its members and leaving others unstated is refused,
+nothing is filled in for it.
 """
 
 from __future__ import annotations
@@ -101,6 +103,24 @@ class ParameterChecks:
             return None
         return f"exactly one of {', '.join(names)} is stated, but {len(stated)} are ({', '.join(stated) or 'none'})"
 
+    @classmethod
+    def partly_stated(cls, names: Tuple[str, ...], values: Mapping[str, Any]) -> Optional[str]:
+        """Names how a resolved parameter set violates one ``all_or_none_of``, or ``None`` (D31).
+
+        Example: ``capacity_in_kwh: 10`` with ``power_in_watt: AUTO`` gives "capacity_in_kwh = 10 is
+        stated but power_in_watt is not; state both or neither".
+        """
+        stated = [name for name in names if cls.is_stated(values.get(name))]
+        if not stated or len(stated) == len(names):
+            return None
+        unstated = [name for name in names if name not in stated]
+        remedy = "state both or neither" if len(names) == 2 else "state all of them or none"
+        return (
+            ", ".join(f"{name} = {values.get(name)!r}" for name in stated)
+            + f" {'is' if len(stated) == 1 else 'are'} stated but {', '.join(unstated)} "
+            + f"{'is' if len(unstated) == 1 else 'are'} not; {remedy}"
+        )
+
 
 @dataclass(frozen=True)
 class Selection:
@@ -154,7 +174,7 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
     Raises:
         EnergySystemAssemblyError: ``EF-76`` for an unknown parameter, a value that does not fit or a
             variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of`` or one the
-            import writes two members of.
+            import writes two members of, and for an ``all_or_none_of`` stated in part.
     """
     declarations = assembly.parameters
     values: Dict[str, Any] = {name: declaration.default for name, declaration in declarations.items()}
@@ -185,6 +205,14 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
                 EnergySystemErrorId.CONSTRAINT_VIOLATED,
                 where,
                 f"the parameters violate the constraint exactly_one_of [{', '.join(names)}] of '{label}': {violation}.",
+            )
+    for names in assembly.all_or_none_of:
+        violation = ParameterChecks.partly_stated(names, values)
+        if violation is not None:
+            raise EnergySystemAssemblyError(
+                EnergySystemErrorId.CONSTRAINT_VIOLATED,
+                where,
+                f"the parameters violate the constraint all_or_none_of [{', '.join(names)}] of '{label}': {violation}.",
             )
     members: Dict[str, MemberTemplate] = dict(assembly.components)
     variants: Dict[str, str] = {}

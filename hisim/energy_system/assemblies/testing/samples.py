@@ -6,7 +6,12 @@ parameter's ``range`` and every allowed value of every parameter with a closed s
 every internal variant. A value that states a parameter of an ``exactly_one_of`` moves the sample
 into that parameter's branch: the other parameters of the constraint become unstated (their
 default when it is unstated, else ``none``, or ``false`` for a boolean); a value that leaves the
-constraint without a stated parameter states the next one that can be.
+constraint without a stated parameter states the next one that can be. A value that states a
+parameter of an ``all_or_none_of`` (D31) states the others too, each that is unstated at its
+**companion value**: its default when that is stated, else the midpoint of its range, else its
+first stated allowed value; a value that unstates one unstates the others. The battery's
+``capacity_in_kwh`` at its ``min`` of 1 kWh, for example, comes with ``power_in_watt`` at 7750 W,
+the middle of its range, and never with a power left to the sizing law.
 
 **The Latin hypercube sample** (the nightly tier): ``scipy.stats.qmc.LatinHypercube`` over the
 parameter box, scrambled and seeded. Every assignment of one stated parameter per
@@ -18,13 +23,19 @@ An internal variant is selected by a boolean or an enum, so its selector's dimen
 variant's. Branch ``i`` draws from ``numpy.random.default_rng((seed, i))``; no sample is thrown away,
 but two points of a branch whose dimensions are all discrete can draw the same values, which are one
 sample, so ``N`` is an upper bound there. The constraints are disjoint (the library check refuses a
-parameter in two), so every choice of one parameter per constraint is a branch.
+parameter in two), so every choice of one parameter per constraint is a branch. A parameter of an
+``all_or_none_of`` is stated in every hypercube point: a numeric one is a dimension over its range
+like any other, a closed set draws from its stated values only. Its unstated state (``AUTO`` for the
+battery) is the defaults' sample, exactly as for a parameter outside every constraint.
 
 **Sweeps** (``tests.monotone``): from a base sample one numeric parameter moves across its range in
 :data:`MONOTONE_STEPS` equidistant values, everything else fixed; an int parameter takes the nearest
 integer of each, so it sweeps up to that many distinct values. A base whose branch keeps the
-parameter unstated admits no sweep of it, since moving it would change two things at once. Two bases
-that differ only in the swept parameter reach the same points, which are one sweep.
+parameter unstated admits no sweep of it, since moving it would change two things at once. A sweep of
+a parameter of an ``all_or_none_of`` from a base that leaves the constraint unstated states the other
+members at their companion values, held fixed over the sweep, so the battery's capacity is swept
+with a stated power and never beside a power its law would derive. Two bases that differ only in the
+swept parameter reach the same points, which are one sweep.
 
 **Int parameters.** Every value the sampler gives an int parameter — a boundary, a representative,
 a hypercube coordinate, a sweep point — goes through :func:`range_value`: the nearest integer, half
@@ -142,6 +153,19 @@ class ParameterSpace:
         stated = [value for value in declaration.allowed_values or () if ParameterChecks.is_stated(value)]
         return stated[0] if stated else None
 
+    def companion(self, name: str) -> Optional[Any]:
+        """The value stating a parameter whose ``all_or_none_of`` another member states (D31).
+
+        Its default when that is stated; else the midpoint of its range (the nearest integer for an
+        int parameter); else the first stated value it allows; ``None`` if none, which the library
+        check refuses for a member of an ``all_or_none_of``.
+        """
+        declaration = self.declarations[name]
+        if ParameterChecks.is_stated(declaration.default) or declaration.range is None:
+            return self.representative(name)
+        low, high = declaration.range
+        return range_value((low + high) / 2.0, low, high, declaration.type == ParameterType.INT)
+
     def problems(self, values: Mapping[str, Any]) -> List[str]:
         """Every way a complete parameter set breaks a declaration or a constraint; empty when it fits."""
         found = [
@@ -153,6 +177,10 @@ class ParameterSpace:
             violation = ParameterChecks.violation(names, values)
             if violation is not None:
                 found.append(violation)
+        for names in self.model.all_or_none_of:
+            violation = ParameterChecks.partly_stated(names, values)
+            if violation is not None:
+                found.append(f"all_or_none_of [{', '.join(names)}]: {violation}")
         return found
 
     def place(self, base: Mapping[str, Any], name: str, value: Any) -> Dict[str, Any]:
@@ -169,6 +197,16 @@ class ParameterSpace:
                 other = next((other for other in others if self.representative(other) is not None), None)
                 if other is not None:
                     values[other] = self.representative(other)
+        for names in self.model.all_or_none_of:
+            if name not in names:
+                continue
+            for other in names:
+                if other == name:
+                    continue
+                if not ParameterChecks.is_stated(value):
+                    values[other] = self.unstated(other)
+                elif not ParameterChecks.is_stated(values[other]):
+                    values[other] = self.companion(other)
         return self.normalised(values)
 
 
@@ -289,6 +327,7 @@ def branches(space: ParameterSpace) -> List[Branch]:
             this is a bug of the harness).
     """
     constraints = space.model.exactly_one_of  # disjoint: the library check refuses a parameter in two
+    always_stated = {name for names in space.model.all_or_none_of for name in names}
     assignments = [
         {name: name == chosen for names, chosen in zip(constraints, choice) for name in names}
         for choice in itertools.product(*constraints)
@@ -304,7 +343,7 @@ def branches(space: ParameterSpace) -> List[Branch]:
             choices = tuple(
                 value
                 for value in declaration.allowed_values or ()
-                if not stated.get(name) or ParameterChecks.is_stated(value)
+                if not (stated.get(name) or name in always_stated) or ParameterChecks.is_stated(value)
             )
             if stated.get(name) is False:
                 fixed[name] = space.unstated(name)
@@ -312,6 +351,8 @@ def branches(space: ParameterSpace) -> List[Branch]:
                 dimensions.append(Dimension(name, declaration.range, integer=declaration.type == ParameterType.INT))
             elif len(choices) > 1:
                 dimensions.append(Dimension(name, choices=choices))
+            elif name in always_stated and not choices:
+                fixed[name] = space.companion(name)
             else:
                 fixed[name] = choices[0] if choices else declaration.default
         result.append(Branch(index, stated, fixed, tuple(dimensions)))
@@ -364,7 +405,7 @@ def sweep(
     points = list(
         dict.fromkeys(range_value(float(point), low, high, integer) for point in np.linspace(low, high, steps))
     )
-    swept = [space.normalised({**base.values, parameter: point}) for point in points]
+    swept = [space.place(base.values, parameter, point) for point in points]
     for values in swept:
         problems = space.problems(values)
         if problems:

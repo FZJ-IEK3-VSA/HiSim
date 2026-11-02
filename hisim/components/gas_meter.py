@@ -42,6 +42,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort, MeteredExchange
 
 
 @dataclass_json
@@ -103,7 +104,7 @@ class GasMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class GasMeter(DynamicComponent):
+class GasMeter(DynamicComponent, cp.MeterComponent):
     """Gas meter class.
 
     It calculates the gas production and consumption dynamically for all components.
@@ -237,6 +238,7 @@ class GasMeter(DynamicComponent):
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.cumulative_gas_production_channel: cp.ComponentOutput = self.add_output(
@@ -245,6 +247,7 @@ class GasMeter(DynamicComponent):
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
@@ -338,6 +341,18 @@ class GasMeter(DynamicComponent):
             )
         )
         return dynamic_connections
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """The gas this meter publishes as bought, in Wh: natural gas or hydrogen, as configured (spec §4.4).
+
+        The energy balance draws the meter between the gas's supply node and the burners whose fuel ports it reads,
+        and checks per step that ``GasFromGrid`` equals what they burn minus what producers feed in. The meter
+        publishes no export: gas a producer feeds in beyond the consumption leaves no output.
+
+        Returns:
+            The one exchange of the configured gas.
+        """
+        return (MeteredExchange(EnergyPort.carrier_of_fuel(self.gas_loadtype), self.GasFromGrid),)
 
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""

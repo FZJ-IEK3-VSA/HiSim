@@ -7,7 +7,7 @@ simulation output (e.g. after a numerical refactor) fails CI with the exact KPIs
 that moved.
 
 The scripts that drive this live in [`../scripts/`](../scripts); the full design is
-in [`../golden_ref_spec.md`](../golden_ref_spec.md).
+in [`../roadmap/golden_ref_spec.md`](../roadmap/golden_ref_spec.md).
 
 ## What is compared
 
@@ -45,7 +45,8 @@ and stored here, in `<setup_id>__<param_id>.json` (keys sorted, two-space indent
   the instruction to re-bless through the `golden-update` workflow with `force_rewrite`, which
   writes the fresh leaves without reading the old file.
 
-Values are compared numerically with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 0`);
+Values are compared numerically with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 1e-12`, so a
+physically zero KPI's rounding noise compares equal);
 non-numeric values exactly. **Unit rule:** the unit is compared exactly, and a changed unit is a
 failure of its own kind — listed as `[unit]` in `report.txt`, under `unit_changes` in
 `report.json`, and counted separately in the summary — whatever the value did. The address
@@ -60,10 +61,41 @@ hash, list of golden files). The checker does **not** read it.
 [`../scripts/golden_config.json`](../scripts/golden_config.json) is the single,
 hand-maintained source of truth for **which** setups and parameter sets are in the
 gate. Edit it to add or remove a setup; everything downstream (runner, check,
-update, CI matrix) follows. Every parameter set must enable the cost stages plus the
+update, CI matrix) follows. An entry's `path` names a Python setup (`system_setups/<file>.py`)
+or an energy system written in YAML alone (`energy_systems/<file>.energy_system.yaml`, such as
+`gas_boiler_household`), which runs the way `hisim energy-system run` runs it. Every parameter
+set must enable the cost stages plus the
 KPIs — `["COMPUTE_OPEX", "COMPUTE_CAPEX", "COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`, so
 the building-level cost KPIs are pinned — and every setup must be **offline-runnable**
-and **KPI-complete** — validate with:
+and **KPI-complete**.
+
+The parameter sets, each run by every setup:
+
+| id | window | step | tier |
+|---|---|---|---|
+| `one_week_60s` | first week of January | 60 s | `golden-check` |
+| `july_week_60s` | first week of July | 60 s | `golden-check`, when dispatched with the `july_week` horizon |
+| `full_year_60s` | 2021 | 60 s | `golden-year` |
+| `one_week_900s` | first week of January | 900 s | `golden-check` |
+| `full_year_900s` | 2021 | 900 s | `golden-year` |
+
+A tier picks its sets by their `SimulationParameters` factory (`one_week_only`, `one_week_july`,
+`full_year`; `scripts/golden_horizons.py`), not by their id, so a set of another step length joins
+the tier of its window with no change to the scripts or the workflows. The step length is the
+set's `seconds_per_timestep`; its id names it too, ending in `_60s` or `_900s`.
+
+**Why 900 s.** RenoVisor runs every calculation at 900 s (`hisim/renovisor/simulation.py`), and
+some code acts only at steps above the part-load threshold of 600 s: the part-load rules
+(`hisim/part_load.py`), `FluidStream.at_part_load` (`hisim/hydronics.py`), and the start-of-step
+node of the buffer and of the hot-water tank. At 60 s none of it runs. Without the 900 s sets a
+change to it passed the gate unless it moved a total of the time-resolution tests
+(`tests/test_space_heating_time_resolution.py`, `tests/test_dhw_chain_time_resolution.py`) by about
+1 % (owner decision 2026-10-26, bead hisim-repo-cleanup-o6a.35). Those tests stay: they check the
+physics across step lengths, while the 900 s goldens catch any change of behaviour, and a pull
+request that changes the 900 s results on purpose needs a bless as one changing the 60 s results
+does.
+
+Validate the setups with:
 
 ```bash
 python scripts/golden_validate.py            # vet the setups listed in the config
@@ -100,6 +132,7 @@ compares with an earlier run of its own.
   the declarative executor: *the recorded twin reproduces the reference*. The energy manager's
   `Priority for <port>` KPIs quote an aggregator port, which the two paths name differently
   (C-P3.2), so this mode excludes that family from both sides (`PORT_NAMED_KPIS`, printed per pair).
+  An entry that is an energy-system file has no twin; this mode runs that file itself.
 - **`composed`** runs the setup's composed file, `energy_systems/<stem>.composed.energy_system.yaml`
   (the site plus imports of `energy_systems/assemblies/`): *the assemblies reproduce the reference*.
   Its KPIs carry the members' addresses (`heating-HeatPump`, with an import, a path and an assembly),
@@ -112,26 +145,54 @@ compares with an earlier run of its own.
 
 In CI this runs as two tiers (see `.github/workflows/`):
 
-- **`golden-check.yml`** — one-week pairs, on every PR and push to `main`, each pair's Python
+- **`golden-check.yml`** — the January-week pairs of both step lengths (`one_week_60s`,
+  `one_week_900s`), on every PR and push to `main`, each pair's Python
   setup, its recorded YAML twin and, where it has one, its composed file side by side
   (`golden_check.py --mode all`, one report per mode), in four shards
   (`scripts/golden_matrix.py --shards 4 --with-yaml --with-composed`) that run four simulations at
-  once each. A diverging YAML twin or composed file fails it, and so also holds back `golden-year`. The shards are
+  once each. A diverging YAML twin or composed file fails it. The shards are
   balanced by each pair's measured duration, `"seconds"` in `scripts/golden_config.json`;
-  `report.json` records a fresh `duration_s` per pair when they need refreshing.
-- **`golden-year.yml`** — full-year pairs, for PRs to `main` **only after** `quality`,
-  `tests`, and `golden-check` have all gone green for the commit (no wasted
-  full-year compute when a cheaper check already failed). It is triggered by those
-  workflows completing (`workflow_run`), not by the pull request itself, so that
-  waiting for them costs no runner; its result reaches the pull request as a
-  `golden-year` commit status rather than as an entry in the checks list. Five shards running
-  two simulations at once, since a full-year pair needs about 6 GiB: the Python setups and, where
-  the setup has one, its composed file (`golden_check.py --mode python composed`,
-  `golden_matrix.py --with-composed`). Every setup of the config runs the full year (owner
+  `report.json` records a fresh `duration_s` per pair when they need refreshing. The 900 s weights
+  are not CI measurements yet: each was measured on a workstation and scaled by its setup's ratio of
+  CI to workstation time at 60 s, and a full-year weight that came out below its week's was raised
+  to the week's (2026-10-26). Refresh them from the `duration_s` of the first CI runs at 900 s.
+- **`golden-year.yml`** — the full-year pairs of both step lengths (`full_year_60s`,
+  `full_year_900s`), on every PR and push to `main`, starting at the
+  same time as `golden-check` and the rest of CI on the self-hosted runners and reporting as
+  ordinary checks of the pull request; a pull request from a fork skips it. One job per 60 s run
+  (`golden_matrix.py --runs --with-composed`, `golden_check.py --jobs 1 --mode <mode> --pairs
+  <pair>`): each Python setup's full-year pair and, separately, where the setup has one, its
+  composed file's, so the tier takes as long as its slowest run. The 900 s years run in about a
+  minute each, too short to be worth a job each, so they are packed into four shards instead
+  (`golden_check.py --mode python composed --jobs 2 --pairs <its pairs>`), 35 jobs in all; see
+  "Packed parameter sets" below. Every setup of the config runs the full year (owner
   decision 2026-10-11), because the first week of January never runs a solar collector's pump;
   only a setup that cannot finish a year yet carries `"horizons": ["week"]`, named with its bead
-  in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). A setup without a golden for a configured pair fails the check before anything
-  runs; the next bless writes the missing file.
+  in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today none). The energy-system file
+  `gas_boiler_household`, which has no Python setup, runs the full year too, as its own entry (see
+  Configuration).
+
+A missing golden is never a silent pass. `golden_check.py` looks for the golden of every pair it was
+given before it runs any, and when one is absent it runs nothing, lists the pair as `[MISSING
+GOLDEN]` and exits non-zero: in `golden-check` that fails the whole shard holding the pair, in
+`golden-year` the one job of the pair, or the 900 s shard holding it. `golden-update` blesses every pair of the config, so the next
+bless writes the missing file: it runs the pair and, finding no file to merge onto, writes the fresh
+leaves as they are. That is how the 900 s sets got their first goldens.
+
+### Packed parameter sets
+
+golden-year and the bless give each full-year pair a job of its own, because a 60 s year runs for up
+to twelve minutes. A parameter set whose runs are short opts out of that explicitly, with
+`"pack_into_shards": N` in its entry of `scripts/golden_config.json`: where a tier would give each of
+its pairs a job, they go into N shards of their own instead, packed by their `"seconds"` with the same
+rule as golden-check's week shards (`PackedParameterSets` and `_pack` in `scripts/golden_matrix.py`).
+Today only `full_year_900s` carries it, with 4 (owner decision 2026-10-26). In golden-year each shard
+runs the Python setups and the composed files of its pairs side by side, two runs at once; in the
+bless, two pairs at once. A shard runs its pairs in child processes, each killed after three times
+its recorded seconds (at least ten minutes), and fails before running anything when one of its pairs
+has no golden. Elsewhere the key changes nothing: golden-check cuts the week into shards anyway. The
+key is explicit rather than a threshold on the measured seconds, so that refreshing a weight never
+moves a pair between a job of its own and a shard unannounced.
 
 ## Blessing (updating the goldens)
 
@@ -140,7 +201,8 @@ reference environment matches the check environment:
 
 > Actions → **golden-update** → *Run workflow* → give a reason.
 
-It regenerates every pair (week and year) in the CI container and opens a PR with
+It regenerates every pair of every parameter set in the CI container (a job per 60 s full-year
+pair, four shards for the 900 s years, four for each week; 35 jobs) and opens a PR with
 the updated `golden_references/`. Review the per-KPI diff, then merge — that merge
 is the bless. (`scripts/golden_update.py` can be run locally for inspection, but
 locally produced goldens are not the canonical committed ones. A local run is

@@ -57,7 +57,7 @@ class HeatingMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class HeatingMeter(DynamicComponent):
+class HeatingMeter(DynamicComponent, cp.MeterComponent):
     """Dynamic component that meters district-heating production and consumption.
 
     Sums heat-delivered and heat-consumption inputs from dynamically connected

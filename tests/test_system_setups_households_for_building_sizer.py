@@ -157,10 +157,10 @@ def _assert_kpi_artefacts_written(result_directory: str, path: str) -> None:
     )
     # Only presence and finiteness are asserted here.  A physical range check
     # (e.g. non-negativity) is deliberately deferred: "Total electricity
-    # consumption" is the consumption with battery round-trip losses included
-    # (charging - discharging, see KpiPreparation.compute_battery_kpis), which
-    # can in principle reduce the value, so a hard bound needs human-confirmed
-    # expected ranges per setup.
+    # consumption" is the consumption with battery losses included (charging
+    # - discharging - stored energy increase, see
+    # KpiPreparation.compute_battery_kpis), so a hard bound needs
+    # human-confirmed expected ranges per setup.
 
 
 @pytest.fixture(name="building_sizer_result_directory")

@@ -31,15 +31,14 @@ def test_basic_household_network_chart() -> None:
     results_dir = Path(result_directory)
     assert results_dir.is_dir(), f"result directory does not exist: {results_dir}"
 
-    # MAKE_NETWORK_CHARTS renders one PNG per chart variant via Graphviz.  The
-    # "and_results" variant additionally requires cumulative results (only
-    # computed when a monthly/cumulative post-processing option is also enabled),
-    # so with MAKE_NETWORK_CHARTS alone the three baseline charts are the
-    # expected output.
+    # MAKE_NETWORK_CHARTS renders one PNG per chart variant via Graphviz, all four
+    # of them: the simulator computes the sums and means over the run that the
+    # "and_results" variant labels its connections with whenever the option is set.
     for prefix in (
         "System_no_Edge_with_class_labels",
         "System_no_Edge_labels",
         "System_with_Edge_labels",
+        "System_with_Edge_labels_and_results",
     ):
         matches = list(results_dir.glob(f"{prefix}*"))
         assert matches, (

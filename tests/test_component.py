@@ -1026,27 +1026,3 @@ def test_get_dynamic_inputs_only_returns_inputs_carrying_all_tags() -> None:
 
     returned = dyn_component.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
     assert [item.src_object_name for item in returned] == ["zzz_producer"]
-
-
-@pytest.mark.base
-def test_electricity_meter_dhw_connection_allow_unconnected() -> None:
-    """Test that the electricity meter marks the DHW heat-pump connection as allow_unconnected_mandatory."""
-    from hisim.components.electricity_meter import ElectricityMeter
-    from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
-
-    # get_default_connections_from_more_advanced_heat_pump does not use self,
-    # so we bypass __init__ to avoid constructing the full component.
-    meter = ElectricityMeter.__new__(ElectricityMeter)
-    connections = meter.get_default_connections_from_more_advanced_heat_pump()
-
-    dhw_connections = [
-        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
-    ]
-    assert len(dhw_connections) == 1
-    assert dhw_connections[0].allow_unconnected_mandatory is True
-
-    sh_connections = [
-        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
-    ]
-    assert len(sh_connections) == 1
-    assert sh_connections[0].allow_unconnected_mandatory is False

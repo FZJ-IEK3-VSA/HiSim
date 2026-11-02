@@ -1,4 +1,4 @@
-"""The economics CLI, its exports, and the legacy parity harness (cost_spec.md §7.2, §9.7).
+"""The economics CLI, its exports, and the legacy parity harness (roadmap/cost_spec.md §7.2, §9.7).
 
 Third of the three data/integration test files (split per the PR-3 review's 500-line rule):
 `python -m hisim.economics` end to end with its export files, and the parity harness that

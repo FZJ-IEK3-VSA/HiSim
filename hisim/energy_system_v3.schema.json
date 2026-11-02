@@ -191,8 +191,10 @@
             "hisim.components.generic_pv_system.PVSystem",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
+            "hisim.components.heating_curve.HeatingCurveController",
             "hisim.components.heating_meter.HeatingMeter",
             "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
+            "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
@@ -741,10 +743,10 @@
                   "minimum_idle_time_s": {
                     "type": "number"
                   },
-                  "offset": {
+                  "hysteresis_in_kelvin": {
                     "type": "number"
                   },
-                  "temperature_difference_full_power_deg_c": {
+                  "ramp_time_to_full_power_at_one_kelvin_s": {
                     "type": "number"
                   }
                 }
@@ -1364,7 +1366,7 @@
                   "limit_to_shave": {
                     "type": "number"
                   },
-                  "building_indoor_temperature_offset_value": {
+                  "building_indoor_temperature_offset_in_kelvin": {
                     "type": "number"
                   },
                   "domestic_hot_water_storage_temperature_offset_value": {
@@ -1627,6 +1629,7 @@
                           "COOLING",
                           "TEMPERATURE",
                           "PRESSURE",
+                          "HUMIDITY",
                           "TIME",
                           "PRICE",
                           "GAS",
@@ -1648,6 +1651,7 @@
                         "enum": [
                           "ANY",
                           "PERCENT",
+                          "FRACTION",
                           "WATT",
                           "KILOWATT",
                           "KWH_PER_TIMESTEP",
@@ -1695,6 +1699,16 @@
                       },
                       "output_description": {
                         "type": "string"
+                      },
+                      "time_column": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -1721,6 +1735,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -1742,6 +1757,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -1789,6 +1805,16 @@
                   },
                   "output_description": {
                     "type": "string"
+                  },
+                  "time_column": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               },
@@ -1924,6 +1950,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -1945,6 +1972,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -2057,6 +2085,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -2078,6 +2107,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -2161,6 +2191,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -2182,6 +2213,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -2274,6 +2306,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -2295,6 +2328,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -2377,6 +2411,7 @@
                           "COOLING",
                           "TEMPERATURE",
                           "PRESSURE",
+                          "HUMIDITY",
                           "TIME",
                           "PRICE",
                           "GAS",
@@ -2528,6 +2563,7 @@
                           "COOLING",
                           "TEMPERATURE",
                           "PRESSURE",
+                          "HUMIDITY",
                           "TIME",
                           "PRICE",
                           "GAS",
@@ -2605,6 +2641,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -2648,16 +2685,33 @@
                       }
                     ]
                   },
-                  "eff_th_min": {
-                    "type": "number"
+                  "seasonal_efficiency": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
-                  "eff_th_max": {
-                    "type": "number"
+                  "installation_year": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "temperature_delta_in_celsius": {
                     "type": "number"
                   },
                   "maximal_flow_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "minimal_lift_at_maximal_power_in_kelvin": {
                     "type": "number"
                   },
                   "device_co2_footprint_in_kg": {
@@ -2757,16 +2811,6 @@
                   "is_modulating": {
                     "type": "boolean"
                   },
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
                   "minimal_thermal_power_in_watt": {
                     "anyOf": [
                       {
@@ -2810,6 +2854,12 @@
                     ]
                   },
                   "hysteresis_water_temperature_offset": {
+                    "type": "number"
+                  },
+                  "maximum_hot_water_priority_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "space_heating_interval_after_hot_water_priority_in_seconds": {
                     "type": "number"
                   }
                 }
@@ -2876,6 +2926,7 @@
                           "COOLING",
                           "TEMPERATURE",
                           "PRESSURE",
+                          "HUMIDITY",
                           "TIME",
                           "PRICE",
                           "GAS",
@@ -2924,6 +2975,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -3021,6 +3073,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -3119,6 +3172,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -3301,16 +3355,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
                   "with_domestic_hot_water_preparation": {
                     "type": "boolean"
                   },
@@ -3325,9 +3369,7 @@
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": [
-                    "set_heating_threshold_outside_temperature_in_celsius"
-                  ]
+                  "enum": []
                 }
               }
             }
@@ -3464,16 +3506,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
                   "with_domestic_hot_water_preparation": {
                     "type": "boolean"
                   },
@@ -3482,26 +3514,13 @@
                   },
                   "parallel_space_heating_and_dhw_option": {
                     "type": "boolean"
-                  },
-                  "specific_heating_load_of_building_in_watt_per_m2": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   }
                 }
               },
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": [
-                    "conditioned_floor_area_in_m2",
-                    "heating_load_in_watt"
-                  ]
+                  "enum": []
                 }
               }
             }
@@ -3598,9 +3617,6 @@
                     "type": "number"
                   },
                   "max_capacity": {
-                    "type": "number"
-                  },
-                  "starting_fill": {
                     "type": "number"
                   },
                   "max_charging_rate_hour": {
@@ -4289,10 +4305,74 @@
                       "LOW_TEMPERATURE_RADIATOR"
                     ]
                   },
+                  "heating_load_of_building_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "heating_load_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.heating_curve.HeatingCurveController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "building_derived",
+                  "direct_room_heating"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
                   "set_heating_threshold_outside_temperature_in_celsius": {
                     "anyOf": [
                       {
                         "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heat_distribution_system_type": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "RADIATOR",
+                          "FLOORHEATING",
+                          "LOW_TEMPERATURE_RADIATOR"
+                        ]
                       },
                       {
                         "const": "AUTO"
@@ -4318,26 +4398,6 @@
                         "const": "AUTO"
                       }
                     ]
-                  },
-                  "set_cooling_temperature_for_building_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
-                  "heating_load_of_building_in_watt": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   }
                 }
               },
@@ -4346,9 +4406,9 @@
                 "propertyNames": {
                   "enum": [
                     "conditioned_floor_area_in_m2",
+                    "heat_distribution_system_type",
                     "heating_load_in_watt",
                     "heating_reference_temperature_in_celsius",
-                    "set_cooling_temperature_in_celsius",
                     "set_heating_temperature_in_celsius"
                   ]
                 }
@@ -4425,6 +4485,43 @@
                   "set_cooling_temperature_for_building_in_celsius": {
                     "type": "number"
                   }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {}
                 }
               },
               "sizing_sources": {
@@ -4826,6 +4923,15 @@
                   },
                   "t_max_dhw_storage_in_celsius": {
                     "type": "number"
+                  },
+                  "charge_end_below_target_in_kelvin": {
+                    "type": "number"
+                  },
+                  "maximum_hot_water_priority_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "space_heating_interval_after_hot_water_priority_in_seconds": {
+                    "type": "number"
                   }
                 }
               },
@@ -4866,19 +4972,6 @@
                   "component_id": {},
                   "mode": {
                     "type": "integer"
-                  },
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   },
                   "set_cooling_threshold_outside_temperature_in_celsius": {
                     "anyOf": [
@@ -4927,8 +5020,7 @@
                 "propertyNames": {
                   "enum": [
                     "heat_distribution_system_type",
-                    "set_heating_temperature_in_celsius",
-                    "set_heating_threshold_outside_temperature_in_celsius"
+                    "set_heating_temperature_in_celsius"
                   ]
                 }
               }
@@ -5428,7 +5520,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "coordinates": {},
                   "azimuth": {
                     "type": "number"
                   },
@@ -5510,7 +5601,13 @@
                       }
                     ]
                   },
-                  "delta_temperature_n_k": {
+                  "pump_target_lift_in_kelvin": {
+                    "type": "number"
+                  },
+                  "pump_minimum_mass_flow_in_kg_per_hour_per_m2": {
+                    "type": "number"
+                  },
+                  "pump_maximum_mass_flow_in_kg_per_hour_per_m2": {
                     "type": "number"
                   }
                 }
@@ -5599,6 +5696,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -5620,6 +5718,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -5700,6 +5799,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -5721,6 +5821,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -5801,6 +5902,7 @@
                       "COOLING",
                       "TEMPERATURE",
                       "PRESSURE",
+                      "HUMIDITY",
                       "TIME",
                       "PRICE",
                       "GAS",
@@ -5822,6 +5924,7 @@
                     "enum": [
                       "ANY",
                       "PERCENT",
+                      "FRACTION",
                       "WATT",
                       "KILOWATT",
                       "KWH_PER_TIMESTEP",
@@ -6272,7 +6375,8 @@
             "domestic_hot_water_heat",
             "cooling",
             "ambient_heat",
-            "solar"
+            "solar",
+            "room_heat"
           ]
         },
         "outputs": {
@@ -6360,7 +6464,8 @@
             "domestic_hot_water_heat",
             "cooling",
             "ambient_heat",
-            "solar"
+            "solar",
+            "room_heat"
           ]
         },
         "outputs": {
@@ -6533,6 +6638,7 @@
                       "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
                       "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
                       "STORAGE_CONTENT",
+                      "STORED_ENERGY_INCREASE",
                       "MAXIMUM_CHARGING_POWER",
                       "MINIMUM_CHARGING_POWER",
                       "CHARGE_DISCHARGE",
@@ -6568,6 +6674,7 @@
                         "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
                         "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
                         "STORAGE_CONTENT",
+                        "STORED_ENERGY_INCREASE",
                         "MAXIMUM_CHARGING_POWER",
                         "MINIMUM_CHARGING_POWER",
                         "CHARGE_DISCHARGE",

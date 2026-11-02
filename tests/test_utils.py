@@ -1,8 +1,8 @@
 """Tests for public utility functions in :mod:`hisim.utils`.
 
 These tests target regressions flagged during docstring review of
-``hisim/utils.py``: the ``convert_lpg_timestep_to_utc`` return value and the
-``get_cache_file`` cache-path generation.
+``hisim/utils.py``: the ``get_cache_file`` and ``get_cache_entry`` cache-path generation and the
+memoized smart-appliance loader.
 """
 
 import os
@@ -12,26 +12,8 @@ from dataclasses import dataclass
 import pytest
 
 from hisim import utils
+from hisim.caching import CacheEntryMetadata, CacheSettings
 from hisim.simulationparameters import SimulationParameters
-
-
-@pytest.mark.base
-def test_convert_lpg_timestep_to_utc_returns_shifted_indices() -> None:
-    """``convert_lpg_timestep_to_utc`` must return the UTC-shifted indices.
-
-    The function builds ``data_utc`` with the shifted values but previously
-    returned the original unmodified ``data`` list, so callers silently
-    received local-time indices. This regression test pins the corrected
-    ``return data_utc`` behaviour: every index is shifted towards UTC (by one
-    hour for winter timesteps at a 3600 s resolution) and the returned list is
-    not the input list.
-    """
-    data = [10, 100, 1000, 5000]
-    result = utils.convert_lpg_timestep_to_utc(
-        data=data, year=2021, seconds_per_timestep=3600
-    )
-    assert result is not data
-    assert result == [9, 99, 999, 4999]
 
 
 @pytest.mark.base
@@ -66,6 +48,33 @@ def test_get_cache_file_returns_cache_path_for_valid_parameters(
     assert exists is False
     assert cache_filepath.startswith(str(tmp_path))
     assert cache_filepath.endswith(".cache")
+
+
+@pytest.mark.base
+def test_get_cache_entry_names_the_entry_after_its_key_material_alone(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a lookup that adds the run to the key material, or that lets the environment beat the argument.
+
+    The entry is named after the hash of the key material it is given, so two runs of different windows find
+    the same entry; the ``cache_dir_path`` argument outranks ``HISIM_CACHE_DIR``; an entry written through the
+    returned entry is found again and records that material.
+    """
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path / "environment"))
+    week = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
+    day = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    directory = str(tmp_path / "argument")
+
+    entry = utils.get_cache_entry("demo", "the key material", week, cache_dir_path=directory)
+
+    assert not entry.exists
+    assert entry.path == os.path.join(directory, f"demo_{CacheEntryMetadata.hash_of('the key material')}.cache")
+    with entry.writing() as temporary_path:
+        pathlib.Path(temporary_path).write_text("content", encoding="utf-8")
+    found = utils.get_cache_entry("demo", "the key material", day, cache_dir_path=directory)
+    assert found.exists and found.path == entry.path
+    assert pathlib.Path(CacheEntryMetadata.metadata_filepath(entry.path)).read_text(encoding="utf-8") == "the key material"
+    assert utils.get_cache_entry("demo", "the key material", day).path.startswith(str(tmp_path / "environment"))
 
 
 @pytest.mark.base

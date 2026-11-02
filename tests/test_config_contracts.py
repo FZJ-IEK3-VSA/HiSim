@@ -329,7 +329,6 @@ class PilotWireFormat:
         "HeatDistributionControllerConfig": (
             "water_mass_flow_rate_in_kg_per_second",
             "heat_distribution_system_type",
-            "set_heating_threshold_outside_temperature_in_celsius",
         ),
         "BuildingConfig": (
             "heating_load_in_watt",
@@ -489,7 +488,6 @@ def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan)
     one thing about it that could silently go wrong, and three components read it.
     """
     expected = {
-        "set_heating_threshold_outside_temperature_in_celsius": {"HeatDistributionControllerConfig"},
         "heating_reference_temperature_in_celsius": {"WeatherConfig"},
         "roof_area_in_m2": {"BuildingConfig"},
         "pv_peak_power_in_watt": {"PVSystemConfig"},

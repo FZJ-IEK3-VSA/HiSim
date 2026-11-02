@@ -1,4 +1,4 @@
-"""Engine tests: actor allocation, the modernization levy, and the canonical-definition pins (cost_spec.md §6).
+"""Engine tests: actor allocation, the modernization levy, and the canonical-definition pins (roadmap/cost_spec.md §6).
 
 Third of the three engine test files (split per the PR-3 review's 500-line rule): the
 landlord/tenant/owner-occupier allocation (zero-sum invariant included), the §559/§559e

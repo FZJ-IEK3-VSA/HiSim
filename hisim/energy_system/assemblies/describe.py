@@ -49,9 +49,9 @@ class AssemblyDescription:
         for name, declaration in model.parameters.items():
             cls._line(name, cls._parameter(declaration), out)
         print("\nconstraints", file=out)
-        for names in model.exactly_one_of:
-            print(f"  exactly_one_of: [{', '.join(names)}]", file=out)
-        if not model.exactly_one_of:
+        for constraint in model.constraints:
+            print(f"  {constraint.kind.value}: [{', '.join(constraint.names)}]", file=out)
+        if not model.constraints:
             print("  none", file=out)
         print("\nmembers", file=out)
         for name, member in model.components.items():
@@ -97,11 +97,12 @@ class AssemblyDescription:
         elif port.kind == PortKind.CIRCUIT:
             text = f"circuit {port.circuit} end at {', '.join(port.members)}"
         elif port.kind == PortKind.CARRIER:
-            text = f"carrier {port.carrier}: " + (
-                f"consumes {', '.join(port.outputs)}"
-                if port.outputs
-                else f"provided, metered by {port.meter or 'none'}"
-            )
+            if port.is_provision:
+                text = f"carrier {port.carrier}: provided, metered by {port.meter or 'none'}"
+            elif port.outputs:
+                text = f"carrier {port.carrier}: consumes {', '.join(port.outputs)}"
+            else:
+                text = f"carrier {port.carrier}: needs the {port.carrier} connection"
         elif port.kind == PortKind.FACT:
             text = f"fact {port.fact} " + (
                 f"from {port.members[0]}"

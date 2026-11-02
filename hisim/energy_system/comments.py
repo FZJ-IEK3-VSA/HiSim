@@ -178,6 +178,10 @@ class ProvenanceComments:
     #: author never had to name its provider.
     ADDED_FOR_REEXECUTION: ClassVar[str] = "unique provider, written for re-execution"
 
+    #: Comment on a sizing source the record added for a fact the run read from every provider
+    #: (``Sum(Many(...))``), whose line is the list of them: the battery beside two PV arrays.
+    ADDED_MANY_FOR_REEXECUTION: ClassVar[str] = "every provider, written for re-execution"
+
     #: Separator between the inputs of one sized value.
     INPUT_SEPARATOR: ClassVar[str] = ", "
 
@@ -489,11 +493,12 @@ class AnnotatedEmitter:
         del entry
         for fact in block:
             added = fact in audit.added_sizing_sources
-            comment = (
-                ProvenanceComments.ADDED_FOR_REEXECUTION
-                if added
-                else ProvenanceComments.WRITTEN_IN_SOURCE
-            )
+            if not added:
+                comment = ProvenanceComments.WRITTEN_IN_SOURCE
+            elif isinstance(block[fact], list):
+                comment = ProvenanceComments.ADDED_MANY_FOR_REEXECUTION
+            else:
+                comment = ProvenanceComments.ADDED_FOR_REEXECUTION
             block.yaml_add_eol_comment(comment, fact, column=cls.COMMENT_COLUMN)
 
 

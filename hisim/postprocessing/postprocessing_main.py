@@ -29,6 +29,10 @@ Execution flow
 --------------
 :meth:`PostProcessor.run` executes the enabled steps in a fixed order:
 
+0. **Finite results** -- in every run, before anything reads the result table: every column must hold
+   only finite values unless its output declares ``may_be_non_finite``, and the run fails with
+   :class:`~hisim.postprocessing.finite_results.NonFiniteResultsError` naming every column that does not
+   (:mod:`hisim.postprocessing.finite_results`).
 1. **Plots** -- line, carpet, single-day, and (for near-year-long runs) monthly bar charts
    are generated and collected as report image entries.
 2. **Exports** -- the result ``DataFrame`` is written to CSV and/or Pickle.
@@ -38,7 +42,9 @@ Execution flow
    instantiated and simulation parameters, components, outputs, and network charts are
    written into it.
 5. **Costs and KPIs** -- OPEX, CAPEX, and key-performance-indicator computations run and
-   are written to the open report when one exists.
+   are written to the open report when one exists. The KPI table is the report's last
+   chapter; the PDF is then built once
+   (:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.build`).
 6. **Database and scenario evaluation** -- CSV generation for the housing database and
    pyam-style output preparation for scenario evaluation.
 7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
@@ -68,6 +74,8 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
+from hisim.postprocessing.chart_selection import ChartSelection
+from hisim.postprocessing.finite_results import FiniteResultsCheck
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -124,7 +132,7 @@ def _propagating_cost_errors() -> Tuple[type, ...]:
     """Exception types a lifecycle-cost failure must propagate instead of logging and continuing.
 
     Computing lifecycle costs is opt-in, so a cost model that cannot describe the simulated fleet
-    is a failed run rather than a log line (cost_spec.md §9.2, decision D7). `CostDataError` is
+    is a failed run rather than a log line (roadmap/cost_spec.md §9.2, decision D7). `CostDataError` is
     the typed marker for exactly that class of failure — `UnresolvableSubjectsError`, raised for
     an undeclared or otherwise undescribable component, is one — while everything else coming out
     of the engine is an accident that must still not cost a user their simulation results.
@@ -194,7 +202,7 @@ class PostProcessor:
         self.dirname = dirname
 
     def compute_lifecycle_costs(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Runs the parallel lifecycle cost engine and decides what its failure means (cost_spec.md §10).
+        """Runs the parallel lifecycle cost engine and decides what its failure means (roadmap/cost_spec.md §10).
 
         A `CostDataError` always fails postprocessing. Any other failure is logged and the legacy
         outputs are written as always, unless the run declared that it cannot finish without the
@@ -224,7 +232,7 @@ class PostProcessor:
             # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
             # failed run rather than a log line: a CostDataError — and hence the D7
             # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
-            # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+            # component (roadmap/cost_spec.md §9.2, §8) — propagates and fails postprocessing.
             # Everything else is an accident in the parallel engine and must still not cost a
             # user their simulation results, so it stays a logged error. What that leniency
             # must not do is leave a *partial* cost export set behind for a later reader to
@@ -275,7 +283,11 @@ class PostProcessor:
         Raises:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
-                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``;
+                and if ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while ``MAKE_NETWORK_CHARTS``
+                is not, because no network chart would have been drawn.
+            NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
+                does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
                 balance does not close or the two sides of a transfer disagree (a ``ValueError``).
         """
@@ -288,43 +300,50 @@ class PostProcessor:
             log.information(f"Selected post processing option: {option}")
         report_image_entries: List[ReportImageEntry] = []
         report: Optional[reportgenerator.ReportGenerator] = None
-        single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
+        # Every result column must be finite unless its output declares otherwise; checked once, before anything
+        # reads the table, since the components do not check it on every pass.
+        FiniteResultsCheck.require_finite(ppdt.results, ppdt.all_outputs)
         # Collected first, from the result table as the simulator left it; concluded last (below)
         energy_balance = self.check_energy_balance(ppdt)
+        # Which outputs get charts: not the constant ones and not those declaring the aggregation
+        # NONE; the report lists both with the reason. The exports below still write every output.
+        chart_selection = ChartSelection.of_results(ppdt.all_outputs, ppdt.results)
 
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
             start = timer()
-            self.make_line_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_line_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making line plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
             log.information("Making carpet plots.")
             start = timer()
-            self.make_carpet_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_carpet_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making carpet plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(single_day_plot_selection, ppdt, report_image_entries=report_image_entries)
+            self.make_single_day_plots(0, ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
 
-        # make monthly bar plots only if simulation duration approximately a year
+        # make monthly bar plots only if simulation duration approximately a year. The window contract keeps a run
+        # within one calendar year, so a run this long starts in the first week of January and its twelve monthly
+        # values are January to December, which is how the bar chart labels them.
         if (
             PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in ppdt.post_processing_options
             and ppdt.simulation_parameters.duration.days >= 360
         ):
             log.information("Making monthly bar charts.")
             start = timer()
-            self.make_monthly_bar_charts(ppdt, report_image_entries=report_image_entries)
+            self.make_monthly_bar_charts(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making monthly bar plots took " + f"{duration:1.2f}s.")
@@ -372,6 +391,7 @@ class PostProcessor:
             start = timer()
             if report is not None:
                 self.write_components_to_report(ppdt, report, report_image_entries)
+                self.write_outputs_without_charts_to_report(report, chart_selection)
             else:
                 raise ValueError(
                     "report is None but should be a ReportGenerator object. "
@@ -397,6 +417,12 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing network charts to report.")
             start = timer()
+            if PostProcessingOptions.MAKE_NETWORK_CHARTS not in ppdt.post_processing_options:
+                # Without it no chart was attempted, and the chapter would blame a missing Graphviz.
+                raise ValueError(
+                    "WRITE_NETWORK_CHARTS_TO_REPORT needs MAKE_NETWORK_CHARTS, which draws the charts it writes. "
+                    "Set MAKE_NETWORK_CHARTS as well."
+                )
             if report is not None:
                 self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             else:
@@ -407,7 +433,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
-        # Parallel lifecycle cost engine (cost_spec.md §10): strictly additive, writes only new
+        # Parallel lifecycle cost engine (roadmap/cost_spec.md §10): strictly additive, writes only new
         # files. It runs BEFORE the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because the legacy
         # get_cost_capex mutates component configs as a side effect (overwrite_config_values...)
         # and would contaminate the facts the new engine reads (§10.0 rule 4). The parity
@@ -451,7 +477,16 @@ class PostProcessor:
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
 
-        # Shadow-mode parity (cost_spec.md §9.7): compares the legacy CSVs written above
+        # Every chapter is in the report now (the KPI table is the last one); the PDF is written once, here
+        if report is not None:
+            log.information("Building the PDF report.")
+            start = timer()
+            report.build()
+            end = timer()
+            duration = end - start
+            log.information("Building the PDF report took " + f"{duration:1.2f}s.")
+
+        # Shadow-mode parity (roadmap/cost_spec.md §9.7): compares the legacy CSVs written above
         # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
         # ran, so legacy config mutation cannot fake agreement.
         if (
@@ -473,7 +508,7 @@ class PostProcessor:
         ):
             log.information("Making special single day plots for a single day calculation for testing.")
             start = timer()
-            self.make_special_one_day_debugging_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_special_one_day_debugging_plots(ppdt, chart_selection, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information(
@@ -516,23 +551,33 @@ class PostProcessor:
     def make_special_one_day_debugging_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes special plots for debugging if only a single day was calculated."""
+        """Make the single-day chart of every charted output, for a run of one day at one minute.
+
+        Like the other charts, it leaves out the constant outputs and those declaring ``NONE``
+        (:class:`ChartSelection`); the report lists them.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         # A special-case arm once compared full_name against a hard-coded "Dummy" component
         # that nothing in the repository constructs; the branch could never fire and was
         # removed rather than have its magic string maintained through every rename.
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_days = chart_single_day_class(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 data_with_units=ppdt.results.iloc[:, index],
-                day=0,
-                month=0,
+                window_start=ppdt.simulation_parameters.start_date,
+                seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
+                day_in_window=0,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -552,41 +597,59 @@ class PostProcessor:
     def make_monthly_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Make bar charts."""
+        """Make the monthly bar chart of every charted output.
+
+        A bar is the month's sum, mean or end-of-month value, by the output's declared aggregation.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         assert ppdt.results_monthly is not None
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_bar = charts_module.BarChart(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
-                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
+                aggregation=output.aggregation,
             )
             my_entry = my_bar.plot(data_in_self_units=ppdt.results_monthly.iloc[:, index])
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
         self,
-        days: Dict[str, int],
+        day_in_window: int,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes plots for selected days."""
+        """Makes one plot per charted output of one day of the run.
+
+        Args:
+            day_in_window: The day of the run to plot, counted from 0 for its first day; the chart
+                names it by its calendar date.
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every plot is appended to.
+        """
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             my_days = chart_single_day_class(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                day=days["day"],
-                month=days["month"],
+                window_start=ppdt.simulation_parameters.start_date,
+                seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
+                day_in_window=day_in_window,
                 data_with_units=ppdt.results.iloc[:, index],
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
@@ -597,18 +660,24 @@ class PostProcessor:
     def make_carpet_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Make carpet plots."""
+        """Make the carpet plot of every charted output.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every plot is appended to.
+        """
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             log.trace("Making carpet plots")
             my_carpet = charts_module.Carpet(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -616,6 +685,7 @@ class PostProcessor:
             my_entry = my_carpet.plot(
                 xdims=int((ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days),
                 data_in_self_units=ppdt.results.iloc[:, index],
+                window_start=ppdt.simulation_parameters.start_date,
             )
             report_image_entries.append(my_entry)
 
@@ -623,11 +693,18 @@ class PostProcessor:
     def make_line_plots(
         self,
         ppdt: PostProcessingDataTransfer,
+        chart_selection: ChartSelection,
         report_image_entries: List[ReportImageEntry],
     ) -> None:
-        """Makes the line plots."""
+        """Make the line chart of every charted output.
+
+        Args:
+            ppdt: The run's results and parameters.
+            chart_selection: The outputs that get charts.
+            report_image_entries: The list the entry of every chart is appended to.
+        """
         charts_module = importlib.import_module("hisim.postprocessing.charts")
-        for index, output in enumerate(ppdt.all_outputs):
+        for index, output in chart_selection.charted_outputs:
             if output.output_description is None:
                 raise ValueError("Output description was missing for " + output.full_name)
             my_line = charts_module.Line(
@@ -635,7 +712,6 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -645,7 +721,17 @@ class PostProcessor:
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Exports the results to a CSV file."""
+        """Exports the results to CSV: one file per output, or all outputs in one file.
+
+        With ``EXPORT_RESULTS_IN_ONE_FILE`` every output goes into ``all_results.csv`` and, with
+        ``EXPORT_MONTHLY_RESULTS``, their monthly values into ``all_results_monthly.csv``; without it
+        each output gets its own file, and with ``EXPORT_MONTHLY_RESULTS`` its own ``*_monthly.csv``.
+        A monthly value is the month's sum, mean or last value, by the output's declared aggregation, and
+        empty for an output declaring ``NONE`` (``Simulator.get_std_results``).
+
+        Args:
+            ppdt: The finished run.
+        """
 
         if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
             csvfilename = os.path.join(
@@ -654,6 +740,14 @@ class PostProcessor:
             )
             csvfilename = self.shorten_path(csvfilename)
             ppdt.results.to_csv(csvfilename, sep=",", decimal=".")
+            if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                # The monthly values in one file too: this branch used to write none, so the option did
+                # nothing beside EXPORT_RESULTS_IN_ONE_FILE.
+                assert ppdt.results_monthly is not None
+                monthly_csvfilename = self.shorten_path(
+                    os.path.join(ppdt.simulation_parameters.result_directory, "all_results_monthly.csv")
+                )
+                ppdt.results_monthly.to_csv(monthly_csvfilename, sep=",", decimal=".")
         else:
             for column in ppdt.results:
                 csvfilename = os.path.join(
@@ -804,15 +898,12 @@ class PostProcessor:
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
-                    report.write_with_center_alignment(
-                        ["Fig." + str(self.figure_counter) + ": " + entry.component_name + " " + entry.output_type]
-                    )
+                    report.write_with_center_alignment([self.figure_caption(self.figure_counter, entry)])
                     report.add_spacer()
                     self.figure_counter = self.figure_counter + 1
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
 
-        report.open()
         # sort report image entries
         component_names = []
         for report_image_entry in report_image_entries:
@@ -830,7 +921,65 @@ class PostProcessor:
 
             write_image_entry_to_report_for_one_component(component, report_image_entries_for_component)
 
-        report.close()
+    #: What each chart class draws, by the first part of its file name (``Chart.type`` in lower case),
+    #: for the figure captions of the report: the charts of one output differ only in this.
+    CHART_KINDS_BY_FILE_PREFIX: Dict[str, str] = {
+        "line": "line chart over the run",
+        "carpet": "carpet plot by day and time of day",
+        "days": "single day",
+        "bar": "monthly bar chart",
+    }
+
+    @classmethod
+    def figure_caption(cls, figure_number: int, entry: ReportImageEntry) -> str:
+        """Return the report caption of one output chart, naming what kind of chart it is.
+
+        The line chart, the carpet plot, the single-day plot and the monthly bar chart of an output
+        all show the same component and output, so the caption adds the kind of chart, read from
+        the file name the chart class gives it. Example: ``Fig. 4: PVSystem ElectricityOutput,
+        monthly bar chart``. A file name with no known prefix gets no kind.
+
+        Args:
+            figure_number: The running number of the figure in the report.
+            entry: The chart's report entry.
+
+        Returns:
+            The caption.
+        """
+        caption = f"Fig. {figure_number}: {entry.component_name} {entry.output_type}"
+        prefix = os.path.basename(entry.file_path).split("_", 1)[0].split(".", 1)[0]
+        kind = cls.CHART_KINDS_BY_FILE_PREFIX.get(prefix)
+        return caption if kind is None else f"{caption}, {kind}"
+
+    def write_outputs_without_charts_to_report(
+        self, report: reportgenerator.ReportGenerator, chart_selection: ChartSelection
+    ) -> None:
+        """Write the chapter listing the outputs that got no charts, each with the reason.
+
+        An output gets no charts when it kept one value over the whole run ("constant at 0") or
+        declares no aggregate ("no aggregate declared", e.g. a controller mode or a sun angle; see
+        :class:`ChartSelection`). The chapter follows the chapters of the charted outputs, so no
+        output disappears from the report silently. Nothing is written when every output was charted.
+
+        Args:
+            report: The report.
+            chart_selection: The run's chart selection.
+        """
+        outputs_without_charts = chart_selection.outputs_without_charts
+        if not outputs_without_charts:
+            return
+        constant_count = len(chart_selection.constant_outputs)
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=chart_selection.outputs_without_charts_table(),
+            headline=". Outputs Without Charts",
+            comment=[
+                f"These outputs get no charts. Constant over the run: {constant_count}. No aggregate declared: "
+                f"{len(outputs_without_charts) - constant_count} (a controller mode, a timer that restarts at every "
+                "switch or an angle of the sun, of which no monthly value means anything). The time series of every "
+                "output are in the result files."
+            ],
+        )
 
     def write_all_outputs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
@@ -853,18 +1002,31 @@ class PostProcessor:
         report: reportgenerator.ReportGenerator,
         system_chart_entries: List[SystemChartEntry],
     ) -> None:
-        """Write network charts to report."""
-        report.open()
+        """Write the network charts of the run into the report, as one chapter with a caption per chart.
+
+        Example: a run with Graphviz installed gets a chapter "System Network Charts" with four
+        figures, each fitted to the page. The caller makes sure ``MAKE_NETWORK_CHARTS`` was set, so an
+        empty list means Graphviz drew no chart, and the chapter says so instead of staying blank.
+
+        Args:
+            ppdt: The run's post-processing data; its result directory holds the chart files.
+            report: The open report generator the chapter is added to.
+            system_chart_entries: The charts ``MAKE_NETWORK_CHARTS`` drew, with their captions.
+        """
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + ". System Network Charts"])
+        if not system_chart_entries:
+            # Said in the report itself, since the reason (Graphviz missing) is otherwise only in the log
+            report.write_with_normal_alignment(
+                ["No network chart could be drawn in this run; the log says why (usually Graphviz is not installed)."]
+            )
         for entry in system_chart_entries:
-            report.write_figures_to_report_with_size_four_six(
+            report.write_figure_fitted_to_page(
                 os.path.join(ppdt.simulation_parameters.result_directory, entry.file_path)
             )
-            report.write_with_center_alignment(["Fig." + str(self.figure_counter) + ": " + entry.caption])
+            report.write_with_center_alignment([f"Fig. {self.figure_counter}: {entry.caption}"])
             self.figure_counter = self.figure_counter + 1
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def compute_kpis_and_write_to_report_and_to_ppdt(
         self,
@@ -889,7 +1051,7 @@ class PostProcessor:
                     report=report,
                     table_as_list_of_list=kpi_table,
                     headline=". KPIs",
-                    comment=["Here a comment on calculation of numbers will follow"],
+                    comment=[],
                 )
             else:
                 raise ValueError("report is None but should be a ReportGenerator object.")
@@ -928,7 +1090,7 @@ class PostProcessor:
                         "\n",
                         "Comments:",
                         "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
-                        "Emissions are fuel emissions emitted during simulad period.",
+                        "Emissions are fuel emissions emitted during the simulated period.",
                         "Consumption for Diesel_Car in l, for EV in kWh.",
                     ],
                 )
@@ -967,12 +1129,10 @@ class PostProcessor:
         self, report: reportgenerator.ReportGenerator, lines: List, headline: str
     ) -> None:
         """Write new chapter with headline and some general information e.g. KPIs to report."""
-        report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + headline])
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def write_new_chapter_with_table_to_report(
         self,
@@ -982,13 +1142,11 @@ class PostProcessor:
         comment: List,
     ) -> None:
         """Write new chapter with headline and a table to report."""
-        report.open()
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + headline])
         report.write_tables_to_report(table_as_list_of_list)
         report.write_with_normal_alignment(comment)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
-        report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
         """Opens files in given path.

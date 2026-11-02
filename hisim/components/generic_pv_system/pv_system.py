@@ -26,6 +26,7 @@ from hisim import utils
 from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import DisplayConfig, concrete
+from hisim.energy_port import EnergyPort
 # The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer`` walks
 # its import closure and hashes the source of everything in it, so an edit to the calculation changes
 # the key without anyone declaring anything.
@@ -33,6 +34,7 @@ from hisim.components.generic_pv_system import calculation
 from hisim.components.generic_pv_system.calculation import (
     ARTIFACT_KIND,
     PVLibModuleAndInverterEnum,
+    PvSeriesColumn,
     PvSeriesInputs,
     PvWeatherSeries,
 )
@@ -75,7 +77,7 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 """
 
 
-class PVSystem(cp.Component):
+class PVSystem(cp.PhysicsComponent):
     """Simulates PV Output based on weather data and peak power.
 
     Parameters
@@ -110,7 +112,7 @@ class PVSystem(cp.Component):
 
     """
 
-    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 
     # Inputs
@@ -128,6 +130,10 @@ class PVSystem(cp.Component):
     # Additional output channels must not contain 'ElectricityOutput' or
     # dynamic components will fail.
     ElectricityEnergyOutput = "ElectricityEnergyOutput"
+    #: The solar power on the modules, the plane-of-array irradiance times the array's module area, in W.
+    SolarPowerOnModulesInWatt = "SolarPowerOnModulesInWatt"
+    #: What the modules and the inverter do not convert: the solar power on the modules minus the AC power, in W.
+    ModuleAndInverterLossInWatt = "ModuleAndInverterLossInWatt"
 
     # Similar components to connect to:
     # 1. Weather
@@ -142,6 +148,10 @@ class PVSystem(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.ac_power_ratios_for_all_timesteps_output: List = []
+        self.solar_power_ratios_for_all_timesteps: List[float] = []
+        #: The array's peak power in W, the configured ``power_in_watt``, resolved once in
+        #: ``i_prepare_simulation`` so that ``i_simulate`` only multiplies.
+        self.peak_power_in_watt: float
         self.coordinates: Any
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -227,6 +237,7 @@ class PVSystem(cp.Component):
                 lt.ComponentType.PV,
             ],
             output_description="Electricity output of the PV system.",
+            energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
@@ -238,6 +249,34 @@ class PVSystem(cp.Component):
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
+        )
+
+        # The sun's input and the conversion loss close the array's energy balance (complete Sankey spec, Q-D):
+        # the solar power on the modules enters from the sun, the AC power leaves to the electricity meter that
+        # reads it (through the energy manager in the household twins), and what the modules and the inverter do
+        # not convert leaves to outdoors.
+        self.solar_power_on_modules_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.SolarPowerOnModulesInWatt,
+            load_type=lt.LoadTypes.IRRADIANCE,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The solar power on the modules, in W: the global irradiance on the plane of the array times the "
+                "area of its modules (peak power over module peak power, times module area). Zero at night."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.SOLAR),
+        )
+        self.module_and_inverter_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ModuleAndInverterLossInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                "What the modules and the inverter do not convert to AC power, in W: the solar power on the modules "
+                "minus the electricity output. At night it is the inverter's standby consumption, which the "
+                "electricity output carries as a small negative power."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR),
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -265,7 +304,7 @@ class PVSystem(cp.Component):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the PV array as one priced subject: a `PV` entry of the cost database, sized by
         its **installed module power in kW**. The config holds that power in *watts*, so the
@@ -414,9 +453,12 @@ class PVSystem(cp.Component):
         the prediction horizon is additionally published to the dynamic
         simulation repository for the controller to consume.
         """
-        ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt
+        ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.peak_power_in_watt
+        solar_power_in_watt = self.solar_power_ratios_for_all_timesteps[timestep] * self.peak_power_in_watt
 
         stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
+        stsv.set_output_value(self.solar_power_on_modules_channel, solar_power_in_watt)
+        stsv.set_output_value(self.module_and_inverter_loss_channel, solar_power_in_watt - ac_power_in_watt)
         stsv.set_output_value(
             self.electricity_energy_output_channel,
             ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
@@ -429,7 +471,7 @@ class PVSystem(cp.Component):
             if last_forecast_timestep > len(self.ac_power_ratios_for_all_timesteps_output):
                 last_forecast_timestep = len(self.ac_power_ratios_for_all_timesteps_output)
             pvforecast = [
-                self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t] * self.peak_power_in_watt
                 for t in range(timestep, last_forecast_timestep)
             ]
             self.simulation_repository.set_dynamic_entry(
@@ -458,8 +500,8 @@ class PVSystem(cp.Component):
         """Prepare the component by computing or loading the whole simulation period's PV output.
 
         On a cache hit, the AC power ratios for every timestep are read from the
-        cache CSV. On a cache miss, the producer computes them from the yearly
-        weather arrays the weather component published, in one vectorized pvlib
+        cache CSV. On a cache miss, the producer computes them from the weather
+        series over the run's window the weather component published, in one vectorized pvlib
         run, and the result is written to the cache file immediately, so even
         simulations that are interrupted later still populate the cache. After
         that, ``i_simulate`` only performs array lookups.
@@ -470,21 +512,21 @@ class PVSystem(cp.Component):
         configuration JSON, and it carries the weather's key by reference, so an
         edit to either calculation -- or to a weather file, or to a module
         database -- files the series somewhere else by itself.
+
+        The configured peak power is resolved here once, as ``peak_power_in_watt``, which every
+        step multiplies the two ratios with.
         """
+        self.peak_power_in_watt = float(concrete(self.pvconfig.power_in_watt))
         calculation_inputs = self.build_calculation_inputs()
         entry = self.cache_entry(calculation_inputs)
 
         if entry.exists:
             log.information("Get PV results from cache.")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the
-            # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
-            # the last bit of a sixth of the values, whatever precision they were written with;
-            # measured on this data: 317 of 2000 with the default write format, 358 with
-            # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
-            # not the digits on disk, which is why writing more of them does not help.
-            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
-                entry.path, sep=",", decimal=".", float_precision="round_trip"
-            )[calculation.OUTPUT_COLUMN].tolist()
+            cached = pd.read_csv(entry.path, sep=",", decimal=".")
+            self.ac_power_ratios_for_all_timesteps_output = cached[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.solar_power_ratios_for_all_timesteps = cached[
+                PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
+            ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
                 raise ValueError(
@@ -495,8 +537,9 @@ class PVSystem(cp.Component):
         else:
             log.information(f"PV series cache miss: computing it and filing it at {entry.path}")
             database = calculation.produce_pv_series(calculation_inputs)
-            self.ac_power_ratios_for_all_timesteps_output = database[
-                calculation.OUTPUT_COLUMN
+            self.ac_power_ratios_for_all_timesteps_output = database[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.solar_power_ratios_for_all_timesteps = database[
+                PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
             ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
@@ -504,7 +547,7 @@ class PVSystem(cp.Component):
                     f"The computed PV values have the wrong length. "
                     f"Expected {self.my_simulation_parameters.timesteps} values, "
                     f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}. "
-                    f"The yearly weather arrays in this simulation's sim repository "
+                    f"The weather series in this simulation's sim repository "
                     f"do not match the simulation parameters."
                 )
 
@@ -547,6 +590,7 @@ class PVSystem(cp.Component):
             tilt_in_degrees=float(self.pvconfig.tilt),
             azimuth_in_degrees=float(self.pvconfig.azimuth),
             number_of_timesteps=self.my_simulation_parameters.timesteps,
+            window_start=self.my_simulation_parameters.start_date.isoformat(),
             module_database_path=module_database_path,
             inverter_database_path=inverter_database_path,
             weather_series=self.read_weather_series(),
@@ -579,7 +623,7 @@ class PVSystem(cp.Component):
 
         The weather component publishes the digest of its series' cache key when it prepares; it is
         key material here, and it is what makes the PV key change when anything about the weather
-        changes (spec §3.1). Its absence means the same thing the missing yearly arrays mean, and is
+        changes (spec §3.1). Its absence means the same thing the missing weather series mean, and is
         reported the same way.
 
         Returns:
@@ -598,61 +642,54 @@ class PVSystem(cp.Component):
         return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
 
     def read_weather_series(self) -> PvWeatherSeries:
-        """Take the weather arrays the producer computes from out of the singleton repository.
+        """Take the weather series the producer computes from out of the per-simulation repository.
 
-        The weather component always publishes arrays covering the whole
-        year at the simulation's resolution, while the simulation itself
-        may span only part of it (e.g. one day or one week). Both index
-        their series by timestep from the same start, so truncating to
-        the simulated period yields exactly the values the old
-        per-timestep computation produced.
+        The weather component publishes each of its series over the run's window: one value per
+        timestep of the simulated period, in the order the simulation steps through it. This is
+        exactly what the producer computes the PV output from, so the series are handed on unchanged.
+        A run that starts on 1 July reads July: the weather looks the run's start up in its series
+        (:meth:`hisim.components.weather.Weather.run_window_of`).
 
         Returns:
-            PvWeatherSeries: the eight series, cut to the simulated period.
+            PvWeatherSeries: the eight series over the run's window.
 
         Raises:
             KeyError: if the weather component has not prepared before this one.
-            ValueError: if the published arrays are shorter than the simulated period.
+            ValueError: if a published series does not have one value per timestep of the run.
         """
-        # The Weather publishes its full-year series into this simulation's repository in its
-        # own i_prepare_simulation. prepare_calculation walks the components in the order the
-        # setup added them, so a Weather added after this component has not published yet and
-        # the lookup below would fail with a bare key name. Say what to do instead.
-        if not self.simulation_repository.entry_exists(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE):
+        # The Weather publishes its series into this simulation's repository in its own
+        # i_prepare_simulation. prepare_calculation walks the components in the order the setup
+        # added them, so a Weather added after this component has not published yet and the lookup
+        # below would fail with a bare key name. Say what to do instead.
+        if not self.simulation_repository.entry_exists(Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE):
             raise KeyError(
-                "The yearly weather arrays were not found in this simulation's "
+                "The weather series over the run's window were not found in this simulation's "
                 "sim repository. Please check in your system setup that the "
                 "weather component is added to the simulator before the pv "
-                "system; its i_prepare_simulation publishes these arrays."
+                "system; its i_prepare_simulation publishes these series."
             )
 
-        dni_extra = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA)
-        dni = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE)
-        dhi = self.simulation_repository.get_entry(Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE)
-        ghi = self.simulation_repository.get_entry(Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE)
-        azimuth = self.simulation_repository.get_entry(Weather.YEARLY_AZIMUTH)
-        apparent_zenith = self.simulation_repository.get_entry(Weather.YEARLY_APPARENT_ZENITH)
-        temperature = self.simulation_repository.get_entry(Weather.YEARLY_TEMPERATURE_OUTSIDE)
-        wind_speed = self.simulation_repository.get_entry(Weather.YEARLY_WIND_SPEED)
-
+        series = {
+            "dni_extra": Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE_EXTRA,
+            "dni": Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE,
+            "dhi": Weather.RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE,
+            "ghi": Weather.RUN_WINDOW_GLOBAL_HORIZONTAL_IRRADIANCE,
+            "azimuth": Weather.RUN_WINDOW_AZIMUTH,
+            "apparent_zenith": Weather.RUN_WINDOW_APPARENT_ZENITH,
+            "temperature": Weather.RUN_WINDOW_TEMPERATURE_OUTSIDE,
+            "wind_speed": Weather.RUN_WINDOW_WIND_SPEED,
+        }
         number_of_timesteps = self.my_simulation_parameters.timesteps
-        if len(dni) < number_of_timesteps:
-            raise ValueError(
-                f"The yearly weather arrays in this simulation's sim repository "
-                f"hold {len(dni)} values but the simulation needs "
-                f"{number_of_timesteps}. The arrays do not match the "
-                f"simulation parameters (wrong resolution or duration)."
-            )
-        return PvWeatherSeries.of(
-            dni_extra=dni_extra[:number_of_timesteps],
-            dni=dni[:number_of_timesteps],
-            dhi=dhi[:number_of_timesteps],
-            ghi=ghi[:number_of_timesteps],
-            azimuth=azimuth[:number_of_timesteps],
-            apparent_zenith=apparent_zenith[:number_of_timesteps],
-            temperature=temperature[:number_of_timesteps],
-            wind_speed=wind_speed[:number_of_timesteps],
-        )
+        values_per_series = {name: self.simulation_repository.get_entry(key) for name, key in series.items()}
+        for name, values in values_per_series.items():
+            if len(values) != number_of_timesteps:
+                raise ValueError(
+                    f"The weather series '{series[name]}' in this simulation's sim repository "
+                    f"holds {len(values)} values but the simulation has "
+                    f"{number_of_timesteps} timesteps. The series do not match the "
+                    f"simulation parameters (wrong resolution or duration)."
+                )
+        return PvWeatherSeries.of(**values_per_series)
 
     def cache_entry(self, calculation_inputs: PvSeriesInputs) -> CacheEntry:
         """Look the produced series up in the cache under the key of the producer that makes it.

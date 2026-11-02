@@ -1,9 +1,9 @@
-"""Serialization of evaluator inputs and stored results, for re-pricing without re-simulating (cost_spec.md §4.6).
+"""Serialization of evaluator inputs and stored results, for re-pricing without re-simulating.
 
 Everything the evaluator needs about one simulated variant is written to ``economic_inputs.json`` and read back, so an
 archived run can be re-priced under new rates or catalogs and evaluate to the same result. A field that does not
 round-trip would make an archived run re-price differently from the original. The one deliberate exception is the
-default tariff contract built from the §3.5 price entries: it is written but not restored, because the evaluator
+default tariff contract built from the price entries: it is written but not restored, because the evaluator
 regenerates it at the price basis year. The second half of the module reads ``lifecycle_costs.json``,
 ``cash_flow_timeline.csv`` and ``cost_provenance.json`` back into an `EvaluationMatrix`, so ``python -m hisim.economics
 report`` renders a stored evaluation instead of re-evaluating.
@@ -148,9 +148,9 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
 
 
 def billing_to_json(determinants: BillingDeterminants) -> dict:
-    """Serialize `BillingDeterminants`: one record per carrier that crossed the system boundary (§3.4).
+    """Serialize `BillingDeterminants`: one record per carrier that crossed the system boundary.
 
-    Holds annual volumes bought and sold, the time-of-use band split, the peaks for capacity charges (§8.4), and for
+    Holds annual volumes bought and sold, the time-of-use band split, the peaks for capacity charges, and for
     dynamic tariffs the integrated cost, revenue and mean spot price. Every quantity is in kWh for every carrier;
     conversion from EUR/t or EUR/l happens on the price side.
     """
@@ -188,7 +188,7 @@ def billing_from_json(raw: dict) -> BillingDeterminants:
 def asset_to_json(asset: ExistingAsset) -> dict:
     """Serialize one existing asset, i.e. a piece of the building as it was before the measure.
 
-    The fields are what the brownfield arithmetic of §4.1 needs: installation year (remaining life, first replacement,
+    The fields are what the brownfield arithmetic needs: installation year (remaining life, first replacement,
     anyway credit), functionality, carrier, an optional like-for-like replacement price, `anyway_share` (the share of
     the avoided like-for-like replacement credited, "Sowieso" share) and `replaced_by_asset_classes`, which marks it as
     replaced by the measure. Used for register entries and for the subsidy context's `existing_heating`.
@@ -258,7 +258,7 @@ def register_from_json(raw: Optional[list]) -> Optional[ExistingAssetRegister]:
 
 
 def subsidy_context_to_json(context: SubsidyContext) -> dict:
-    """Serialize the subsidy context: the applicant and building answers the eligibility conditions read (§5.3, §5.7).
+    """Serialize the subsidy context: the applicant and building answers the eligibility conditions read.
 
     Every field is written even when None, because an unanswered field is undetermined in the condition language, not
     false. `building.existing_heating` matters for the DE catalog's BEG speed bonus.
@@ -413,7 +413,7 @@ def contracts_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> D
     """Read the tariff contracts of an inputs file.
 
     ``tariff_contracts`` holds full contract objects; older files hold ``tariff_contract_ids``, resolved against the
-    tariffs directory. Contracts generated from the §3.5 price entries are skipped in both forms, because the evaluator
+    tariffs directory. Contracts generated from the price entries are skipped in both forms, because the evaluator
     regenerates them at the price basis year (which keeps scenario price overlays effective). An embedded contract is
     recognized by its ``is_default_contract`` flag, an id by `TariffContract.is_default_contract_id`; a loaded id-only
     contract whose flag is set is skipped too.
@@ -604,7 +604,7 @@ def read_inputs(result_directory: str, tariffs_base_path: Optional[str] = None) 
     """Read ``economic_inputs.json`` from a result directory, possibly archived years ago.
 
     The directory can be re-priced against a newer database or catalog without the original setup, HiSim version or
-    weather data (§4.6). ``tariffs_base_path`` is only used for older files that reference contracts by id.
+    weather data. ``tariffs_base_path`` is only used for older files that reference contracts by id.
 
     Raises:
         OSError: If the directory holds no ``economic_inputs.json``; callers read this as "not a lifecycle-cost run".
@@ -651,7 +651,7 @@ def _breakdown_from_json(raw: dict) -> ComponentCostBreakdown:
 
 
 def _decision_from_json(raw: dict) -> SubsidyDecision:
-    """Rebuild one measure's `SubsidyDecision`, the §5 audit trail, from stored results.
+    """Rebuild one measure's `SubsidyDecision`, the audit trail, from stored results.
 
     Restores the applied schemes (payout kind, schedule, loan terms, which caps bound in which slot), the rejected ones
     with their reason, and the undetermined ones with the most an unanswered question could still be worth.

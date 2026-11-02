@@ -37,7 +37,7 @@ Never push; the user pushes from another machine.
 
 - `system_docs/json_scenario_v2_spec.md` — format spec; §3.3 connection shapes,
   decisions 18/20 and the decision list style for adding 21.
-- `system_docs/config_defaults_spec.md` — design B: `sized_field`, laws, `SizingContext`,
+- `roadmap/declarative_energy_systems/config_defaults_spec.md` — design B: `sized_field`, laws, `SizingContext`,
   engine §8.4, template workflow §8.1/§8.3.
 - Pilots to imitate: `hisim/components/generic_boiler.py` (presets Catalog, per-preset
   law, contributions), `hisim/components/heat_distribution_system.py`,

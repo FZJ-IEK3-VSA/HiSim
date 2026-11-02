@@ -3,9 +3,9 @@
 It grows the occupancy, both heat pump draws and the collector pump.
 
 TEMPORARY — part of the P3 parity rig's tests and deleted with ``test_p3_parity.py`` when P6 retires
-the rig (hisim-b3b.22). The check itself lives there as ``check_participant_targets``; this module
+the rig (hisim-declarative-systems-b3b.22). The check itself lives there as ``check_participant_targets``; this module
 exists only so that ``--dist loadfile`` can run this canary on another worker than its sibling
-(hisim-60sv.10). ``test_every_participant_canary_has_its_own_module`` keeps one module per canary.
+(hisim-ci-speed-60sv.10). ``test_every_participant_canary_has_its_own_module`` keeps one module per canary.
 """
 
 from pathlib import Path

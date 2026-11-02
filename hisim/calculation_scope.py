@@ -3,7 +3,7 @@
 Every entry point that runs a calculation -- ``hisim_main`` in both of its modes, ``run_energy_system``
 (and with it ``hisim energy-system run``), the RenoVisor ``Calculation`` and the economics CLI's
 writing commands -- opens exactly one :meth:`CalculationScope.open` around the whole of it. The
-scope does three things (bead hisim-epc.23, owner decisions of 2026-09-26):
+scope does three things (bead hisim-renovisor-translator-epc.23, owner decisions of 2026-09-26):
 
 1. **A fresh result directory.** :class:`~hisim.result_path_provider.ResultPathProviderSingleton` is
    process-global, and a worker that runs several calculations in one process must never hand the

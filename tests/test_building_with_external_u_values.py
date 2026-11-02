@@ -18,6 +18,7 @@ from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
 from hisim.config import ComponentID, SizingContext
+from tests.idealized_heater_rig import controller_between
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -175,13 +176,6 @@ def _connect_components(
         my_building.ThermalPowerDelivered,
         my_idealized_electric_heater.component_name,
         my_idealized_electric_heater.ThermalPowerDelivered,
-    )
-
-    # Fake Heater
-    my_idealized_electric_heater.connect_input(
-        my_idealized_electric_heater.TheoreticalThermalBuildingDemand,
-        my_building.component_name,
-        my_building.TheoreticalThermalBuildingDemand,
     )
 
 
@@ -411,6 +405,7 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
+    my_sim.add_component(controller_between(my_building, my_idealized_electric_heater))
     my_sim.add_component(my_idealized_electric_heater)
 
     my_sim.run_all_timesteps()

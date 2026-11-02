@@ -417,7 +417,7 @@ class KpiEntry:
     name_of_source_component: Optional[str] = None
     # Snake_case field names inside the camelCase entry: KpiSource pins its own spelling.
     source: Optional[KpiSource] = None
-    # Optional uncertainty band (cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
+    # Optional uncertainty band (roadmap/cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
     # legacy KPIs leave these unset during the parallel phase of the lifecycle cost engine.
     value_min: Optional[float] = None
     value_max: Optional[float] = None
@@ -501,6 +501,47 @@ class KpiHelperClass:
 
         energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * time_resolution_in_seconds / 3.6e6)
         return energy_in_kilowatt_hour
+
+    @staticmethod
+    def compute_storage_losses_in_kilowatt_hour(
+        *,
+        charged_energy_in_kilowatt_hour: float,
+        discharged_energy_in_kilowatt_hour: float,
+        stored_energy_increase_in_kilowatt_hour: float,
+    ) -> float:
+        """Return the energy a storage lost over a run: what went in, minus what came out, minus what it still holds.
+
+        Charged minus discharged energy is the loss only for a storage that ends the run as full as it started. A
+        storage that ends fuller holds part of the charged energy, and one that ends emptier gave up energy it held at
+        the start, so the change of the stored energy is subtracted. For example, a battery charged with 10 kWh and
+        discharged by 2 kWh that holds 7 kWh more at the end than at the start lost 1 kWh, not 8 kWh.
+
+        Args:
+            charged_energy_in_kilowatt_hour: The energy that went into the storage over the run, in kWh, as a
+                magnitude: at least 0.
+            discharged_energy_in_kilowatt_hour: The energy that came out of the storage over the run, in kWh, as a
+                magnitude: at least 0, not the negative sum of a signed charging power.
+            stored_energy_increase_in_kilowatt_hour: The stored energy at the end of the run minus the stored energy at
+                its start, in kWh; negative when the storage ends emptier than it started.
+
+        Returns:
+            The losses over the run, in kWh.
+
+        Raises:
+            ValueError: If the charged or the discharged energy is negative, which is a signed sum passed where a
+                magnitude belongs.
+        """
+        if charged_energy_in_kilowatt_hour < 0 or discharged_energy_in_kilowatt_hour < 0:
+            raise ValueError(
+                "The charged and the discharged energy of a storage are magnitudes, at least 0; got "
+                f"{charged_energy_in_kilowatt_hour} kWh charged and {discharged_energy_in_kilowatt_hour} kWh "
+                "discharged."
+            )
+        return (
+            charged_energy_in_kilowatt_hour
+            - discharged_energy_in_kilowatt_hour
+            - stored_energy_increase_in_kilowatt_hour
+        )
 
     @staticmethod
     def compute_mean_max_min_values(list_or_pandas_series: Union[List[float], pd.Series]) -> Tuple[float, float, float]:

@@ -1,4 +1,4 @@
-"""Per-scheme eligibility assessment and questionnaire derivation (cost_spec.md §5.3-§5.5, §5.7).
+"""Per-scheme eligibility assessment and questionnaire derivation.
 
 `SubsidyContext` carries the answers; `evaluate_condition` and `describe_condition` judge and explain each condition;
 `assess_schemes` gives one `SchemeAssessment` per scheme; `required_questions` derives what a partly filled context
@@ -48,7 +48,7 @@ class SubsidyContext:
     The caller attaches it to a run through ``bridge.EconomicContext``, and its answers round-trip through
     ``economic_inputs.json`` so a stored result can be re-priced without re-simulating. The ``measure.*`` root is not
     stored here: it is the cost facts of the measure being assessed, passed per call. Any field may stay unanswered;
-    conditions touching it are then UNDETERMINED rather than false (§5.7).
+    conditions touching it are then UNDETERMINED rather than false.
     """
 
     applicant: ApplicantProfile = field(default_factory=ApplicantProfile)
@@ -109,7 +109,7 @@ class SubsidyContext:
 def evaluate_condition(  # pylint: disable=too-many-return-statements
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> Tuple[Optional[bool], List[str]]:
-    """Evaluate a condition tree to True, False or None (undetermined) plus the fields that would settle it (§5.7).
+    """Evaluate a condition tree to True, False or None (undetermined) plus the fields that would settle it.
 
     A leaf whose field is unanswered, or whose comparison raises `TypeError` on a mistyped answer, is undetermined and
     reports its field. ``all`` short-circuits on a definite False, ``any`` on a definite True, and ``not`` keeps
@@ -159,7 +159,7 @@ def evaluate_condition(  # pylint: disable=too-many-return-statements
 def describe_condition(
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> str:
-    """Render one condition node as the single line an audit trail shows (§5.4).
+    """Render one condition node as the single line an audit trail shows.
 
     A leaf becomes ``field op value (actual: answer)``, so a rejection can be checked without opening the catalog;
     unanswered fields print as ``unanswered``. Combinators render as ``all of``, ``any of`` and ``not``.
@@ -187,7 +187,7 @@ def describe_condition(
 def failed_condition_descriptions(
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> List[str]:
-    """Describe the condition leaves responsible for a definite ``False`` verdict (§5.4).
+    """Describe the condition leaves responsible for a definite ``False`` verdict.
 
     The walk mirrors :func:`evaluate_condition` and descends only into subtrees that are definitely False, so the
     explanation matches the verdict. A failing ``all`` names every failing child, since fixing one may not be enough. A
@@ -234,7 +234,7 @@ def ineligibility_reason(
 
 
 class EligibilityStatus(str, enum.Enum):
-    """Tri-state eligibility of a scheme (§5.7).
+    """Tri-state eligibility of a scheme.
 
     UNDETERMINED separates "does not qualify" from "not asked enough to tell": the solver awards only ELIGIBLE schemes,
     while the decision still reports what unanswered questions might unlock.
@@ -379,7 +379,7 @@ class SchemeMaximum:
 
 @dataclass
 class SubsidyDecision:
-    """The full outcome of the cumulation solver for one measure, as an audit trail (§5.4).
+    """The full outcome of the cumulation solver for one measure, as an audit trail.
 
     Cumulation is combining several schemes for one measure under their stacking rules. The decision records which
     schemes applied, which were rejected and why, which stayed undetermined on which fields, how much those could still
@@ -460,8 +460,8 @@ def assess_schemes(
 ) -> List[SchemeAssessment]:
     """Assess every candidate scheme of one measure as ELIGIBLE, INELIGIBLE or UNDETERMINED.
 
-    All three classes are returned because the rejected and undetermined ones feed the audit trail (§5.4) and the
-    questionnaire (§5.7). A scheme that `admits` rejects is not assessed at all, so it enters neither the solver nor
+    All three classes are returned because the rejected and undetermined ones feed the audit trail and the
+    questionnaire. A scheme that `admits` rejects is not assessed at all, so it enters neither the solver nor
     the undetermined bound.
 
     Args:
@@ -469,7 +469,7 @@ def assess_schemes(
         measure: The measure; its asset class and kind select candidates, and its facts back the ``measure.*`` paths.
         context: The applicant and building answers.
         year: The year scheme validity is tested against (the price basis year in production).
-        admits: The perspective's subsidy-mode filter on scheme ids (§5.5); ``None`` admits everything.
+        admits: The perspective's subsidy-mode filter on scheme ids; ``None`` admits everything.
 
     Returns:
         One assessment per admitted candidate, in catalog order; a rejection names the responsible condition(s)
@@ -508,12 +508,12 @@ def required_questions(
     year: int,
     admits: Optional[Callable[[str], bool]] = None,
 ) -> List[Question]:
-    """Compute the minimal question set for the candidate schemes, most valuable first (§5.7).
+    """Compute the minimal question set for the candidate schemes, most valuable first.
 
     Collects every context field the candidate schemes depend on (:func:`scheme_context_fields`, so implied fields such
     as residential share or dwelling units count), drops answered ones and ``measure.*`` fields, and replaces derived
     fields by the questions behind them (:func:`question_targets`). A field with no catalog question is skipped here;
-    the coverage check in ``validation.py`` reports it (§9.6). Ordering is by pruning power: each scheme's rough
+    the coverage check in ``validation.py`` reports it. Ordering is by pruning power: each scheme's rough
     uncapped support estimate (:meth:`Benefit.value_estimate`) is credited to every field it depends on, so the
     questions that gate the most money come first. The list is meant for a frontend questionnaire.
 

@@ -1,4 +1,4 @@
-"""Engine tests: views, financing, CO2 accumulation, sign validation, maintenance (cost_spec.md §4-§6).
+"""Engine tests: views, financing, CO2 accumulation, sign validation, maintenance (roadmap/cost_spec.md §4-§6).
 
 Second of the three engine test files (split per the PR-3 review's 500-line rule): the
 OPERATING and MACROECONOMIC views, loan financing and the soft-loan award substitution

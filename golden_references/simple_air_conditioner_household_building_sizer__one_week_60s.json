@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2137.909405598272
+    "value": 2550.5979036747167
   },
   "BUI1.Building.Internal energy gains (Building)": {
     "building": "BUI1",
@@ -261,7 +261,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 2.1742385589171236
+    "value": -1.6576881687488094
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -351,7 +351,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2303.5584890155797
+    "value": 2717.2588279438573
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -381,7 +381,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 2732.9766152142734
+    "value": 3223.7969513978524
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",

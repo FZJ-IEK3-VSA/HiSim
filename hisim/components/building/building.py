@@ -7,7 +7,7 @@ moved verbatim from the former single-module ``building.py``.
 """
 
 import importlib
-from typing import Any, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple
 
 import pandas as pd
 
@@ -80,12 +80,26 @@ class BuildingState:
 
     def __init__(
         self,
+        *,
         thermal_mass_temperature_in_celsius: float,
         thermal_capacitance_in_joule_per_kelvin: float,
+        indoor_air_temperature_in_celsius: float,
     ) -> None:
-        """Construct all the neccessary attributes for the BuildingState object."""
+        """Construct all the neccessary attributes for the BuildingState object.
+
+        The two temperatures are the values the state carries from one step into the next. At the start of a step
+        they are the values the previous step ended at (on the first step the configured initial temperature);
+        ``Building.i_simulate`` replaces them with this step's values, which the next step then starts from.
+
+        Args:
+            thermal_mass_temperature_in_celsius: The thermal mass temperature the state carries into the next step,
+                in °C.
+            thermal_capacitance_in_joule_per_kelvin: The thermal mass's heat capacity, in J/K.
+            indoor_air_temperature_in_celsius: The indoor air temperature the state carries into the next step, in °C.
+        """
         # this is labeled as t_m in the paper [1] (** Check header)
         self.thermal_mass_temperature_in_celsius: float = thermal_mass_temperature_in_celsius
+        self.indoor_air_temperature_in_celsius: float = indoor_air_temperature_in_celsius
 
         # this is labeled as c_m in the paper [1] (** Check header)
         self.thermal_capacitance_in_joule_per_kelvin: float = thermal_capacitance_in_joule_per_kelvin
@@ -101,13 +115,14 @@ class BuildingState:
     ) -> "BuildingState":
         """Copy the Building State."""
         return BuildingState(
-            self.thermal_mass_temperature_in_celsius,
-            self.thermal_capacitance_in_joule_per_kelvin,
+            thermal_mass_temperature_in_celsius=self.thermal_mass_temperature_in_celsius,
+            thermal_capacitance_in_joule_per_kelvin=self.thermal_capacitance_in_joule_per_kelvin,
+            indoor_air_temperature_in_celsius=self.indoor_air_temperature_in_celsius,
         )
 
 
 # class Building(dynamic_component.DynamicComponent):
-class Building(cp.Component):
+class Building(cp.PhysicsComponent):
     """Building class.
 
     This class calculates the thermal behaviour of the building based on the RC Simulator (** paper [1]) and the EN ISO 13790 norm (see header).
@@ -153,12 +168,23 @@ class Building(cp.Component):
     TemperatureOutside = "TemperatureOutside"
 
     # Inputs -> energy management system
-    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    BuildingTemperatureModifierInKelvin = "BuildingTemperatureModifierInKelvin"
 
     # Outputs
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
     TemperatureInternalSurface = "TemperatureInternalSurface"
     TemperatureIndoorAir = "TemperatureIndoorAir"
+
+    #: How far above the cooling set temperature the room must be for the occupants to open the windows, in K. A room
+    #: that a distribution system cools in the same step ends exactly at the cooling set temperature; without a margin
+    #: float noise decides whether the windows open, and the step has no consistent state (the room flips between the
+    #: set temperature and the aired temperature from pass to pass). The margin lies far above that noise and far
+    #: above the simulator's convergence tolerance, and far below a temperature anyone would notice.
+    WINDOW_OPENING_MARGIN_IN_KELVIN: ClassVar[float] = 0.01
+    #: The indoor air temperature at the start of the step, the value the previous step converged to: a sensor
+    #: value no pass of the step moves, for components that decide on the room temperature within the step.
+    #: On the first step it is the configured initial indoor temperature.
+    TemperatureIndoorAirAtStartOfStepInCelsius = "TemperatureIndoorAirAtStartOfStepInCelsius"
     TotalThermalPowerToResidence = "TotalThermalPowerToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     InternalHeatGainsFromOccupancy = "InternalHeatGainsFromOccupancy"
@@ -235,6 +261,7 @@ class Building(cp.Component):
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
+            indoor_air_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
         self.previous_state = self.state.self_copy()
 
@@ -331,9 +358,9 @@ class Building(cp.Component):
 
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.BuildingTemperatureModifier,
+            self.BuildingTemperatureModifierInKelvin,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            lt.Units.KELVIN,
             mandatory=False,
         )
 
@@ -357,7 +384,22 @@ class Building(cp.Component):
             self.TemperatureIndoorAir,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-            output_description=f"here a description for {self.TemperatureIndoorAir} will follow.",
+            output_description=(
+                "The indoor air temperature of this step, computed from the heat delivered in the same pass, so it "
+                "moves while the step iterates. A component that decides on the room temperature within the step "
+                f"reads {self.TemperatureIndoorAirAtStartOfStepInCelsius} instead."
+            ),
+        )
+        self.indoor_air_temperature_at_start_of_step_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TemperatureIndoorAirAtStartOfStepInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The indoor air temperature at the start of the step: the value the previous step converged to, "
+                "the configured initial indoor temperature on the first step. The building publishes the same value "
+                "in every pass of the step."
+            ),
         )
         self.total_thermal_power_to_residence_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -604,9 +646,9 @@ class Building(cp.Component):
         ems_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
-                Building.BuildingTemperatureModifier,
+                Building.BuildingTemperatureModifierInKelvin,
                 ems_classname,
-                component_class.BuildingIndoorTemperatureModifier,
+                component_class.BuildingTemperatureModifierInKelvin,
             )
         )
         return connections
@@ -630,7 +672,7 @@ class Building(cp.Component):
 
         temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
 
-        building_temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
+        building_temperature_modifier_in_kelvin = stsv.get_input_value(self.building_temperature_modifier_channel)
 
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
@@ -643,6 +685,7 @@ class Building(cp.Component):
             )
 
         previous_thermal_mass_temperature_in_celsius = self.state.thermal_mass_temperature_in_celsius
+        indoor_air_temperature_at_start_of_step_in_celsius = self.state.indoor_air_temperature_in_celsius
 
         # Performs calculations
         solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
@@ -675,15 +718,17 @@ class Building(cp.Component):
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
         )
-        self.state.thermal_mass_temperature_in_celsius = thermal_mass_average_bulk_temperature_in_celsius
+        # The next step starts from the mass's end-of-step temperature T_m,t (ISO 13790 C.4). The step average
+        # (T_m,t-1 + T_m,t) / 2 (C.9) is what this step's surface and air equations use and what the thermal mass
+        # output publishes; carrying the average forward would let the mass keep only half its net heat per step.
+        self.state.thermal_mass_temperature_in_celsius = next_thermal_mass_temperature_in_celsius
 
         # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or initial temperature is reached
-        if (
-            self.buildingconfig.enable_opening_windows is True
-            and self.buildingconfig.initial_internal_temperature_in_celsius
-            < self.set_cooling_temperature_in_celsius
-            < indoor_air_temperature_in_celsius
-            and temperature_outside_in_celsius < indoor_air_temperature_in_celsius
+        if self.buildingconfig.enable_opening_windows is True and self.occupants_open_the_windows(
+            initial_temperature_in_celsius=self.buildingconfig.initial_internal_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
+            indoor_air_temperature_in_celsius=indoor_air_temperature_in_celsius,
+            outside_temperature_in_celsius=temperature_outside_in_celsius,
         ):
             indoor_air_temperature_in_celsius = max(
                 self.buildingconfig.initial_internal_temperature_in_celsius,
@@ -695,7 +740,7 @@ class Building(cp.Component):
 
         # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
         set_heating_temperature_modified_in_celsius = (
-            self.set_heating_temperature_in_celsius + building_temperature_modifier
+            self.set_heating_temperature_in_celsius + building_temperature_modifier_in_kelvin
         )
 
         theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
@@ -739,6 +784,11 @@ class Building(cp.Component):
             self.indoor_air_temperature_channel,
             indoor_air_temperature_in_celsius,
         )
+        stsv.set_output_value(
+            self.indoor_air_temperature_at_start_of_step_channel,
+            indoor_air_temperature_at_start_of_step_in_celsius,
+        )
+        self.state.indoor_air_temperature_in_celsius = indoor_air_temperature_in_celsius
 
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
 
@@ -794,6 +844,41 @@ class Building(cp.Component):
         )
 
     # =================================================================================================================================
+
+    @classmethod
+    def occupants_open_the_windows(
+        cls,
+        *,
+        initial_temperature_in_celsius: float,
+        set_cooling_temperature_in_celsius: float,
+        indoor_air_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+    ) -> bool:
+        """Return whether the room's temperatures make the occupants air it by opening the windows in this step.
+
+        They do when the room is more than :attr:`WINDOW_OPENING_MARGIN_IN_KELVIN` above the cooling set temperature,
+        the outside is cooler than the room, and the cooling set temperature lies above the initial temperature the
+        aired room falls back to. For example, with a 22 °C initial and a 25 °C cooling set temperature, a room at
+        25.5 °C with 18 °C outside is aired, a room at exactly 25.0 °C (where a distribution system cooling it in the
+        same step leaves it) is not. The method decides on the temperatures only: a building whose configuration does
+        not enable opening windows never airs, and :meth:`i_simulate` checks that before it asks.
+
+        Args:
+            initial_temperature_in_celsius: The building's initial indoor temperature, which an aired room falls back
+                to unless the outside is warmer, in °C.
+            set_cooling_temperature_in_celsius: The cooling set temperature, in °C.
+            indoor_air_temperature_in_celsius: The indoor air temperature of this step before airing, in °C.
+            outside_temperature_in_celsius: The outside temperature, in °C.
+
+        Returns:
+            True if the windows open, provided the configuration enables opening them.
+        """
+        return (
+            initial_temperature_in_celsius
+            < set_cooling_temperature_in_celsius
+            < indoor_air_temperature_in_celsius - cls.WINDOW_OPENING_MARGIN_IN_KELVIN
+            and outside_temperature_in_celsius < indoor_air_temperature_in_celsius
+        )
 
     def i_save_state(
         self,
@@ -853,18 +938,7 @@ class Building(cp.Component):
         entry = self.cache_entry(calculation_inputs)
         if entry.exists:
             log.information(f"Building solar gains cache hit: {entry.path}")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the
-            # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
-            # the last bit of a sixth of the values, whatever precision they were written with;
-            # measured on this data: 317 of 2000 with the default write format, 358 with
-            # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
-            # not the digits on disk, which is why writing more of them does not help.
-            cached_series = pd.read_csv(
-                entry.path,
-                sep=",",
-                decimal=".",
-                float_precision="round_trip",
-            )
+            cached_series = pd.read_csv(entry.path, sep=",", decimal=".")
             cached_gains_in_watt: List[float] = cached_series[solar_gains.SERIES_COLUMN].tolist()
             return cached_gains_in_watt
         log.information(f"Building solar gains cache miss: computing them and filing them at {entry.path}")
@@ -896,21 +970,22 @@ class Building(cp.Component):
             year=self.my_simulation_parameters.year,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
             timesteps=self.my_simulation_parameters.timesteps,
+            window_start=self.my_simulation_parameters.start_date.isoformat(),
             windows=self.window_geometries,
-            azimuth_in_degrees=self.published_weather_series(Weather.YEARLY_AZIMUTH),
+            azimuth_in_degrees=self.published_weather_series(Weather.RUN_WINDOW_AZIMUTH),
             direct_normal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE
+                Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE
             ),
             diffuse_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE
+                Weather.RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE
             ),
             global_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE
+                Weather.RUN_WINDOW_GLOBAL_HORIZONTAL_IRRADIANCE
             ),
             direct_normal_irradiance_extra_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA
+                Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE_EXTRA
             ),
-            apparent_zenith_in_degrees=self.published_weather_series(Weather.YEARLY_APPARENT_ZENITH),
+            apparent_zenith_in_degrees=self.published_weather_series(Weather.RUN_WINDOW_APPARENT_ZENITH),
         )
 
     def weather_artifact_key(self) -> str:
@@ -934,13 +1009,13 @@ class Building(cp.Component):
         return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
 
     def published_weather_series(self, key: str) -> Tuple[float, ...]:
-        """Return one full-year weather series the Weather published, as an immutable tuple.
+        """Return one weather series the Weather published over the run's window, as an immutable tuple.
 
         Args:
-            key: the repository key, one of the ``Weather.YEARLY_*`` names.
+            key: the repository key, one of the ``Weather.RUN_WINDOW_*`` names.
 
         Returns:
-            Tuple[float, ...]: the series, one value per timestep of the weather's own frame.
+            Tuple[float, ...]: the series, one value per timestep of the run.
 
         Raises:
             KeyError: if the series is missing although the artifact key is there, which would mean a

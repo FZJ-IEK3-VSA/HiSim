@@ -18,15 +18,16 @@ import pandas as pd
 import pytest
 from dataclasses_json import dataclass_json
 
-from hisim.component import CapexCostDataClass, Component, OpexCostDataClass
+from hisim.component import CapexCostDataClass, Component, ComponentOutput, OpexCostDataClass
 from hisim.component_wrapper import ComponentWrapper
+from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
-from hisim.loadtypes import ComponentType, LoadTypes, Units
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import opex_calculation
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiSource, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -514,3 +515,162 @@ def test_the_building_maintenance_kpi_carries_the_prorated_annual_rate(tmp_path)
     assert collected["Maintenance costs for simulated period"]["value"] == pytest.approx(
         expected_maintenance_in_euro
     )
+
+
+class TestBatteryLosses:
+    """The battery losses subtract the change of the stored energy from charged minus discharged energy."""
+
+    @pytest.mark.base
+    def test_the_losses_of_a_storage_subtract_what_it_holds_more_at_the_end(self) -> None:
+        """Catches a losses formula that ignores the stored energy: 10 kWh in, 2 out, 7 kept is 1 kWh lost, not 8."""
+        assert KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+            charged_energy_in_kilowatt_hour=10.0,
+            discharged_energy_in_kilowatt_hour=2.0,
+            stored_energy_increase_in_kilowatt_hour=7.0,
+        ) == pytest.approx(1.0, abs=1e-12)
+
+    @pytest.mark.base
+    def test_a_storage_that_ends_emptier_does_not_report_a_negative_loss(self) -> None:
+        """Catches the energy held at the start showing up as a negative loss: 5 kWh out of 5.5 kWh held is 0.5 lost."""
+        assert KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+            charged_energy_in_kilowatt_hour=0.0,
+            discharged_energy_in_kilowatt_hour=5.0,
+            stored_energy_increase_in_kilowatt_hour=-5.5,
+        ) == pytest.approx(0.5, abs=1e-12)
+
+    @pytest.mark.base
+    def test_a_negative_discharged_energy_is_refused(self) -> None:
+        """Catches a signed discharge sum (negative) passed as the discharged energy, which would double the losses."""
+        with pytest.raises(ValueError, match="magnitudes"):
+            KpiHelperClass.compute_storage_losses_in_kilowatt_hour(
+                charged_energy_in_kilowatt_hour=10.0,
+                discharged_energy_in_kilowatt_hour=-2.0,
+                stored_energy_increase_in_kilowatt_hour=7.0,
+            )
+
+    @pytest.mark.base
+    def test_the_battery_kpis_read_the_stored_energy_column(self) -> None:
+        """Catches the battery KPIs dropping the stored-energy column of the result frame.
+
+        One hour at 60 s steps charging 10 kW (10 kWh) while the cells gain 150 Wh per step (9 kWh): the losses are
+        1 kWh. Without the column, the KPI books the 9 kWh the battery holds at the end as lost.
+        """
+        preparation = _bare_preparation("BUI1")
+        frame = pd.DataFrame(
+            {
+                "battery_charge": [10_000.0] * 60,
+                "battery_discharge": [0.0] * 60,
+                "battery_stored_energy_increase_in_watt_hour": [150.0] * 60,
+            }
+        )
+        charged, discharged, losses = preparation.compute_battery_kpis(result_dataframe=frame)
+        assert charged == pytest.approx(10.0, rel=1e-9)
+        assert discharged == 0.0
+        assert losses == pytest.approx(1.0, rel=1e-9)
+
+
+class TestElectricityKpisReadTheDeclaredUnit:
+    """The electricity KPIs convert each flagged column from the unit its output declares (hisim-50kh)."""
+
+    @staticmethod
+    def one_hour_of_transformer_output(power_in_kilowatt: float) -> tuple[Transformer, List, pd.DataFrame]:
+        """Build a standard transformer and one hour at 60 s steps of its output at a constant power.
+
+        Args:
+            power_in_kilowatt: The power the transformer delivers in every step, in its declared unit kW.
+
+        Returns:
+            The transformer, its outputs in column order, and the result frame with its one output column.
+        """
+        simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+        transformer = Transformer(
+            my_simulation_parameters=simulation_parameters,
+            config=TransformerConfig.preset_standard("StandardTransformerAndRectifier"),
+        )
+        outputs = list(transformer.get_outputs())
+        frame = pd.DataFrame({0: [power_in_kilowatt] * 60})
+        return transformer, outputs, frame
+
+    @pytest.mark.base
+    def test_the_total_production_of_a_transformer_in_kilowatt_equals_its_delivered_energy(self) -> None:
+        """Catches the general KPI summing a kW column as watts, which reported 180.5 for 180,546 kWh delivered.
+
+        The transformer publishes its output in kW and flags it as electricity production. One hour at 10 kW is
+        10 kWh: the transformer's own KPI says so, and the general "Total electricity production" must agree
+        instead of reading the column as 10 W and reporting 0.01 kWh (rounded to 0.0).
+        """
+        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
+        building = transformer.component_id.building_label
+        preparation = _bare_preparation(building)
+
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=building
+        )
+        _, total_production_in_kilowatt_hour, _, _, _ = (
+            preparation.compute_electricity_consumption_and_production_and_battery_kpis(
+                result_dataframe=filtered, building_objects_in_district=building, kpi_tag=KpiTagEnumClass.GENERAL
+            )
+        )
+
+        delivered = {
+            entry.name: entry.value
+            for entry in transformer.get_component_kpi_entries(all_outputs=outputs, postprocessing_results=frame)
+        }["Electrical energy delivered"]
+        assert delivered == pytest.approx(10.0, rel=1e-9)
+        assert total_production_in_kilowatt_hour == pytest.approx(delivered, rel=1e-9)
+        assert preparation.kpi_collection_dict_unsorted[building]["Total electricity production"]["value"] == (
+            pytest.approx(10.0, rel=1e-9)
+        )
+
+    @pytest.mark.base
+    def test_a_watt_column_and_a_kilowatt_column_each_keep_their_own_factor(self) -> None:
+        """Catches the unit factors being applied to the wrong columns when W and kW outputs are summed together.
+
+        A PV-flagged output in W comes first and the transformer's output in kW after it, as in a run where both
+        feed the grid. Each column must be scaled by its own factor before the sum: 2000 W plus 10 kW is 12 kW,
+        so one hour gives 12 kWh. Factors swapped or shifted by one column would give 2,000,010 W or 20 kW.
+        """
+        transformer, transformer_outputs, transformer_frame = self.one_hour_of_transformer_output(
+            power_in_kilowatt=10.0
+        )
+        pv_output_in_watt = ComponentOutput(
+            object_name="PhotovoltaicStandIn",
+            field_name="ElectricityOutput",
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION, ComponentType.PV],
+            component_id=transformer.component_id,
+        )
+        outputs = [pv_output_in_watt, *transformer_outputs]
+        frame = pd.DataFrame({0: [2000.0] * 60, 1: transformer_frame[0].tolist()})
+        building = transformer.component_id.building_label
+        preparation = _bare_preparation(building)
+
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=outputs, results=frame, building_objects_in_district=building
+        )
+        _, total_production_in_kilowatt_hour, _, _, _ = (
+            preparation.compute_electricity_consumption_and_production_and_battery_kpis(
+                result_dataframe=filtered, building_objects_in_district=building, kpi_tag=KpiTagEnumClass.GENERAL
+            )
+        )
+
+        expected_in_kilowatt_hour = (2000.0 + 1000.0 * 10.0) / 1000.0
+        assert filtered["total_production"].tolist() == pytest.approx([2000.0 + 1000.0 * 10.0] * 60, rel=1e-12)
+        assert filtered["pv_production"].tolist() == pytest.approx([2000.0] * 60, rel=1e-12)
+        assert total_production_in_kilowatt_hour == pytest.approx(expected_in_kilowatt_hour, rel=1e-9)
+        assert preparation.kpi_collection_dict_unsorted[building]["Total electricity production"]["value"] == (
+            pytest.approx(expected_in_kilowatt_hour, rel=1e-9)
+        )
+
+    @pytest.mark.base
+    def test_a_flagged_output_in_a_unit_without_a_conversion_is_refused(self) -> None:
+        """Catches a flagged column in an unexpected unit, here kWh, being summed as watts without notice."""
+        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
+        outputs[0].unit = Units.KWH
+        building = transformer.component_id.building_label
+        preparation = _bare_preparation(building)
+        with pytest.raises(ValueError, match="no conversion to W"):
+            preparation.filter_results_according_to_postprocessing_flags(
+                all_outputs=outputs, results=frame, building_objects_in_district=building
+            )

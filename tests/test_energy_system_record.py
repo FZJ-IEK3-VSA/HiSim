@@ -266,12 +266,17 @@ components:
       - weather
       - occupancy
       - hds
+  heating_curve:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
+      - weather
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - weather
       - building
+      - heating_curve
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
@@ -297,8 +302,7 @@ groups:
         class: hisim.components.generic_boiler.GenericBoilerController
         preset: modulating
         inputs:
-          - weather
-          - hds_controller
+          - heating_curve
           - input: WaterTemperatureInputFromWaterStorage
             from: hds.WaterTemperatureOutput
 """

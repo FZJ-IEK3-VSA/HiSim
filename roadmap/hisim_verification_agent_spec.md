@@ -783,7 +783,7 @@ outside the registered directories. `BESTEST_output/` is therefore created insid
 calculation's result directory; `--output-dir` is accepted only as a registered target.
 Nothing is written to the repository, the working directory or the user's home.
 On Windows the guard refuses the `\\.\nul` open that `numpy.testing` performs when `pvlib` is
-imported inside the scope (bead hisim-o6a.22); the verification runner sets
+imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification runner sets
 `HISIM_WRITE_GUARD=collect` until that is fixed (decision 2026-11-02).
 
 ```

@@ -17,6 +17,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    ignore:
+      # pyloadprofilegenerator 0.2.0 changes the bindings API and the LPG release it downloads; that
+      # migration is bead hisim-pylpg-0-2-pegf, which removes this entry when it is done.
+      - dependency-name: "pyloadprofilegenerator"
     groups:
       # One pull request for the lot. Five separate ones for five pinned packages is how a
       # dependency bot stops being read.

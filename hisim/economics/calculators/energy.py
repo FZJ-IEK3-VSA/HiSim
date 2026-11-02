@@ -1,4 +1,4 @@
-"""Energy bills per carrier, billed for year 1 and projected over the horizon (cost_spec.md §3.6 rule 5, §8.5).
+"""Energy bills per carrier, billed for year 1 and projected over the horizon.
 
 Per carrier the simulated billing determinants (kWh bought and sold, peaks) are annualized, billed once under the
 tariff contract, and each bill component is escalated with its own rate:
@@ -6,10 +6,12 @@ tariff contract, and each bill component is escalated with its own rate:
 - ENERGY_WORKING: the carrier rate; a controllable tariff's flexibility value escalates with the spread rate instead.
 - ENERGY_STANDING: the general price escalation rate.
 - ENERGY_CAPACITY_CHARGE: the grid-fee rate (the general rate when unset).
-- FEED_IN_REVENUE: nominal for an EEG-style guaranteed duration, then the feed-in rate.
+- FEED_IN_REVENUE: an EEG-style fixed tariff stays nominal for its guaranteed duration, then escalates at the
+  feed-in rate; a market-linked rate (Ireland's Clean Export Guarantee) escalates with the electricity price from
+  year 1 (`resolve_feed_in_escalation_rate`).
 - ENERGY_CO2_PRICE: not escalated; read off the CO2 price path per year.
 
-It also returns the operational CO2 mass per carrier (§3.8), which `calculators/co2.py` folds into the CO2 result, and
+It also returns the operational CO2 mass per carrier, which `calculators/co2.py` folds into the CO2 result, and
 handles plan-stated energy prices.
 """
 
@@ -22,7 +24,12 @@ from hisim.economics.calculators.annualization import (
     annualize_billing_determinants,
     check_simulated_period_fraction,
 )
-from hisim.economics.calculators.escalation import carrier_escalation_rate, escalate, escalation_factor
+from hisim.economics.calculators.escalation import (
+    carrier_escalation_rate,
+    escalate,
+    escalation_factor,
+    resolve_feed_in_escalation_rate,
+)
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase, EnergyPriceEntry
 from hisim.economics.facts import BillingDeterminants
@@ -42,7 +49,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 @dataclass
 class CarrierEmissions:
-    """Operational CO2 of one carrier in kg per year: emission factor times annualized energy bought (§3.8).
+    """Operational CO2 of one carrier in kg per year: emission factor times annualized energy bought.
 
     `carrier_value` is `EnergyCarrier.value`, the subject string of the carrier's cash-flow entries.
     """
@@ -51,7 +58,7 @@ class CarrierEmissions:
     annual_emissions_in_kg: float
     #: The factor the mass above was computed with, in kg per kWh bought, so the CO2 section can
     #: show the multiplication. The price entry's `emission_factor_in_kg_per_kwh`, constant over
-    #: the horizon (§3.8 asks for a per-year trend, which would make this a path).
+    #: the horizon (a per-year trend would make this a path).
     emission_factor_in_kg_per_kwh: float = 0.0
 
 
@@ -60,7 +67,7 @@ class EnergyFlowResult:
     """The cash flows, the CO2 mass and the diagnostics the energy calculator produces.
 
     `entries` are money for the timeline; `emissions` are kilograms for the separate CO2 accounting and are never
-    summed with money (§3.8). `raw_flexibility_value_by_carrier` holds each carrier's flexibility value before the
+    summed with money. `raw_flexibility_value_by_carrier` holds each carrier's flexibility value before the
     projection clamps it at zero; a negative value means the load was timed worse than a flat profile, which
     `plausibility.py` warns about. `tariffs_applied` lists the contract each carrier was billed under.
     """
@@ -84,7 +91,7 @@ class StatedPriceError(ValueError):
 
 
 class StatedPrices:
-    """Names for a plan-stated price: its contract id, provenance record and feed-in duration.
+    """Names for a plan-stated price: its contract id, provenance record and fixed feed-in duration.
 
     The staged evaluator, the document echo and the tests read these same strings.
     """
@@ -103,8 +110,8 @@ class StatedPrices:
     #: The dotted parameter path a stated field is recorded under in the provenance ledger.
     PARAMETER_PATH: ClassVar[str] = "parameters.energy_prices.{carrier}.{field}"
 
-    #: How long a feed-in rate is held nominally fixed, stated or from the database (EEG
-    #: convention, §8.5).
+    #: How long a FIXED_TARIFF feed-in rate is held nominally fixed, stated or from the database (the
+    #: EEG convention). A MARKET_LINKED rate is never held fixed (`FeedIn.fixed_period_in_years`).
     FEED_IN_DURATION_IN_YEARS: ClassVar[int] = 20
 
     #: Tolerance of the "not below the year-1 carbon price" check, in EUR/kWh: a price echoed by a
@@ -161,9 +168,10 @@ class StatedPrices:
 
 
 def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffContract:
-    """Build the default flat contract from a §3.5 energy price entry.
+    """Build the default flat contract from an energy price entry.
 
-    A carrier without an explicit contract is billed flat at the database price. This lives in the engine rather than
+    A carrier without an explicit contract is billed flat at the database price, or at the plan's stated terms when
+    `with_stated_terms` puts them in place on the contract built here. This lives in the engine rather than
     in `tariffs.py`, which holds only contract data, parsing and billing.
     """
     return TariffContract(
@@ -185,10 +193,12 @@ def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffCo
 def default_contract(
     carrier: EnergyCarrier, year: int, database: CostDatabase, country: str
 ) -> TariffContract:
-    """Build the default flat contract of a carrier from the §3.5 price entries, feed-in included (§8.2).
+    """Build the default flat contract of a carrier from the price entries, feed-in included.
 
-    Records nothing in the ledger: `build_energy_flows` records the working price against the same entry, and the
-    feed-in rate gets no record of its own.
+    The electricity contract carries the country's `ELECTRICITY_FEED_IN` row as its feed-in terms: the row's rate, paid
+    the way the row's `feed_in_kind` says (an EEG FIXED_TARIFF held for `StatedPrices.FEED_IN_DURATION_IN_YEARS`, or
+    Ireland's MARKET_LINKED Clean Export Guarantee), and the row's sources join the contract's. Records nothing in the
+    ledger: `build_energy_flows` records the working price and the feed-in rate against the same entries.
     """
     entry = database.get_energy_price(carrier, year, country)
     contract = contract_from_price_entry(entry, country)
@@ -197,9 +207,12 @@ def default_contract(
     ):
         feed_in_entry = database.get_energy_price(EnergyCarrier.ELECTRICITY_FEED_IN, year, country)
         contract.feed_in = FeedIn(
-            kind=FeedInKind.FIXED_TARIFF,
+            kind=feed_in_entry.feed_in_kind,
             rate_in_euro_per_kwh=feed_in_entry.working_price_in_euro_per_kwh,
             duration_in_years=StatedPrices.FEED_IN_DURATION_IN_YEARS,
+        )
+        contract.source_ids = tuple(contract.source_ids) + tuple(
+            source_id for source_id in feed_in_entry.source_ids if source_id not in contract.source_ids
         )
     return contract
 
@@ -240,7 +253,8 @@ def with_stated_terms(
 
     A stated working price is the all-in year-1 price, so the year-1 carbon price is subtracted and the rest is billed
     as the working price. A stated standing charge replaces the fixed annual charge, and a stated ELECTRICITY_FEED_IN
-    price becomes the electricity contract's fixed feed-in rate for 20 years. Unstated terms stay the database's. A
+    price becomes the electricity contract's feed-in rate, paid the way the country's feed-in row says (a FIXED_TARIFF
+    for 20 years, also when the country has no feed-in row, or MARKET_LINKED). Unstated terms stay the database's. A
     contract with anything stated gets its own id, so the assumptions table does not cite a database entry for it.
 
     Args:
@@ -276,7 +290,7 @@ def with_stated_terms(
     remuneration = contract.feed_in
     if feed_in is not None and feed_in.working_price_in_euro_per_kwh is not None:
         remuneration = FeedIn(
-            kind=FeedInKind.FIXED_TARIFF,
+            kind=contract.feed_in.kind if contract.feed_in.kind.pays_rate_per_kwh else FeedInKind.FIXED_TARIFF,
             rate_in_euro_per_kwh=feed_in.working_price_in_euro_per_kwh,
             duration_in_years=StatedPrices.FEED_IN_DURATION_IN_YEARS,
         )
@@ -341,6 +355,66 @@ def _stated_record(
     )
 
 
+def _feed_in_provenance_ids(
+    carrier: EnergyCarrier,
+    ledger: ProvenanceLedger,
+    database: CostDatabase,
+    parameters: EconomicParameters,
+    price_basis_year: int,
+    stated_feed_in: Optional[UncertainValue],
+    annual_energy_sold_in_kwh: float,
+    simulated_period_fraction: float,
+) -> Tuple[int, ...]:
+    """Record where the feed-in revenue of a default electricity contract comes from and return the record ids.
+
+    The revenue is the feed-in rate times the annualized energy sold, so it cites one record for each. The rate is the
+    plan's stated ELECTRICITY_FEED_IN price when there is one (a REQUEST record), else the country's
+    `ELECTRICITY_FEED_IN` price row: its working price, and its `feed_in_kind`, which decides how the rate escalates,
+    both with the row's own sources. Example: an Irish run cites `energy_prices_IE.ELECTRICITY_FEED_IN@2026` with
+    the Clean Export Guarantee sources and the kind MARKET_LINKED, a German one the EEG row with FIXED_TARIFF.
+
+    Args:
+        carrier: The carrier whose contract pays the feed-in, ELECTRICITY for every default contract.
+        ledger: The evaluation's provenance ledger.
+        database: The cost database, for the feed-in price row.
+        parameters: The run's parameters, for the country.
+        price_basis_year: The year the price row is read for.
+        stated_feed_in: The feed-in rate the plan stated, or None.
+        annual_energy_sold_in_kwh: The annualized energy sold the revenue is billed on.
+        simulated_period_fraction: The simulated share of a year, named in the energy record.
+
+    Returns:
+        The rate record ids followed by the energy-sold record id.
+    """
+    if stated_feed_in is not None:
+        rate_ids: Tuple[int, ...] = (
+            _stated_record(
+                ledger,
+                EnergyCarrier.ELECTRICITY_FEED_IN,
+                StatedEnergyPrice.WORKING_PRICE_KEY,
+                stated_feed_in,
+                StatedPrices.DETAIL + "; the feed-in rate of the electricity contract",
+            ),
+        )
+    else:
+        rate_ids = database.resolve_energy_price(
+            EnergyCarrier.ELECTRICITY_FEED_IN,
+            price_basis_year,
+            parameters.country,
+            ledger,
+            ("working_price_in_euro_per_kwh", "feed_in_kind"),
+        ).provenance_ids
+    sold_id = ledger.record(
+        ParameterProvenance(
+            parameter=f"simulation.{carrier.value}.energy_sold",
+            value=annual_energy_sold_in_kwh,
+            origin=ParameterOrigin.SIMULATION_OUTPUT,
+            detail=f"annualized from simulated fraction {simulated_period_fraction:.4f}",
+        )
+    )
+    return rate_ids + (sold_id,)
+
+
 def build_energy_flows(
     billing: List[BillingDeterminants],
     tariff_contracts: Dict[EnergyCarrier, TariffContract],
@@ -352,14 +426,14 @@ def build_energy_flows(
     horizon: int,
     macro: bool,
 ) -> EnergyFlowResult:
-    """Return each carrier's energy cost flows over years 1..T and its operational CO2 (§3.6 rule 5, §8.5).
+    """Return each carrier's energy cost flows over years 1..T and its operational CO2.
 
     Per carrier: annualize the measured determinants, bill them once under the tariff contract for a year-1 bill, then
     repeat it for each year with every component escalated at its own rate (see the module docstring). The flexibility
     value (what load shifting saved against the year's average price) is added into the working band, escalated at the
     spread rate and subtracted back out, so it escalates separately from the volume. The CO2 price component uses the
     path value of calendar year `price_basis_year + t - 1` and is emitted only when the entry's `co2_price_exposure >
-    0`; entries whose working price already includes carbon declare 0 exposure (§3.5).
+    0`; entries whose working price already includes carbon declare 0 exposure.
 
     Args:
         billing: One `BillingDeterminants` per carrier over the simulated period (kWh, peaks, optional integrated cost
@@ -373,7 +447,7 @@ def build_energy_flows(
         parameters: Economic parameters: country, escalation rates, CO2 price scenario.
         price_basis_year: The economic "today" prices and the CO2 path are anchored on, not the weather year.
         horizon: Observation period T in years.
-        macro: MACROECONOMIC accounting (§4.5): strips the tax and levy share from the working price and drops feed-in
+        macro: MACROECONOMIC accounting: strips the tax and levy share from the working price and drops feed-in
             revenue and the CO2 price component, all transfers; `calculators/co2.py` adds the CO2 damage cost instead.
 
     Returns:
@@ -451,19 +525,15 @@ def build_energy_flows(
             standing_provenance_ids = (
                 database.provenance_for_price(price_entry, ledger, StatedEnergyPrice.STANDING_CHARGE_KEY),
             )
-        feed_in_provenance_ids = provenance_ids
-        if stated_feed_in is not None:
-            feed_in_provenance_ids = (
-                _stated_record(
-                    ledger,
-                    EnergyCarrier.ELECTRICITY_FEED_IN,
-                    StatedEnergyPrice.WORKING_PRICE_KEY,
-                    stated_feed_in,
-                    StatedPrices.DETAIL + "; the fixed feed-in rate of the electricity contract",
-                ),
-                energy_provenance,
-            )
         bill = apply_tariff(annualized, contract)
+        feed_in_provenance_ids = provenance_ids
+        # A stated rate is always recorded, so the ledger names every term the plan stated; the
+        # database's rate only when it earns a revenue.
+        books_feed_in = CostCategory.FEED_IN_REVENUE in bill.by_category and not macro
+        if explicit is None and (stated_feed_in is not None or books_feed_in):
+            feed_in_provenance_ids = _feed_in_provenance_ids(
+                carrier, ledger, database, params, year, stated_feed_in, annualized.energy_sold_in_kwh, fraction
+            )
 
         if macro:
             # Strip taxes/levies and VAT from the working price (§4.5). Migrated AS_LEGACY
@@ -480,6 +550,7 @@ def build_energy_flows(
             if params.grid_fee_escalation_rate is not None
             else params.general_price_escalation_rate
         )
+        feed_in_rate = resolve_feed_in_escalation_rate(contract, params, database).rate
         co2_path = database.get_co2_price_path(params.country, params.co2_price_scenario)
         emission_factor = price_entry.emission_factor_in_kg_per_kwh
         annual_emissions = annualized.energy_bought_in_kwh * emission_factor
@@ -537,12 +608,11 @@ def build_energy_flows(
                 )
             feed_in = bill.by_category.get(CostCategory.FEED_IN_REVENUE)
             if feed_in is not None and not macro and feed_in.minimum != 0:
-                # EEG-style fixed tariffs stay nominal for their duration (§8.5).
-                within_duration = projection_year <= contract.feed_in.duration_in_years
+                # An EEG-style fixed tariff stays nominal for its duration (§8.5); a market-linked
+                # rate has no fixed period and follows the electricity price from year 1.
+                within_fixed_period = projection_year <= contract.feed_in.fixed_period_in_years
                 feed_escalation = (
-                    1.0
-                    if within_duration
-                    else escalation_factor(params.feed_in_escalation_rate, projection_year - 1)
+                    1.0 if within_fixed_period else escalation_factor(feed_in_rate, projection_year - 1)
                 )
                 result.entries.append(
                     CashFlowEntry(

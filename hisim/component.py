@@ -15,7 +15,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 import json
 import pandas as pd
 
@@ -23,7 +23,7 @@ from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, MeteredExchange
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
@@ -57,6 +57,8 @@ class ComponentOutput:  # noqa: too-few-public-methods
         *,
         component_id: cfg.ComponentID,
         display_config: Optional[cfg.DisplayConfig] = None,
+        may_be_non_finite: bool = False,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ):
         """Defines a component output.
 
@@ -86,6 +88,16 @@ class ComponentOutput:  # noqa: too-few-public-methods
         :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` exactly as the
         component names it itself. ``None`` only on an output built by hand, outside a component.
 
+        ``may_be_non_finite`` declares that the output may hold NaN or infinite values, for example a quantity that
+        is undefined while a device stands still. Every other output must be finite in every step: after the run,
+        :class:`~hisim.postprocessing.finite_results.FiniteResultsCheck` fails a run whose result table holds a NaN
+        or an infinity in a column that does not declare it.
+
+        ``aggregation`` says how post-processing combines the output's time steps into monthly
+        values and a run total (:class:`~hisim.loadtypes.OutputAggregation`). Left out, it follows
+        the unit: a power in W is averaged, an energy in Wh summed. A component declares it where
+        that is wrong, e.g. ``LAST`` for a running total in Wh, whose monthly sum means nothing.
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
@@ -110,6 +122,10 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
         self.display_config: Optional[cfg.DisplayConfig] = display_config
+        self.may_be_non_finite: bool = may_be_non_finite
+        self.aggregation: lt.OutputAggregation = (
+            aggregation if aggregation is not None else lt.OutputAggregation.of_unit(unit)
+        )
 
     @property
     def building_label(self) -> str:
@@ -233,9 +249,16 @@ class ComponentNameMismatchError(ValueError):
 
 
 class Component:
-    """Base class for all components."""
+    """Base class for all components.
 
-    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    A concrete component does not derive from this class alone: it inherits one of the five kind base classes
+    below (:class:`DataSourceComponent`, :class:`L2ControllerComponent`, :class:`L1ControllerComponent`,
+    :class:`PhysicsComponent`, :class:`MeterComponent`), which states its role and so its place in a pass
+    (:class:`ComponentKinds`). For example, ``class Battery(PhysicsComponent)``. The simulator refuses a component
+    whose class has no kind when it is added.
+    """
+
+    # Cost role declaration for the lifecycle cost engine (roadmap/cost_spec.md §9.2). PRICED
     # components must return facts from `get_cost_facts()` or have an adapter table entry,
     # FREE_OF_COST components must return None, METER components provide
     # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
@@ -243,6 +266,28 @@ class Component:
     # lifecycle-cost run it appears in — at simulation start via
     # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
+
+    #: Why this component declares no energy port although it is neither a controller nor a meter, or None.
+    #: Controllers are exempt from the energy balance by their kind: a controller decides, it moves no energy (owner
+    #: decision D1 of the complete Sankey spec); a meter is a node by what it meters (:meth:`metered_exchanges`). Any
+    #: other component that moves no energy states the reason on its own class, for example a helper that sums two
+    #: inputs; the balance then lists it as exempt instead of undeclared and never draws it as the peer of a port
+    #: (:class:`hisim.postprocessing.energy_balance.ports.Exemptions`).
+    ENERGY_PORTS_EXEMPT_BECAUSE: ClassVar[Optional[str]] = None
+
+    def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
+        """What this component publishes as the exchange of a carrier at the system boundary; empty for most.
+
+        A meter declares it, for example the electricity meter its grid import and export. The energy balance then
+        draws the meter as a node between the carrier's boundary node and the devices whose metered ports it reads,
+        and checks per step that what it publishes equals what it reads (owner decision Q-J of the complete Sankey
+        spec, :class:`hisim.energy_port.MeteredExchange`). It is a method, not a class attribute, because a meter's
+        carrier may be its configuration's: a gas meter counts natural gas in one house and hydrogen in the next.
+
+        Returns:
+            One exchange per carrier the component meters; the default, for a component that meters nothing, is empty.
+        """
+        return ()
 
     @classmethod
     def get_classname(cls):
@@ -411,8 +456,17 @@ class Component:
         postprocessing_flag: Optional[List[Any]] = None,
         energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
+        *,
+        may_be_non_finite: bool = False,
+        aggregation: Optional[lt.OutputAggregation] = None,
     ) -> ComponentOutput:
-        """Adds an output definition; ``energy_port`` declares its role in the energy balance."""
+        """Adds an output definition; ``energy_port`` declares its role in the energy balance.
+
+        ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
+        after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
+        infinity in any other. ``aggregation`` declares how its time steps are combined into monthly values and a
+        run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`).
+        """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
@@ -426,6 +480,8 @@ class Component:
             output_description,
             component_id=self.config.component_id,
             display_config=self.my_display_config,
+            may_be_non_finite=may_be_non_finite,
+            aggregation=aggregation,
         )
         self.outputs.append(outp)
         return outp
@@ -579,7 +635,7 @@ class Component:
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
 
     def get_cost_facts(self) -> Optional[ComponentCostFacts]:
-        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+        """Return cost-relevant facts for the lifecycle cost engine, or None (roadmap/cost_spec.md §3.3).
 
         Components declare, the engine computes: no prices, no discounting, no dataframe
         access here. The default (None) means "this component contributes no cost facts" —
@@ -605,7 +661,7 @@ class Component:
         all_outputs: List,  # pylint: disable=unused-argument
         postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
     ) -> Optional[EnergyFlowFacts]:
-        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4).
+        """Return the carrier flows a meter measured, or None for non-meters (roadmap/cost_spec.md §3.4).
 
         The billing counterpart of `get_cost_facts`: only components sitting at a carrier boundary
         (the electricity/gas/fuel/heating meters) override it, and they report the energy that
@@ -790,6 +846,136 @@ class StatelessComponent(Component):
 
     def i_prepare_simulation(self) -> None:
         """No-op: a stateless component performs no pre-simulation setup by default."""
+
+
+class DataSourceComponent(Component):
+    """The kind base class of a data source: a component that reads nothing from other components.
+
+    A data source provides data the simulation does not change, such as the weather, an occupancy profile from the
+    LoadProfileGenerator or a CSV time series. Its outputs for a time step are the same in every pass of that step.
+    For example, ``class Weather(DataSourceComponent)``. The simulator evaluates the data sources first in every
+    pass, so every other component reads this step's values
+    (:attr:`hisim.simulator.Simulator.EVALUATION_ORDER_OF_KINDS`).
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class L2ControllerComponent(Component):
+    """The kind base class of an L2 controller: a component that coordinates devices through their L1 controllers.
+
+    An L2 controller, such as the energy management system, reads anything except meters and sends incentive
+    signals (priorities, prices, set-point shifts) to L1 controllers, never a command to a device. For example,
+    ``class L2GenericEnergyManagementSystem(DynamicComponent, L2ControllerComponent)``. The simulator evaluates the
+    L2 controllers after the data sources and before the L1 controllers, so a signal reaches the L1 controllers in
+    the same pass, and each L2 controller after the L2 controllers it reads (:class:`hisim.evaluation_order.L2Order`).
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class L1ControllerComponent(Component):
+    """The kind base class of an L1 controller: a component that commands exactly one device.
+
+    An L1 controller decides on/off, mode, set point and run fraction of its one device (a physics component), from
+    data sources, the sensor values of physics, the signals of L2 controllers and its own committed state, that is
+    the state it saved at the start of the step. For example, ``class GenericBoilerController(L1ControllerComponent)``.
+    The name differs from :class:`hisim.components.controller_l1_generic_ev_charge.L1Controller`, the electric car's
+    charge controller, which is one such class. The simulator evaluates the L1 controllers after the L2 controllers
+    and before the physics, so a command reaches its device in the same pass.
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class PhysicsComponent(Component):
+    """The kind base class of physics: a component that simulates a device and decides nothing.
+
+    A physics component, such as a heat pump, a storage tank, a building or a battery, reads data sources, the port
+    quantities of the physics it is connected to and the commands of its L1 controller, and enforces only its own
+    physical and safety limits. For example, ``class GenericBoiler(PhysicsComponent)``. The simulator evaluates the
+    physics after the controllers; within the physics, every device an L1 controller commands goes before the other
+    physics that controller reads (:class:`hisim.evaluation_order.PhysicsOrder`).
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class MeterComponent(Component):
+    """The kind base class of a meter: a component that reads port quantities for the reports, and nothing reads it.
+
+    A meter, such as the electricity, gas, heat or fuel meter, sums the port quantities of physics for the KPIs and
+    the post-processing and never acts on what it reads. For example,
+    ``class ElectricityMeter(DynamicComponent, MeterComponent)``. The simulator evaluates the meters last in every
+    pass, after everything they read. Nothing in the simulation reads a meter, except the listed exceptions of bead
+    hisim-repo-cleanup-o6a.22, so no other component waits for it; such an exception reads the meter's value of the pass before,
+    which costs passes but not the converged value.
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class ComponentKindNotDeclaredError(TypeError):
+    """A component class inherits no kind base class, or more than one, so the simulator cannot place it in a pass.
+
+    For example, a class derived from :class:`Component` or :class:`StatelessComponent` alone has no kind. Raised by
+    :meth:`ComponentKinds.of`, which the simulator calls when a component is added, so the error comes while the
+    system is built rather than at the first time step.
+    """
+
+
+class ComponentKinds:
+    """The five kind base classes, and the lookup that finds the one a component class inherits.
+
+    A component's *kind* is its role in a simulation: data source, L2 controller, L1 controller, physics or meter
+    (``system_docs/component_design_principles.md`` §A). A class states it by inheriting exactly one kind base
+    class, for example ``class Battery(PhysicsComponent)``, or, combined with a base that adds behaviour,
+    ``class Transformer(StatelessComponent, PhysicsComponent)``. Bases such as :class:`StatelessComponent`,
+    ``DynamicComponent`` and test doubles may have no kind; only a class added to a simulator needs one, so the
+    kind is looked up there and not checked when a class is defined.
+    """
+
+    #: The kind base classes. Their order here is not the evaluation order; that is
+    #: :attr:`hisim.simulator.Simulator.EVALUATION_ORDER_OF_KINDS`.
+    BASES: ClassVar[Tuple[Type[Component], ...]] = (
+        DataSourceComponent,
+        L2ControllerComponent,
+        L1ControllerComponent,
+        PhysicsComponent,
+        MeterComponent,
+    )
+
+    @classmethod
+    def of(cls, component_class: Type[Component]) -> Type[Component]:
+        """Return the kind base class a component class inherits.
+
+        For example, ``ComponentKinds.of(Weather)`` returns :class:`DataSourceComponent`, and
+        ``ComponentKinds.of(ElectricityMeter)`` returns :class:`MeterComponent`, found through ``DynamicComponent``
+        in its bases. A kind base class is its own kind.
+
+        Args:
+            component_class: The component class to look up.
+
+        Returns:
+            The one class of :attr:`BASES` in the method resolution order of ``component_class``.
+
+        Raises:
+            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one.
+        """
+        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
+        if len(kinds) != 1:
+            found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
+            raise ComponentKindNotDeclaredError(
+                f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
+                f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
+                f"{found}."
+            )
+        return kinds[0]
 
 
 @dataclass

@@ -1,21 +1,20 @@
 """Solar thermal system for DHW."""
 
-from copy import deepcopy
-import datetime
 import math
 from typing import ClassVar, List, Optional, Tuple
-from dataclasses import dataclass, field
+import dataclasses
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
 import pvlib
 from hisim.component import (
     CapexCostDataClass,
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
-    Coordinates,
     OpexCostDataClass,
     SingleTimeStepValues,
 )
@@ -29,9 +28,11 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim import hydronics, loadtypes, log, utils
-from hisim.caching import atomic_cache_write
+from hisim import hydronics, loadtypes
 from hisim.energy_port import EnergyPort
+from hisim.part_load import PartLoadCommand, PartLoadControl
+from hisim.subcomponents.base import Subcomponent
+from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -105,13 +106,13 @@ def flat_plate_collector_heat_w_m2(
 
 
 @dataclass(frozen=True)
-class FlatPlateCollectorCurve:
+class FlatPlateCollectorCurve(Subcomponent):
 
-    """A flat-plate collector's efficiency curve, the law that turns irradiance into heat at an inlet temperature.
+    """A flat-plate collector's efficiency curve, the subcomponent that turns irradiance into heat at a mean temperature.
 
     The efficiency is ``eta_0 - a_1 dT / G - a_2 dT^2 / G`` with ``dT`` the collector's mean temperature (the inlet
-    plus the inlet-to-mean difference) above the air and ``G`` the irradiance on its plane; a value object built
-    once from the configuration, so the law is a pure function of its arguments.
+    plus the inlet-to-mean difference, half the lift from inlet to outlet) above the air and ``G`` the irradiance on
+    its plane; a subcomponent built once from the configuration, so each method is a pure function of its arguments.
     """
 
     #: The optical efficiency, dimensionless.
@@ -120,23 +121,25 @@ class FlatPlateCollectorCurve:
     a_1_in_watt_per_m2_per_kelvin: float
     #: The quadratic heat loss coefficient, in W/(m² K²).
     a_2_in_watt_per_m2_per_kelvin_squared: float
-    #: The difference between the collector's inlet and its mean temperature, in K.
-    inlet_to_mean_temperature_difference_in_kelvin: float
 
     def heat_in_watt_per_m2(
         self,
         *,
         inlet_temperature_in_celsius: float,
+        inlet_to_mean_temperature_difference_in_kelvin: float,
         ambient_temperature_in_celsius: float,
         irradiance_in_watt_per_m2: float,
     ) -> float:
-        """Return the heat one square metre of collector delivers at an inlet temperature, in W/m².
+        """Return the heat one square metre of collector delivers at an inlet and a mean temperature, in W/m².
 
         It is :func:`flat_plate_collector_heat_w_m2`, zero when the efficiency is not positive. For example, at
-        500 W/m², a 40 °C inlet and 5 °C outside a typical collector delivers about 215 W/m².
+        500 W/m², a 40 °C inlet, a 10 K inlet-to-mean difference and 5 °C outside a typical collector delivers about
+        215 W/m².
 
         Args:
             inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+            inlet_to_mean_temperature_difference_in_kelvin: How far the collector's mean temperature lies above its
+                inlet, in K: half the lift from inlet to outlet.
             ambient_temperature_in_celsius: The outside air temperature, in °C.
             irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
 
@@ -149,11 +152,95 @@ class FlatPlateCollectorCurve:
                 a_1=self.a_1_in_watt_per_m2_per_kelvin,
                 a_2=self.a_2_in_watt_per_m2_per_kelvin_squared,
                 temperature_collector_inlet_deg_c=inlet_temperature_in_celsius,
-                delta_temperature_n_k=self.inlet_to_mean_temperature_difference_in_kelvin,
+                delta_temperature_n_k=inlet_to_mean_temperature_difference_in_kelvin,
                 ambient_air_temperature_deg_c=ambient_temperature_in_celsius,
                 collector_irradiance_w_m2=np.float64(irradiance_in_watt_per_m2),
             )
         )
+
+    def lift_at_mass_flow_in_kelvin(
+        self,
+        *,
+        inlet_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        irradiance_in_watt_per_m2: float,
+        mass_flow_in_kg_per_second_per_m2: float,
+    ) -> float:
+        """Return the lift from inlet to outlet a collector gives at a fixed flow per m², in K; 0 without heat.
+
+        At a fixed flow the lift ``L`` and the heat set each other: the heat is the curve's at the mean temperature,
+        the inlet plus ``L / 2``, and the water carries it, ``c m L``. With ``x`` the inlet above the air and ``q_0``
+        the heat at a mean temperature equal to the inlet, the balance ``c m L = q_0 - (a_1 / 2 + a_2 x) L -
+        a_2 L^2 / 4`` is a quadratic in ``L`` with one positive root while ``q_0`` is positive. For example, the
+        flat-plate preset's curve at 200 W/m², a 45 °C inlet and 20 °C air, at 5 kg/(m² h), lifts the water by
+        8.5 K.
+
+        Args:
+            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
+            mass_flow_in_kg_per_second_per_m2: The flow through one m² of collector, in kg/(s m²), above 0.
+
+        Returns:
+            The lift, in K.
+        """
+        if irradiance_in_watt_per_m2 <= 0.0:
+            return 0.0
+        inlet_above_air_in_kelvin = inlet_temperature_in_celsius - ambient_temperature_in_celsius
+        a_1 = self.a_1_in_watt_per_m2_per_kelvin
+        a_2 = self.a_2_in_watt_per_m2_per_kelvin_squared
+        heat_at_the_inlet_in_watt_per_m2 = (
+            self.eta_0 * irradiance_in_watt_per_m2
+            - a_1 * inlet_above_air_in_kelvin
+            - a_2 * inlet_above_air_in_kelvin * inlet_above_air_in_kelvin
+        )
+        if heat_at_the_inlet_in_watt_per_m2 <= 0.0:
+            return 0.0
+        linear_in_watt_per_m2_per_kelvin = (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * mass_flow_in_kg_per_second_per_m2
+            + a_1 / 2.0
+            + a_2 * inlet_above_air_in_kelvin
+        )
+        # the root of a_2/4 L^2 + linear L - q_0 = 0 in the form that stays exact for a_2 = 0
+        return (
+            2.0
+            * heat_at_the_inlet_in_watt_per_m2
+            / (
+                linear_in_watt_per_m2_per_kelvin
+                + math.sqrt(
+                    linear_in_watt_per_m2_per_kelvin * linear_in_watt_per_m2_per_kelvin
+                    + a_2 * heat_at_the_inlet_in_watt_per_m2
+                )
+            )
+        )
+
+    def stagnation_temperature_in_celsius(
+        self, *, ambient_temperature_in_celsius: float, irradiance_in_watt_per_m2: float
+    ) -> float:
+        """Return the temperature a collector reaches while no water flows through it, in °C.
+
+        Without flow the collector warms until its heat loss equals the irradiance it absorbs, so its temperature
+        ``T`` solves ``eta_0 G = a_1 (T - T_a) + a_2 (T - T_a)^2``: the efficiency curve at zero heat, with the whole
+        collector at one temperature. For example, the flat-plate preset's curve (``eta_0`` 0.78, ``a_1`` 3.2,
+        ``a_2`` 0.015) stagnates 40.9 K above the air at 200 W/m², at 60.9 °C in 20 °C air. Without irradiance the
+        collector is at the air temperature. The sensor of a collector whose pump stands reads this temperature, which
+        is how a differential controller sees that the collector has heat to give.
+
+        Args:
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
+
+        Returns:
+            The stagnation temperature, in °C.
+        """
+        absorbed_in_watt_per_m2 = self.eta_0 * max(irradiance_in_watt_per_m2, 0.0)
+        a_1 = self.a_1_in_watt_per_m2_per_kelvin
+        a_2 = self.a_2_in_watt_per_m2_per_kelvin_squared
+        if a_2 > 0.0:
+            excess_in_kelvin = (math.sqrt(a_1 * a_1 + 4.0 * a_2 * absorbed_in_watt_per_m2) - a_1) / (2.0 * a_2)
+        else:
+            excess_in_kelvin = absorbed_in_watt_per_m2 / a_1
+        return ambient_temperature_in_celsius + excess_in_kelvin
 
 
 @dataclass_json
@@ -162,9 +249,10 @@ class SolarThermalSystemConfig(ConfigBase):
     """Configuration of the solar thermal system: a collector field preheating the hot water storage.
 
     A collector is described by three things: the efficiency curve it converts irradiance with
-    (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``)
-    together with the place that plane stands in (``coordinates``, which fix the sun's path over
-    it), and how much of it there is (``area_m2``). Only the last is sized against the building:
+    (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``),
+    and how much of it there is (``area_m2``). It names no location of its own: it stands at the
+    weather's location, and the weather publishes the sun over it with the irradiance. Only the area
+    is sized against the building:
     the curve and the plane describe the product an installer picks, the area describes how much
     of that product the dwellings need.
 
@@ -185,12 +273,6 @@ class SolarThermalSystemConfig(ConfigBase):
     COLLECTOR_AREA_IN_M2_PER_APARTMENT: ClassVar[float] = 4.0
 
     component_id: ComponentID
-
-    #: Where the collector stands, which together with the instant is the whole of the sun's
-    #: position over it. Aachen.
-    coordinates: Coordinates = field(
-        default_factory=lambda: Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
-    )
 
     #: Compass direction the collector plane faces, in degrees clockwise from north; 180 is south.
     azimuth: float = 180.0
@@ -237,34 +319,78 @@ class SolarThermalSystemConfig(ConfigBase):
         note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
     )
 
-    #: Temperature difference between the collector inlet and the collector's mean temperature, in K.
-    delta_temperature_n_k: float = 10
+    #: The lift from collector inlet to outlet the solar pump aims at, in K. 20 K is the lift the collector circuit
+    #: has always run at (twice the 10 K inlet-to-mean difference its efficiency curve was evaluated at). High-flow
+    #: circuits lift the water by 10 to 15 K at 800 W/m², low-flow circuits by far more (W. Weiss, AEE INTEC, "Lay out
+    #: of systems: high-flow and low-flow systems",
+    #: https://www.crses.sun.ac.za/files/services/events/workshops/05_Lay-out_High_and%20low%20flow.pdf).
+    PUMP_TARGET_LIFT_IN_KELVIN: ClassVar[float] = 20.0
+
+    #: The smallest flow of the speed-controlled solar pump per m² of collector, in kg/(m² h): the low end of the
+    #: 5 to 20 kg/(m² h) an r.p.m.-controlled low-flow pump runs (the AEE INTEC source above; the Austrian Federal
+    #: Ministry of Science and Transport's Forschungsforum 2/97, "Solar systems with layer storage in low-flow
+    #: operation", gives 8 to 18 kg/(m² h) for low flow,
+    #: https://nachhaltigwirtschaften.at/resources/nw_pdf/fofo/fofo2_97_en.pdf). At 5 kg/(m² h) the preset collector
+    #: whose stagnation temperature stood 7 K above the tank lifts the water by 3.3 to 4.3 K (tanks of 20 to 60 °C,
+    #: air of -5 to 25 °C), more than the controller's 3 K switch-off difference, so a pump the controller switches on
+    #: is not switched off in the next step by the cooler sensor its own flow gives. At 10 kg/(m² h) the lift there is
+    #: about 2 K, and the pump switches on and off in alternate steps while the sun stands near the switch-on point.
+    PUMP_MINIMUM_MASS_FLOW_IN_KG_PER_HOUR_PER_M2: ClassVar[float] = 5.0
+
+    #: The largest flow of the speed-controlled solar pump per m² of collector, in kg/(m² h): 40 kg/(m² h), the low
+    #: end of the 40 to 70 kg/(m² h) typical of high-flow circuits (the AEE INTEC source above), the full speed of a
+    #: pump sized for a high-flow circuit. The preset collector's 20 K target lift needs about 21 kg/(m² h) at
+    #: 800 W/m² and 28 kg/(m² h) at 1000 W/m², so the maximum hardly binds.
+    PUMP_MAXIMUM_MASS_FLOW_IN_KG_PER_HOUR_PER_M2: ClassVar[float] = 40.0
+
+    #: The lift from collector inlet to outlet the speed-controlled solar pump aims at, in K. The collector's mean
+    #: temperature, at which its efficiency curve is evaluated, lies half the lift above the inlet.
+    pump_target_lift_in_kelvin: float = PUMP_TARGET_LIFT_IN_KELVIN
+    #: The smallest flow the solar pump runs per m² of collector, in kg/(m² h).
+    pump_minimum_mass_flow_in_kg_per_hour_per_m2: float = PUMP_MINIMUM_MASS_FLOW_IN_KG_PER_HOUR_PER_M2
+    #: The largest flow the solar pump runs per m² of collector, in kg/(m² h); equal to the minimum for a
+    #: constant-flow pump.
+    pump_maximum_mass_flow_in_kg_per_hour_per_m2: float = PUMP_MAXIMUM_MASS_FLOW_IN_KG_PER_HOUR_PER_M2
 
     def __post_init__(self) -> None:
-        """Refuse an inlet-to-mean temperature difference that is not a finite positive number of kelvin.
+        """Refuse a solar pump whose numbers give no finite positive flow and lift.
 
-        The collector lifts its water by twice this difference, and its flow is the collector heat over that lift.
-        A difference of 0 K divides by zero, and a negative one gives a negative flow and a supply below the inlet.
-        For example, ``delta_temperature_n_k=10`` is accepted, ``0`` and ``-5`` are refused.
+        The pump's flow is the collector heat over its target lift, clamped to its two specific flows: a target lift of
+        0 K divides by zero, a minimum flow of 0 gives an infinite lift, and a maximum below the minimum is no range.
+        For example, the preset's 20 K and 5 to 40 kg/(m² h) are accepted; ``pump_target_lift_in_kelvin=-5`` and a
+        maximum flow of 5 below a minimum of 10 kg/(m² h) are refused.
 
         Raises:
-            ValueError: If ``delta_temperature_n_k`` is not finite or not above 0 K.
+            ValueError: If ``pump_target_lift_in_kelvin`` is not finite or not above 0 K,
+                ``pump_minimum_mass_flow_in_kg_per_hour_per_m2`` is not finite or not above 0, or
+                ``pump_maximum_mass_flow_in_kg_per_hour_per_m2`` is not finite or below the minimum.
         """
-        if not math.isfinite(self.delta_temperature_n_k) or self.delta_temperature_n_k <= 0:
+        if not math.isfinite(self.pump_target_lift_in_kelvin) or self.pump_target_lift_in_kelvin <= 0:
             raise ValueError(
-                f"The collector's inlet-to-mean temperature difference delta_temperature_n_k must be a finite number "
-                f"above 0 K, got {self.delta_temperature_n_k!r}: the collector lifts its water by twice this difference "
-                "and its flow is the collector heat over that lift."
+                f"The solar pump's target lift pump_target_lift_in_kelvin must be a finite number above 0 K, got "
+                f"{self.pump_target_lift_in_kelvin!r}: the pump's flow is the collector heat over this lift."
+            )
+        minimum = self.pump_minimum_mass_flow_in_kg_per_hour_per_m2
+        maximum = self.pump_maximum_mass_flow_in_kg_per_hour_per_m2
+        if not math.isfinite(minimum) or minimum <= 0:
+            raise ValueError(
+                f"The solar pump's minimum flow pump_minimum_mass_flow_in_kg_per_hour_per_m2 must be a finite number "
+                f"above 0 kg/(m2 h), got {minimum!r}: the lift at the minimum flow is the collector heat over it."
+            )
+        if not math.isfinite(maximum) or maximum < minimum:
+            raise ValueError(
+                f"The solar pump's maximum flow pump_maximum_mass_flow_in_kg_per_hour_per_m2 must be a finite number "
+                f"at least its minimum {minimum!r} kg/(m2 h), got {maximum!r}; a constant-flow pump has both equal."
             )
 
     @preset
     @classmethod
     def preset_flat_plate(cls, name: str) -> "SolarThermalSystemConfig":
-        """A Solar Keymark flat-plate collector over Aachen, facing south at 30 degrees.
+        """A Solar Keymark flat-plate collector at the weather's location, facing south at 30 degrees.
 
         The field defaults are the whole installation: the efficiency curve fitted to the typical
-        flat-plate curve, a south-facing plane inclined 30 degrees, the Aachen coordinates and a
-        new solar pump. The collector area is the one thing the preset does not state, because it
+        flat-plate curve, a south-facing plane inclined 30 degrees and a new solar pump. The collector
+        area is the one thing the preset does not state, because it
         follows from the building: it stays ``AUTO`` and ``.resolve(context)`` turns it into four
         square metres per dwelling.
 
@@ -287,11 +413,29 @@ class SolarThermalSystemConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SolarThermalSystem(Component):
+class SolarThermalSystem(PhysicsComponent):
     """Solar thermal system.
 
     This class represents a solar thermal system that can be used
     for warm water and space heating.
+
+    The solar pump is speed-controlled, a temperature-sensor pump (:class:`~hisim.subcomponents.pumps.FixedLiftPump`): it
+    runs the flow that lifts the water by its target lift, within a minimum and a maximum flow per m² of collector, and
+    the outlet is the inlet plus the lift the collector heat gives at that flow (:meth:`operating_point`).
+
+    The pump runs the requested part-load ratio its controller commands (``RequestedPartLoadRatio``): 1, the whole step,
+    at and below the part-load threshold, and above it the fraction of the step that ends the tank at the controller's
+    target. Below 1 the collector publishes the averaged flow at its full-load outlet temperature and books the heat
+    that flow carries; the pump draws the ratio of its electricity. At a requested ratio of 0 the collector circuit is
+    idle even while the pump signal is on: no flow, and the outlet at the inlet temperature. The collector reports the
+    actual ratio its pump ran (``ActualPartLoadRatio``): the requested ratio while the pump runs, 0 otherwise.
+
+    The collector carries the sensor its controller switches the pump on
+    (``CollectorSensorTemperatureAtStartOfStepInCelsius``), read at the start of the step: while the pump stood in the
+    previous step, the collector's stagnation temperature in this step's sun
+    (:meth:`FlatPlateCollectorCurve.stagnation_temperature_in_celsius`); while it ran, its outlet temperature with the
+    tank's start-of-step temperature at the inlet. Whether the pump ran in the previous step is the collector's saved
+    state (:class:`SolarThermalSystemState`).
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -303,12 +447,21 @@ class SolarThermalSystem(Component):
     Azimuth: ClassVar[str] = "Azimuth"
     ApparentZenith: ClassVar[str] = "ApparentZenith"
     TemperatureCollectorInletDegC: ClassVar[str] = "TemperatureCollectorInletDegC"
+    #: The collector inlet's temperature at the start of the step: the storage's start-of-step temperature, which no
+    #: pass of the step moves.
+    TemperatureCollectorInletAtStartOfStepInCelsius: ClassVar[str] = "TemperatureCollectorInletAtStartOfStepInCelsius"
     ControlSignal: ClassVar[str] = "ControlSignal"
+    #: The requested part-load ratio: the fraction of the step the controller commands the pump to run.
+    RequestedPartLoadRatio: ClassVar[str] = "RequestedPartLoadRatio"
 
     # Outputs
+    #: The actual part-load ratio: the fraction of the step the pump ran, reported back to the controller.
+    ActualPartLoadRatio: ClassVar[str] = "ActualPartLoadRatio"
     ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
     ThermalEnergyOutput: ClassVar[str] = "ThermalEnergyOutput"
-    RequiredWaterMassFlowOutput: ClassVar[str] = "RequiredWaterMassFlowOutput"
+    #: The temperature the collector's sensor reads at the start of the step (°C), on which the controller switches
+    #: the pump: the stagnation temperature while the pump stood in the previous step, the outlet while it ran.
+    CollectorSensorTemperatureAtStartOfStepInCelsius: ClassVar[str] = "CollectorSensorTemperatureAtStartOfStepInCelsius"
     WaterMassFlowOutput: ClassVar[str] = "WaterMassFlowOutput"
     WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
     ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
@@ -339,8 +492,10 @@ class SolarThermalSystem(Component):
         )
 
         # If a component requires states, this can be implemented here.
-        self.state: SolarThermalSystemState = SolarThermalSystemState()
-        self.previous_state: SolarThermalSystemState = deepcopy(self.state)
+        #: Whether the pump ran, as the latest pass of the step being iterated has it.
+        self.state = SolarThermalSystemState(pump_ran=False)
+        #: The saved state: whether the pump ran in the previous step, which chooses what the sensor reads.
+        self.previous_state = SolarThermalSystemState(pump_ran=False)
         # Initialized variables
         self.factor: float = 1.0
         #: The collector area, read once here rather than at every timestep. ``super().__init__``
@@ -351,20 +506,20 @@ class SolarThermalSystem(Component):
             eta_0=config.eta_0,
             a_1_in_watt_per_m2_per_kelvin=config.a_1_w_m2_k,
             a_2_in_watt_per_m2_per_kelvin_squared=config.a_2_w_m2_k,
-            inlet_to_mean_temperature_difference_in_kelvin=config.delta_temperature_n_k,
         )
-        # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
-        # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
-        self.solar_position: pd.DataFrame = pd.DataFrame()
-        # The same two columns as plain arrays, for the per-timestep lookup in i_simulate.
-        self.apparent_zenith: np.ndarray = np.empty(0)
-        self.solar_azimuth: np.ndarray = np.empty(0)
+        #: The speed-controlled solar pump, a temperature-sensor pump at the configured target lift. Its bounds are
+        #: rated per m² of collector and per hour, so collector fields of any size run alike per m²; the pump's bounds
+        #: are for the whole field, in kg/s.
+        self.pump: FixedLiftPump = FixedLiftPump(
+            target_lift_in_kelvin=config.pump_target_lift_in_kelvin,
+            minimal_mass_flow_in_kg_per_second=config.pump_minimum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
+            maximal_mass_flow_in_kg_per_second=config.pump_maximum_mass_flow_in_kg_per_hour_per_m2 * self.area_m2 / self.SECONDS_PER_HOUR,
+        )
         # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
-        # the weather it came from. It depends on the weather and the sun alone, not on the storage,
-        # so the convergence iterations of one timestep share one pvlib call.
-        self.plane_of_array_key: Optional[Tuple[int, float, float]] = None
+        # the weather it came from: its irradiance and its sun. It depends on the weather alone, not
+        # on the storage, so the convergence iterations of one timestep share one calculation of it.
+        self.plane_of_array_key: Optional[Tuple[int, float, float, float, float]] = None
         self.plane_of_array_irradiance_w_m2: np.float64 = np.float64(0)
-        self.cache_filepath: Optional[str] = None
 
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
@@ -414,6 +569,13 @@ class SolarThermalSystem(Component):
             loadtypes.Units.CELSIUS,
             True,
         )
+        self.inlet_temperature_at_start_of_step_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureCollectorInletAtStartOfStepInCelsius,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
+        )
 
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -421,6 +583,12 @@ class SolarThermalSystem(Component):
             loadtypes.LoadTypes.ANY,
             loadtypes.Units.BINARY,
             True,
+        )
+        self.part_load_command = PartLoadCommand(
+            self,
+            requested_ratio_input_name=SolarThermalSystem.RequestedPartLoadRatio,
+            actual_ratio_output_name=SolarThermalSystem.ActualPartLoadRatio,
+            device_description="the solar pump",
         )
 
         # Add outputs
@@ -454,15 +622,16 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
         )
-        self.required_water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
+        self.sensor_temperature_at_start_of_step_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.RequiredWaterMassFlowOutput,
-            load_type=loadtypes.LoadTypes.WARM_WATER,
-            unit=loadtypes.Units.KG_PER_SEC,
+            field_name=self.CollectorSensorTemperatureAtStartOfStepInCelsius,
+            load_type=loadtypes.LoadTypes.TEMPERATURE,
+            unit=loadtypes.Units.CELSIUS,
             output_description=(
-                "The mass flow [kg/s] the collector heat at the storage's step mean needs: that heat over c times twice "
-                "the inlet-to-mean difference, whether or not the pump runs. The controller stops the pump below its "
-                "minimum flow."
+                "The temperature [°C] the collector's sensor reads at the start of the step: its stagnation "
+                "temperature in the step's sun while the pump stood in the previous step, its outlet temperature at "
+                "the tank's start-of-step temperature while the pump ran. No pass of the step moves it, so the "
+                "controller switches the pump on it."
             ),
         )
 
@@ -472,8 +641,8 @@ class SolarThermalSystem(Component):
             load_type=loadtypes.LoadTypes.TEMPERATURE,
             unit=loadtypes.Units.CELSIUS,
             output_description=(
-                "Supply temperature [°C] of the collector's circuit: the storage's step mean plus twice the "
-                "inlet-to-mean difference while the pump runs with heat, the return otherwise."
+                "Supply temperature [°C] of the collector's circuit: the storage's step mean plus the lift the "
+                "collector heat gives at the pump's flow while the pump runs with heat, the return otherwise."
             ),
         )
         self.electricity_consumption_output_channel: ComponentOutput = self.add_output(
@@ -483,11 +652,7 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.WATT,
             output_description="Electricity consumption of the solar pump.",
             postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-            energy_port=EnergyPort(
-                loadtypes.EnergyRole.IN,
-                loadtypes.EnergyBalanceCarrier.ELECTRICITY,
-                peer_output=self.ElectricityConsumptionOutput,
-            ),
+            energy_port=EnergyPort(loadtypes.EnergyRole.IN, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.solar_power_on_collector_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -712,7 +877,14 @@ class SolarThermalSystem(Component):
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ) -> List[ComponentConnection]:
-        """Get simple_water_storage default connections."""
+        """Return the connections from the hot-water storage: the collector inlet's temperatures.
+
+        The collector's inlet is the storage's return leg. Its step mean is the temperature the collector runs at;
+        its start-of-step temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
+
+        Returns:
+            The connection list.
+        """
 
         connections: List[ComponentConnection] = []
         storage_classname = SimpleDHWStorage.get_classname()
@@ -721,6 +893,13 @@ class SolarThermalSystem(Component):
                 SolarThermalSystem.TemperatureCollectorInletDegC,
                 storage_classname,
                 SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.TemperatureCollectorInletAtStartOfStepInCelsius,
+                storage_classname,
+                SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -775,115 +954,48 @@ class SolarThermalSystem(Component):
                 component_class.ControlSignalToSolarThermalSystem,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.RequestedPartLoadRatio,
+                l1_controller_classname,
+                component_class.RequestedPartLoadRatio,
+            )
+        )
         return connections
 
     def i_save_state(self) -> None:
-        """Saves the current state."""
-        self.previous_state = deepcopy(self.state)
+        """Save whether the pump ran in the step that just ended, from its last pass, as the state to start from.
+
+        The simulator calls this at the start of every step, so the saved state is whether the pump ran in the
+        previous step, which chooses whether the sensor reads the stagnation or the outlet temperature.
+        """
+        self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restores previous state."""
-        self.state = deepcopy(self.previous_state)
+        """Return to the saved state before a pass, so a pass never sees what an earlier pass of the step decided."""
+        self.state = dataclasses.replace(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublechecks."""
         pass
 
-    def timestamps_of_the_run(self) -> pd.DatetimeIndex:
-        """Return the instant of every timestep of this simulation.
-
-        The sun's position is a function of these and of the coordinates, and of nothing else, which
-        is what makes it the only part of the collector calculation that can be worked out before
-        the run and cached. They come from ``start_date`` and ``seconds_per_timestep``, both of which
-        are already in the cache key.
-
-        Returns:
-            pd.DatetimeIndex: one instant per timestep, in simulation order.
-        """
-        return pd.DatetimeIndex(
-            [
-                self.my_simulation_parameters.start_date
-                + datetime.timedelta(0, self.my_simulation_parameters.seconds_per_timestep * timestep)
-                for timestep in range(self.my_simulation_parameters.timesteps)
-            ]
-        )
-
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation by working out where the sun will be.
+        """Forget the plane-of-array irradiance of an earlier run, so the first step computes its own.
 
-        Only the sun's position is precomputed, and only it is cached. The collector calculation has
-        three stages and just the first qualifies: the solar position depends on the timestamps and
-        the coordinates, both already in the cache key; the plane-of-array irradiance depends on the
-        weather, which arrives through wired inputs; and the collector efficiency depends on the
-        storage's inlet temperature, which is the simulation's own state feeding back.
-
-        This component used to cache the output of all three. That value could not be keyed by
-        anything -- it was a function of a trajectory the run had not taken yet -- so any hit
-        replayed one system's storage behaviour into another's. Restricting what is cached is what
-        makes the existing key exactly correct, with nothing to widen. See roadmap/pylpg_flakiness.md
-        F8.
+        Nothing is precomputed. The sun's position over the collector comes from the weather, at every timestep,
+        through the ``ApparentZenith`` and ``Azimuth`` inputs: the weather has looked the run's window up in its own
+        year (:mod:`hisim.window_offset`), so its sun and its irradiance stand on one clock. The collector used to
+        work out a sun of its own from the run's start date read as UTC, which stood an hour off the weather's
+        standard-time clock in every run.
         """
-        file_exists, self.cache_filepath = utils.get_cache_file(
-            self.config.component_id.name, self.config, self.my_simulation_parameters
-        )
-        timestamps = self.timestamps_of_the_run()
-
-        if file_exists:
-            log.information("Get solar position from cache.")
-            # float_precision="round_trip" is what makes a cached run and an uncached one the same
-            # run. pandas' default CSV reader uses a fast, inexact float parser, and it loses the
-            # last bit of roughly a sixth of the values here whatever precision they were written
-            # with -- measured: 317 of 2000 with the default write format, 358 with "%.17g", 542
-            # with "%.20g", and zero with this argument. The loss is in the reader, not in the
-            # digits on disk, which is worth knowing because the obvious remedies make it worse.
-            cached = pd.read_csv(self.cache_filepath, sep=",", decimal=".", float_precision="round_trip")
-            # No length check here on purpose. The old one accepted any file with the right number
-            # of rows, which is exactly how a cache entry belonging to a different system passed
-            # unnoticed. With a key that genuinely determines the contents, a mismatched length
-            # means the file is corrupt, so it is left to raise rather than warned about.
-            self.solar_position = cached.set_index(timestamps)
-        else:
-            self.solar_position = pvlib.solarposition.get_solarposition(
-                time=timestamps,
-                latitude=self.config.coordinates.latitude_in_degrees,
-                longitude=self.config.coordinates.longitude_in_degrees,
-            )[["apparent_zenith", "azimuth"]]
-
-            assert self.cache_filepath is not None
-            with atomic_cache_write(
-                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
-                # The default float format already writes a shortest round-trip representation;
-                # forcing more digits does not help, because what loses precision is the read. See
-                # the note beside the read above.
-                self.solar_position.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
-        self.apparent_zenith = self.solar_position["apparent_zenith"].to_numpy(dtype=np.float64)
-        self.solar_azimuth = self.solar_position["azimuth"].to_numpy(dtype=np.float64)
         self.plane_of_array_key = None
 
+    #: Seconds in an hour, to turn the pump's flows per hour into flows per second.
+    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
     #: The electricity of the solar pump while it runs, in W, for a current high-efficiency circulator.
     PUMP_POWER_IN_WATT: ClassVar[float] = 10.0
     #: The electricity of an old, uncontrolled solar pump while it runs, in W.
     OLD_PUMP_POWER_IN_WATT: ClassVar[float] = 35.0
-
-    @staticmethod
-    def required_mass_flow_in_kg_per_second(
-        *, collector_heat_in_watt: float, inlet_to_mean_temperature_difference_in_kelvin: float
-    ) -> float:
-        """Return the flow that carries the collector heat over the collector's lift, in kg/s; 0 without heat.
-
-        The collector lifts the water by twice its inlet-to-mean difference, the difference its efficiency curve is
-        evaluated at, so the flow is ``Q / (c 2 dT_n)``. For example, 836 W over 20 K need 0.01 kg/s.
-
-        Args:
-            collector_heat_in_watt: The collector heat at the storage's step mean, in W.
-            inlet_to_mean_temperature_difference_in_kelvin: The collector's inlet-to-mean difference, in K.
-
-        Returns:
-            The mass flow, in kg/s.
-        """
-        lift_in_kelvin = 2 * inlet_to_mean_temperature_difference_in_kelvin
-        return max(collector_heat_in_watt, 0.0) / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
 
     @staticmethod
     def pump_power_in_watt(*, pump_runs: bool, is_old_pump: bool) -> float:
@@ -908,43 +1020,143 @@ class SolarThermalSystem(Component):
     @staticmethod
     def collector_circuit(
         *,
-        collector_heat_in_watt: float,
+        operating_point: PumpOperatingPoint,
         inlet_temperature_in_celsius: float,
-        inlet_to_mean_temperature_difference_in_kelvin: float,
         pump_runs: bool,
-    ) -> hydronics.CircuitStep:
+    ) -> hydronics.FluidStream:
         """Return the collector circuit of one step: its flow, its supply and the heat its water carries.
 
-        While the pump runs and the collector has heat, the circuit carries that heat at the flow
-        :meth:`required_mass_flow_in_kg_per_second` and supplies the inlet plus twice the inlet-to-mean difference,
-        so its water carries exactly the collector heat. Otherwise it moves no water. For example, 836 W at a 40 °C
-        inlet with a 10 K inlet-to-mean difference supply 60 °C at 0.01 kg/s.
+        While the pump runs and the collector has heat (its operating point has a flow), the circuit runs the operating
+        point's flow and supplies its supply temperature, so its water carries exactly the collector heat. Otherwise
+        it moves no water. For example, 0.025 kg/s supplied at 60 °C from a 40 °C inlet carry 2090 W.
 
         Args:
-            collector_heat_in_watt: The collector heat at the storage's step mean, in W.
+            operating_point: The flow and supply the collector runs at with its pump running (:meth:`operating_point`).
             inlet_temperature_in_celsius: The collector's inlet temperature, the storage's step mean, in °C.
-            inlet_to_mean_temperature_difference_in_kelvin: The collector's inlet-to-mean difference, in K.
             pump_runs: Whether the controller runs the solar pump.
 
         Returns:
             The circuit's mass flow, supply temperature and heat.
         """
-        if not pump_runs or collector_heat_in_watt <= 0:
-            return hydronics.CircuitStep.idle(t_return_c=inlet_temperature_in_celsius)
-        mass_flow_in_kg_per_second = SolarThermalSystem.required_mass_flow_in_kg_per_second(
-            collector_heat_in_watt=collector_heat_in_watt,
-            inlet_to_mean_temperature_difference_in_kelvin=inlet_to_mean_temperature_difference_in_kelvin,
+        if not pump_runs or operating_point.mass_flow_in_kg_per_second <= 0:
+            return hydronics.FluidStream.idle(t_return_c=inlet_temperature_in_celsius)
+        return hydronics.FluidStream.carrying(
+            mass_flow_kg_per_s=operating_point.mass_flow_in_kg_per_second,
+            t_supply_c=operating_point.supply_temperature_in_celsius,
+            t_return_c=inlet_temperature_in_celsius,
         )
-        supply_temperature_in_celsius = inlet_temperature_in_celsius + 2 * inlet_to_mean_temperature_difference_in_kelvin
-        return hydronics.CircuitStep(
-            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
-            t_supply_c=supply_temperature_in_celsius,
-            power_w=hydronics.circuit_power_w(
-                mass_flow_kg_per_s=mass_flow_in_kg_per_second,
-                t_supply_c=supply_temperature_in_celsius,
-                t_return_c=inlet_temperature_in_celsius,
-            ),
+
+    def operating_point(
+        self, *, inlet_temperature_in_celsius: float, ambient_temperature_in_celsius: float
+    ) -> PumpOperatingPoint:
+        """Return this collector's :meth:`collector_operating_point` (flow in kg/s, supply in °C) for an inlet and air in °C.
+
+        The irradiance is the plane-of-array irradiance of the step last calculated, in W/m².
+        """
+        return self.collector_operating_point(
+            pump=self.pump,
+            curve=self.collector_curve,
+            inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+            irradiance_in_watt_per_m2=float(self.plane_of_array_irradiance_w_m2),
+            area_m2=self.area_m2,
         )
+
+    @staticmethod
+    def collector_operating_point(
+        *,
+        pump: FixedLiftPump,
+        curve: FlatPlateCollectorCurve,
+        inlet_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        irradiance_in_watt_per_m2: float,
+        area_m2: float,
+    ) -> PumpOperatingPoint:
+        """Return the flow and the supply of a collector field and its temperature-sensor pump, at an inlet.
+
+        First the pump's target lift: the collector heat at a mean temperature half the target lift above the inlet,
+        and the pump's flow for that heat (:meth:`FixedLiftPump.operating_point`). Within the pump's bounds that is
+        the point, and the supply is the inlet plus the target lift. Outside them the pump runs the nearer bound, and
+        the collector's heat depends on its own outlet, so the collector evaluates its lift again at that flow
+        (:meth:`FlatPlateCollectorCurve.lift_at_mass_flow_in_kelvin`): below the target lift at the smallest flow,
+        above it at the largest. Without heat even at the bound the pump stands: no flow, the water at the inlet.
+        The heat is what the water carries, ``c m (T_sup - T_in)``. For example, 4 m² of the flat-plate preset at a
+        45 °C inlet in 20 °C air with a 20 K target lift and 5 to 40 kg/(m² h) run 0.0236 kg/s to 65 °C (1975 W) at
+        800 W/m², and the smallest flow, 0.0056 kg/s, with an 8.5 K lift (198 W) at 200 W/m².
+
+        Args:
+            pump: The collector's pump, a temperature-sensor pump whose bounds are for the whole field.
+            curve: The collector's efficiency curve.
+            inlet_temperature_in_celsius: The collector's inlet temperature, in °C.
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            irradiance_in_watt_per_m2: The irradiance on the collector plane, in W/m².
+            area_m2: The collector area, in m².
+
+        Returns:
+            The operating point.
+        """
+        heat_in_watt = (
+            curve.heat_in_watt_per_m2(
+                inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+                inlet_to_mean_temperature_difference_in_kelvin=pump.target_lift_in_kelvin / 2,
+                ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+                irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
+            )
+            * area_m2
+        )
+        point = pump.operating_point(
+            heat_power_in_watt=max(heat_in_watt, 0.0), return_temperature_in_celsius=inlet_temperature_in_celsius
+        )
+        if not point.flow_is_clamped:
+            return point
+        lift_in_kelvin = curve.lift_at_mass_flow_in_kelvin(
+            inlet_temperature_in_celsius=inlet_temperature_in_celsius,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+            irradiance_in_watt_per_m2=irradiance_in_watt_per_m2,
+            mass_flow_in_kg_per_second_per_m2=point.mass_flow_in_kg_per_second / area_m2,
+        )
+        if lift_in_kelvin <= 0.0:
+            return PumpOperatingPoint(mass_flow_in_kg_per_second=0.0, supply_temperature_in_celsius=inlet_temperature_in_celsius, flow_is_clamped=False)
+        return PumpOperatingPoint(
+            mass_flow_in_kg_per_second=point.mass_flow_in_kg_per_second, supply_temperature_in_celsius=inlet_temperature_in_celsius + lift_in_kelvin, flow_is_clamped=True
+        )
+
+    def sensor_temperature_at_start_of_step_in_celsius(
+        self,
+        *,
+        inlet_temperature_at_start_of_step_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        pump_ran_in_previous_step: bool,
+    ) -> float:
+        """Return the temperature the collector's sensor reads at the start of the step, in °C.
+
+        While the pump stood in the previous step no water flows through the collector, and the sensor reads its
+        stagnation temperature in this step's irradiance
+        (:meth:`FlatPlateCollectorCurve.stagnation_temperature_in_celsius`). While the pump ran the sensor reads the
+        outlet: the inlet at the tank's start-of-step temperature plus the lift of the collector's operating point at
+        that inlet (:meth:`operating_point`), which is 0 when the collector has no heat there. For example, at
+        200 W/m² in 20 °C air a standing pump's sensor reads 60.9 °C with the preset curve; a running pump's sensor on
+        a 45 °C tank reads 53.5 °C with the preset pump. Both are start-of-step quantities: no pass of the step
+        moves them, so the pump's own heat in the step does not switch it.
+
+        Args:
+            inlet_temperature_at_start_of_step_in_celsius: The tank's start-of-step temperature, the inlet's, in °C.
+            ambient_temperature_in_celsius: The outside air temperature, in °C.
+            pump_ran_in_previous_step: Whether the pump ran in the previous step, the collector's saved state.
+
+        Returns:
+            The sensor temperature, in °C.
+        """
+        if not pump_ran_in_previous_step:
+            return self.collector_curve.stagnation_temperature_in_celsius(
+                ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+                irradiance_in_watt_per_m2=float(self.plane_of_array_irradiance_w_m2),
+            )
+        operating_point = self.operating_point(
+            inlet_temperature_in_celsius=inlet_temperature_at_start_of_step_in_celsius,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+        )
+        return operating_point.supply_temperature_in_celsius
 
     def i_simulate(
         self,
@@ -955,61 +1167,80 @@ class SolarThermalSystem(Component):
         """Run the collector at the storage's step mean and publish its circuit, its heat and the pump's electricity.
 
         The irradiance on the collector plane is computed once per step from the weather and the sun's position;
-        the collector heat at the step mean, which moves while the step iterates, on every call.
+        the collector heat at the step mean, which moves while the step iterates, on every call. The collector also
+        publishes its sensor temperature at the start of the step
+        (:meth:`sensor_temperature_at_start_of_step_in_celsius`), the quantity its controller switches the pump on,
+        and keeps whether its pump ran as its state.
         """
         # get inputs
         control_signal = stsv.get_input_value(self.control_signal_channel)
         global_horizontal_irradiance_w_m2 = stsv.get_input_value(self.ghi_channel)
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
         ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
+        apparent_zenith_in_degrees = stsv.get_input_value(self.apparent_zenith_channel)
+        solar_azimuth_in_degrees = stsv.get_input_value(self.azimuth_channel)
         temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
+        inlet_temperature_at_start_of_step_in_celsius = stsv.get_input_value(
+            self.inlet_temperature_at_start_of_step_input_channel
+        )
         # The collector is calculated every timestep, from this timestep's weather and this
-        # timestep's storage temperature. Only the sun's position comes from the precomputation, and
-        # the two stages below are the body of oemof.thermal's flat_plate_precalc with its first
-        # stage lifted out -- see i_prepare_simulation for why that stage and no other.
+        # timestep's storage temperature, and with the weather's sun. The two stages below are the body
+        # of oemof.thermal's flat_plate_precalc without its first stage, the sun's position, which the
+        # weather publishes -- see i_prepare_simulation.
         # Some more info on the equation:
         # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
         # The irradiance on the collector plane needs the weather and the sun only, so it is worked
         # out once per timestep and shared by the timestep's convergence iterations.
-        plane_of_array_key = (timestep, global_horizontal_irradiance_w_m2, diffuse_horizontal_irradiance_w_m2)
+        plane_of_array_key = (
+            timestep,
+            global_horizontal_irradiance_w_m2,
+            diffuse_horizontal_irradiance_w_m2,
+            apparent_zenith_in_degrees,
+            solar_azimuth_in_degrees,
+        )
         if plane_of_array_key != self.plane_of_array_key:
             self.plane_of_array_irradiance_w_m2 = plane_of_array_irradiance_w_m2(
                 surface_tilt=self.config.tilt,
                 surface_azimuth=self.config.azimuth,
-                apparent_zenith=self.apparent_zenith[timestep],
-                solar_azimuth=self.solar_azimuth[timestep],
+                apparent_zenith=apparent_zenith_in_degrees,
+                solar_azimuth=solar_azimuth_in_degrees,
                 global_horizontal_irradiance_w_m2=global_horizontal_irradiance_w_m2,
                 diffuse_horizontal_irradiance_w_m2=diffuse_horizontal_irradiance_w_m2,
             )
             self.plane_of_array_key = plane_of_array_key
         # the efficiency depends on the collector's inlet temperature, the storage's step mean, which moves while the
         # step iterates, so it is calculated every call
-        collector_heat_at_return_w = (
-            self.collector_curve.heat_in_watt_per_m2(
-                inlet_temperature_in_celsius=temperature_collector_inlet_deg_c,
-                ambient_temperature_in_celsius=ambient_air_temperature_deg_c,
-                irradiance_in_watt_per_m2=float(self.plane_of_array_irradiance_w_m2),
-            )
-            * self.area_m2
-        )
-        circuit = self.collector_circuit(
-            collector_heat_in_watt=collector_heat_at_return_w,
+        operating_point = self.operating_point(
             inlet_temperature_in_celsius=temperature_collector_inlet_deg_c,
-            inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
-            pump_runs=control_signal != 0,
+            ambient_temperature_in_celsius=ambient_air_temperature_deg_c,
         )
-        required_mass_flow_output_kg_s = self.required_mass_flow_in_kg_per_second(
-            collector_heat_in_watt=collector_heat_at_return_w,
-            inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
+        sensor_temperature_at_start_of_step_in_celsius = self.sensor_temperature_at_start_of_step_in_celsius(
+            inlet_temperature_at_start_of_step_in_celsius=inlet_temperature_at_start_of_step_in_celsius,
+            ambient_temperature_in_celsius=ambient_air_temperature_deg_c,
+            pump_ran_in_previous_step=self.previous_state.pump_ran,
         )
+        pump_runs = control_signal != 0
+        circuit = self.collector_circuit(
+            operating_point=operating_point,
+            inlet_temperature_in_celsius=temperature_collector_inlet_deg_c,
+            pump_runs=pump_runs,
+        )
+        # the actual ratio: the requested one while the pump runs, 0 while it stands
+        pump_actual_ratio = 0.0
+        if pump_runs:
+            pump_actual_ratio = self.part_load_command.requested_ratio(stsv)
+            circuit = circuit.at_part_load(part_load_ratio=pump_actual_ratio, t_return_c=temperature_collector_inlet_deg_c)
+        self.part_load_command.publish_actual_ratio(stsv, pump_actual_ratio)
+        self.state = SolarThermalSystemState(pump_ran=pump_actual_ratio > 0.0)
         thermal_power_output_w = circuit.power_w
         thermal_energy_output_wh: float = (
             thermal_power_output_w
             * self.my_simulation_parameters.seconds_per_timestep
             / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         )
-        electric_power_demand_solar_pump_w = self.pump_power_in_watt(
-            pump_runs=control_signal != 0, is_old_pump=self.config.old_solar_pump
+        # the solar pump draws its electricity for the part of the step it runs
+        electric_power_demand_solar_pump_w = pump_actual_ratio * self.pump_power_in_watt(
+            pump_runs=pump_runs, is_old_pump=self.config.old_solar_pump
         )
         water_temperature_output_deg_c = circuit.t_supply_c
         mass_flow_output_kg_s = circuit.mass_flow_kg_per_s
@@ -1022,8 +1253,7 @@ class SolarThermalSystem(Component):
         )
         stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
         stsv.set_output_value(
-            self.required_water_mass_flow_kg_s_output_channel,
-            required_mass_flow_output_kg_s,
+            self.sensor_temperature_at_start_of_step_output_channel, sensor_temperature_at_start_of_step_in_celsius
         )
         stsv.set_output_value(
             self.electricity_consumption_output_channel,
@@ -1035,19 +1265,17 @@ class SolarThermalSystem(Component):
         stsv.set_output_value(self.solar_pump_heat_loss_channel, electric_power_demand_solar_pump_w)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SolarThermalSystemState:
-    """The data class saves the state of the simulation results.
+    """The collector's state: whether its pump ran.
 
-    Parameters
-    ----------
-    output_with_state : int
-        Stores the state of the output_with_state value from
-        :py:class:`~hisim.component.ComponentName`.
-
+    The collector keeps two of them: the state of the step being iterated, as the latest pass has it, and the saved
+    state, the one the previous step ended with. The saved state chooses what the collector's sensor reads at the start
+    of the step: the stagnation temperature after a step the pump stood, the outlet after a step it ran.
     """
 
-    output_with_state: float = 0
+    #: Whether the pump ran: the controller signalled it on and the collector ran a part-load ratio above 0.
+    pump_ran: bool
 
 
 @dataclass_json
@@ -1055,9 +1283,10 @@ class SolarThermalSystemState:
 class SolarThermalSystemControllerConfig(ConfigBase):
     """Configuration of the solar thermal system's controller: when the solar pump runs.
 
-    The controller runs the pump while the collector has heat enough for its minimum flow and stops it once the
-    vessel has reached its 60 °C aim. Both rules are the controller's own, so the configuration holds only the
-    controller's identity. The named default is :meth:`preset_standard`::
+    The controller switches the pump on when the collector's sensor reads more than 7 K above the tank, keeps it
+    running while the sensor reads more than 3 K above the tank, stops it once the vessel has passed its 80 °C maximum
+    storage temperature and restarts it only 3 K below that maximum. These rules are the controller's own, so the
+    configuration holds only the controller's identity. The named default is :meth:`preset_standard`::
 
         SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     """
@@ -1083,7 +1312,7 @@ class SolarThermalSystemControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SolarThermalSystemController(Component):
+class SolarThermalSystemController(L1ControllerComponent):
     """Solar Controller.
 
     It takes data from other components and sends signal to the
@@ -1095,6 +1324,36 @@ class SolarThermalSystemController(Component):
     Components to connect to:
     (1) SolarThermalSystem (control_signal)
 
+    The controller also owns how much of a step the pump runs (:class:`hisim.part_load.PartLoadControl`): it switches
+    the pump on and off as before, and commands the requested part-load ratio ``RequestedPartLoadRatio`` with it. At and
+    below the part-load threshold the requested ratio is 1 whenever the pump runs. Above it the requested ratio follows
+    :class:`hisim.part_load.PartLoadRule` from the actual ratio the collector reports its pump ran
+    (``ActualPartLoadRatio``) and the storage's start and end temperatures, so that the storage ends the step at its
+    maximum storage temperature, the temperature above which it stops the pump (``TargetTemperatureInCelsius``, 80 °C).
+    Nothing ranks it against a backup charging the same storage: each controller aims at its own target, and the
+    backups' 60 °C warm-water aim lies below the solar maximum, so the sun may heat the storage above the temperature
+    the backups stop at.
+
+    It is a differential controller: the on/off decision compares two temperatures its sensors read at the start of
+    the step, as a real solar controller decides on the temperatures it measures at that moment. They are the
+    collector's sensor (the collector's ``CollectorSensorTemperatureAtStartOfStepInCelsius``: its stagnation
+    temperature after a step the pump stood, its outlet after a step it ran) and the storage's start-of-step
+    temperature. No pass of the step moves either, so the pump's own heat cannot switch it off again in the step it
+    switches on. One exception: the simulator starts each step from the values the previous step
+    converged to and evaluates the controller before the collector and the storage, so the first pass of a step reads
+    the previous step's sensors and may decide differently; from the second pass on the decision cannot change, and
+    the step keeps the decision of its last pass. Two hysteresis bands keep the pump from switching every few steps:
+
+    * the temperature difference: a pump that stood in the previous step switches on when the collector's sensor
+      reads more than :attr:`SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN` (7 K) above the storage, a pump that ran
+      keeps running while it reads more than :attr:`SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN` (3 K) above it;
+    * the full storage: the pump stops once the storage starts a step above its maximum storage temperature,
+      :attr:`MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS` (80 °C), and stays stopped until the storage starts a step at
+      least :attr:`FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN` (3 K) below the maximum.
+
+    Whether the pump ran and whether the full-storage stop holds are the controller's saved state
+    (:class:`SolarThermalSystemControllerState`): set from the step's last pass in :meth:`i_save_state`, restored
+    before every pass, so the decision of a pass depends only on that pass's inputs and the saved state.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1102,20 +1361,50 @@ class SolarThermalSystemController(Component):
     # Inputs
     #: The storage's start-of-step temperature, on which the pump stops once the storage is full.
     StorageTemperatureAtStartOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtStartOfStepInCelsius"
-    #: The flow the collector heat at the storage's step mean needs, on which the pump stops below its minimum.
-    MassFlow: ClassVar[str] = "MassFlow"
+    #: The storage's temperature at the end of the step, which the requested part-load ratio is set against.
+    StorageTemperatureAtEndOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtEndOfStepInCelsius"
+    #: The actual part-load ratio: the fraction of the step the pump ran, as the collector reports it.
+    ActualPartLoadRatio: ClassVar[str] = "ActualPartLoadRatio"
+    #: The temperature the collector's sensor reads at the start of the step, which the pump switches on against the
+    #: storage's.
+    CollectorSensorTemperatureAtStartOfStepInCelsius: ClassVar[str] = "CollectorSensorTemperatureAtStartOfStepInCelsius"
 
     # Outputs
     ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
+    #: The requested part-load ratio: the fraction of the step the pump is to run.
+    RequestedPartLoadRatio: ClassVar[str] = "RequestedPartLoadRatio"
+    #: The storage temperature above which the controller stops the pump, its maximum storage temperature.
+    TargetTemperatureInCelsius: ClassVar[str] = "TargetTemperatureInCelsius"
 
-    #: Below this pump flow at the storage's step mean the controller stops the pump. The flow is sized for
-    #: twice the collector's inlet-to-mean difference (20 K), so 0.005 kg/s is the collector heat of about 420 W
-    #: below which the pump has always stood (0.01 kg/s when the flow was sized for 10 K).
-    MINIMUM_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.005
+    #: How far the collector's sensor must read above the storage for a pump that stood in the previous step to
+    #: switch on, in K. Differential solar controllers switch on at a collector-to-tank difference of a few kelvin,
+    #: adjustable from about 2 to 16 K, with factory settings of about 6 K (RESOL DeltaSol A and DeltaSol ES manuals,
+    #: https://www.heizungsdiscount24.de/pdf/Resol-DeltaSol-A-Anleitung.pdf). The owner chose 7 K and 3 K on
+    #: 2026-10-14.
+    SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN: ClassVar[float] = 7.0
 
-    #: The storage temperature above which the pump stops, in °C: warm water should leave the tank at 60 °C
-    #: (https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser).
-    WARM_WATER_AIM_IN_CELSIUS: ClassVar[float] = 60.0
+    #: How far the collector's sensor must read above the storage for a pump that ran in the previous step to keep
+    #: running, in K. Below it the heat gained no longer pays for the pipe losses and the pump's electricity;
+    #: differential controllers switch off at about 3 to 4 K (the DeltaSol ES's factory setting is 4 K). Without the
+    #: band between the two differences a pump whose start cools the sensor would switch off and on every few steps.
+    SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN: ClassVar[float] = 3.0
+
+    #: The maximum storage temperature: the storage temperature above which the pump stops, in °C. It is the solar
+    #: controller's own limit, above the 60 °C warm-water aim the backup generators (boiler, district heating, electric
+    #: heater) charge to, above the 58 °C the heat pump charges to and the 68 °C it charges to while the energy manager
+    #: raises its set temperature on PV surplus. Solar controllers let the sun heat the tank past the backup's set point
+    #: up to a maximum storage temperature that installers set between about 60 and 80 °C; a thermostatic mixing valve
+    #: at the tap keeps the water drawn at the tap temperature, so a hotter tank does not scald and delivers the same
+    #: heat to the tap. With a maximum equal to the backup's aim the tank waits just below 60 °C on sunny days and the
+    #: backup supplies what the sun could have. The owner chose 80 °C, the upper end, on 2026-10-11: the larger standby
+    #: loss of the hotter tank is accepted.
+    MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 80.0
+
+    #: How far below the maximum storage temperature the storage must start a step before a pump the full storage
+    #: stopped runs again, in K. Solar controllers restart the pump a few kelvin below their maximum storage
+    #: temperature, typically 3 to 5 K; 3 K is the lower end. Without it the part-load rule, which ends a charging step
+    #: just above the maximum, and the standby loss of the next step switch the pump every second step.
+    FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN: ClassVar[float] = 3.0
 
     def __init__(
         self,
@@ -1143,12 +1432,21 @@ class SolarThermalSystemController(Component):
             True,
         )
 
-        self.required_mass_flow_input_channel: ComponentInput = self.add_input(
+        self.collector_sensor_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.MassFlow,
-            loadtypes.LoadTypes.WARM_WATER,
-            loadtypes.Units.KG_PER_SEC,
+            self.CollectorSensorTemperatureAtStartOfStepInCelsius,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
             True,
+        )
+
+        self.part_load = PartLoadControl(
+            self,
+            end_temperature_input_name=self.StorageTemperatureAtEndOfStepInCelsius,
+            actual_ratio_input_name=self.ActualPartLoadRatio,
+            requested_ratio_output_name=self.RequestedPartLoadRatio,
+            target_output_name=self.TargetTemperatureInCelsius,
+            device_description="the solar pump",
         )
 
         # Configure Output Channels
@@ -1158,11 +1456,13 @@ class SolarThermalSystemController(Component):
             loadtypes.LoadTypes.ANY,
             loadtypes.Units.BINARY,
             output_description="Control signal to solar pump in SolarThermalSystem",
+            aggregation=loadtypes.OutputAggregation.MEAN,
         )
 
-        self.state: SolarThermalSystemControllerState = SolarThermalSystemControllerState(0, 0, 0)
-        self.previous_state: SolarThermalSystemControllerState = self.state.clone()
-        self.processed_state: SolarThermalSystemControllerState = self.state.clone()
+        #: The pump state of the step being iterated, as the latest pass decided it.
+        self.state = SolarThermalSystemControllerState(pump_runs=False, full_storage_stop_holds=False)
+        #: The saved state: the pump state the previous step ended with.
+        self.previous_state = SolarThermalSystemControllerState(pump_runs=False, full_storage_stop_holds=False)
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
@@ -1181,35 +1481,55 @@ class SolarThermalSystemController(Component):
                 SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.StorageTemperatureAtEndOfStepInCelsius,
+                storage_classname,
+                SimpleDHWStorage.WaterTemperatureAtEndOfStepInCelsius,
+            )
+        )
         return connections
 
     def get_default_connections_from_solar_thermal_system(
         self,
     ) -> List[ComponentConnection]:
-        """Return the connection of the collector's required mass flow to this controller's input.
+        """Return the connections from the collector: its sensor temperature at the step start and its pump's actual ratio.
 
         Returns:
             The connection list.
         """
 
         connections: List[ComponentConnection] = []
-        storage_classname = SolarThermalSystem.get_classname()
+        collector_classname = SolarThermalSystem.get_classname()
         connections.append(
             ComponentConnection(
-                SolarThermalSystemController.MassFlow,
-                storage_classname,
-                SolarThermalSystem.RequiredWaterMassFlowOutput,
+                SolarThermalSystemController.CollectorSensorTemperatureAtStartOfStepInCelsius,
+                collector_classname,
+                SolarThermalSystem.CollectorSensorTemperatureAtStartOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.ActualPartLoadRatio,
+                collector_classname,
+                SolarThermalSystem.ActualPartLoadRatio,
             )
         )
         return connections
 
     def i_save_state(self) -> None:
-        """Saves the state."""
-        self.previous_state = self.state.clone()
+        """Save the pump state the step that just ended was left with, from its last pass, as the state to start from.
+
+        The simulator calls this at the start of every step, so the saved state is whether the pump ran and whether
+        the full-storage stop held in the previous step: the two hysteresis bands of :meth:`pump_runs` and
+        :meth:`full_storage_stop_holds` read it. The pump counts as having run only if the collector ran an actual
+        ratio above 0, which is what the collector reports and what a forced pass keeps.
+        """
+        self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restores previous state."""
-        self.state = self.previous_state.clone()
+        """Return to the saved state before a pass, so a pass never sees what an earlier pass of the step decided."""
+        self.state = dataclasses.replace(self.previous_state)
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1221,49 +1541,131 @@ class SolarThermalSystemController(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the solar thermal system controller."""
+        """Decide whether the pump runs and, above the part-load threshold, the fraction of the step it runs.
+
+        The full-storage stop follows :meth:`full_storage_stop_holds` from the storage's start-of-step temperature and
+        whether the stop held in the previous step. In an unforced pass the pump's on/off decision follows
+        :meth:`pump_runs` from the collector's sensor and the storage's start-of-step temperature, the full-storage
+        stop and whether the pump ran in the previous step; the state saves the pump as running only with a requested
+        ratio above 0, as the collector will report it. Under ``force_convergence`` the controller keeps the pump as
+        the collector reports it ran (:meth:`pump_ran_as_reported`) and its requested-ratio port carries the actual
+        ratio (:meth:`hisim.part_load.PartLoadControl.publish_held`), so the device keeps running what it ran and the
+        iteration stops moving. All of it reads only inputs and the saved state. The inputs are start-of-step
+        quantities, so from the second pass on an unforced pass decides as the pass before it; the first pass, which
+        reads the previous step's sensors, may decide differently.
+        """
+        storage_temperature_at_start_in_celsius = stsv.get_input_value(
+            self.storage_temperature_at_start_deg_c_input_channel
+        )
+        full_storage_stop_holds = self.full_storage_stop_holds(
+            storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+            stop_held_in_previous_step=self.previous_state.full_storage_stop_holds,
+        )
         if force_convergence:
-            # states are saved after each timestep, outputs after each iteration
-            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
-            self.state = self.processed_state.clone()
+            pump_runs = self.pump_ran_as_reported(actual_ratio=self.part_load.actual_ratio(stsv))
+            stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
+            self.part_load.publish_held(stsv)
+            pump_ran = pump_runs
         else:
             pump_runs = self.pump_runs(
-                required_mass_flow_in_kg_per_second=stsv.get_input_value(self.required_mass_flow_input_channel),
-                storage_temperature_at_start_in_celsius=stsv.get_input_value(
-                    self.storage_temperature_at_start_deg_c_input_channel
+                collector_sensor_temperature_in_celsius=stsv.get_input_value(
+                    self.collector_sensor_temperature_input_channel
                 ),
+                storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+                full_storage_stop_holds=full_storage_stop_holds,
+                pump_ran_in_previous_step=self.previous_state.pump_runs,
             )
-            if pump_runs:
-                self.state.activate(timestep)
-            else:
-                self.state.deactivate(timestep)
-            self.processed_state = self.state.clone()
-
-        stsv.set_output_value(
-            self.control_signal_to_solar_thermal_system_channel,
-            self.state.on_off,
+            stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
+            requested_ratio = self.part_load.publish(
+                stsv,
+                device_runs=pump_runs,
+                start_temperature_in_celsius=storage_temperature_at_start_in_celsius,
+                target_temperature_in_celsius=self.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS,
+            )
+            pump_ran = pump_runs and requested_ratio > 0.0
+        self.state = SolarThermalSystemControllerState(
+            pump_runs=pump_ran, full_storage_stop_holds=full_storage_stop_holds
         )
 
     @staticmethod
-    def pump_runs(*, required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float) -> bool:
-        """Return whether the solar pump runs in this step.
+    def full_storage_stop_holds(
+        *, storage_temperature_at_start_in_celsius: float, stop_held_in_previous_step: bool
+    ) -> bool:
+        """Return whether the full-storage stop holds the solar pump in this step, from the storage and the last step.
 
-        It runs while the flow the collector heat at the storage's step mean needs is at least
-        :attr:`MINIMUM_MASS_FLOW_IN_KG_PER_S`, which also means the collector has heat there, unless the storage
-        started the step above the 60 °C aim. The full-tank stop decides on the start-of-step temperature: on the step
-        mean it would have no fixed point when the pump's own heat lifts the mean across the aim. For example, a
-        collector that needs 0.01 kg/s runs the pump for a tank that started at 45 °C and not for one at 61 °C.
+        The full-storage stop enforces the controller's maximum storage temperature: it sets once the storage starts a
+        step above :attr:`MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS` (80 °C), and releases only once the storage starts a
+        step at least :attr:`FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN` (3 K) below the maximum. Between the two
+        edges it keeps the state of the previous step. It reads the start-of-step temperature, which no pass of the
+        step moves. For example, a storage that started at 78.5 °C is held if the stop held in the previous step and
+        free otherwise; one that started at 77 °C is free; one that started at 80.02 °C is held.
 
         Args:
-            required_mass_flow_in_kg_per_second: The flow the collector heat needs, in kg/s.
             storage_temperature_at_start_in_celsius: The storage's start-of-step temperature, in °C.
+            stop_held_in_previous_step: Whether the stop held in the previous step, the controller's saved state.
+
+        Returns:
+            True while the full-storage stop holds the pump.
+        """
+        maximum_in_celsius = SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
+        if storage_temperature_at_start_in_celsius > maximum_in_celsius:
+            return True
+        restart_temperature_in_celsius = (
+            maximum_in_celsius - SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
+        )
+        return stop_held_in_previous_step and storage_temperature_at_start_in_celsius > restart_temperature_in_celsius
+
+    @staticmethod
+    def pump_runs(
+        *,
+        collector_sensor_temperature_in_celsius: float,
+        storage_temperature_at_start_in_celsius: float,
+        full_storage_stop_holds: bool,
+        pump_ran_in_previous_step: bool,
+    ) -> bool:
+        """Return whether the solar pump runs in a step, from the two sensors, the full-storage stop and its state.
+
+        A pump that stood in the previous step switches on when the collector's sensor reads more than
+        :attr:`SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN` (7 K) above the storage's start-of-step temperature; a pump
+        that ran keeps running while it reads more than :attr:`SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN` (3 K)
+        above it. Either way the pump stands while the full-storage stop (:meth:`full_storage_stop_holds`) holds. For
+        example, a collector sensor 5 K above the storage keeps a running pump on, does not switch on a pump that
+        stood, and runs neither while the full-storage stop holds.
+
+        Args:
+            collector_sensor_temperature_in_celsius: The collector's sensor temperature at the start of the step,
+                in °C.
+            storage_temperature_at_start_in_celsius: The storage's start-of-step temperature, in °C.
+            full_storage_stop_holds: Whether the full-storage stop holds the pump in this step.
+            pump_ran_in_previous_step: Whether the pump ran in the previous step, the controller's saved state.
 
         Returns:
             True while the pump runs.
         """
-        storage_is_full = storage_temperature_at_start_in_celsius > SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
-        has_heat_enough = required_mass_flow_in_kg_per_second >= SolarThermalSystemController.MINIMUM_MASS_FLOW_IN_KG_PER_S
-        return has_heat_enough and not storage_is_full
+        if full_storage_stop_holds:
+            return False
+        if pump_ran_in_previous_step:
+            least_difference_in_kelvin = SolarThermalSystemController.SWITCH_OFF_TEMPERATURE_DIFFERENCE_IN_KELVIN
+        else:
+            least_difference_in_kelvin = SolarThermalSystemController.SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN
+        difference_in_kelvin = collector_sensor_temperature_in_celsius - storage_temperature_at_start_in_celsius
+        return difference_in_kelvin > least_difference_in_kelvin
+
+    @staticmethod
+    def pump_ran_as_reported(*, actual_ratio: float) -> bool:
+        """Return whether the pump ran in this pass, from the actual ratio the collector reports its pump ran with.
+
+        The collector reports the fraction of the step its pump ran: 0 while it stood, more than 0 while it ran. A
+        forced pass keeps the pump as it ran, so the on/off signal stops changing without the controller remembering
+        an earlier pass. For example, a reported actual ratio of 0.42 means the pump ran.
+
+        Args:
+            actual_ratio: The actual part-load ratio the collector reports, from 0 to 1.
+
+        Returns:
+            True if the pump ran.
+        """
+        return actual_ratio > 0.0
 
     def get_cost_opex(
         self,
@@ -1292,38 +1694,19 @@ class SolarThermalSystemController(Component):
         return []
 
 
+@dataclass(frozen=True)
 class SolarThermalSystemControllerState:
-    """Data class that saves the state of the controller."""
+    """The solar pump controller's state: whether the pump runs and whether the full-storage stop holds it.
 
-    def __init__(
-        self,
-        on_off: int,
-        activation_time_step: int,
-        deactivation_time_step: int,
-    ) -> None:
-        """Initializes the solar pump controller state."""
-        self.on_off: int = on_off
-        self.activation_time_step: int = activation_time_step
-        self.deactivation_time_step: int = deactivation_time_step
+    The controller keeps two of them: the state of the step being iterated, as the latest pass decided it, and the
+    saved state, the one the previous step ended with. The saved state chooses the edges of both hysteresis bands: the
+    switch-on or switch-off temperature difference, and whether the storage must fall 3 K below the maximum storage
+    temperature before the pump runs again.
+    """
 
-    def clone(self) -> "SolarThermalSystemControllerState":
-        """Copies the current instance."""
-        return SolarThermalSystemControllerState(
-            on_off=self.on_off,
-            activation_time_step=self.activation_time_step,
-            deactivation_time_step=self.deactivation_time_step,
-        )
+    #: Whether the pump runs: signalled on with a part-load ratio above 0.
+    pump_runs: bool
 
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
-
-    def activate(self, timestep: int) -> None:
-        """Activates the solar pump and remembers the time step."""
-        self.on_off = 1
-        self.activation_time_step = timestep
-
-    def deactivate(self, timestep: int) -> None:
-        """Deactivates the solar pump and remembers the time step."""
-        self.on_off = 0
-        self.deactivation_time_step = timestep
+    #: Whether the full-storage stop holds the pump: set once the storage started a step above the maximum storage
+    #: temperature, released once it started a step at least 3 K below it.
+    full_storage_stop_holds: bool

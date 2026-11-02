@@ -8,13 +8,12 @@ source can say what commit this is.
 """
 
 import re
+import subprocess
 
 import pytest
 
 from hisim.hisim_commit import HiSimCommit
 from hisim.renovisor.capabilities import CapabilityDocument
-
-pytestmark = pytest.mark.base
 
 
 class TestHiSimCommit:
@@ -30,6 +29,7 @@ class TestHiSimCommit:
         yield
         HiSimCommit.forget()
 
+    @pytest.mark.base
     def test_the_baked_file_wins(self, tmp_path, monkeypatch):
         """``hisim/COMMIT`` is what the image was built from, so it answers before anything else."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
@@ -38,12 +38,14 @@ class TestHiSimCommit:
         (tmp_path / HiSimCommit.COMMIT_FILE).write_text(self.FULL_HASH + "\n", encoding="utf-8")
         assert HiSimCommit.of() == self.FULL_HASH[: HiSimCommit.SHORT_LENGTH]
 
+    @pytest.mark.base
     def test_the_environment_is_read_when_the_file_is_absent(self, tmp_path, monkeypatch):
         """An image built without the file can still be told its revision by its orchestrator."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
         monkeypatch.setenv(HiSimCommit.COMMIT_VARIABLE, self.FULL_HASH)
         assert HiSimCommit.of() == self.FULL_HASH[: HiSimCommit.SHORT_LENGTH]
 
+    @pytest.mark.base
     def test_an_empty_file_does_not_shadow_the_environment(self, tmp_path, monkeypatch):
         """A marker file that says nothing is not an answer, and the next source is asked."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
@@ -52,12 +54,14 @@ class TestHiSimCommit:
         (tmp_path / HiSimCommit.COMMIT_FILE).write_text("   \n", encoding="utf-8")
         assert HiSimCommit.of() == "abc1234"
 
+    @pytest.mark.base
     def test_no_source_at_all_is_none_rather_than_a_failure(self, tmp_path, monkeypatch):
         """Provenance never fails a calculation: an unknown commit is stated as unknown."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
         monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE, raising=False)
         assert HiSimCommit.of() is None
 
+    @pytest.mark.base
     def test_a_checkout_answers_with_a_short_hexadecimal_hash(self, monkeypatch):
         """In a developer checkout the answer is git's own short hash, and is shaped like one.
 
@@ -75,6 +79,7 @@ class TestHiSimCommit:
             pytest.skip("not a git checkout, so there is no hash to check the shape of")
         assert re.fullmatch(r"[0-9a-f]{7,12}", commit), commit
 
+    @pytest.mark.base
     def test_the_file_wins_over_the_environment_and_the_environment_over_git(
         self, tmp_path, monkeypatch
     ):
@@ -96,12 +101,34 @@ class TestHiSimCommit:
         monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE)
         assert HiSimCommit.of() is None, "an empty directory is not a checkout"
 
+    @pytest.mark.base
+    def test_a_git_that_hangs_is_given_up_on_and_answers_none(self, tmp_path, monkeypatch):
+        """The git lookup runs with a timeout, and running out of it is no commit rather than a failure.
+
+        If this fails, either the lookup is started without ``timeout`` and a hanging git would stall every
+        translation and staged run, or the timeout is raised to the caller instead of answering ``None``.
+        """
+        seen = {}
+
+        def hanging_git(arguments, **options):
+            """Stand in for a git that never returns: record the options and raise the timeout."""
+            seen.update(options)
+            raise subprocess.TimeoutExpired(arguments, options["timeout"])
+
+        monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
+        monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE, raising=False)
+        monkeypatch.setattr(subprocess, "run", hanging_git)
+        assert HiSimCommit.of() is None
+        assert seen["timeout"] == HiSimCommit.GIT_TIMEOUT_SECONDS
+
+    @pytest.mark.base
     def test_a_full_hash_from_any_source_is_shortened_to_one_spelling(self, tmp_path, monkeypatch):
         """Forty hexadecimal characters become seven, so the three sources agree on one form."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
         monkeypatch.setenv(HiSimCommit.COMMIT_VARIABLE, "0" * 39 + "f")
         assert HiSimCommit.of() == "0" * 7
 
+    @pytest.mark.renovisor_probes
     def test_the_capability_document_stays_valid_without_a_commit(
         self, tmp_path, monkeypatch, capability_document: CapabilityDocument
     ):

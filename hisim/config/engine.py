@@ -218,7 +218,9 @@ class SizingFactEngine:
         configs, never from what has been computed so far, which is what makes the binding
         — ambiguity errors included — independent of the order the fixed point happens to
         resolve the nodes in. Returns the nodes in input order; raises
-        :class:`SizingError` if a config has no instance name or two share one.
+        :class:`SizingError` if a config has no instance name or two share one, and
+        :class:`ConfigSizingError` if a config states only some fields of a group its class
+        sizes together (:class:`~hisim.config.sizing.SizedTogether`), before any fact is looked for.
         """
         nodes: List[_Node] = []
         seen: Dict[str, str] = {}
@@ -230,6 +232,7 @@ class SizingFactEngine:
                     "sizing addresses every provider and consumer by its instance name."
                 )
             seen[name] = type(config).__name__
+            sizing.SizedTogether.check(config)
             contributions = tuple(getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ()))
             for fact in declared_facts_of(type(config)):
                 self._providers.setdefault(fact, {})[name] = None

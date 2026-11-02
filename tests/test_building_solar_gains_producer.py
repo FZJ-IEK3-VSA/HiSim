@@ -176,6 +176,7 @@ def calculation_inputs(**overrides: Any) -> SolarGainsInputs:
         "year": 2021,
         "seconds_per_timestep": 900,
         "timesteps": 2,
+        "window_start": "2021-01-01T00:00:00",
         "windows": (window_geometry(),),
         "azimuth_in_degrees": daylight_series(180.0),
         "direct_normal_irradiance_in_watt_per_square_meter": daylight_series(620.0),
@@ -332,7 +333,7 @@ def test_the_weather_enters_the_key_as_a_reference_and_not_as_data() -> None:
 
 @pytest.mark.base
 def test_what_changes_the_series_changes_the_key() -> None:
-    """Every window number and every span field is key material.
+    """Every window number, every span field and the run's start are key material.
 
     A refurbishment that changes the glazing, a building scaled to another floor area, a roof light
     instead of a facade window: all of them compute a different series and must therefore be filed
@@ -346,6 +347,9 @@ def test_what_changes_the_series_changes_the_key() -> None:
     assert digest_of(baseline) != digest_of(calculation_inputs(timesteps=3))
     assert digest_of(baseline) != digest_of(calculation_inputs(seconds_per_timestep=3600))
     assert digest_of(baseline) != digest_of(calculation_inputs(year=2022))
+    # A July window reads other weather values than a January window under the same weather artifact
+    # key, which names the weather's whole year.
+    assert digest_of(baseline) != digest_of(calculation_inputs(window_start="2021-07-01T00:00:00"))
     for field_name, changed_value in (
         ("tilt_angle_in_degrees", 0.0),
         ("azimuth_angle_in_degrees", None),

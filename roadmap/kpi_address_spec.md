@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-08, revised 2026-10-03 · **Owner:** Noah Pflugradt · **Status:** proposed; step 0 of the
 assemblies staging (`roadmap/declarative_energy_systems/assemblies_spec.md` §13, decisions D5/D15/D18), before its
-step 1 and independent of the hydronic stages (hisim-fxix). Bead **hisim-b3b.1, P1** (the gating step).
+step 1 and independent of the hydronic stages (hisim-hydronics-fxix). Bead **hisim-declarative-systems-b3b.1, P1** (the gating step).
 
 ## Problem
 
@@ -196,7 +196,7 @@ energy-system file ships. Until then a flat file's rows carry `source` with `imp
    JSON is opened with this PR and merged before the first composed file ships.
 6. Record the key format and `source` in the webtool JSON contract note in `kpi_structure.py` and in
    the `energy_systems/README.md` KPI section, with one before/after example.
-7. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged. → hisim-b3b.1
+7. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged. → hisim-declarative-systems-b3b.1
 
 ## Acceptance
 

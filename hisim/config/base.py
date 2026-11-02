@@ -101,19 +101,30 @@ def _sizable_enum_type(annotation: Any, owner_module: Optional[types.ModuleType]
 
 
 def _complete_sizable_enum_codecs(config_class: type) -> None:
-    """Fills in the wire decoder of every enum-typed sizable field that did not declare one.
+    """Gives every enum-typed sizable field a wire decoder that yields the member and names the field.
 
     A sizable field replaces the serialization layer's own decoder with one that understands
     the ``AUTO`` sentinel, and that replacement is what makes an enum-typed sizable field a
-    trap: unless the declaration also passes ``value_type``, the member name read from a file
-    stays a plain string. Because HiSim's config enums derive from ``str``, the mistake is
-    invisible to every equality comparison and shows up only where a component compares by
-    identity — so the declaration is completed here instead of being left to be remembered.
+    trap: were the declaration not completed here, a field declared without ``value_type``
+    would leave the member name read from a file a plain string. Because HiSim's config enums
+    derive from ``str``, the mistake is invisible to every equality comparison and shows up
+    only where a component compares by identity — so the declaration is completed here
+    instead of being left to be remembered.
+
+    The decoder is installed for a field that declared its ``value_type`` too, because only
+    here is the field's name known: ``sized_field`` builds its decoder before the field has a
+    name, so its refusal of a misspelled member could not say which field was misspelled.
+    Example: ``heating_system: Sizable[HeatDistributionSystemType]`` on
+    ``HeatDistributionConfig`` gets a decoder that turns ``"FLOORHEATING"`` into
+    ``HeatDistributionSystemType.FLOORHEATING`` and refuses ``"FLOOR"`` naming
+    ``HeatDistributionConfig.heating_system``.
 
     Runs while the subclass object is created, before its ``@dataclass`` decorator has turned
     the field descriptors into fields, which is the last moment at which the descriptor can
     still be edited. A field whose annotation cannot be resolved is left alone: the check can
-    only strengthen a declaration it understands, never weaken one it does not.
+    only strengthen a declaration it understands, never weaken one it does not. A field that
+    declared a ``value_type`` which is not an enum (``str`` for a weather identity) keeps the
+    decoder it declared.
 
     Args:
         config_class: The configuration class whose body has just executed.
@@ -124,13 +135,19 @@ def _complete_sizable_enum_codecs(config_class: type) -> None:
         if not isinstance(descriptor, dc.Field):
             continue
         metadata = dict(descriptor.metadata)
-        if SizedFieldMetadata.LAW not in metadata or SizedFieldMetadata.VALUE_TYPE in metadata:
+        if SizedFieldMetadata.LAW not in metadata:
             continue
-        enum_type = _sizable_enum_type(annotation, owner_module)
+        declared_type = metadata.get(SizedFieldMetadata.VALUE_TYPE)
+        if declared_type is None:
+            enum_type = _sizable_enum_type(annotation, owner_module)
+        elif isinstance(declared_type, type) and issubclass(declared_type, enum.Enum):
+            enum_type = declared_type
+        else:
+            enum_type = None
         if enum_type is None:
             continue
         json_config = dict(metadata.get("dataclasses_json", {}))
-        json_config["decoder"] = _sizable_decoder(enum_type)
+        json_config["decoder"] = _sizable_decoder(enum_type, f"{config_class.__name__}.{field_name}")
         metadata["dataclasses_json"] = json_config
         metadata[SizedFieldMetadata.VALUE_TYPE] = enum_type
         descriptor.metadata = MappingProxyType(metadata)

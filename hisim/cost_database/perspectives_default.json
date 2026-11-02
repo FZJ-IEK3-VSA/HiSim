@@ -1,5 +1,5 @@
 {
-  "comment": "Standard perspective bundle (cost_spec.md §7.1). Greenfield rows are skipped automatically when an ExistingAssetRegister is provided and vice versa.",
+  "comment": "Standard perspective bundle (roadmap/cost_spec.md §7.1). Greenfield rows are skipped automatically when an ExistingAssetRegister is provided and vice versa.",
   "perspectives": [
     {"id": "greenfield_gross", "context": "GREENFIELD", "actor": "SYSTEM", "subsidies": "NONE", "financing": "cash", "accounting": "FINANCIAL"},
     {"id": "greenfield_net", "context": "GREENFIELD", "actor": "SYSTEM", "subsidies": "FULL", "financing": "cash", "accounting": "FINANCIAL"},

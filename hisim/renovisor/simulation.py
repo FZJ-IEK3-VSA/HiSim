@@ -40,10 +40,10 @@ class Period(str, Enum):
 
     ``FULL_YEAR`` is what the backend calls; the two short periods exist for the verification
     harness and for the end-to-end tests, which need a run that finishes in seconds. All three
-    start on the 1st of January, and the two short ones deliberately do *not* start mid-January
-    as the frontend side's spec proposed: every profile-driven component of HiSim indexes its
-    year-long profile by the timestep number, so a mid-January start reproduces the 1st of
-    January anyway while labelling the result with the wrong dates.
+    start on the 1st of January. The two short ones did not start mid-January as the frontend
+    side's spec proposed because HiSim then read every profile from the 1st of January whatever
+    the start date said; since the mid-year-start epic (``roadmap/midyear_start_epic.md``) a
+    window reads its own dates, so that reason is gone, and the periods are kept as they are.
     """
 
     FULL_YEAR = "full_year"
@@ -77,7 +77,7 @@ class SimulationSetup:
     LOGGING_LEVEL: ClassVar[int] = 3
 
     #: The environment variable holding the ordered cache directories a container maps in,
-    #: separated by :data:`os.pathsep` (hisim-epc.22). Every entry must be absolute: a relative
+    #: separated by :data:`os.pathsep` (hisim-renovisor-translator-epc.22). Every entry must be absolute: a relative
     #: one would resolve against whatever the worker's working directory happens to be, and two
     #: workers would then disagree about where the cache is. An explicit ``cache_directory``
     #: argument to :meth:`parameters` outranks the variable, which is then not consulted.
@@ -116,7 +116,8 @@ class SimulationSetup:
                 one. It is the one location outside the output directory a calculation writes
                 to, and it is shared state rather than output (decision Q25). Given, it is the
                 single cache directory and ``HISIM_CACHE_DIRECTORIES`` is not consulted; absent,
-                the variable fills the ordered directory list when it is set (hisim-epc.22).
+                the variable fills the ordered directory list when it is set (hisim-renovisor-translator-epc.22).
+                Either way every cache directory has to be absolute.
             country: The dwelling's country, which selects the legacy fuel-price and emission
                 tables. For a country registered as a placeholder the numbers in them are the
                 sentinel; see the module docstring.
@@ -124,6 +125,10 @@ class SimulationSetup:
         Returns:
             The parameters, with the result directory created, the post-processing options set
             and the lifecycle costs required.
+
+        Raises:
+            ValueError: When ``cache_directory`` is relative, or ``HISIM_CACHE_DIRECTORIES`` holds a
+                relative entry or nothing but separators.
         """
         start = datetime.datetime(cls.YEAR, 1, 1)
         days = period.days
@@ -146,12 +151,22 @@ class SimulationSetup:
         if cache_directory is not None:
             # The explicit argument outranks the environment: a caller that names a directory
             # gets exactly that one, and the variable is not consulted.
+            if not cache_directory.is_absolute():
+                raise ValueError(
+                    f"the cache directory {str(cache_directory)!r} is relative; every cache directory has to be "
+                    "absolute, so two workers agree on where the cache is whatever their working directory is"
+                )
             cache_directory.mkdir(parents=True, exist_ok=True)
             parameters.cache_dir_path = str(cache_directory)
             return parameters
         env_directories = os.environ.get(cls.CACHE_DIRECTORIES_VARIABLE)
         if env_directories:
             directories = [entry for entry in env_directories.split(os.pathsep) if entry]
+            if not directories:
+                raise ValueError(
+                    f"{cls.CACHE_DIRECTORIES_VARIABLE} is {env_directories!r}, which names no directory; "
+                    "unset it to use the default cache directory, or list at least one absolute path"
+                )
             relative = [entry for entry in directories if not os.path.isabs(entry)]
             if relative:
                 raise ValueError(

@@ -809,22 +809,58 @@ class DynamicComponent(Component):
             + str(self.dynamic_default_connections)
         )
 
+    def declares_default_connections(self) -> bool:
+        """Whether this component declares any default connection, so that connecting it automatically can work.
+
+        By default that is whether :meth:`add_dynamic_default_connections` registered a declaration for any class. A
+        component that finds its participants by the ports they declare (:meth:`default_connections_for`) overrides
+        it, since it declares its connections without naming a class.
+
+        Returns:
+            True when the component declares default connections.
+        """
+        return bool(self.dynamic_default_connections)
+
+    def default_connections_for(self, source_component: Component) -> List[DynamicComponentConnection]:
+        """The default connections this component declares from one component of the run, not yet bound to it.
+
+        By default these are the declarations :meth:`add_dynamic_default_connections` registered for the source's
+        class. A component that reads its participants by what their outputs declare instead of by their class
+        overrides this: the electricity meter, for example, reads every electricity port of any component
+        (``ElectricityMeter.default_connections_for``). Every place that resolves default connections asks here: the
+        simulator's ``connect_automatically``, and a declarative file's bare items, observer selections and meter
+        landings.
+
+        Args:
+            source_component: The component of the run whose outputs the connections would read.
+
+        Returns:
+            The declared connections, in declaration order; empty when this component reads nothing of it.
+        """
+        return list(self.dynamic_default_connections.get(source_component.get_classname(), []))
+
     def get_dynamic_default_connections(self, source_component: Component) -> List[DynamicComponentConnection]:
-        """Gets the dynamic default connections for this component."""
-        source_classname: str = source_component.get_classname()
+        """The default connections from one component of the run, bound to it by its instance name.
 
-        target_classname: str = self.get_classname()
+        Args:
+            source_component: The component of the run whose outputs the connections read.
 
-        if source_classname not in self.dynamic_default_connections:
+        Returns:
+            Copies of :meth:`default_connections_for` that carry the source's instance name and the source itself.
+
+        Raises:
+            ValueError: If this component declares no default connection from the source.
+        """
+        connections = self.default_connections_for(source_component)
+        if not connections:
             raise ValueError(
                 "No dynamic default connections for "
-                + source_classname
+                + source_component.get_classname()
                 + " in the connections for "
-                + target_classname
+                + self.get_classname()
                 + ". content:\n"
                 + str(self.dynamic_default_connections)
             )
-        connections = self.dynamic_default_connections[source_classname]
         new_connections: List[DynamicComponentConnection] = []
         for connection in connections:
             connection_copy = dc.replace(connection)

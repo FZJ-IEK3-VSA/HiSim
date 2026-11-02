@@ -110,6 +110,7 @@ def test_the_minimal_mockup_builds_runs_and_writes_results(tmp_path: Path) -> No
         "weather",
         "occupancy",
         "building",
+        "heating_curve",
         "hds_controller",
         "hds",
         "boiler",

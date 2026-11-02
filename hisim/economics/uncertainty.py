@@ -1,4 +1,4 @@
-"""The uncertainty band type of the lifecycle cost engine (cost_spec.md §3.9).
+"""The uncertainty band type of the lifecycle cost engine.
 
 Every monetary value is an `UncertainValue`, a (minimum, best_estimate, maximum) band. The engine evaluates three
 coherent worlds, called slots (LOW, BEST_ESTIMATE, HIGH), in one pass; arithmetic is slot-wise. LOW and HIGH are
@@ -15,7 +15,7 @@ from typing import Any, ClassVar, Iterable, Optional, Union
 
 
 class Slot(str, Enum):
-    """The three coherent evaluation worlds of §3.9.
+    """The three coherent evaluation worlds.
 
     LOW is the optimistic world (every cost-type parameter at its minimum, every revenue-type parameter at its
     maximum), HIGH its mirror image, and BEST_ESTIMATE the headline world. A slot belongs to the whole evaluation:
@@ -32,7 +32,7 @@ class UncertainValue:
     """A monetary figure with an uncertainty band; invariant minimum <= best_estimate <= maximum.
 
     The universal value type of the engine: prices, cash-flow entries, NPVs, KPIs and export cells are all bands, so
-    uncertainty is never dropped. Frozen and hashable, so the provenance ledger can intern values (§3.10).
+    uncertainty is never dropped. Frozen and hashable, so the provenance ledger can intern values.
 
     The fields are the values in the three worlds after any revenue mirroring: `minimum` is the LOW-world value, which
     for a revenue is the largest income (see `as_revenue`). Arithmetic is slot-wise (`__add__`, `scale`,
@@ -74,7 +74,7 @@ class UncertainValue:
 
     @staticmethod
     def from_json(value: Any, context: str = "") -> "UncertainValue":
-        """Parse a JSON value: a bare number is exact, an object declares a band (§3.9).
+        """Parse a JSON value: a bare number is exact, an object declares a band.
 
         Every monetary field of the data files and stored results accepts `0.30` or `{"min": .., "best_estimate": ..,
         "max": ..}`. The constructor validates ordering, so a malformed band fails at load time.
@@ -153,7 +153,7 @@ class UncertainValue:
         return self.best_estimate
 
     def as_revenue(self) -> "UncertainValue":
-        """Mirror the band for a revenue-type parameter: negate it and swap the ends (§3.9).
+        """Mirror the band for a revenue-type parameter: negate it and swap the ends.
 
         Example: a feed-in revenue stated as {min 100, best 120, max 150} becomes the entry band {min -150, best -120,
         max -100}.
@@ -177,9 +177,9 @@ class UncertainValue:
         )
 
     def __sub__(self, other: "UncertainValue") -> "UncertainValue":
-        """Return the slot-wise difference, re-sorted into an envelope (§3.9).
+        """Return the slot-wise difference, re-sorted into an envelope.
 
-        Variants are compared within the same world (§3.7), so a price band present in both cancels. When the
+        Variants are compared within the same world, so a price band present in both cancels. When the
         subtrahend's band is wider than the minuend's, the LOW-world delta can exceed the HIGH-world delta (e.g.
         dropping a very uncertain gas bill), so the three deltas are sorted: `minimum` means the best-case delta, not
         the LOW-world delta.
@@ -227,7 +227,7 @@ class UncertainValue:
         )
 
     def clamp_upper(self, cap: "UncertainValue") -> "UncertainValue":
-        """Cap each slot separately (§3.9, §5.4).
+        """Cap each slot separately.
 
         A cap such as an eligible-cost ceiling may bind in the HIGH world and not in LOW; the subsidy audit and the
         input audit report which slots it bound in. Used by the subsidy engine and the German levy rules (`actors.py`).
@@ -243,7 +243,7 @@ class UncertainValue:
         """Return the slot-wise sum; an empty input yields the exact zero band.
 
         Folds left in iteration order, so totals are reproducible bit for bit and match the order the audit and
-        reconciliation checks (§7.4) use.
+        reconciliation checks use.
         """
         total = UncertainValue.ZERO
         for value in values:

@@ -403,7 +403,7 @@ class TestTheDocumentShape:
 
     @pytest.mark.parametrize("variant", ["reference", "plan"])
     def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, document, variant):
-        """hisim-cyc.6: ``monthly_equivalent_cost_in_euro`` is EAC / 12 in every slot.
+        """hisim-economics-engine-cyc.6: ``monthly_equivalent_cost_in_euro`` is EAC / 12 in every slot.
 
         Twelve is written as a literal on purpose: comparing with the constant the document used
         would pass whatever that constant said.
@@ -501,7 +501,7 @@ class TestTheDocumentShape:
         """Version 8: every ``by_subject`` row's required ``source`` (``kpi_address_spec.md``).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
-        the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
+        the format with hisim-economics-engine-cyc.5's awarded-row rules and hisim-economics-engine-cyc.6's required monthly keys;
         version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
         ``by_subject`` row; version 4 (2026-09-26, renovisorissues #52) changes what
         ``parameters.escalation.energy`` means — every carrier priced, not only the stated ones —
@@ -515,7 +515,7 @@ class TestTheDocumentShape:
         ``max_amount_in_euro`` on every ``subsidies[]`` row; version 7 (2026-09-27, renovisorissues
         #59, hisim-ryw1) requires ``replaces_subjects`` on every ``by_subject`` row, and its
         reference renews the building fabric, so its reference totals are not a version 6's;
-        version 8 (2026-10-03, hisim-b3b.1) requires ``source`` on every ``by_subject`` row. A
+        version 8 (2026-10-03, hisim-declarative-systems-b3b.1) requires ``source`` on every ``by_subject`` row. A
         document of that shape stating an older version would tell a consumer it could skip what
         the later versions require.
         """
@@ -958,7 +958,7 @@ class TestBandOrder:
 
 
 class TestSupportIsStatedOnce:
-    """The ``Subsidies`` stack and the ``subsidies[]`` rows state the same support (hisim-cyc.5).
+    """The ``Subsidies`` stack and the ``subsidies[]`` rows state the same support (hisim-economics-engine-cyc.5).
 
     A plan priced with subsidies on and no catalogue used to run the engine's §10.1 flat shim,
     which booked a grant into the year stacks and the NPV while the rows said nothing had been

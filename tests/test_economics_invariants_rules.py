@@ -1,4 +1,4 @@
-"""Property tests: tariff billing and subsidy bounds (cost_spec.md §5, §8).
+"""Property tests: tariff billing and subsidy bounds (roadmap/cost_spec.md §5, §8).
 
 Second of the three invariant test files (split per the PR-3 review's 500-line rule):
 billing monotonicity and decomposition properties across random contracts, and the subsidy

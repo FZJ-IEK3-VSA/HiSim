@@ -14,5 +14,5 @@
   "source_ids": [
     "src_expert_engine_defaults"
   ],
-  "notes": "Per-asset-class table deliberately empty until reviewed sources exist (cost_spec.md Q2)."
+  "notes": "Per-asset-class table deliberately empty until reviewed sources exist (roadmap/cost_spec.md Q2)."
 }

@@ -5,13 +5,16 @@ It iterates over all components in each timestep until convergence and loops ove
 import os
 import datetime
 import enum
+import math
 from dataclasses import dataclass
-from typing import Callable, List, Tuple, Optional, Dict, Any, Type, Union
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
 import time
+import numpy as np
 import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
+from hisim.evaluation_order import EvaluationOrder, L2Order, PhysicsOrder
 from hisim import sim_repository
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -24,13 +27,13 @@ from hisim.economics.facts import (
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
-from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
+from hisim.loadtypes import OutputAggregation
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.write_guard import CalculationDirectories
 
 
 def _has_cost_facts_source(component_class: type) -> bool:
-    """Whether anything can produce `ComponentCostFacts` for this class (cost_spec.md §9.1).
+    """Whether anything can produce `ComponentCostFacts` for this class (roadmap/cost_spec.md §9.1).
 
     Mirrors the precedence `adapter.extract_cost_facts` applies at postprocessing time, so the
     pre-run refusal and the D7 abort can never disagree about which classes have a facts source:
@@ -161,6 +164,24 @@ class Simulator:
     with convergence checking, and post-processing of results.
     """
 
+    #: The order in which the kinds of components are evaluated within a pass (:meth:`evaluation_positions`): what
+    #: reads nothing first, then the controllers from the coordinating level down, so that a command reaches its
+    #: device in the same pass, then the devices, and the meters, which nothing reads, last. Each kind is a kind base
+    #: class of :mod:`hisim.component` (:class:`hisim.component.ComponentKinds`).
+    EVALUATION_ORDER_OF_KINDS: ClassVar[Tuple[Type[cp.Component], ...]] = (
+        cp.DataSourceComponent,
+        cp.L2ControllerComponent,
+        cp.L1ControllerComponent,
+        cp.PhysicsComponent,
+        cp.MeterComponent,
+    )
+
+    #: How many passes one time step may take per 60 s of step length before the simulator gives up on it. It is
+    #: also the smallest limit: steps of 60 s and shorter get 100 passes, a 900 s step 1500, a 3600 s step 6000.
+    #: A loop whose error shrinks by a fixed factor per pass needs a number of passes that grows about linearly with
+    #: the step length, because a store is turned over more often in a longer step and contracts more slowly.
+    MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH: ClassVar[int] = 100
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -188,11 +209,17 @@ class Simulator:
         # debugging. Enabled by the Python entry point to mirror the JSON path.
         self._force_log_connections: bool = force_log_connections
         self._simulation_parameters: SimulationParameters
+        #: The most passes one time step may take (:meth:`maximum_passes_for_step_length`). It is set from the step
+        #: length whenever the simulation parameters are set, so the convergence loop only compares against it.
+        self.maximum_passes_per_timestep: int = self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH
         if my_simulation_parameters is not None:
             if self._force_log_connections:
                 my_simulation_parameters.log_connections = True
             self._simulation_parameters = my_simulation_parameters
             log.logger.logging_level = self._simulation_parameters.logging_level
+            self.maximum_passes_per_timestep = self.maximum_passes_for_step_length(
+                self._simulation_parameters.seconds_per_timestep
+            )
         self.register_run_locations()
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
@@ -224,6 +251,8 @@ class Simulator:
         #: (:meth:`add_progress_callback`). Empty unless a caller registers one, and then the loop
         #: behaves and logs exactly as it always did.
         self._progress_callbacks: List[ProgressCallback] = []
+        #: The wrapped components in the order a pass evaluates them (:meth:`evaluation_plan`).
+        self._evaluation_plan: Optional[List[ComponentWrapper]] = None
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -269,7 +298,30 @@ class Simulator:
             if self._force_log_connections:
                 self._simulation_parameters.log_connections = True
             log.logger.logging_level = self._simulation_parameters.logging_level
+            self.maximum_passes_per_timestep = self.maximum_passes_for_step_length(
+                self._simulation_parameters.seconds_per_timestep
+            )
             self.register_run_locations()
+
+    @classmethod
+    def maximum_passes_for_step_length(cls, seconds_per_timestep: int) -> int:
+        """Return the most passes one time step of the given length may take before the run aborts.
+
+        The limit is ``MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH`` passes per 60 s of step length, rounded up, and never
+        less than that constant: 100 passes at 60 s and below, 102 at 61 s, 1500 at 900 s and 6000 at 3600 s.
+
+        A loop whose error shrinks by a factor per pass needs a number of passes that grows about linearly with the
+        step length, so a fixed limit aborts coarse steps that would converge. The limit is computed once, when the
+        simulation parameters are set, so the convergence loop does no extra work per pass.
+
+        Args:
+            seconds_per_timestep: The step length in seconds.
+
+        Returns:
+            The pass limit for one time step.
+        """
+        passes_for_step_length = math.ceil(cls.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH * seconds_per_timestep / 60)
+        return max(cls.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH, passes_for_step_length)
 
     def get_simulation_parameters(self) -> SimulationParameters:
         """Returns the simulation parameters for exporting them to JSON.
@@ -310,9 +362,13 @@ class Simulator:
         Raises:
             ValueError: If simulation parameters are not initialized or a duplicate
                 component name is added.
+            ComponentKindNotDeclaredError: If the component's class inherits no kind base class, or more than one
+                (:meth:`hisim.component.ComponentKinds.of`).
         """
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # Refused here rather than at the first step, so a class without a kind fails while the system is built.
+        cp.ComponentKinds.of(type(component))
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
@@ -323,15 +379,22 @@ class Simulator:
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
         wrap.register_component_outputs(self.all_outputs, wrapped_components_so_far=self.wrapped_components)
         self.wrapped_components.append(wrap)
+        # A plan computed before this component was added would leave it out of every pass.
+        self._evaluation_plan = None
         if component.component_name in self.config_dictionary:
             raise ValueError(f"duplicate component name : {component.component_name}")
         self.config_dictionary[component.component_name] = component.config
 
     @utils.measure_execution_time
     def connect_all_components(self) -> None:
-        """Connects the inputs from every component to the corresponding outputs."""
+        """Connects the inputs from every component to the corresponding outputs, and drops a cached evaluation plan.
+
+        The plan reads each component's sources from the outputs its inputs resolved to (:meth:`evaluation_plan`), so
+        a plan computed before the inputs were connected would order nothing by the wiring.
+        """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
+        self._evaluation_plan = None
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:
@@ -371,6 +434,15 @@ class Simulator:
         Following up, all components have their states restored and simulated respectively.
         Convergence is dependent on the i_restore and i_simulate of the components and how they
         are connected to each other.
+
+        ``previous_stsv`` is the vector the previous step converged to (all zeros at step 0), so
+        the first pass reads the previous step's value from every output computed later in the
+        order. It is cloned before the first write and is never changed here.
+
+        Raises:
+            ValueError: If no output is defined, or if the step has not converged after more than
+                ``maximum_passes_per_timestep`` passes (:meth:`maximum_passes_for_step_length`). The message names
+                the step, the step length, the limit and every output that still changed on the last pass.
         """
 
         # Save states of all components
@@ -386,6 +458,7 @@ class Simulator:
 
         # Creates List with values
         stsv = previous_stsv.clone()
+        evaluation_plan = self.evaluation_plan()
         # Creates a buffer List with values
         previous_values = previous_stsv.clone()
         iterative_tries = 0
@@ -394,7 +467,7 @@ class Simulator:
         # Starts loop
         while continue_calculation:
             # Loops through components
-            for wrapped_component in self.wrapped_components:
+            for wrapped_component in evaluation_plan:
                 # Executes restore state for each component
                 wrapped_component.restore_state()
                 # Executes i_simulate for component
@@ -414,9 +487,14 @@ class Simulator:
                     filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
-            if iterative_tries > 100:
+            if iterative_tries > self.maximum_passes_per_timestep:
                 list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                raise ValueError(f"More than 100 tries in time step {timestep}\n{list_of_changed_values}")
+                raise ValueError(
+                    f"More than {self.maximum_passes_per_timestep} passes in time step {timestep} "
+                    f"({self._simulation_parameters.seconds_per_timestep} s steps; the limit is "
+                    f"{self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes per 60 s of step length)\n"
+                    f"{list_of_changed_values}"
+                )
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -424,6 +502,131 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
         return (stsv, iterative_tries, force_convergence)
+
+    @staticmethod
+    def evaluation_positions(
+        kinds: Sequence[Type[cp.Component]], sources: Sequence[AbstractSet[int]]
+    ) -> EvaluationOrder:
+        """Return the positions of components in the order a pass evaluates them, from their kinds and their wiring.
+
+        The components are evaluated kind by kind, in :attr:`EVALUATION_ORDER_OF_KINDS`. Components of one kind keep
+        the order they were added in, with two exceptions. An L2 controller that reads another L2 controller's output
+        comes after it (:class:`hisim.evaluation_order.L2Order`). Among the physics, every device an L1 controller
+        commands goes before the other physics the controller reads (:class:`hisim.evaluation_order.PhysicsOrder`).
+        For example, the kinds (physics, L1 controller, data source, physics) without wiring give the positions
+        (2, 1, 0, 3): the data source, the controller, then the two devices in their order. If the controller at 1
+        commands the device at 3 and reads the one at 0, the positions are (2, 1, 3, 0). The kinds (L2, L2) where the
+        first reads the second give (1, 0).
+
+        Why: a controller evaluated after its device would pair the device's answer to its previous command with its
+        newer one, and one whose store is evaluated before its device pairs the device's report with the store's
+        answer of the pass before; an iteration that pairs them so can circle its fixed point instead of settling. An
+        L2 signal read by another L2 controller, such as the energy manager's raise the heating curve applies, reaches
+        the reader, and through it the L1 controllers, in the same pass.
+
+        Args:
+            kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
+                the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+
+        Returns:
+            The positions into ``kinds`` in evaluation order, the physics positions whose constraints form a cycle
+            and the L2 positions that read one another in a cycle, both of which keep the order they were added in.
+
+        Raises:
+            ValueError: If a kind is not one of :attr:`EVALUATION_ORDER_OF_KINDS`, or ``kinds`` and ``sources``
+                differ in length.
+        """
+        rank_of_kind = {kind: rank for rank, kind in enumerate(Simulator.EVALUATION_ORDER_OF_KINDS)}
+        unknown = [kind.__name__ for kind in kinds if kind not in rank_of_kind]
+        if unknown:
+            raise ValueError(f"Not kind base classes, so not placeable in a pass: {unknown}.")
+        by_kind = sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
+        l2 = L2Order.ordered(kinds, sources)
+        ordered_l2 = iter(l2.positions)
+        physics = PhysicsOrder.ordered(kinds, sources)
+        reordered_physics = iter(physics.positions)
+        positions: List[int] = []
+        for position in by_kind:
+            if kinds[position] is cp.L2ControllerComponent:
+                positions.append(next(ordered_l2))
+            elif kinds[position] is cp.PhysicsComponent:
+                positions.append(next(reordered_physics))
+            else:
+                positions.append(position)
+        return EvaluationOrder(
+            positions=tuple(positions),
+            physics_cycles=physics.physics_cycles,
+            l2_cycles=l2.l2_cycles,
+        )
+
+    def evaluation_plan(self) -> List[ComponentWrapper]:
+        """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.
+
+        Computed once, at the first time step, from the kinds and the resolved wiring (:meth:`evaluation_positions`).
+        For example, a setup that adds a hot-water tank, its boiler and the boiler's controller gets the plan
+        controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
+        columns keep the order they were added in. A group of physics components whose constraints form a cycle, or
+        of L2 controllers that read one another in a cycle, is evaluated as one block in the order it was added in,
+        and a warning names its components. Only a member of such a group waits for a component evaluated after it.
+
+        A component's sources are read from the outputs its inputs resolved to, so an input that stayed unconnected
+        (an optional one, or one the parameters allow to stay unconnected) adds no ordering constraint.
+
+        Raises:
+            ValueError: If an input resolved to an output that no added component registered; its ordering constraint
+                would otherwise be lost without a word.
+
+        Returns:
+            The wrapped components in evaluation order; the same list on every later call until a component is added
+            or the inputs are connected (:meth:`add_component` and :meth:`connect_all_components` drop the plan).
+        """
+        if self._evaluation_plan is None:
+            components = [wrapped_component.my_component for wrapped_component in self.wrapped_components]
+            # An output is keyed by the object itself: an input resolves to the very output its component registered.
+            position_of_output = {
+                output: position
+                for position, wrapped_component in enumerate(self.wrapped_components)
+                for output in wrapped_component.component_outputs
+            }
+            kinds = [cp.ComponentKinds.of(type(component)) for component in components]
+            unregistered = [
+                component_input.fullname
+                for component in components
+                for component_input in component.inputs
+                if component_input.source_output is not None and component_input.source_output not in position_of_output
+            ]
+            if unregistered:
+                raise ValueError(
+                    f"The inputs {unregistered} resolved to outputs that no added component registered, so the "
+                    "evaluation order cannot place their sources."
+                )
+            sources = [
+                frozenset(
+                    position_of_output[component_input.source_output]
+                    for component_input in component.inputs
+                    if component_input.source_output is not None
+                )
+                for component in components
+            ]
+            order = self.evaluation_positions(kinds, sources)
+            for cycle in order.physics_cycles:
+                names = ", ".join(components[position].component_name for position in cycle)
+                log.warning(
+                    f"The physics components {names} require one another to be evaluated first: each is a device "
+                    "of an L1 controller that reads another of them. They keep the order they were added in, so a "
+                    "controller among them may pair its device's report with a store's answer of the pass before, "
+                    "and its iteration may circle instead of settling."
+                )
+            for cycle in order.l2_cycles:
+                names = ", ".join(components[position].component_name for position in cycle)
+                log.warning(
+                    f"The L2 controllers {names} read one another in a cycle. They keep the order they were added "
+                    "in, so each of them that reads a later one applies its signal of the pass before, and the "
+                    "iteration may need more passes or circle instead of settling."
+                )
+            self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
+        return self._evaluation_plan
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory, creating it if necessary.
@@ -513,7 +716,7 @@ class Simulator:
     def check_cost_declarations(self) -> None:
         """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
 
-        The completeness check cost_spec.md §9.2 asks for "at simulation start, not end", and this
+        The completeness check roadmap/cost_spec.md §9.2 asks for "at simulation start, not end", and this
         method answers it for the two defects that are visible without the cost database:
 
         1. a class that declares no `cost_relevance` at all and therefore keeps the `UNDECLARED`
@@ -594,7 +797,7 @@ class Simulator:
             raise ValueError("Not a single component was defined. Quitting.")
 
         # A lifecycle-cost run needs every component to have declared a cost role; refuse now
-        # rather than after hours of simulation (cost_spec.md §9.2).
+        # rather than after hours of simulation (roadmap/cost_spec.md §9.2).
         self.check_cost_declarations()
 
         # prepare logging and simulation directory
@@ -622,8 +825,12 @@ class Simulator:
         last_step: int = 0
         starttime = datetime.datetime.now()
         total_iteration_tries_since_last_msg = 0
+        # The end-of-run summary of the pass counts: updated once per step, nothing per pass.
+        steps_above_minimum_pass_limit = 0
+        largest_pass_count = 0
 
-        # Creates empty list with values to get started
+        # All outputs start at zero for the first step only; every later step starts from the
+        # values the step before it converged to (the warm start below).
         number_of_outputs = len(self.all_outputs)
         stsv = cp.SingleTimeStepValues(number_of_outputs)
 
@@ -634,11 +841,17 @@ class Simulator:
                 iteration_tries,
                 force_convergence,
             ) = self.process_one_timestep(step, stsv)
-            # Comment this out to always begin the convergence process with the previously converged state
-            # stsv = cp.SingleTimeStepValues(number_of_outputs)
+            # Warm start: the next step's first pass reads the values this step converged to, so a
+            # component that reads an output computed later in the order sees the previous step's
+            # value on that pass instead of 0. No copy is needed: process_one_timestep clones its
+            # argument before it writes, so the values appended below are never changed afterwards.
+            stsv = resulting_stsv
 
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
+            largest_pass_count = max(largest_pass_count, iteration_tries)
+            if iteration_tries > self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH:
+                steps_above_minimum_pass_limit += 1
 
             # Appends
             all_result_lines.append(resulting_stsv.values)
@@ -657,6 +870,7 @@ class Simulator:
                 )
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
+        self.log_pass_count_summary(steps_above_minimum_pass_limit, largest_pass_count)
         # The loop is done; what follows, up to the finished flag, is postprocessing.
         self._notify_progress(ProgressEvent.LOOP_END, self._simulation_parameters.timesteps, 0.0)
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
@@ -678,14 +892,42 @@ class Simulator:
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")
 
+    def log_pass_count_summary(self, steps_above_minimum_pass_limit: int, largest_pass_count: int) -> None:
+        """Log one line on how many passes the time steps of the run needed.
+
+        The line names the number of steps that needed more than ``MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH`` passes,
+        the largest pass count of any step and the run's pass limit, for example "Pass counts: 3 of 96 time steps
+        needed more than 100 passes; the largest pass count was 414 (the limit is 1500 passes at 900 s steps)." It
+        is a warning when any step needed more than 100 passes, and information otherwise.
+
+        The limit grows with the step length, so a coarse run can converge on steps that a 60 s run would abort;
+        the line shows how close the run came to its limit and how often it needed more than a 60 s step may take.
+
+        Args:
+            steps_above_minimum_pass_limit: The number of time steps that needed more than 100 passes.
+            largest_pass_count: The largest number of passes any time step needed.
+        """
+        message = (
+            f"Pass counts: {steps_above_minimum_pass_limit} of {self._simulation_parameters.timesteps} time steps "
+            f"needed more than {self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes; the largest pass count was "
+            f"{largest_pass_count} (the limit is {self.maximum_passes_per_timestep} passes at "
+            f"{self._simulation_parameters.seconds_per_timestep} s steps)."
+        )
+        if steps_above_minimum_pass_limit > 0:
+            log.warning(message)
+        else:
+            log.information(message)
+
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
         """Assembles simulation results into a DataFrame and prepares data for post-processing.
 
         Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
         simulation start/end dates and timestep size, and optionally computes monthly, daily,
-        hourly, and cumulative aggregations. Returns a PostProcessingDataTransfer object
-        containing all results and metadata.
+        hourly, and cumulative aggregations: all four for the monthly and scenario-evaluation
+        options, only the cumulative one (the sums and means over the run) for
+        ``MAKE_NETWORK_CHARTS``. Returns a PostProcessingDataTransfer object containing all
+        results and metadata.
 
         Args:
             all_result_lines: List of result arrays, one per timestep.
@@ -730,10 +972,19 @@ class Simulator:
                 results_merged_hourly,
             ) = self.get_std_results(self.results_data_frame)
         else:
-            results_merged_cumulative = None
             results_merged_monthly = None
             results_merged_daily = None
             results_merged_hourly = None
+            if (
+                postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS
+                in self._simulation_parameters.post_processing_options
+            ):
+                # The network chart with results labels each connection with its output's sum or mean
+                # over the run; only these totals are computed, not the resampled frames.
+                log.information("Computing the sums and means over the run for the network charts")
+                results_merged_cumulative = self.get_run_totals(self.results_data_frame, self.all_outputs)
+            else:
+                results_merged_cumulative = None
 
         # A run nobody named is named after the module it ran: an empty scenario column is a
         # row no scenario evaluation can tell apart from the next unnamed run's.
@@ -813,8 +1064,18 @@ class Simulator:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into aggregated DataFrames for post-processing.
 
-        Computes monthly, daily, hourly, and cumulative aggregations, using mean
-        aggregation for units in UNITS_USING_MEAN_AGGREGATION and sum otherwise.
+        Computes the monthly, daily, hourly and cumulative (whole-run) values of every output by the
+        output's declared aggregation (:class:`~hisim.loadtypes.OutputAggregation`): ``SUM`` sums
+        the time steps of a period, ``MEAN`` averages them, ``LAST`` takes the period's last time
+        step (a running total at the end of the month), and ``NONE`` gives NaN, since no aggregate
+        of such an output means anything. An output that declares no aggregation follows its unit
+        (mean for W, °C, ..., sum for Wh, ...), as all outputs did before outputs declared one.
+
+        The cumulative frame comes from :meth:`get_run_totals`, which a run with only
+        ``MAKE_NETWORK_CHARTS`` calls on its own.
+
+        When the simulation already runs on hourly time steps, the hourly frame is the time series
+        itself, for every output: nothing is aggregated, so nothing is left out either.
 
         Args:
             results_data_frame: DataFrame with raw per-timestep simulation results.
@@ -822,79 +1083,57 @@ class Simulator:
         Returns:
             A tuple of (cumulative, monthly, daily, hourly) DataFrames.
         """
-
-        units_mean = UNITS_USING_MEAN_AGGREGATION
         use_hourly_resample = self._simulation_parameters.seconds_per_timestep != 3600
 
-        # Split columns once by aggregation rule and resample each sub-DataFrame
-        # in a single call. ``mean``/``sum`` are column-wise reductions, so this
-        # is numerically identical to the previous per-column resampling but
-        # issues ~6 resample calls instead of ~3 * n_columns (GitLab #1687).
-        # Selection and recombination are positional (``iloc``) so the result is
-        # independent of column-label uniqueness.
+        # Split the columns once by aggregation and resample each group in a single call
+        # instead of once per column (GitLab #1687). Selection and recombination are
+        # positional (``iloc``) so the result is independent of column-label uniqueness.
         column_count = len(results_data_frame.columns)
-        mean_indices = [
-            i for i in range(column_count) if self.all_outputs[i].unit in units_mean
-        ]
-        sum_indices = [
-            i for i in range(column_count) if self.all_outputs[i].unit not in units_mean
-        ]
-        mean_df = results_data_frame.iloc[:, mean_indices]
-        sum_df = results_data_frame.iloc[:, sum_indices]
-        log.debug(
-            f"get_std_results: {len(mean_indices)} mean-aggregated and "
-            f"{len(sum_indices)} sum-aggregated of {column_count} columns"
+        indices_by_aggregation: Dict[OutputAggregation, List[int]] = {
+            aggregation: [i for i in range(column_count) if self.all_outputs[i].aggregation == aggregation]
+            for aggregation in OutputAggregation
+        }
+        frames_by_aggregation: Dict[OutputAggregation, pd.DataFrame] = {
+            aggregation: results_data_frame.iloc[:, indices]
+            for aggregation, indices in indices_by_aggregation.items()
+        }
+        group_sizes = ", ".join(
+            f"{len(indices)} {aggregation.value}" for aggregation, indices in indices_by_aggregation.items()
         )
+        log.debug(f"get_std_results: {group_sizes} of {column_count} columns")
 
-        def _resample_group(frame: pd.DataFrame, freq: str, how: str) -> pd.DataFrame:
+        def _resample_group(frame: pd.DataFrame, freq: str, aggregation: OutputAggregation) -> pd.DataFrame:
             # resample on a column-less frame is valid but pointless; skip it to
             # avoid creating a spurious (empty) index that misaligns on concat.
             if frame.shape[1] == 0:
                 return pd.DataFrame(columns=frame.columns)
-            return frame.resample(freq).agg(how)
+            if aggregation == OutputAggregation.NONE:
+                period_index = frame.iloc[:, :1].resample(freq).last().index
+                return pd.DataFrame(np.nan, index=period_index, columns=frame.columns)
+            return frame.resample(freq).agg(aggregation.value)
 
-        monthly_mean = _resample_group(mean_df, "ME", "mean")
-        monthly_sum = _resample_group(sum_df, "ME", "sum")
-        daily_mean = _resample_group(mean_df, "D", "mean")
-        daily_sum = _resample_group(sum_df, "D", "sum")
+        def _aggregate(freq: str) -> List[pd.DataFrame]:
+            return [_resample_group(frame, freq, aggregation) for aggregation, frame in frames_by_aggregation.items()]
+
+        # Recombine the groups in the original column order. After the concat the columns
+        # sit group by group, so map every original index back to its concatenated position
+        # and select positionally.
+        concatenated_order = [index for indices in indices_by_aggregation.values() for index in indices]
+        position_in_combined = {original_index: position for position, original_index in enumerate(concatenated_order)}
+        reorder = [position_in_combined[original_index] for original_index in range(column_count)]
+
+        def _combine_in_order(group_frames: List[pd.DataFrame]) -> pd.DataFrame:
+            return pd.concat(group_frames, axis=1).iloc[:, reorder]
+
+        results_merged_monthly = _combine_in_order(_aggregate("ME"))
+        results_merged_daily = _combine_in_order(_aggregate("D"))
         if use_hourly_resample:
-            hourly_mean = _resample_group(mean_df, "60min", "mean")
-            hourly_sum = _resample_group(sum_df, "60min", "sum")
+            results_merged_hourly = _combine_in_order(_aggregate("60min"))
         else:
-            # No resampling needed when the simulation already runs on an hourly
-            # grid; pass the raw slices through unchanged.
-            hourly_mean = mean_df
-            hourly_sum = sum_df
+            # No resampling needed when the simulation already runs on an hourly grid.
+            results_merged_hourly = results_data_frame
 
-        # Cumulative scalars (``.mean()``/``.sum()``) are cheap column-wise
-        # reductions; keep them per-column to preserve the previous scalar
-        # aggregation (and dict-keyed column order) exactly.
-        cumulative_data: Dict[Any, Any] = {}
-        for i, column_name in enumerate(results_data_frame.columns):
-            col_data = results_data_frame.iloc[:, i]
-            if self.all_outputs[i].unit in units_mean:
-                cumulative_data[column_name] = col_data.mean()
-            else:
-                cumulative_data[column_name] = col_data.sum()
-
-        # Recombine the mean/sum groups in the original column order. After the
-        # concat the columns sit in [mean_indices..., sum_indices...] order, so
-        # map every original index back to its concatenated position and select
-        # positionally.
-        def _combine_in_order(mean_frame: pd.DataFrame, sum_frame: pd.DataFrame) -> pd.DataFrame:
-            combined = pd.concat([mean_frame, sum_frame], axis=1)
-            position_in_combined: Dict[int, int] = {}
-            for position, original_index in enumerate(mean_indices):
-                position_in_combined[original_index] = position
-            for position, original_index in enumerate(sum_indices):
-                position_in_combined[original_index] = len(mean_indices) + position
-            reorder = [position_in_combined[original_index] for original_index in range(column_count)]
-            return combined.iloc[:, reorder]
-
-        results_merged_monthly = _combine_in_order(monthly_mean, monthly_sum)
-        results_merged_daily = _combine_in_order(daily_mean, daily_sum)
-        results_merged_hourly = _combine_in_order(hourly_mean, hourly_sum)
-        results_merged_cumulative = pd.DataFrame([cumulative_data])
+        results_merged_cumulative = Simulator.get_run_totals(results_data_frame, self.all_outputs)
 
         return (
             results_merged_cumulative,
@@ -902,6 +1141,56 @@ class Simulator:
             results_merged_daily,
             results_merged_hourly,
         )
+
+    @staticmethod
+    def get_run_totals(results_data_frame: pd.DataFrame, all_outputs: List[cp.ComponentOutput]) -> pd.DataFrame:
+        """Reduce every result column to one value over the whole run, by the output's declared aggregation.
+
+        Each column is reduced by :meth:`aggregate_whole_run` with its output's
+        :class:`~hisim.loadtypes.OutputAggregation`. Example: a heat pump's electricity in kWh per
+        timestep (``SUM``) sums to the kWh of the run, its flow temperature in °C (``MEAN``) gives the
+        mean temperature, a meter's running total (``LAST``) its final reading and a controller mode
+        (``NONE``) NaN. The network chart with results labels each connection with this value, and the
+        scenario evaluation exports it; :meth:`get_std_results` returns it as its first frame. It is one
+        reduction per column (15 ms for a year at 15 minutes with 158 outputs), so a run that needs only
+        the totals does not pay for the hourly, daily and monthly resamples.
+
+        Args:
+            results_data_frame: The per-timestep results, one column per output.
+            all_outputs: The outputs in the order of the columns; their aggregations choose the reduction.
+
+        Returns:
+            A one-row DataFrame with the columns of ``results_data_frame``, in the same order.
+        """
+        # Kept per column so the dict-keyed column order is the original one.
+        cumulative_data: Dict[Any, Any] = {}
+        for i, column_name in enumerate(results_data_frame.columns):
+            cumulative_data[column_name] = Simulator.aggregate_whole_run(
+                results_data_frame.iloc[:, i], all_outputs[i].aggregation
+            )
+        return pd.DataFrame([cumulative_data])
+
+    @staticmethod
+    def aggregate_whole_run(column: pd.Series, aggregation: OutputAggregation) -> float:
+        """Return the value of one output over the whole run, by its aggregation.
+
+        Example: a power in W (``MEAN``) gives its mean, an energy in Wh (``SUM``) its total, a
+        running total (``LAST``) its final value, and a controller state (``NONE``) NaN.
+
+        Args:
+            column: The output's time series.
+            aggregation: How the output's time steps are combined.
+
+        Returns:
+            The run value.
+        """
+        if aggregation == OutputAggregation.SUM:
+            return float(column.sum())
+        if aggregation == OutputAggregation.MEAN:
+            return float(column.mean())
+        if aggregation == OutputAggregation.LAST:
+            return float(column.iloc[-1])
+        return float("nan")
 
     def connect_everything_automatically(
         self,
@@ -920,60 +1209,74 @@ class Simulator:
                 target has no default connections defined.
         """
 
-        # prepare the target components' default connection lists
-        target_default_connection_dict: Union[
-            Dict[str, List[cp.ComponentConnection]],
-            Dict[str, List[dcp.DynamicComponentConnection]],
-        ]
-
-        # check if target component is a normal or a dynamic component and get all default connections
         if isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = target_component.dynamic_default_connections
-
-        elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = target_component.default_connections
-
-        else:
+            self.connect_dynamic_component_automatically(source_component_list, target_component)
+            return
+        if not isinstance(target_component, cp.Component):
             raise TypeError(
                 f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
             )
+        target_default_connection_dict: Dict[str, List[cp.ComponentConnection]] = target_component.default_connections
 
         # check if target component has any default connections (otherwise automatic connection cannot be made)
-        if bool(target_default_connection_dict) is True:
-            # check if at least one source_component is in the target default connections
-            if (
-                any(
-                    source_component.get_classname() in target_default_connection_dict
-                    for source_component in source_component_list
-                )
-                is False
-            ):
-                raise KeyError(
-                    f"No component in the system setup matches the default connections of {target_component.component_name}."
-                )
-
-            # go through all registered components
-            for source_component in source_component_list:
-                source_component_classname = source_component.get_classname()
-
-                # if the source components' classname is found in the target components' default connection dict, a connection is made
-                if source_component_classname in target_default_connection_dict.keys():
-                    if isinstance(target_component, dcp.DynamicComponent):
-                        dynamic_connections = target_component.get_dynamic_default_connections(
-                            source_component=source_component
-                        )
-
-                        target_component.connect_with_dynamic_connections_list(
-                            dynamic_component_connections=dynamic_connections
-                        )
-
-                    if isinstance(target_component, cp.Component) and not isinstance(
-                        target_component, dcp.DynamicComponent
-                    ):
-                        connections = target_component.get_default_connections(source_component=source_component)
-                        target_component.connect_with_connections_list(connections=connections)
-        else:
+        if not target_default_connection_dict:
             raise KeyError(
-                f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
-                + "Please check if a connection is needed and if yes, create the missing default connection in your component."
+                f"Automatic connection does not work for {target_component.component_name} because no default "
+                "connections were found. Please check if a connection is needed and if yes, create the missing "
+                "default connection in your component."
+            )
+        # check if at least one source_component is in the target default connections
+        if not any(
+            source_component.get_classname() in target_default_connection_dict
+            for source_component in source_component_list
+        ):
+            raise KeyError(
+                "No component in the system setup matches the default connections of "
+                f"{target_component.component_name}."
+            )
+        # go through all registered components; a source whose class the target names is connected
+        for source_component in source_component_list:
+            if source_component.get_classname() in target_default_connection_dict:
+                connections = target_component.get_default_connections(source_component=source_component)
+                target_component.connect_with_connections_list(connections=connections)
+
+    @staticmethod
+    def connect_dynamic_component_automatically(
+        source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
+        target_component: dcp.DynamicComponent,
+    ) -> None:
+        """Connects a dynamic component to every source it declares default connections from.
+
+        The dynamic component itself says what it reads of each source (``default_connections_for``): the
+        declarations for the source's class, or for the electricity meter every electricity port the source declares.
+        It never reads its own outputs.
+
+        Args:
+            source_component_list: Candidate source components to connect from, in the order of the run.
+            target_component: The dynamic component whose default connections to resolve.
+
+        Raises:
+            KeyError: If the target declares no default connections, or none from any source of the run.
+        """
+        if not target_component.declares_default_connections():
+            raise KeyError(
+                f"Automatic connection does not work for {target_component.component_name} because no default "
+                "connections were found. Please check if a connection is needed and if yes, create the missing "
+                "default connection in your component."
+            )
+        sources = [
+            source_component
+            for source_component in source_component_list
+            if source_component is not target_component and target_component.default_connections_for(source_component)
+        ]
+        if not sources:
+            raise KeyError(
+                "No component in the system setup matches the default connections of "
+                f"{target_component.component_name}."
+            )
+        for source_component in sources:
+            target_component.connect_with_dynamic_connections_list(
+                dynamic_component_connections=target_component.get_dynamic_default_connections(
+                    source_component=source_component
+                )
             )

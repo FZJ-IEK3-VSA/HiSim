@@ -1,6 +1,7 @@
 # Flat-plate solar thermal collectors with their differential-thermostat pump controller, charging a DHW cylinder
 # through its solar coil, the `solar_dhw` circuit. Control is hardcoded here (D21): the Controller starts the solar pump
-# on the collector temperature against the cylinder's mean temperature. The energy manager ranks the pump's electricity
+# when the collector's sensor reads 7 K above the cylinder's start-of-step temperature and stops it at 3 K. The
+# collector's speed-controlled pump runs 5 to 40 kg/(m² h). The energy manager ranks the pump's electricity
 # from its own declaration (SOLAR_THERMAL_SYSTEM, weight 4, dispatch {}) and has no modifier for it (rank-only, dry run
 # G18), so the assembly offers no `ems_modifier`.
 #
@@ -31,20 +32,24 @@ components:
       area_m2: {$param: area_in_m2}
     inputs:
       - {$port: weather}                                    # outside temperature, irradiance, sun position
-      - Controller                                          # ControlSignal
-      - {$port: solar_coil}                                 # TemperatureCollectorInletDegC, the cylinder's return leg
+      - Controller                                          # ControlSignal; RequestedPartLoadRatio, the fraction of the step
+                                                            # the pump runs
+      - {$port: solar_coil}                                 # the cylinder's return leg: its step mean and its start-of-step temperature
   Controller:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # MassFlow, the flow its heat at the step mean needs
-      - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-tank stop
+      - Collector                                           # its sensor temperature at the start of the step;
+                                                            # ActualPartLoadRatio, the fraction of the step its pump ran
+      - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-storage stop;
+                                                            # the end-of-step temperature, for the part-load ratio
 
 interface:
   needs:
     weather:          {into: [Collector], partner: Weather}
     cylinder_temperature: {into: [Controller], partner: SimpleDHWStorage}
-                      # the controller's measured variable, the cylinder's start-of-step temperature: a need, not a
+                      # the controller's measured variables, the cylinder's start-of-step temperature for the
+                      # full-storage stop and its end-of-step temperature for the part-load ratio: a need, not a
                       # circuit end
     electricity:      {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
   provides:
@@ -56,27 +61,39 @@ tests:
   # the fixed test day, 1 January in Aachen, on which the solar pump never starts (see the monotone entry), so the
   # collector delivers no heat and no entry can fail on the collector's physics. That physics is covered by the
   # goldens of the two solar twins until the assembly's composed file and its gate arrive with hydronic stage C, whose
-  # golden-year run covers summer; bead hisim-lt0b.23 adds the test of collection then.
+  # golden-year run covers summer; bead hisim-assemblies-lt0b.23 adds the test of collection then.
   #
   # One day at 900 s on the test weather beside a DHW cylinder at the other end of the solar_dhw circuit. The bounds
   # are sized for the physical ceiling, not for the test day: irradiance on the collector plane is at most about
   # 1200 W/m², so over the box's 20 m² at most 24 kW, of which a flat plate delivers at most about 80 %; per-step
   # energies are those powers x 0.25 h. The new solar pump draws 10 W while it runs (an old one 35 W). The
-  # Controller's one output, the pump's control signal, is binary: no energy or temperature.
+  # Controller's pump signal is binary; its target and part-load ratio have bounds listed below.
   bounds:
     - {output: Collector.ThermalPowerOutput, unit: WATT, min: 0, max: 20000}
       # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
     - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: 0, max: 5000}         # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
-    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
+    - {output: Collector.CollectorSensorTemperatureAtStartOfStepInCelsius, unit: CELSIUS, min: -30, max: 250}
+      # the stagnation temperature of a standing pump: winter night air to about 205 °C at 1200 W/m² in 40 °C air
+    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}
+      # the pump draws 10 W (new) or 35 W (old) while it runs; 200 W is margin
     - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
-    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
+    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}
+      # the incident power minus the heat delivered: at most the incident power; negative when the collector fluid
+      # is colder than its surroundings and gains heat from them
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
+    - {output: Controller.TargetTemperatureInCelsius, unit: CELSIUS, min: 40, max: 80}
+      # the cylinder temperature above which the Controller stops the pump, its 80 °C maximum storage temperature
+    - {output: Controller.RequestedPartLoadRatio, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the pump runs: 1 at and below the part-load threshold while the pump runs, 0 while
+      # it stands
+    - {output: Collector.ActualPartLoadRatio, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the pump ran, reported back to the Controller
   monotone:
     - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
       # the investment is priced per m² of collector (3188 EUR for the default 4 m², 1594 to 15940 EUR over the
       # range); the heat delivered is no measure on the test day: unlike the 1200 W/m² ceiling the bounds are sized
-      # for, the test day measures at most 53 W/m² on the collector plane, which never lifts the collector 10 K above
+      # for, the test day measures at most 53 W/m² on the collector plane, at which the collector stagnates far below
       # the cylinder, so the pump never starts and every area of the range delivers 0 kWh
   expect:
     - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 0.5}

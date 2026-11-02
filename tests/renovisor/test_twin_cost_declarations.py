@@ -3,7 +3,7 @@
 A RenoVisor calculation always asks for lifecycle costs, and `Simulator.check_cost_declarations`
 refuses such a run before its first timestep when a component's class declares no
 `cost_relevance`, or declares `PRICED` with nothing that can produce its cost facts. Several
-component classes are in the second state today (the list is the bead hisim-l07.12), among them
+component classes are in the second state today (the list is the bead hisim-cost-data-l07.12), among them
 the car pair and the air conditioner. The translator never selects the two twins that wire them
 (an electric vehicle and an air conditioner are ``not_implemented_yet``), so no calculation is
 refused (decision of 2026-09-23). This test keeps it that way: a twin added to `BaseFiles` with

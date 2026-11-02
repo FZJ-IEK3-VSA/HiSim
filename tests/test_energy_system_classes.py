@@ -335,14 +335,14 @@ def test_a_config_key_that_is_no_field_is_refused_with_the_field_list() -> None:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
     config:
-      eff_th_maximum: 0.95
+      seasonal_eficiency: 0.9
 """
             )
         )
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.UNKNOWN_CONFIG_FIELD
-    assert "boiler" in message and "eff_th_maximum" in message and "eff_th_max" in message
+    assert "boiler" in message and "seasonal_eficiency" in message and "seasonal_efficiency" in message
 
 
 @pytest.mark.base
@@ -385,14 +385,14 @@ def test_auto_on_a_field_without_a_law_is_refused_with_the_sizable_fields() -> N
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
     config:
-      eff_th_max: AUTO
+      seasonal_efficiency: AUTO
 """
             )
         )
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.AUTO_ON_CONCRETE_FIELD
-    assert "boiler" in message and "eff_th_max" in message
+    assert "boiler" in message and "seasonal_efficiency" in message
     assert "maximal_thermal_power_in_watt" in message
 
 

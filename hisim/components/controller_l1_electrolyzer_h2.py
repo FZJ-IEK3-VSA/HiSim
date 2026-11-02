@@ -6,7 +6,7 @@ from typing import Any, ClassVar
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import L1ControllerComponent, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
 from hisim import loadtypes as lt
@@ -141,7 +141,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         )
 
 
-class ElectrolyzerController(Component):
+class ElectrolyzerController(L1ControllerComponent):
     """Electrolyzer Controller class."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -212,6 +212,7 @@ class ElectrolyzerController(Component):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="standby count",
+            aggregation=lt.OutputAggregation.LAST,
         )
 
         self.distributed_load: ComponentOutput = self.add_output(
@@ -228,6 +229,7 @@ class ElectrolyzerController(Component):
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             output_description="current mode of electrolyzer",
+            aggregation=lt.OutputAggregation.NONE,
         )
 
         self.curtailed_load: ComponentOutput = self.add_output(
@@ -244,6 +246,7 @@ class ElectrolyzerController(Component):
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of switching off",
+            aggregation=lt.OutputAggregation.LAST,
         )
         # =================================================================================================================================
         # Initialize variables

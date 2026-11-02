@@ -2,6 +2,11 @@
 # PR and push to main, comparing KPIs against the committed golden references, first
 # from the Python setups and then from their recorded '.energy_system.yaml' twins.
 #
+# BOTH STEP LENGTHS. The week horizon holds every parameter set built by the one_week_only factory,
+# so the January week runs at 60 s (one_week_60s) and at 900 s (one_week_900s): RenoVisor's step
+# length, and the only one at which the part-load rules and the start-of-step nodes act (above
+# 600 s); see golden_references/README.md.
+#
 # SHARDS. The pairs run as a handful of shards (scripts/golden_matrix.py --shards), each
 # job running its pairs several at a time (golden_check.py --jobs, a child process per
 # pair). One job per pair paid about a minute of container, checkout, install and cache
@@ -35,15 +40,10 @@
 # not excluded: the golden's legacy port names are read through the parity rig's declared table.
 #
 # Gate: BLOCKING. Any KPI divergence or run error, in any mode, fails its shard and the
-# summary job. Because golden-year waits for this workflow to succeed, a YAML twin that
-# diverges from its golden also keeps the full-year tier from running: the twins gate
-# golden-year too, deliberately (decided 2026-09-27).
+# summary job.
 #
-# The heavier full-year pairs run separately, in golden-year.yml, once all the other
-# CI for the commit is green. This workflow completing is one of the three events
-# that fire that one (`workflow_run`), so renaming this workflow, or its `name:`
-# above, breaks that trigger. Nothing here has to wait for anything: the gate on the
-# other side reads where the three prerequisites stand and decides in seconds.
+# The heavier full-year pairs run separately, in golden-year.yml, which starts at the same
+# time as this workflow and does not wait for it.
 
 name: golden-check
 
@@ -56,27 +56,37 @@ on:
   # requests that target main. A stacked pull request — one whose base is the branch below it
   # in a chain — therefore gets no run at all, and a whole stack can reach main having never
   # been tested. Dispatching this workflow against such a branch is how that is avoided.
-  # A dispatch can also choose the full year, for a heavier parity run of both modes.
+  # A dispatch can also choose the July week (july_week), or the full year for a heavier parity run
+  # of both modes. The automatic triggers check the January week only.
   workflow_dispatch:
     inputs:
       horizon:
         description: "Parameter horizon to check (the Python setups, their recorded YAML twins and the composed files)"
         type: choice
         default: week
-        options: [ week, year ]
+        options: [ week, july_week, year ]
+  # Called by weekly-cold-cache.yml, the weekly run without any cache; see there.
+  workflow_call:
+    inputs:
+      cold_cache:
+        description: "Skip the inputs-cache restore, so every job computes its inputs from scratch, and leave the save to the caller"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: golden-check-${{ github.ref }}
+  # The weekly cold run (cold_cache) has a group of its own, so it neither waits for nor cancels a push's run.
+  group: golden-check-${{ github.ref }}${{ inputs.cold_cache && '-cold' || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   discover:
     name: discover golden shards
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -107,7 +117,8 @@ jobs:
   golden:
     name: golden ${{ matrix.name }} (${{ matrix.count }} pairs)
     needs: discover
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:
@@ -133,13 +144,13 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
-      # Scoped by shard: a pair that moves to another shard recomputes its profiles once.
+      # The weather series and LoadProfileGenerator profiles earlier runs computed: the most recent
+      # shared entry, which every job of every workflow restores; see the action.
       - name: Restore the HiSim inputs cache
+        if: ${{ !inputs.cold_cache }}
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-          scope: ${{ github.workflow }}-${{ matrix.name }}
       # All three modes from one pool of `jobs` child processes: each pair's Python setup, its
       # YAML twin and, where it has one, its composed file run side by side. One report per
       # mode; a failure in any fails the step.
@@ -160,13 +171,16 @@ jobs:
             results/golden-ref-check*/report.*
             results/golden-ref-check*/_children/*.log
           if-no-files-found: warn
-      # Kept even when the job failed; see the action for why that is safe.
-      - name: Save the HiSim inputs cache
+      # Only the files this job added, for the merge job below. Kept even when the job failed; see
+      # the action for why that is safe.
+      - name: Upload what this job added to the HiSim inputs cache
         if: always()
         uses: ./.github/actions/hisim-cache
         with:
-          mode: save
-          scope: ${{ github.workflow }}-${{ matrix.name }}
+          mode: upload-new
+          # Prefixed with the workflow: the weekly cold run calls three workflows in one run, and an
+          # artifact name must be unique within it.
+          scope: golden-check-${{ matrix.name }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -176,11 +190,46 @@ jobs:
           mode: report
           scope: ${{ matrix.name }}
 
+  # One shared inputs-cache entry per run instead of one per job: merges what every golden job added
+  # into the most recent shared entry and saves it, or nothing when nothing changed; see the action.
+  # Not for a fork's pull request, which saves no cache, nor for the weekly cold run, whose caller saves.
+  inputs-cache:
+    name: merge the inputs cache
+    needs: golden
+    if: always() && !github.event.pull_request.head.repo.fork && !inputs.cold_cache
+    # On the self-hosted runners, and in the image of the jobs it merges, whose HISIM_LPG_BINARY_ROOT
+    # decides whether the LoadProfileGenerator binaries stay in the cache.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+      - name: Merge and save the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: merge-save
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+
   summary:
     name: golden-check summary
     needs: golden
     if: always()
-    runs-on: ubuntu-latest
+    # On the self-hosted runners; see the runs-on comment in tests.yml.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","hisim-local"]') }}
     steps:
       - name: Fail if any pair diverged or failed to run, in any mode
         run: '[ "${{ needs.golden.result }}" = "success" ] || exit 1'

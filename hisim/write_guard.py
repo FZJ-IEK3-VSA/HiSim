@@ -2,7 +2,7 @@
 
 A calculation -- one run of ``hisim_main``, of ``run_energy_system`` or of the RenoVisor
 ``Calculation`` -- may write in exactly two kinds of place (owner decision of 2026-09-26, bead
-hisim-epc.23):
+hisim-renovisor-translator-epc.23):
 
 * **its result directory**, the fresh directory :class:`~hisim.result_path_provider.ResultPathProviderSingleton`
   hands out for it (or the directory its caller named: a RenoVisor job directory, a test's

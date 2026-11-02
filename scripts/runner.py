@@ -4,6 +4,8 @@ This module turns a JSON config (``scripts/golden_config.json``) into
 :class:`~hisim.simulationparameters.SimulationParameters`, runs a setup via
 :func:`hisim.hisim_main.main`, reads the resulting ``all_kpis.json``, and
 turns it into the golden leaf map (``scripts/golden_kpis.py``, :func:`golden_leaves`).
+An entry whose ``path`` names an energy-system file (``*.energy_system.yaml``) instead of a
+Python setup runs that file through the declarative executor (:func:`run_energy_system_file`).
 
 The pure helpers (``load_config``, ``build_simulation_parameters``,
 ``resolve_setup_path``, ``filter_config``, ``select_pairs``, ``config_hash``,
@@ -25,11 +27,12 @@ import hashlib
 import json
 import os
 import platform
+import signal
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence, cast
 
@@ -40,9 +43,11 @@ from hisim.simulationparameters import SimulationParameters
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
     from golden_kpis import golden_leaves, renamed_leaves  # type: ignore[import-not-found]
     from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
+    from golden_matrix import pair_seconds  # type: ignore[import-not-found]
 except ModuleNotFoundError:
     from scripts.golden_kpis import golden_leaves, renamed_leaves
     from scripts.golden_horizons import HorizonVocabulary
+    from scripts.golden_matrix import pair_seconds
 
 
 # ---------------------------------------------------------------------------
@@ -54,11 +59,48 @@ class SetupConfig:
 
     id: str
     path: str
-    #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
+    #: The horizons this setup participates in (``"day"``/``"week"``/``"july_week"``/``"year"``), or
     #: ``None`` for all of them. Every shipped setup runs both the week and the full year
-    #: (owner decision 2026-10-11: every energy system has a full-year golden), so the
-    #: shipped config sets this nowhere; it stays for a setup that may join one horizon only.
+    #: (owner decision 2026-10-11: every system setup has a full-year golden) and the July week
+    #: (hisim-midyear-windows-9g2.8); the shipped config sets it for no setup today
+    #: (``tests/test_golden_matrix.py``).
     horizons: Optional[list[str]] = None
+    #: The recorded wall time of each of its pairs on a GitHub runner, in seconds, by parameter-set
+    #: id: the config's ``seconds`` entry. The CI shards are balanced by it, and a pair run in a
+    #: child process gets a timeout from it (:meth:`ChildRuns.timeout_in_seconds`).
+    seconds: dict[str, float] = field(default_factory=dict)
+
+    def recorded_seconds(self, parameter_set_id: str) -> float:
+        """Return the recorded wall time of this setup's pair with one parameter set, in seconds.
+
+        A pair the config records no time for weighs the shard balance's default
+        (``golden_matrix.DEFAULT_PAIR_SECONDS``, a typical building-sizer week), so the matrix and
+        the runner read the same number for every pair.
+
+        Args:
+            parameter_set_id: The id of the parameter set the pair runs.
+
+        Returns:
+            The recorded wall time in seconds, or the default when none is recorded.
+        """
+        return float(pair_seconds({"id": self.id, "seconds": self.seconds}, parameter_set_id))
+
+    def is_energy_system_file(self) -> bool:
+        """Whether this entry names an energy-system file rather than a Python setup.
+
+        An entry is either a Python setup, ``system_setups/<stem>.py``, or an energy system written
+        in YAML alone, ``energy_systems/<stem>.energy_system.yaml``, a file with no Python setup
+        behind it. The second kind is recognised by the suffixes the ``hisim`` command line itself
+        dispatches on (:class:`hisim.hisim_main.EnergySystemMode`), so the runner and the command
+        line agree on what an energy-system file is.
+
+        Returns:
+            True when :attr:`path` ends in ``.energy_system.yaml`` or ``.energy_system.yml``.
+        """
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.hisim_main import EnergySystemMode
+
+        return self.path.endswith(EnergySystemMode.SUFFIXES)
 
     def runs_factory(self, factory: str) -> bool:
         """Whether this setup participates in parameter sets built by ``factory``.
@@ -75,6 +117,61 @@ class SetupConfig:
             is among the ones it names.
         """
         return bool(HorizonVocabulary.runs_factory(self.horizons, factory))
+
+    def runs_local_lpg_household(self, repo_root: Path) -> bool:
+        """Whether this setup computes a household with the local LoadProfileGenerator.
+
+        The answer is read from the setup's recorded energy system (:func:`resolve_twin_path`),
+        not from running it: a household is a ``UtspLpgConnector`` entry, and it is computed
+        locally when its configuration, preset and ``config`` block applied, has the data
+        acquisition mode ``USE_LOCAL_LPG``. Example: ``household_gas_building_sizer`` records
+        ``data_acquisition_mode: USE_LOCAL_LPG`` on its ``UTSPConnector`` and is recognised;
+        ``basic_household`` uses its preset's shipped profile (``USE_PREDEFINED_PROFILE``) and is
+        not. Such a setup computes the household's whole calendar year on a cache miss, whatever
+        its run's window (:meth:`ChildRuns.lpg_year_allowance_in_seconds`).
+
+        A setup whose own file does not exist is not recognised: its child fails at once on the
+        missing file (:func:`resolve_setup_path`) and reports that itself.
+
+        Args:
+            repo_root: The repository the setup's path and its recorded energy system lie in.
+
+        Returns:
+            True when at least one household of the setup is computed by the local LPG.
+
+        Raises:
+            FileNotFoundError: if the setup's file exists but its recorded energy system does not.
+            ValueError: if the energy system imports assemblies; their households are only known
+                after the expansion of imports, which this reading does not do.
+        """
+        if not (repo_root / self.path).exists():
+            return False
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.components.loadprofilegenerator_utsp_connector import (
+            LpgDataAcquisitionMode,
+            UtspLpgConnectorConfig,
+        )
+        from hisim.energy_system.classes import validate_classes
+        from hisim.energy_system.configure import EntryConfigurator
+        from hisim.energy_system.groups import expand_groups
+        from hisim.energy_system.loader import load_energy_system
+        from hisim.energy_system.path_resolver import PathResolver
+
+        twin = resolve_twin_path(self, repo_root)
+        model = load_energy_system(twin)
+        if model.imports:
+            raise ValueError(
+                f"{twin} imports assemblies ({', '.join(model.imports)}); the golden runner reads its "
+                "households only from a file without imports, such as a recorded energy system."
+            )
+        expanded, _ = expand_groups(model)
+        resolver = PathResolver.default()
+        for binding in validate_classes(expanded):
+            if issubclass(binding.config_class, UtspLpgConnectorConfig):
+                _, config = EntryConfigurator(binding, resolver, expanded.addresses.get(binding.name)).build()
+                if config.data_acquisition_mode is LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                    return True
+        return False
 
 
 @dataclass
@@ -178,7 +275,10 @@ def load_config(config_path: Path) -> GoldenConfig:
             raise ValueError(f"Golden config setups[{idx}] must have 'id' and 'path'.")
         horizons = entry.get("horizons")
         HorizonVocabulary.check_horizons(horizons, f"Golden config setups[{idx}]")
-        setups.append(SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons))
+        pair_seconds(entry, "")  # refuses a malformed 'seconds' entry
+        setups.append(
+            SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons, seconds=dict(entry.get("seconds", {})))
+        )
 
     parameter_sets: list[ParameterSetConfig] = []
     for idx, entry in enumerate(param_sets_raw):
@@ -328,14 +428,24 @@ def build_simulation_parameters(
 def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     """Resolve ``setup.path`` relative to ``repo_root`` and return the absolute ``Path``.
 
+    The path names either a Python setup (``.py``) or an energy-system file
+    (``.energy_system.yaml`` or ``.energy_system.yml``, :meth:`SetupConfig.is_energy_system_file`).
+
     Raises:
-        FileNotFoundError: if the file does not exist or does not have a ``.py`` suffix.
+        FileNotFoundError: if the file does not exist or is neither a ``.py`` file nor an
+            energy-system file.
     """
     resolved = (repo_root / setup.path).resolve()
     if not resolved.exists():
         raise FileNotFoundError(f"Setup script not found: {setup.path} (resolved to {resolved})")
-    if resolved.suffix != ".py":
-        raise FileNotFoundError(f"Setup script must be a .py file: {setup.path} (resolved to {resolved})")
+    if resolved.suffix != ".py" and not setup.is_energy_system_file():
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.hisim_main import EnergySystemMode
+
+        raise FileNotFoundError(
+            "Setup must be a .py file or an energy-system file "
+            f"(*{' or *'.join(EnergySystemMode.SUFFIXES)}): {setup.path} (resolved to {resolved})"
+        )
     return resolved
 
 
@@ -347,10 +457,16 @@ def resolve_twin_path(setup: SetupConfig, repo_root: Path) -> Path:
     that twin so the YAML golden check can run the identical system through the
     declarative executor.
 
+    An entry that names an energy-system file (:meth:`SetupConfig.is_energy_system_file`) has
+    no recorded twin: it is a declarative file itself, so this returns that file, and YAML mode
+    runs it a second time through the executor directly.
+
     Raises:
         FileNotFoundError: if the twin does not exist; the message names the recording
             command that produces it.
     """
+    if setup.is_energy_system_file():
+        return resolve_setup_path(setup, repo_root)
     twin_rel = Path("energy_systems") / f"{Path(setup.path).stem}.energy_system.yaml"
     resolved = (repo_root / twin_rel).resolve()
     if not resolved.exists():
@@ -385,6 +501,28 @@ def resolve_composed_path(setup: SetupConfig, repo_root: Path) -> tuple[Path, Co
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
+def run_energy_system_file(path: Path, params: SimulationParameters) -> None:
+    """Run one energy-system file the way ``hisim energy-system run`` runs it, with parameters built here.
+
+    The command line's :func:`hisim.energy_system.executor.run_energy_system` reads its parameters
+    from a file; the golden runner builds them in memory from the config's parameter set
+    (:func:`build_simulation_parameters`). Apart from that, this does what it does: one
+    calculation (:class:`hisim.calculation_scope.CalculationScope`, with its write guard) around
+    the run both share, :func:`hisim.energy_system.executor.simulate_energy_system`: the file
+    built, its run records written, every time step simulated and the post-processing run.
+
+    Args:
+        path: The ``*.energy_system.yaml`` file.
+        params: The simulation parameters, their result directory already set.
+    """
+    # Imported here so the pure helpers stay importable without the HiSim execution stack.
+    from hisim.calculation_scope import CalculationScope
+    from hisim.energy_system.executor import simulate_energy_system
+
+    with CalculationScope.open(label=str(path)):
+        simulate_energy_system(str(path), params)
+
+
 def run_one(
     setup: SetupConfig,
     parameter_set: ParameterSetConfig,
@@ -396,7 +534,8 @@ def run_one(
 
     Builds :class:`SimulationParameters`, resolves the setup, runs it, then reads
     turns ``<result_directory>/all_kpis.json`` into golden leaves. With ``mode="python"``
-    (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
+    (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`, or, for an entry that
+    names an energy-system file, that file via :func:`run_energy_system_file`; with
     ``mode="yaml"`` it runs the recorded ``.energy_system.yaml`` twin through the
     declarative executor, and with ``mode="composed"`` the setup's composed file
     (:func:`resolve_composed_path`), whose KPI leaves are then renamed to the twin's
@@ -428,6 +567,8 @@ def run_one(
                 path = resolve_twin_path(setup, repo_root)
             built = build_energy_system(str(path), params)
             built.simulator.run_all_timesteps()
+        elif setup.is_energy_system_file():
+            run_energy_system_file(resolve_setup_path(setup, repo_root), params)
         else:
             setup_path = resolve_setup_path(setup, repo_root)
             hisim_main.main(str(setup_path), params)
@@ -535,7 +676,11 @@ class ChildRuns:
     the pair; it calls :func:`run_one` and writes the :class:`RunResult` to a file the parent
     reads back. Everything the child prints goes to ``<pair>.log`` in :data:`WORK_SUBDIR`, and a
     child that ends without writing its result — a crash of the interpreter, or the kernel's
-    out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines.
+    out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines. A child
+    that runs longer than its timeout (:meth:`timeout_in_seconds`) is killed together with the
+    processes it started (:meth:`kill_with_its_children`) and becomes a ``run_error`` of its pair
+    the same way, so a hung simulation fails its pair by name instead of holding a CI runner until
+    the job's own limit.
 
     The children keep the process-id default of the LoadProfileGenerator base index
     (``PylpgWorkspace.default_base_index``) rather than borrowing from an ``LpgBaseIndexPool``:
@@ -549,6 +694,100 @@ class ChildRuns:
     WORK_SUBDIR = "_children"
     #: How much of a failed child's log its ``run_error`` carries.
     LOG_TAIL_LINES = 40
+    #: A child's timeout as a multiple of its pair's recorded wall time. The recorded times are
+    #: measured on a GitHub runner; a composed run beside its Python pair took up to 1.3 times its
+    #: pair's weight there (2026-10-13), so three leaves room for a slower machine.
+    TIMEOUT_TO_RECORDED_SECONDS_RATIO = 3.0
+    #: The shortest timeout a child gets, in seconds, so a pair recorded at a few seconds still
+    #: has time to import HiSim and read its inputs on a busy machine.
+    MINIMAL_TIMEOUT_IN_SECONDS = 600.0
+    #: The time added to the timeout of a pair that runs a local LoadProfileGenerator household and
+    #: covers less than a full year, in seconds (owner decision 2026-10-19, "LPG year allowance"): on
+    #: a cache miss such a pair first computes the household's whole calendar year, which its recorded
+    #: time does not contain. Source: CI run 39254406710 of #1030 (job 118081327774, cold household
+    #: cache, four children at once). One LPG year took 130 to 155 s there, but the generator computes
+    #: one household at a time per installation (``PylpgWorkspace.exclusive_generator_access``), so
+    #: four local-LPG week pairs started together finished after 156, 304, 462 and 593 s, while the
+    #: same pairs take about 20 s with a warm cache (job 118081280128). The last of four children waits
+    #: for four LPG years, about 620 s; 900 s covers that with 45 % to spare for a slower runner.
+    LPG_YEAR_ALLOWANCE_IN_SECONDS = 900.0
+
+    #: Whether a timed-out child is killed together with every process it started (POSIX), or alone
+    #: (Windows, which has no process groups to kill).
+    KILLS_PROCESS_GROUP = hasattr(os, "killpg")
+
+    @classmethod
+    def kill_with_its_children(cls, child: subprocess.Popen) -> None:
+        """Kill a timed-out child and every process it started, then wait for the child.
+
+        The child runs in a session of its own (``start_new_session``), so its process id is also
+        the id of its process group, and ``os.killpg`` reaches the processes it started too: a
+        LoadProfileGenerator calculation the child is waiting for, which killing the child alone
+        would leave running on the machine. Example: a full-year pair hangs inside the LPG; the
+        Python child and the LPG binary both receive SIGKILL. Where there are no process groups
+        (Windows), only the child is killed.
+
+        Args:
+            child: The child process, started with ``start_new_session=KILLS_PROCESS_GROUP``.
+        """
+        if cls.KILLS_PROCESS_GROUP:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # the whole group ended between the timeout and the kill
+        else:
+            child.kill()
+        child.wait()
+
+    @classmethod
+    def lpg_year_allowance_in_seconds(
+        cls, setup: SetupConfig, parameter_set: ParameterSetConfig, repo_root: Path
+    ) -> float:
+        """Return the time a pair's timeout gets for computing a full LoadProfileGenerator year, in seconds.
+
+        The LoadProfileGenerator always computes a household's whole calendar year, and a run cuts
+        its window from it. A pair that covers less than a full year and runs a local LPG household
+        (:meth:`SetupConfig.runs_local_lpg_household`) therefore needs time on a cache miss that its
+        recorded wall time does not contain, and gets :data:`LPG_YEAR_ALLOWANCE_IN_SECONDS`. A
+        full-year pair gets nothing: its recorded time already contains the LPG year. A pair without
+        a local LPG household gets nothing either. Example: ``household_gas_building_sizer`` gets
+        900 s for its week and nothing for its full year; ``basic_household`` gets nothing.
+
+        Args:
+            setup: The pair's setup.
+            parameter_set: The pair's parameter set.
+            repo_root: The repository the setup's recorded energy system lies in.
+
+        Returns:
+            :data:`LPG_YEAR_ALLOWANCE_IN_SECONDS` or 0.
+        """
+        if HorizonVocabulary.FACTORY_HORIZONS.get(parameter_set.factory) == "year":
+            return 0.0
+        return cls.LPG_YEAR_ALLOWANCE_IN_SECONDS if setup.runs_local_lpg_household(repo_root) else 0.0
+
+    @classmethod
+    def timeout_in_seconds(cls, setup: SetupConfig, parameter_set: ParameterSetConfig, repo_root: Path) -> float:
+        """Return how long the child running one pair may run before it is killed, in seconds.
+
+        The timeout is :data:`TIMEOUT_TO_RECORDED_SECONDS_RATIO` times the pair's recorded wall
+        time, at least :data:`MINIMAL_TIMEOUT_IN_SECONDS`, plus the pair's allowance for a full
+        LoadProfileGenerator year (:meth:`lpg_year_allowance_in_seconds`). Example: the heat pump
+        with car records 690 s for its full year, so its child is killed after 2070 s; its week,
+        recorded at 124 s, runs a local LPG household and gets the minimum of 600 s plus 900 s, so
+        1500 s; ``basic_household``'s week, recorded at 17 s, gets the minimum of 600 s.
+
+        Args:
+            setup: The pair's setup, which carries the recorded wall times.
+            parameter_set: The pair's parameter set.
+            repo_root: The repository the setup's recorded energy system lies in.
+
+        Returns:
+            The timeout in seconds.
+        """
+        recorded = setup.recorded_seconds(parameter_set.id)
+        return max(
+            cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO * recorded, cls.MINIMAL_TIMEOUT_IN_SECONDS
+        ) + cls.lpg_year_allowance_in_seconds(setup, parameter_set, repo_root)
 
     @classmethod
     def command(cls, payload: str) -> list[str]:
@@ -590,20 +829,49 @@ class ChildRuns:
         env = dict(os.environ)
         repo_of_this_file = str(Path(__file__).resolve().parent.parent)
         env["PYTHONPATH"] = os.pathsep.join(p for p in (repo_of_this_file, env.get("PYTHONPATH", "")) if p)
+        lpg_year_allowance_in_seconds = cls.lpg_year_allowance_in_seconds(setup, parameter_set, repo_root)
+        timeout_in_seconds = cls.timeout_in_seconds(setup, parameter_set, repo_root)
         started = time.monotonic()
         with log_path.open("w", encoding="utf-8") as log:
-            completed = subprocess.run(
-                cls.command(payload), stdout=log, stderr=subprocess.STDOUT, cwd=repo_root, env=env, check=False
-            )
+            # A session of its own makes the child the leader of a process group that also holds the
+            # processes it starts, so a timeout can end the LoadProfileGenerator binary along with it.
+            with subprocess.Popen(
+                cls.command(payload),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=repo_root,
+                env=env,
+                start_new_session=cls.KILLS_PROCESS_GROUP,
+            ) as child:
+                returncode: Optional[int]
+                try:
+                    returncode = child.wait(timeout=timeout_in_seconds)
+                except subprocess.TimeoutExpired:
+                    cls.kill_with_its_children(child)
+                    returncode = None
         duration = round(time.monotonic() - started, 1)
-        if completed.returncode == 0 and out_path.exists():
+        if returncode == 0 and out_path.exists():
             result = RunResult(**json.loads(out_path.read_text(encoding="utf-8")))
             result.duration_s = duration
             return result
-        code = completed.returncode
-        how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
-        if code in (-9, 137):
-            how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"
+        if returncode is None:
+            allowance = (
+                f", plus {lpg_year_allowance_in_seconds:g} s for computing its household's full "
+                "LoadProfileGenerator year"
+                if lpg_year_allowance_in_seconds
+                else ""
+            )
+            how = (
+                f"ran longer than its timeout of {timeout_in_seconds:g} s "
+                f"({cls.TIMEOUT_TO_RECORDED_SECONDS_RATIO:g} times the {setup.recorded_seconds(parameter_set.id):g} s "
+                f"recorded for {setup.id} / {parameter_set.id} in golden_config.json, at least "
+                f"{cls.MINIMAL_TIMEOUT_IN_SECONDS:g} s{allowance}) and was killed"
+            )
+        else:
+            code = returncode
+            how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
+            if code in (-9, 137):
+                how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"
         lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
         tail = "\n".join(lines[-cls.LOG_TAIL_LINES:]) or "(the child wrote nothing)"
         return RunResult(

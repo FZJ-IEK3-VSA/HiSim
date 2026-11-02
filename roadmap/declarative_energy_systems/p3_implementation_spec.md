@@ -172,7 +172,7 @@ Port `json_v2:parity.py` nearly whole into `hisim/energy_system/parity.py`:
 
 **The upgrade** `[decided 2026-08-28; R11.3 and C-P3.2 amended]`. The requirements first treated the aggregator port-naming divergence as a wall: compare only the columns whose names exist on both paths. `PortRenaming` is a solved translation of exactly that divergence — v1's `Input_<source>_<field>_<n>` against the declarative derived names — and `apply_to_results` rewrites the columns of a result frame through the same table that rewrites a wiring snapshot. So the rig compares **every** column, anything the table does not list must still match literally, and a translation landing on a column the frame already carries raises rather than overwriting. This does not disturb Q-P3.2: the permanent golden gate stays on KPIs; only the temporary rig gets stricter. The table is **hand-authored per aggregator** (DQ4) and reviewed with the rig, so "these two names mean the same wire" stays a claim someone made rather than an assumption the tooling reached.
 
-The comparison runs at **exact equality**, not `rel_tol = 1e-9`: both runs happen in one container, where determinism is byte-exact (`golden_ref_spec.md` §7), and the tolerance in the permanent gate exists only to absorb cross-machine drift (R11.2).
+The comparison runs at **exact equality**, not `rel_tol = 1e-9`: both runs happen in one container, where determinism is byte-exact (`roadmap/golden_ref_spec.md` §7), and the tolerance in the permanent gate exists only to absorb cross-machine drift (R11.2).
 
 ## 4. Alternatives considered
 

@@ -1,4 +1,4 @@
-"""Tests for the tariff provider component (cost_spec.md §8.3).
+"""Tests for the tariff provider component (roadmap/cost_spec.md §8.3).
 
 The point of the component is that control and billing read *one* contract. These tests pin
 that property where it can actually break: the price a controller sees per timestep must

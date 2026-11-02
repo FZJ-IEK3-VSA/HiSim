@@ -55,3 +55,6 @@ redirect
 
 # bv (beads viewer) lock file
 .bv.lock
+
+# br runtime lock sidecars (beads.db-lock-pending/-reserved/-shared)
+*.db-lock-*

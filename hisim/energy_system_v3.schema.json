@@ -6147,7 +6147,8 @@
                           "ES",
                           "DK",
                           "NL",
-                          "BG"
+                          "BG",
+                          "DENVER_INTL_AP"
                         ]
                       },
                       "heating_reference_temperature_in_celsius": {
@@ -6162,7 +6163,8 @@
                               "NSRDB_15MIN",
                               "DWD_10MIN",
                               "ERA5",
-                              "DWD_15MIN"
+                              "DWD_15MIN",
+                              "EPW"
                             ]
                           },
                           {
@@ -6191,7 +6193,8 @@
                           "NSRDB_15MIN",
                           "DWD_10MIN",
                           "ERA5",
-                          "DWD_15MIN"
+                          "DWD_15MIN",
+                          "EPW"
                         ]
                       },
                       "heating_reference_temperature_in_celsius": {
@@ -6219,7 +6222,8 @@
                       "NSRDB_15MIN",
                       "DWD_10MIN",
                       "ERA5",
-                      "DWD_15MIN"
+                      "DWD_15MIN",
+                      "EPW"
                     ]
                   },
                   "heating_reference_temperature_in_celsius": {

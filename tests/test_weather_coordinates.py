@@ -50,6 +50,7 @@ class ShippedStations:
             51.296,
             6.7686,
         ),
+        (WeatherDataSourceEnum.EPW, "EPW/Denver_Intl_AP/725650TYCST.epw", "DENVER INTL AP", 39.83, -104.65),
     )
 
 

@@ -464,20 +464,24 @@ Raised by the human before step 2b: option C of D6 means two parameter pipelines
 
 `BuildingConfig.building_code` stays mandatory; the row is the only pipeline. New optional fields,
 each with the rule the config already spells for the areas, "unset means the TABULA row's value"
-(names provisional, final in the PR):
+(the names as implemented in step 2b):
 
 | Field(s) | Replaces | Note |
 |---|---|---|
-| `windows: Optional[List[WindowOverride]]`; one item per window: `area_in_m2`, `azimuth_angle_in_degrees` (`None` for horizontal), `tilt_angle_in_degrees`, and the four optics factors `glass_solar_transmittance`, `frame_area_fraction_reduction_factor`, `nonperpendicular_reduction_factor`, `external_shading_vertical_reduction_factor`, each optional with the row's value as default | the per-direction `A_Window_*` scaling and the row's single `g_gl_n`, `F_f`, `F_w`, `F_sh_vert`; the window area is the list's sum | one item is one `WindowGeometry`, built by `BuildingInformation` (§8.3); any tilt and azimuth. A list beside `window_area_in_m2` is refused by name |
+| `windows: Optional[List[ConfiguredWindow]]`; one item per window: `area_in_m2`, `azimuth_angle_in_degrees` (`None` for horizontal), `tilt_angle_in_degrees`, and the four optics factors `glass_solar_transmittance`, `frame_area_fraction_reduction_factor`, `nonperpendicular_reduction_factor`, `external_shading_vertical_reduction_factor`, each optional with the row's value as default | the per-direction `A_Window_*` scaling and the row's single `g_gl_n`, `F_f`, `F_w`, `F_sh_vert`; the window area is the list's sum | one item is one `WindowGeometry`, built by `BuildingInformation` (§8.3); any tilt and azimuth. A list beside `window_area_in_m2` is refused by name |
 | `use_air_change_rate_per_hour`, `infiltration_air_change_rate_per_hour` | `n_air_use`, `n_air_infiltration` | the suite sets use 0 and the scaled infiltration of spec §3.2.6 |
 | `conditioned_air_volume_in_m3` | `h_room` · A_f | the volume the standards state; H_ve = 0.34 Wh/(m³K) · n · V as today, without the floor area's scaling round trip |
 | `floor_transmission_adjustment_factor`, `facade_…`, `roof_…` | the row's largest `b_Transmission_*`, or the fixed factor when the U-value is configured | a configured factor is used as given (1.0 for the floor over outdoor air, D10); the 0.5 stays for configs that do not set it |
 | `thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin`, `effective_mass_area_in_m2`, `total_internal_surface_area_in_m2` | f_c(class) · A_f, f_a(class) · A_f, 4.5 · A_f | the suite computes them by spec §3.2.3 and 3.2.4 in the system builder (step 3) and passes the results |
 
 - `BuildingInformation` records the origin of every quantity above and of the existing overrides
-  (`configured`, or `TABULA row` with the columns) in one mapping, exposed like `element_values()`.
-  The suite's system builder refuses a case whose record names the row anywhere and writes the record
-  to `parameters/<case>.json`: the carrier row is visible, and so is that nothing of it is used.
+  in one mapping, `value_origins()`: a `ValueOrigin` per quantity whose `source` is `configured`,
+  `TABULA row` or `derived` (a fixed factor, the class table, a fallback) with the field, columns or
+  rule as detail; `window_geometries()` hands the Building its windows. The suite's system builder
+  refuses a case whose record names the row anywhere and writes the record to
+  `parameters/<case>.json`: the carrier row is visible, and so is that nothing of it is used. For a
+  fully configured building only the window's and the door's adjustment factors are `derived`
+  (both are always 1).
 - The TABULA path is unchanged: every new field defaults to `None`; the goldens stay bit-identical.
 - `hisim/components/building/explicit.py` is not created. C_m = Σ κ_j A_j, A_m = C_m²/Σ A_j κ_j²
   and A_tot = Σ A_j belong to the suite's system builder beside the layer rule (step 3), tested

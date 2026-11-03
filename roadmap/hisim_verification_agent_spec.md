@@ -2,9 +2,23 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 6, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02)
+**Status:** Draft, revision 7, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revision 6: 2026-11-03)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 7** (D6 revised before step 2b, gap analysis §8, 2026-11-03)
+
+- One parameter path instead of two: the explicit building description and
+  `hisim/components/building/explicit.py` are dropped. Step 2b adds overrides on the TABULA row
+  for every value the 5R1C model reads (a window list with tilt, azimuth and the optics factors
+  per window, both air change rates, the air volume, the transmission adjustment factors, C_m, A_m
+  and A_tot) and an origin record that the suite checks: a case runs only when
+  nothing of the carrier row is used (D16, revising D6; §3.1, §3.2, FR2, §11, §A).
+- The §3.2 rules 1 to 4 are all applied in the suite's system builder, which passes the results
+  to HiSim; rule 5 stays HiSim's. `Building.get_windows` takes the window geometries from
+  `BuildingInformation` (tilt, azimuth and optics per window, so F_w per orientation for cases 620
+  and 920); the volume replaces the room height (D17, folded into 2b).
 
 **Changes in revision 6** (re-check against `origin/main` after the merge of 2026-11-03, gap
 analysis §7)
@@ -158,6 +172,10 @@ analysis §7)
 - [x] Thermostat variable: air control with a register entry (§3.2.10), decided 2026-11-02; the
       ideal heater stays unchanged.
 - [x] `iso52016` suite deferred (2026-11-02): phase 1 runs `ashrae140` only (§2.1).
+- [x] D16 (2026-11-03): one parameter path, overrides on the TABULA row with an origin record;
+      replaces D6 (gap analysis §8).
+- [x] D17 (2026-11-03): `Building.get_windows` reads the window geometries from
+      `BuildingInformation` in step 2b itself, no step 2c (gap analysis §8.3).
 
 ## 0. Rules for the agent
 
@@ -317,15 +335,17 @@ change the formal result at all.
   beam/diffuse split. HiSim's window optics compute that plane irradiance from DNI, DHI
   and GHI with a constant F_w per window; a bypass for the ISO suite would need a new Building
   input (§7.4, deferred).
-- Today the building is parametrised from a TABULA/EPISCOPE row; explicit parametrisation
-  is added in step 2 as a second parameter source (§5, §11, gap analysis D6).
+- The building is parametrised from a TABULA/EPISCOPE row. Step 2b adds an override for every
+  value the 5R1C model reads from the row, plus an origin record; the suite names a carrier row
+  and overrides all of it (§5, §11, gap analysis D16, which revised D6 on 2026-11-03).
 
 ### 3.2 Input-mapping rules (case description → 5R1C parameters)
 
 The test cases are described as layered constructions, areas and windows; the model takes
 conductances and one capacity. These rules fix the bridge. They are applied in
-`system_builder.py` (rules 1 to 3 and 6 to 11) and in HiSim's explicit building pipeline (rules 4
-and 5, FR2); every derived value is written to `parameters/<case>.json` (FR3), and
+`system_builder.py` (rules 1 to 4 and 6 to 11), which passes the results to HiSim as overrides on
+the TABULA row (FR2, D16); rule 5 is HiSim's own (`Building.get_conductances`). Every derived
+value is written to `parameters/<case>.json` (FR3), and
 the values for cases 600 and 900 are checked against the hand calculation of Appendix B
 (`test_parameter_derivation.py`). Items marked *[decision]* are confirmed by the human (§A).
 Every rule that departs from the standard's description is also an entry in the deviation
@@ -349,8 +369,8 @@ register (§8.3).
    (a) half the total thickness of the element [verify], (b) the thickness up to the first
    thermal insulation layer [verify], (c) 0.10 m (the cap ISO 13790 states for a one-day period,
    FDIS 2007 Table 11, referring to ISO 13786 for the method). The heat-capacity class table of
-   ISO 13790 is not used. κ is derived in the system builder; the explicit building description
-   receives κ per element.
+   ISO 13790 is not used. κ and C_m are derived in the system builder; HiSim receives C_m as an
+   override (D16).
    pyBuildingEnergy sums all layers because its model distributes the mass differently;
    that value must not be reused. Appendix B applies the rule to cases 600 and 900 and
    shows where condition (a) matters. *[decided 2026-11-02: rule with all three conditions;
@@ -359,7 +379,8 @@ register (§8.3).
    12.2.2; FDIS 2007 equation (66)). A_tot is the actual area of all surfaces facing the zone
    (floor, ceiling, four walls including the windows), which is how ISO 13790 7.2.2.2 defines
    it; Λ_at = 4.5 is the value the clause offers as an assumption and is not used.
-   Appendix B gives the value. *[decided 2026-11-02: actual A_tot, A_m by the formula]*
+   Appendix B gives the value. Both are derived in the system builder and passed as overrides
+   (D16). *[decided 2026-11-02: actual A_tot, A_m by the formula]*
 5. **Coupling conductances.** H_tr_is = 3.45 W/(m²K)·A_tot, H_tr_ms = 9.1 W/(m²K)·A_m,
    H_tr_em = 1 / (1/H_tr_op − 1/H_tr_ms) (ISO 13790 12.2.2, FDIS 2007 equations (64) and (65);
    h_is = 3.45 in 7.2.2.2). Already implemented;
@@ -423,7 +444,7 @@ register (§8.3).
 | ID | Requirement |
 |---|---|
 | FR1 | Test cases are defined declaratively in YAML files, one file per case, validated against a schema. A case may declare `derives_from: <case>` and override fields; the loader resolves the inheritance and writes the resolved case to the output. |
-| FR2 | The building can be created from an explicit description without a TABULA code: zone geometry (floor area, volume, internal surface area), opaque elements (area, U-value, κ), windows (orientation, area, U, g_n, frame fraction, F_w), infiltration in ACH, thermal-bridge allowance. Implemented as a second parameter source beside TABULA, not as overrides of a TABULA row (decided 2026-11-02: `building_code` optional, new field `explicit_description`, derivation pipeline in `hisim/components/building/explicit.py`; gap analysis D6, option C). |
+| FR2 | The building takes every value the 5R1C model needs as an override on a TABULA row: element areas, U-values and transmission adjustment factors, a window list (area, azimuth, tilt and the four optics factors per window; `Building.get_windows` reads the geometries from `BuildingInformation`), both air change rates, the air volume, C_m, A_m and A_tot, the apartments and the maximum demand. `BuildingInformation` records the origin of each value (configured or TABULA row); the suite names a carrier row, overrides everything, refuses a case whose record still names the row and writes the record to `parameters/<case>.json`. *Revised 2026-11-03 (gap analysis D16): replaces the second parameter source of D6 (`explicit_description`, `explicit.py`), dropped so that one parameter path is maintained; the TABULA path and its goldens are unchanged.* |
 | FR3 | The 5R1C parameters (H_tr_op, H_tr_w, H_tr_em, H_tr_ms, H_tr_is, H_ve, C_m, A_m, A_tot, scaled ACH, F_w per window) are derived by the rules of §3.2 and written to `parameters/<case>.json`. |
 | FR4 | Ideal heating and cooling with setpoints (`BuildingConfig`), unlimited capacity, the 640/940 setback through `NightSetbackController` and `BuildingTemperatureModifierInKelvin`, control on the air temperature; the ideal heater and its L1 controller are used unchanged, wired Building → controller → heater → Building: the controller sets the heater's power to the Building's demand and the heater's output is the delivered thermal power (gap analysis §7.1). No power limit and no control-variable option in phase 1 (decided 2026-11-02). |
 | FR5 | Free-floating mode (no heating/cooling). |
@@ -832,8 +853,8 @@ imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification run
 | Step | Content | Needs from §A |
 |---|---|---|
 | 1 | Gap analysis (§5) — **stop for review** | – |
-| 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: explicit building source as a second parameter source with the derivation of §3.2.4 and 3.2.5 from κ, areas and U-values, the explicit window list and explicit ACH and volume (FR2, FR3; gap analysis D6, option C; bead hisim-x6c7.6); the layer-to-κ rule of §3.2.3 belongs to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
-| 3 | Schema, case loader with inheritance, system builder, deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
+| 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: the overrides of FR2 on the TABULA row (window list with angles and optics per window, air change rates, air volume, transmission adjustment factors, C_m, A_m, A_tot) and the origin record in `BuildingInformation`, which also builds the `WindowGeometry` list that `Building.get_windows` now takes instead of building it from the five TABULA directions; the schema regenerated (FR2; gap analysis D16 and D17, revising D6; bead hisim-x6c7.6). Unit tests: each override reaches the Building's conductances and windows exactly, the origin record, the refusal of a list beside `window_area_in_m2`, the TABULA path bit-identical (same window geometries, same solar-gains cache key, goldens unchanged). The rules of §3.2.3 and 3.2.4 (κ, C_m, A_m, A_tot) belong to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
+| 3 | Schema, case loader with inheritance, system builder (derives κ, C_m, A_m and A_tot by §3.2.3 and 3.2.4 and sets the overrides of FR2), deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2) | – |
 | 5 | Export (§10) and CLI (FR14) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |

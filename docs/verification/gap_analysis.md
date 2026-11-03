@@ -230,7 +230,7 @@ Further facts the implementation relies on:
   after `run_all_timesteps`; `PostProcessingOptions.EXPORT_TO_CSV` writes one CSV per output into the
   result directory. The runner reads the frame in process.
 
-## 3. Changes to public interfaces (approved 2026-11-02 with D6, option C)
+## 3. Changes to public interfaces (approved 2026-11-02 with D6, option C; the building rows are revised by D16, §8)
 
 | Interface | Change | Who else is affected |
 |---|---|---|
@@ -251,7 +251,7 @@ Further facts the implementation relies on:
 | D3 | Warm-up: two-pass run, none, or a simulator feature | two-pass | two-pass | hisim-x6c7.3 (closed) |
 | D4 | ISO suite: external gain input on the Building (row 5) or a producer mode | external input | not built; superseded by D9 | – |
 | D5 | ISO climate: CSV converted once from the `.xls` in the private folder, or `xlrd` as a dependency | CSV | CSV, when the ISO suite returns | – |
-| D6 | Shape of the explicit building description (row 1) and where the derivation functions live (row 2) | as proposed, `hisim/components/building/explicit.py` | option C as proposed: `building_code` optional, `explicit_description`, second pipeline in `explicit.py`; option B (more overrides on a TABULA row) rejected because every untouched value would come silently from the row | hisim-x6c7.4 |
+| D6 | Shape of the explicit building description (row 1) and where the derivation functions live (row 2) | as proposed, `hisim/components/building/explicit.py` | option C as proposed: `building_code` optional, `explicit_description`, second pipeline in `explicit.py`; option B (more overrides on a TABULA row) rejected because every untouched value would come silently from the row. *Revised 2026-11-03 by D16 (§8): option B, with an origin record the suite checks* | hisim-x6c7.4 |
 | D7 | FR4: drop the power limit for phase 1; the heater stays unchanged | drop | drop | hisim-x6c7.4 |
 | D8 | Windows write-guard refusal of `\\.\nul` | separate bug; local runs use `HISIM_WRITE_GUARD=collect` meanwhile | workaround: the runner sets `HISIM_WRITE_GUARD=collect`; the bug stays open | hisim-repo-cleanup-o6a.36 |
 | D9 | ISO suite (`iso52016`) in phase 1, after F3: the §7.4 bypass needs a new Building input | option 2 of F3 (optional gain input as input infrastructure) | deferred: phase 1 runs the ASHRAE suite only; no new Building input | hisim-x6c7.5 |
@@ -430,3 +430,88 @@ cited above that `main` changed: `building.py`, `information.py`, `solar_gains.p
 - §5 row "test framework", §9.1, §9.2, §11 step 2a: the job-marker rule and D14.
 - §8.3: the F1 entry leaves the `model` category (pending D15).
 - §A: merge item ticked; D14 and D15 listed before step 2a.
+
+## 8. Revision of D6 (2026-11-03): one parameter path, TABULA with overrides
+
+Raised by the human before step 2b: option C of D6 means two parameter pipelines in
+`BuildingInformation` to maintain. The code was re-read at `80e2d0df` (tip of
+`verification/step2-epw-weather`) on 2026-11-03.
+
+### 8.1 What the code says
+
+- The Building's 5R1C reads neither the thermal-bridging conductance nor the transmission total:
+  H_tr_op is facade + roof + floor (`building.py`,
+  `get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin`), H_tr_w is window + door
+  (`get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin`). The
+  surcharge enters only `max_thermal_building_demand_in_watt`, which the config already overrides.
+  The 0 → 0.1 W/(m²K) trap of row 1 is therefore harmless for the suite. Note for the register in
+  step 3: the 5R1C has no thermal-bridge term at all; both suites set zero, so no deviation.
+- The floor trap is real: a configured floor U-value gets the fixed factor 0.5
+  (`FLOOR_ELEMENT.fixed_adjustment_factor`); wall and roof get 1.
+- The origin record exists: `ElementValues.u_value_origin` and `_door_area_origin` state for each
+  U-value and the door area whether it is configured or from the row (`element_values()`, read by
+  RenoVisor). Extending that record to every quantity the 5R1C reads is the code's own pattern.
+- Every row column that reaches the 5R1C: `A_C_Ref` (scaling), `A_*`, `U_Actual_*`,
+  `b_Transmission_*` (through the element descriptors), `A_Window_<direction>`, `F_w`, `F_f`,
+  `F_sh_vert`, `g_gl_n`, `n_air_use`, `n_air_infiltration`, `h_room`, the heat-capacity class
+  table (C_m, A_m) and Λ_at = 4.5 (A_tot). Overridable today: the five element areas and
+  U-values, the floor area, the apartments, the maximum demand. Everything else is not.
+- The window optics already take a tilt and an azimuth per window (`WindowGeometry`); only
+  `Building.get_windows` fixes them to the five TABULA directions (tilt 90° or 0°; azimuth 180, 90,
+  0, 270) and fills the four optics factors with the row's single values for all windows.
+
+### 8.2 Design: overrides on the TABULA row, with an origin record
+
+`BuildingConfig.building_code` stays mandatory; the row is the only pipeline. New optional fields,
+each with the rule the config already spells for the areas, "unset means the TABULA row's value"
+(names provisional, final in the PR):
+
+| Field(s) | Replaces | Note |
+|---|---|---|
+| `windows: Optional[List[WindowOverride]]`; one item per window: `area_in_m2`, `azimuth_angle_in_degrees` (`None` for horizontal), `tilt_angle_in_degrees`, and the four optics factors `glass_solar_transmittance`, `frame_area_fraction_reduction_factor`, `nonperpendicular_reduction_factor`, `external_shading_vertical_reduction_factor`, each optional with the row's value as default | the per-direction `A_Window_*` scaling and the row's single `g_gl_n`, `F_f`, `F_w`, `F_sh_vert`; the window area is the list's sum | one item is one `WindowGeometry`, built by `BuildingInformation` (§8.3); any tilt and azimuth. A list beside `window_area_in_m2` is refused by name |
+| `use_air_change_rate_per_hour`, `infiltration_air_change_rate_per_hour` | `n_air_use`, `n_air_infiltration` | the suite sets use 0 and the scaled infiltration of spec §3.2.6 |
+| `conditioned_air_volume_in_m3` | `h_room` · A_f | the volume the standards state; H_ve = 0.34 Wh/(m³K) · n · V as today, without the floor area's scaling round trip |
+| `floor_transmission_adjustment_factor`, `facade_…`, `roof_…` | the row's largest `b_Transmission_*`, or the fixed factor when the U-value is configured | a configured factor is used as given (1.0 for the floor over outdoor air, D10); the 0.5 stays for configs that do not set it |
+| `thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin`, `effective_mass_area_in_m2`, `total_internal_surface_area_in_m2` | f_c(class) · A_f, f_a(class) · A_f, 4.5 · A_f | the suite computes them by spec §3.2.3 and 3.2.4 in the system builder (step 3) and passes the results |
+
+- `BuildingInformation` records the origin of every quantity above and of the existing overrides
+  (`configured`, or `TABULA row` with the columns) in one mapping, exposed like `element_values()`.
+  The suite's system builder refuses a case whose record names the row anywhere and writes the record
+  to `parameters/<case>.json`: the carrier row is visible, and so is that nothing of it is used.
+- The TABULA path is unchanged: every new field defaults to `None`; the goldens stay bit-identical.
+- `hisim/components/building/explicit.py` is not created. C_m = Σ κ_j A_j, A_m = C_m²/Σ A_j κ_j²
+  and A_tot = Σ A_j belong to the suite's system builder beside the layer rule (step 3), tested
+  there against Appendix B.
+- Known and accepted: the suite's floor area goes through the scaling round trip
+  `A_C_Ref · (48 / A_C_Ref)` and may differ from 48 m² in the last bit (pinned behaviour of
+  `get_scaling_factor_according_to_conditioned_living_area`). With the volume override it reaches
+  no 5R1C parameter, only the Building's per-m² KPIs; the value used is in the parameters output.
+- `BuildingConfig` grows by 11 optional fields, flat like the existing ones; the schema is
+  regenerated; recorded twins are unaffected (they record deviations from presets only).
+
+### 8.3 The Building reads the window geometries (part of 2b)
+
+`BuildingInformation` builds the `WindowGeometry` list: from the row's five directions with the
+values `Building.get_windows` (building.py lines 1141 to 1158) computes today, bit-identical and in
+the same order, so the solar-gains cache key of a TABULA building does not move; or from the
+override, one item per window with its own tilt, azimuth and optics. `get_windows` takes that list
+and sums the areas; the loop with the fixed angles goes. About 45 lines replaced by 5; no change to
+the conductances, the DTO or the outputs. The human's first choice (2026-11-03) was to leave the
+Building untouched in 2b and lift a window-list restriction in a step 2c; that was dropped the same
+day: a restriction built only to be removed is no design, and F3's F_w per orientation (cases 620
+and 920 have an east and a west window whose F_w differ slightly through the weather's
+morning/afternoon asymmetry) needs the per-window geometry anyway.
+
+### 8.4 Decisions
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D16 | Revise D6: (B) one parameter path, overrides on the TABULA row for every value the 5R1C reads, a window list with angles per window, an origin record the suite checks; or keep (C), the second pipeline | (B) with the three conditions of §8.2: the window list in its final shape, the origin record checked by the suite, the TABULA path bit-identical | (B), 2026-11-03, as recommended. Same day: the per-building optics overrides are dropped (the list items carry them), the volume replaces the room height | hisim-x6c7.6 |
+| D17 | Step 2c (the Building reads the geometries, §8.3): directly after 2b, or later | directly after 2b, before step 3 | folded into 2b, 2026-11-03: no restriction is built that a later step removes (§8.3) | hisim-x6c7.6 |
+
+### 8.5 Spec corrections applied (revision 7, 2026-11-03)
+
+- §3.1: the parametrisation bullet. §3.2 introduction and rules 3 and 4: rules 1 to 4 live in the
+  system builder, HiSim receives the results as overrides; rule 5 stays HiSim's.
+- FR2 rewritten; §11 steps 2b and 3; §A: D16 and D17 recorded.
+- §3 and §4 of this document are left as written; D6 points here.

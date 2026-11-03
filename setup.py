@@ -70,6 +70,9 @@ setup(
             "renovisor/contract/*.json",
             "renovisor/not_implemented_yet.yaml",
             "renovisor/how_to_use.md",
+            # The suite files of the building-model verification: the structure of the
+            # acceptance ranges and the deviation register (roadmap/hisim_verification_agent_spec.md §7.3):
+            "verification/suites/*/*.yaml",
         ]
     },
     include_package_data=True,

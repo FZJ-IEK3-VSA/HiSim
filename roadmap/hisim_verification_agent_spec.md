@@ -150,9 +150,9 @@ analysis §7)
 - [ ] Verify the [verify] items of §3.2 and Appendix B against the standards. ISO 13790 items
       checked against the FDIS 2007 text on 2026-11-02 (§3.1, §3.2.3 to 3.2.5, 3.2.9, 3.2.10,
       Appendix B.4). ASHRAE 140 clause and table numbers checked in the PDF on 2026-11-03 (gap
-      analysis §9; finding F5, the 640/940 ramp hour, D18). Open: the layer data of Appendix B
-      (Tables 7-2, 7-27; the human), the few ASHRAE values of gap analysis §9.2, and conditions
-      (a) and (b) of the ISO 13786 rule (standard not available). *Before step 3.*
+      analysis §9; finding F5, the 640/940 ramp hour, D18). Appendix B.1 and B.2 confirmed by the
+      human on 2026-11-03. Open: the few ASHRAE values of gap analysis §9.2 and conditions (a) and
+      (b) of the ISO 13786 rule (standard not available); neither blocks step 3.
 - [ ] Optional: IEA BESTEST 1995 report for the public report.
 
 ### Decisions
@@ -982,13 +982,14 @@ Not needed to implement this spec. Grouped by when it is useful.
 | VDI 6007-1:2015-06 | Only if written permission from the VDI is obtained |
 | EN 14825 / Heat Pump Keymark data | Adding heat pump component checks |
 
-## Appendix B. Worked derivation for cases 600 and 900 (to be verified)
+## Appendix B. Worked derivation for cases 600 and 900 (inputs verified 2026-11-03)
 
 Purpose: make §3.2.3 and §3.2.4 checkable by hand and give `test_parameter_derivation.py`
 its expected values. Layer data are pyBuildingEnergy's transcription of ASHRAE Tables 7-2
-and 7-27 [verify against the standard]; U-values are not derived here (§3.2.1 takes the
-printed ones). All values below were computed on 2026-11-02 and are to be confirmed by the
-human before they enter the test.
+and 7-27; U-values are not derived here (§3.2.1 takes the printed ones). The geometry of B.1
+and every layer value of B.2 were checked by the human against 7.2.1.3, Figure 7-1 and
+Tables 7-2 and 7-27 on 2026-11-03: all correct. B.3 and B.4 were computed from them on
+2026-11-02; B.3 still depends on conditions (a) and (b) of the ISO 13786 rule (D11).
 
 ### B.1 Geometry
 

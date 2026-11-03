@@ -550,8 +550,8 @@ bridges: the term does not occur in the standard; the constructions are plane la
 The hemispherical SHGC 0.670 of Table 7-12 (not located by search; pyBuildingEnergy's reading),
 the exterior solar absorptance of Table 7-5, the window placement of 620, the 20/20 set points of
 685, 695, 985 and 995, 7.2.2.3 for the free-float cases, the geometry of the shading cases (not
-modelled), and every ISO item (ISO 13786 unavailable, the ISO 52016 suite deferred). The layer
-data of Appendix B are the human's check (Tables 7-2 and 7-27).
+modelled), and every ISO item (ISO 13786 unavailable, the ISO 52016 suite deferred). The geometry
+and layer data of Appendix B were checked by the human on 2026-11-03: all correct.
 
 ### 9.3 Finding F5: the set-point ramp of cases 640 and 940
 

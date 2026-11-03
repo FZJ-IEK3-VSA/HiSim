@@ -227,6 +227,12 @@ Copyright (C) 2020-2026 Noah Pflugradt, Leander Kotzur, Detlef Stolten, Tjarko T
 You should have received a copy of the MIT License along with this program.
 If not, see https://opensource.org/licenses/MIT
 
+Third-party data files under `hisim/inputs/` keep the licence of their source, stated in
+a `PROVENANCE.md` or `readme.md` beside them; they are not covered by the MIT licence.
+The Denver weather file `hisim/inputs/weather/EPW/Denver_Intl_AP/725650TYCST.epw` is
+redistributed under the licence in `hisim/inputs/weather/EPW/Denver_Intl_AP/LICENSE.md`
+(see Acknowledgement).
+
 ## About Us
 
 <a href="https://www.fz-juelich.de/en/ice/ice-2"><img src="https://www.fz-juelich.de/SharedDocs/Bilder/IEK/IEK-3/Abteilungen2015/VSA_DepartmentPicture_2019-02-04_459x244_2480x1317.jpg?__blob=normal" alt="Juelich Systems Analysis"></a>
@@ -249,6 +255,8 @@ Initiative ["Energy System 2050   A Contribution of the Research Field Energy"](
 <a href="https://www.helmholtz.de/en/"><img src="https://www.helmholtz.de/fileadmin/user_upload/05_aktuelles/Marke_Design/logos/HG_LOGO_S_ENG_RGB.jpg" alt="Helmholtz Logo" width="200px" style="float:right"></a>
 
 For this work weather data is based on data from ["German Weather Service (Deutscher Wetterdienst, DWD)"](https://www.dwd.de/DE/Home/home_node.html) ([terms of use](https://www.dwd.de/DE/service/rechtliche_hinweise/rechtliche_hinweise_node.html)) and ["NREL National Solar Radiation Database"](https://nsrdb.nrel.gov/data-viewer/download/intro/) (License: Creative Commons Attribution 3.0 United States License, Creative Commons BY 4.0); individual values are averaged.
+
+The Denver TMY3 weather file `725650TYCST.epw` used by the building-model verification suite is redistributed unmodified from "Building Energy Simulation Test - Generation Simulation and Reporting" (BESTEST-GSR), Copyright (c) 2026, Alliance for Energy Innovation, LLC, <https://github.com/NatLabRockies/BESTEST-GSR>, under its own licence (see `hisim/inputs/weather/EPW/Denver_Intl_AP/LICENSE.md` and `PROVENANCE.md`); it is not covered by HiSim's MIT licence.
 
 <a href="https://www.dwd.de/"><img src="https://www.dwd.de/SharedDocs/bilder/DE/logos/dwd/dwd_logo_258x69.png?__blob=normal&v=1" alt="DWD Logo" width="200px" style="float:right"></a>
 

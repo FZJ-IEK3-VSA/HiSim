@@ -2,10 +2,20 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 9, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revisions 6 to 8: 2026-11-03)
+**Status:** Draft, revision 10, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 to 9: 2026-11-03)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 10** (step 4, gap analysis §11, 2026-11-04)
+
+- The reference file keys a difference range minuend-subtrahend as Tables A3-1 to A3-4 state it;
+  `suites/ashrae140/reference_template.json` holds the layout (§7.3). The suite file names the
+  reference file and the outputs of 7.3 and Table 7-47, those HiSim cannot produce included (§7.3).
+  `suite.py` reads the suite file (§6). §11 step 4 done. The `known_deviation` example of §8.3 is
+  a placeholder layout, so that it cannot be read as a result. Two phrases close to the
+  standard's wording (7.2.1.13.1) are put in own words here and in gap analysis §9.1, and one
+  close to ISO 13790's definition of A_tot here (§3.2.4) and in gap analysis §4 (D12).
 
 **Changes in revision 9** (step 3a, gap analysis §10, 2026-11-03)
 
@@ -352,8 +362,8 @@ change the formal result at all.
   succeeded by ISO 52016-1, whose hourly method is a different, surface-resolved model.
   Cite as "EN ISO 13790:2008 (withdrawn), simple hourly method".
 - The thermostat is the Building's two-step demand procedure (ISO 13790, clause C.4) on the zone
-  air temperature, which is what ASHRAE 140 requires (7.2.1.13.1 b: the thermostat senses only the
-  air temperature); the setpoints are
+  air temperature, which is what ASHRAE 140 requires (7.2.1.13.1 b: control on the zone air
+  temperature alone); the setpoints are
   `BuildingConfig` fields; the ideal heater delivers the power its L1 controller sets, and that
   controller copies the Building's demand, so the delivered power is the demand (gap analysis
   F2 and §7.1).
@@ -412,7 +422,7 @@ register (§8.3).
    shows where condition (a) matters. *[decided 2026-11-02: rule with all three conditions;
    (a) and (b) stay [verify] until ISO 13786 is available]*
 4. **Effective mass area and total internal surface.** A_m = C_m² / Σ A_j·κ_j² (ISO 13790
-   12.2.2; FDIS 2007 equation (66)). A_tot is the actual area of all surfaces facing the zone
+   12.2.2; FDIS 2007 equation (66)). A_tot is the actual area of every surface that faces the zone
    (floor, ceiling, four walls including the windows), which is how ISO 13790 7.2.2.2 defines
    it; Λ_at = 4.5 is the value the clause offers as an assumption and is not used.
    Appendix B gives the value. Both are derived in the system builder and passed as overrides
@@ -556,6 +566,7 @@ hisim/verification/
   __main__.py              # CLI (FR14)
   schema.py                # case file schema (pydantic or repo's validation approach)
   case_loader.py           # YAML → validated case object, resolves derives_from (FR1)
+  suite.py                 # suite file: cases, range structure, outputs, register (§7.3, §8.3)
   system_builder.py        # case object → HiSim system; applies §3.2 (FR2, FR3)
   runner.py                # run simulation for a given time step, collect outputs
   aggregate.py             # aggregation to reference resolution (FR10)
@@ -689,11 +700,16 @@ pyBuildingEnergy's templates; every value `null` until the human fills it):
   "units": "MWh/year",
   "ranges": {
     "600": {"heating": [null, null], "cooling": [null, null]},
-    "610": {"heating": [null, null], "cooling": [null, null]},
-    "650": {"heating": null, "cooling": [null, null]}
+    "610-600": {"heating": [null, null], "cooling": [null, null]},
+    "650-600": {"heating": null, "cooling": [null, null]}
   }
 }
 ```
+
+A difference range is keyed minuend-subtrahend as the tables state it (`"900-910"` for Case 910);
+`suites/ashrae140/reference_template.json` is the full layout, generated from `suite.yaml`.
+*Corrected 2026-11-04 (step 4): the keys follow the filled file; the earlier example keyed by the
+case alone.*
 
 ```json
 {
@@ -809,13 +825,13 @@ Entry fields: `id`, `category`, `standard_clause` (with [verify] until confirmed
 `timestep_s`:
 
 ```yaml
-  - id: case900_cooling_3600
+  - id: <case>_<output>_<time step>     # a placeholder layout, not a result
     category: known_deviation
-    case: "900"
-    output: annual_cooling
-    timestep_s: 3600          # optional; omit for all time steps
-    description: "annual sensible cooling above the Table A3-4 upper bound"
-    hisim_treatment: "single-capacity 5R1C model; no change"
+    case: "<case>"
+    output: annual_heating | annual_cooling
+    timestep_s: <seconds>     # optional; omit for all time steps
+    description: "<the range the result lies outside of>"
+    hisim_treatment: "<why, and what follows>"
     approved_by: "<name>"
     approved_on: "YYYY-MM-DD"
 ```
@@ -906,7 +922,7 @@ imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification run
 | 1 | Gap analysis (§5) — **stop for review** | – |
 | 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: the overrides of FR2 on the TABULA row (window list with angles and optics per window, air change rates, air volume, transmission adjustment factors, C_m, A_m, A_tot) and the origin record in `BuildingInformation`, which also builds the `WindowGeometry` list that `Building.get_windows` now takes instead of building it from the five TABULA directions; the schema regenerated (FR2; gap analysis D16 and D17, revising D6; bead hisim-x6c7.6). Unit tests: each override reaches the Building's conductances and windows exactly, the origin record, the refusal of a list beside `window_area_in_m2`, the TABULA path bit-identical (same window geometries, same solar-gains cache key, goldens unchanged). The rules of §3.2.3 and 3.2.4 (κ, C_m, A_m, A_tot) belong to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
 | 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b (done 2026-11-03, gap analysis §10.4): the run: heater and controller, constant gains, setback, two-pass warm-up, parameters, time-series and summary output, the CLI of FR14 for runs; case 600 runs end to end at all three time steps. The register export and the EPW identity check in `PROVENANCE.md` move to step 5 | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
-| 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2) | – |
+| 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2). Done 2026-11-04 (gap analysis §11, bead hisim-x6c7.10) | – |
 | 5 | Export (§10) and CLI (FR14) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |
 | 7 | `iso52016` suite, 6 cases, first full report for review — **deferred** (2026-11-02, §2.1) | filled Tables 28–34 file; a solar-gain input on the Building (§7.4) |

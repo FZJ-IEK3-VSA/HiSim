@@ -257,7 +257,7 @@ Further facts the implementation relies on:
 | D9 | ISO suite (`iso52016`) in phase 1, after F3: the §7.4 bypass needs a new Building input | option 2 of F3 (optional gain input as input infrastructure) | deferred: phase 1 runs the ASHRAE suite only; no new Building input | hisim-x6c7.5 |
 | D10 | Spec §3.2.1: printed air-to-air U-values, no thermal bridges, floor to outdoor air without a ground factor, no solar radiation on the floor; printed value over the layer recomputation (Case 900 floor) | as stated | as recommended | hisim-x6c7 (comment) |
 | D11 | Spec §3.2.3: κ per element by the ISO 13786 effective-thickness rule, conditions (a) half thickness, (b) up to the first insulation layer, (c) 0.10 m; no class table, no full-layer sum | rule with all three conditions | as recommended. ISO 13790 (FDIS 2007 text, 12.3.1.1 and Table 11) states only the 0.10 m cap and refers to ISO 13786, which is not in the private folder: (a) and (b) stay [verify]. The rule is applied in the suite's system builder (step 3); the explicit description takes κ per element | hisim-x6c7 (comment) |
-| D12 | Spec §3.2.4: A_tot as the actual area of all surfaces facing the zone, A_m = C_m²/Σ A_j κ_j² | actual A_tot, A_m by the formula | as recommended (ISO 13790 7.2.2.2 and 12.2.2; FDIS 2007 equation (66)) | hisim-x6c7.6 |
+| D12 | Spec §3.2.4: A_tot as the actual area of every surface that faces the zone, A_m = C_m²/Σ A_j κ_j² | actual A_tot, A_m by the formula | as recommended (ISO 13790 7.2.2.2 and 12.2.2; FDIS 2007 equation (66)) | hisim-x6c7.6 |
 | D13 | Who resolves the [verify] marks against the standards in the private folder | the agent reads them; only clause and table numbers and the suite's own derived values enter the repository | as recommended; ISO 13790 marks resolved against the FDIS 2007 text on 2026-11-02, ASHRAE marks and Appendix B layer data open. Added 2026-11-03: the standards are read in place, no text is extracted or copied into any file, not even temporarily | – |
 
 Beads: epic hisim-x6c7 (the suite); hisim-x6c7.1 stays open as the `owner-decision` for D1 (a) and no
@@ -538,8 +538,8 @@ solar absorptance 0.6, infrared emittance 0.9); surface coefficients Tables 7-7 
 mullions: none), Informative Table 7-11, Table 7-12 (SHGC 0.769 at normal incidence), 7.2.1.11.3
 a) (a program without angle-dependent inputs skips the section); interior solar distribution
 7.2.1.12.2 with Tables 7-13 (600) and 7-15 (620); mechanical system 7.2.1.13, thermostat
-7.2.1.13.1 (senses only the air temperature; heat on below 20 °C, cool on above 27 °C); Case 640
-in 7.2.2.1.4 (cooling at 27 °C at all hours); Case 650 in 7.2.2.1.5 (1700 standard m³/h); 660
+7.2.1.13.1 (control on the zone air temperature alone; set points 20 °C for heating, 27 °C for
+cooling); Case 640 in 7.2.2.1.4 (cooling set point 27 °C throughout); Case 650 in 7.2.2.1.5 (1700 standard m³/h); 660
 Table 7-17 (7.2.2.1.6); 670 Table 7-21 (7.2.2.1.7); 900 in 7.2.2.2.1; in-depth cases 7.2.3 from
 Case 195 (7.2.3.5) to Case 810 (7.2.3.25); outputs Table 7-47 with 7.3.8, the 1 °C bins of 7.3.7;
 site Table A1-1; Annex A3: Table A3-14 counts (low mass 21 ranges, 18 required; high mass 19 and
@@ -664,3 +664,52 @@ developer's machine, the two passes included.
   settled mass temperature of 15.2 °C (600) and 17.2 °C (900), at 3600 s: annual heating −0.06 % (600) and −0.6 % (900),
   January heating −0.4 % and −3.6 %, first week −1.4 % and −8.6 %; cooling and the annual peak
   heating load unchanged.
+
+## 11. Step 4 (2026-11-04): the hours, the quantities of Section 7.3, comparison and accounting
+
+### 11.1 What was built
+
+- `aggregate.py` forms the hours (FR10): the mean of each hour's time steps; the delivered power is
+  split into heating and sensible cooling before the mean, because Section 3 defines the two loads
+  apart. At 3600 s only the split is made.
+- `metrics.py` computes the quantities of 7.3 from the hours: annual loads (7.3.1.1, 7.3.1.2); annual
+  hourly peaks with month, day and hour (7.3.1.3, 7.3.1.4), Hour 1 being 00:00 to 01:00 (Table 7-47
+  note a), so the hour is the label's hour plus one; monthly loads and peaks (7.3.2.4, required for
+  600 and 900, computed for every conditioned case); mean, minimum and maximum of the zone air
+  temperature, which is the air node θ_air (Section 3, 7.3.6); 1 K bins for 900FF, a bin holding its
+  lower bound (7.3.7.1); 24 hourly values on the days of Table 7-47. The operative and the mass
+  temperature, the solar gain through the windows and the largest single time step are HiSim's
+  diagnostics. The runner's summary is these quantities; its step-based summary of 3b is gone.
+- `suite.py` reads and checks `suite.yaml`: each group against its counts, each range with its
+  reference key, the register entries by category (a `known_deviation` names case, output and
+  optionally time step), the outputs. `suite.yaml` gains `reference_file` and `outputs`.
+- `compare.py` takes each range's value (the case's load, case minus parent, or parent minus case
+  for 910) and compares it with the private bounds: `pass`, `fail`, `known_deviation` (outside, with
+  an entry of the human), `skipped` (a case not run, or no bounds), `not_modelled`; with the position
+  in the range (0 at the lower, 1 at the upper bound) and the signed distance to the nearer bound.
+  The group accounting per time step counts attempted = pass + fail + known_deviation; a range not
+  attempted counts as not met; the formal result is `pass` only at met ≥ minimum (Table A3-14).
+  No error message shows a bound.
+- `suites/ashrae140/reference_template.json`: the private file's layout, every value null,
+  generated from the suite file; a test keeps the two equal, another checks the private file's keys
+  against it (skipped without the data).
+- Tests: `test_aggregation.py` and `test_compare.py`, base, with synthetic numbers.
+
+### 11.2 Deviations from the spec
+
+- Spec §7.3 keyed a difference range by the case alone (`"610"`); the filled reference file keys it
+  minuend-subtrahend as the tables state it (`"610-600"`, `"900-910"`). The suite follows the file;
+  the spec example is corrected (revision 10).
+- Outputs of 7.3 that HiSim's building does not produce are listed in `suite.yaml` as
+  `not_available`: the incident solar radiation by orientation (7.3.2.1, Table 7-47) and the
+  transmitted solar radiation through the windows (7.3.2.2, 7.3.4.1, Table 7-47), since the window
+  output is the solar heat gain through g_gl,n. The sky temperature (7.3.2.3) is `not_applicable`:
+  HiSim applies none. Nothing is computed outside the model to fill them.
+- `deviations.py` of the layout (§6) is not created: `suite.py` reads the register; its export as
+  `deviations.md` belongs to step 5.
+
+### 11.3 End-to-end check: case 600 at 3600 s
+
+Case 600 ran through the hours, the quantities and the comparison with the private file. The
+comparison results are not recorded here. HiSim's own values: peak heating 2.805 kW on 31 December,
+hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.

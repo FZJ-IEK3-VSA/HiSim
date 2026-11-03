@@ -2,10 +2,18 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 8, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revisions 6 and 7: 2026-11-03)
+**Status:** Draft, revision 9, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 to 8: 2026-11-03)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 9** (step 3a, gap analysis §10, 2026-11-03)
+
+- The case files are private for now (D19): `$HISIM_VERIFICATION_DATA/cases/ashrae140/`, the
+  suite file public (§6, §7.2). The standard is the only source cited; pyBuildingEnergy is the
+  starting point and every value is checked (D20, §0). The register entry for the air-temperature
+  thermostat leaves the ASHRAE suite (D21, §3.2.10, §8.3). §3.2.6 applies the standard's density
+  ratio. §11 step 3 is split into 3a (files, derivation, builder) and 3b (the run).
 
 **Changes in revision 8** (ASHRAE 140 [verify] marks resolved against the PDF, gap analysis §9,
 2026-11-03)
@@ -189,6 +197,14 @@ analysis §7)
 - [x] D18 (2026-11-03, for now): cases 640 and 940 keep the step at 07:00 instead of the ramp of
       7.2.2.1.4 c, registered as `input_mapping`; revisited with the first full report (gap
       analysis §9.3).
+- [x] D19 (2026-11-03): the case files stay private in `$HISIM_VERIFICATION_DATA/cases/ashrae140/`
+      until the human's supervisor decides their publication; D20: the standard is the only cited
+      source, every value checked; D21: no air-temperature register entry for the ASHRAE suite
+      (gap analysis §10.1).
+- [x] Read off the standard by the human on 2026-11-03: the Case 600 window U-value is 2.10 W/(m²K)
+      (Table 7-11; the case file had carried 3.0, the former edition's value, and was corrected), the
+      low-e SHGC at 0° is 0.440 (Table 7-19) and the Case 680 foam insulation has c_p = 1400 J/(kg K)
+      (Table 7-25), both as carried (gap analysis §10.3).
 
 ## 0. Rules for the agent
 
@@ -406,11 +422,11 @@ register (§8.3).
    h_is = 3.45 in 7.2.2.2). Already implemented;
    unchanged.
 6. **Ventilation.** H_ve = (ρ·c)_air · n · V / 3600. HiSim's constant is
-   0.34 Wh/(m³K) = 1224 J/(m³K) (`information.py`). ASHRAE specifies 0.5 h⁻¹ at site
-   density (Denver, 1650 m); the rate passed to HiSim is n = 0.5 · (ρ·c_p)_site / 1224 with
-   (ρ·c_p)_site from the standard (7.2.1.6.1, Table 7-4 and Annex B3.1; the references checked, the
-   site values are read from B3.1 in step 3), so that H_ve is
-   the standard's. The ISO rate of 0.41 h⁻¹ is already altitude-adjusted (7.2.2.14 [verify])
+   0.34 Wh/(m³K) = 1224 J/(m³K) (`information.py`), the standard density's value. ASHRAE specifies
+   0.5 h⁻¹ at site density (Denver, 1650 m) and corrects the rate for programs with standard air
+   density by the density ratio 1.0156 / 1.2255 (7.2.1.6.1, Table 7-4, Annex B3.1): the rate passed
+   to HiSim is 0.5 · 1.0156 / 1.2255 = 0.414 h⁻¹, Table 7-4's value. *Revised 2026-11-03 (step 3a):
+   the standard's rule replaces the (ρ·c_p)_site / 1224 formula of revisions 2 to 8.* The ISO rate of 0.41 h⁻¹ is already altitude-adjusted (7.2.2.14 [verify])
    for the air heat capacity ISO 52016-1 assumes [verify]; if that constant differs from
    1224 J/(m³K), n is scaled the same way. Scaled n and H_ve are written to the parameters
    output; the scaling is a register entry.
@@ -424,8 +440,9 @@ register (§8.3).
    frames, spacers and mullions none; checked). Non-perpendicular
    incidence: for the ASHRAE suite F_w is the irradiance-weighted annual mean of
    SHGC(θ)/SHGC_n from Table 7-12, computed per orientation from the weather file (method
-   of pyBuildingEnergy's `effective_window_fw`: beam from the angular table, diffuse from
-   the hemispherical value, isotropic sky, ground reflectance 0.2); for the ISO
+   the suite implements from this definition, `derivation.nonperpendicular_reduction_factor`:
+   beam from the angular table interpolated in the cosine, diffuse from the hemispherical value,
+   isotropic sky, ground reflectance 0.2, on the hourly EPW labels); for the ISO
    suite F_w = 0.90 (7.2.2.6, Table B.22 [verify]). HiSim applies F_w as a
    constant per window on the total plane irradiance (isotropic sky; ground reflectance 0.2 as
    the standard specifies, 7.2.1.1.2.5, checked). The weighted F_w is computed once before any
@@ -453,8 +470,9 @@ register (§8.3).
     θ_op = 0.3·θ_air + 0.7·θ_s (ISO 13790 Annex C, equation (C.12)). The thermostat is the
     Building's C.4 step, not the heater's (gap analysis F2), so an operative-temperature option
     would be a Building change. Decided 2026-11-02: air control in every suite, register entry
-    `model` ("Thermostat acts on θ_air (ISO 13790, clause C.4 procedure); EN ISO 52016-1 controls
-    on the operative temperature"). The 640/940 setback uses the existing `NightSetbackController`
+    `model` for the ISO suite only ("Thermostat acts on θ_air (ISO 13790, clause C.4 procedure);
+    EN ISO 52016-1 controls on the operative temperature"); for the ASHRAE suite the air temperature
+    is what 7.2.1.13.1 b requires, so there is no entry (D21, 2026-11-03). The 640/940 setback uses the existing `NightSetbackController`
     and `BuildingTemperatureModifierInKelvin` (heating setpoint only, 23:00 ≤ t < 07:00; the ramp hour
     per D18); capacity is
     unlimited. *[decided 2026-11-02]*
@@ -550,7 +568,8 @@ hisim/verification/
     ashrae140/
       suite.yaml           # metadata, case list, range structure, group definition, register entries
       reference_template.json   # Annex A3 template, values null (§7.3)
-      cases/case600.yaml … case995.yaml, case600ff.yaml … case980ff.yaml
+      cases/               # case600.yaml … case980ff.yaml: PRIVATE for now, in
+                           # $HISIM_VERIFICATION_DATA/cases/ashrae140/ (D19, 2026-11-03)
     iso52016/
       suite.yaml
       reference_template.json   # Tables 28–34 template, values null (§7.3)
@@ -607,6 +626,7 @@ $HISIM_VERIFICATION_DATA/                       # private folder outside every r
   iso52016_tables_28_34.json                    # filled from Tables 28 to 34, Case 900 corrected
   ISO_52016_1_BESTEST_ClimData_2016.08.24.xls   # copy of 06_Norms/EN-ISO-52016/, or a path in suite.yaml
   ashrae140_2023_supplemental/                  # 725650TY.CSV, output templates
+  cases/ashrae140/                              # the 18 case files, private for now (D19)
 ```
 
 | Source ID | Location |
@@ -779,7 +799,7 @@ Three categories:
 
 | Category | Meaning | Who adds | Effect on status |
 |---|---|---|---|
-| `model` | the model cannot represent the feature (§3.2.7, §3.2.9, §3.2.10, the isotropic sky of §3.2.8) | agent proposes, human confirms | none |
+| `model` | the model cannot represent the feature (§3.2.7, §3.2.9, §3.2.10 for the ISO suite, the isotropic sky of §3.2.8) | agent proposes, human confirms | none |
 | `input_mapping` | the input is represented, but through an approximation or a rule the standard leaves to the program (§3.2.1, 3.2.3, 3.2.4, 3.2.6, 3.2.8, 3.2.11, §7.4) | agent proposes, human confirms | none |
 | `known_deviation` | a result is outside its range and the human accepts that for now | human only | status `known_deviation`, pytest `xfail(strict=False)`, counts as not met in the group accounting |
 
@@ -885,7 +905,7 @@ imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification run
 |---|---|---|
 | 1 | Gap analysis (§5) — **stop for review** | – |
 | 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: the overrides of FR2 on the TABULA row (window list with angles and optics per window, air change rates, air volume, transmission adjustment factors, C_m, A_m, A_tot) and the origin record in `BuildingInformation`, which also builds the `WindowGeometry` list that `Building.get_windows` now takes instead of building it from the five TABULA directions; the schema regenerated (FR2; gap analysis D16 and D17, revising D6; bead hisim-x6c7.6). Unit tests: each override reaches the Building's conductances and windows exactly, the origin record, the refusal of a list beside `window_area_in_m2`, the TABULA path bit-identical (same window geometries, same solar-gains cache key, goldens unchanged). The rules of §3.2.3 and 3.2.4 (κ, C_m, A_m, A_tot) belong to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
-| 3 | Schema, case loader with inheritance, system builder (derives κ, C_m, A_m and A_tot by §3.2.3 and 3.2.4 and sets the overrides of FR2), deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
+| 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b: the run: heater and controller, constant gains, setback, two-pass warm-up, parameters and time-series output, the register exported; case 600 of the ASHRAE suite runs end to end at all three time steps; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2) | – |
 | 5 | Export (§10) and CLI (FR14) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |

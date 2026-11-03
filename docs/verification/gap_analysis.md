@@ -576,4 +576,41 @@ case runs without it); (c) the step at 08:00 (the hourly programs' reading, wron
 - §2.1, §2.2, §2.4, §3.1, §3.2 rules 1, 2, 6 to 10 and 11, §7.3, §8.1: the confirmed clause and
   table numbers replace their [verify] marks; the marks of §9.2 stay.
 - §3.2.10: the ramp hour of 7.2.2.1.4 c; D18 in §A.
+
+## 10. Step 3a (2026-11-03): case files, derivation and system builder
+
+### 10.1 Decisions
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D19 | Where the 18 case files live: in the repository (public, as pyBuildingEnergy publishes the same inputs) or in the private folder | in the repository | private for now, `$HISIM_VERIFICATION_DATA/cases/ashrae140/`, until the human's supervisor has decided their publication; 2026-11-03 | hisim-x6c7.8 |
+| D20 | Source of the case inputs | pyBuildingEnergy's transcription, checked | the standard is the only source cited; pyBuildingEnergy is the starting point, every value is checked against the standard by the agent's in-place search or by the human; 2026-11-03 | hisim-x6c7.8 |
+| D21 | The register entry "thermostat on the air temperature" for the ASHRAE suite | drop it | dropped: 7.2.1.13.1 b requires the air temperature; the entry stays only for the ISO suite; 2026-11-03 | – |
+
+### 10.2 What was built
+
+`hisim/verification/`: `schema.py` (a case as dataclasses, checked field by field), `case_loader.py`
+(YAML directory, `derives_from` resolved by recursive mapping merge with list replacement),
+`derivation.py` (rules 3, 4, 6 and 8 of spec §3.2 as pure functions) and `system_builder.py` (the
+building on the carrier row `DE.N.SFH.05.Gen.ReEx.001.002` with every override, the Denver weather,
+the night-setback controller for 640/940, the origin check, the record for `parameters/<case>.json`).
+Public: `hisim/verification/suites/ashrae140/suite.yaml` with the range structure and eleven proposed
+register entries (`approved_by: null`). Private: the 18 case files. Tests in `tests/verification/`
+(marker `base`, skipping without `HISIM_VERIFICATION_DATA`): the derivation of 600 and 900 gives
+Appendix B, the altitude adjustment gives Table 7-4's 0.414 ach, F_w behaves as defined, case 600 builds
+with no origin in the row and the conductances follow.
+
+### 10.3 Findings
+
+- Spec §3.2.6 scaled the air change rate with (ρ·c_p)_site / 1224; the standard's own rule
+  (7.2.1.6.1, Table 7-4, Annex B3.1) is the density ratio 1.0156 / 1.2255 for programs with standard
+  air density, which gives the printed 0.414 ach. The suite applies the standard's rule.
+- Three input values could not be read by the in-place search; the human read them off the
+  standard the same day. The air-to-air U-value of the Case 600 window is 2.10 W/(m²K) (Table 7-11):
+  the case file had carried 3.0, the value of the former edition, and was corrected before any run.
+  The SHGC at 0° of the low-e glazing, 0.440 (Table 7-19), and the specific heat of the Case 680 foam
+  insulation, 1400 J/(kg K) (Table 7-25), were as carried.
+- F_w is the suite's own implementation of the definition in §3.2.8 (beam weighted with the table
+  interpolated in the cosine, 7.2.1.11.3; diffuse with the hemispherical value; isotropic sky and
+  ground reflectance 0.2 as HiSim's optics use them), on the hourly EPW labels.
 - §3 and §4 of this document are left as written; D6 points here.

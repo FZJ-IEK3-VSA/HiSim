@@ -41,6 +41,7 @@ from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.audit import build_audit, write_audit
 from hisim.energy_system.bindings import ClassBindings
+from hisim.energy_system.building_record import BUILDING_RECORD_FILENAME, building_record_text
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
@@ -546,32 +547,37 @@ def write_parameters(parameters: SimulationParameters, result_directory: str) ->
 
 
 def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str, str, str, str]:
-    """Writes the four artifacts that describe one built energy system and its run.
+    """Writes the five artifacts that describe one built energy system and its run.
 
     The realized record states what was built, annotated with where every number came from; the
     audit companion states the same provenance as data nothing has to parse out of a comment; the
     wire log lists every connection that was made; and the parameter record states what the run
-    was asked to do with the system. All four are written before the first timestep runs, so a run
-    that crashes halfway still leaves behind a complete description of what it was running — which
-    is when such a description is worth the most.
+    was asked to do with the system. The expanded building record (``building.expanded.yaml``)
+    states each Building as the run computes with it, every area, U-value and factor resolved; it
+    is output for other tools and is never read back, while the realized record stays the input
+    that reproduces the run. All five are written before the first timestep runs, so a run that
+    crashes halfway still leaves behind a complete description of what it was running — which is
+    when such a description is worth the most.
 
     The record and the parameter file together are the two arguments of the command that produced
     them, which is what makes a result directory reproducible from its own contents rather than
     from whatever the caller remembers typing.
 
     Nothing has to have been simulated for this to work. A caller that only built a system, to
-    see what a file would produce, gets the same four files.
+    see what a file would produce, gets the same five files.
 
     Args:
         built: The finished build.
         result_directory: Where the artifacts go; created when it does not exist.
 
     Returns:
-        The paths of the record, the audit, the wire log and the parameter record.
+        The paths of the record, the audit, the wire log and the parameter record; the expanded
+        building record lies beside them under its fixed name.
 
     Raises:
         EnergySystemRecordError: ``EF-60`` when the record would not be fully concrete, and
             ``EF-61`` when this was a re-run that failed to reproduce the record it was given.
+        ValueError: When a Building holds a missing or non-finite value.
     """
     record = realize(built)
     if built.rerun:
@@ -582,9 +588,13 @@ def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str,
     )
     audit_path, wire_path = write_audit(built, result_directory)
     parameters_path = write_parameters(built.simulator.get_simulation_parameters(), result_directory)
+    building_path = os.path.join(result_directory, BUILDING_RECORD_FILENAME)
+    with open(building_path, "w", encoding="utf-8") as file:
+        file.write(building_record_text(built))
     log.information(
         f"Wrote the realized record of '{built.model.name}' to '{record_path}', its audit to "
-        f"'{audit_path}', its wire log to '{wire_path}' and its parameters to '{parameters_path}'."
+        f"'{audit_path}', its wire log to '{wire_path}', its parameters to '{parameters_path}' "
+        f"and its expanded buildings to '{building_path}'."
     )
     return record_path, audit_path, wire_path, parameters_path
 

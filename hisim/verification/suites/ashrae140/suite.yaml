@@ -122,7 +122,19 @@ deviation_register:            # spec section 8.3; the agent proposes, the human
     approved_by: null
   - id: two_pass_warm_up
     category: input_mapping
-    standard_clause: "ANSI/ASHRAE 140-2023, initialisation of the simulation [clause to verify]"
+    standard_clause: "ANSI/ASHRAE 140-2023, 5.1.1.7.2"
     description: "The simulation starts from a settled state"
     hisim_treatment: "Two full-year passes: the second starts from the mass temperature at the end of the first; results from the second pass only (decision D3)"
+    approved_by: null
+  - id: weather_interpolation
+    category: input_mapping
+    standard_clause: "ANSI/ASHRAE 140-2023, 7.2.1.1.1"
+    description: "The hourly values of the weather data"
+    hisim_treatment: "HiSim's weather pipeline places each hourly value at the middle of its hour, interpolates linearly to one minute and averages over the time step; at 3600 s an hour's value is (previous + 6 x own + next) / 8 of the file's values (gap analysis 10.5, F6)"
+    approved_by: null
+  - id: weather_start_padding
+    category: input_mapping
+    standard_clause: "ANSI/ASHRAE 140-2023, 7.2.1.1.1"
+    description: "The hourly values of the weather data, first hour of the year"
+    hisim_treatment: "Defect: the interpolation is padded with zero at 1 January 00:00 for every column but the relative humidity, so the first hour's air temperature is -13.2 degC instead of the file's -18.0 degC; to be fixed in HiSim outside the verification (gap analysis 10.5, F7)"
     approved_by: null

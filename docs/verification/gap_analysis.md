@@ -518,6 +518,7 @@ morning/afternoon asymmetry) needs the per-window geometry anyway.
 - §3.1: the parametrisation bullet. §3.2 introduction and rules 3 and 4: rules 1 to 4 live in the
   system builder, HiSim receives the results as overrides; rule 5 stays HiSim's.
 - FR2 rewritten; §11 steps 2b and 3; §A: D16 and D17 recorded.
+- §3 and §4 of this document are left as written; D6 points here.
 
 ## 9. ASHRAE 140 [verify] marks resolved against the standard (2026-11-03)
 
@@ -613,4 +614,53 @@ with no origin in the row and the conductances follow.
 - F_w is the suite's own implementation of the definition in §3.2.8 (beam weighted with the table
   interpolated in the cosine, 7.2.1.11.3; diffuse with the hemispherical value; isotropic sky and
   ground reflectance 0.2 as HiSim's optics use them), on the hourly EPW labels.
-- §3 and §4 of this document are left as written; D6 points here.
+
+### 10.4 Step 3b (2026-11-03): the run, and the first numbers of case 600
+
+`hisim/verification/runner.py` assembles weather, building, a constant internal gain (`CSVLoader`
+with a frame of the case's watts), the ideal heater with its L1 controller (none in a free-float
+case) and the night-setback controller where the case has one; it runs two full-year passes, the
+second from the thermal-mass temperature the first ends with, and writes `BESTEST_output/` with
+`parameters/<case>.json`, `timeseries/<case>_<step>s.csv` (the second pass, operative temperature
+computed as 0.3·θ_air + 0.7·θ_s) and `summary/<case>_<step>s.json`. `python -m hisim.verification
+--case 600 --output-dir <dir>` runs the three time steps (FR14, the part of step 3). The write guard
+collects (D8). Test: `test_run.py` runs case 600 at 3600 s under the marker `verification`.
+
+First run of case 600 (HiSim's own results, no comparison; the acceptance ranges stay private):
+
+| Time step | Annual heating [MWh] | Annual sensible cooling [MWh] | Peak heating [kW] | θ_air min/max [°C] | θ_m at the end of pass 1 [°C] |
+|---|---:|---:|---:|---|---:|
+| 3600 s | 3.700 | 5.521 | 2.81 (31 Dec 23:00) | 20.0 / 27.0 | 15.16 |
+| 900 s | 3.721 | 5.530 | – | 20.0 / 27.0 | 15.17 |
+| 60 s | 3.722 | 5.531 | – | 20.0 / 27.0 | 15.17 |
+
+Observations, to be read with the first full report: the three time steps agree to 0.6 % in heating
+and 0.2 % in cooling (§8.4); the second pass ends at the same mass temperature as the first to
+nine digits, so the periodic state is reached within one year (D3); the air temperature sits exactly
+on the set points when the heater acts (ISO 13790 C.4); the operative temperature reaches 33.4 °C and
+the mass node 39.9 °C in summer, which is the lightweight 5R1C mass node under the C.1 to C.3 split of
+10.1 MWh of transmitted solar gains. The whole run of three time steps takes about 85 s on the
+developer's machine, the two passes included.
+
+### 10.5 Findings after the first run (2026-11-03)
+
+- **F6, weather smoothing** (register entry `weather_interpolation`). HiSim's weather pipeline
+  (`hisim/components/weather/calculation.py`, `interpolate` and `aggregate_to_timestep`) places each
+  value of an hourly source at the middle of its hour, interpolates linearly to one minute and
+  averages over the time step. At 3600 s an hour's value is (previous + 6·own + next)/8 of the file's
+  values: a few tenths of a kelvin off the file in the Denver temperatures, peaks flattened, the
+  annual mean kept; the irradiance goes the same way. This is HiSim's treatment of every hourly
+  source, not the suite's. No change; the report quantifies the effect.
+- **F7, start padding** (register entry `weather_start_padding`). Before interpolating, the series is
+  padded at 1 January 00:00 with zero for every column except the relative humidity. For the
+  irradiance that is the night; for the air temperature it is 0 °C, so the first hour of the Denver
+  year is −13.2 °C instead of the file's −18.0 °C. A defect of HiSim's weather pipeline in every run
+  on an hourly source, one hour of 8760 here; it is fixed in HiSim outside the verification, and the
+  register entry holds until then.
+- Time labels: a row's label is the start of its step in the station's standard time, so the label
+  00:00 is the EPW's hour 1 and the standard's hour of a peak is the label's hour plus one.
+- Warm-up (D3): 5.1.1.7.2 requires preconditioning where the program allows it; HiSim has none of its
+  own, the first pass is it. A single pass from 20 °C against the second pass, which starts from the
+  settled mass temperature of 15.2 °C (600) and 17.2 °C (900), at 3600 s: annual heating −0.06 % (600) and −0.6 % (900),
+  January heating −0.4 % and −3.6 %, first week −1.4 % and −8.6 %; cooling and the annual peak
+  heating load unchanged.

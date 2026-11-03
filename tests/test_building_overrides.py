@@ -73,28 +73,28 @@ class FullyConfigured:
     """A building whose every quantity the 5R1C reads is set in the configuration.
 
     The row is a carrier only; :meth:`BuildingInformation.value_origins` must name it nowhere.
-    The numbers are round and unrelated to any standard's case.
+    The numbers are arbitrary: the test is about the record, not about a building.
     """
 
     OVERRIDES: Dict[str, Any] = {
         "number_of_apartments": 1.0,
         "max_thermal_building_demand_in_watt": 5000.0,
-        "floor_area_in_m2": 48.0,
-        "floor_u_value_in_watt_per_m2_per_kelvin": 0.04,
+        "floor_area_in_m2": 50.0,
+        "floor_u_value_in_watt_per_m2_per_kelvin": 0.25,
         "floor_transmission_adjustment_factor": 1.0,
-        "facade_area_in_m2": 63.6,
-        "facade_u_value_in_watt_per_m2_per_kelvin": 0.5,
+        "facade_area_in_m2": 70.0,
+        "facade_u_value_in_watt_per_m2_per_kelvin": 0.4,
         "facade_transmission_adjustment_factor": 1.0,
-        "roof_area_in_m2": 48.0,
-        "roof_u_value_in_watt_per_m2_per_kelvin": 0.3,
+        "roof_area_in_m2": 55.0,
+        "roof_u_value_in_watt_per_m2_per_kelvin": 0.2,
         "roof_transmission_adjustment_factor": 1.0,
-        "window_u_value_in_watt_per_m2_per_kelvin": 3.0,
-        "windows": [ConfiguredWindow(12.0, 180.0, 90.0, 0.8, 0.0, 0.9, 1.0)],
+        "window_u_value_in_watt_per_m2_per_kelvin": 2.0,
+        "windows": [ConfiguredWindow(10.0, 180.0, 90.0, 0.7, 0.1, 0.9, 1.0)],
         "door_area_in_m2": 0.0,
         "door_u_value_in_watt_per_m2_per_kelvin": 1.0,
         "use_air_change_rate_per_hour": 0.0,
-        "infiltration_air_change_rate_per_hour": 0.5,
-        "conditioned_air_volume_in_m3": 129.6,
+        "infiltration_air_change_rate_per_hour": 0.6,
+        "conditioned_air_volume_in_m3": 140.0,
         "thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin": 3.0e6,
         "effective_mass_area_in_m2": 100.0,
         "total_internal_surface_area_in_m2": 300.0,
@@ -219,19 +219,19 @@ class TestVentilationOverrides:
 
     def test_the_rates_and_the_volume_multiply_the_air_heat_capacity(self) -> None:
         """H_ve = 0.34 Wh/(m³K) · (use + infiltration) · V, nothing else."""
-        information = information_for(use_air_change_rate_per_hour=0.0, infiltration_air_change_rate_per_hour=0.5, conditioned_air_volume_in_m3=129.6)
+        information = information_for(use_air_change_rate_per_hour=0.0, infiltration_air_change_rate_per_hour=0.6, conditioned_air_volume_in_m3=140.0)
 
-        assert information.heat_conductance_ventilation_in_watt_per_kelvin == 0.34 * (0.0 + 0.5) * 129.6
+        assert information.heat_conductance_ventilation_in_watt_per_kelvin == 0.34 * (0.0 + 0.6) * 140.0
         origins = information.value_origins()
         for quantity in ("use_air_change_rate_per_hour", "infiltration_air_change_rate_per_hour", "conditioned_air_volume_in_m3"):
             assert origins[quantity].source == ValueOrigin.CONFIGURED
 
     def test_the_row_volume_is_room_height_times_floor_area_in_the_pinned_order(self) -> None:
         """Without a configured volume the product is the former one, operand by operand."""
-        information = information_for(use_air_change_rate_per_hour=0.0, infiltration_air_change_rate_per_hour=0.5)
+        information = information_for(use_air_change_rate_per_hour=0.0, infiltration_air_change_rate_per_hour=0.6)
 
         assert information.heat_conductance_ventilation_in_watt_per_kelvin == (
-            0.34 * (0.0 + 0.5) * GermanSingleFamilyHome.ROOM_HEIGHT_IN_M * information.scaled_conditioned_floor_area_in_m2
+            0.34 * (0.0 + 0.6) * GermanSingleFamilyHome.ROOM_HEIGHT_IN_M * information.scaled_conditioned_floor_area_in_m2
         )
         assert information.value_origins()["conditioned_air_volume_in_m3"].source == ValueOrigin.TABULA_ROW
 

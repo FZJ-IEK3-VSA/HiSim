@@ -881,7 +881,9 @@ class L1ControllerComponent(Component):
 
     An L1 controller decides on/off, mode, set point and run fraction of its one device (a physics component), from
     data sources, the sensor values of physics, the signals of L2 controllers and its own committed state, that is
-    the state it saved at the start of the step. For example, ``class GenericBoilerController(L1ControllerComponent)``.
+    the state it saved at the start of the step. For example, ``class ElectricHeatingController(L1ControllerComponent)``;
+    a controller that declares its memory as one state adds
+    :class:`hisim.explicit_state_controller.ExplicitStateController` before the kind base.
     The name differs from :class:`hisim.components.controller_l1_generic_ev_charge.L1Controller`, the electric car's
     charge controller, which is one such class. The simulator evaluates the L1 controllers after the L2 controllers
     and before the physics, so a command reaches its device in the same pass.

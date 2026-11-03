@@ -40,38 +40,66 @@ A power output (W, kW) is converted to energy with the timestep, an energy outpu
 kJ) is taken per step as it is; any other unit is refused when the output is declared
 (:meth:`EnergyPort.validate_unit`).
 
-Hydronic circuits
------------------
+Fluid loops
+-----------
 
-A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
-its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
-derives the heat from :func:`hisim.hydronics.circuit_power_w`, the one rule. Both ends of a circuit declare the
-same port, the supply owner with role ``PRODUCTION`` and the receiver with role ``CONSUMPTION``, so a circuit balances by
-construction. No component declares one yet, and the balance check does not read them yet. The contract the
-balance check is to implement:
+A water loop carries no energy output: each of its members publishes or reads a mass flow and two temperatures, and
+the loop's heat is derived from them, ``m c (T_out - T_in) dt``. A component says which of its channels belong to a
+loop with a tag on the channel itself, passed to ``add_input`` or ``add_output`` as ``fluid_loop=``
+(:class:`FluidLoopChannel`): which of the component's loops (:class:`FluidLoop`) and which of the four quantities
+(:class:`LoopQuantity`). The component's tagged channels, grouped by loop, are its *port sets*
+(:meth:`hisim.component.Component.port_sets`); nothing else declares a loop (D8 of
+``roadmap/hydraulic_circuits_spec.md``). Each :class:`FluidLoop` states the facts the wiring cannot tell: the heat
+the loop carries while it heats (``carrier``), its fluid (``fluid``, which gives ``c``), whether this member supplies
+the loop (``supplies``, its generator end), whether it pumps it (``pumps``) and whether it lets the loop cool
+(``may_cool``). For example, a buffer reads its generator's flow and supply and publishes the return::
 
-* A port names no peer. The two ends come from the wiring: the component that reads the circuit's mass-flow
-  output is the other end.
-* **One reader.** A mass-flow output read by more than one component that declares a ``HydronicPort`` on it
-  fails the run: one flow cannot deliver its heat twice, and a split is a valve component with one circuit per
-  branch.
-* **Both ends or neither.** A circuit whose one end declares a ``HydronicPort`` while the other end, a
-  component that declares ports, does not declare the matching one fails the run. A circuit whose other end
-  declares no ports at all is reported as undeclared, as for an :class:`EnergyPort`.
+    self.generator_loop = FluidLoop(
+        "generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, fluid=LoopFluid.WATER,
+        supplies=False, may_cool=True, pumps=False,
+    )
+    self.add_input(..., lt.Units.KG_PER_SEC, True, fluid_loop=self.generator_loop.flow_in)
+
+The balance check (:mod:`hisim.postprocessing.energy_balance.ports`) follows each tagged input to the output
+connected to it, so both members of a loop resolve to the same flow and the same two temperatures, derives the
+loop's heat once from them and books it by the supplier's sign (§3.4 of the spec): in a step in which the supplier
+heats the water, the loop's ``carrier`` goes from the supplier to the other member; in a step in which it cools the
+water, ``COOLING`` goes from the other member to the supplier. The rules it applies:
+
+* A loop names no peer. The two members come from the wiring: the component that reads a member's mass-flow output
+  is its other member, and the owner of the flow a member reads is its other member. A flow nobody reads (a boiler
+  whose distribution system pumps a flow of its own) has as its other member the component that publishes or reads
+  the loop's temperatures.
+* **One reader.** A mass-flow output read by more than one component that tags a loop on it fails the run: one flow
+  cannot deliver its heat twice, and a split is a valve component with one loop per branch.
+* **Every member or none.** A loop whose one member tags it while the other member, a component that declares
+  ports, does not tag the same loop fails the run. A loop whose other member declares no ports at all is drawn to
+  that member as undeclared, as for an :class:`EnergyPort`.
+* **Exactly one supplier.** Of the two members of a loop exactly one states ``supplies=True``.
+* **An idle member.** A member whose mass flow it reads through an input that is not connected moves no water in
+  this run and is left out, as a storage's second generator loop without a second generator is. A member that
+  pumps water into a loop whose other quantities it cannot read fails the run.
+
+The rules that need no value of the run fail it right after the build, before it simulates
+(:meth:`hisim.postprocessing.energy_balance.ports.Wiring.refuse_a_broken_wiring`), together with rule (a) of the
+owner's decision of 2026-10-02 for an :class:`EnergyPort`: a ``PRODUCTION`` port that is not metered and names no
+``peer_input`` or ``peer_output`` must not be read by more than one component that declares ports.
 
 The :class:`EnergyPort` peer pointers remain for the carriers that are not water: fuel, electricity, ambient
-heat and solar.
+heat and solar, and for heat that leaves a component other than on a loop (a tank's tap, a distribution
+system's heat to the building).
 """
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
 
 from hisim import hydronics
 from hisim import loadtypes as lt
-from hisim.config.names import NameSyntax
 
 
 @dataclass(frozen=True)
@@ -332,117 +360,195 @@ class MeteredExchange:
         return f"{self.carrier.value.replace('_', ' ')} export"
 
 
-class HydronicPortError(ValueError):
+@enum.unique
+class LoopQuantity(str, enum.Enum):
 
-    """A hydronic port whose output names or role cannot describe a circuit.
+    """Which of a loop member's four quantities a channel is: what the fluid does at it.
 
-    Raised when the port is declared, so a component with a malformed port fails when it is built rather than when
-    the balance check reads it. It is a ``ValueError``, as every invalid declaration of this module is.
+    A member of a fluid loop reads the fluid arriving and publishes the fluid leaving, each as a mass flow and a
+    temperature: ``FLOW_IN`` and ``TEMPERATURE_IN`` are inputs, ``FLOW_OUT`` and ``TEMPERATURE_OUT`` outputs. For
+    example, a boiler's supply temperature is its ``TEMPERATURE_OUT`` on its space-heating loop, and the return it reads
+    from the buffer its ``TEMPERATURE_IN``.
+    """
+
+    FLOW_IN = "flow_in"
+    FLOW_OUT = "flow_out"
+    TEMPERATURE_IN = "temperature_in"
+    TEMPERATURE_OUT = "temperature_out"
+
+    @property
+    def is_input(self) -> bool:
+        """Whether a channel of this quantity is an input: the fluid arriving, its flow or its temperature."""
+        return self in (LoopQuantity.FLOW_IN, LoopQuantity.TEMPERATURE_IN)
+
+    @property
+    def unit(self) -> lt.Units:
+        """The unit of a channel of this quantity: kg/s for a flow, °C for a temperature."""
+        if self in (LoopQuantity.FLOW_IN, LoopQuantity.FLOW_OUT):
+            return lt.Units.KG_PER_SEC
+        return lt.Units.CELSIUS
+
+
+@enum.unique
+class LoopFluid(str, enum.Enum):
+
+    """The fluid a loop carries, which gives the specific heat its heat is derived with.
+
+    Water in every heating and hot-water loop, brine in a ground-source collector loop; air, for ventilation, is to
+    follow. For example, ``LoopFluid.WATER.specific_heat_j_per_kg_k`` is 4180.0, the value every hydronic component
+    books with (:class:`hisim.hydronics.Water`).
+    """
+
+    WATER = "water"
+    BRINE = "brine"
+
+    @property
+    def specific_heat_j_per_kg_k(self) -> float:
+        """The fluid's specific heat capacity, in J/(kg K), from :mod:`hisim.hydronics`, where its source is stated."""
+        if self is LoopFluid.BRINE:
+            return hydronics.Brine.SPECIFIC_HEAT_J_PER_KG_K
+        return hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+
+
+class FluidLoopError(ValueError):
+
+    """A fluid-loop declaration that cannot describe a loop, refused when the component declares it.
+
+    Raised by :class:`FluidLoop` for a malformed loop, by ``add_input`` and ``add_output`` for a loop tag that does not
+    fit its channel, and when a component's tagged channels are grouped into port sets
+    (:meth:`hisim.component.Component.port_sets`) for a loop tagged by half. It is a ``ValueError``, as every invalid
+    declaration of this module is.
     """
 
 
 @dataclass(frozen=True)
-class HydronicPort:
+class FluidLoop:
 
-    """The three outputs of one water circuit, as one end of it declares them.
+    """One fluid loop as one of its members names it: its name, its heat, its fluid and what this member is to it.
 
-    ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
-    outputs (°C) of the components the water leaves on each leg; each is a name under the component-key rule,
-    :meth:`hisim.config.names.NameSyntax.require_component_key`: an identifier, or identifiers joined by ``-`` as
-    an assembly member's serialized address is.
+    A component creates one per loop it can be a member of and tags each channel of that loop with it
+    (:class:`FluidLoopChannel`, through :attr:`flow_in`, :attr:`flow_out`, :attr:`temperature_in` and
+    :attr:`temperature_out`). The two members of a loop each state their own: the balance check books the loop's heat
+    by its supplier, and the build refuses a loop with no or two suppliers. For example, a buffer's loop to its
+    generator::
 
-    ``carrier`` is the heat the circuit carries, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``, so that the
-    Sankey knows which heat a circuit moves (complete Sankey spec, §4.2).
+        FluidLoop("generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, fluid=LoopFluid.WATER,
+                  supplies=False, may_cool=True, pumps=False)
 
-    ``role`` is ``PRODUCTION`` for the supply owner and ``CONSUMPTION`` for the receiver; it says on which side of that end's
-    balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
-    a cooling circuit). :meth:`heat_in_kilowatt_hour` returns that heat with the circuit's sign whatever the role,
-    and the balance check adds it on the ``CONSUMPTION`` side and subtracts it on the ``PRODUCTION`` side. The role is
-    checked at construction to be ``CONSUMPTION`` or ``PRODUCTION``, because :class:`~hisim.loadtypes.EnergyRole` also has
-    ``LOSS`` and ``STORED_CHANGE``, which a circuit end cannot be.
+    Attributes:
+        name: The component's own name for the loop, free text, for example ``"space_heating"`` or
+            ``"apartment_3"``: a component may have as many loops as its configuration says. It must differ from the
+            names of the component's other loops.
+        carrier: The heat the loop carries while it heats, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``;
+            while it cools, the balance books ``COOLING``.
+        fluid: The fluid the loop carries, which gives its specific heat.
+        supplies: Whether this member is the loop's generator end, the one whose heat the other member receives.
+        may_cool: Whether this member lets the loop remove heat from the room side; a loop may cool only if every
+            member allows it. Stage 2 of the spec fails a run that cools a loop that may not.
+        pumps: Whether this member moves the loop's fluid; None where the component can do either and does not state
+            it yet (stage 1b of the spec states it on every loop).
     """
 
-    mass_flow: str
-    supply_temperature: str
-    return_temperature: str
-    role: lt.EnergyRole
+    name: str
+    _: dataclasses.KW_ONLY
     carrier: lt.EnergyBalanceCarrier
+    fluid: LoopFluid
+    supplies: bool
+    may_cool: bool
+    pumps: Optional[bool] = None
 
-    #: The roles a circuit can have at one of its ends.
-    CIRCUIT_ROLES: ClassVar[Tuple[lt.EnergyRole, ...]] = (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
-    #: The heat a circuit can carry; a cooling circuit keeps its circuit's carrier and its heat turns negative.
-    CIRCUIT_CARRIERS: ClassVar[Tuple[lt.EnergyBalanceCarrier, ...]] = (
+    #: The heat a loop can carry while it heats.
+    LOOP_CARRIERS: ClassVar[Tuple[lt.EnergyBalanceCarrier, ...]] = (
         lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
         lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
     )
 
     def __post_init__(self) -> None:
-        """Refuse names that are not distinct identifiers, a role other than ``CONSUMPTION`` or ``PRODUCTION`` and a foreign carrier.
+        """Refuse an empty name, a carrier that is no loop's heat, a fluid that is no :class:`LoopFluid` and a non-bool.
 
         Raises:
-            HydronicPortError: If a name is no component key (an identifier, or an assembly member's address joined
-                by ``-``), two names coincide, the role is not an :class:`~hisim.loadtypes.EnergyRole` ``CONSUMPTION`` or
-                ``PRODUCTION``, or the carrier is not ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``.
+            FluidLoopError: For any of the above, naming the loop.
         """
-        names = {
-            "mass_flow": self.mass_flow,
-            "supply_temperature": self.supply_temperature,
-            "return_temperature": self.return_temperature,
-        }
-        for field_name, output_name in names.items():
-            try:
-                NameSyntax.require_component_key(output_name)
-            except ValueError as error:
-                raise HydronicPortError(f"A hydronic port's {field_name} must name an output: {error}") from error
-        if len(set(names.values())) != len(names):
-            raise HydronicPortError(
-                f"A hydronic port names three distinct outputs, got mass_flow={self.mass_flow!r}, "
-                f"supply_temperature={self.supply_temperature!r}, return_temperature={self.return_temperature!r}."
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise FluidLoopError(f"A fluid loop's name is a non-empty text, got {self.name!r}.")
+        if not isinstance(self.carrier, lt.EnergyBalanceCarrier) or self.carrier not in self.LOOP_CARRIERS:
+            raise FluidLoopError(
+                f"The fluid loop {self.name!r} carries space-heating or hot-water heat "
+                f"({', '.join(carrier.name for carrier in self.LOOP_CARRIERS)}), got {self.carrier!r}."
             )
-        if not isinstance(self.role, lt.EnergyRole) or self.role not in self.CIRCUIT_ROLES:
-            raise HydronicPortError(
-                f"A hydronic port's role is EnergyRole.CONSUMPTION (the receiver) or EnergyRole.PRODUCTION (the supply owner), "
-                f"got {self.role!r}."
-            )
-        if not isinstance(self.carrier, lt.EnergyBalanceCarrier) or self.carrier not in self.CIRCUIT_CARRIERS:
-            raise HydronicPortError(
-                f"A hydronic port carries space-heating or hot-water heat "
-                f"({', '.join(carrier.name for carrier in self.CIRCUIT_CARRIERS)}), got {self.carrier!r}."
-            )
+        if not isinstance(self.fluid, LoopFluid):
+            raise FluidLoopError(f"The fluid loop {self.name!r} names its fluid by LoopFluid, got {self.fluid!r}.")
+        for flag, value in (("supplies", self.supplies), ("may_cool", self.may_cool)):
+            if not isinstance(value, bool):
+                raise FluidLoopError(f"The fluid loop {self.name!r} states {flag} as True or False, got {value!r}.")
+        if self.pumps is not None and not isinstance(self.pumps, bool):
+            raise FluidLoopError(f"The fluid loop {self.name!r} states pumps as True, False or None, got {self.pumps!r}.")
 
-    @staticmethod
-    def heat_in_kilowatt_hour(
+    @property
+    def flow_in(self) -> "FluidLoopChannel":
+        """The tag of the input that reads the mass flow arriving, in kg/s."""
+        return FluidLoopChannel(self, LoopQuantity.FLOW_IN)
+
+    @property
+    def flow_out(self) -> "FluidLoopChannel":
+        """The tag of the output that publishes the mass flow leaving, in kg/s."""
+        return FluidLoopChannel(self, LoopQuantity.FLOW_OUT)
+
+    @property
+    def temperature_in(self) -> "FluidLoopChannel":
+        """The tag of the input that reads the temperature of the fluid arriving, in °C."""
+        return FluidLoopChannel(self, LoopQuantity.TEMPERATURE_IN)
+
+    @property
+    def temperature_out(self) -> "FluidLoopChannel":
+        """The tag of the output that publishes the temperature of the fluid leaving, in °C."""
+        return FluidLoopChannel(self, LoopQuantity.TEMPERATURE_OUT)
+
+
+@dataclass(frozen=True)
+class FluidLoopChannel:
+
+    """The loop tag of one channel: which fluid loop of its component, and which of the four quantities.
+
+    Passed to ``add_input`` or ``add_output`` as ``fluid_loop=``, usually through the loop's properties, for example
+    ``fluid_loop=self.generator_loop.flow_in``. The tag is the only declaration of a loop: the component's tagged
+    channels, grouped by loop, are its port sets (:meth:`hisim.component.Component.port_sets`).
+    """
+
+    loop: FluidLoop
+    quantity: LoopQuantity
+
+    def check_fits(
+        self,
+        component_name: str,
+        field_name: str,
+        unit: lt.Units,
         *,
-        mass_flow_in_kg_per_second: float,
-        supply_temperature_in_celsius: float,
-        return_temperature_in_celsius: float,
-        seconds_per_timestep: float,
-    ) -> float:
-        """Return the heat a circuit's water carries over one step, ``m c (T_sup - T_ret) dt``, in kWh.
+        is_input: bool,
+        energy_port: Optional[EnergyPort] = None,
+    ) -> None:
+        """Refuse this tag on a channel it cannot describe (§3.1 of ``roadmap/hydraulic_circuits_spec.md``).
 
-        The balance check applies it to the three outputs the port names, so both ends of a circuit derive the same
-        number. For example, 0.1 kg/s over 10 K for one hour carries 4.18 kWh. The heat is
-        :func:`hisim.hydronics.circuit_power_w` times the step, converted from J to kWh in that order, so it agrees to
-        the last bit with the power a component books for the same three values.
+        A flow is in kg/s and a temperature in °C; the fluid arriving is read through an input and the fluid leaving
+        published through an output; a channel is a leg of a loop or an energy port, never both. For example, the tag
+        ``loop.flow_in`` on an output in °C is refused for its unit first.
 
         Args:
-            mass_flow_in_kg_per_second: The circuit's mass flow, in kg/s, at least 0.
-            supply_temperature_in_celsius: The supply temperature, in °C.
-            return_temperature_in_celsius: The return temperature, in °C.
-            seconds_per_timestep: The step duration, in s.
-
-        Returns:
-            The heat, in kWh; negative for a cooling circuit.
+            component_name: The channel's component, for the message.
+            field_name: The channel's name, for the message.
+            unit: The channel's unit.
+            is_input: Whether the channel is an input.
+            energy_port: The channel's energy port, if it declares one.
 
         Raises:
-            NonPositiveTimestepError: If the step is not positive.
-            NegativeMassFlowError: If the flow is negative.
+            FluidLoopError: If the unit, the kind of channel or an energy port beside the tag does not fit.
         """
-        if seconds_per_timestep <= 0.0:
-            raise hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
-        power_in_watt = hydronics.circuit_power_w(
-            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
-            t_supply_c=supply_temperature_in_celsius,
-            t_return_c=return_temperature_in_celsius,
-        )
-        return power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR
+        where = f"{component_name}.{field_name} (loop {self.loop.name!r}, {self.quantity.value})"
+        if unit != self.quantity.unit:
+            raise FluidLoopError(f"{where} is in {unit.value}; a {self.quantity.value} is in {self.quantity.unit.value}.")
+        if is_input != self.quantity.is_input:
+            channel_kind = "an input" if is_input else "an output"
+            quantity_kind = "an input" if self.quantity.is_input else "an output"
+            raise FluidLoopError(f"{where} is {channel_kind}; a {self.quantity.value} is {quantity_kind}.")
+        if energy_port is not None:
+            raise FluidLoopError(f"{where} also declares an energy port; a channel is a leg of a loop or a power, not both.")

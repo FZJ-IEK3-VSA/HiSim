@@ -45,11 +45,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - CondensingGasBoiler
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputMassFlowDhw
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputTemperatureDhw
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer

@@ -9,7 +9,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import hydronics
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import (
@@ -229,6 +229,18 @@ class ElectricHeating(PhysicsComponent):
         #: for, ``m = P / (c lift)``, without bounds. For example, 1.5 kW over a 25 K lift pump 0.0144 kg/s. The rooms
         #: are heated directly, without a pump.
         self.hot_water_pump: ControllerLiftPump = ControllerLiftPump()
+        # The heater's water loop to the hot-water tank (complete Sankey spec §5.1): the hot-water heat is what it
+        # carries. The heater pumps and supplies it and never cools it. A heater without hot-water preparation tags
+        # no channel with it.
+        self.hot_water_loop = FluidLoop(
+            "dhw",
+            carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
+        with_hot_water = self.config.with_domestic_hot_water_preparation
         # Inputs
         self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -261,7 +273,7 @@ class ElectricHeating(PhysicsComponent):
 
         # The tank's step mean, the hot-water circuit's return; a heater without a tank has no such input.
         self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
-        if self.config.with_domestic_hot_water_preparation:
+        if with_hot_water:
             self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 self.component_name,
                 ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
@@ -275,6 +287,7 @@ class ElectricHeating(PhysicsComponent):
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
+                fluid_loop=self.hot_water_loop.temperature_in,
             )
 
         # Outputs Space Heating
@@ -317,6 +330,7 @@ class ElectricHeating(PhysicsComponent):
             LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             output_description="Water mass flow rate for domestic hot water.",
+            fluid_loop=self.hot_water_loop.flow_out if with_hot_water else None,
         )
         self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -324,6 +338,7 @@ class ElectricHeating(PhysicsComponent):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for domestic hot water.",
+            fluid_loop=self.hot_water_loop.temperature_out if with_hot_water else None,
         )
         self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -331,11 +346,6 @@ class ElectricHeating(PhysicsComponent):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
-            energy_port=EnergyPort(
-                EnergyRole.PRODUCTION,
-                EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-                peer_output=self.WaterOutputDhwMassFlowRate,
-            ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

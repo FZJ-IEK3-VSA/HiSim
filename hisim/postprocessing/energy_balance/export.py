@@ -3,19 +3,22 @@
 The check runs in every simulation (owner, 2026-10-02: always fail hard). :meth:`EnergyBalanceReport.conclude` fails
 the run with :class:`EnergyBalanceError` when a declared port is NaN or infinite, when a component's balance does
 not close, when the two sides of a transfer disagree beyond the tolerance, when only one of two declared
-components books a transfer between them, or, in a run without undeclared components, when a meter publishes other
-than it reads or a metered port passes no meter (:mod:`.meters`); the message names every one of them. A run in
-which no component declares a port passes.
+components books a transfer between them, when a water circuit breaks the rules of :mod:`hisim.energy_port` (two
+components declaring an end on one flow, an end without its match, a circuit pumping water the balance cannot see;
+:attr:`~.ports.DeclaredPorts.circuit_faults`), or, in a run without undeclared components, when a meter publishes
+other than it reads or a metered port passes no meter (:mod:`.meters`); the message names every one of them. A run
+in which no component declares a port passes.
 
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only decides whether the
 files are written, before the run is failed. ``balance_report.json`` (schema ``hisim.energy_balance/3``) lists, per
 declared component, the run's consumption / production / loss / storage change in kWh (in total and per carrier), the residual in kWh
 and in percent of the throughput, the worst step and the verdict; then every link between declared components (a
-side that books nothing is null, and a failing link states its reason); every meter with what it publishes, the
-ports it reads and whether the two agree; every unmetered port; every unlinked port; every undeclared component; and
-every exempt component with its reason. Beside it, ``energy_sankeys/`` holds
-``energy_sankey.json`` (every view's nodes and links: ``overall``, the connected graph, and one filter per carrier)
-and one plotly HTML per view, which share one ``plotly.min.js``.
+side that books nothing is null, and a failing link states its reason; a water circuit is a link from its supply
+owner to its receiver, and each end's port lists the circuit's three outputs); every breach of the circuit rules;
+every meter with what it publishes, the ports it reads and whether the two agree; every unmetered port; every
+unlinked port; every undeclared component; and every exempt component with its reason. Beside it,
+``energy_sankeys/`` holds ``energy_sankey.json`` (every view's nodes and links: ``overall``, the connected graph, and
+one filter per carrier) and one plotly HTML per view, which share one ``plotly.min.js``.
 """
 
 from __future__ import annotations
@@ -97,9 +100,13 @@ class EnergyBalanceReport:
 
     @property
     def fails(self) -> bool:
-        """Whether a balance, a link, an enforced meter balance or the enforced rule that flows are metered fails."""
+        """Whether a balance, a link, a circuit rule, an enforced meter balance or the enforced metering rule fails."""
         return bool(
-            self.failing or self.failing_links or self.meter_check.failing or self.meter_check.failing_unmetered
+            self.failing
+            or self.failing_links
+            or self.declared.circuit_faults
+            or self.meter_check.failing
+            or self.meter_check.failing_unmetered
         )
 
     def step_time(self, step: Optional[int]) -> Optional[str]:
@@ -143,12 +150,13 @@ class EnergyBalanceReport:
             "verdict": self.verdict,
             "components": [self.component_entry(balance) for balance in self.balances],
             "links": [link.as_dict() for link in self.links],
+            "circuit_faults": list(self.declared.circuit_faults),
             "meters": [meter.as_dict(self.step_time) for meter in self.meter_check.balances],
             "unmetered": self.meter_check.unmetered_entry(),
             "unlinked": [
                 {
                     "component": series.component,
-                    "output": series.output.field_name,
+                    "output": series.port_name,
                     "role": series.port.role.value,
                     "carrier": series.port.carrier.value,
                     "total_kwh": series.annual_kilowatt_hours,
@@ -206,7 +214,8 @@ class EnergyBalanceReport:
 
         Raises:
             EnergyBalanceError: When a declared port is not finite, a balance does not close, a link's two
-                sides disagree beyond the tolerance, only one of two declared components books a transfer, or, in a
+                sides disagree beyond the tolerance, only one of two declared components books a transfer, a water
+                circuit breaks the rules of :mod:`hisim.energy_port`, or, in a
                 run without undeclared components, a meter publishes other than it reads or a metered port passes
                 no meter.
         """
@@ -217,6 +226,7 @@ class EnergyBalanceReport:
         log.information(
             f"Energy balance: {len(self.balances) - len(self.failing)} of {len(self.balances)} declared components "
             f"close, {len(self.links) - len(self.failing_links)} of {len(self.links)} links between them close, "
+            f"{len(self.declared.circuit_faults)} circuit faults, "
             f"{sum(meter.agrees for meter in meters)} of {len(meters)} meters publish what they read, "
             f"{len(self.meter_check.unmetered)} ports unmetered, "
             f"{len(self.declared.unlinked())} ports unlinked, {len(self.declared.undeclared)} components undeclared, "
@@ -257,6 +267,8 @@ class EnergyBalanceReport:
             )
         for link in self.failing_links:
             lines.append(f"- link {link.sender} -> {link.receiver} ({link.carrier}): {link.reason}")
+        for fault in self.declared.circuit_faults:
+            lines.append(f"- circuit: {fault}")
         for meter in self.meter_check.failing:
             lines.append(
                 f"- {meter.describe()} ({self.step_time(meter.worst_step)}): the meter reads a flow no port declares, "

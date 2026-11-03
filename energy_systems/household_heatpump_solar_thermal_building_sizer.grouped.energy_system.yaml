@@ -98,11 +98,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - MoreAdvancedHeatPumpHPLib
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW
   MoreAdvancedHeatPumpHPLibControllerSH:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard

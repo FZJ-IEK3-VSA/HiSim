@@ -49,7 +49,7 @@ from hisim.config import (
 )
 from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
-from hisim.energy_port import EnergyPort
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 from hisim.part_load import PartLoadCommand, StartOfStepPartLoadControl
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.components.dual_circuit_system import HotWaterPriorityLimit, HotWaterPriorityTimer
@@ -548,12 +548,33 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             mandatory=True,
         )
 
+        # The machine's water loops (complete Sankey spec §5.1): the space heat, and in cooling mode the heat drawn
+        # back, is what the space-heating loop carries, the hot-water heat what the hot-water loop carries. hplib's
+        # flow is authoritative, so the machine pumps and supplies both (D2 of the hydronic coupling spec). It cools
+        # through its space-heating loop whenever its controller asks for cooling (-1); it never cools the tank.
+        self.space_heating_loop = FluidLoop(
+            "space_heating",
+            carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=True,
+            pumps=True,
+        )
+        self.hot_water_loop = FluidLoop(
+            "dhw",
+            carrier=EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+            fluid=LoopFluid.WATER,
+            supplies=True,
+            may_cool=False,
+            pumps=True,
+        )
         self.t_in_secondary_space_heating: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.TemperatureInputSecondarySH,
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             mandatory=False,
+            fluid_loop=self.space_heating_loop.temperature_in,
         )
 
         self.t_amb: ComponentInput = self.add_input(
@@ -579,6 +600,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=True,
+                fluid_loop=self.hot_water_loop.temperature_in,
             )
 
             self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
@@ -683,6 +705,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Output SH in °C",
+            fluid_loop=self.space_heating_loop.temperature_out,
         )
 
         self.m_dot_space_heating: ComponentOutput = self.add_output(
@@ -691,6 +714,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.KG_PER_SEC,
             output_description="Mass flow output",
+            fluid_loop=self.space_heating_loop.flow_out,
         )
 
         self.time_on_heating: ComponentOutput = self.add_output(
@@ -734,9 +758,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Heat delivered to the space-heating circuit in W: ThermalOutputPowerSH when positive.",
-            energy_port=EnergyPort(
-                EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.MassFlowOutputSH
-            ),
         )
         self.thermal_power_drawn_for_cooling: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -747,7 +768,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "Heat drawn from the space-heating circuit in cooling mode in W: minus ThermalOutputPowerSH when "
                 "negative. It leaves, with the electricity, to the environment."
             ),
-            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.COOLING, peer_output=self.MassFlowOutputSH),
         )
 
         self.thermal_energy_hp_space_heating_channel: ComponentOutput = self.add_output(
@@ -864,9 +884,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 unit=Units.WATT,
                 output_description=("Thermal output power dhw Storage in Watt"),
                 postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-                energy_port=EnergyPort(
-                    EnergyRole.PRODUCTION, EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=self.MassFlowOutputDHW
-                ),
             )
 
             self.p_el_dhw: ComponentOutput = self.add_output(
@@ -892,6 +909,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 output_description="Temperature Output DHW Water in °C",
+                fluid_loop=self.hot_water_loop.temperature_out,
             )
 
             self.m_dot_dhw: ComponentOutput = self.add_output(
@@ -900,6 +918,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.WARM_WATER,
                 unit=Units.KG_PER_SEC,
                 output_description="Mass flow output",
+                fluid_loop=self.hot_water_loop.flow_out,
             )
 
             self.thermal_energy_hp_dhw_channel: ComponentOutput = self.add_output(

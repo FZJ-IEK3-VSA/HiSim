@@ -255,9 +255,9 @@ class FluidLoopPortSet:
     ) -> Tuple["FluidLoopPortSet", ...]:
         """Group a component's channels by the fluid loop their tags name, one port set per loop.
 
-        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop tagged by half is refused: one without both temperatures, or (stage 1a)
-        with no flow or with both. For example, a boiler's three space-heating channels and its three hot-water
-        channels give two sets.
+        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop
+        tagged by half is refused: one without both temperatures, or (stage 1a) with no flow or with both. For
+        example, a boiler's three space-heating channels and its three hot-water channels give two sets.
 
         Args:
             component_name: The component the channels belong to.

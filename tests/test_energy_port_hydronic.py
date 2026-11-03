@@ -495,7 +495,10 @@ def test_the_supplier_s_sign_splits_a_circuit_into_its_two_directions() -> None:
     A heating-only run keeps the one series it always had, so its report does not change.
     """
     heat = np.array([2.0, -1.0, 0.0])
-    for supplies, heating_role, cooling_role in ((True, lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION), (False, lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)):
+    for supplies, heating_role, cooling_role in (
+        (True, lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION),
+        (False, lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION),
+    ):
         (heating_port, heating), (cooling_port, cooling) = DeclaredPorts.book_by_the_supplier_s_sign(heat, Loops.CARRIER, supplies=supplies)
         assert heating_port == EnergyPort(heating_role, Loops.CARRIER)
         assert cooling_port == EnergyPort(cooling_role, lt.EnergyBalanceCarrier.COOLING)

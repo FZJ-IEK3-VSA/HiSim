@@ -1,20 +1,20 @@
 """Checks whether each component's energy balance closes (hisim-energy-sankeys-9uoo.2).
 
 Per component and timestep, vectorised over the run:
-``residual = sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE)`` over all its declared ports. The balance is
+``residual = sum(CONSUMPTION) - sum(PRODUCTION) - sum(LOSS) - sum(STORED_CHANGE)`` over all its declared ports. The balance is
 the component's, not a carrier's: a converter turns one carrier into another, so only its total is
 conserved; the per-carrier totals are reported beside it.
 
 The tolerance is the owner's (decision 6 of hisim-energy-sankeys-9uoo): the run's residual is at most 0.1 % of the
 component's throughput over the run, and every step's residual at most
 ``max(1e-6 kWh, 0.001 * step throughput)``. A step's throughput is the larger of what enters the component
-(``IN``, energy taken from its store, and any port running backwards) and what leaves it; the run's is the sum
+(``CONSUMPTION``, energy taken from its store, and any port running backwards) and what leaves it; the run's is the sum
 over its steps.
 
 Beside the balances, two more things are checked (owner, 2026-10-02: always fail hard): every declared port is
 finite in every step, and every transfer between two declared components
-(:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``OUT`` port and its
-receiver's ``IN`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
+(:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``PRODUCTION`` port and its
+receiver's ``CONSUMPTION`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
 two. A transfer only one of two declared components books fails; one toward a component that declares no ports at
 all, a meter, a boundary node or nobody does not. The check runs in every simulation; whatever does not hold fails
 the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes. The meters, what they
@@ -64,10 +64,10 @@ class Tolerance:
 class RoleTotals:
     """Totals over the run of the four roles, in kWh."""
 
-    energy_in: float = 0.0
-    energy_out: float = 0.0
-    loss: float = 0.0
-    stored_change: float = 0.0
+    consumption_in_kilowatt_hour: float = 0.0
+    production_in_kilowatt_hour: float = 0.0
+    loss_in_kilowatt_hour: float = 0.0
+    stored_change_in_kilowatt_hour: float = 0.0
 
     def add(self, role: lt.EnergyRole, kilowatt_hours: float) -> None:
         """Add one port's total to its role.
@@ -75,30 +75,35 @@ class RoleTotals:
         Raises:
             ValueError: For a role that is not one of the four.
         """
-        if role == lt.EnergyRole.IN:
-            self.energy_in += kilowatt_hours
-        elif role == lt.EnergyRole.OUT:
-            self.energy_out += kilowatt_hours
+        if role == lt.EnergyRole.CONSUMPTION:
+            self.consumption_in_kilowatt_hour += kilowatt_hours
+        elif role == lt.EnergyRole.PRODUCTION:
+            self.production_in_kilowatt_hour += kilowatt_hours
         elif role == lt.EnergyRole.LOSS:
-            self.loss += kilowatt_hours
+            self.loss_in_kilowatt_hour += kilowatt_hours
         elif role == lt.EnergyRole.STORED_CHANGE:
-            self.stored_change += kilowatt_hours
+            self.stored_change_in_kilowatt_hour += kilowatt_hours
         else:
             raise ValueError(f"{role!r} is not an energy role this balance knows.")
 
     @property
-    def residual(self) -> float:
-        """In minus out, loss and storage change."""
-        return self.energy_in - self.energy_out - self.loss - self.stored_change
+    def residual_in_kilowatt_hour(self) -> float:
+        """Consumption minus production, loss and storage change, in kWh."""
+        return (
+            self.consumption_in_kilowatt_hour
+            - self.production_in_kilowatt_hour
+            - self.loss_in_kilowatt_hour
+            - self.stored_change_in_kilowatt_hour
+        )
 
     def as_dict(self) -> Dict[str, float]:
         """The totals as the report states them."""
         return {
-            "in_kwh": self.energy_in,
-            "out_kwh": self.energy_out,
-            "loss_kwh": self.loss,
-            "stored_change_kwh": self.stored_change,
-            "residual_kwh": self.residual,
+            "consumption_kwh": self.consumption_in_kilowatt_hour,
+            "production_kwh": self.production_in_kilowatt_hour,
+            "loss_kwh": self.loss_in_kilowatt_hour,
+            "stored_change_kwh": self.stored_change_in_kilowatt_hour,
+            "residual_kwh": self.residual_in_kilowatt_hour,
         }
 
 
@@ -223,8 +228,8 @@ class BalanceCheck:
     """Computes every declared component's balance, every link between declared components and every port not finite."""
 
     SIGN_OF_ROLE: ClassVar[Dict[lt.EnergyRole, float]] = {
-        lt.EnergyRole.IN: 1.0,
-        lt.EnergyRole.OUT: -1.0,
+        lt.EnergyRole.CONSUMPTION: 1.0,
+        lt.EnergyRole.PRODUCTION: -1.0,
         lt.EnergyRole.LOSS: -1.0,
         lt.EnergyRole.STORED_CHANGE: -1.0,
     }

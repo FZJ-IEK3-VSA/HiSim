@@ -48,7 +48,7 @@ controller (#941).
   step, so power times step length is the step's energy (`hisim/energy_port.py` converts it so). A value at the
   start or end of the step is a sensor or a state, and its name says so (`WaterTemperatureAtEndOfStepInCelsius`).
 - **Every component that moves energy declares its ports and closes its balance.** Each energy-carrying output
-  declares an `EnergyPort` (role `IN`, `OUT`, `LOSS` or `STORED_CHANGE`, carrier, peer); a water circuit a
+  declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier, peer); a water circuit a
   `HydronicPort`. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's
   above `max(1e-6 kWh, 0.1 %)` of the step's throughput, a transfer booked by only one of two declared components,
@@ -71,7 +71,7 @@ Today HiSim mixes conventions:
 |---|---|---|
 | Mass flow of a water circuit | always `>= 0`; the direction is the circuit's topology | `hisim/hydronics.py` |
 | Heat of a water circuit | positive when the supply owner heats the receiver; negative for a cooling circuit (`T_sup < T_ret`) | `hydronics.circuit_power_w`, `HydronicPort` |
-| Energy-port values | read with the sign of their role: positive `IN` enters, positive `OUT` and `LOSS` leave, positive `STORED_CHANGE` is stored; `EnergyPort.negated` turns round an output published the other way | `hisim/loadtypes.py` (`EnergyRole`), `hisim/energy_port.py` |
+| Energy-port values | read with the sign of their role: positive `CONSUMPTION` enters, positive `PRODUCTION` and `LOSS` leave, positive `STORED_CHANGE` is stored; `EnergyPort.negated` turns round an output published the other way | `hisim/loadtypes.py` (`EnergyRole`), `hisim/energy_port.py` |
 | Hot water drawn at the tap | positive (`ThermalPowerConsumptionDHW`, stated in its description since #909) | `hisim/components/simple_water_storage.py` |
 | Grid balance of the energy manager | signed net, positive for a surplus to the grid, in an output whose description states no sign (`TotalElectricityToOrFromGrid`) | `hisim/components/controller_l2_energy_management_system.py` |
 | Grid exchange of the electricity meter | import and export both `>= 0` (`ElectricityFromGrid*`, `ElectricityToGrid*`), consumption and production both `>= 0`: the sums of the electricity `IN` and `OUT` ports it reads, stated in the descriptions since hisim-component-physics-4g9.39 | `hisim/components/electricity_meter.py` |

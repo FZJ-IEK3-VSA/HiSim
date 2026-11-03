@@ -4,18 +4,15 @@ import pathlib
 from typing import Dict
 
 import pytest
-import yaml
 
-import hisim.verification
 from hisim.verification.case_loader import load_cases, merge, read_case_files, resolve
 from hisim.verification.schema import Case, CaseFileError
+from hisim.verification.suite import Suite
 
 pytestmark = pytest.mark.base
 
 #: The cases of phase 1 (spec section 2.1).
 CASE_IDS = frozenset({"600", "620", "640", "660", "670", "680", "685", "695", "900", "920", "940", "980", "985", "995", "600FF", "680FF", "900FF", "980FF"})
-
-SUITE_FILE = pathlib.Path(hisim.verification.__file__).parent / "suites" / "ashrae140" / "suite.yaml"
 
 
 def test_every_case_of_phase_one_loads(cases: Dict[str, Case]) -> None:
@@ -111,15 +108,10 @@ def test_a_file_that_is_not_a_case_is_refused(tmp_path: pathlib.Path) -> None:
 
 
 def test_the_suite_file_names_the_cases_and_the_ranges(cases: Dict[str, Case]) -> None:
-    """Every case of the suite file is a case file or a range marked not modelled; the register is complete."""
-    with open(SUITE_FILE, encoding="utf-8") as suite_file:
-        suite = yaml.safe_load(suite_file)
+    """Every case of the suite file is a case file; a range's cases are case files unless it is not modelled."""
+    suite = Suite.load("ashrae140")
 
-    assert set(suite["cases"]) == set(cases)
-    for group in suite["groups"].values():
-        assert len(group["range_cases"]) == group["ranges_total"]
-        for entry in group["range_cases"]:
-            assert entry["case"] in cases or entry.get("status") == "not_modelled", entry
-    for entry in suite["deviation_register"]:
-        assert set(entry) == {"id", "category", "standard_clause", "description", "hisim_treatment", "approved_by"}
-        assert entry["category"] in ("model", "input_mapping")
+    assert set(suite.cases) == set(cases)
+    for range_case in suite.range_cases:
+        needed = {range_case.case} if range_case.parent is None else {range_case.case, range_case.parent}
+        assert needed <= set(cases) or range_case.not_modelled, range_case

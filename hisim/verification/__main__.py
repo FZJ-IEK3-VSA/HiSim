@@ -15,6 +15,7 @@ from typing import List
 from hisim import log
 from hisim.verification import runner, system_builder
 from hisim.verification.case_loader import load_cases
+from hisim.verification.suite import Suite
 
 DATA_ENVIRONMENT_VARIABLE = "HISIM_VERIFICATION_DATA"
 DEFAULT_TIMESTEPS = (3600, 900, 60)
@@ -38,16 +39,19 @@ def main(arguments: List[str]) -> int:
         log.error(f"set {DATA_ENVIRONMENT_VARIABLE} to the private data folder holding cases/ashrae140")
         return 2
     cases = load_cases(Path(data_root) / "cases" / "ashrae140")
+    suite = Suite.load("ashrae140")
     runner.write_guard_collects()
     for case_id in options.case or ["600"]:
         built = system_builder.build(cases[case_id], year=options.year)
         for seconds in options.timestep or DEFAULT_TIMESTEPS:
-            run = runner.run_case(built, runner.RunSettings(year=options.year, seconds_per_timestep=seconds, output_directory=options.output_dir))
+            settings = runner.RunSettings(year=options.year, seconds_per_timestep=seconds, output_directory=options.output_dir)
+            run = runner.run_case(built, settings, suite.outputs_for(case_id))
             summary = run.summary
+            air = summary["zone_air_temperature_in_celsius"]
             log.information(
                 f"case {case_id} at {seconds} s: heating {summary.get('annual_heating_in_megawatt_hour', float('nan')):.3f} MWh, "
                 f"cooling {summary.get('annual_sensible_cooling_in_megawatt_hour', float('nan')):.3f} MWh, "
-                f"air {summary['indoor_air_temperature_in_celsius']['min']:.1f} to {summary['indoor_air_temperature_in_celsius']['max']:.1f} degC, "
+                f"air {air['min']['value']:.1f} to {air['max']['value']:.1f} degC, "
                 f"mass at the end of pass 1: {summary['passes'][0]['final_thermal_mass_temperature_in_celsius']:.2f} degC; "
                 f"written to {run.files['summary']}"
             )

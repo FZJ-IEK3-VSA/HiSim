@@ -5,6 +5,7 @@
 suite: ashrae140
 standard: "ANSI/ASHRAE Standard 140-2023, Section 7"
 reference_sources: [ashrae140_2023, denver_tmy3_epw]
+reference_file: ashrae140_annex_a3.json   # private, in $HISIM_VERIFICATION_DATA; keys and layout as reference_template.json
 case_files: private            # $HISIM_VERIFICATION_DATA/cases/ashrae140/, decision D19 of 2026-11-03
 cases: ["600", "620", "640", "660", "670", "680", "685", "695", "900", "920", "940", "980", "985", "995", "600FF", "680FF", "900FF", "980FF"]
 gating: false                  # spec section 9.3; only the human sets true
@@ -59,6 +60,35 @@ groups:
       - {case: "985", parent: "900", metric: cooling}
       - {case: "995", parent: "985", metric: heating}
       - {case: "995", parent: "985", metric: cooling}
+outputs:                       # Section 7.3 and Table 7-47 beyond the annual loads and peaks of 7.3.1
+  temperature_bins: {cases: ["900FF"], lowest_in_celsius: -50, highest_in_celsius: 98}   # 7.3.7.1
+  daily_hourly:                # Table 7-47, the rows HiSim can produce; days as MM-DD
+    - {cases: ["600", "660", "670", "680", "685", "695", "900", "980", "985", "995"], quantity: load, days: ["02-01", "07-14"]}
+    - {cases: ["640", "940"], quantity: load, days: ["02-01"]}
+    - {cases: ["640", "940"], quantity: zone_air_temperature, days: ["02-01"]}
+    - {cases: ["600FF", "680FF", "900FF", "980FF"], quantity: zone_air_temperature, days: ["02-01"]}
+  not_available:               # required by the standard, not produced by HiSim's building model
+    - clause: "7.3.2.1"
+      cases: ["600"]
+      quantity: "annual solar irradiation of each surface orientation"
+      reason: "the building computes the irradiance on its windows only and does not output it"
+    - clause: "7.3.2.2, 7.3.4.1"
+      cases: ["600", "620", "660", "670"]
+      quantity: "annual transmitted solar radiation through the windows"
+      reason: "the building's window output is the solar heat gain through the total solar energy transmittance, not the transmitted radiation"
+    - clause: "7.3.8, Table 7-47"
+      cases: ["600"]
+      quantity: "hourly incident solar radiation on the horizontal, south and west surfaces"
+      reason: "as for 7.3.2.1"
+    - clause: "7.3.8, Table 7-47"
+      cases: ["600", "660", "670"]
+      quantity: "hourly transmitted solar radiation through the south windows"
+      reason: "as for 7.3.2.2"
+  not_applicable:              # required only of programs with the feature
+    - clause: "7.3.2.3, Table 7-47"
+      cases: ["600"]
+      quantity: "sky temperature"
+      reason: "HiSim applies no sky temperature (register entry opaque_solar_absorption_and_sky_radiation)"
 deviation_register:            # spec section 8.3; the agent proposes, the human confirms (approved_by)
   - id: gains_split
     category: model

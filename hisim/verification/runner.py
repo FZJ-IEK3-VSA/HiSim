@@ -24,6 +24,8 @@ from hisim.components.building import Building
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.night_setback_controller import NightSetbackController
 from hisim.simulationparameters import SimulationParameters
+from hisim.verification import aggregate, metrics
+from hisim.verification.suite import RequestedOutputs
 from hisim.verification.system_builder import BuiltCase
 
 #: Operative temperature of the 5R1C model: 0.3 air plus 0.7 internal surface (ISO 13790, equation C.12).
@@ -44,18 +46,14 @@ SETBACK_NAME = "NightSetback"
 #: The columns of the exported time series: (component, output, name in the export).
 EXPORTED_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     (WEATHER_NAME, weather.Weather.TemperatureOutside, "outdoor_air_temperature_in_celsius"),
-    (BUILDING_NAME, Building.TemperatureIndoorAir, "indoor_air_temperature_in_celsius"),
+    (BUILDING_NAME, Building.TemperatureIndoorAir, metrics.AIR_TEMPERATURE_COLUMN),
     (BUILDING_NAME, Building.TemperatureInternalSurface, "internal_surface_temperature_in_celsius"),
-    (BUILDING_NAME, Building.TemperatureMeanThermalMass, "thermal_mass_temperature_in_celsius"),
-    (BUILDING_NAME, Building.SolarGainThroughWindows, "solar_gain_through_windows_in_watt"),
+    (BUILDING_NAME, Building.TemperatureMeanThermalMass, metrics.MASS_TEMPERATURE_COLUMN),
+    (BUILDING_NAME, Building.SolarGainThroughWindows, metrics.SOLAR_GAIN_COLUMN),
     (BUILDING_NAME, Building.TheoreticalThermalBuildingDemand, "theoretical_thermal_demand_in_watt"),
-    (HEATER_NAME, idealized_electric_heater.IdealizedElectricHeater.ThermalPowerDelivered, "thermal_power_delivered_in_watt"),
+    (HEATER_NAME, idealized_electric_heater.IdealizedElectricHeater.ThermalPowerDelivered, aggregate.DELIVERED_POWER_COLUMN),
     (SETBACK_NAME, NightSetbackController.BuildingTemperatureModifierInKelvin, "heating_set_point_modifier_in_kelvin"),
 )
-
-#: The exported name of the operative temperature the runner computes.
-OPERATIVE_TEMPERATURE_COLUMN = "operative_temperature_in_celsius"
-DELIVERED_POWER_COLUMN = "thermal_power_delivered_in_watt"
 
 
 @dataclass(frozen=True)
@@ -172,8 +170,8 @@ class Assembled:
             if column is not None:
                 exported[name] = results[column]
         frame = pd.DataFrame(exported, index=results.index)
-        frame[OPERATIVE_TEMPERATURE_COLUMN] = (
-            OPERATIVE_AIR_WEIGHT * frame["indoor_air_temperature_in_celsius"] + OPERATIVE_SURFACE_WEIGHT * frame["internal_surface_temperature_in_celsius"]
+        frame[metrics.OPERATIVE_TEMPERATURE_COLUMN] = (
+            OPERATIVE_AIR_WEIGHT * frame[metrics.AIR_TEMPERATURE_COLUMN] + OPERATIVE_SURFACE_WEIGHT * frame["internal_surface_temperature_in_celsius"]
         )
         return frame
 
@@ -185,53 +183,16 @@ def _find_column(results: pd.DataFrame, component: str, output: str) -> Optional
     return matches[0] if matches else None
 
 
-def summarise(frame: pd.DataFrame, seconds_per_timestep: int) -> Dict[str, Any]:
-    """Annual energies, peak loads with their time and the temperature statistics of one pass.
-
-    Heating is the positive part of the delivered thermal power, cooling the negative part; a
-    free-float frame has no delivered power and reports neither. Peaks are the largest step value;
-    the hourly aggregates the standard compares are step 4's.
-
-    Args:
-        frame: the exported time series of a pass.
-        seconds_per_timestep: the run's time step.
-
-    Returns:
-        Dict[str, Any]: plain data.
-    """
-    hours_per_step = seconds_per_timestep / 3600.0
-    summary: Dict[str, Any] = {
-        "seconds_per_timestep": seconds_per_timestep,
-        "timesteps": int(len(frame)),
-        "indoor_air_temperature_in_celsius": _statistics(frame["indoor_air_temperature_in_celsius"]),
-        "operative_temperature_in_celsius": _statistics(frame[OPERATIVE_TEMPERATURE_COLUMN]),
-        "thermal_mass_temperature_in_celsius": _statistics(frame["thermal_mass_temperature_in_celsius"]),
-        "solar_gain_through_windows_in_kilowatt_hour": float(frame["solar_gain_through_windows_in_watt"].sum() * hours_per_step / 1000.0),
-    }
-    if DELIVERED_POWER_COLUMN in frame:
-        delivered = frame[DELIVERED_POWER_COLUMN]
-        heating = delivered.clip(lower=0.0)
-        cooling = (-delivered).clip(lower=0.0)
-        summary["annual_heating_in_megawatt_hour"] = float(heating.sum() * hours_per_step / 1e6)
-        summary["annual_sensible_cooling_in_megawatt_hour"] = float(cooling.sum() * hours_per_step / 1e6)
-        summary["peak_heating_in_kilowatt"] = float(heating.max() / 1000.0)
-        summary["peak_heating_at"] = str(heating.idxmax())
-        summary["peak_sensible_cooling_in_kilowatt"] = float(cooling.max() / 1000.0)
-        summary["peak_sensible_cooling_at"] = str(cooling.idxmax())
-    return summary
-
-
-def _statistics(series: pd.Series) -> Dict[str, float]:
-    """Minimum, maximum and mean of a series."""
-    return {"min": float(series.min()), "max": float(series.max()), "mean": float(series.mean())}
-
-
-def run_case(built: BuiltCase, settings: RunSettings) -> CaseRun:
+def run_case(built: BuiltCase, settings: RunSettings, requested: Optional[RequestedOutputs] = None) -> CaseRun:
     """Run one case at one time step in two passes and write parameters, time series and summary.
+
+    The summary holds the quantities of Section 7.3 computed from the hours of the second pass
+    (``metrics``).
 
     Args:
         built: the configurations of the case.
         settings: year, time step and output directory.
+        requested: the hourly days and the temperature bins the suite asks of the case.
 
     Returns:
         CaseRun: the passes, the summary of the second pass and the files written.
@@ -265,7 +226,7 @@ def run_case(built: BuiltCase, settings: RunSettings) -> CaseRun:
             for entry in passes
         ],
         "reported_pass": reported.index,
-        **summarise(reported.frame, settings.seconds_per_timestep),
+        **metrics.case_metrics(reported.frame, settings.seconds_per_timestep, requested),
     }
     files = _write_outputs(built, settings, label, reported.frame, summary)
     return CaseRun(case_id=case_id, seconds_per_timestep=settings.seconds_per_timestep, passes=tuple(passes), summary=summary, files=files)

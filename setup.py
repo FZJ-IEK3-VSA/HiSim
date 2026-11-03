@@ -73,6 +73,8 @@ setup(
             # The suite files of the building-model verification: the structure of the
             # acceptance ranges and the deviation register (roadmap/hisim_verification_agent_spec.md §7.3):
             "verification/suites/*/*.yaml",
+            # The layout of the private reference file, every value null (spec section 7.3).
+            "verification/suites/*/reference_template.json",
         ]
     },
     include_package_data=True,

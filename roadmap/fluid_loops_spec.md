@@ -1016,9 +1016,8 @@ energy check (D15), which is why that check waits for pnw7. Re-recorded: the thr
 ## 9. Beads
 
 Epic hisim-hydraulic-circuits-wci7 (P2, `components`; its `owner-decision` label was removed on 2026-10-27,
-every question being decided). The child beads are filed with `br`, one per stage of §4; this PR edits
-the epic's title and description wording to "fluid loops" (in `.beads/issues.jsonl`, its id unchanged) and files no
-child bead; the rows marked *to file* are the list for that.
+every question being decided). There is one child bead per stage of §4; the table names each. hisim-hydronics-fxix.15 is
+closed as absorbed.
 
 | Bead | What it covers | This spec |
 |---|---|---|
@@ -1029,11 +1028,11 @@ child bead; the rows marked *to file* are the list for that.
 | hisim-energy-sankeys-9uoo.20 (R1, P2) | build rule: refuse a pumping end whose flow nobody reads while another component reads its supply | **superseded by stage 1b**: §3.3 rules 2 and 3 refuse the same wiring and more, by walking the loop instead of a heuristic over readers of the supply temperature; close it when §3.3 lands, citing this spec |
 | hisim-boiler-circuit-flow-gap-g2mx (P1) | the gas boiler's flow gap; a2 built in #1117; keeps the per-step closure, the thermostat-driven flow (hisim-component-physics-4g9.37) and the HDS enum removal | **partly absorbed**: the enum removal moves to stage 3; the per-step closure stays with pnw7; the thermostat-driven flow stays with 4g9.37; re-rate as its note says |
 | hisim-pnw7 (P3) | the HDS's pipe water as a start-of-step node; D25's flow ownership; the HDS enum; district heating's bill | **a dependency and a partner**: pnw7 keeps the node and the bill; the enum removal and D25's "who pumps" move here; stages 3 and 4 follow it |
-| hisim-hydronics-fxix.15 (P3) | design how a component learns its hydraulic topology, replacing the three enums | **absorbed** by §3.3 and D16: a component learns nothing about its topology, it states whether it pumps, and the loop is found through the wiring; close it now that Q3 is decided |
-| *to file*, child of hisim-energy-sankeys-9uoo (P2, `cleanup`) | stage 0: `EnergyRole.IN`/`OUT` → `CONSUMPTION`/`PRODUCTION` across the 73 uses, and the test that `postprocessing_flag` and `energy_port` agree on every output (D21) | its own small PR, before stage 1a |
-| *to file*, child of wci7 (P2, `components`) | D9: `energy_port=` on `add_input`; `peer_input`/`peer_output` and the copy-outputs go; the HDS's two outputs read by the building's two inputs (D20) | the D9 PR, after stage 1a |
-| *to file*, child of wci7 (P2, `components`) | stage 1b: the fourth wire, the pumping flag everywhere, the loop walk and its refusals, the D16 booleans, the sentence under B4 (D13), the recorded-files test (D22) | after stage 1a |
-| *to file*, child of wci7 (P2, `components`) | stage 2: the mass check at every member and the heating-only check in the post-run check (D11, D14, D24), the energy check coded off (D15), `FluidLoopConservationError` | after 1b |
-| *to file*, child of wci7 (P2, `components`) | stage 3: the three enums and `declares_energy_ports` go | after pnw7 |
-| *to file*, child of wci7 (P3, `components`) | stage 4: the energy check switched on (D15) | after pnw7 and stage 3 |
-| *to file*, child of hisim-energy-sankeys-9uoo (P3, `cleanup`, `owner-decision`) | the KPIs and the energy manager select by the port; the three flow flags retire (Q10's old option b, neither rejected nor chosen, D21) | after the Sankey stack |
+| hisim-hydronics-fxix.15 (P3) | design how a component learns its hydraulic topology, replacing the three enums | **absorbed** by §3.3 and D16: a component learns nothing about its topology, it states whether it pumps, and the loop is found through the wiring; closed |
+| hisim-energy-role-names-y1zy (P2, closed by #1159) | stage 0: `EnergyRole.IN`/`OUT` → `CONSUMPTION`/`PRODUCTION` across the 73 uses, and the test that `postprocessing_flag` and `energy_port` agree on every output (D21) | its own small PR, before stage 1a |
+| hisim-energy-input-ports-93jl (P2, PR #1161) | D9: `energy_port=` on `add_input`; `peer_input`/`peer_output` and the copy-outputs go; the HDS's two outputs read by the building's two inputs (D20) | the D9 PR, after stage 1a |
+| hisim-fluid-loop-walk-x4rd (P2, PR #1174) | stage 1b: the fourth wire, the pumping flag everywhere, the loop walk and its refusals, the D16 booleans, the sentence under B4 (D13), the recorded-files test (D22) | after stage 1a |
+| hisim-fluid-loop-post-run-check-vnw7 (P2) | stage 2: the mass check at every member and the heating-only check in the post-run check (D11, D14, D24), the energy check coded off (D15), `FluidLoopConservationError` | after 1b |
+| hisim-fluid-loop-enums-go-8dtc (P2) | stage 3: the three enums and `declares_energy_ports` go | after pnw7 |
+| hisim-fluid-loop-energy-check-on-lpv9 (P3) | stage 4: the energy check switched on (D15) | after pnw7 and stage 3 |
+| hisim-kpis-select-by-port-95ka (P3, `owner-decision`) | the KPIs and the energy manager select by the port; the three flow flags retire (Q10's old option b, neither rejected nor chosen, D21) | after the Sankey stack |

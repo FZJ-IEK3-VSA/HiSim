@@ -2,10 +2,19 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 7, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revision 6: 2026-11-03)
+**Status:** Draft, revision 8, 2026-11-03 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 and 7: 2026-11-03)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 8** (ASHRAE 140 [verify] marks resolved against the PDF, gap analysis §9,
+2026-11-03)
+
+- The clause and table numbers of ANSI/ASHRAE 140-2023 cited in §2, §3, §7.3 and §8.1 were
+  checked in the standard and lose their [verify] marks; the few values and clauses not checked
+  keep them (gap analysis §9.2). Finding F5: cases 640 and 940 ramp the heating set point
+  linearly from 10 °C to 20 °C between 07:00 and 08:00 (7.2.2.1.4 c), which §3.2.10 did not
+  state; `NightSetbackController` steps, so D18 is open (§3.2.10, §A).
 
 **Changes in revision 7** (D6 revised before step 2b, gap analysis §8, 2026-11-03)
 
@@ -140,9 +149,10 @@ analysis §7)
       Both decided 2026-11-03 (gap analysis §7.4).
 - [ ] Verify the [verify] items of §3.2 and Appendix B against the standards. ISO 13790 items
       checked against the FDIS 2007 text on 2026-11-02 (§3.1, §3.2.3 to 3.2.5, 3.2.9, 3.2.10,
-      Appendix B.4). Open: the ASHRAE 140 items, the layer data of Appendix B (Tables 7-2,
-      7-27) and conditions (a) and (b) of the ISO 13786 rule (standard not available).
-      *Before step 3.*
+      Appendix B.4). ASHRAE 140 clause and table numbers checked in the PDF on 2026-11-03 (gap
+      analysis §9; finding F5, the 640/940 ramp hour, D18). Open: the layer data of Appendix B
+      (Tables 7-2, 7-27; the human), the few ASHRAE values of gap analysis §9.2, and conditions
+      (a) and (b) of the ISO 13786 rule (standard not available). *Before step 3.*
 - [ ] Optional: IEA BESTEST 1995 report for the public report.
 
 ### Decisions
@@ -176,6 +186,9 @@ analysis §7)
       replaces D6 (gap analysis §8).
 - [x] D17 (2026-11-03): `Building.get_windows` reads the window geometries from
       `BuildingInformation` in step 2b itself, no step 2c (gap analysis §8.3).
+- [x] D18 (2026-11-03, for now): cases 640 and 940 keep the step at 07:00 instead of the ramp of
+      7.2.2.1.4 c, registered as `input_mapping`; revisited with the first full report (gap
+      analysis §9.3).
 
 ## 0. Rules for the agent
 
@@ -249,7 +262,7 @@ from the BESTEST test cell.
 
 | Suite | Cases | Compared quantities | Criterion |
 |---|---|---|---|
-| `ashrae140` | 600, 620, 640, 660, 670, 680, 685, 695, 900, 920, 940, 980, 985, 995, 600FF, 680FF, 900FF, 980FF | annual heating and annual sensible cooling (absolute for 600 and 900, difference to the parent case otherwise); diagnostics: peak heating and cooling load with timestamp, monthly loads, hourly loads and temperatures on 1 February and 14 July (Table 7-47 [verify]), free-float mean/min/max zone air temperature, 1 °C temperature bins for 900FF (7.3.7 [verify]) | Annex A3 ranges, Tables A3-1 to A3-4; diagnostics have no range |
+| `ashrae140` | 600, 620, 640, 660, 670, 680, 685, 695, 900, 920, 940, 980, 985, 995, 600FF, 680FF, 900FF, 980FF | annual heating and annual sensible cooling (absolute for 600 and 900, difference to the parent case otherwise); diagnostics: peak heating and cooling load with timestamp, monthly loads, hourly loads and temperatures on 1 February and 14 July (Table 7-47, 7.3.8), free-float mean/min/max zone air temperature, 1 °C temperature bins for 900FF (7.3.7) | Annex A3 ranges, Tables A3-1 to A3-4; diagnostics have no range |
 | `iso52016` (**deferred**, 2026-11-02: the §7.4 bypass needs a new Building input, excluded by rule 3) | 600, 640, 900, 940, 600FF, 900FF (Table 27 [verify]) | monthly and annual heating and cooling need (Tables 28, 29), monthly and annual mean operative temperature (Table 30), peak loads (Table 31), free-float max/min/mean operative temperature (Table 32), hourly load and operative temperature on 4 January (Tables 33, 34) [verify] | reported deviation; the standard defines no tolerance (§8.2) |
 
 Phase 1 runs the `ashrae140` suite. The `iso52016` suite keeps its definition in this spec for a
@@ -260,11 +273,11 @@ later phase; its step (§11 step 7) and its data items (§A) wait.
 Every case is defined relative to its base case. The derivation below is the input of the
 `derives_from` mechanism of the case files (FR1); the details come from the standard.
 
-| Case | Derived from | Change [verify] |
+| Case | Derived from | Change |
 |---|---|---|
 | 600 | – | lightweight base case, 7.2.1 |
 | 620 | 600 | 6 m² window east and 6 m² west, no south window |
-| 640 | 600 | heating setback 10 °C from 23:00 to 07:00 |
+| 640 | 600 | heating setback 10 °C from 23:00 to 07:00, linear ramp to 20 °C from 07:00 to 08:00 (7.2.2.1.4) |
 | 660 | 600 | low-emissivity double glazing, Tables 7-17 to 7-20 |
 | 670 | 600 | single glazing, Tables 7-21 to 7-24 |
 | 680 | 600 | increased insulation, Table 7-25 |
@@ -276,14 +289,18 @@ Every case is defined relative to its base case. The derivation below is the inp
 | 980 | 900 | increased insulation, Table 7-31 |
 | 985 | 900 | thermostat 20/20 |
 | 995 | 980 | thermostat 20/20 |
-| 600FF, 680FF, 900FF, 980FF | base case | no heating and no cooling, 7.2.2.3 |
+| 600FF, 680FF, 900FF, 980FF | base case | no heating and no cooling, 7.2.2.3 [verify] |
+
+Checked against the standard on 2026-11-03: the tables of 660, 670, 680, 900 and 980 and the clauses
+7.2.2.1.4 (640), 7.2.2.1.6 (660), 7.2.2.1.7 (670) and 7.2.2.2.1 (900). Still [verify]: the window
+placement of 620, the 20/20 set points of 685, 695, 985 and 995, and 7.2.2.3.
 
 ### 2.3 Not modelled (decision 2026-11-02: no extension planned)
 
 | Cases | Missing capability |
 |---|---|
 | 610, 630, 910, 930 | shading of direct radiation by an overhang (610, 910) and by overhang plus side fins (630, 930); geometry per Figures 7-3, 7-5, 7-6 [verify] |
-| 650, 950, 650FF, 950FF | scheduled ventilation: night vent fan 1700 m³/h from 18:00 to 07:00, no heating in 650/950 [verify]; time-dependent H_ve |
+| 650, 950, 650FF, 950FF | scheduled ventilation: night vent fan 1700 standard m³/h (7.2.2.1.5) from 18:00 to 07:00, no heating in 650/950 [schedule: verify]; time-dependent H_ve |
 
 These cases appear in the group accounting as `not_modelled` (§8.1). Should the human
 later reopen the decision, §8.1 contains the rule that tells whether an extension can
@@ -293,7 +310,7 @@ change the formal result at all.
 
 - Case 960 (two-zone sunspace): no multi-zone model in HiSim; `not_modelled` in the group
   accounting (§8.1).
-- In-depth diagnostic cases of Section 7.2.3 (195 to 810) [verify].
+- In-depth diagnostic cases of Section 7.2.3, Case 195 (7.2.3.5) to Case 810 (7.2.3.25).
 - Other test groups of Table A3-14 (cooling, heating and air-side equipment).
 - Code-to-code comparison with EnergyPlus: carried out separately by a partner
   organisation for the paper.
@@ -319,7 +336,8 @@ change the formal result at all.
   succeeded by ISO 52016-1, whose hourly method is a different, surface-resolved model.
   Cite as "EN ISO 13790:2008 (withdrawn), simple hourly method".
 - The thermostat is the Building's two-step demand procedure (ISO 13790, clause C.4) on the zone
-  air temperature, which is what ASHRAE 140 requires (7.2.1.13 [verify]); the setpoints are
+  air temperature, which is what ASHRAE 140 requires (7.2.1.13.1 b: the thermostat senses only the
+  air temperature); the setpoints are
   `BuildingConfig` fields; the ideal heater delivers the power its L1 controller sets, and that
   controller copies the Building's demand, so the delivered power is the demand (gap analysis
   F2 and §7.1).
@@ -352,17 +370,19 @@ Every rule that departs from the standard's description is also an entry in the 
 register (§8.3).
 
 1. **Opaque transmission.** H_tr_op = Σ U_i·A_i over floor, walls and roof. Thermal bridges
-   are zero in both suites [verify]. The U-values are the air-to-air values printed in the
-   standards' construction tables (ASHRAE Tables 7-2, 7-25, 7-27, 7-31; ISO Tables 23, 24
-   [verify]). They include the standards' combined surface coefficients, which is
+   are zero in both suites (ASHRAE: the constructions are plane layers and the term does not occur
+   in the standard, checked 2026-11-03; ISO [verify]). The U-values are the air-to-air values printed
+   in the standards' construction tables (ASHRAE Tables 7-2, 7-25, 7-27, 7-31, checked; ISO Tables
+   23, 24 [verify]). They include the standards' combined surface coefficients, which is
    consistent with a model that has no separate long-wave exchange. Recomputation from the
    layers serves only as a check (pyBuildingEnergy notes a 0.01 m²K/W discrepancy between
-   Table 7-28 and the layers of Table 7-27 for the Case 900 floor [verify]). The floor
-   faces outdoor air in both suites (ASHRAE 7.2.1.5 raised floor; ISO Table 23 footnote a
-   [verify]) and receives no solar radiation. *[decided 2026-11-02: as stated; the printed
+   Informative Table 7-28 and the layers of Table 7-27 for the Case 900 floor; table numbers
+   checked). The floor faces outdoor air in both suites (ASHRAE 7.2.1.5 raised floor, checked; ISO
+   Table 23 footnote a [verify]) and receives no solar radiation. *[decided 2026-11-02: as stated; the printed
    value wins where the layer recomputation differs]*
 2. **Window transmission.** H_tr_w = Σ U_w·A_w with the printed air-to-air window U-values
-   (ASHRAE Tables 7-10, 7-11 and the 660/670 tables; ISO clause 7.2.2.6 [verify]).
+   (ASHRAE Normative Table 7-10 with Informative Table 7-11, Tables 7-17 and 7-21 for 660 and 670,
+   checked; ISO clause 7.2.2.6 [verify]).
 3. **Internal heat capacity.** C_m = Σ κ_j·A_j over all elements facing the zone (ISO 13790
    12.3.1; FDIS 2007: 12.3.1.1, equation (68)). κ_j = Σ ρ·c·d over the layers from the inside up
    to the effective thickness of ISO 13786, Annex A, for a period of one day: the smallest of
@@ -388,7 +408,8 @@ register (§8.3).
 6. **Ventilation.** H_ve = (ρ·c)_air · n · V / 3600. HiSim's constant is
    0.34 Wh/(m³K) = 1224 J/(m³K) (`information.py`). ASHRAE specifies 0.5 h⁻¹ at site
    density (Denver, 1650 m); the rate passed to HiSim is n = 0.5 · (ρ·c_p)_site / 1224 with
-   (ρ·c_p)_site from the standard (Table 7-3 footnote, Annex B3.1 [verify]), so that H_ve is
+   (ρ·c_p)_site from the standard (7.2.1.6.1, Table 7-4 and Annex B3.1; the references checked, the
+   site values are read from B3.1 in step 3), so that H_ve is
    the standard's. The ISO rate of 0.41 h⁻¹ is already altitude-adjusted (7.2.2.14 [verify])
    for the air heat capacity ISO 52016-1 assumes [verify]; if that constant differs from
    1224 J/(m³K), n is scaled the same way. Scaled n and H_ve are written to the parameters
@@ -396,28 +417,37 @@ register (§8.3).
 7. **Internal gains.** 200 W, constant, sensible, fed as a constant source into the
    building's device heat-gain input. The model's split onto the nodes is fixed by ISO 13790
    C.1 to C.3 (half of the internal gains to the air node, the rest to surface and mass by
-   area ratio); the 60 % radiative / 40 % convective split of ASHRAE (7.2.1.7 [verify]) and
+   area ratio); the 60 % radiative / 40 % convective split of ASHRAE (7.2.1.7, checked) and
    the split of ISO 52016-1 cannot be set. Register entry in both suites.
 8. **Solar gains through windows.** Windows are explicit per orientation (area, azimuth,
-   tilt 90°), with g_n, frame fraction 0 and no external shading [verify]. Non-perpendicular
+   tilt 90°), with g_n, frame fraction 0 and no shading devices (Table 7-10: curtains, blinds,
+   frames, spacers and mullions none; checked). Non-perpendicular
    incidence: for the ASHRAE suite F_w is the irradiance-weighted annual mean of
    SHGC(θ)/SHGC_n from Table 7-12, computed per orientation from the weather file (method
    of pyBuildingEnergy's `effective_window_fw`: beam from the angular table, diffuse from
-   the hemispherical value, isotropic sky, ground reflectance 0.2 [verify]); for the ISO
+   the hemispherical value, isotropic sky, ground reflectance 0.2); for the ISO
    suite F_w = 0.90 (7.2.2.6, Table B.22 [verify]). HiSim applies F_w as a
    constant per window on the total plane irradiance (isotropic sky; ground reflectance 0.2 as
-   the standard specifies, 7.2.1.1.2.5 [verify]). The weighted F_w is computed once before any
+   the standard specifies, 7.2.1.1.2.5, checked). The weighted F_w is computed once before any
    result is looked at, written to the parameters output and reported beside the hemispherical
-   ratio 0.670/0.769 = 0.871 of Table 7-12 [verify]. Register entries: `input_mapping` (one
-   constant per orientation, permitted by 7.2.1.11.3 a) [verify]) and `model` (isotropic sky).
+   ratio 0.670/0.769 = 0.871 of Table 7-12 (0.769 at normal incidence checked; the hemispherical
+   0.670 is pyBuildingEnergy's reading [verify]). Register entries: `input_mapping` (one constant per
+   orientation; 7.2.1.11.3 a) lets a program without angle-dependent inputs skip that section,
+   checked) and `model` (isotropic sky).
    *[decided 2026-11-02]*
-9. **Opaque solar absorption and sky radiation.** α = 0.6 (Table 7-5 [verify]). HiSim
+9. **Opaque solar absorption and sky radiation.** α = 0.6 (Table 7-5 with 7.2.1.8.1; the table
+   checked, the interior value 0.6 read, the exterior column [verify]). HiSim
    implements neither the opaque solar gain nor the sky radiation term of ISO 13790 11.3.4 and
    11.3.5 (clause numbers checked against the FDIS 2007 text); H_tr_em sees the outdoor air temperature and α is not used. Register entry
    `model`; no sol-air temperature or other workaround through the inputs. *[decided 2026-11-02]*
 10. **Thermostat.** ASHRAE: zone air temperature, non-proportional, unlimited capacity,
-    setpoints 20/27 °C; 685, 695, 985, 995 use 20/20 °C; 640 and 940 heat to 10 °C from
-    23:00 to 07:00 and to 20 °C from 07:00 to 23:00, cooling at 27 °C at all hours [verify].
+    setpoints 20/27 °C (7.2.1.13.1, checked); 685, 695, 985, 995 use 20/20 °C [verify]; 640 and 940
+    (7.2.2.1.4, checked 2026-11-03) heat to 10 °C from 23:00 to 07:00, ramp the set point linearly
+    from 10 °C to 20 °C between 07:00 and 08:00 (sub-hourly steps follow the ramp, hourly programs
+    use 20 °C for that hour) and heat to 20 °C from 08:00 to 23:00; cooling at 27 °C at all hours.
+    The ramp hour was missing from this spec until 2026-11-03; `NightSetbackController` steps at
+    07:00. Decided 2026-11-03 (D18, for now): the step at 07:00 stays, registered as `input_mapping`
+    naming 7.2.2.1.4 c; revisited with the first full report (gap analysis §9.3).
     ISO: control on the operative temperature (7.2.2.1 [verify]), same setpoints and the same
     setback for 640 and 940 (7.2.2.15 [verify]). Operative temperature in the 5R1C model:
     θ_op = 0.3·θ_air + 0.7·θ_s (ISO 13790 Annex C, equation (C.12)). The thermostat is the
@@ -425,7 +455,8 @@ register (§8.3).
     would be a Building change. Decided 2026-11-02: air control in every suite, register entry
     `model` ("Thermostat acts on θ_air (ISO 13790, clause C.4 procedure); EN ISO 52016-1 controls
     on the operative temperature"). The 640/940 setback uses the existing `NightSetbackController`
-    and `BuildingTemperatureModifierInKelvin` (heating setpoint only, 23:00 ≤ t < 07:00); capacity is
+    and `BuildingTemperatureModifierInKelvin` (heating setpoint only, 23:00 ≤ t < 07:00; the ramp hour
+    per D18); capacity is
     unlimited. *[decided 2026-11-02]*
 11. **Warm-up.** HiSim lays exactly one calendar year and can neither prepend a month nor start
     in December (gap analysis row 17). Decided 2026-11-02: two-pass run per (case, time step):
@@ -435,7 +466,7 @@ register (§8.3).
     initialisation month of the ISO spreadsheet cannot be used for the same reason, should that
     suite return. *[decided 2026-11-02]*
 12. **Site and weather.** ASHRAE: Denver International Airport, 39.833 N, 104.650 W, 1650 m,
-    UTC−7 (Table A1-1 [verify]), EPW of §7.2, linear interpolation to sub-hourly steps (FR6).
+    UTC−7 (Table A1-1, checked; the EPW header says the same), EPW of §7.2, linear interpolation to sub-hourly steps (FR6).
     ISO: site per 7.2.2.12 [verify], irradiance per orientation from the climate spreadsheet
     (§7.4), linear interpolation to sub-hourly steps.
 
@@ -607,24 +638,24 @@ reference_sources: [ashrae140_2023, denver_tmy3_epw]
 gating: false             # §9.3; only the human sets true
 groups:
   low_mass:
-    ranges_total: 21        # [verify] Table A3-14
-    minimum_required: 18    # [verify] Table A3-14
+    ranges_total: 21        # Table A3-14, checked 2026-11-03
+    minimum_required: 18    # Table A3-14, checked
     range_cases:
       - {case: "600", metric: heating}
       - {case: "600", metric: cooling}
       - {case: "610", parent: "600", metric: heating}
       - {case: "610", parent: "600", metric: cooling}
-      # … 650 has a cooling range only [verify]
+      # … 650 has a cooling range only (Table A3-2, checked)
   high_mass:
-    ranges_total: 19        # [verify]
-    minimum_required: 17    # [verify]
+    ranges_total: 19        # Table A3-14, checked
+    minimum_required: 17    # Table A3-14, checked
     range_cases:
-      - {case: "910", parent: "900", metric: heating, reverse: true}   # value = 900 − 910 [verify]
+      - {case: "910", parent: "900", metric: heating, reverse: true}   # value = 900 − 910 (Tables A3-3, A3-4, checked)
       # …
 deviation_register:        # §8.3; entries of category model and input_mapping
   - id: gains_split
     category: model
-    standard_clause: "ASHRAE 140-2023, 7.2.1.7 [verify]"
+    standard_clause: "ASHRAE 140-2023, 7.2.1.7"
     description: "60 % radiative / 40 % convective internal gains"
     hisim_treatment: "ISO 13790 C.1–C.3 split: 50 % to the air node, remainder to surface and mass nodes by area ratio"
 ```
@@ -721,11 +752,11 @@ Consequences:
   states conformity with Standard 140; the text "attempted ranges met: m of n" is the
   headline of the verification.
 - **Information for a later decision on §2.3 (low-mass group).** With 3 misses allowed
-  [verify], shading alone (650 still not modelled) would leave 2 misses among the other 20
+  (21 − 18, Table A3-14), shading alone (650 still not modelled) would leave 2 misses among the other 20
   ranges, shading plus night ventilation 3 among 21. Let F be the number of `fail` among the
   16 attempted low-mass ranges at 3600 s: F ≥ 4 → no extension can change the formal
   result; F ≤ 3 → an extension could. The high-mass group cannot be passed by any
-  single-zone model: Case 960 alone uses the 2 allowed misses [verify]. The report states
+  single-zone model: Case 960 alone uses the 2 allowed misses (19 − 17, Table A3-14). The report states
   this as a property of the test procedure.
 
 ### 8.2 EN ISO 52016-1 — reported deviations

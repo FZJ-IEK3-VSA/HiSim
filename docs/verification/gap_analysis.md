@@ -518,4 +518,62 @@ morning/afternoon asymmetry) needs the per-window geometry anyway.
 - §3.1: the parametrisation bullet. §3.2 introduction and rules 3 and 4: rules 1 to 4 live in the
   system builder, HiSim receives the results as overrides; rule 5 stays HiSim's.
 - FR2 rewritten; §11 steps 2b and 3; §A: D16 and D17 recorded.
+
+## 9. ASHRAE 140 [verify] marks resolved against the standard (2026-11-03)
+
+Method (D13): the PDF in the private folder was searched in place for the cited clause and table
+numbers, printing only the matching line heads; nothing of it was copied into a file. Two
+acceptance-range rows of Annex A3 appeared in the local session log of that search by mistake;
+they are in no file and nowhere in the repository.
+
+### 9.1 Confirmed (clause and table numbers of ANSI/ASHRAE 140-2023)
+
+Geometry 7.2.1.3; ground reflectance 0.2, 7.2.1.1.2.5; raised floor 7.2.1.5; materials Table 7-2
+(600), 7-25 (680), 7-27 (900), 7-31 (980), with the informative summaries Tables 7-3 and 7-28;
+infiltration 0.5 ach, 7.2.1.6, the altitude adjustment 7.2.1.6.1 with Table 7-4 and Annex B3.1;
+internal gains 7.2.1.7, 60 % radiative and 40 % convective; Table 7-5 with 7.2.1.8.1 (interior
+solar absorptance 0.6, infrared emittance 0.9); surface coefficients Tables 7-7 and 7-9 with
+7.2.1.9.3 and 7.2.1.10.3; window: Normative Table 7-10 (curtains, blinds, frames, spacers,
+mullions: none), Informative Table 7-11, Table 7-12 (SHGC 0.769 at normal incidence), 7.2.1.11.3
+a) (a program without angle-dependent inputs skips the section); interior solar distribution
+7.2.1.12.2 with Tables 7-13 (600) and 7-15 (620); mechanical system 7.2.1.13, thermostat
+7.2.1.13.1 (senses only the air temperature; heat on below 20 °C, cool on above 27 °C); Case 640
+in 7.2.2.1.4 (cooling at 27 °C at all hours); Case 650 in 7.2.2.1.5 (1700 standard m³/h); 660
+Table 7-17 (7.2.2.1.6); 670 Table 7-21 (7.2.2.1.7); 900 in 7.2.2.2.1; in-depth cases 7.2.3 from
+Case 195 (7.2.3.5) to Case 810 (7.2.3.25); outputs Table 7-47 with 7.3.8, the 1 °C bins of 7.3.7;
+site Table A1-1; Annex A3: Table A3-14 counts (low mass 21 ranges, 18 required; high mass 19 and
+17), Case 650 listed in Table A3-2 only, Case 910 as 900 − 910 in Tables A3-3 and A3-4. Thermal
+bridges: the term does not occur in the standard; the constructions are plane layers.
+
+### 9.2 Still marked
+
+The hemispherical SHGC 0.670 of Table 7-12 (not located by search; pyBuildingEnergy's reading),
+the exterior solar absorptance of Table 7-5, the window placement of 620, the 20/20 set points of
+685, 695, 985 and 995, 7.2.2.3 for the free-float cases, the geometry of the shading cases (not
+modelled), and every ISO item (ISO 13786 unavailable, the ISO 52016 suite deferred). The layer
+data of Appendix B are the human's check (Tables 7-2 and 7-27).
+
+### 9.3 Finding F5: the set-point ramp of cases 640 and 940
+
+7.2.2.1.4 c: from 07:00 to 08:00 the heating set point rises linearly from 10 °C to 20 °C;
+sub-hourly programs follow the ramp step by step (12.5, 15, 17.5 and 20 °C at 900 s), hourly
+programs use 20 °C for that hour. Spec §3.2.10 had the set point at 20 °C from 07:00.
+`NightSetbackController` has `night_end_time_in_hours` and one `setback_delta_in_kelvin`: a step.
+Options: (a) the step at 07:00 as planned, registered as `input_mapping` naming 7.2.2.1.4 c (the
+morning peak and the heating of that hour differ from the ramp, the annual heating little);
+(b) a ramp end hour in the controller (control code; rule 3 allows it only as a refinement, the
+case runs without it); (c) the step at 08:00 (the hourly programs' reading, wrong at 900 s and
+60 s). Recommendation: (a) for the first full report, revisited with the report.
+
+### 9.4 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D18 | F5: the 07:00 to 08:00 set-point ramp of 640 and 940 | (a) step at 07:00 with a register entry | (a), 2026-11-03, for now; revisited with the first full report | hisim-x6c7 |
+
+### 9.5 Spec corrections applied (revision 8, 2026-11-03)
+
+- §2.1, §2.2, §2.4, §3.1, §3.2 rules 1, 2, 6 to 10 and 11, §7.3, §8.1: the confirmed clause and
+  table numbers replace their [verify] marks; the marks of §9.2 stay.
+- §3.2.10: the ramp hour of 7.2.2.1.4 c; D18 in §A.
 - §3 and §4 of this document are left as written; D6 points here.

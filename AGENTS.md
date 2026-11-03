@@ -87,6 +87,9 @@ and what a test must prove.
   (session fixtures in `tests/renovisor/conftest.py`). The first test builds the whole probe set, about
   100 s; run it when you change the translator, the catalogue or the capability document. Run without
   xdist (`-p no:xdist` or `-n 0`), or every worker builds the document again.
+- `verification` — the building-model verification suite against ANSI/ASHRAE 140 (`tests/verification/`).
+  Skips unless `HISIM_VERIFICATION_DATA` names the private reference-data folder; with it, full-year
+  runs. Avoid.
 
 Deselect the slow/networked ones explicitly when running a broader-than-base subset, e.g.:
 ```bash

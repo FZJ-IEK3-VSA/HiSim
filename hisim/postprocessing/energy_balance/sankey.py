@@ -12,8 +12,8 @@ negative total turns the edge round) and the port it came from:
 * **meter boundary**: what a meter publishes, its import from "grid import" or the carrier's supply node and its
   export to "grid export" (:mod:`.meters`). A meter's gap between what it publishes and what it reads is its
   residual, treated like a component's.
-* **boundary**: a ``CONSUMPTION`` port from its boundary node ("natural gas supply", "ambient heat", "sun") or a ``PRODUCTION``
-  port to one.
+* **boundary**: a ``CONSUMPTION`` port from its boundary node ("natural gas supply", "ambient heat source", "sun") or a
+  ``PRODUCTION`` port to one ("ambient heat sink", "driving").
 * **loss**: a ``LOSS`` port to its own loss node, "<component> · <output>", which carries the total on to its
   boundary node, "outdoors" unless the port names another.
 * **storage**: a ``STORED_CHANGE`` port to the component's storage node, "<component> · stored", or from it when

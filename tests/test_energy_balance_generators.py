@@ -48,7 +48,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {"electricity", "ambient_heat"},
         {"space_heating_heat", "domestic_hot_water_heat"},
         {
-            ("ambient_heat", "ambient heat", "MoreAdvancedHeatPumpHPLib"),
+            ("ambient_heat", "ambient heat source", "MoreAdvancedHeatPumpHPLib"),
             ("electricity", "ElectricityMeter", "MoreAdvancedHeatPumpHPLib"),
             ("electricity", "grid import", "ElectricityMeter"),
             ("space_heating_heat", "MoreAdvancedHeatPumpHPLib", "SimpleHotWaterStorage"),

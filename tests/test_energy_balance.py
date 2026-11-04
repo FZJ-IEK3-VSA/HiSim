@@ -188,8 +188,8 @@ def test_a_port_naming_its_environment_goes_there_whoever_reads_it() -> None:
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.DISTRICT_HEAT), "district heat supply"),
         (EnergyPort(PRODUCTION, GAS), None),
         (EnergyPort(LOSS, GAS), "outdoors"),
-        (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat"),
-        (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat"),
+        (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat source"),
+        (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat sink"),
         (EnergyPort(CONSUMPTION, SOLAR), "sun"),
         (EnergyPort(PRODUCTION, SOLAR), None),
         (EnergyPort(CONSUMPTION, SH), None),
@@ -1043,7 +1043,7 @@ def test_a_device_the_meter_reads_links_to_the_meter_also_through_an_exempt_cont
     balance_report = house(through_the_manager=through_the_manager)
     peers = {series.name: series.peer for series in balance_report.declared.all_series()}
     assert peers["HeatPump.ElectricityIn"] == peers["PV.ElectricityOut"] == Peer(PeerKind.METER, "Meter")
-    assert peers["HeatPump.AmbientIn"].name == "ambient heat" and peers["PV.SunIn"].name == "sun"
+    assert peers["HeatPump.AmbientIn"].name == "ambient heat source" and peers["PV.SunIn"].name == "sun"
     assert not balance_report.meter_check.unmetered
 
 
@@ -1338,7 +1338,7 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
         {"component": "Sum", "class": "Helper", "reason": "it sums two inputs, which moves no energy"}
     ]
     kinds = {node["name"]: node["kind"] for node in balance_report.sankeys()["overall"]["nodes"]}
-    assert kinds["unlinked"] == "unlinked" and kinds["ambient heat"] == "boundary"
+    assert kinds["unlinked"] == "unlinked" and kinds["ambient heat source"] == "boundary"
 
 
 @pytest.mark.base

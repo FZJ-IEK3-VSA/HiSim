@@ -265,6 +265,15 @@ class EnergyPort:
         lt.EnergyBalanceCarrier.ELECTRICITY
     }
 
+    #: The boundary node of an ambient-heat port by its role: heat taken from the outside air comes from its source node,
+    #: heat rejected to it goes to its sink node (owner decision Q-M of the complete Sankey spec).
+    AMBIENT_HEAT_NODES: ClassVar[Mapping[lt.EnergyRole, lt.EnvironmentNode]] = MappingProxyType(
+        {
+            lt.EnergyRole.CONSUMPTION: lt.EnvironmentNode.AMBIENT_HEAT_SOURCE,
+            lt.EnergyRole.PRODUCTION: lt.EnvironmentNode.AMBIENT_HEAT_SINK,
+        }
+    )
+
     @staticmethod
     def supply_node_name(carrier: lt.EnergyBalanceCarrier) -> str:
         """The name of the boundary node a bought carrier comes from.
@@ -286,8 +295,11 @@ class EnergyPort:
         The table of the complete Sankey spec, §4.3: a ``LOSS`` port, a bought carrier's ``CONSUMPTION`` port, an ambient-heat
         ``CONSUMPTION`` or ``PRODUCTION`` port and a solar ``CONSUMPTION`` port have one; an electricity port and a heat port have none, and
         such a port with no peer is unlinked. For example, a boiler's natural-gas ``CONSUMPTION`` port that no meter reads goes
-        to "natural gas supply", a heat pump's ambient-heat ``CONSUMPTION`` port to "ambient heat", a collector's solar ``CONSUMPTION``
-        port to "sun" and every ``LOSS`` port to "outdoors". A port that names its ``environment`` goes there.
+        to "natural gas supply", a heat pump's ambient-heat ``CONSUMPTION`` port to "ambient heat source", an air conditioner's
+        ambient-heat ``PRODUCTION`` port (the heat it rejects while cooling) to "ambient heat sink", a collector's solar
+        ``CONSUMPTION`` port to "sun" and every ``LOSS`` port to "outdoors". The source and the sink of ambient heat are two
+        nodes (owner decision Q-M of the complete Sankey spec), so the Sankey draws the one left and the other right. A
+        port that names its ``environment`` goes there.
 
         Returns:
             The boundary node's name, or None for a port whose carrier has no boundary default for its role.
@@ -298,8 +310,8 @@ class EnergyPort:
             return lt.EnvironmentNode.OUTDOORS.value
         if self.role == lt.EnergyRole.CONSUMPTION and self.carrier in self.SUPPLIED_CARRIERS:
             return self.supply_node_name(self.carrier)
-        if self.carrier == lt.EnergyBalanceCarrier.AMBIENT_HEAT and self.role in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION):
-            return lt.EnvironmentNode.AMBIENT_HEAT.value
+        if self.carrier == lt.EnergyBalanceCarrier.AMBIENT_HEAT and self.role in self.AMBIENT_HEAT_NODES:
+            return self.AMBIENT_HEAT_NODES[self.role].value
         if self.carrier == lt.EnergyBalanceCarrier.SOLAR and self.role == lt.EnergyRole.CONSUMPTION:
             return lt.EnvironmentNode.SOLAR.value
         return None
@@ -459,8 +471,9 @@ class FluidLoop:
         name: The component's own name for the loop, free text, for example ``"space_heating"`` or
             ``"apartment_3"``: a component may have as many loops as its configuration says. It must differ from the
             names of the component's other loops.
-        carrier: The heat the loop carries while it heats, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``;
-            while it cools, the balance books ``COOLING``.
+        carrier: The heat the loop carries while it heats, ``SPACE_HEATING_HEAT`` or ``DOMESTIC_HOT_WATER_HEAT``, or
+            ``AMBIENT_HEAT`` on a collector loop that brings the heat of the ground or the outside air to a heat pump
+            (``SimpleHeatSource``'s brine loop); while it cools, the balance books ``COOLING``.
         fluid: The fluid the loop carries, which gives its specific heat.
         supplies: Whether this member is the loop's generator end, the one whose heat the other member receives.
         may_cool: Whether this member lets the loop remove heat from the room side; a loop may cool only if every
@@ -477,10 +490,11 @@ class FluidLoop:
     may_cool: bool
     pumps: Optional[bool] = None
 
-    #: The heat a loop can carry while it heats.
+    #: The heat a loop can carry while it heats: space heating, hot water, or the environment's heat on a collector loop.
     LOOP_CARRIERS: ClassVar[Tuple[lt.EnergyBalanceCarrier, ...]] = (
         lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
         lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+        lt.EnergyBalanceCarrier.AMBIENT_HEAT,
     )
 
     def __post_init__(self) -> None:
@@ -493,7 +507,7 @@ class FluidLoop:
             raise FluidLoopError(f"A fluid loop's name is a non-empty text, got {self.name!r}.")
         if not isinstance(self.carrier, lt.EnergyBalanceCarrier) or self.carrier not in self.LOOP_CARRIERS:
             raise FluidLoopError(
-                f"The fluid loop {self.name!r} carries space-heating or hot-water heat "
+                f"The fluid loop {self.name!r} carries space-heating, hot-water or ambient heat "
                 f"({', '.join(carrier.name for carrier in self.LOOP_CARRIERS)}), got {self.carrier!r}."
             )
         if not isinstance(self.fluid, LoopFluid):

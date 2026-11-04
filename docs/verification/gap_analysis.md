@@ -713,3 +713,10 @@ developer's machine, the two passes included.
 Case 600 ran through the hours, the quantities and the comparison with the private file. The
 comparison results are not recorded here. HiSim's own values: peak heating 2.805 kW on 31 December,
 hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.
+
+### 11.4 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D22 | Statuses per range and group accounting in the public report (spec §9.3, §10 and §12 allowed them, as pyBuildingEnergy publishes them) | private | private for now: the statuses, the group accounting and its headline appear only in the private report; the public report carries HiSim's values and the deviation register; spec revision 11; 2026-11-04 | – |
+| D23 | Whether step 5 builds the public report (spec §10, FR14 `--public`) | defer: no reader yet (the CI of step 9 and the paper come later), and every public output is a place where something could slip out | deferred until a reader needs it; step 5 builds the private report only, without plots; the plots follow with the review of step 6; spec revision 11; 2026-11-04 | – |

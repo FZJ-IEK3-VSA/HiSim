@@ -32,10 +32,10 @@ import hisim.components
 from hisim import loadtypes as lt
 from hisim.component import Component
 from hisim.components.advanced_battery_bslib import Battery
+from hisim.components.advanced_fuel_cell import CHP
 from hisim.components.air_conditioner import AirConditioner
 from hisim.components.fuel_meter import FuelMeterConfig
-from hisim.components.generic_chp.chp import SimpleCHP
-from hisim.components.generic_fuel_cell import FuelCell
+from hisim.components.generic_electrolyzer_h2 import Electrolyzer
 from hisim.components.generic_heat_pump import GenericHeatPump
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
@@ -156,6 +156,11 @@ class FlagPortAgreement:
     )
     #: The reason an output of a class that declares no energy port carries a flag and no port.
     UNDECLARED_REASON: ClassVar[str] = "a flag and no port: the class declares no energy port at all, and the balance lists it as undeclared."
+    #: The reason an electricity port of a device in a golden setup carries no flag.
+    RESULTS_KEEP_REASON: ClassVar[str] = (
+        "a port and no flag: the device runs in a golden setup (dynamic_components, electrolyzer_with_renewables) "
+        "whose KPIs would move if they counted this electricity."
+    )
 
     #: Every output that carries one of the two tags without the other, as (component class, output name), with the
     #: reason. The list may only shrink.
@@ -177,10 +182,10 @@ class FlagPortAgreement:
             "STORED_ENERGY_INCREASE output; flagged as production, the discharging would count as generation."
         ),
         (AirConditioner, AirConditioner.ElectricalPowerConsumption): UNDECLARED_REASON,
-        (FuelCell, FuelCell.PowerOutput): UNDECLARED_REASON,
+        (CHP, CHP.ElectricityOutput): RESULTS_KEEP_REASON,
+        (Electrolyzer, Electrolyzer.CurrentLoad): RESULTS_KEEP_REASON,
         (GenericHeatPump, GenericHeatPump.ElectricityOutput): UNDECLARED_REASON,
-        (SimpleCHP, SimpleCHP.ElectricityOutput): UNDECLARED_REASON,
-        (Transformer, Transformer.TransformerOutput): UNDECLARED_REASON,
+        (Transformer, Transformer.ElectricityReceivedInKilowatt): RESULTS_KEEP_REASON,
     }
 
     @classmethod

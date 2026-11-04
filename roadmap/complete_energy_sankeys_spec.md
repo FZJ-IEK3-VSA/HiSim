@@ -405,7 +405,7 @@ has ports after this epic; "exempt" means it is never a node.
 |---|---|---|---|---|
 | `Battery` (advanced_battery_bslib) | physics | declares | §5.3 | 2 |
 | `CarBattery` (advanced_ev_battery_bslib) | physics | declares | el in from its meter (`AcBatteryChargingPower`, which also takes the KPI consumption flag from the charge controller's copy), vehicle electricity out to the car (`AcBatteryDischargingPower`, carrier `VEHICLE_ELECTRICITY`, Q-K: the car reads it, no meter does), new `InverterLossInWatt` and `CellLossInWatt` (el), new `StoredEnergyIncreaseInWattHour` (el) (built in 5b) | 5b |
-| `CHP` (advanced_fuel_cell) | physics | declares | hydrogen or gas in; el out to its meter, SH heat out; conversion loss | 5c |
+| `CHP` (advanced_fuel_cell) | physics | declares | hydrogen or natural gas in (new `FuelConsumptionInWatt`, `GasDemandReal` times the fuel's lower heating value), el out (`ElectricityOutput`), SH heat out (`ThermalOutputPower`, an `EnergyPort`: its water circuit is wired in no setup, hisim-hydrogen-transfer-links-m4tx), new `ConversionLossInWatt` (fuel) (built in 5c) | 5c |
 | `AirConditioner` (air_conditioner) | physics | declares | el in; heating: ambient in, SH heat out to the building; cooling: `COOLING` in from the building, heat rejected to ambient | 5a |
 | `AirConditionerController` | L1 | exempt (kind) | controller | – |
 | `Building` (building.building) | physics | declares | §5.4 | 4 |
@@ -421,10 +421,10 @@ has ports after this epic; "exempt" means it is never a node.
 | `CalculateOperation`, `SumBuilderForTwoInputs`, `SumBuilderForThreeInputs` (sumbuilder) | physics | exempt (reason) | arithmetic helpers; summing energy is not moving it | 5 |
 | `GenericBoiler`, `MoreAdvancedHeatPumpHPLib`, `DistrictHeating`, `ElectricHeating`, `SolarThermalSystem` | physics | declare (built) | §5.2 | 1, 3 |
 | `Car` (generic_car) | physics | declares | electric: vehicle electricity in from the car battery (the new input `ElectricityFromCarBatteryInWatt`, wired to the battery's discharge, carries the `CONSUMPTION` port of `VEHICLE_ELECTRICITY`, an input port under D9 of `roadmap/fluid_loops_spec.md`), driving energy out (`ElectricityOutput`, new carrier `DRIVING`) to the new boundary `driving` (Q-L) (built in 5b); fuel: `DIESEL` in from `diesel supply`, driving out (not built: its fuel is published in litres) | 5b |
-| `SimpleCHP` (generic_chp) | physics | declares | gas or hydrogen in; el out, SH heat out; loss | 5c |
-| `AdvancedElectrolyzer`, `Electrolyzer` | physics | declare | el in; hydrogen out; `EnergyLosses` loss | 5c |
-| `HydrogenStorage` | physics | declares | hydrogen in, out, `HydrogenLosses`, `StorageDelta` stored | 5c |
-| `FuelCell` (generic_fuel_cell) | physics | declares | hydrogen in; el out; heat as loss or out | 5c |
+| `SimpleCHP` (generic_chp) | physics | declares | natural gas or hydrogen in (new `FuelConsumptionInWatt`, the configured `p_fuel` while on), el out, SH heat out (`ThermalPowerOutputBuilding`), DHW heat out (`ThermalPowerOutputDHW`), new `ConversionLossInWatt` (fuel) (built in 5c) | 5c |
+| `AdvancedElectrolyzer`, `Electrolyzer` | physics | declare | el in (`ElectricityRealNeeded`, `CurrentLoad`); hydrogen out (new `HydrogenProductionInWatt` of each, by the lower heating value); loss: `EnergyLosses` (advanced, does not close: B6), new `ConversionLossInWatt` (el) (built in 5c) | 5c |
+| `HydrogenStorage` | physics | declares | new `HydrogenReceivedInWatt` in, `HydrogenReleasedInWatt` out, `HydrogenLossInWatt` loss, `StoredEnergyIncreaseInWattHour` stored (from the fill carried into the next step; `HydrogenLosses` and `StorageDelta` are in kg and kg/s); el in (`HydrogenStorageEnergyDemand`) and new `CompressionLossInWatt` (el) (built in 5c; B7) | 5c |
+| `FuelCell` (generic_fuel_cell) | physics | declares | hydrogen in (new `HydrogenConsumptionInWatt`); el out (`PowerOutput`); heat as new `ConversionLossInWatt` (hydrogen) (built in 5c; B8) | 5c |
 | `GenericHeatPump` (generic_heat_pump) | physics | declares | el, ambient in; SH heat out (`ThermalPowerDelivered` to the building); cooling as `COOLING` in | 5a |
 | `HeatDistribution` | physics | declares | §5.1 | 3 |
 | `IdealizedElectricHeater` | physics | declares | el in (its meter), SH heat out to the building | 5a |
@@ -434,7 +434,7 @@ has ports after this epic; "exempt" means it is never a node.
 | `SimpleHeatSource` | physics | declares | heat out on its circuit from a boundary `heat source` (it is a fixed source by design) | 5a |
 | `SimpleDHWStorage`, `SimpleHotWaterStorage` | physics | declare | §5.1 | 3 |
 | `SimpleWaterStorage` | physics | n/a | abstract base of the two storages, never instantiated | – |
-| `Transformer` (transformer_rectifier) | physics | declares | el in, el out, conversion loss | 5c |
+| `Transformer` (transformer_rectifier) | physics | declares | el in (new `ElectricityReceivedInKilowatt`: a metered carrier is booked on an output), el out (`MyTransformerOutput`), new `ConversionLossInKilowatt` (built in 5c) | 5c |
 
 Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `generic_car_profile`,
 `lpg_car_information`, `lpg_local_time`, `more_advanced_heat_pump_hplib_model`, `pylpg_workspace`, the
@@ -464,6 +464,9 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
 - PR 5b: `lt.EnergyBalanceCarrier.DRIVING` and `lt.EnvironmentNode.DRIVING` ("driving"), the energy a car's drive
   takes (Q-L), and `lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY` ("vehicle_electricity"), the electricity a car
   battery gives its car past every meter (Q-K). The energy-system and assembly schemas list both carriers.
+- PR 5c: hydrogen and the CHPs' fuel are counted by their lower heating value
+  (`PhysicsConfig.get_properties_for_energy_carrier`); every hydrogen and fuel port is a new output in W, since a port
+  is a power or an energy and the components exchange hydrogen in kg/s. No new carrier and no new node.
 - New outputs of §5 (named with their units). No output is renamed.
 
 ### 6.3 What does not change
@@ -480,6 +483,11 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
 | B2 | `Building` | ISO 13790's gain split leaves `H_tr_w/(9.1 A_t)` of the gains on no node | 46.7 kWh/yr, 0.24 % of the gains | declared as the loss `GainsLostThroughWindowsInWatt`; no result change |
 | B3 | `DistrictHeating` without buffer | bills the heat its controller asks for, not what the HDS receives (hisim-energy-sankeys-9uoo.12) | 30.8 kWh/yr (bead) | hisim-pnw7, before PR 3 declares the HDS in the district-heating twin |
 | B4 | `ElectricityMeter` in the car twin | read the car's charging from the charge controller's copy (`BatteryChargingPowerToEMS`), which reads the battery's output of the pass before, so in a step the last pass moved the meter billed up to 1.9e-5 W other than the battery took | car twin, 2021 at 900 s: 146 of 35,040 steps, grid import −9.8e-8 kWh/yr (relative 5e-11) | in PR 5b, inseparable from it: the meter reads the battery's charging port by its role and the by-name read goes; KPIs move by at most 5e-11 relative, within the golden tolerance (1e-9) |
+| B5 | `dynamic_components` | its energy manager never reads the occupancy's consumption (the setup names an `ElectricityOutput` the occupancy does not publish, and the connection is skipped silently), so it never asks the CHPs for power: they run no step | CHPs 0 kWh in the golden year; their ports close at zero | hisim-dynamic-components-chp-idle-v8mt; no imbalance, the CHPs' balance is exercised only at zero until it lands |
+| B6 | `AdvancedElectrolyzer` | its supplier's hydrogen rates give up to 6.2 times more hydrogen than the electricity it uses, beside a stated 400 W waste heat | one step: 1,200 W in, residual −98.6 W; 2,400 W in, 14,976 W of hydrogen, residual −12,976 W | hisim-advanced-electrolyzer-energy-ws1d; no setup runs it, a run that does fails |
+| B7 | `HydrogenStorage` | a withdrawal above the discharging rate or above the fill takes hydrogen from the fill and releases none | one step at 900 s: +66.6 kW (above the rate), +40.0 kW (above the fill) | hisim-hydrogen-tank-drops-hn7k; no setup runs it |
+| B8 | `FuelCell` | reads its nominal flow, configured in m³/h, as kg/h (its preset fails its first step); on at or below its minimum power it makes electricity from no hydrogen (a negative loss, not a residual) | preset: IndexError; 4 kW from 0 W of hydrogen | hisim-fuel-cell-hydrogen-flow-q2zc; no setup runs it |
+| B9 | `electrolyzer_with_renewables` | the transformer delivers 95 % of the wind whatever its rating, the electrolyzer draws only what it can, and the rest reaches no component; both close, and their electricity ports are unlinked because the electrolyzer reads its load through its controller | second January week at 900 s: delivered 219,343 kWh, drawn 114,925 kWh, 104,418 kWh reach no component | hisim-component-physics-4g9.69 (owner decision); not a residual of either component |
 
 The window opening (Q-E) is not an imbalance of the declared ports: it moves no energy in the model.
 
@@ -596,7 +604,7 @@ beads in its own branch.
 | 4 | The building's ports (§5.4), including B2 as a declared loss. | `extendedbase2`, `tests/test_energy_balance_building.py`: the building closes per step in the heat-pump and gas twins, a January and a July week (heating, solar gains, window opening). | none | hisim-energy-sankeys-9uoo.6 |
 | 5a | Other heat and cooling devices: `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner`, `IdealizedElectricHeater`, `SimpleHeatSource`. | `extendedbase2`: `basic_household`, `air_conditioned_house`, `simple_air_conditioner_household_building_sizer` close. | none | – (hisim-i7yq's view needs hisim-energy-sankeys-9uoo.17 too) |
 | 5b | Car and car battery; `L1Controller` exempt. | `extendedbase2`: `household_heatpump_car_building_sizer` closes, the car's charging is read by the electricity meter. | none | hisim-energy-sankeys-9uoo.5 |
-| 5c | Hydrogen and CHP: electrolyzers, hydrogen storage, fuel cell, both CHPs, transformer. | `extendedbase2`: `dynamic_components`, `electrolyzer_with_renewables` close. | none | – (hisim-svh4's view follows) |
+| 5c | Hydrogen and CHP: electrolyzers, hydrogen storage, fuel cell, both CHPs, transformer. | `extendedbase2`: `dynamic_components`, `electrolyzer_with_renewables` close (`tests/test_energy_balance_hydrogen.py`); `base`: one step of each class (`tests/test_energy_ports_hydrogen_and_chp.py`). | none | – (hisim-svh4's view follows, after hisim-hydrogen-transfer-links-m4tx); files B5 to B8, measures B9 |
 | 5d | The exemptions (Q-B), the example template's port, the `base` test that every component is declared or exempt. | `base`: walk every component class. | none | hisim-energy-sankeys-9uoo.7 |
 | 6 | System balance and acceptance: undeclared physics and unlinked ports fail the run, so every meter check and the unmetered ports are enforced (§4.4), the acceptance test. | `extendedbase2`, `tests/test_complete_energy_sankeys.py`: heat-pump and gas twin, a week: no `undeclared` node, `unaccounted` within tolerance, every meter publishes what it reads, no unmetered port. The full year of every golden setup runs in `golden-year.yml` with the check on. | none | hisim-energy-sankeys-9uoo.8, hisim-energy-sankeys-9uoo.10, hisim-energy-sankeys-9uoo.11, hisim-mzft (after the owner has reviewed one twin per heating system) |
 

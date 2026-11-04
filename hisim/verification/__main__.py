@@ -1,14 +1,18 @@
 """Run the cases of a verification suite and write the private report (FR14, spec §10, D23).
 
-    python -m hisim.verification --output-dir runs/verification
-    python -m hisim.verification --case 600 --timestep 3600 --output-dir runs/verification
-    python -m hisim.verification --report-only --output-dir runs/verification
+    python -m hisim.verification --output-dir <private folder>/runs
+    python -m hisim.verification --case 600 --timestep 3600 --output-dir <private folder>/runs
+    python -m hisim.verification --report-only --output-dir <private folder>/runs
 
 The case files are read from ``$HISIM_VERIFICATION_DATA/cases/<suite>`` and the ranges from the
 suite's reference file in that folder. Without ``--case`` every case of the suite runs, without
 ``--timestep`` at 3600, 900 and 60 s; each run is written under ``<output-dir>/BESTEST_output``.
 The report is then built from every summary in that folder, so cases run one by one into the
 same folder end up in one report; ``--report-only`` rebuilds it without running.
+
+The report carries the private range bounds and statuses (D22), and the runs carry values derived
+from the private case files (D19), so an output directory inside the HiSim checkout is refused:
+nothing is written to the repository (spec §10).
 """
 
 import argparse
@@ -17,6 +21,7 @@ import sys
 from pathlib import Path
 from typing import List
 
+import hisim
 from hisim import log
 from hisim.verification import compare, export, runner, system_builder
 from hisim.verification.case_loader import load_cases
@@ -24,6 +29,15 @@ from hisim.verification.suite import SUITES_DIRECTORY, Suite
 
 DATA_ENVIRONMENT_VARIABLE = "HISIM_VERIFICATION_DATA"
 DEFAULT_TIMESTEPS = (3600, 900, 60)
+
+#: The HiSim checkout (or, installed, the folder the package lies in): no output goes below it.
+REPOSITORY_ROOT = Path(hisim.__file__).resolve().parent.parent
+
+
+def inside_repository(directory: Path) -> bool:
+    """Whether a directory is the HiSim checkout or lies below it."""
+    target = directory.resolve()
+    return target == REPOSITORY_ROOT or REPOSITORY_ROOT in target.parents
 
 
 def parse_arguments(arguments: List[str]) -> argparse.Namespace:
@@ -42,6 +56,9 @@ def parse_arguments(arguments: List[str]) -> argparse.Namespace:
 def main(arguments: List[str]) -> int:
     """Run the requested cases, then write the private report of everything in the output directory."""
     options = parse_arguments(arguments)
+    if inside_repository(options.output_dir):
+        log.error(f"the output directory {options.output_dir} lies inside {REPOSITORY_ROOT}; the report is private, choose a folder outside (spec §10)")
+        return 2
     data_root = os.environ.get(DATA_ENVIRONMENT_VARIABLE)
     if not data_root:
         log.error(f"set {DATA_ENVIRONMENT_VARIABLE} to the private data folder holding cases/{options.suite}")

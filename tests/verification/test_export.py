@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 import pytest
 
+from hisim.verification import __main__ as verification_cli
 from hisim.verification import export
 from hisim.verification.suite import Suite
 from tests.verification.synthetic import ranges, suite_mapping
@@ -119,3 +120,14 @@ def test_a_folder_without_summaries_is_refused(tmp_path: pathlib.Path, suite: Su
     """Nothing to report is an error, not an empty report."""
     with pytest.raises(FileNotFoundError, match="no case summaries"):
         export.build_report(tmp_path, suite, None)
+
+
+def test_an_output_directory_inside_the_repository_is_refused(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The private report never lands in the checkout; a folder outside is accepted."""
+    monkeypatch.setenv(verification_cli.DATA_ENVIRONMENT_VARIABLE, str(tmp_path))
+    inside = verification_cli.REPOSITORY_ROOT / "verification_runs_must_not_exist"
+
+    assert verification_cli.main(["--report-only", "--output-dir", str(inside)]) == 2
+    assert not inside.exists()
+    assert verification_cli.inside_repository(verification_cli.REPOSITORY_ROOT)
+    assert not verification_cli.inside_repository(tmp_path)

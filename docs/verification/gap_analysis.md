@@ -739,6 +739,8 @@ hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.
   whose runs come from more than one commit.
 - CLI: `--suite`, every case of the suite when no `--case` is given, `--report-only` to rebuild the
   report without running. The log line of a run names the file only; the loads are in the report.
+  An output directory inside the HiSim checkout is refused, so that the private report cannot be
+  committed by accident (spec §10: nothing is written to the repository).
 - Tests: `test_export.py` (base, synthetic numbers); the made-up suite and ranges moved to
   `tests/verification/synthetic.py`.
 

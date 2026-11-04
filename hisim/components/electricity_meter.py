@@ -9,7 +9,6 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
-from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
@@ -335,7 +334,6 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
             aggregation=lt.OutputAggregation.LAST,
         )
-        self.add_dynamic_default_connections(self.get_default_connections_from_electric_car())
 
     def declares_default_connections(self) -> bool:
         """Whether the meter declares default connections: always, since it reads every electricity port it finds."""
@@ -350,11 +348,8 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         with (the PV system's ``PV``) goes with the feed, so that a selection by component type finds it. Nothing
         depends on the source's class, so a consumer no energy manager reads is billed like any other: a heat pump's
         cooling and brine-pump electricity, for example. Losses and stored changes are not read; they never cross the
-        meter. The meter never reads itself.
-
-        One class is still read by name: the electric car's charge controller, whose
-        ``BatteryChargingPowerToEMS`` is the car's charging until the car battery declares its ports
-        (complete Sankey spec, §9, PR 5b).
+        meter, and neither does another carrier: a car battery's discharge into its car is ``VEHICLE_ELECTRICITY``, which
+        flows straight into the car and passes no meter. The meter never reads itself.
 
         Args:
             source_component: A component of the run.
@@ -386,34 +381,6 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
                 )
             )
         return connections
-
-    def get_default_connections_from_electric_car(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """The electric car's charging, read from its charge controller until the car battery declares its ports.
-
-        The car battery (``advanced_ev_battery_bslib``) declares no energy port yet (complete Sankey spec, §9,
-        PR 5b), so the meter cannot find its charging by role; the charge controller publishes it as
-        ``BatteryChargingPowerToEMS``. Once the car battery declares its electricity port, the meter reads that
-        port by role and this declaration goes.
-        """
-
-        from hisim.components.controller_l1_generic_ev_charge import L1Controller  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        electric_car_charger_class_name = L1Controller.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=L1Controller,
-                source_class_name=electric_car_charger_class_name,
-                source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
-            )
-        )
-        return dynamic_connections
 
     def metered_exchanges(self) -> Tuple[MeteredExchange, ...]:
         """The grid import and export this meter publishes, in W (complete Sankey spec, §4.4).
@@ -457,9 +424,8 @@ class ElectricityMeter(DynamicComponent, cp.MeterComponent):
         The port an input reads decides: an electricity ``CONSUMPTION`` port is consumption, a ``PRODUCTION`` port production
         (:attr:`FLOW_TAG_OF_ROLE`), and a port published with the opposite sign of its role (``negated``, the
         battery's ``DischargingPower``, published <= 0) is read with the factor -1, so that both totals are
-        positive. An input whose output declares no energy port (an undeclared device, such as the car's charge
-        controller) is read as its channel says, with the factor 1. Called once the inputs are connected, at the
-        first step.
+        positive. An input whose output declares no energy port (an undeclared device) is read as its channel says,
+        with the factor 1. Called once the inputs are connected, at the first step.
 
         Args:
             channel_key: :attr:`PRODUCTION_CHANNEL` or :attr:`CONSUMPTION_UNCONTROLLED_CHANNEL`.

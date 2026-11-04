@@ -287,6 +287,7 @@ def test_the_sweep_builds_every_class_that_declares_ports(tagged_outputs: List[T
     built: FrozenSet[str] = frozenset(output.component_class.__name__ for output in tagged_outputs)
     assert {
         "Battery",
+        "CarBattery",
         "DistrictHeating",
         "ElectricHeating",
         "GenericBoiler",

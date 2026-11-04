@@ -21,7 +21,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import simulator as sim
 from hisim.components import advanced_battery_bslib, controller_l2_energy_management_system, electricity_meter
-from hisim.components import more_advanced_heat_pump_hplib
+from hisim.components import advanced_ev_battery_bslib, generic_car, more_advanced_heat_pump_hplib
 from hisim.config import SizingContext
 from hisim.simulationparameters import SimulationParameters
 
@@ -220,3 +220,52 @@ def test_the_meter_sums_its_readings_exactly_rounded_whatever_order_they_were_wi
     )
     assert (0.1 + 0.2) + 0.3 != 0.6
     assert published["ElectricityConsumptionInWatt"] == 0.6
+
+
+@pytest.mark.base
+def test_the_car_battery_s_charging_is_read_and_its_discharge_into_the_car_is_not(tmp_path: Path) -> None:
+    """The meter reads a car battery's charging as consumption and nothing of what the battery gives its car.
+
+    The discharge is vehicle electricity, which flows from the battery straight into the car, and the car declares
+    no electricity port. Catches the meter counting the car's driving twice, as production of the battery and as
+    consumption of the car, which would change the meter's consumption and production by the driving energy.
+    """
+    house = MeteredHouse(tmp_path)
+    parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
+    car_battery = advanced_ev_battery_bslib.CarBattery(
+        my_simulation_parameters=parameters, config=advanced_ev_battery_bslib.CarBatteryConfig.preset_standard("CarBattery")
+    )
+    car_config = generic_car.CarConfig.for_household(name="Car", household_name="CHR01", car_name="SmallCar")
+    car_config.occupancy_identity = "profile of the test"
+    car = generic_car.Car(my_simulation_parameters=parameters, config=car_config)
+    reads = [(entry.source_component_field_name, entry.source_tags) for entry in house.meter.default_connections_for(car_battery)]
+    assert reads == [("AcBatteryChargingPower", [lt.ComponentType.CAR_BATTERY, CONSUMPTION])]
+    assert not house.meter.default_connections_for(car)
+
+
+@pytest.mark.base
+def test_a_car_battery_s_discharge_fed_to_the_meter_by_hand_is_refused(tmp_path: Path) -> None:
+    """A car battery's discharge wired to the meter by hand fails at the first step, naming the port and its carrier.
+
+    Catches a file that bills the car's driving at the grid boundary, past the port's own statement.
+    """
+    house = MeteredHouse(tmp_path)
+    car_battery = advanced_ev_battery_bslib.CarBattery(
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
+        config=advanced_ev_battery_bslib.CarBatteryConfig.preset_standard("CarBattery"),
+    )
+    house.simulator.add_component(car_battery)
+    house.meter.add_component_input_and_connect(
+        source_object_name="CarBattery",
+        source_component_output="AcBatteryDischargingPower",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[PRODUCTION],
+        source_weight=999,
+    )
+    for wrapper in house.simulator.wrapped_components:
+        if wrapper.my_component is house.meter:
+            wrapper.connect_automatically = False
+    house.wire()
+    with pytest.raises(ValueError, match="CarBattery.AcBatteryDischargingPower, a vehicle_electricity production port"):
+        house.step({})

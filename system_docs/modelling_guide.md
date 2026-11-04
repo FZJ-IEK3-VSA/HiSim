@@ -62,9 +62,10 @@ controller (#941).
   the occupancy, the water storages and the distribution system behind a buffer declare ports
   (`tests/test_energy_balance_storages.py`, hydronic stage E), and so do the electric car and its battery, the
   electrolyzers, the hydrogen tank, the fuel cell, both CHPs and the transformer (`tests/test_energy_balance_car.py`,
-  `tests/test_energy_balance_hydrogen.py`), and the generic heat pump, both air conditioners, the idealized heater and
-  the ground collector (`tests/test_energy_balance_heat_and_cooling.py`); the building, the distribution system
-  without a buffer (hisim-pnw7) and the rest follow with the complete Sankey spec's §9.
+  `tests/test_energy_balance_hydrogen.py`), the generic heat pump, both air conditioners, the idealized heater and
+  the ground collector (`tests/test_energy_balance_heat_and_cooling.py`) and the building
+  (`tests/test_energy_balance_building.py`); the distribution system without a buffer (hisim-pnw7) and the rest
+  follow with the complete Sankey spec's §9.
 - **An exact step is preferred to a fine one.** Where a law has a closed-form solution over a step with constant
   inputs, use it: `MixedNode.step` solves `C dT/dt = Σ m_i c (T_i - T) - UA (T - T_amb)` exactly, so its heat
   balance closes to float precision at any step length, without sub-stepping.

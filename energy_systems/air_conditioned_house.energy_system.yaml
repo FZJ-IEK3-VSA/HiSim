@@ -111,6 +111,10 @@ components:
     inputs:
       - Weather
       - UTSPConnector
+      - input: HeatReceivedInWatt
+        from: AirConditioner.HeatDeliveredInWatt
+      - input: HeatRemovedByCoolingInWatt
+        from: AirConditioner.HeatDrawnForCoolingInWatt
       - input: ThermalPowerDelivered
         from: AirConditioner.ThermalPowerDelivered
   AirConditionerControllerConfig:

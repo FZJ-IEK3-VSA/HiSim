@@ -118,14 +118,7 @@ def test_the_electricity_meter_reads_the_car_s_charging_and_publishes_what_it_re
     assert meter["verdict"] == "agrees" and meter["failing_steps"] == 0 and meter["worst_step"] is None
     assert meter["enforced"] is False and "undeclared" in meter["not_enforced_because"]
     assert abs(meter["residual_kwh"]) <= 1e-6 and meter["largest_step_residual_kwh"] <= 1e-9
-    assert not report["unmetered"]["ports"]
-    # every port finds its peer but the distribution system's two heat directions, which the building does not read
-    # through input ports yet
-    unlinked = {(port["component"], port["output"]) for port in report["unlinked"]}
-    assert unlinked <= {
-        ("HeatDistributionSystem", "HeatDeliveredInWatt"),
-        ("HeatDistributionSystem", "HeatDrawnForCoolingInWatt"),
-    }, unlinked
+    assert not report["unmetered"]["ports"] and not report["unlinked"]
     exempt = {entry["component"]: entry["reason"] for entry in report["exempt"]}
     assert exempt["L1EVChargeControl_1"] == "an L1 controller decides for its device, it moves no energy"
 

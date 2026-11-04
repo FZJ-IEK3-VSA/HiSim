@@ -2,10 +2,18 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 11, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revisions 6 to 9: 2026-11-03; revision 10: 2026-11-04)
+**Status:** Draft, revision 12, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 to 9: 2026-11-03; revisions 10 and 11: 2026-11-04)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 12** (step 5, gap analysis §12, 2026-11-04)
+
+- `export.py` writes the private report from the summaries on disk; `deviations.md` comes from it,
+  there is no `deviations.py` (§6). `results.csv` reports a range's position and distance to the
+  nearer bound instead of `ref_value` and `deviation_*`, which belong to the deferred ISO suite
+  (§10). The CLI runs every case of a suite by default and rebuilds the report with
+  `--report-only` (FR14). §11 step 5 done.
 
 **Changes in revision 11** (decisions D22 and D23, gap analysis §11.4, 2026-11-04)
 
@@ -524,7 +532,7 @@ register (§8.3).
 | FR11 | Comparison with reference data according to §8; status per output: `pass`, `fail`, `known_deviation`, `skipped` (reference missing), `info` (diagnostic, no criterion), `not_modelled` (case excluded by §2.3 or §2.4). |
 | FR12 | pytest integration: one test per (suite, case, time step, output) with a criterion; failing comparisons fail the test only when gating is on (§9.3), otherwise the test reports and passes. No test is generated for `info` and `not_modelled`. |
 | FR13 | Export of all results to `BESTEST_output/` inside the calculation's result directory (§10). |
-| FR14 | CLI entry point: `python -m hisim.verification --suite ashrae140 [--case 600] [--timestep 900] [--output-dir ...]`. *`--public` is deferred with the public report (D23, 2026-11-04).* |
+| FR14 | CLI entry point: `python -m hisim.verification --suite ashrae140 [--case 600] [--timestep 900] --output-dir ... [--report-only]`; without `--case` every case of the suite runs, and the report is built from every summary in the output directory. *`--public` is deferred with the public report (D23, 2026-11-04).* |
 | FR15 | CI job running the suites (§9.3), implemented when the private repository exists. |
 | FR16 | Group accounting for the ASHRAE suite per §8.1: ranges total, minimum required, attempted, met, not modelled, formal result. |
 | FR17 | HiSim's own results per (suite, case, time step) are committed as regression references under `golden_references/bestest/`, following the repository's golden-reference system (`golden_ref_spec.md`); they contain HiSim values only. |
@@ -581,8 +589,7 @@ hisim/verification/
   aggregate.py             # aggregation to reference resolution (FR10)
   metrics.py               # annual/monthly sums, peaks, min/max/mean, bins
   compare.py               # acceptance logic and group accounting (§8)
-  deviations.py            # deviation register (§8.3)
-  export.py                # BESTEST_output (§10)
+  export.py                # the private report in BESTEST_output, deviations.md included (§10, §8.3)
   plots.py
   suites/
     ashrae140/
@@ -925,7 +932,11 @@ follow with the review of step 6 as far as it needs them; the public report (`--
   steps, interpolation method, suite versions, reference source IDs, gating state,
   tolerances used, warm-up, standards cited with [verify] flags resolved or open.
 - `results.csv` columns:
-  `suite,group,case,parent_case,timestep_s,output,unit,value,ref_value,ref_min,ref_max,criterion,deviation_abs,deviation_rel_pct,status,note`
+  `suite,group,case,parent_case,timestep_s,output,unit,value,ref_min,ref_max,criterion,position_in_range,distance_to_nearer_bound,status,note`;
+  `ref_value` and `deviation_abs`, `deviation_rel_pct` return with single reference values (the
+  deferred ISO suite). A difference range's output ends in `_diff`.
+- The report records the HiSim commit of every run; it is the commit checked out, so runs for a
+  report to keep are made from a committed state.
 - *Deferred (D23):* `--public` produces the reduced report without the `ref_*`, `criterion`,
   `deviation_*` and `status` columns, without the group accounting and without range bounds in
   plots (§12, D22).
@@ -939,7 +950,7 @@ follow with the review of step 6 as far as it needs them; the public report (`--
 | 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: the overrides of FR2 on the TABULA row (window list with angles and optics per window, air change rates, air volume, transmission adjustment factors, C_m, A_m, A_tot) and the origin record in `BuildingInformation`, which also builds the `WindowGeometry` list that `Building.get_windows` now takes instead of building it from the five TABULA directions; the schema regenerated (FR2; gap analysis D16 and D17, revising D6; bead hisim-x6c7.6). Unit tests: each override reaches the Building's conductances and windows exactly, the origin record, the refusal of a list beside `window_area_in_m2`, the TABULA path bit-identical (same window geometries, same solar-gains cache key, goldens unchanged). The rules of §3.2.3 and 3.2.4 (κ, C_m, A_m, A_tot) belong to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
 | 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b (done 2026-11-03, gap analysis §10.4): the run: heater and controller, constant gains, setback, two-pass warm-up, parameters, time-series and summary output, the CLI of FR14 for runs; case 600 runs end to end at all three time steps. The register export and the EPW identity check in `PROVENANCE.md` move to step 5 | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2). Done 2026-11-04 (gap analysis §11, bead hisim-x6c7.10) | – |
-| 5 | The private report of §10 (`summary.md`, `summary.json`, `deviations.md`, `results.csv`) and the CLI for the whole suite (FR14); no plots, no public report (D23) | – |
+| 5 | The private report of §10 (`summary.md`, `summary.json`, `deviations.md`, `results.csv`) and the CLI for the whole suite (FR14); no plots, no public report (D23). Done 2026-11-04 (gap analysis §12, bead hisim-x6c7.11) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |
 | 7 | `iso52016` suite, 6 cases, first full report for review — **deferred** (2026-11-02, §2.1) | filled Tables 28–34 file; a solar-gain input on the Building (§7.4) |
 | 8 | Golden references for HiSim's own results (FR17) and documentation (`docs/verification/README.md`) | human blesses the goldens after reviewing the reports |

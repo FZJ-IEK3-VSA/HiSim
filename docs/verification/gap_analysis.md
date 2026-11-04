@@ -720,3 +720,33 @@ hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.
 |---|---|---|---|---|
 | D22 | Statuses per range and group accounting in the public report (spec §9.3, §10 and §12 allowed them, as pyBuildingEnergy publishes them) | private | private for now: the statuses, the group accounting and its headline appear only in the private report; the public report carries HiSim's values and the deviation register; spec revision 11; 2026-11-04 | – |
 | D23 | Whether step 5 builds the public report (spec §10, FR14 `--public`) | defer: no reader yet (the CI of step 9 and the paper come later), and every public output is a place where something could slip out | deferred until a reader needs it; step 5 builds the private report only, without plots; the plots follow with the review of step 6; spec revision 11; 2026-11-04 | – |
+
+## 12. Step 5 (2026-11-04): the private report
+
+### 12.1 What was built
+
+- `export.py` reads the runner's summaries below the output directory, compares every time step
+  (`compare`) and writes four files beside them: `results.csv` (each range with value, bounds,
+  position, distance and status; HiSim's diagnostics with status `info`: annual loads of the cases
+  that are not a range of their own, annual peaks with month, day and hour, the free-float
+  temperatures), `summary.json` (metadata, rows, group accounting, register), `summary.md` (the
+  same for a reader, with the time-step consistency of spec §8.4) and `deviations.md` (the register
+  and the outputs the suite does not report). The report says it is private and not a claim of
+  conformity; it carries the bounds, statuses and group accounting (D22). No plots, no public
+  variant (D23).
+- Because it is built from the summaries on disk, cases run one by one into one directory end up in
+  one report. Each summary records the HiSim commit of its run, and the report flags a directory
+  whose runs come from more than one commit.
+- CLI: `--suite`, every case of the suite when no `--case` is given, `--report-only` to rebuild the
+  report without running. The log line of a run names the file only; the loads are in the report.
+- Tests: `test_export.py` (base, synthetic numbers); the made-up suite and ranges moved to
+  `tests/verification/synthetic.py`.
+
+### 12.2 Deviations from the spec
+
+- `results.csv` drops `ref_value`, `deviation_abs` and `deviation_rel_pct`, which belong to single
+  reference values (the deferred ISO suite), and adds `position_in_range` and
+  `distance_to_nearer_bound`, which spec §8.1 asks of a range.
+- No `deviations.py`: `export.py` writes `deviations.md` from the register `suite.py` reads.
+- The commit recorded is the one checked out (`HiSimCommit`); uncommitted changes do not show. The
+  runs of a report to keep are therefore made from a committed state.

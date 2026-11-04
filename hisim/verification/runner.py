@@ -23,6 +23,7 @@ from hisim.components import idealized_electric_heater, weather
 from hisim.components.building import Building
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.night_setback_controller import NightSetbackController
+from hisim.hisim_commit import HiSimCommit
 from hisim.simulationparameters import SimulationParameters
 from hisim.verification import aggregate, metrics
 from hisim.verification.suite import RequestedOutputs
@@ -216,6 +217,7 @@ def run_case(built: BuiltCase, settings: RunSettings, requested: Optional[Reques
     summary = {
         "case": case_id,
         "year": settings.year,
+        "hisim_commit": HiSimCommit.or_unknown(),
         "passes": [
             {
                 "index": entry.index,

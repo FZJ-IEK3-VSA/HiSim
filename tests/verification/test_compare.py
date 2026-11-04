@@ -1,57 +1,22 @@
 """The suite file, the comparison with ranges and the group accounting, with synthetic numbers.
 
-No range value of the standard appears here: the bounds below are made up, and the public suite file
-and template carry structure only.
+No range value of the standard appears here: the bounds are made up (``synthetic``), and the public
+suite file and template carry structure only.
 """
 
 import json
 import pathlib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import pytest
 
 from hisim.verification import compare
 from hisim.verification.suite import SUITES_DIRECTORY, Suite, SuiteFileError
+from tests.verification.synthetic import ranges, suite_mapping
 
 pytestmark = pytest.mark.base
 
 TEMPLATE_FILE = SUITES_DIRECTORY / "ashrae140" / "reference_template.json"
-
-
-def suite_mapping(register: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """A small suite: two base ranges, two difference ranges, one reversed, one not modelled."""
-    return {
-        "suite": "synthetic",
-        "reference_file": "ranges.json",
-        "cases": ["1", "2", "3"],
-        "groups": {
-            "light": {
-                "ranges_total": 5,
-                "minimum_required": 3,
-                "range_cases": [
-                    {"case": "1", "metric": "heating"},
-                    {"case": "1", "metric": "cooling"},
-                    {"case": "2", "parent": "1", "metric": "heating"},
-                    {"case": "3", "parent": "1", "metric": "heating", "reverse": True},
-                    {"case": "4", "parent": "1", "metric": "cooling", "status": "not_modelled"},
-                ],
-            }
-        },
-        "outputs": {},
-        "deviation_register": register or [],
-    }
-
-
-def ranges(**overrides: Any) -> compare.ReferenceRanges:
-    """Made-up bounds for the small suite, in hundreds of MWh so that none can be mistaken for a real one."""
-    bounds: Dict[str, Any] = {
-        "1": {"heating": [400.0, 600.0], "cooling": [200.0, 300.0]},
-        "2-1": {"heating": [-100.0, 100.0], "cooling": None},
-        "1-3": {"heating": [50.0, 150.0], "cooling": None},
-        "4-1": {"heating": None, "cooling": [10.0, 110.0]},
-    }
-    bounds.update(overrides)
-    return compare.ReferenceRanges.from_mapping({"units": "MWh/year", "ranges": bounds})
 
 
 def summaries(**annual: Any) -> Dict[str, Dict[str, float]]:

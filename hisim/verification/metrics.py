@@ -23,6 +23,9 @@ OPERATIVE_TEMPERATURE_COLUMN = "operative_temperature_in_celsius"
 MASS_TEMPERATURE_COLUMN = "thermal_mass_temperature_in_celsius"
 SOLAR_GAIN_COLUMN = "solar_gain_through_windows_in_watt"
 
+#: The summary's name of the zone air temperature statistics (7.3.6).
+ZONE_AIR_TEMPERATURE_KEY = "zone_air_temperature_in_celsius"
+
 #: The summary's names of the hourly quantities of Table 7-47, with their units.
 DAILY_KEYS = {"load": "load_in_kilowatt_hour", "zone_air_temperature": "zone_air_temperature_in_celsius"}
 
@@ -128,7 +131,7 @@ def case_metrics(frame: pd.DataFrame, seconds_per_timestep: int, requested: Opti
         delivered = frame[aggregate.DELIVERED_POWER_COLUMN]
         metrics["largest_time_step_heating_in_kilowatt"] = float(delivered.clip(lower=0.0).max() / 1000.0)
         metrics["largest_time_step_sensible_cooling_in_kilowatt"] = float((-delivered).clip(lower=0.0).max() / 1000.0)
-    metrics["zone_air_temperature_in_celsius"] = temperature_statistics(hourly[AIR_TEMPERATURE_COLUMN])
+    metrics[ZONE_AIR_TEMPERATURE_KEY] = temperature_statistics(hourly[AIR_TEMPERATURE_COLUMN])
     metrics["operative_temperature_in_celsius"] = temperature_statistics(hourly[OPERATIVE_TEMPERATURE_COLUMN])
     metrics["thermal_mass_temperature_in_celsius"] = temperature_statistics(hourly[MASS_TEMPERATURE_COLUMN])
     metrics["solar_gain_through_windows_in_kilowatt_hour"] = float(hourly[SOLAR_GAIN_COLUMN].sum() / 1000.0)

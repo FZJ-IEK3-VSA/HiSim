@@ -240,6 +240,7 @@ class Suite:
 
     name: str
     standard: str
+    reference_sources: Tuple[str, ...]
     reference_file: str
     cases: Tuple[str, ...]
     gating: bool
@@ -279,6 +280,7 @@ class Suite:
         suite = cls(
             name=name,
             standard=str(mapping.get("standard", "")),
+            reference_sources=tuple(str(source) for source in mapping.get("reference_sources", [])),
             reference_file=str(mapping.get("reference_file", "")),
             cases=tuple(str(case) for case in mapping.get("cases", [])),
             gating=bool(mapping.get("gating", False)),

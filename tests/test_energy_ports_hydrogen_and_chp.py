@@ -378,6 +378,7 @@ def test_a_tank_reading_the_advanced_electrolyzer_s_hydrogen_links_to_it_through
     """
     electrolyzer = AdvancedElectrolyzer(OneStep.parameters(), ElectrolyzerWithStorageConfig.preset_standard("Electrolyzer"))
     tank = TankSteps.build().component
+    assert isinstance(tank, HydrogenStorage)
     tank.charging_hydrogen.src_object_name = electrolyzer.component_name
     tank.charging_hydrogen.src_field_name = AdvancedElectrolyzer.HydrogenOutput
     Wiring.refuse_a_broken_wiring([electrolyzer, tank])

@@ -171,10 +171,15 @@ analysis §7)
       all 8 760 rows identical in 13 fields; recorded in `PROVENANCE.md`.
 - [x] ASHRAE 140-2023 supplemental files (`725650TY.csv`, `Std140_TF_Output.xlsx`, `S140outNotes.txt`)
       placed in the private folder (§7.2) on 2026-11-02; local use only, never committed.
-- [ ] Fill `ashrae140_annex_a3.json` from Annex A3, Tables A3-1 to A3-4 (§7.3). *Before step 6.*
-- [ ] Confirm the group sizes and minimum counts of Table A3-14 assumed in §8.1. *Before step 6.*
-- [ ] Check whether Annex A3 or the modelling rules of Section 7 say anything about cases a
+- [x] Fill `ashrae140_annex_a3.json` from Annex A3, Tables A3-1 to A3-4 (§7.3). *Before step 6.*
+      Filled and confirmed by the human against the tables on 2026-11-04 (21 keys, 40 ranges; layout
+      as `reference_template.json`).
+- [x] Confirm the group sizes and minimum counts of Table A3-14 assumed in §8.1. *Before step 6.*
+      Confirmed on 2026-11-04: low mass 21 ranges, 18 to meet; high mass 19, 17.
+- [x] Check whether Annex A3 or the modelling rules of Section 7 say anything about cases a
       program cannot model; note the result in `docs/verification/README.md`. *Before step 6.*
+      Checked on 2026-11-04 (gap analysis §13): no rule of Annex A3 or Section 7; an omitted case
+      is explained in the modeler report (5.1.2.3). Goes into the README with step 8.
 - [ ] Fill `iso52016_tables_28_34.json` from Tables 28 to 34, using the corrected Case 900
       columns (§7.3). *Before step 7; deferred with the ISO suite (§2.1).*
 - [x] `origin/main` merged into `verification_spec` on 2026-11-03 (`389ac8c0`); gap analysis §7
@@ -802,7 +807,8 @@ Consequences:
   650 cooling) and the high-mass group 7 (910, 930, 960 both metrics, 950 cooling), so
   both groups are `not_passed` by construction. The report says so explicitly and never
   states conformity with Standard 140; the text "attempted ranges met: m of n" is the
-  headline of the verification. The accounting appears only in the private report (D22).
+  headline of the verification. The accounting appears only in the private report (D22); the
+  counts of the first full run are stated in gap analysis §14 (D24).
 - **Information for a later decision on §2.3 (low-mass group).** With 3 misses allowed
   (21 − 18, Table A3-14), shading alone (650 still not modelled) would leave 2 misses among the other 20
   ranges, shading plus night ventilation 3 among 21. Let F be the number of `fail` among the
@@ -948,7 +954,7 @@ follow with the review of step 6 as far as it needs them; the public report (`--
 |---|---|---|
 | 1 | Gap analysis (§5) — **stop for review** | – |
 | 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: the overrides of FR2 on the TABULA row (window list with angles and optics per window, air change rates, air volume, transmission adjustment factors, C_m, A_m, A_tot) and the origin record in `BuildingInformation`, which also builds the `WindowGeometry` list that `Building.get_windows` now takes instead of building it from the five TABULA directions; the schema regenerated (FR2; gap analysis D16 and D17, revising D6; bead hisim-x6c7.6). Unit tests: each override reaches the Building's conductances and windows exactly, the origin record, the refusal of a list beside `window_area_in_m2`, the TABULA path bit-identical (same window geometries, same solar-gains cache key, goldens unchanged). The rules of §3.2.3 and 3.2.4 (κ, C_m, A_m, A_tot) belong to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
-| 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b (done 2026-11-03, gap analysis §10.4): the run: heater and controller, constant gains, setback, two-pass warm-up, parameters, time-series and summary output, the CLI of FR14 for runs; case 600 runs end to end at all three time steps. The register export and the EPW identity check in `PROVENANCE.md` move to step 5 | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
+| 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b (done 2026-11-03, gap analysis §10.4): the run: heater and controller, constant gains, setback, two-pass warm-up, parameters, time-series and summary output, the CLI of FR14 for runs; case 600 runs end to end at all three time steps. The register export moves to step 5; the EPW identity check was already in `PROVENANCE.md` (2026-11-02), HiSim's processing of the file is register entries F6 and F7 (gap analysis §13, corrected 2026-11-04) | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2). Done 2026-11-04 (gap analysis §11, bead hisim-x6c7.10) | – |
 | 5 | The private report of §10 (`summary.md`, `summary.json`, `deviations.md`, `results.csv`) and the CLI for the whole suite (FR14); no plots, no public report (D23). Done 2026-11-04 (gap analysis §12, bead hisim-x6c7.11) | – |
 | 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |

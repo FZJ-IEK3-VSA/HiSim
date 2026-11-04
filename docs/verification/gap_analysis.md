@@ -752,3 +752,55 @@ hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.
 - No `deviations.py`: `export.py` writes `deviations.md` from the register `suite.py` reads.
 - The commit recorded is the one checked out (`HiSimCommit`); uncommitted changes do not show. The
   runs of a report to keep are therefore made from a committed state.
+
+## 13. Before step 6 (2026-11-04)
+
+- The private reference file was filled and confirmed by the human against Tables A3-1 to A3-4
+  (21 keys, 40 ranges), and the counts of Table A3-14 (low mass 21 ranges, 18 to meet; high mass
+  19, 17).
+- Cases a program cannot model: Annex A3 has no rule of its own. A group passes when the count of
+  results within their ranges meets the minimum (A3.2), so a range without a result counts as not
+  met, as the accounting does (spec §8.1). A program may omit a test case if the modeler explains
+  the omission in the modeler report of Normative Annex A2 (5.1.2.3); the cases of spec §2.3 are
+  explained by the feature they need. Section 7 adds nothing. The same modelling methods apply to
+  every case (5.1.1.4), which the one rule set of the system builder ensures. This goes into
+  `docs/verification/README.md` with step 8.
+- The EPW identity check that spec §11 step 3 moved to step 5 was already done: `PROVENANCE.md`
+  records the hour-by-hour agreement of the file with the normative `725650TY.CSV` since
+  2026-11-02, and what HiSim's weather pipeline makes of the file is register entries F6 and F7
+  (§10.5). Step 5 did nothing for it; the spec row is corrected.
+
+## 14. The first full run (2026-11-04)
+
+The 18 cases of the suite ran at 60, 900 and 3600 s from commit fc209c59. Ranges met: low mass 11
+of 16 attempted, high mass 7 of 12 attempted, the same at all three time steps. With the cases of
+spec §2.3 not modelled, neither group can reach the minimum of Table A3-14. Which ranges are met,
+and by how much the others are missed, stays private (D22, D24).
+
+### 14.1 Causes
+
+Diagnostic runs outside the repository changed the model in their own process only; HiSim is
+unchanged. They point to three causes:
+
+1. **ISO 13790 in part.** HiSim's building has neither the absorbed solar radiation of the opaque
+   elements (ISO 13790, 11.3.4) nor the radiation to the sky (11.3.5); register entry
+   `opaque_solar_absorption_and_sky_radiation`. Without them the zone's temperature swings too
+   little, which lowers heating and cooling alike.
+2. **The 5R1C network.** The coupling conductance H_tr,is (ISO 13790, Eq. 9) lies in series with
+   the transmission conductances, whose printed U-values already include the interior surface
+   resistance. The network therefore loses less in steady state than the U-values give, and more
+   insulation saves less than it should. A property of the model, not a defect of HiSim; not yet in
+   the register.
+3. **The setback step (D18).** The heating set point of 640 and 940 steps instead of ramping,
+   which changes the effect of the setback.
+
+The causes partly offset each other, so correcting one alone can move results away. Some
+differences remain unexplained; candidates are the constant F_w per window and the distribution of
+the solar gains over the nodes (register entries `constant_fw_per_window`,
+`interior_solar_distribution`). The decisions on the three causes are open.
+
+### 14.2 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D24 | The group accounting of the first full run in the gap analysis (D22 kept it in the private report) | – | stated in §14: the counts only; the statuses of the ranges, their positions and every number of the diagnosis stay private; pyBuildingEnergy publishes its own accounting; 2026-11-04 | – |

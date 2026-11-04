@@ -1,40 +1,49 @@
-"""The energy-port contract: what an output of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
+"""The energy-port contract: what a channel of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
-An output that carries energy states it with an :class:`EnergyPort`, passed to
-:meth:`hisim.component.Component.add_output` as ``energy_port=``: its role in the balance
-(:class:`~hisim.loadtypes.EnergyRole`), its carrier (:class:`~hisim.loadtypes.EnergyBalanceCarrier`) and,
-for the Sankey, who is on the other side. The balance check and the Sankeys in
+A channel that carries energy states it with an :class:`EnergyPort`, passed to
+:meth:`hisim.component.Component.add_output` or :meth:`hisim.component.Component.add_input` as ``energy_port=``: its
+role in the balance (:class:`~hisim.loadtypes.EnergyRole`) and its carrier
+(:class:`~hisim.loadtypes.EnergyBalanceCarrier`). The balance check and the Sankeys in
 :mod:`hisim.postprocessing.energy_balance` read nothing else. The check runs in every simulation and fails
-the run on a balance that does not close; a component whose outputs declare no port is *undeclared*, which is
+the run on a balance that does not close; a component whose channels declare no port is *undeclared*, which is
 reported, never a failure.
 
-The other side of a port is found from the wiring (complete Sankey spec, §4.3):
+A port names no other component; the other side is found from the wiring (complete Sankey spec, §4.3, and §3.7 of
+``roadmap/fluid_loops_spec.md``, decision D9):
 
 * ``environment`` names a boundary node; the port then names no component.
-* ``peer_input`` names one of the component's own inputs; the component that input is connected to is
-  the peer (a storage's heat from its generator: the generator feeds the storage's mass-flow input).
-* otherwise the peer is the component reading ``peer_output`` -- one of the component's own outputs,
-  by default the port's own output for a ``PRODUCTION`` port (the building reads the heat a distribution
-  system delivers). A port names ``peer_input`` or ``peer_output``, never both.
+* An *input port* books the energy that arrives on its input: its series is the column of the output connected to
+  the input, and its peer is that output's component. For example, a building that reads a distribution system's
+  heat through an input carrying ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` books that heat from the
+  distribution system. An input port is a ``CONSUMPTION`` or ``PRODUCTION`` port of a carrier no meter counts
+  (:meth:`EnergyPort.check_fits_an_input`); an optional input port that is not connected moves nothing and is left
+  out.
+* An *output port* that is read through an input carrying a port it pairs with (:meth:`EnergyPort.pairs_with`: the
+  same carrier, the other of ``CONSUMPTION`` and ``PRODUCTION``) has that reader as its peer. Otherwise a
+  ``PRODUCTION`` port's peer is the component that reads its output (the building reads the heat a distribution
+  system delivers).
 * A controller is never a peer: it decides, it moves no energy (owner decision D1). Such a component is *exempt*
   (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`) and the wiring skips it.
 * A meter is a node (owner decision Q-J, 2026-10-20): a component that declares what it meters
   (:meth:`hisim.component.Component.metered_exchanges`) stands between the boundary and the devices whose flows it
-  reads. A *metered* port (:attr:`EnergyPort.is_metered`: the ``CONSUMPTION`` or ``PRODUCTION`` port of electricity or of a bought
-  carrier) watches its own output, whatever its role, and its peer is the component that reads it: a meter of its
-  carrier, or a component that moves energy. The wiring is traced through exempt components to the first meter, so
-  a heat pump whose electricity the energy manager reads and passes on summed to the electricity meter links to that
-  meter. There is no derived junction: what the meter publishes is checked against what it reads, never assumed.
+  reads. A *metered* port (:attr:`EnergyPort.is_metered`: the ``CONSUMPTION`` or ``PRODUCTION`` port of electricity
+  or of a bought carrier) is an output port; it watches its own output, whatever its role, and its peer is the
+  component that reads it: a meter of its carrier, or a component that moves energy. The wiring is traced through
+  exempt components to the first meter, so a heat pump whose electricity the energy manager reads and passes on
+  summed to the electricity meter links to that meter. There is no derived junction: what the meter publishes is
+  checked against what it reads, never assumed.
 * A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_boundary`): a bought
-  carrier's ``CONSUMPTION`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their nodes,
-  and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A metered
-  port whose peer is no meter and no component is *unmetered*, which the balance reports.
+  carrier's ``CONSUMPTION`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their
+  nodes, and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A
+  metered port whose peer is no meter and no component is *unmetered*, which the balance reports.
 
 A transfer between two components that both declare ports is booked by both: the sender's ``PRODUCTION`` port whose
 peer is the receiver, and the receiver's ``CONSUMPTION`` port of the same carrier whose peer is the sender. The check
 compares the two totals and fails the run when they disagree beyond its tolerance, and when only one side books
 the transfer (owner, 2026-10-02: always fail hard). A one-sided booking is allowed only toward a component that
-declares no ports at all, a meter, a boundary node or nobody.
+declares no ports at all, a meter, a boundary node or nobody. A transfer on one wire, the sender's output port read
+through the receiver's input port, resolves to one column at both ends and so agrees by construction; the check
+still proves each side's own balance.
 
 A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
 kJ) is taken per step as it is; any other unit is refused when the output is declared
@@ -81,13 +90,14 @@ water, ``COOLING`` goes from the other member to the supplier. The rules it appl
   pumps water into a loop whose other quantities it cannot read fails the run.
 
 The rules that need no value of the run fail it right after the build, before it simulates
-(:meth:`hisim.postprocessing.energy_balance.ports.Wiring.refuse_a_broken_wiring`), together with rule (a) of the
-owner's decision of 2026-10-02 for an :class:`EnergyPort`: a ``PRODUCTION`` port that is not metered and names no
-``peer_input`` or ``peer_output`` must not be read by more than one component that declares ports.
+(:meth:`hisim.postprocessing.energy_balance.ports.Wiring.refuse_a_broken_wiring`), together with two rules of the
+:class:`EnergyPort` wiring: rule (a) of the owner's decision of 2026-10-02, a ``PRODUCTION`` port that is not metered
+and is read by more than one component that declares ports is refused unless exactly one reader tags the reading
+input with a port it pairs with; and an input port must pair with the port of the output it reads, if that output
+declares one.
 
-The :class:`EnergyPort` peer pointers remain for the carriers that are not water: fuel, electricity, ambient
-heat and solar, and for heat that leaves a component other than on a loop (a tank's tap, a distribution
-system's heat to the building).
+:class:`EnergyPort` stays for everything a loop does not carry: fuel, electricity, ambient heat and solar, and heat
+that leaves a component other than on a loop (a tank's tap, a distribution system's heat to the building).
 """
 
 from __future__ import annotations
@@ -104,14 +114,10 @@ from hisim import loadtypes as lt
 
 @dataclass(frozen=True)
 class EnergyPort:
-    """Role, carrier and peer of one energy-carrying output."""
+    """Role and carrier of one energy-carrying output or input; the wiring finds its peer."""
 
     role: lt.EnergyRole
     carrier: lt.EnergyBalanceCarrier
-    #: One of the component's own inputs; the component it is connected to is the peer.
-    peer_input: Optional[str] = None
-    #: One of the component's own outputs; the component reading it is the peer.
-    peer_output: Optional[str] = None
     #: A boundary node as the peer, instead of a component (``lt.EnvironmentNode``).
     environment: Optional[lt.EnvironmentNode] = None
     #: True when the output is published with the opposite sign of the role (heat leaving as a negative number).
@@ -129,7 +135,7 @@ class EnergyPort:
     POWER_UNITS_IN_KILOWATT: ClassVar[Dict[lt.Units, float]] = {lt.Units.WATT: 1e-3, lt.Units.KILOWATT: 1.0}
 
     def __post_init__(self) -> None:
-        """Refuse a port whose role or carrier is not one of the enums, that names two peers, or that skips a meter.
+        """Refuse a port whose role or carrier is not one of the enums, or that skips a meter.
 
         A metered port (``CONSUMPTION`` or ``PRODUCTION`` of electricity or a bought carrier) names no ``environment``: its peer is
         the meter that reads it, and a boundary node named on it would take its flow past every meter (owner decision
@@ -141,8 +147,6 @@ class EnergyPort:
         """
         lt.EnergyRole(self.role)
         lt.EnergyBalanceCarrier(self.carrier)
-        if self.environment is not None and (self.peer_input is not None or self.peer_output is not None):
-            raise ValueError("An energy port's peer is either an environment node or a component, not both.")
         if self.environment in (lt.EnvironmentNode.GRID_IMPORT, lt.EnvironmentNode.GRID_EXPORT):
             raise ValueError(
                 f"An energy port cannot name {self.environment.value!r} as its environment: the grid is reached only "
@@ -157,11 +161,43 @@ class EnergyPort:
                 f"A {self.role.value} port of {self.carrier.value} is metered and names no environment "
                 f"({self.environment.value!r}): its peer is the meter that reads it."
             )
-        if self.peer_input is not None and self.peer_output is not None:
+
+    def check_fits_an_input(self, component_name: str, field_name: str) -> None:
+        """Refuse this port on an input it cannot describe: an input port books energy exchanged with its source.
+
+        An input's other side is the component whose output it reads, so the port is a ``CONSUMPTION`` (energy
+        arriving from the source) or a ``PRODUCTION`` (energy given to the source, as cooling leaves a building) and
+        names no ``environment``. A metered carrier is booked on the output a meter reads (owner decision Q-J), never
+        on an input. For example, ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)`` fits an input, while
+        ``EnergyPort(LOSS, SPACE_HEATING_HEAT)`` and ``EnergyPort(CONSUMPTION, ELECTRICITY)`` do not.
+
+        Args:
+            component_name: The input's component, for the message.
+            field_name: The input's name, for the message.
+
+        Raises:
+            ValueError: If the role is ``LOSS`` or ``STORED_CHANGE``, the port names an environment or it is metered.
+        """
+        where = f"The energy port of the input {component_name}.{field_name} ({self.role.value}, {self.carrier.value})"
+        if self.role not in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION):
+            raise ValueError(f"{where} is no exchange with its source: an input port is consumption or production.")
+        if self.environment is not None:
             raise ValueError(
-                f"An energy port names its peer by one of peer_input or peer_output, not both: "
-                f"peer_input={self.peer_input!r}, peer_output={self.peer_output!r}."
+                f"{where} names the environment {self.environment.value!r}; an input port's peer is its source."
             )
+        if self.is_metered:
+            raise ValueError(f"{where} is metered: a metered carrier is booked on the output its meter reads.")
+
+    def pairs_with(self, other: "EnergyPort") -> bool:
+        """Whether this port and ``other`` book the two ends of one transfer: the same carrier, opposite exchange roles.
+
+        For example, a distribution system's ``EnergyPort(PRODUCTION, SPACE_HEATING_HEAT)`` pairs with a building's
+        ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)``, and its ``EnergyPort(CONSUMPTION, COOLING)`` with the
+        building's ``EnergyPort(PRODUCTION, COOLING)``; two ``PRODUCTION`` ports, a ``LOSS`` port or two carriers never
+        pair.
+        """
+        exchange = {lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION}
+        return self.carrier == other.carrier and {self.role, other.role} == exchange
 
     @classmethod
     def validate_unit(cls, unit: lt.Units) -> None:
@@ -277,27 +313,11 @@ class EnergyPort:
         """
         return self.carrier in self.METERED_CARRIERS and self.role in (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
 
-    @property
-    def names_a_component(self) -> bool:
-        """Whether the port names a peer through the wiring.
-
-        A ``PRODUCTION`` port and a metered ``CONSUMPTION`` port (:attr:`is_metered`) name one implicitly through their own output,
-        which the receiver or the meter reads; any other ``LOSS`` or ``CONSUMPTION`` port only when it names ``peer_input`` or
-        ``peer_output``. A port with an ``environment`` names none.
-        """
-        if self.environment is not None:
-            return False
-        if self.peer_input is not None or self.peer_output is not None:
-            return True
-        return self.role == lt.EnergyRole.PRODUCTION or self.is_metered
-
     def as_dict(self) -> Dict[str, object]:
         """The port as the balance report lists it."""
         return {
             "role": self.role.value,
             "carrier": self.carrier.value,
-            "peer_input": self.peer_input,
-            "peer_output": self.peer_output,
             "environment": None if self.environment is None else self.environment.value,
             "negated": self.negated,
         }

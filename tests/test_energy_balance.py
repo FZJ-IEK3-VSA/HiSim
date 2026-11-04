@@ -27,7 +27,7 @@ from hisim.postprocessing.energy_balance import (
     EnergyBalanceReport,
 )
 from hisim.postprocessing.energy_balance.check import RoleTotals
-from hisim.postprocessing.energy_balance.ports import Peer, PeerKind
+from hisim.postprocessing.energy_balance.ports import DeclaredPorts, EnergyPortWiringError, Peer, PeerKind, Wiring
 from hisim.postprocessing.energy_balance.sankey import SankeyDiagram
 from hisim.postprocessing.postprocessing_main import PostProcessor
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -49,9 +49,11 @@ def output(component: str, field: str, unit: lt.Units, port: Optional[EnergyPort
     )
 
 
-def wired_input(field: str, source: str, source_field: str) -> SimpleNamespace:
-    """An input connected to ``source.source_field``, as the wiring leaves it."""
-    return SimpleNamespace(field_name=field, src_object_name=source, src_field_name=source_field)
+def wired_input(
+    field: str, source: Optional[str], source_field: Optional[str], port: Optional[EnergyPort] = None
+) -> SimpleNamespace:
+    """An input connected to ``source.source_field`` (None: to nothing), as the wiring leaves it; ``port`` its port."""
+    return SimpleNamespace(field_name=field, src_object_name=source, src_field_name=source_field, energy_port=port)
 
 
 class Meter(cp.MeterComponent):
@@ -155,14 +157,22 @@ def test_an_energy_port_on_an_output_that_is_neither_power_nor_energy_is_refused
 
 
 @pytest.mark.base
-def test_an_energy_port_names_either_an_environment_node_or_a_component() -> None:
-    """``environment`` with ``peer_input`` is refused; a port naming its environment goes there whatever its carrier."""
-    with pytest.raises(ValueError, match="either an environment node"):
-        EnergyPort(LOSS, SH, peer_input="X", environment=lt.EnvironmentNode.OUTDOORS)
+def test_a_port_naming_its_environment_goes_there_whoever_reads_it() -> None:
+    """A port naming its environment goes there whatever its carrier, even when a declared component reads it."""
     named = EnergyPort(
         PRODUCTION, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, environment=lt.EnvironmentNode.HOT_WATER_USE
     )
-    assert named.default_boundary() == "hot water drawn at the taps" and not named.names_a_component
+    assert named.default_boundary() == "hot water drawn at the taps"
+    balance_report = report(
+        [
+            ("Tank", "Tap", lt.Units.KWH, named, [0.5]),
+            ("Tank", "Loss", lt.Units.KWH, EnergyPort(LOSS, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT), [-0.5]),
+            ("Sink", "Loss", lt.Units.KWH, EnergyPort(LOSS, SH), [0.0]),
+        ],
+        inputs={"Sink": [wired_input("Tap", "Tank", "Tap")]},
+    )
+    (tap,) = [series for series in balance_report.declared.by_component["Tank"] if series.channel == "Tap"]
+    assert tap.peer == Peer(PeerKind.BOUNDARY, "hot water drawn at the taps")
 
 
 @pytest.mark.base
@@ -229,10 +239,56 @@ def test_a_metered_exchange_names_a_metered_carrier_and_two_distinct_outputs() -
 
 
 @pytest.mark.base
-def test_an_energy_port_names_its_peer_by_one_input_or_one_output_not_both() -> None:
-    """``peer_input`` with ``peer_output`` is refused, naming both."""
-    with pytest.raises(ValueError, match="peer_input='A', peer_output='B'"):
-        EnergyPort(PRODUCTION, SH, peer_input="A", peer_output="B")
+@pytest.mark.parametrize(
+    ("port", "refusal"),
+    [
+        (EnergyPort(CONSUMPTION, SH), None),
+        (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.COOLING), None),
+        (EnergyPort(CONSUMPTION, SH, negated=True), None),
+        (EnergyPort(LOSS, SH), "no exchange with its source"),
+        (EnergyPort(STORED, SH), "no exchange with its source"),
+        (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT, environment=lt.EnvironmentNode.RESIDENTS), "names the environment"),
+        (EnergyPort(CONSUMPTION, ELECTRICITY), "is metered"),
+        (EnergyPort(PRODUCTION, GAS), "is metered"),
+    ],
+)
+def test_an_input_port_is_an_unmetered_exchange_with_its_source(port: EnergyPort, refusal: Optional[str]) -> None:
+    """An input port is consumption or production of a carrier no meter counts, and names no environment (D9)."""
+    if refusal is None:
+        port.check_fits_an_input("Building", "HeatIn")
+        assert cp.ComponentInput("Building", "HeatIn", lt.LoadTypes.HEATING, lt.Units.WATT, False, energy_port=port)
+        return
+    with pytest.raises(ValueError, match=f"input Building.HeatIn .*{refusal}"):
+        port.check_fits_an_input("Building", "HeatIn")
+    with pytest.raises(ValueError, match=refusal):
+        cp.ComponentInput("Building", "HeatIn", lt.LoadTypes.HEATING, lt.Units.WATT, False, energy_port=port)
+
+
+@pytest.mark.base
+def test_an_input_port_must_be_a_power_or_an_energy() -> None:
+    """An input in °C cannot carry energy: it is refused when it is declared, as an output is."""
+    with pytest.raises(ValueError, match="power or an energy"):
+        cp.ComponentInput("Tank", "Supply", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, False, energy_port=EnergyPort(CONSUMPTION, SH))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("first", "second", "pairs"),
+    [
+        (EnergyPort(PRODUCTION, SH), EnergyPort(CONSUMPTION, SH), True),
+        (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.COOLING), EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.COOLING), True),
+        (EnergyPort(PRODUCTION, SH), EnergyPort(PRODUCTION, SH), False),
+        (EnergyPort(CONSUMPTION, SH), EnergyPort(CONSUMPTION, SH), False),
+        (EnergyPort(PRODUCTION, SH), EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.COOLING), False),
+        (EnergyPort(LOSS, SH), EnergyPort(CONSUMPTION, SH), False),
+        (EnergyPort(STORED, SH), EnergyPort(PRODUCTION, SH), False),
+    ],
+)
+def test_two_ports_pair_when_they_book_the_two_ends_of_one_transfer(
+    first: EnergyPort, second: EnergyPort, pairs: bool
+) -> None:
+    """The same carrier, one consumption and the other production, in either order; nothing else pairs."""
+    assert first.pairs_with(second) is pairs and second.pairs_with(first) is pairs
 
 
 @pytest.mark.base
@@ -494,31 +550,30 @@ def test_a_negated_port_is_read_with_the_sign_of_its_role() -> None:
 def chain(received_watt_hour: float = 699.6) -> EnergyBalanceReport:
     """A boiler (undeclared) feeds a tank, the tank a radiator loop, the loop the building (undeclared).
 
-    The tank sends 0.7 kWh, the loop books 0.6996 kWh of it: 0.4 Wh, within the tolerance, is sent but not
-    received. The loop loses 0.05 kWh it does not declare, so it carries a residual of 0.05 kWh, beyond the
-    tolerance. One 900 s step.
+    The tank books the boiler's heat on an input port. The tank sends 0.7 kWh, which the loop reads; the loop books,
+    on an input port, a second output of the tank that carries no port, 0.6996 kWh: 0.4 Wh, within the tolerance, is
+    sent but not received. (A transfer booked on one wire cannot disagree; a receiver booking another column than
+    the one the sender books is what the link check catches.) The loop loses 0.05 kWh it does not declare, so it
+    carries a residual of 0.05 kWh, beyond the tolerance. One 900 s step.
     """
     columns: List[Column] = [
-        ("Tank", "HeatIn", lt.Units.WATT, EnergyPort(CONSUMPTION, SH, peer_input="FlowFromBoiler"), [4000.0]),
         ("Tank", "HeatOut", lt.Units.WATT_HOUR, EnergyPort(PRODUCTION, SH), [700.0]),
+        ("Tank", "HeatOutForTheLoop", lt.Units.WATT_HOUR, None, [received_watt_hour]),
         ("Tank", "Loss", lt.Units.WATT, EnergyPort(LOSS, SH), [200.0]),
         ("Tank", "Stored", lt.Units.WATT_HOUR, EnergyPort(STORED, SH), [250.0]),
-        (
-            "Loop",
-            "Received",
-            lt.Units.WATT_HOUR,
-            EnergyPort(CONSUMPTION, SH, peer_input="HeatFromTank"),
-            [received_watt_hour],
-        ),
         ("Loop", "Delivered", lt.Units.WATT_HOUR, EnergyPort(PRODUCTION, SH), [received_watt_hour - 50.0]),
         ("Pump", "Power", lt.Units.WATT, EnergyPort(CONSUMPTION, ELECTRICITY), [100.0]),
+        ("Boiler", "Flow", lt.Units.WATT, None, [4000.0]),
     ]
     inputs = {
-        "Tank": [wired_input("FlowFromBoiler", "Boiler", "Flow")],
-        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Tank": [wired_input("FlowFromBoiler", "Boiler", "Flow", EnergyPort(CONSUMPTION, SH))],
+        "Loop": [
+            wired_input("HeatFromTank", "Tank", "HeatOut"),
+            wired_input("Received", "Tank", "HeatOutForTheLoop", EnergyPort(CONSUMPTION, SH)),
+        ],
         "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
     }
-    return report(columns, inputs=inputs, extra_components=["Boiler", "Building"])
+    return report(columns, inputs=inputs, extra_components=["Building"])
 
 
 def flows(diagram: Dict[str, Any]) -> Dict[Tuple[str, str], float]:
@@ -610,15 +665,15 @@ def test_a_link_whose_two_sides_disagree_fails_the_run_in_either_direction(
 
 
 def receiver_only() -> EnergyBalanceReport:
-    """The loop books 0.7 kWh of heat from the tank; the tank declares ports, but none sends heat to the loop."""
+    """The loop books 0.7 kWh of heat from the tank on an input port; the tank declares ports, none on that output."""
     columns: List[Column] = [
         ("Tank", "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [1.0]),
         ("Tank", "Loss", lt.Units.KWH, EnergyPort(LOSS, SH), [1.0]),
-        ("Loop", "Received", lt.Units.KWH, EnergyPort(CONSUMPTION, SH, peer_input="HeatFromTank"), [0.7]),
+        ("Tank", "HeatOut", lt.Units.KWH, None, [0.7]),
         ("Loop", "Delivered", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.7]),
     ]
     inputs = {
-        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))],
         "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
     }
     return report(columns, inputs=inputs, extra_components=["Building"])
@@ -683,14 +738,14 @@ def test_a_booking_only_the_sender_declares_fails_the_run_naming_both_the_carrie
 def test_a_one_sided_booking_toward_a_component_without_ports_passes(tmp_path: Path) -> None:
     """The tank books heat from an undeclared boiler and to an undeclared building: no link, the run passes."""
     columns: List[Column] = [
-        ("Tank", "HeatIn", lt.Units.KWH, EnergyPort(CONSUMPTION, SH, peer_input="FlowFromBoiler"), [0.7]),
         ("Tank", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.7]),
+        ("Boiler", "Flow", lt.Units.KWH, None, [0.7]),
     ]
     inputs = {
-        "Tank": [wired_input("FlowFromBoiler", "Boiler", "Flow")],
+        "Tank": [wired_input("FlowFromBoiler", "Boiler", "Flow", EnergyPort(CONSUMPTION, SH))],
         "Building": [wired_input("HeatFromTank", "Tank", "HeatOut")],
     }
-    balance_report = report(columns, inputs=inputs, extra_components=["Boiler", "Building"])
+    balance_report = report(columns, inputs=inputs, extra_components=["Building"])
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -700,15 +755,14 @@ def test_a_one_sided_booking_toward_a_component_without_ports_passes(tmp_path: P
 
 @pytest.mark.base
 def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> None:
-    """The tank sends 0.7 kWh, the loop books 0.7 kWh from it: the link closes and states no reason."""
+    """The tank sends 0.7 kWh, the loop books it on the input that reads it: the link closes and states no reason."""
     columns: List[Column] = [
         ("Tank", "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [0.7]),
         ("Tank", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.7]),
-        ("Loop", "Received", lt.Units.KWH, EnergyPort(CONSUMPTION, SH, peer_input="HeatFromTank"), [0.7]),
         ("Loop", "Delivered", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.7]),
     ]
     inputs = {
-        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))],
         "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
     }
     balance_report = report(columns, inputs=inputs, extra_components=["Building"])
@@ -744,6 +798,183 @@ def test_a_sankey_node_label_carries_the_energy_through_the_node() -> None:
         "store<br>15,252 kWh",
         "ambient heat<br>11,631 kWh",
     ]
+
+
+# --- input ports (decision D9 of roadmap/fluid_loops_spec.md) ------------------------------------------------------
+
+COOLING = lt.EnergyBalanceCarrier.COOLING
+
+
+def distribution_and_building(
+    heat_watt: Sequence[float], cooling_watt: Sequence[float], building_inputs: Optional[List[SimpleNamespace]] = None
+) -> EnergyBalanceReport:
+    """A distribution system that heats and cools a building on two wires, the building booking both on input ports.
+
+    D20 of the spec: the distribution system publishes two non-negative outputs, ``HeatDeliveredInWatt`` (production
+    of space heating) and ``HeatDrawnForCoolingInWatt`` (consumption of cooling), and books the same two flows from an
+    undeclared heat pump on two input ports; the building reads the two outputs through ``HeatReceivedInWatt``
+    (consumption of space heating) and ``HeatRemovedByCoolingInWatt`` (production of cooling), and loses what it
+    receives and gives the cooling from a store. 900 s steps.
+    """
+    columns: List[Column] = [
+        ("HDS", "HeatDeliveredInWatt", lt.Units.WATT, EnergyPort(PRODUCTION, SH), heat_watt),
+        ("HDS", "HeatDrawnForCoolingInWatt", lt.Units.WATT, EnergyPort(CONSUMPTION, COOLING), cooling_watt),
+        ("Building", "LossInWatt", lt.Units.WATT, EnergyPort(LOSS, SH), heat_watt),
+        ("Building", "StoredCoolingInWatt", lt.Units.WATT, EnergyPort(STORED, COOLING), [-c for c in cooling_watt]),
+        ("HeatPump", "HeatInWatt", lt.Units.WATT, None, heat_watt),
+        ("HeatPump", "CoolingInWatt", lt.Units.WATT, None, cooling_watt),
+    ]
+    inputs = {
+        "HDS": [
+            wired_input("HeatFromGenerator", "HeatPump", "HeatInWatt", EnergyPort(CONSUMPTION, SH)),
+            wired_input("CoolingToGenerator", "HeatPump", "CoolingInWatt", EnergyPort(PRODUCTION, COOLING)),
+        ],
+        "Building": building_inputs
+        if building_inputs is not None
+        else [
+            wired_input("HeatReceivedInWatt", "HDS", "HeatDeliveredInWatt", EnergyPort(CONSUMPTION, SH)),
+            wired_input("HeatRemovedByCoolingInWatt", "HDS", "HeatDrawnForCoolingInWatt", EnergyPort(PRODUCTION, COOLING)),
+        ],
+    }
+    return report(columns, inputs=inputs)
+
+
+@pytest.mark.base
+def test_an_input_port_books_the_column_wired_to_it_with_its_source_as_the_peer() -> None:
+    """The building's input port is the distribution system's column, its peer the distribution system (D9)."""
+    balance_report = distribution_and_building([4000.0, 0.0, 2000.0, 0.0], [0.0, 1000.0, 0.0, 0.0])
+    building = {series.channel: series for series in balance_report.declared.by_component["Building"]}
+    received = building["HeatReceivedInWatt"]
+    assert received.reads == ("HDS", "HeatDeliveredInWatt") and received.peer == Peer(PeerKind.COMPONENT, "HDS")
+    np.testing.assert_array_equal(received.kilowatt_hours, np.array([1.0, 0.0, 0.5, 0.0]))
+    assert received.as_dict()["reads"] == "HDS.HeatDeliveredInWatt" and received.as_dict()["unit"] == "W"
+    hds = {series.channel: series for series in balance_report.declared.by_component["HDS"]}
+    assert hds["HeatDeliveredInWatt"].peer == Peer(PeerKind.COMPONENT, "Building")
+    assert hds["HeatDrawnForCoolingInWatt"].peer == Peer(PeerKind.COMPONENT, "Building")
+    assert hds["HeatDeliveredInWatt"].as_dict()["reads"] is None
+
+
+@pytest.mark.base
+def test_heating_and_cooling_steps_are_booked_on_two_wires_alike_at_both_ends() -> None:
+    """D20: heat goes to the building on one wire, cooling to the distribution system on the other; both links close.
+
+    Each wire resolves to one column at both ends, so sender and receiver book the same numbers, and every balance
+    closes in every step.
+    """
+    balance_report = distribution_and_building([4000.0, 0.0, 2000.0, 0.0], [0.0, 1000.0, 0.0, 400.0])
+    links = {(link.sender, link.receiver, link.carrier): link for link in balance_report.links}
+    heating = links[("HDS", "Building", "space_heating_heat")]
+    cooling = links[("Building", "HDS", "cooling")]
+    assert heating.closes and heating.sent == heating.received == pytest.approx(1.5)
+    assert cooling.closes and cooling.sent == cooling.received == pytest.approx(0.35)
+    assert {balance.component for balance in balance_report.balances} == {"HDS", "Building"}
+    assert all(balance.closes for balance in balance_report.balances)
+    assert balance_report.declared.undeclared == ["HeatPump"]
+    assert [series.peer for series in balance_report.declared.by_component["HDS"][2:]] == [
+        Peer(PeerKind.COMPONENT, "HeatPump")
+    ] * 2
+    heat = flows(balance_report.sankeys()["space_heating_heat"])
+    assert heat[("HDS", "Building")] == pytest.approx(1.5)
+    assert flows(balance_report.sankeys()["cooling"])[("Building", "HDS")] == pytest.approx(0.35)
+
+
+@pytest.mark.base
+def test_an_input_port_whose_input_is_not_connected_is_left_out() -> None:
+    """An optional input port without a source moves nothing in this run: no series, no fault."""
+    balance_report = distribution_and_building(
+        [4000.0],
+        [0.0],
+        building_inputs=[
+            wired_input("HeatReceivedInWatt", "HDS", "HeatDeliveredInWatt", EnergyPort(CONSUMPTION, SH)),
+            wired_input("HeatRemovedByCoolingInWatt", None, None, EnergyPort(PRODUCTION, COOLING)),
+        ],
+    )
+    assert [series.channel for series in balance_report.declared.by_component["Building"]] == [
+        "LossInWatt",
+        "StoredCoolingInWatt",
+        "HeatReceivedInWatt",
+    ]
+
+
+@pytest.mark.base
+def test_a_negated_input_port_is_read_with_the_sign_of_its_role() -> None:
+    """A source publishing heat delivered as -0.7 kWh is booked +0.7 kWh by an input port declared negated."""
+    balance_report = report(
+        [
+            ("Pipe", "Out", lt.Units.KWH, None, [-0.7]),
+            ("Room", "Loss", lt.Units.KWH, EnergyPort(LOSS, SH), [0.7]),
+        ],
+        inputs={"Room": [wired_input("HeatIn", "Pipe", "Out", EnergyPort(CONSUMPTION, SH, negated=True))]},
+    )
+    (balance,) = [balance for balance in balance_report.balances if balance.component == "Room"]
+    assert balance.closes
+
+
+@pytest.mark.base
+def test_an_input_port_reading_an_exempt_component_takes_its_fallback() -> None:
+    """A controller moves no energy: an input port reading it has no component peer and, for heat, is unlinked."""
+    balance_report = report(
+        [
+            ("Controller", "Signal", lt.Units.WATT, None, [1000.0]),
+            ("Room", "Loss", lt.Units.KWH, EnergyPort(LOSS, SH), [0.25]),
+        ],
+        inputs={"Room": [wired_input("HeatIn", "Controller", "Signal", EnergyPort(CONSUMPTION, SH))]},
+        classes={"Controller": Controller},
+    )
+    room = {series.channel: series for series in balance_report.declared.by_component["Room"]}
+    assert room["HeatIn"].peer == Peer.unlinked()
+    wiring = Wiring([])
+    assert wiring.input_peer("Unknown", EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT)) == Peer(
+        PeerKind.COMPONENT, "Unknown"
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("input_port", "refused"),
+    [
+        (EnergyPort(CONSUMPTION, SH), False),
+        (EnergyPort(PRODUCTION, SH), True),
+        (EnergyPort(CONSUMPTION, COOLING), True),
+    ],
+)
+def test_an_input_port_must_pair_with_the_output_port_it_reads(input_port: EnergyPort, refused: bool) -> None:
+    """The two ports of one wire state the same carrier, one consumption and the other production; else the build fails."""
+    outputs = [output("Tank", "HeatOut", lt.Units.WATT, EnergyPort(PRODUCTION, SH))]
+    components = [
+        stand_in("Tank", None, [], outputs),
+        stand_in("Loop", None, [wired_input("HeatIn", "Tank", "HeatOut", input_port)], []),
+    ]
+    assert len(Wiring(components).unpaired_input_port_faults()) == int(refused)
+    if not refused:
+        Wiring.refuse_a_broken_wiring(components)
+        return
+    with pytest.raises(EnergyPortWiringError, match=r"the input Loop.HeatIn .* reads the energy port Tank.HeatOut"):
+        Wiring.refuse_a_broken_wiring(components)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("name", "kind", "refusal"), [("EMS", Manager, "it is exempt"), ("Meter", Meter, "it is a meter")])
+def test_an_exempt_component_or_a_meter_with_an_input_port_is_refused(name: str, kind: type, refusal: str) -> None:
+    """A controller or a meter moves no energy of its own, on an input no more than on an output."""
+    with pytest.raises(ValueError, match=f"{name} declares the energy port HeatIn, but {refusal}"):
+        report(
+            [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
+            inputs={name: [wired_input("HeatIn", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))]},
+            extra_components=[name],
+            classes={name: kind},
+        )
+
+
+@pytest.mark.base
+def test_a_port_of_a_component_that_moves_nothing_is_refused_naming_the_reason() -> None:
+    """An exempt component's port names its reason; a meter's says it is a meter; any other passes."""
+    meters = {"Meter": frozenset({ELECTRICITY})}
+    with pytest.raises(ValueError, match="EMS declares the energy port Power, but it is exempt .*: it decides"):
+        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("EMS", "Power", {"EMS": "it decides"}, meters)
+    with pytest.raises(ValueError, match="Meter declares the energy port Power, but it is a meter"):
+        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Meter", "Power", {}, meters)
+    DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Tank", "Power", {"EMS": "it decides"}, meters)
 
 
 # --- the graph model of the complete Sankey (roadmap/complete_energy_sankeys_spec.md §4, owner decision Q-J) ----
@@ -833,7 +1064,7 @@ def test_grid_import_and_export_are_what_the_meter_publishes_and_the_meter_node_
     assert kinds["Meter"] == "meter" and kinds["grid import"] == "boundary"
 
     written = json.loads(balance_report.write(str(tmp_path), with_html=False).read_text())
-    assert written["schema"] == "hisim.energy_balance/3" and "buses" not in written
+    assert written["schema"] == "hisim.energy_balance/4" and "buses" not in written
     (entry,) = written["meters"]
     assert entry["meter"] == "Meter" and entry["carrier"] == "electricity"
     assert entry["published_import_kwh"] == pytest.approx(0.6) and entry["published_export_kwh"] == pytest.approx(0.6)
@@ -1014,12 +1245,12 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
     """Only a helper reads the boiler's flow: the heat has no peer; the report lists the port as unlinked."""
     columns: List[Column] = [
         ("Boiler", "AmbientIn", lt.Units.KWH, EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), [1.0]),
-        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH, peer_output="Flow"), [1.0]),
+        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [1.0]),
         ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, [0.1]),
     ]
     balance_report = report(
         columns,
-        inputs={"Sum": [wired_input("Flow", "Boiler", "Flow")]},
+        inputs={"Sum": [wired_input("HeatOut", "Boiler", "HeatOut")]},
         extra_components=["Sum"],
         classes={"Sum": Helper},
     )

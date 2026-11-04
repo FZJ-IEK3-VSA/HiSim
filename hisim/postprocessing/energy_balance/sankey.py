@@ -100,7 +100,7 @@ class SankeyNodes:
     @staticmethod
     def loss_of(series: PortSeries) -> str:
         """The loss node of one ``LOSS`` port, for example "CondensingGasBoiler · CombustionHeatLoss"."""
-        return f"{series.component}{Peer.NODE_SEPARATOR}{series.output.field_name}"
+        return f"{series.component}{Peer.NODE_SEPARATOR}{series.channel}"
 
 
 class SankeyBuilder:

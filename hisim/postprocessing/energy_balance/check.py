@@ -221,7 +221,7 @@ class NonFinitePort:
     @property
     def name(self) -> str:
         """``component.output``."""
-        return f"{self.series.component}.{self.series.output.field_name}"
+        return f"{self.series.component}.{self.series.channel}"
 
 
 class BalanceCheck:

@@ -447,7 +447,7 @@ def unmetered_outputs(
             output.field_name
             for output in components_by_name[consumer].outputs
             if output.energy_port is not None
-            and output.energy_port.role == lt.EnergyRole.IN
+            and output.energy_port.role == lt.EnergyRole.CONSUMPTION
             and output.energy_port.carrier.value == carrier
             and output.field_name not in named_outputs
         ]

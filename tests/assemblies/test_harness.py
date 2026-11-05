@@ -473,7 +473,9 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
         checks.check_heat_delivered(run)
     assert str(caught.value) == (
         f"{label} heat delivered every heat input: Building.ThermalPowerDelivered is not connected, although "
-        "subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default: the heat never arrives"
+        "subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default; Building.HeatReceivedInWatt is not "
+        "connected, although subject-Heater (ElectricHeating.ThermalOutputShPower) serves it by default: the heat never "
+        "arrives"
     )
     with pytest.raises(AssemblyCheckFailure, match=r"room heated .* the room air of Building averages 1\d\.\d\d °C"):
         checks.check_room_heated(run)

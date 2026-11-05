@@ -18,6 +18,10 @@ components:
     inputs:
       - Weather
       - UTSPConnector
+      - input: HeatReceivedInWatt
+        from: HeatPump.Heating
+      - input: HeatRemovedByCoolingInWatt
+        from: HeatPump.HeatDrawnForCoolingInWatt
       - input: ThermalPowerDelivered
         from: HeatPump.ThermalPowerDelivered
   PVSystem:

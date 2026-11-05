@@ -383,6 +383,7 @@ def setup_function(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+                heat_distribution_cooling_enabled=my_hds_controller_information.hds_controller_config.cooling_enabled,
             )
         )
     )
@@ -429,26 +430,26 @@ def setup_function(
         my_occupancy.WaterConsumption,
     )
 
-    # Connect solarthermal as primary heat generator
+    # Connect the solar thermal collector to the secondary coil, the lower solar coil of the cylinder
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterTemperatureFromHeatGenerator,
+        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
         my_solar_thermal_system.component_name,
         my_solar_thermal_system.WaterTemperatureOutput,
     )
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
+        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
         my_solar_thermal_system.component_name,
         my_solar_thermal_system.WaterMassFlowOutput,
     )
 
-    # Connect gas as secondary heat generator
+    # Connect the boiler to the primary coil
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
+        my_dhw_storage.WaterTemperatureFromHeatGenerator,
         my_gas_heater.component_name,
         my_gas_heater.WaterOutputTemperatureDhw,
     )
     my_dhw_storage.connect_input(
-        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
+        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
         my_gas_heater.component_name,
         my_gas_heater.WaterOutputMassFlowDhw,
     )

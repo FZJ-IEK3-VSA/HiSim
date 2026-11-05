@@ -14,8 +14,8 @@ components:
     inputs:
       - Weather
       - L2EMSElectricityController
-      - UTSPConnector
       - ElectricHeating
+      - UTSPConnector
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work

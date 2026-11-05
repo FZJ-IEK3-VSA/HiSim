@@ -15,8 +15,8 @@ components:
     inputs:
       - Weather
       - L2EMSElectricityController
-      - UTSPConnector
       - HeatDistributionSystem
+      - UTSPConnector
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -98,11 +98,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - MoreAdvancedHeatPumpHPLib
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW
   MoreAdvancedHeatPumpHPLibControllerSH:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard

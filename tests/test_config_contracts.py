@@ -329,6 +329,7 @@ class PilotWireFormat:
         "HeatDistributionControllerConfig": (
             "water_mass_flow_rate_in_kg_per_second",
             "heat_distribution_system_type",
+            "heat_distribution_cooling_enabled",
         ),
         "BuildingConfig": (
             "heating_load_in_watt",

@@ -97,8 +97,6 @@ The `post_processing_options` array accepts any combination of the following str
 | `PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION`       | Prepare outputs for multi-scenario comparison                       |
 | `WRITE_KPIS_TO_JSON`                            | Write KPI results to a JSON file                                    |
 | `WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER`         | Write KPIs in the format expected by the building sizer             |
-| `MAKE_RESULT_JSON_FOR_WEBTOOL`                  | Generate a result JSON for the HiSim webtool                        |
-| `MAKE_OPERATION_RESULTS_FOR_WEBTOOL`            | Generate operational results for the webtool                        |
 | `PROVIDE_DETAILED_ITERATION_LOGGING`            | Write per-timestep convergence details to a log file                |
 
 ### Pre-defined simulation JSON files

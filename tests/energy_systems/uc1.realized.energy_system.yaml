@@ -61,6 +61,16 @@ components:
       window_area_in_m2: null
       door_u_value_in_watt_per_m2_per_kelvin: null
       door_area_in_m2: null
+      windows: null
+      use_air_change_rate_per_hour: null
+      infiltration_air_change_rate_per_hour: null
+      conditioned_air_volume_in_m3: null
+      floor_transmission_adjustment_factor: null
+      facade_transmission_adjustment_factor: null
+      roof_transmission_adjustment_factor: null
+      thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin: null
+      effective_mass_area_in_m2: null
+      total_internal_surface_area_in_m2: null
       set_heating_temperature_in_celsius: 20.0
       set_cooling_temperature_in_celsius: 25.0
       enable_opening_windows: false

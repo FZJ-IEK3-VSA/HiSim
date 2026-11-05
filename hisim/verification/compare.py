@@ -12,7 +12,7 @@ The bounds are private: nothing here logs them, and every error names a range by
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -40,10 +40,13 @@ class ReferenceFileError(ValueError):
 
 @dataclass(frozen=True)
 class ReferenceRanges:
-    """The bounds of the reference file by key and metric; None where the tables state no range."""
+    """The bounds of the reference file by key and metric; None where the tables state no range.
+
+    The bounds stay out of the representation, so that no traceback or test report shows them.
+    """
 
     source: str
-    ranges: Dict[str, Dict[str, Optional[Tuple[float, float]]]]
+    ranges: Dict[str, Dict[str, Optional[Tuple[float, float]]]] = field(repr=False)
 
     @classmethod
     def load(cls, path: Path) -> "ReferenceRanges":
@@ -90,7 +93,8 @@ class RangeResult:
 
     ``position`` is where the value lies in the range, 0 at the lower and 1 at the upper bound (below 0
     or above 1 outside); ``distance_to_nearer_bound`` is positive inside and negative outside, in
-    MWh/year. Both are None when the range was not compared.
+    MWh/year. Both are None when the range was not compared. The bounds, the position and the distance
+    stay out of the representation: with the value, each of them gives a bound back.
     """
 
     group: str
@@ -101,11 +105,11 @@ class RangeResult:
     key: str
     timestep_s: int
     value: Optional[float]
-    lower: Optional[float]
-    upper: Optional[float]
+    lower: Optional[float] = field(repr=False)
+    upper: Optional[float] = field(repr=False)
     status: str
-    position: Optional[float]
-    distance_to_nearer_bound: Optional[float]
+    position: Optional[float] = field(repr=False)
+    distance_to_nearer_bound: Optional[float] = field(repr=False)
     note: str
 
 

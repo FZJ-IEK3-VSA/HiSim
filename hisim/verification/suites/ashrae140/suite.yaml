@@ -108,6 +108,12 @@ deviation_register:            # spec section 8.3; the agent proposes, the human
     description: "Exterior solar absorptance 0.6 and infrared emittance 0.9 of the opaque surfaces"
     hisim_treatment: "No opaque solar gain and no sky radiation term (ISO 13790 11.3.4 and 11.3.5 not implemented); the exterior surfaces see the outdoor air temperature"
     approved_by: null
+  - id: series_interior_coupling
+    category: model
+    standard_clause: "ISO/FDIS 13790:2007, 7.2.2.2, Eq. (9)"
+    description: "Steady-state heat loss of the zone through the total air-to-air U-values of the constructions"
+    hisim_treatment: "The coupling conductance H_tr,is lies in series with H_tr,w and H_tr,op, whose printed U-values already contain the interior surface resistance, so the network's steady-state transmission conductance is below the U-A sum; found after the first full run (gap analysis §14), no correction applied"
+    approved_by: null
   - id: isotropic_sky
     category: model
     standard_clause: "ANSI/ASHRAE 140-2023, 7.2.1.11"

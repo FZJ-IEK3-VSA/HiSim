@@ -97,6 +97,19 @@ def test_reference_errors_never_show_a_bound() -> None:
         compare.ReferenceRanges.from_mapping({"units": "kWh", "ranges": {}})
 
 
+def test_no_representation_shows_a_bound() -> None:
+    """Tracebacks and test reports show the representation: no bound, position or distance in it."""
+    suite = Suite.from_mapping(suite_mapping())
+    results, _ = compare.evaluate(suite, summaries(**{"1": (500.0, 350.0), "2": (550.0, 200.0)}), ranges(), 3600)
+
+    shown = repr(ranges()) + "".join(repr(result) for result in results)
+
+    for bound in ("400.0", "600.0", "200.0", "300.0", "-100.0", "100.0", "150.0", "110.0"):
+        assert bound not in shown, bound
+    assert "position" not in shown and "distance" not in shown
+    assert "value=500.0" in shown and "status='fail'" in shown
+
+
 def test_a_range_takes_the_case_its_difference_or_the_reversed_difference() -> None:
     """Case 2 minus case 1; case 1 minus case 3 for the reversed range."""
     suite = Suite.from_mapping(suite_mapping())

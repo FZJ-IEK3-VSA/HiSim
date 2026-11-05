@@ -137,7 +137,14 @@ class Assembled:
             )
             controller.connect_input(controller.TheoreticalThermalBuildingDemand, self.building.component_name, self.building.TheoreticalThermalBuildingDemand)
             self.heater.connect_input(self.heater.ThermalPowerSetInWatt, controller.component_name, controller.ThermalPowerSetInWatt)
-            self.building.connect_input(self.building.ThermalPowerDelivered, self.heater.component_name, self.heater.ThermalPowerDelivered)
+            # The building computes with the signed ThermalPowerDelivered; its energy ports book the heating and the
+            # cooling direction on two further inputs, which the energy balance after the run reads.
+            for building_input, heater_output in (
+                (self.building.ThermalPowerDelivered, self.heater.ThermalPowerDelivered),
+                (self.building.HeatReceivedInWatt, self.heater.HeatingPowerDelivered),
+                (self.building.HeatRemovedByCoolingInWatt, self.heater.HeatDrawnForCoolingInWatt),
+            ):
+                self.building.connect_input(building_input, self.heater.component_name, heater_output)
             self.simulator.add_component(controller)
             self.simulator.add_component(self.heater)
 

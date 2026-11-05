@@ -841,3 +841,24 @@ the solar gains over the nodes (register entries `constant_fw_per_window`,
 | # | Decision | Recommendation | Decision (human) | Bead |
 |---|---|---|---|---|
 | D25 | Where the plots of the range cases come from (spec §10) | a `plots.py` in the repository, tested with made-up ranges; the plots themselves private | a script in the private data folder draws them; nothing of it in the repository for now; 2026-11-04 | hisim-x6c7.12 |
+
+## 16. Merge of main (2026-11-05)
+
+`origin/main` (13 commits, up to #1166) was merged into the branches of the verification. Two
+findings:
+
+- main's building declares energy ports, and an energy balance after every run checks that they
+  close. The building computes with the signed `ThermalPowerDelivered` as before and books its
+  heating and its cooling direction on two further inputs, `HeatReceivedInWatt` and
+  `HeatRemovedByCoolingInWatt`. The runner connected only the first, so the balance missed the
+  heater's heat and every run with the heater stopped with an `EnergyBalanceError`. The runner now
+  wires the two inputs to the heater's `HeatingPowerDelivered` and `HeatDrawnForCoolingInWatt`, as
+  main's building tests do (`tests/idealized_heater_rig.py`). The whole suite then ran at all three
+  time steps: every case summary is identical to the first run's (§14), and the energy balance
+  closes in every pass.
+- `tests/test_energy_system_record.py` compares the record of a minimal energy system with a
+  committed golden. The ten override fields of step 2b (§8) were missing from it: the test has
+  failed since step 2b, which ran the building and weather tests only. The golden is rewritten on
+  the step 2b branch; its diff is the ten fields, all null.
+
+The other failures of `pytest -m base` on this Windows machine fail on main alike.

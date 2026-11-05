@@ -307,16 +307,16 @@ class EnergyRole(str, enum.Enum):
 
     """What an energy port of a component is in that component's energy balance (hisim-energy-sankeys-9uoo.1).
 
-    The balance a component closes is ``sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE) = 0``
-    over all its ports, per timestep. A port's value is read with its own sign: a negative ``IN``
+    The balance a component closes is ``sum(CONSUMPTION) - sum(PRODUCTION) - sum(LOSS) - sum(STORED_CHANGE) = 0``
+    over all its ports, per timestep. A port's value is read with its own sign: a negative ``CONSUMPTION``
     is energy leaving through that port, a negative ``STORED_CHANGE`` is energy the component
     gave up from its store.
     """
 
     #: Energy entering the component (a fuel burnt, heat received, ambient heat drawn).
-    IN = "in"
+    CONSUMPTION = "consumption"
     #: Useful energy leaving the component to another component or to a consumer.
-    OUT = "out"
+    PRODUCTION = "production"
     #: Energy leaving the component unused, to the environment (a standby loss, a flue loss).
     LOSS = "loss"
     #: Increase of the energy the component holds during the step (negative when it discharges).
@@ -336,6 +336,11 @@ class EnergyBalanceCarrier(str, enum.Enum):
     the same name. ``ROOM_HEAT`` is heat released into or lost from the heated zone: the carrier of
     the internal gains, of the building's losses and of its thermal mass, so that ``SPACE_HEATING_HEAT``
     stays the heat the heating system delivers up to the building (complete Sankey spec, Q-G).
+    ``DRIVING`` is the energy a car's drive takes to move the car, whatever it runs on: an electric car
+    turns the electricity of its battery into it, a diesel car its fuel; it leaves the system at the
+    ``DRIVING`` environment node. ``VEHICLE_ELECTRICITY`` is the electricity a car battery gives its car's drive: it
+    flows from one component straight into the other, past every meter, so it is a carrier of its own, which no meter
+    reads and the KPIs do not count; the battery takes its charge as ``ELECTRICITY`` through the meter.
     A port whose wiring names no peer takes its carrier's boundary default where one exists
     (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
     unlinked.
@@ -355,6 +360,8 @@ class EnergyBalanceCarrier(str, enum.Enum):
     AMBIENT_HEAT = "ambient_heat"
     SOLAR = "solar"
     ROOM_HEAT = "room_heat"
+    DRIVING = "driving"
+    VEHICLE_ELECTRICITY = "vehicle_electricity"
 
 
 @enum.unique
@@ -362,23 +369,30 @@ class EnvironmentNode(str, enum.Enum):
 
     """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.
 
-    An ``IN`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT``, one of carrier ``SOLAR`` from
-    ``SOLAR`` (the sun), and a ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself
-    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    A ``CONSUMPTION`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT_SOURCE`` (the outside air or the
+    ground a device takes heat from), a ``PRODUCTION`` port of it goes to ``AMBIENT_HEAT_SINK`` (the outside air a
+    cooling device rejects heat to), one of carrier ``SOLAR`` comes from ``SOLAR`` (the sun), and a ``LOSS`` port goes
+    ``OUTDOORS``, unless the port names its node itself (:meth:`hisim.energy_port.EnergyPort.default_boundary`). The
+    source and the sink of ambient heat are two nodes, so the Sankey draws the one left and the other right (owner
+    decision Q-M of ``roadmap/complete_energy_sankeys_spec.md``). ``HEAT_SOURCE`` is the fixed heat source of a ground
+    collector (``SimpleHeatSource``), which its ports name (Q-O). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
-    at the taps and ``RESIDENTS`` the residents' body heat. The supply node of a bought carrier, such as
+    at the taps, ``RESIDENTS`` the residents' body heat and ``DRIVING`` the energy cars use to drive. The supply node of a bought carrier, such as
     "natural gas supply", is derived from its carrier and not listed here
     (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
 
-    AMBIENT_HEAT = "ambient heat"
+    AMBIENT_HEAT_SOURCE = "ambient heat source"
+    AMBIENT_HEAT_SINK = "ambient heat sink"
+    HEAT_SOURCE = "heat source"
     SOLAR = "sun"
     OUTDOORS = "outdoors"
     GRID_IMPORT = "grid import"
     GRID_EXPORT = "grid export"
     HOT_WATER_USE = "hot water drawn at the taps"
     RESIDENTS = "residents' body heat"
+    DRIVING = "driving"
 
 
 @enum.unique

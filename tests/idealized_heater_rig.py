@@ -31,3 +31,22 @@ def controller_between(
         my_heater.ThermalPowerSetInWatt, controller.component_name, controller.ThermalPowerSetInWatt
     )
     return controller
+
+
+def heat_into(my_building: building.Building, my_heater: idealized_electric_heater.IdealizedElectricHeater) -> None:
+    """Wire the heater's heat into the building: the signed heat it computes with, and the two directions it books.
+
+    The building computes with the signed ``ThermalPowerDelivered``; its energy ports book the heating direction on
+    ``HeatReceivedInWatt`` and the cooling direction on ``HeatRemovedByCoolingInWatt``, so a run with the heater
+    closes the building's energy balance.
+
+    Args:
+        my_building: The building the heater heats or cools.
+        my_heater: The idealized heater.
+    """
+    for building_input, heater_output in (
+        (my_building.ThermalPowerDelivered, my_heater.ThermalPowerDelivered),
+        (my_building.HeatReceivedInWatt, my_heater.HeatingPowerDelivered),
+        (my_building.HeatRemovedByCoolingInWatt, my_heater.HeatDrawnForCoolingInWatt),
+    ):
+        my_building.connect_input(building_input, my_heater.component_name, heater_output)

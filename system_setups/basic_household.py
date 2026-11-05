@@ -166,6 +166,17 @@ def setup_function(
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
     )
+    # the building books the two directions of that heat, each >= 0, on its input ports
+    my_building.connect_input(
+        my_building.HeatReceivedInWatt,
+        my_heat_pump.component_name,
+        my_heat_pump.Heating,
+    )
+    my_building.connect_input(
+        my_building.HeatRemovedByCoolingInWatt,
+        my_heat_pump.component_name,
+        my_heat_pump.HeatDrawnForCoolingInWatt,
+    )
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
 

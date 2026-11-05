@@ -5,10 +5,12 @@ wall-clock minute -- and cuts every run's window and timestep from it when it re
 once per household configuration and year, not once per window and resolution: each run used to cache its own
 windowed and averaged series under a key naming the run's start, end and timestep, and every new window ran the
 generator for the whole year again. These tests pin that the generator runs once, that a profile served from the cache
-gives the same series as one just computed, what the key names and what it does not, and that the entry's metadata
-names the configuration that produced it.
+gives the same series as one just computed, what the key names and what it does not, that the entry's metadata
+names the configuration that produced it, and that a run finding only some of its households in the cache counts each
+household once.
 
-The local generator is replaced by :class:`FakeGenerator`, which serves the shipped CHR01 profile as its result files.
+The local generator is replaced by :class:`FakeGenerator`, which serves the shipped CHR01 profile as its result files,
+or the whole profile source by :class:`ApartmentGenerator`, which gives every request a profile of its own.
 """
 
 import dataclasses
@@ -17,7 +19,7 @@ import json
 import math
 import os
 import pathlib
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
 import pytest
 from utspclient.helpers.lpgdata import Households
@@ -86,6 +88,64 @@ class FakeGenerator:
             return str(self.result_folder)
 
         monkeypatch.setattr(UtspLpgConnector, "execute_local_lpg_single_household", execute)
+
+
+class ApartmentGenerator:
+    """Stands in for the whole profile source: gives every request a constant profile of its own and records the requests.
+
+    The profile of the request with guid ``g`` has ``g`` residents awake in every minute, ``g`` W of electricity and
+    ``g`` l of warm water per minute, and its guid in its car and flexibility data. A building of three apartments of
+    one household type requests the guids 3, 2 and 1, so its sum is 6 residents and 6 W in every minute, and an
+    apartment counted twice or served another apartment's profile shows in the sum and in the car data.
+    """
+
+    #: The minutes of each profile: three days, which cover the two-day runs of the tests from 1 January 2021.
+    MINUTES_PER_PROFILE: ClassVar[int] = 3 * 24 * 60
+    #: The electricity of one profile unit, in kWh per minute: 1 W for one minute.
+    ELECTRICITY_PER_GUID_UNIT_IN_KWH: ClassVar[float] = 1 / 60_000
+
+    def __init__(self) -> None:
+        """Start with no request made."""
+        self.requested_guids: List[str] = []
+
+    @classmethod
+    def profile_of(cls, guid: str) -> LpgMinuteProfile:
+        """Return the profile the generator gives the request with ``guid``; its values are described on the class.
+
+        Args:
+            guid: the request's guid, a whole number as a string.
+
+        Returns:
+            LpgMinuteProfile: the request's profile, from 1 January 2021 00:00 on the wall clock.
+        """
+        units = int(guid)
+        return LpgMinuteProfile(
+            start_time="2021-01-01T00:00:00",
+            persons_at_high_activity=[float(units)] * cls.MINUTES_PER_PROFILE,
+            persons_at_low_activity=[0.0] * cls.MINUTES_PER_PROFILE,
+            electricity_per_minute_in_kwh=[units * cls.ELECTRICITY_PER_GUID_UNIT_IN_KWH] * cls.MINUTES_PER_PROFILE,
+            warm_water_per_minute_in_liter=[float(units)] * cls.MINUTES_PER_PROFILE,
+            inner_device_heat_gains_per_minute_in_kwh=[0.0] * cls.MINUTES_PER_PROFILE,
+            flexibility={"guid": guid},
+            car_states={"guid": guid},
+            car_locations={"guid": guid},
+            driving_distances={"guid": guid},
+        )
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Make every occupancy that misses its cache take its profiles from this generator.
+
+        Args:
+            monkeypatch: pytest's monkeypatch fixture.
+        """
+
+        def minute_profiles_from_the_generator(connector: UtspLpgConnector, household_config: UtspLpgConnectorConfig) -> List[LpgMinuteProfile]:
+            """Record the request's guid and return its one profile."""
+            del connector
+            self.requested_guids.append(household_config.guid)
+            return [self.profile_of(household_config.guid)]
+
+        monkeypatch.setattr(UtspLpgConnector, "minute_profiles_from_the_generator", minute_profiles_from_the_generator)
 
 
 class Runs:
@@ -326,6 +386,48 @@ def test_each_entry_records_the_configuration_that_produced_it(tmp_path: pathlib
     pathlib.Path(CacheEntryMetadata.metadata_filepath(entries[0].path)).write_text("another key", encoding="utf-8")
     Runs.occupancy(parameters, config)
     assert generator.runs == 3
+
+
+@pytest.mark.base
+def test_a_household_missing_from_the_cache_after_hits_is_counted_once(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a household whose cache entry is missing being served the profile of the household read before it as well.
+
+    Issue #879: the occupancy decided whether to read the cache with one flag for the whole list of households, set
+    before the loop over them and set to True on every hit. A household whose entry was missing after a hit then
+    took both branches: it got the stale profile of the household before it and its own computed profile, and the
+    run summed one household more than the building has apartments, without an error.
+
+    A building of three apartments is computed once, so the cache holds an entry per apartment, and the entry of the
+    apartment the occupancy reads last is deleted. The run after that reads two hits and then one miss, in this
+    order. The guids of duplicated households descend, 3, 2, 1, so a cache filled by growing buildings misses the
+    first entry it reads, before any hit; an interrupted run leaves the last one missing, and so does this test. The
+    run must compute only the missing apartment and give the series, the car data and the flexibility events of the
+    complete cold run: 6 residents in every minute, one entry per apartment.
+    """
+    generator = ApartmentGenerator()
+    generator.install(monkeypatch)
+    parameters = Runs.parameters(tmp_path, days=2, seconds_per_timestep=60)
+    apartments = [Households.CHR01_Couple_both_at_Work] * 3
+    config = dataclasses.replace(Runs.config(household=apartments), cache_dir_path=str(tmp_path / "cache"))
+
+    cold = Runs.occupancy(parameters, config)
+    assert generator.requested_guids == ["3", "2", "1"]
+    assert cold.number_of_residents == [6] * 2 * 1440
+    os.remove(cold.minute_profile_cache_entries[-1].path)
+
+    partial = Runs.occupancy(parameters, config)
+
+    # Without a hit before the miss the test would pass with the defect present.
+    assert [entry.exists for entry in partial.minute_profile_cache_entries] == [True, True, False]
+    assert generator.requested_guids == ["3", "2", "1", "1"]
+    assert_bit_identical(Runs.series(partial), Runs.series(cold))
+    guid_of_each_apartment = [{"guid": guid} for guid in ("3", "2", "1")]
+    assert partial.car_data_dict == {
+        "car_states": guid_of_each_apartment,
+        "car_locations": guid_of_each_apartment,
+        "driving_distances": guid_of_each_apartment,
+    }
+    assert partial.flexibility_data_dict == {"flexibility": guid_of_each_apartment}
 
 
 @pytest.mark.base

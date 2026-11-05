@@ -148,6 +148,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         position_hot_water_storage_in_system=heat_distribution_system.PositionHotWaterStorageInSystemSetup.PARALLEL,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        cooling_enabled=True,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -302,29 +303,59 @@ class TestHeatDistributionValve:
 
     Mode = heat_distribution_system.HeatDistributionValveMode
 
-    #: The valve's transition table: the mode before the pass, the building's theoretical demand in W, the next mode.
+    #: The valve's transition table: the mode before the pass, the building's theoretical demand in W, whether cooling
+    #: is enabled, the next mode. A valve open for cooling while cooling is not enabled cannot occur and is refused
+    #: (:meth:`test_a_cooling_valve_without_the_cooling_option_is_refused`).
     TRANSITIONS = [
-        (Mode.OFF, 300.0, Mode.HEATING),
-        (Mode.OFF, -300.0, Mode.COOLING),
-        (Mode.OFF, 0.0, Mode.OFF),
-        (Mode.HEATING, 300.0, Mode.HEATING),
-        (Mode.HEATING, -300.0, Mode.HEATING),
-        (Mode.HEATING, 0.0, Mode.OFF),
-        (Mode.COOLING, -300.0, Mode.COOLING),
-        (Mode.COOLING, 300.0, Mode.COOLING),
-        (Mode.COOLING, 0.0, Mode.OFF),
+        (Mode.OFF, 300.0, True, Mode.HEATING),
+        (Mode.OFF, -300.0, True, Mode.COOLING),
+        (Mode.OFF, 0.0, True, Mode.OFF),
+        (Mode.HEATING, 300.0, True, Mode.HEATING),
+        (Mode.HEATING, -300.0, True, Mode.HEATING),
+        (Mode.HEATING, 0.0, True, Mode.OFF),
+        (Mode.COOLING, -300.0, True, Mode.COOLING),
+        (Mode.COOLING, 300.0, True, Mode.COOLING),
+        (Mode.COOLING, 0.0, True, Mode.OFF),
+        (Mode.OFF, 300.0, False, Mode.HEATING),
+        (Mode.OFF, -300.0, False, Mode.OFF),
+        (Mode.OFF, 0.0, False, Mode.OFF),
+        (Mode.HEATING, 300.0, False, Mode.HEATING),
+        (Mode.HEATING, -300.0, False, Mode.HEATING),
+        (Mode.HEATING, 0.0, False, Mode.OFF),
     ]
 
     @pytest.mark.base
-    @pytest.mark.parametrize(("mode", "demand_in_watt", "expected"), TRANSITIONS)
+    @pytest.mark.parametrize(("mode", "demand_in_watt", "cooling_enabled", "expected"), TRANSITIONS)
     def test_every_transition_of_the_valve(
         self,
         mode: heat_distribution_system.HeatDistributionValveMode,
         demand_in_watt: float,
+        cooling_enabled: bool,
         expected: heat_distribution_system.HeatDistributionValveMode,
     ) -> None:
-        """Catches a valve that opens without a demand, or one that closes while the building still needs heat."""
-        assert heat_distribution_system.HeatDistributionController.next_valve_mode(mode, demand_in_watt) is expected
+        """Catches a valve that opens without a demand, or for cooling the configuration does not enable.
+
+        It also catches a valve that closes while the building still needs heat.
+        """
+        assert (
+            heat_distribution_system.HeatDistributionController.next_valve_mode(
+                mode, demand_in_watt, cooling_enabled=cooling_enabled
+            )
+            is expected
+        )
+
+    @pytest.mark.base
+    @pytest.mark.parametrize("demand_in_watt", [-300.0, 0.0, 300.0])
+    def test_a_cooling_valve_without_the_cooling_option_is_refused(self, demand_in_watt: float) -> None:
+        """Catches a valve rule that keeps a cooling valve open, or closes it silently, while cooling is not enabled.
+
+        The controller starts closed and opens for cooling only where cooling is enabled, so a cooling valve without
+        the option means its state was corrupted.
+        """
+        with pytest.raises(ValueError, match="cooling is not enabled"):
+            heat_distribution_system.HeatDistributionController.next_valve_mode(
+                self.Mode.COOLING, demand_in_watt, cooling_enabled=False
+            )
 
     @pytest.mark.base
     @pytest.mark.parametrize(
@@ -353,14 +384,19 @@ class TestValveState:
     """The heat-distribution controller's valve mode advances only between steps, not between the passes of one step."""
 
     @staticmethod
-    def controller_with_inputs() -> tuple:
+    def controller_with_inputs(*, cooling_enabled: bool) -> tuple:
         """Build the controller with its two inputs wired to stand-in outputs.
 
+        Args:
+            cooling_enabled: Whether the controller may open the valve for cooling.
+
         Returns:
-            The controller, the demand output, the heating-season output and the step values.
+            The controller, the demand output and the step values.
         """
         config = heat_distribution_system.HeatDistributionControllerConfig(
-            component_id=ComponentID(name="HeatDistributionController"), heating_load_of_building_in_watt=8000.0
+            component_id=ComponentID(name="HeatDistributionController"),
+            heating_load_of_building_in_watt=8000.0,
+            cooling_enabled=cooling_enabled,
         )
         controller = heat_distribution_system.HeatDistributionController(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config
@@ -410,7 +446,7 @@ class TestValveState:
         A closed valve opens for heating on a positive demand in one pass; a later pass of the same step with a
         negative demand starts again from the closed valve and opens it for cooling, as a fresh step would.
         """
-        controller, demand, stsv = self.controller_with_inputs()
+        controller, demand, stsv = self.controller_with_inputs(cooling_enabled=True)
         controller.i_save_state()
         assert self.published_state(controller, demand, stsv, 300.0) == 1
         assert self.published_state(controller, demand, stsv, -300.0) == -1
@@ -425,7 +461,7 @@ class TestValveState:
         A free pass opens the closed valve for heating. A forced pass with a cooling demand leaves both the published
         state and the mode the step ends with untouched, so the next step starts from the open heating valve.
         """
-        controller, demand, stsv = self.controller_with_inputs()
+        controller, demand, stsv = self.controller_with_inputs(cooling_enabled=True)
         controller.i_save_state()
         assert self.published_state(controller, demand, stsv, 300.0) == 1
         stsv.set_output_value(demand, -300.0)
@@ -435,3 +471,18 @@ class TestValveState:
         assert controller.end_of_step_state.valve_mode == heat_distribution_system.HeatDistributionValveMode.HEATING
         controller.i_save_state()
         assert self.published_state(controller, demand, stsv, -300.0) == 1  # the open heating valve stays open
+
+    @pytest.mark.base
+    def test_without_the_cooling_option_a_cooling_demand_leaves_the_valve_closed(self) -> None:
+        """Catches a controller that commands cooling although its configuration, as in every preset, does not enable it.
+
+        A closed valve stays closed on a negative demand in every pass and every step, and opens for heating as soon as
+        the building needs heat.
+        """
+        controller, demand, stsv = self.controller_with_inputs(cooling_enabled=False)
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, -300.0) == 0
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, -300.0) == 0
+        assert controller.end_of_step_state.valve_mode == heat_distribution_system.HeatDistributionValveMode.OFF
+        assert self.published_state(controller, demand, stsv, 300.0) == 1

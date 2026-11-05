@@ -22,6 +22,7 @@ from hisim.component import (
 )
 from hisim import loadtypes as lt
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.energy_port import EnergyPort
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
@@ -117,9 +118,7 @@ class TransformerConfig(ConfigBase):
 
 
 class Transformer(StatelessComponent, PhysicsComponent):
-    """The Example Transformer class.
-
-    It is used to modify input values and return them as new output values.
+    """A transformer and rectifier: it passes on a fixed share of the electricity it receives and loses the rest.
 
     The single input (``TransformerInput``) is scaled by
     :attr:`TransformerConfig.efficiency` (a dimensionless fraction in [0, 1])
@@ -128,6 +127,12 @@ class Transformer(StatelessComponent, PhysicsComponent):
     :attr:`lt.Units.KILOWATT`, so the transformer carries an implicit unit
     contract: a caller must feed ``electricity_input`` in kW and read
     ``electricity_output`` in kW.
+
+    Its energy ports: the electricity it receives is ``ElectricityReceivedInKilowatt`` (``CONSUMPTION``), the
+    electricity it delivers ``TransformerOutput`` (``PRODUCTION``) and the difference ``ConversionLossInKilowatt``
+    (``LOSS``), all of carrier electricity. The received electricity is an output of its own because a metered
+    carrier is booked on an output, never on the input that reads it. For example, 1000 kW received at 95 % are
+    950 kW delivered and 50 kW lost.
 
     Parameters
     ----------
@@ -150,6 +155,10 @@ class Transformer(StatelessComponent, PhysicsComponent):
 
     TransformerInput: str = "Input1"
     TransformerOutput: str = "MyTransformerOutput"
+    #: The electricity the unit receives, in kW: its input, published as the output its energy port is booked on.
+    ElectricityReceivedInKilowatt: str = "ElectricityReceivedInKilowatt"
+    #: The electricity the unit loses in the step, in kW: what it receives minus what it delivers.
+    ConversionLossInKilowatt: str = "ConversionLossInKilowatt"
 
     def __init__(
         self,
@@ -184,14 +193,36 @@ class Transformer(StatelessComponent, PhysicsComponent):
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-            output_description="Electricity output",
+            output_description="The electricity the unit delivers, in kW, >= 0: its input times its efficiency.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        # no consumption flag: the KPIs would count the electricity the unit receives as the household's own
+        # consumption, beside the delivered electricity they count as production
+        self.electricity_received_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            Transformer.ElectricityReceivedInKilowatt,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.KILOWATT,
+            output_description="The electricity the unit receives on its input, in kW, >= 0.",
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.conversion_loss_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            Transformer.ConversionLossInKilowatt,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.KILOWATT,
+            output_description=(
+                "The electricity the unit loses in the step, in kW, >= 0: what it receives minus what it delivers."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Scale the electricity input by the configured efficiency to produce output.
 
         Reads the input power value (``electricity_input``) from ``stsv``, multiplies it by
-        :attr:`TransformerConfig.efficiency`, and writes the result to ``electricity_output``.
+        :attr:`TransformerConfig.efficiency`, and writes the result to ``electricity_output``. It also publishes
+        the input itself and the difference of the two, the conversion loss, for its energy ports.
 
         Args:
             timestep: The current simulation timestep index.
@@ -199,11 +230,12 @@ class Transformer(StatelessComponent, PhysicsComponent):
             force_convergence: Whether to force convergence (unused in this component).
         """
         input_power_in_kilowatt = stsv.get_input_value(self.electricity_input)
-        # print(f"Input from CSV: {input_power_in_kilowatt}")
         efficiency = self.transformerconfig.efficiency
-        # print(f"individual efficiency: {efficiency}")
 
-        stsv.set_output_value(self.electricity_output, float(input_power_in_kilowatt * efficiency))
+        output_power_in_kilowatt = float(input_power_in_kilowatt * efficiency)
+        stsv.set_output_value(self.electricity_output, output_power_in_kilowatt)
+        stsv.set_output_value(self.electricity_received_channel, float(input_power_in_kilowatt))
+        stsv.set_output_value(self.conversion_loss_channel, float(input_power_in_kilowatt) - output_power_in_kilowatt)
 
     def delivered_and_lost_energy_in_kilowatt_hour(
         self,

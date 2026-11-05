@@ -13,9 +13,10 @@ reads it. Per step, the import minus the export the meter publishes must equal w
 minus what they give, and no electricity port is left unmetered, the heat pump's cooling and brine pump included.
 
 The second January week at 900 s of the heat-pump and the gas household (each run once per module): the run
-finishing proves every declared balance closes; the tests read its report. The building declares no ports until
-PR 4 of the spec, so the room heat ends at the grey "undeclared: Building" and the meter check is reported, not
-enforced (owner decision Q-H: it fails the run only once no component is undeclared).
+finishing proves every declared balance closes; the tests read its report. The occupancy's room heat goes to the
+building, which declares its ports since PR 4 of the spec. The weather is still undeclared (its exemption is PR 5d),
+so the meter check is reported, not enforced (owner decision Q-H: it fails the run only once no component is
+undeclared).
 """
 
 import json
@@ -36,22 +37,22 @@ class Expected:
     #: The ports of the three electricity devices as ``component -> output -> (role, carrier)``.
     PORTS: ClassVar[Dict[str, Dict[str, Tuple[str, str]]]] = {
         "PVSystem": {
-            "ElectricityOutput": ("out", "electricity"),
-            "SolarPowerOnModulesInWatt": ("in", "solar"),
+            "ElectricityOutput": ("production", "electricity"),
+            "SolarPowerOnModulesInWatt": ("consumption", "solar"),
             "ModuleAndInverterLossInWatt": ("loss", "solar"),
         },
         "Battery": {
-            "ChargingPower": ("in", "electricity"),
-            "DischargingPower": ("out", "electricity"),
+            "ChargingPower": ("consumption", "electricity"),
+            "DischargingPower": ("production", "electricity"),
             "StoredEnergyIncreaseInWattHour": ("stored_change", "electricity"),
             "InverterLossInWatt": ("loss", "electricity"),
             "CellLossInWatt": ("loss", "electricity"),
         },
         "UTSPConnector": {
-            "ElectricalPowerConsumption": ("in", "electricity"),
-            "HeatingByResidents": ("in", "room_heat"),
-            "HeatingByDevices": ("out", "room_heat"),
-            "BodyHeatToBuildingInWatt": ("out", "room_heat"),
+            "ElectricalPowerConsumption": ("consumption", "electricity"),
+            "HeatingByResidents": ("production", "room_heat"),
+            "HeatingByDevices": ("production", "room_heat"),
+            "BodyHeatToBuildingInWatt": ("consumption", "room_heat"),
             "ApplianceElectricityNotReleasedIndoorsInWatt": ("loss", "electricity"),
         },
     }
@@ -77,7 +78,7 @@ class Expected:
         ("electricity", "Battery", "Battery · CellLossInWatt"),
         ("electricity", "ElectricityMeter", "UTSPConnector"),
         ("room_heat", "residents' body heat", "UTSPConnector"),
-        ("room_heat", "UTSPConnector", "undeclared: Building"),
+        ("room_heat", "UTSPConnector", "Building"),
         ("electricity", "UTSPConnector", "UTSPConnector · ApplianceElectricityNotReleasedIndoorsInWatt"),
         ("electricity", "grid import", "ElectricityMeter"),
         ("electricity", "ElectricityMeter", "grid export"),
@@ -112,7 +113,7 @@ def test_the_electricity_device_declares_its_ports_and_closes(twin: Tuple[str, P
     assert entry["verdict"] == "closes" and entry["worst_step"] is None
     assert abs(entry["residual_kwh"]) <= 1e-9
     assert port_roles(entry) == Expected.PORTS[component]
-    assert entry["in_kwh"] > 1.0
+    assert entry["consumption_kwh"] > 1.0
 
 
 @pytest.mark.extendedbase2
@@ -124,7 +125,7 @@ def test_the_flows_of_the_electricity_devices_are_physical(twin: Tuple[str, Path
     """
     _, results = twin
     pv = balance_entry(results, "PVSystem")["carriers"]
-    assert 4.0 < pv["solar"]["in_kwh"] / pv["electricity"]["out_kwh"] < 8.0
+    assert 4.0 < pv["solar"]["consumption_kwh"] / pv["electricity"]["production_kwh"] < 8.0
     battery = {port["output"]: port["total_kwh"] for port in balance_entry(results, "Battery")["ports"]}
     assert battery["InverterLossInWatt"] > 0.0 and battery["CellLossInWatt"] > 0.0
     assert battery["ChargingPower"] > battery["DischargingPower"] > 0.0
@@ -138,8 +139,8 @@ def test_the_electricity_meter_publishes_what_it_reads_in_every_step(twin: Tuple
     """Import minus export of the electricity meter equals what the devices it reads take minus what they give.
 
     The meter reads every device's electricity port directly, the heat pump's cooling and brine pump too, and no
-    electricity port is unmetered. The check is reported and not yet enforced, because the building and the storages
-    are still undeclared (Q-H); with PV, battery and occupancy declared it already agrees in every step.
+    electricity port is unmetered. The check is reported and not yet enforced, because the weather is still
+    undeclared (Q-H); with PV, battery and occupancy declared it already agrees in every step.
     """
     setup, results = twin
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))

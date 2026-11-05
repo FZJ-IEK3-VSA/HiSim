@@ -804,3 +804,40 @@ the solar gains over the nodes (register entries `constant_fw_per_window`,
 | # | Decision | Recommendation | Decision (human) | Bead |
 |---|---|---|---|---|
 | D24 | The group accounting of the first full run in the gap analysis (D22 kept it in the private report) | – | stated in §14: the counts only; the statuses of the ranges, their positions and every number of the diagnosis stay private; pyBuildingEnergy publishes its own accounting; 2026-11-04 | – |
+
+## 15. Step 6 (2026-11-04): the suite as pytest tests
+
+### 15.1 What was built
+
+- `tests/verification/test_suite_ashrae140.py`: one test per range the suite models and per time
+  step, 28 ranges at three steps, with the ids of spec §9.1. Each case runs once per session and
+  time step, when a range first needs it, into pytest's temporary directory. While the suite's
+  gating is off, a range outside its bounds is reported as a `VerificationStatusWarning` and the test
+  passes; with gating on it fails; a known deviation of the register is an xfail. Without
+  `HISIM_VERIFICATION_DATA` every test skips. The message names the value, its unit, the status and
+  the time step only.
+- `--verification-timesteps` (in `tests/conftest.py`, where pytest reads options) restricts the
+  step lengths, e.g. `--verification-timesteps 3600`.
+- `compare.py`: the bounds, the position and the distance stay out of the representation of the
+  comparison results and of the reference ranges, so that neither a pytest report nor a traceback
+  shows them (test in `test_compare.py`).
+- Register: `series_interior_coupling` (category `model`, cause 2 of §14.1), proposed, not
+  approved.
+- The whole suite ran in pytest at all three time steps in 15 minutes, at 3600 s alone in about one
+  minute; without the data every test of the suite skips.
+
+### 15.2 Deviations from the spec
+
+- Spec §9.1 asked the failure message for the deviation and the path to the plot. With the value,
+  a deviation from the range gives a bound back, so the message has neither; the spec is corrected.
+- Spec §9.3 left open how a test reports its status while gating is off; it is a warning.
+- No option to keep the runs of a pytest session: they go to pytest's temporary directory. A report
+  to keep comes from the command line (FR14).
+- The plots of the range cases are drawn by a script in the private data folder (D25), not by a
+  `plots.py` in the repository.
+
+### 15.3 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D25 | Where the plots of the range cases come from (spec §10) | a `plots.py` in the repository, tested with made-up ranges; the plots themselves private | a script in the private data folder draws them; nothing of it in the repository for now; 2026-11-04 | hisim-x6c7.12 |

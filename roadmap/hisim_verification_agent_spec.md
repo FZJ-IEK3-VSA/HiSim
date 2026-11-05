@@ -2,10 +2,21 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 12, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revisions 6 to 9: 2026-11-03; revisions 10 and 11: 2026-11-04)
+**Status:** Draft, revision 13, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 to 9: 2026-11-03; revisions 10 to 12: 2026-11-04)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 13** (step 6, gap analysis §15, 2026-11-04)
+
+- pytest runs the `ashrae140` suite: one test per range the suite models and per time step, each
+  case once per session and time step (§9.1). A failure message names the value, its unit, the
+  status and the time step, never a bound, a position in the range or a distance to a bound, since
+  the value with either of the last two gives the bound back; the comparison results keep all three
+  out of their representation (§9.1). While gating is off, a range outside its bounds is reported as
+  a warning (§9.3). The plots of the range cases are drawn by a script in the private data folder,
+  not in the repository (D25, §10). The register proposes `series_interior_coupling` (gap analysis
+  §14). §11 step 6 done.
 
 **Changes in revision 12** (step 5, gap analysis §12, 2026-11-04)
 
@@ -870,7 +881,8 @@ For each case: differences in annual demand, peak loads and temperatures between
 - Parametrise by (suite, case, time step, output), e.g.
   `test_verification[ashrae140-620-900-annual_cooling_diff]`.
 - Each (case, time step) is simulated **once** per session (session-scoped cache).
-- Failure message: value, unit, status, deviation and path to the exported plot. Do not
+- Failure message: value, unit, status and time step; no bound, no position in the range and no
+  distance to a bound, since the value with either of the last two gives the bound back. Do not
   print private reference values in logs; differences between HiSim results are not
   private.
 - The suite tests carry the job marker `verification` (D14) and skip unless
@@ -890,7 +902,8 @@ For each case: differences in annual demand, peak loads and temperatures between
 ### 9.3 Gating and CI
 - `gating: false` in every `suite.yaml` until the human has reviewed the first full
   report of the suites in scope at all three time steps. While gating is off, criterion tests
-  report their status and pass. The human switches gating on per suite; from then on
+  report their status (a warning for a range outside its bounds) and pass. The human switches
+  gating on per suite; from then on
   status `fail` fails the test.
 - Development runs locally. CI comes with the private repository on JuGit (GitLab CI);
   the public GitHub Actions workflows of HiSim are not touched by this spec. Frequency per
@@ -921,7 +934,7 @@ imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification run
   parameters/<case>.json     # derived 5R1C parameters, scaled inputs, warm-up, resolved case (FR1, FR3)
   timeseries/<case>_<timestep>.csv   # zone air and operative temperature, heating and cooling power
   plots/
-    ashrae140_annex_a3.png   # each range case: value as point within its range, per time step (private)
+    ashrae140_annex_a3.png   # each range case: value as point within its range, per time step (private; drawn by a script in the private data folder, D25)
     ashrae140_annex_a3_public.png   # HiSim's values of the range cases, without bounds and statuses (D22)
     ashrae140_ff_temperatures.png
     iso52016_monthly_<case>.png
@@ -957,7 +970,7 @@ follow with the review of step 6 as far as it needs them; the public report (`--
 | 3 | 3a (bead hisim-x6c7.8): schema, case loader with inheritance, derivation (§3.2.3, 3.2.4, 3.2.6, 3.2.8), system builder with the overrides of FR2 and the origin check, the suite file with the proposed register entries; fast tests against Appendix B. 3b (done 2026-11-03, gap analysis §10.4): the run: heater and controller, constant gains, setback, two-pass warm-up, parameters, time-series and summary output, the CLI of FR14 for runs; case 600 runs end to end at all three time steps. The register export moves to step 5; the EPW identity check was already in `PROVENANCE.md` (2026-11-02), HiSim's processing of the file is register entries F6 and F7 (gap analysis §13, corrected 2026-11-04) | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2). Done 2026-11-04 (gap analysis §11, bead hisim-x6c7.10) | – |
 | 5 | The private report of §10 (`summary.md`, `summary.json`, `deviations.md`, `results.csv`) and the CLI for the whole suite (FR14); no plots, no public report (D23). Done 2026-11-04 (gap analysis §12, bead hisim-x6c7.11) | – |
-| 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review | filled Annex A3 file, confirmed Table A3-14 counts |
+| 6 | `ashrae140` suite, 18 cases, pytest integration (§9.1), first full report for review. Done 2026-11-04 (gap analysis §14 and §15, bead hisim-x6c7.12) | filled Annex A3 file, confirmed Table A3-14 counts |
 | 7 | `iso52016` suite, 6 cases, first full report for review — **deferred** (2026-11-02, §2.1) | filled Tables 28–34 file; a solar-gain input on the Building (§7.4) |
 | 8 | Golden references for HiSim's own results (FR17) and documentation (`docs/verification/README.md`) | human blesses the goldens after reviewing the reports |
 | 9 | CI on the private JuGit repository (§9.3) | repository, protected data location |

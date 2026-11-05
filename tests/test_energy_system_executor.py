@@ -115,6 +115,7 @@ def test_the_minimal_mockup_builds_runs_and_writes_results(tmp_path: Path) -> No
         "hds",
         "boiler",
         "boiler_controller",
+        "gas_meter",
         "meter",
     ]
     assert built.simulator.get_simulation_parameters().result_directory == str(results)

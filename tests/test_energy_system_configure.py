@@ -457,6 +457,7 @@ def test_a_source_naming_a_component_that_does_not_provide_the_fact_is_refused()
       heating_system: FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.5
       absolute_conditioned_floor_area_in_m2: 100.0
+      cooling_enabled: false
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -561,6 +562,7 @@ def test_an_enum_typed_field_written_in_a_file_holds_the_member_afterwards() -> 
       heating_system: FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.5
       absolute_conditioned_floor_area_in_m2: 100.0
+      cooling_enabled: false
 """
     )
 

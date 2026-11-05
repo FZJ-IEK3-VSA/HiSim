@@ -4290,6 +4290,16 @@
                       }
                     ]
                   },
+                  "cooling_enabled": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
                   "position_hot_water_storage_in_system": {
                     "enum": [
                       "PARALLEL",
@@ -4355,6 +4365,7 @@
                 "propertyNames": {
                   "enum": [
                     "conditioned_floor_area_in_m2",
+                    "heat_distribution_cooling_enabled",
                     "heat_distribution_system_type",
                     "water_mass_flow_rate_in_kg_per_second"
                   ]
@@ -4405,6 +4416,9 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "cooling_enabled": {
+                    "type": "boolean"
                   }
                 }
               },
@@ -6471,7 +6485,9 @@
             "cooling",
             "ambient_heat",
             "solar",
-            "room_heat"
+            "room_heat",
+            "driving",
+            "vehicle_electricity"
           ]
         },
         "outputs": {
@@ -6560,7 +6576,9 @@
             "cooling",
             "ambient_heat",
             "solar",
-            "room_heat"
+            "room_heat",
+            "driving",
+            "vehicle_electricity"
           ]
         },
         "outputs": {

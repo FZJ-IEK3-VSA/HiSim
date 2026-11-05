@@ -31,8 +31,8 @@ components:
     inputs:
       - Weather
       - {$port: temperature_modifier}
-      - UTSPConnector
       - {$port: heating}
+      - UTSPConnector
     ports:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifierInKelvin
       heating: {partner: ElectricHeating}                   # the heater's space-heating heat; no water circuit

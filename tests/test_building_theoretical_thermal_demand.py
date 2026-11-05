@@ -14,7 +14,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim.config import ComponentID, SizingContext
 from tests.testing_utils import TestingUtils
-from tests.idealized_heater_rig import controller_between
+from tests.idealized_heater_rig import controller_between, heat_into
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -146,11 +146,7 @@ def _connect_components(
         my_occupancy.component_name,
         my_occupancy.HeatingByDevices,
     )
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_idealized_electric_heater.component_name,
-        my_idealized_electric_heater.ThermalPowerDelivered,
-    )
+    heat_into(my_building, my_idealized_electric_heater)
 
 
 def _assert_indoor_temperature(

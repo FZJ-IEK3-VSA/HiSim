@@ -25,11 +25,12 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
-from hisim.loadtypes import InandOutputType, LoadTypes, Units
+from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, InandOutputType, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort
 
 
 def get_price_in_euro(air_conditioner: Dict[str, Any]) -> float:
@@ -365,7 +366,15 @@ class AirConditionerConfig(ConfigBase):
 
 
 class AirConditioner(cp.PhysicsComponent):
-    """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
+    """Simulates an air conditioner that provides heating and cooling based on a modulating signal.
+
+    Its energy ports (complete Sankey spec, PR 5a): it consumes electricity (``ElectricalPowerConsumption``). While it
+    heats it takes heat from the outside air (``HeatFromAmbientInWatt``) and delivers the sum as space heating
+    (``HeatDeliveredInWatt``); while it cools it draws heat from the building (``HeatDrawnForCoolingInWatt``, carrier
+    ``COOLING``) and rejects that heat plus its electricity to the outside air (``HeatToAmbientInWatt``). Both
+    directions of the building heat are non-negative outputs, which the receiver reads with an input each (decision D20
+    of ``roadmap/fluid_loops_spec.md``); the signed ``ThermalPowerDelivered`` carries no port.
+    """
 
     cost_relevance = CostRelevance.PRICED
 
@@ -377,6 +386,14 @@ class AirConditioner(cp.PhysicsComponent):
     PV2load: ClassVar[str] = "PV2load"
     Battery2Load: ClassVar[str] = "Battery2Load"
     ThermalPowerDelivered: ClassVar[str] = "ThermalPowerDelivered"
+    #: The positive part of ThermalPowerDelivered, the heat delivered while heating, in W.
+    HeatDeliveredInWatt: ClassVar[str] = "HeatDeliveredInWatt"
+    #: Minus the negative part of ThermalPowerDelivered, the heat taken from the building while cooling, in W.
+    HeatDrawnForCoolingInWatt: ClassVar[str] = "HeatDrawnForCoolingInWatt"
+    #: The heat taken from the outside air while heating, in W, >= 0.
+    HeatFromAmbientInWatt: ClassVar[str] = "HeatFromAmbientInWatt"
+    #: The heat rejected to the outside air while cooling, in W, >= 0.
+    HeatToAmbientInWatt: ClassVar[str] = "HeatToAmbientInWatt"
     ThermalEnergyDelivered: ClassVar[str] = "ThermalEnergyDelivered"
     ElectricalPowerConsumption: ClassVar[str] = "ElectricalPowerConsumption"
     ElectricalEnergyConsumption: ClassVar[str] = "ElectricalEnergyConsumption"
@@ -449,6 +466,54 @@ class AirConditioner(cp.PhysicsComponent):
             Units.WATT,
             output_description="Delivered thermal power",
         )
+        # The two directions of the signed heat above, each >= 0, which the building reads through its input ports:
+        # a port books one direction only.
+        self.heat_delivered_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDeliveredInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device delivers to the building while it heats, in W, >= 0: {self.ThermalPowerDelivered} "
+                "in a step in which it is positive, else 0."
+            ),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+        )
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            LoadTypes.COOLING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0. The building books it as the cooling it gives the device."
+            ),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.COOLING),
+        )
+        # The outside air is the device's source while it heats and its sink while it cools; the energy balance links
+        # the one to the "ambient heat source" boundary node and the other to "ambient heat sink" (owner decision Q-M).
+        self.heat_from_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatFromAmbientInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device takes from the outside air while it heats, in W: {self.HeatDeliveredInWatt} minus "
+                f"{self.ElectricalPowerConsumption} in a step in which it heats, else 0."
+            ),
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
+        self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatToAmbientInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=(
+                f"Heat the device rejects to the outside air while it cools, in W, >= 0: {self.HeatDrawnForCoolingInWatt} "
+                f"plus {self.ElectricalPowerConsumption} in a step in which it cools, else 0."
+            ),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
         self.thermal_energy_generation_channel = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalEnergyDelivered,
@@ -466,6 +531,7 @@ class AirConditioner(cp.PhysicsComponent):
             # untagged consumer makes grid import exceed total consumption and the KPI run refuses.
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electrical power consumption",
+            energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electrical_energy_consumption_channel = self.add_output(
             self.component_name,
@@ -697,6 +763,16 @@ class AirConditioner(cp.PhysicsComponent):
         )
         stsv.set_output_value(
             self.thermal_power_generation_channel, thermal_power_delivered_w
+        )
+        stsv.set_output_value(self.heat_delivered_channel, max(0.0, thermal_power_delivered_w))
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -thermal_power_delivered_w))
+        stsv.set_output_value(
+            self.heat_from_ambient_channel,
+            thermal_power_delivered_w - electrical_power_consumption_w if thermal_power_delivered_w > 0 else 0.0,
+        )
+        stsv.set_output_value(
+            self.heat_to_ambient_channel,
+            electrical_power_consumption_w - thermal_power_delivered_w if thermal_power_delivered_w < 0 else 0.0,
         )
         stsv.set_output_value(
             self.thermal_energy_generation_channel, thermal_energy_delivered_wh

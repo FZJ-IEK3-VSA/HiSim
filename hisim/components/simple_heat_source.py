@@ -23,6 +23,7 @@ from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort, FluidLoop, LoopFluid
 
 
 class SimpleHeatSourceType(str, Enum):
@@ -253,7 +254,18 @@ class SimpleHeatSourceState:
 
 
 class SimpleHeatSource(cp.PhysicsComponent):
-    """Heat Source implementation."""
+    """Heat Source implementation.
+
+    Its energy ports (complete Sankey spec, PR 5a): it is the supplier of a brine loop (``brine_loop``, carrier
+    ``AMBIENT_HEAT``, fluid ``BRINE``) whose flow it publishes (``MassFlowOutput``), whose returning temperature it
+    reads (``TemperatureInput``) and whose supply temperature it publishes (``TemperatureOutput``). The heat it gives
+    the brine it takes from the environment (``HeatFromAmbientInWatt``); in a step in which the returning brine is
+    warmer than the source, the brine gives heat to the ground instead (``HeatToAmbientInWatt``). Both name the
+    "heat source" boundary node (``lt.EnvironmentNode.HEAT_SOURCE``, owner decision Q-O of the complete Sankey spec):
+    the source is fixed by design, so its heat comes from a node of its own and not from the outside air's "ambient
+    heat source". The loop keeps the carrier ``AMBIENT_HEAT``: the carrier says what the brine carries, environmental
+    heat for a heat pump to lift; the node says where it comes from.
+    """
 
     cost_relevance = CostRelevance.PRICED
 
@@ -266,6 +278,10 @@ class SimpleHeatSource(cp.PhysicsComponent):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     TemperatureOutput = "TemperatureOutput"
     MassFlowOutput = "MassFlowOutput"
+    #: The heat taken from the environment and given to the brine, in W, >= 0.
+    HeatFromAmbientInWatt = "HeatFromAmbientInWatt"
+    #: The heat the brine gives back to the environment, in W, >= 0.
+    HeatToAmbientInWatt = "HeatToAmbientInWatt"
 
     def __init__(
         self,
@@ -317,6 +333,16 @@ class SimpleHeatSource(cp.PhysicsComponent):
         self.state: SimpleHeatSourceState = SimpleHeatSourceState()
         self.previous_state: SimpleHeatSourceState = SimpleHeatSourceState()
 
+        # The brine loop to the heat pump: the source supplies it and may take heat back from it (a heat pump that
+        # cools into the ground). Until stage 1b of the fluid loops spec a port set has one flow, the one it publishes.
+        self.brine_loop = FluidLoop(
+            "brine",
+            carrier=lt.EnergyBalanceCarrier.AMBIENT_HEAT,
+            fluid=LoopFluid.BRINE,
+            supplies=True,
+            may_cool=True,
+        )
+
         # Inputs
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
             object_name=self.component_name,
@@ -340,6 +366,7 @@ class SimpleHeatSource(cp.PhysicsComponent):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             mandatory=False,
+            fluid_loop=self.brine_loop.temperature_in,
         )
 
         # Outputs
@@ -357,6 +384,7 @@ class SimpleHeatSource(cp.PhysicsComponent):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             output_description="Temperature Output",
+            fluid_loop=self.brine_loop.temperature_out,
         )
         self.massflow_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -364,6 +392,33 @@ class SimpleHeatSource(cp.PhysicsComponent):
             load_type=lt.LoadTypes.WARM_WATER,
             unit=lt.Units.KG_PER_SEC,
             output_description="Massflow Output",
+            fluid_loop=self.brine_loop.flow_out,
+        )
+        self.heat_from_ambient_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatFromAmbientInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                f"Heat the source takes from the environment and gives the brine, in W, >= 0: {self.ThermalPowerDelivered} "
+                "in a step in which it is positive, else 0."
+            ),
+            energy_port=EnergyPort(
+                lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT, environment=lt.EnvironmentNode.HEAT_SOURCE
+            ),
+        )
+        self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatToAmbientInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                f"Heat the returning brine gives back to the environment, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0."
+            ),
+            energy_port=EnergyPort(
+                lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT, environment=lt.EnvironmentNode.HEAT_SOURCE
+            ),
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -479,6 +534,8 @@ class SimpleHeatSource(cp.PhysicsComponent):
         stsv.set_output_value(self.massflow_output_channel, massflow_in_kg_per_sec)  # type: ignore
         stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)  # type: ignore
         stsv.set_output_value(self.temperature_output_channel, temperature_output_in_celsius)
+        stsv.set_output_value(self.heat_from_ambient_channel, max(0.0, thermal_power_in_watt))
+        stsv.set_output_value(self.heat_to_ambient_channel, max(0.0, -thermal_power_in_watt))
 
     @staticmethod
     def get_cost_capex(

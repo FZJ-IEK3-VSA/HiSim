@@ -12,8 +12,8 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
-      - UTSPConnector
       - HeatDistributionSystem
+      - UTSPConnector
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -45,11 +45,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - CondensingGasBoiler
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputMassFlowDhw
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputTemperatureDhw
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer

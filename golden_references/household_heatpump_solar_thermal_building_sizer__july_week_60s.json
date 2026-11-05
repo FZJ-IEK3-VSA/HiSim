@@ -66,7 +66,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 44.897896500339776
+    "value": 49.299817812831165
   },
   "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (Building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 29.973503489011872
+    "value": 30.406685658898045
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 75.80134751255545
+    "value": 80.20326882504682
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",
@@ -231,7 +231,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -388.8628617838841
+    "value": -407.3104098122713
   },
   "BUI1.Building.Theoretical heating demand (Building)": {
     "building": "BUI1",
@@ -935,7 +935,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 28.25987883207966
+    "value": 25.82533668799161
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -950,7 +950,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 28.28297998201963
+    "value": 25.82533668799161
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -965,7 +965,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": -0.023101149939970266
+    "value": 0.0
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -980,7 +980,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 24.774118394007516
+    "value": 21.47051406157218
   },
   "BUI1.Heat Distribution System.Min return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -995,7 +995,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 24.77540028184622
+    "value": 21.47051406157218
   },
   "BUI1.Heat Distribution System.Min temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1010,7 +1010,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": -0.766016720463842
+    "value": 0.0
   },
   "BUI1.Heat Distribution System.Thermal output energy of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 28.25987883207966
+    "value": 25.82533668799161
   },
   "BUI1.Heat Pump For Space Heating.Mean return temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1220,7 +1220,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 28.25987883207966
+    "value": 25.82533668799161
   },
   "BUI1.Heat Pump For Space Heating.Mean temperature difference of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1250,7 +1250,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 24.774118394007516
+    "value": 21.47051406157218
   },
   "BUI1.Heat Pump For Space Heating.Min return temperature of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1265,7 +1265,7 @@
     },
     "tag": "Heat Pump For Space Heating",
     "unit": "\u00b0C",
-    "value": 24.774118394007516
+    "value": 21.47051406157218
   },
   "BUI1.Heat Pump For Space Heating.Min temperature difference of SH heat pump (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1610,6 +1610,6 @@
     },
     "tag": "Storage For Space Heating Hot Water",
     "unit": "kWh",
-    "value": 8.6
+    "value": 6.1
   }
 }

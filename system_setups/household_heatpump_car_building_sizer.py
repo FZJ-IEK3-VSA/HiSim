@@ -435,6 +435,7 @@ def setup_function(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+                heat_distribution_cooling_enabled=my_hds_controller_information.hds_controller_config.cooling_enabled,
             )
         )
     )
@@ -508,6 +509,8 @@ def setup_function(
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
+        # the car takes its electricity from its battery
+        car.connect_only_predefined_connections(car_battery)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

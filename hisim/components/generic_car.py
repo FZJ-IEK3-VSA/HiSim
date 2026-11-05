@@ -15,9 +15,11 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.components import generic_car_profile
+from hisim.components.advanced_ev_battery_bslib import CarBattery
 from hisim.components.generic_car_profile import CarProfileInputs, produce_car_profile
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, constructor, sized_field
+from hisim.energy_port import EnergyPort
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import Units, ComponentType
 
@@ -168,9 +170,21 @@ class Car(cp.PhysicsComponent):
     occupancy must be registered before any car. When it was not, or when no occupancy has car data
     at all, the lookup raises and names the household and the car rather than letting the run
     continue with a vehicle that never moves.
+
+    An electric car takes its electricity from its battery: its input ``ElectricityFromCarBatteryInWatt`` reads the
+    battery's discharging power and carries the car's ``CONSUMPTION`` port of vehicle electricity
+    (``EnergyBalanceCarrier.VEHICLE_ELECTRICITY``), the electricity that flows from the car battery into the car's
+    drive past every meter, so that no electricity meter reads it. Its ``ElectricityOutput``, the electricity it uses
+    to drive, is its ``PRODUCTION`` port of driving energy, which leaves the system at the ``driving`` node. The
+    energy balance then checks in every step that the battery gave the car what it used. A diesel car declares no
+    energy port yet.
     """
 
     cost_relevance = CostRelevance.PRICED
+
+    # Inputs
+    #: The power the car's battery discharges into the car, in W (electric car only).
+    ElectricityFromCarBatteryInWatt = "ElectricityFromCarBatteryInWatt"
 
     # Outputs
     FuelConsumption = "FuelConsumption"
@@ -209,13 +223,28 @@ class Car(cp.PhysicsComponent):
         self.meters_driven: Any = []
 
         if self.config.fuel == lt.LoadTypes.ELECTRICITY:
+            self.electricity_from_car_battery_channel: cp.ComponentInput = self.add_input(
+                object_name=self.component_name,
+                field_name=self.ElectricityFromCarBatteryInWatt,
+                load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT,
+                mandatory=True,
+                # the battery discharges straight into the car's drive, past every meter
+                energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY),
+            )
             self.electricity_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.ElectricityOutput,
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
                 postprocessing_flag=[lt.ComponentType.CAR, lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-                output_description="Electricity Consumption of the car while driving. [W]",
+                output_description=(
+                    "The electricity the car uses while driving, in W: the metres driven in the step times the "
+                    "consumption per kilometre. It is the driving energy the car delivers."
+                ),
+                energy_port=EnergyPort(
+                    lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.DRIVING, environment=lt.EnvironmentNode.DRIVING
+                ),
             )
             self.car_location_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
@@ -246,6 +275,21 @@ class Car(cp.PhysicsComponent):
             unit=lt.Units.METER,
             output_description="Driven distance in meters.",
         )
+        if self.config.fuel == lt.LoadTypes.ELECTRICITY:
+            self.add_default_connections(self.get_default_connections_from_car_battery())
+
+    def get_default_connections_from_car_battery(self) -> List[cp.ComponentConnection]:
+        """The electric car's connection from its battery: the battery's discharging power is the car's electricity.
+
+        Returns:
+            One connection, from :attr:`CarBattery.AcBatteryDischargingPower` to
+            :attr:`ElectricityFromCarBatteryInWatt`.
+        """
+        return [
+            cp.ComponentConnection(
+                self.ElectricityFromCarBatteryInWatt, CarBattery.get_classname(), CarBattery.AcBatteryDischargingPower
+            )
+        ]
 
     def i_save_state(self) -> None:
         """Saves actual state."""

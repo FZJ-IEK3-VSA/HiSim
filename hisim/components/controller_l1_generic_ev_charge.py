@@ -16,7 +16,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
-from hisim.loadtypes import Units, ComponentType, InandOutputType
+from hisim.loadtypes import Units, ComponentType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass
@@ -279,8 +279,11 @@ class L1Controller(cp.StatelessComponent, cp.L1ControllerComponent):
             field_name=self.BatteryChargingPowerToEMS,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description="Real Power for EV charging in Watt. Signal send to L2EMSElectricityController",
-            postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            output_description=(
+                "The car battery's AC charging power, in W, >= 0, as the controller reports it to the energy manager. "
+                "A signal for the manager's decisions: the electricity meter and the KPIs read the battery's own "
+                "AcBatteryChargingPower."
+            ),
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_car())

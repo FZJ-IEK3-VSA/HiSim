@@ -14,8 +14,8 @@ components:
     inputs:
       - Weather
       - L2EMSElectricityController
-      - UTSPConnector
       - HeatDistributionSystem
+      - UTSPConnector
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -100,11 +100,8 @@ components:
     preset: standard
     inputs:
       - UTSPConnector
+      - CondensingGasBoiler
       - SolarThermalSystem
-      - input: WaterMassFlowRateFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputMassFlowDhw
-      - input: WaterTemperatureFromSecondaryHeatGenerator
-        from: CondensingGasBoiler.WaterOutputTemperatureDhw
   GasMeter:
     class: hisim.components.gas_meter.GasMeter
     preset: standard

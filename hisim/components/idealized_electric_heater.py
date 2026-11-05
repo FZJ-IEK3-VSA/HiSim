@@ -17,6 +17,7 @@ from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim.energy_port import EnergyPort
 from hisim import utils
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.economics.facts import CostRelevance
@@ -176,7 +177,14 @@ class IdealizedElectricHeater(cp.PhysicsComponent):
     """The idealized electric heater: a device without limits or losses that delivers the thermal power it is told.
 
     Its controller (:class:`IdealizedElectricHeaterController`) sets the power. The heater publishes the power it
-    delivers, ``ThermalPowerDelivered`` (negative for cooling), and the heating part of it, ``HeatingPowerDelivered``.
+    delivers, ``ThermalPowerDelivered`` (negative for cooling), the heating part of it, ``HeatingPowerDelivered``, and
+    the cooling part, ``HeatDrawnForCoolingInWatt`` (>= 0).
+
+    Its energy ports (complete Sankey spec, PR 5a): while it heats, it turns electricity
+    (``ElectricityConsumptionInWatt``) into the same amount of space heating (``HeatingPowerDelivered``), as an
+    electric resistance heater does. While it cools, it draws heat from the building (``HeatDrawnForCoolingInWatt``,
+    carrier ``COOLING``) and rejects it to the outside air (``HeatToAmbientInWatt``) without electricity: an idealized
+    cooler of unlimited efficiency, since it exists to measure the building's demand, not a device's consumption.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -187,6 +195,12 @@ class IdealizedElectricHeater(cp.PhysicsComponent):
     # Outputs
     ThermalPowerDelivered: str = "ThermalPowerDelivered"
     HeatingPowerDelivered: str = "HeatingPowerDelivered"
+    #: Minus the negative part of ThermalPowerDelivered, the heat taken from the building while cooling, in W.
+    HeatDrawnForCoolingInWatt: str = "HeatDrawnForCoolingInWatt"
+    #: The electricity it turns into heat while heating, in W, >= 0: equal to HeatingPowerDelivered.
+    ElectricityConsumptionInWatt: str = "ElectricityConsumptionInWatt"
+    #: The heat rejected to the outside air while cooling, in W, >= 0: equal to HeatDrawnForCoolingInWatt.
+    HeatToAmbientInWatt: str = "HeatToAmbientInWatt"
 
     # Similar components to connect to:
     # 1. Building
@@ -233,7 +247,46 @@ class IdealizedElectricHeater(cp.PhysicsComponent):
             self.HeatingPowerDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
+            output_description=(
+                f"Heat the heater delivers to the building while it heats, in W, >= 0: {self.ThermalPowerDelivered} in a "
+                "step in which it is not negative, else 0."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+        )
+        # The cooling direction of the signed heat, >= 0, which the building reads through its input port beside the
+        # heating direction, HeatingPowerDelivered: a port books one direction only.
+        self.heat_drawn_for_cooling_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatDrawnForCoolingInWatt,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the device takes out of the building while it cools, in W, >= 0: minus {self.ThermalPowerDelivered} "
+                "in a step in which that is negative, else 0. The building books it as the cooling it gives the device."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING),
+        )
+        self.electricity_consumption_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ElectricityConsumptionInWatt,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            output_description=(
+                f"Electricity the heater turns into heat, in W, >= 0: equal to {self.HeatingPowerDelivered}, an electric "
+                "resistance heater without losses."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+        )
+        self.heat_to_ambient_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatToAmbientInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"Heat the heater rejects to the outside air while it cools, in W, >= 0: equal to "
+                f"{self.HeatDrawnForCoolingInWatt}, since its cooling takes no electricity."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT),
         )
 
     def build(
@@ -288,6 +341,9 @@ class IdealizedElectricHeater(cp.PhysicsComponent):
         )
 
         stsv.set_output_value(self.heating_power_delivered_channel, heating_in_watt)
+        stsv.set_output_value(self.heat_drawn_for_cooling_channel, max(0.0, -thermal_power_delivered_in_watt))
+        stsv.set_output_value(self.electricity_consumption_channel, heating_in_watt)
+        stsv.set_output_value(self.heat_to_ambient_channel, max(0.0, -thermal_power_delivered_in_watt))
 
     def get_cost_opex(
         self,

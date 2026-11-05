@@ -7,8 +7,8 @@ hot-water tank; it is fully mixed, so its water has one uniform temperature at e
 exchange heat through water publish only these port quantities, and the heat is derived from them by the
 functions here, so both ends of a circuit book the same number.
 
-The module lives in ``hisim/`` rather than ``hisim/components/``: :class:`hisim.energy_port.HydronicPort` derives
-a circuit's energy from :func:`circuit_power_w`, and ``hisim/energy_port.py`` is imported by
+The module lives in ``hisim/`` rather than ``hisim/components/``: :class:`hisim.energy_port.LoopFluid` takes a fluid
+loop's specific heat from :class:`Water` and :class:`Brine`, and ``hisim/energy_port.py`` is imported by
 ``hisim/component.py``, the base of every component, which must not import the component package built on it.
 The module imports nothing from HiSim.
 
@@ -111,6 +111,23 @@ class Water:
 
     #: The same density in kg/l, the unit storage volumes are configured in.
     DENSITY_KG_PER_LITER: ClassVar[float] = DENSITY_KG_PER_M3 / UnitConversion.LITERS_PER_CUBIC_METER
+
+
+class Brine:
+
+    """The properties of the brine in a ground-source heat pump's collector loop.
+
+    The brine is the mixture :class:`hisim.components.simple_heat_source.SimpleHeatSourceConfig` circulates by
+    default, propylene glycol at 20 % by mass in water. A fluid loop that carries brine
+    (:class:`hisim.energy_port.LoopFluid`) turns its flow and temperatures into heat with this value, as one that
+    carries water does with :attr:`Water.SPECIFIC_HEAT_J_PER_KG_K`. For example, 0.5 kg/s of brine cooled by 3 K
+    gives up ``0.5 * 3976.8 * 3 = 5965.2`` W.
+    """
+
+    #: Specific heat capacity of propylene glycol, 20 % by mass in water, at 20 °C, J/(kg K) (source: pygfunction
+    #: 2.3.1, ``pygfunction.media.Fluid("PropyleneGlycol", 20, T=20.0).cp`` = 3976.77, the fluid library
+    #: ``SimpleHeatSource`` reads its heat capacity from).
+    SPECIFIC_HEAT_J_PER_KG_K: ClassVar[float] = 3976.8
 
 
 class HydronicsError(ValueError):

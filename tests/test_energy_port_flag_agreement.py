@@ -38,7 +38,6 @@ from hisim.components.generic_electrolyzer_h2 import Electrolyzer
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.components.idealized_electric_heater import IdealizedElectricHeater
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
-from hisim.components.simple_air_conditioner import SimpleAirConditioner
 from hisim.components.transformer_rectifier import Transformer
 from hisim.config import ConfigBase, auto_fields, presets_of
 from hisim.config.context import SizingContext
@@ -186,10 +185,6 @@ class FlagPortAgreement:
             "a port and no flag: the idealized heater holds a building at its set points to measure the building's "
             "demand; nothing bills it, and a consumption flag would put its electricity into the KPIs of the building "
             "tests that run it."
-        ),
-        (SimpleAirConditioner, SimpleAirConditioner.ElectricalPowerConsumption): (
-            "a port and no flag: the device runs in the golden setup simple_air_conditioner_household_building_sizer, "
-            "whose KPIs would move if they counted this electricity."
         ),
         (Transformer, Transformer.ElectricityReceivedInKilowatt): RESULTS_KEEP_REASON,
     }

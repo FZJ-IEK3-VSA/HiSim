@@ -19,7 +19,7 @@ signal-collision tests of ``test_energy_system_dispatch`` take, because the arra
 provoke need a participant no shipped energy-system file wires yet.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import ClassVar, List, Optional, Tuple
 
 import pytest
@@ -335,6 +335,37 @@ def test_the_matcher_lets_any_carrier_reach_the_fuel_and_gas_meters() -> None:
         source_unit=lt.Units.WATT_HOUR,
     )
     assert gas_channel.key == GasMeter.CONSUMPTION_UNCONTROLLED_CHANNEL
+
+
+@pytest.mark.base
+def test_a_mass_flow_feed_selects_the_gas_meter_s_mass_flow_channel_and_only_in_kg_per_s() -> None:
+    """A feed tagged ``MASS_FLOW`` beside the consumption tag reaches the kg/s channel; one in Wh is refused there.
+
+    A CHP publishes the hydrogen it burns as a mass flow, which the gas meter converts by the gas's heating value, so
+    the feed must land on the channel that converts it and nowhere else. Catches the two consumption channels tying
+    (overlapping instead of nested tag sets) and a mass-flow channel that would sum watt-hours unconverted.
+    """
+    feed = replace(
+        MeterFixtures.feed(lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED),
+        flow_tags=(lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW),
+    )
+    channel = ChannelMatcher.match_and_validate(
+        feed=feed,
+        channels=GasMeter.CHANNELS,
+        target="the gas meter",
+        source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+        source_unit=lt.Units.KG_PER_SEC,
+    )
+    assert channel.key == GasMeter.CONSUMPTION_MASS_FLOW_CHANNEL
+    with pytest.raises(EnergySystemWiringError) as caught:
+        ChannelMatcher.match_and_validate(
+            feed=feed,
+            channels=GasMeter.CHANNELS,
+            target="the gas meter",
+            source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+            source_unit=lt.Units.WATT_HOUR,
+        )
+    assert caught.value.error_id.value == "EF-30"
 
 
 @pytest.mark.base

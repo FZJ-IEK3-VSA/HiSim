@@ -109,6 +109,11 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
 
     It calculates the gas production and consumption dynamically for all components.
     So far only gas consumers are represented here but gas producers can be added here too.
+    A consumer publishes the gas it burns either as an energy per step in Wh (a boiler's
+    ``EnergyDemandSh``) or as a mass flow in kg/s (a CHP's ``GasDemandReal``); the meter counts a
+    mass flow by the lower heating value of its gas, the same value the CHP's fuel port is counted
+    by. For example, 0.001 kg/s of hydrogen over a 900 s step is 0.9 kg, which the meter counts as
+    0.9 kg * 33.32 kWh/kg = 29,989 Wh.
     """
 
     cost_relevance = CostRelevance.METER
@@ -127,6 +132,9 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
     #: Stable key of the channel carrying gas a participant burned.
     CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
 
+    #: Stable key of the channel carrying gas a participant burns as a mass flow in kg/s, such as a CHP's fuel.
+    CONSUMPTION_MASS_FLOW_CHANNEL: ClassVar[str] = "consumption_mass_flow"
+
     #: The two flows this meter understands, declared so that an energy-system file can address a
     #: gas burner or a gas producer at it. The consumption channel's tag, unit and monitored-only
     #: weight are the ones :meth:`get_default_connections_from_generic_gas_heater` already builds
@@ -142,6 +150,11 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
     #:
     #: Dispatch is forbidden on both. A meter is a pure aggregator: it has no control authority
     #: and no per-participant output to send a signal on.
+    #:
+    #: A burner that publishes its fuel as a mass flow in kg/s feeds the third channel, tagged
+    #: ``MASS_FLOW`` beside the consumption tag. Its tag set is the wider of the two consumption
+    #: channels, so a feed carrying both tags selects it, and its unit is as strict as the others':
+    #: kg/s only, which the meter converts by the gas's lower heating value.
     CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
         DynamicConnectionChannel(
             key=PRODUCTION_CHANNEL,
@@ -155,6 +168,13 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
             tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED}),
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_MASS_FLOW_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.KG_PER_SEC,
             dispatch=DispatchRule.FORBIDDEN,
         ),
     )
@@ -192,8 +212,15 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
 
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
+        #: The consumers that publish the gas they burn as a mass flow in kg/s (:attr:`CONSUMPTION_MASS_FLOW_CHANNEL`).
+        self.consumption_mass_flow_inputs: List[ComponentInput] = []
 
         self.timestep_duration_in_s = self.my_simulation_parameters.seconds_per_timestep
+        #: The Wh one step of a mass flow of 1 kg/s of this meter's gas carries, by its lower heating value: the factor
+        #: the energy balance counts a fuel port on a mass flow by (:meth:`EnergyPort.kilowatt_hours_per_step`), in Wh.
+        self.watt_hours_per_step_of_one_kilogram_per_second: float = 1e3 * EnergyPort.kilowatt_hours_per_step(
+            lt.Units.KG_PER_SEC, self.timestep_duration_in_s, EnergyPort.carrier_of_fuel(self.gas_loadtype)
+        )
         # Component has states
         self.state = GasMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
@@ -354,6 +381,42 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
         """
         return (MeteredExchange(EnergyPort.carrier_of_fuel(self.gas_loadtype), self.GasFromGrid),)
 
+    def sort_inputs_by_channel(self) -> None:
+        """Sort the connected inputs into production, consumption in Wh and consumption as a mass flow in kg/s.
+
+        A feed of the mass-flow channel carries the consumption tag as well, so the consumption channel's query
+        returns it too; it is summed once, converted, with the mass flows. Called at the first step, once the inputs
+        are connected. For example, a meter fed by a boiler's ``EnergyDemandSh`` in Wh and a CHP's ``GasDemandReal``
+        in kg/s, tagged ``MASS_FLOW`` beside the consumption tag, sums the first as it is and converts the second.
+
+        Raises:
+            ValueError: For an input whose unit is not the unit of its channel: a mass flow fed without the
+                ``MASS_FLOW`` tag would otherwise be summed as watt-hours.
+        """
+        self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+        self.consumption_mass_flow_inputs = self.get_channel_inputs(self.CONSUMPTION_MASS_FLOW_CHANNEL)
+        mass_flows = {id(component_input) for component_input in self.consumption_mass_flow_inputs}
+        self.consumption_uncontrolled_inputs = [
+            component_input
+            for component_input in self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+            if id(component_input) not in mass_flows
+        ]
+        for channel_key, inputs in (
+            (self.PRODUCTION_CHANNEL, self.production_inputs),
+            (self.CONSUMPTION_UNCONTROLLED_CHANNEL, self.consumption_uncontrolled_inputs),
+            (self.CONSUMPTION_MASS_FLOW_CHANNEL, self.consumption_mass_flow_inputs),
+        ):
+            unit = self.get_channel(channel_key).unit
+            for component_input in inputs:
+                if component_input.unit != unit:
+                    raise ValueError(
+                        f"The gas meter '{self.component_name}' reads {component_input.src_object_name}."
+                        f"{component_input.src_field_name} in {component_input.unit.value} on its channel "
+                        f"'{channel_key}', which is in {unit.value}. Feed a mass flow in kg/s with the tags "
+                        f"{lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED.name} and {lt.InandOutputType.MASS_FLOW.name}, "
+                        "and an energy per step in Wh with the consumption or the production tag alone."
+                    )
+
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""
         # Note: despite the name, ConfigBase.get_string_dict() returns a List[str]
@@ -380,8 +443,7 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
-            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+            self.sort_inputs_by_channel()
 
         # GAS #
 
@@ -390,6 +452,10 @@ class GasMeter(DynamicComponent, cp.MeterComponent):
         consumption_uncontrolled_in_watt_hour = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
+        if self.consumption_mass_flow_inputs:
+            consumption_uncontrolled_in_watt_hour += self.watt_hours_per_step_of_one_kilogram_per_second * sum(
+                [stsv.get_input_value(component_input=elem) for elem in self.consumption_mass_flow_inputs]
+            )
         # Production of Gas positve sign
         # Consumption of Gas negative sign
         difference_between_production_and_consumption_in_watt_hour = (

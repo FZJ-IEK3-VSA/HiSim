@@ -63,11 +63,29 @@ twins (`basic_household_only_heating`, `automatic_default_connections`, `househo
 building-sizer twins with a tank, district heating and electric heating included through their hot-water tank), whose
 golden files number 70 of the 116 under `golden_references/`. The twins without a tank do not move.
 
-## Note: a tank in the heated zone in a file
+## Confirmation after the rework of D-h
 
-In a declarative file the building grows the input of a device's heat only for a component its own `inputs:` list
-names as a bare item. A tank whose `AUTO` location resolves to the heated zone (a TABULA row with cellar code `-`,
-`C`, `P`, `NI` or `0`) in a file whose building does not list it publishes room heat that nothing reads: the balance
-reports the port as unlinked and the run finishes. Listing the tank under the building's inputs is refused (EF-23)
-when the tank stands elsewhere. The heated-zone runs above list the tanks by hand. This is an open question to the
-owner (the report of PR 2).
+PR 2 was reworked to owner decision D-h (2026-11-06): each tank has three fixed temperature inputs and two fixed
+released-heat outputs, `HeatToHeatedZoneInWatt` and `HeatLossInWatt`, its `StandbyHeatLoss` is gone, and every twin
+lists both tanks under the building. The physics is unchanged, so the numbers above must not move. Re-run on the
+reworked branch, heat-pump twin, full year 2021 at 900 s, local LPG, `COMPUTE_KPIS`, `WRITE_KPIS_TO_JSON`,
+`EXPORT_ENERGY_BALANCE`:
+
+| Location | Tank losses kWh (buffer + DHW) | Battery losses kWh | Space heating kWh (theoretical demand) | HP electricity kWh (SH + DHW) | °C·h above 26 °C | Cooling demand kWh | Unmet DHW kWh |
+|---|---|---|---|---|---|---|---|
+| `AUTO` = unheated space | 898.3 + 302.5 | 958.8 | 11,661.5 (11,754.4) | 2,776.0 + 1,065.1 | 251.3 | 2,210.7 | 8.6 |
+| pinned heated zone | 634.1 + 265.1 | 940.7 | 11,021.1 (11,092.4) | 2,593.3 + 1,055.4 | 261.1 | 2,464.0 | 7.4 |
+
+Every figure equals its row of the table above to the digits shown there. The heated-zone run now needs no edit
+beyond pinning the two tanks: the recorded twin lists both under the building, and the run's balance closes with
+8 of 8 links and no unlinked port; in the `AUTO` run the building reads zeros from both tanks, an idle transfer, and
+the balance shows 6 of 6 links (the two idle ones book nothing) and no unlinked port.
+
+## Note: a tank in the heated zone in a file (resolved by D-h)
+
+The first build of PR 2 wired a tank's surrounding temperature and the port of its loss by its location, so a file
+was right only for the house it was recorded on: a tank whose `AUTO` location resolved to the heated zone in a file
+whose building did not list it published room heat that nothing read, and listing it was refused (EF-23) when the
+tank stood elsewhere. D-h removed the dependence: the three temperature inputs and the two released-heat outputs are
+the same in every location, the building lists every tank as a bare item in every twin, and a run refuses room heat
+that no component reads before its first step.

@@ -1,6 +1,7 @@
 # Spec: every setup declares its kind, every validation rule lives in one rules package, and a rule a kind does not need is waived by name with a reason
 
-Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft);
+Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft, D12
+to D15 from the comparison with ruff, pylint, ESLint and clippy);
 nothing is built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
 PR: #1216 (spec only). Builds on: `roadmap/device_location_spec.md` (D-h: the build rule "room heat needs a
 receiver", PRs #1211 and #1213), `roadmap/complete_energy_sankeys_spec.md` (D1 and Q-B: a component declares its
@@ -79,6 +80,10 @@ reason it lost.
 | D9 | A parse fault (EF-00 to EF-03, EF-07, EF-70) stays in the reader; only a check on a readable document is a rule | Noah | 2026-11-06 |
 | D10 | The components' per-step physics guards and constructor-time declarations stay in the components | Noah | 2026-11-06 |
 | D11 | `simple_air_conditioner_household_building_sizer` gets residents; its results move and are blessed in that PR | Noah | 2026-11-06 |
+| D12 | One class per rule: a `SetupRule` subclass with its class-scoped fields, its docstring and its `check` method | Noah | 2026-11-06 |
+| D13 | Every rule has a stable code and a readable kebab-case name; a code is never reused and a retired code stays reserved; the EF codes stay; every docstring follows one template, which `hisim setup-rules show` prints and every refusal points to | Noah | 2026-11-06 |
+| D14 | A rule is pure and reports every fault; the registry runs every applicable rule of a stage and raises one violation listing every fault, ordered by code; a rule that needs another to have passed declares it in `REQUIRES` and is skipped, visibly, when that one found faults | Noah | 2026-11-06 |
+| D15 | A fault carries its location as fields, component, port and the file's key path, beside the message; the violation and the CLI can emit JSON | Noah | 2026-11-06 |
 
 **D1 — the validation rules are modular and live in one rules package, each rule a self-contained unit with its
 id, its check and its stage; a registry collects them; the hooks only call the registry; the existing checks move
@@ -163,6 +168,37 @@ gains and a warning, `Building.warn_about_unconnected_internal_heat_gains`); wit
 the owner chose to make it what its name says. Consequence: bead .10, its own PR with the measured goldens and the
 re-recorded twin, grouped and probe files.
 
+**D12 — one class per rule: a `SetupRule` subclass with its class-scoped fields, its docstring and its `check`
+method** (owner, 2026-11-06; from comparing the design with ruff, pylint, ESLint and clippy). The class form costs
+15 to 20 lines of frame per rule where a decorated function would cost 5 to 8, and the owner prefers it: a class has
+room for rule-specific helpers as methods, and `__init_subclass__` checks the declarations when the class is
+created, which a decorator can do only at registration. Consequence: the shape of §4.1 stands; a rule's helpers are
+its methods, never module functions.
+
+**D13 — every rule has a stable code and a readable kebab-case name; a code is never reused and a retired code
+stays reserved; the EF codes stay; every docstring follows one template, which `hisim setup-rules show` prints
+and every refusal points to** (owner, 2026-11-06; ruff's `F401` / `unused-import` pair). A code is what a message,
+a test and a bead cite and must never change meaning; a name is what a reader remembers. Consequence: `CODE` and
+`NAME` on every rule, the scheme of §4.1 (a letter prefix per family and a number; the moved file checks keep their
+`EF-nn`), `SetupRuleRegistry.RETIRED_CODES` for codes whose rule is gone, the docstring template "What it checks /
+Why / Example of a fault / How to fix", and the pointer `see: hisim setup-rules show <code>` at the end of every
+refusal.
+
+**D14 — a rule is pure and reports every fault; the registry runs every applicable rule of a stage and raises one
+violation listing every fault, ordered by code; a rule that needs another to have passed declares it in
+`REQUIRES` and is skipped, visibly, when that one found faults** (owner, 2026-11-06). A run that stops at the first
+fault costs one run per fault; a linter reports all of them. A rule that walks loops on a broken wiring would
+report nonsense, so the dependency is written down and the registry skips the rule and says so, instead of an
+implicit order that nobody can read. Consequence: `check` never raises; `REQUIRES: ClassVar[FrozenSet[str]]` of
+codes; `SetupRuleViolation` lists faults and skips; the checks that stop at the first fault today are
+restructured in their family's PR (§4.1, "What must be restructured").
+
+**D15 — a fault carries its location as fields, component, port and the file's key path, beside the message;
+the violation and the CLI can emit JSON** (owner, 2026-11-06). A message a person reads and a location a tool reads
+are two things; CI and RenoVisor's `problems.json` need the second. Line numbers are left for later: the reader may
+not keep positions (`RawDocument`, `hisim/energy_system/document.py`). Consequence: the `Fault` fields of §4.1,
+`SetupRuleViolation.to_dict()`, `hisim setup-rules check --format json`.
+
 ## 3. Terms
 
 - **Setup**: one simulated system, however it is written: a Python setup (`system_setups/*.py`, its
@@ -174,9 +210,14 @@ re-recorded twin, grouped and probe files.
   occupancy, apartments, domestic hot water per person), `COMMERCIAL` (a building people work in: usage profiles
   by zone type, no apartments), `PLANT` (a system without a building: a generator, a storage, a converter and the
   meters around them). The file spells the lowercase values `demo`, `residential`, `commercial`, `plant`.
-- **Rule** (a setup rule, class `SetupRule`): one named check on one subject at one stage, with one message per fault. A rule has an **id**
-  (`<family>.<name>`, for example `energy_ports.room_heat_needs_receiver`), a **family** (its module), a **stage**
-  and, for the document rules, the **code** the message carries (`EF-31`).
+- **Rule** (a setup rule, class `SetupRule`): one named check on one subject at one stage, with one message per
+  fault. A rule has a **code** (`EP-06`, `EF-31`: a letter prefix per family and a number, stable for ever, D13), a
+  **name** (kebab-case, `room-heat-needs-receiver`, readable and unique), a **family** (its module), a **stage**,
+  and what it **requires** (the codes of rules that must have found nothing for its own result to mean anything,
+  D14). The inventory of §6 writes a rule as `<family>.<snake_name>`; the name is the kebab-case form of the second
+  part.
+- **Retired code**: the code of a rule that was removed; it is listed in `SetupRuleRegistry.RETIRED_CODES` and never
+  given to another rule, as `EF-R8` is reserved today (`hisim/energy_system/recording/`).
 - **Stage**: when a rule runs. `RuleStage.LOAD`: on the document, before any class is imported (declarative mode
   only). `RuleStage.BUILD`: on the built, wired components, before the first step, in both modes.
   `RuleStage.AFTER_RUN`: on the result table, in the post-processing, before anything is written.
@@ -191,9 +232,13 @@ re-recorded twin, grouped and probe files.
   empty, so a malformed waiver fails at import.
 - **Registry**: the object that collects every rule of the package, answers which rules run at a stage for a
   kind, runs them and raises their faults as one error. It is built on demand, never stored in a module.
-- **Fault**: one finding of one rule: the rule id, the subject (a component, an output, a file location) and the
-  message. A stage's faults are raised together, as today's `EnergyPortWiringError` and `FluidLoopWiringError`
-  list every fault at once.
+- **Fault**: one finding of one rule, a frozen record with the rule's code and name, the message, and the
+  location as fields (D15): `component` (the runtime name of the component, or the entry name in a file),
+  `port` (the input or output name) and `key_path` (the keys and indices from the file's top level to the value,
+  `("components", "Battery1", "inputs", 0)`), each `None` or empty when it does not apply. A stage's faults are
+  raised together, as today's `EnergyPortWiringError` and `FluidLoopWiringError` list every fault at once (D14).
+- **Skip**: a rule the registry did not run because a rule it requires found faults (D14); reported beside the
+  faults with the codes it waited for, never silent.
 
 ## 4. Design
 
@@ -223,11 +268,23 @@ hisim/setup_rules/
 
 ```python
 class RoomHeatNeedsReceiver(SetupRule):
-    """A PRODUCTION port of ROOM_HEAT that no component reads is a transfer with a missing end."""
+    """What it checks: every PRODUCTION port of carrier ROOM_HEAT is read by some component.
 
-    ID = "energy_ports.room_heat_needs_receiver"
+    Why: room heat is a transfer into the heated zone, not a loss; an output nobody reads is a
+    transfer with a missing end, and the heat would vanish from the balance.
+
+    Example of a fault: ``buffer.HeatToHeatedZoneInWatt declares PRODUCTION of ROOM_HEAT and no
+    component reads it``.
+
+    How to fix: list the device under the building's inputs, or set its installation location to
+    an unheated space so that the heat leaves as a loss.
+    """
+
+    CODE = "EP-06"
+    NAME = "room-heat-needs-receiver"
     STAGE = RuleStage.BUILD
     ENFORCED = True
+    REQUIRES = frozenset({"EP-05"})  # an input port must pair with the output it reads first
     WAIVED_FOR = MappingProxyType({
         SetupKind.DEMO: "a demo may run an occupancy without a building; the heat it does not place is reported as unlinked",
         SetupKind.PLANT: "a plant has no heated zone; heat a device releases there has no receiver by construction",
@@ -237,18 +294,73 @@ class RoomHeatNeedsReceiver(SetupRule):
         ...
 ```
 
-`ID` is unique across the package (the registry's test checks it); `STAGE` picks the subject the rule receives;
-`ENFORCED` says whether its faults raise or are logged (§4.5). A document rule adds `CODE = "EF-31"`, which its
-messages carry as today, so the error catalogue of `roadmap/declarative_energy_systems/` and every test that
-asserts on a message stay valid. `WAIVED_FOR: ClassVar[Mapping[SetupKind, str]]` names the kinds that do not run
+`CODE` and `NAME` are each unique across the package (D13; the registry's test checks it, and `__init_subclass__`
+refuses a code not of the form `<PREFIX>-<nn>`, a name that is not kebab-case, and a code in `RETIRED_CODES`);
+`STAGE` picks the subject the rule receives; `ENFORCED` says whether its faults raise or are logged (§4.5);
+`REQUIRES` names the codes the rule depends on (D14; `__init_subclass__` cannot see other rules, so the registry
+checks at `collect()` that every required code exists, belongs to the same or an earlier stage, and forms no
+cycle). A moved file check keeps its `CODE = "EF-31"`, which its messages carry as today, so the error catalogue
+of `roadmap/declarative_energy_systems/` and every test that asserts on a message stay valid. `WAIVED_FOR: ClassVar[Mapping[SetupKind, str]]` names the kinds that do not run
 the rule, each with its reason (D3 as amended); the base's default is an empty `MappingProxyType({})`, read-only
 like every class constant of the package (`coding_style.md` §4), and a rule that waives nothing writes nothing.
 `SetupRule.__init_subclass__` checks the mapping when the class is created: a key that is not a `SetupKind` and a
 reason that is empty or blank raise a `TypeError` naming the rule, so a malformed waiver fails at import, before
-any run, and no test needs to look for it. `check` returns faults and raises nothing; a rule that needs a value it does not have (a column missing from the table) returns a
-fault that says so. The class holds no state between calls. Everything is class-scoped or an `Enum`
+any run, and no test needs to look for it. `check` is pure (D14): it returns every fault it finds and raises
+nothing; a rule that needs a value it does not have (a column missing from the table) returns a fault that says
+so, and a rule that would read what an earlier rule guards names that rule in `REQUIRES` instead of checking it
+again. The class holds no state between calls. Everything is class-scoped or an `Enum`
 (`system_docs/coding_style.md` §4); the package writes no file and prints nothing, so the semgrep gates
 (`.semgrep/file_writes.yml`, `.semgrep/no_print.yml`) need no entry.
+
+**Codes and names (D13).** The scheme, one letter prefix per family and a two-digit number in the inventory's
+order, allocated by the family's PR and never changed afterwards:
+
+| Family (module) | Prefix | Day-one allocation |
+|---|---|---|
+| `document`, `bindings`, `sizing`, `wiring`, `assemblies` | `EF-` | the codes the checks carry today (§6.1 to §6.4); a moved warning that has none gets the next free code of its block: `EF-34` unconsumed source, `EF-35` unmetered output of a need, `EF-4K` unconsumed fact |
+| `energy_ports` | `EP-` | `EP-01` circuit-pairing … `EP-05` input-port-pairs, `EP-06` room-heat-needs-receiver (the rows of §6.5 in order) |
+| `fluid_loops` | `FL-` | `FL-01` loop-tagged-whole … `FL-08` one-pump-owner |
+| `components` | `CB-` | `CB-01` one-kind-base … in the order of §6.5 |
+| `results` | `AR-` | `AR-01` finite … in the order of §6.6 |
+| `meters` | `MT-` | `MT-01` meter-balance, `MT-02` metered-port-has-a-meter |
+
+A removed rule's code goes into `SetupRuleRegistry.RETIRED_CODES: ClassVar[FrozenSet[str]]` with a one-line comment
+saying what it was and in which PR it went; `__init_subclass__` refuses a live rule with a retired code, and the
+test of §9 checks that no two rules share a code or a name and that the retired set and the live codes are
+disjoint. Reviewers check that the set only grows, as they check that the EF catalogue never renumbers. The
+docstring of every rule follows one template, four headings in this order: "What it checks", "Why", "Example of
+a fault", "How to fix" (the example of §4.1); `hisim setup-rules show <code|name>` prints it with the
+declarations, and every message of a refusal ends with `see: hisim setup-rules show <code>`, so the reader of a
+failed run has the fix one command away. The test of §9 checks the four headings in every rule's docstring.
+
+**Every fault, one violation (D14).** `registry.run(stage, subject, kind)` runs every applicable rule of the
+stage, in code order, and collects; it raises one `SetupRuleViolation` per stage with every fault of every
+enforced rule, ordered by code, then by component and port, and with every skip. A rule whose `REQUIRES` names a
+code that found faults in this run, or that was itself skipped, is skipped and listed as `Skip(code, because_of=
+(codes,))`; nothing else orders rules, and a rule that runs sees the subject as it is. The faults of the rules
+that are not enforced are logged, one line each, with the same fields. *What must be restructured*: the checks
+that collect every fault already are `Wiring.refuse_a_broken_wiring`, `FluidLoopWalk.find_loops`,
+`LibraryChecker.check` (EF-75), `BalanceCheck`, `MeterCheck` and `FiniteResultsCheck`. The checks that raise at
+the first fault today, and whose family PR turns each `raise` into an appended fault, are the structural
+validator (`StructuralValidator`, `hisim/energy_system/validation.py`, one `EF-nn` error per raise), the class and
+config binder (`ClassBinder`, `ConfigOriginChecker`), the sizing bridge (the first kernel failure), the wiring
+checker and the feed, channel and dispatch resolvers (`WiringChecker`, `DynamicConnectionResolver`,
+`ChannelMatcher`, `DispatchSignalPlanner`), the assembly port binder (`PortBinder`, `hisim/energy_system/assemblies/binding.py`),
+and the simulator's `add_component` and `ComponentWrapper.connect_inputs`. Each message keeps its text, so a test
+that asserts on one message still matches; a test that asserts that *only* one fault is reported when two exist
+is corrected in that PR.
+
+**A fault's fields (D15).** `Fault` is a frozen dataclass: `code` and `name` of the rule, `stage`, `message` (the
+text as today, with the `see:` pointer), `component` (the runtime name, or the entry name in a file; `None` for a
+fault of the whole system), `port` (the input or output name; `None`), `key_path` (a tuple of keys and indices
+from the file's top level, empty when the subject is not a file; filled by the document, bindings, sizing, wiring
+and assembly rules from the location the EF messages print today), `file` (the file's path; `None` in Python
+mode). `SetupRuleViolation.to_dict()` gives `{"stage": "build", "kind": "demo", "faults": [{"code", "name",
+"stage", "message", "component", "port", "key_path", "file"}, ...], "skipped": [{"code", "because_of": [...]}]}`, which
+`hisim setup-rules check --format json` prints and which RenoVisor's `run` may write into `problems.json` in place
+of a bare traceback (its exit code 5 case; out of scope here, the field names are what it would read). Line and
+column are an extension: the reader keeps no positions, and adding them means a position-keeping reader for
+`RawDocument` (a later bead), after which `Fault` gains `line` and `column` without changing anything else.
 
 **The subjects.** One frozen object per stage, built by the hook and handed to every rule of that stage:
 `LoadedDocument` (the `EnergySystemFile` model and the raw document for locations), `BuiltSystem` (the wired
@@ -259,12 +371,13 @@ checks that import no component today (`hisim/energy_system/validation.py` keeps
 `tests/test_energy_system_layering.py` keeps proving it).
 
 **The registry.** `SetupRuleRegistry.collect()` walks the package's modules (`pkgutil.iter_modules` over `hisim.setup_rules`)
-and gathers every `SetupRule` subclass that declares an `ID`; it returns a registry object the caller keeps for the
+and gathers every `SetupRule` subclass that declares a `CODE`; it returns a registry object the caller keeps for the
 calculation. Nothing is cached at module level (`coding_style.md` §4: no mutable module state); the simulator
 holds the registry it built, as it holds its components. `registry.run(stage, subject, kind)` refuses a subject
 whose kind is not declared (D7), picks the rules of the stage, drops those whose `WAIVED_FOR` names the kind,
-runs each, and raises one `SetupRuleViolation` listing every fault of the enforced rules, logging the faults of the
-others (§4.5). The order of rules within a stage is the order of the inventory, so the message is stable.
+runs each, and raises one `SetupRuleViolation` listing every fault of the enforced rules and every skip, logging
+the faults of the others (§4.5, D14). The order of rules within a stage is the order of their codes, so the
+message is stable.
 
 **The hooks.** Four call sites, each one line of logic:
 
@@ -287,8 +400,9 @@ not rules of the system and stay (D10).
 that every `except` and every test keeps working: `EnergySystemFormatError`, `EnergySystemBindingError`,
 `EnergySystemSizingError`, `EnergySystemWiringError`, `EnergySystemAssemblyError` (`hisim/energy_system/errors.py`),
 `EnergyPortWiringError`, `FluidLoopWiringError`, `EnergyBalanceError`, `NonFiniteResultsError`. A family raises its
-own subclass; the message formats do not change in the migration (§8: a migration PR moves code and changes no
-message, so the tests that assert on messages prove the move).
+own subclass; the message texts do not change in the migration (§8: a migration PR moves code and changes no
+message, so the tests that assert on messages prove the move), except that each gains the `see: hisim setup-rules
+show <code>` pointer at its end (D13) and a stage may now list several (D14).
 
 ### 4.2 Every rule applies unless waived; a rule waives itself (D2, D3)
 
@@ -314,9 +428,13 @@ whose kind does not fit a rule declares another kind or fixes the system.
 | `meters.metered_port_has_a_meter` | `demo` | a demo may leave a bought carrier unmetered; the balance reports the port as unmetered |
 
 **The overview is generated, never written.** The one place that shows every waiver per kind is the registry,
-through a CLI command: `hisim setup-rules list` prints every rule with its id, family, stage, nature, whether it is
-enforced and the kinds that waive it with their reasons, in the inventory's order; `hisim setup-rules waivers [--kind
-<kind>]` prints the waivers grouped by kind; `hisim setup-rules show <id>` prints one rule's docstring and declarations.
+through a CLI command: `hisim setup-rules list` prints every rule with its code, name, family, stage, nature,
+whether it is enforced, what it requires and the kinds that waive it with their reasons, in code order;
+`hisim setup-rules waivers [--kind <kind>]` prints the waivers grouped by kind; `hisim setup-rules show <code|name>`
+prints one rule's docstring (the four headings of D13) and declarations; `hisim setup-rules check
+<file.energy_system.yaml> [--stage load|build] [--format text|json]` runs the `LOAD` and `BUILD` rules on a file
+without simulating (building it as `hisim energy-system facts` does) and prints the faults and skips, as text or
+as the JSON of D15, exiting non-zero on an enforced fault.
 The commands live beside `hisim energy-system describe` (`hisim/cli.py`, `hisim/cli_render.py`) and read nothing
 but `SetupRuleRegistry.collect()`, so they cannot disagree with the code. No overview page is committed: a committed
 page would be the central table under another name, and the inventory of §6 is a design record of this spec's
@@ -445,7 +563,10 @@ says what a waiver gives up): **L** a law of the model or a consistency the code
 about the whole system; **B** a domain rule about a building (no subject in a plant); **R** a residential
 assumption; **P** a parse fault, stays in the reader (D9); **K** a device's own physics guard, stays in the
 component (D10); **C** a CI gate or harness contract. "Waived for" names the kinds in the rule's `WAIVED_FOR` on day
-one (§4.2); a row without one applies to every kind. Paths are relative to the repository root; `es/` is `hisim/energy_system/`, `eb/` is
+one (§4.2); a row without one applies to every kind. The id column writes `<family>.<snake_name>`: the rule's
+`NAME` is the kebab-case form of the name part, and its `CODE` is the EF code in brackets where the row shows
+one, else allocated by the family's PR in the row order of the scheme of §4.1 (D13). Paths are relative to the
+repository root; `es/` is `hisim/energy_system/`, `eb/` is
 `hisim/postprocessing/energy_balance/`, `cmp/` is `hisim/components/`.
 
 ### 6.1 Reading the document (declarative mode, stage LOAD)
@@ -719,7 +840,7 @@ typology for the country, a TABULA row, no conflicting hot-water volumes), all p
 `RequestError` (exit 2). `whitelist.py` and `not_implemented_yet.yaml` list what the translator may skip with a
 note; anything else unmapped fails (exit 3). `translate.py` picks a recorded grouped twin by renovated generator
 and may only write config values, named-constructor arguments and a variant selection; `run.py` requires the
-lifecycle costs. All of it is a house and a household: RenoVisor is residential, every file it writes is `case`,
+lifecycle costs. All of it is a house and a household: RenoVisor is residential, every file it writes is `residential`,
 and the translator writes `setup_kind: residential` into every file it builds.
 
 ### 6.11 Counts
@@ -771,13 +892,16 @@ No setup is `commercial` today.
 
 ## 8. Implementation plan
 
-Small stacked PRs; each keeps every result and every message bit-identical unless it says otherwise; each moves
-one family and its tests, and adds the direct tests of §9 for the rules it moves. PR 1 is the mechanism; PR 2
+Small stacked PRs; each keeps every result and every message text unchanged unless it says otherwise (the
+`see:` pointer of D13 is appended, and a stage may list several faults, D14); each moves one family and its tests,
+allocates the family's codes (§4.1), writes each rule's docstring to the template, turns the family's
+first-fault raises into appended faults where §4.1 lists them, fills the `Fault` fields its subject allows, and
+adds the direct tests of §9 for the rules it moves. PR 1 is the mechanism; PR 2
 carries #1211; the families follow in the order of their coupling; PR 10 is the one result-moving PR (D11).
 
 | PR | Content | Moves | Results |
 |---|---|---|---|
-| 1 | `hisim/setup_rules/`: `SetupRule`, `Fault`, `RuleStage`, `SetupRuleViolation`, `SetupRuleRegistry.collect`, `SetupRule.WAIVED_FOR` with its `__init_subclass__` checks, the `hisim setup-rules` commands, `Inventory.RECORDS` (every rule id of §6 with its family, stage, nature and where it lives today), the subjects; `SetupKind`, the `setup_kind` key (model, reader, emitter, schema, executor), `Simulator.declare_setup_kind`, the registry's refusal of an undeclared kind, the recorder, every setup's declaration, every twin re-recorded, the fixtures and the harness declaring; the generic tests of §9; the four hooks calling an (empty) registry | nothing | none |
+| 1 | `hisim/setup_rules/`: `SetupRule` (`CODE`, `NAME`, `STAGE`, `ENFORCED`, `REQUIRES`, `WAIVED_FOR`, the docstring template, the `__init_subclass__` checks of D3, D13), `Fault` with the fields of D15, `Skip`, `RuleStage`, `SetupRuleViolation` (every fault and skip per stage, `to_dict()`), `SetupRuleRegistry.collect` (the `REQUIRES` graph checked), `run` (code order, skips), `RETIRED_CODES` (empty), the `hisim setup-rules` commands `list`, `waivers`, `show`, `check --format json`, `Inventory.RECORDS` (every rule id of §6 with its family, stage, nature and where it lives today), the subjects; `SetupKind`, the `setup_kind` key (model, reader, emitter, schema, executor), `Simulator.declare_setup_kind`, the registry's refusal of an undeclared kind, the recorder, every setup's declaration, every twin re-recorded, the fixtures and the harness declaring; the generic tests of §9; the four hooks calling an (empty) registry | nothing | none |
 | 2 | `energy_ports.py`: the three fault lists of `Wiring.refuse_a_broken_wiring` and `energy_ports.room_heat_needs_receiver` with its `demo` and `plant` waivers; #1211 rebased onto PR 1 and reduced to the device side | `eb/ports.py:Wiring.*_faults` | none (the rule refuses nothing that runs today once the demos and the plant are declared) |
 | 3 | `fluid_loops.py`: the refusals of `FluidLoopWalk.find_loops`; the walk keeps discovering loop ids | `hisim/fluid_loops.py` (part) | none |
 | 4 | `results.py`, `meters.py`: the finite check, the balance, the links, the circuit faults, the meter balance, the unmetered ports (Q-H kept; the `demo` waiver of `meters.metered_port_has_a_meter`), the log-only `port_linked` and `component_declared` | `hisim/postprocessing/finite_results.py`; `eb/check.py`, `eb/meters.py` (the judging halves) | none |
@@ -796,18 +920,27 @@ inventory stays the one list.
 
 Generic tests, in `tests/rules/`, each one test for the whole package:
 
-- `test_registry.py`: every `SetupRule` subclass of the package declares a unique `ID` of the form `<module>.<name>`
-  where `<module>` is its module, a `STAGE` and `ENFORCED`; the registry collects exactly the classes the
-  inventory records as "in the package"; the order of a stage is the inventory's; the registry refuses a subject
-  without a kind with the message of §4.4.
+- `test_registry.py`: every `SetupRule` subclass of the package declares a `CODE` of its family's prefix, a
+  kebab-case `NAME`, a `STAGE` and `ENFORCED`; no two rules share a code or a name; no live code is in
+  `RETIRED_CODES`; every `REQUIRES` entry names a live code of the same or an earlier stage and the graph has no
+  cycle; the registry collects exactly the classes the inventory records as "in the package"; a stage runs in code
+  order; the registry refuses a subject without a kind with the message of §4.4.
+- `test_docstrings.py`: every rule's docstring carries the four headings of D13 in order, each followed by text.
+- `test_aggregation.py`: two rules of one stage that both find faults give one `SetupRuleViolation` with both
+  faults in code order; a rule whose `REQUIRES` names a rule that found faults is listed as skipped with that code
+  and is not run; a rule with faults that is not enforced logs and does not raise; every refusal message ends with
+  `see: hisim setup-rules show <code>`.
+- `test_fault.py`: `Fault` is frozen; `SetupRuleViolation.to_dict()` holds the fields of D15 and round-trips through
+  `json`; a document rule fills `key_path` and `file`, a build rule `component` and `port`.
 - `test_rule_base.py`: the direct tests of `SetupRule.__init_subclass__`: a subclass whose `WAIVED_FOR` has a key that is
   not a `SetupKind`, or a reason that is empty or blank, fails at class creation with a `TypeError` naming the
   rule; a subclass without `WAIVED_FOR` inherits the empty read-only mapping and cannot mutate it; a well-formed
   mapping is kept as declared. Nothing else is checked about a waiver (D2).
-- `test_overview.py`: `hisim setup-rules list` and `hisim setup-rules waivers` print every rule of the registry once with its
-  id, stage, nature, enforcement and every `WAIVED_FOR` entry with its reason, in the inventory's order, and
-  `hisim setup-rules show <id>` prints each rule's declarations; the output is compared with what the registry holds,
-  not with a committed page (§4.2).
+- `test_overview.py`: `hisim setup-rules list` and `hisim setup-rules waivers` print every rule of the registry once
+  with its code, name, stage, nature, enforcement, requirements and every `WAIVED_FOR` entry with its reason, in
+  code order; `hisim setup-rules show <code>` and `show <name>` print the same rule's docstring and declarations;
+  `hisim setup-rules check` on a fixture with two faults prints both as text and as the JSON of D15 and exits
+  non-zero; the output is compared with what the registry holds, not with a committed page (§4.2).
 - `test_inventory.py`: every rule id of the registry is in the inventory and vice versa; every record names a
   nature, a stage and a place; the records of this spec's §6 are the file's (the spec cites the file as its source
   after PR 1).
@@ -857,6 +990,21 @@ alternatives both rejected.
   name; the generated `hisim setup-rules` output is the overview, and the test checks the generator against the registry.
 - **Per-setup waivers.** A setup that does not fit its kind declares another kind or is fixed; a switch per file is
   the state the owner wants to leave.
+- **Ruff-style rules: a function with a decorator** (D12). Five to eight lines of frame instead of fifteen to
+  twenty, but no place for a rule's helpers but module functions, and the declarations can be checked only at
+  registration, not when the class is created; the owner prefers the class.
+- **Per-rule example pairs enforced by a generic test** (ruff's fixture style: for every rule a file that fails
+  and a file that passes, run by one test). Left out by the owner: at 500 to 7,500 lines of fixtures it costs more
+  than it finds here; the direct tests per rule (§9) build their subjects in code.
+- **Per-rule options** (a threshold or a list a user sets per rule), **inline per-file disables** (`noqa`
+  comments in an energy-system file), **severity ladders** beyond refuse or log, **plugin entry points** for
+  rules outside the package, **autofix**, and **layered configuration files** (a project file overriding a user
+  file overriding the defaults). Each is a linter's answer to many projects with many tastes; HiSim has one
+  package, one owner and four kinds, and every one of them would be a switch the waivers were designed to
+  replace. Not adopted.
+- **A dead-waiver report** (a rule whose waiver names a kind no setup declares, or that would never fire for that
+  kind). Not adopted now; it could be revisited once the registry and the setups' declarations exist, as a line
+  of `hisim setup-rules waivers`.
 - **A kind in `SimulationParameters`.** The parameter files are a shared library, any system runs from any of
   them; a kind is a property of the system (D7).
 - **A default kind.** A demo would run as a house by omission, the silent direction D3 avoids (D7).
@@ -876,7 +1024,8 @@ alternatives both rejected.
 
 ## 11. Open questions
 
-None. Every question of the draft of 2026-11-06 is decided (D2 to D11).
+None. Every question of the draft of 2026-11-06 is decided (D2 to D11), and the comparison with the linters is
+decided (D12 to D15).
 
 ## 12. Beads
 
@@ -886,7 +1035,7 @@ PR numbers of §8.
 
 | Bead | Content | PR |
 |---|---|---|
-| .1 (P2) | the mechanism: the package, the registry, `SetupRule.WAIVED_FOR` and the generated `hisim setup-rules` overview, the inventory as data, the subjects, the hooks; `SetupKind`, `setup_kind` and `declare_setup_kind` declared everywhere; the twins re-recorded; the generic tests | PR 1 |
+| .1 (P2) | the mechanism: the package, the registry, `SetupRule` with its code, name, template docstring, `REQUIRES` and `WAIVED_FOR`, the `Fault` fields and the JSON of the violation, every fault per stage with skips, the generated `hisim setup-rules` overview and `check`, the inventory as data, the subjects, the hooks; `SetupKind`, `setup_kind` and `declare_setup_kind` declared everywhere; the twins re-recorded; the generic tests | PR 1 |
 | .2 (P2) | the energy-port family, with `room_heat_needs_receiver` and its `demo` and `plant` waivers; #1211 rebased onto it | PR 2 |
 | .3 (P3) | the fluid-loop family | PR 3 |
 | .4 (P3) | the after-run and meter families, with the `demo` waiver of `meters.metered_port_has_a_meter` | PR 4 |

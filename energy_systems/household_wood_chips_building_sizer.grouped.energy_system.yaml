@@ -18,6 +18,8 @@ components:
       - L2EMSElectricityController
       - HeatDistributionSystem
       - UTSPConnector
+      - DHWStorage
+      - SimpleHotWaterStorage
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -76,6 +78,7 @@ components:
     preset: standard
     inputs:
       - Building
+      - Weather
       - UTSPConnector
       - ConventionalWoodChipBoiler
   SimpleHotWaterStorage:
@@ -85,6 +88,7 @@ components:
       sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
     inputs:
       - Building
+      - Weather
       - HeatDistributionSystem
       - ConventionalWoodChipBoiler
   HeatDistributionSystem:

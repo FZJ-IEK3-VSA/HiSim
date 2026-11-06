@@ -25,6 +25,8 @@ components:
       - Weather
       - HeatDistributionSystem
       - UTSPConnector
+      - DHWStorage
+      - SimpleHotWaterStorage
   MoreAdvancedHeatPumpHPLib:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
@@ -80,6 +82,7 @@ components:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
     inputs:
       - Building
+      - Weather
       - HeatDistributionSystem
       - MoreAdvancedHeatPumpHPLib
   DHWStorage:
@@ -87,6 +90,7 @@ components:
     preset: standard
     inputs:
       - Building
+      - Weather
       - UTSPConnector
       - MoreAdvancedHeatPumpHPLib
   ElectricityMeter:

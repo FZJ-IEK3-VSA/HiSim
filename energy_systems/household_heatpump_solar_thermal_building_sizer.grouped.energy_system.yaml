@@ -18,6 +18,8 @@ components:
       - L2EMSElectricityController
       - HeatDistributionSystem
       - UTSPConnector
+      - DHWStorage
+      - SimpleHotWaterStorage
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -73,6 +75,7 @@ components:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
     inputs:
       - Building
+      - Weather
       - HeatDistributionSystem
       - MoreAdvancedHeatPumpHPLib
   HeatDistributionSystem:
@@ -100,6 +103,7 @@ components:
     preset: standard
     inputs:
       - Building
+      - Weather
       - UTSPConnector
       - MoreAdvancedHeatPumpHPLib
       - SolarThermalSystem

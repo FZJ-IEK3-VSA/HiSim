@@ -18,6 +18,7 @@ components:
       - L2EMSElectricityController
       - HeatDistributionSystem
       - UTSPConnector
+      - DHWStorage
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -75,6 +76,7 @@ components:
     preset: standard
     inputs:
       - Building
+      - Weather
       - UTSPConnector
       - DistrictHeating
   HeatDistributionSystem:

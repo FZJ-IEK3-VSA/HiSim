@@ -373,9 +373,9 @@ class Inventory:
             ),
         ),
         RuleRecord(
-            rule_id="wiring.mandatory_input_connected", codes=("EF-31",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            rule_id="wiring.mandatory_input_fed", codes=("EF-31",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
             enforcement="E (L when allowed)", checks="a mandatory input is fed; allow_unconnected_mandatory only logs",
-            lives="hisim/setup_rules/wiring.py:MandatoryInputConnected",
+            lives="hisim/setup_rules/wiring.py:MandatoryInputFed",
             note="the inputs that make a device need a building are listed in §6.8; an allowed open input is logged by hisim/energy_system/wiring.py:WiredSystem.apply",
         ),
         RuleRecord(

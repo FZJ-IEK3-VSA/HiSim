@@ -148,6 +148,12 @@ class FluidLoopRules(FamilyRules):
     FAMILY: ClassVar[str] = "fluid_loops"
 
 
+class ComponentRules(FamilyRules):
+    """The component-build setup rules (``hisim/setup_rules/components.py``) run alone; their faults raise ``SetupRuleViolation``, or the cost rules' errors."""
+
+    FAMILY: ClassVar[str] = "components"
+
+
 class AfterRunRules:
     """The setup rules after the run on an energy balance built by hand, as the post-processing runs them.
 

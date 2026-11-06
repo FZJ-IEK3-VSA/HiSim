@@ -1,6 +1,6 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 128 that move into the rules package and the 71 that stay where
+The inventory is the one list of the checks, the 129 that move into the rules package and the 71 that stay where
 they are: a parse fault of the reader, a device's own physics guard, a recorder check, a CI gate, a policy of the
 run. Each record names the check, its nature, when it runs, whether it refuses or logs, where it lives today and,
 for a check that moves, the module of ``hisim/setup_rules/`` it moves to and its stage. When a family moves, its
@@ -501,20 +501,27 @@ class Inventory:
             checks="a derived weight reaches no other kind's base weight", lives="SelectionPlan._refuse_collision",
         ),
         RuleRecord(
-            rule_id="components.one_kind_base", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the class inherits exactly one of the five kind bases", lives="hisim/component.py:ComponentKinds.of, from Simulator.add_component",
+            rule_id="components.one_kind_base", codes=("CB-01",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build, on the components as added, before the run prepares anything", enforcement="E",
+            checks="the class inherits exactly one of the five kind bases", lives="hisim/setup_rules/components.py:OneKindBase",
+            note="the sentence is hisim/component.py:ComponentKinds.problem, which ComponentKinds.of raises for a lookup of such a class",
         ),
         RuleRecord(
-            rule_id="components.unique_name", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="no second component with one component_id.key", lives="hisim/simulator.py:Simulator.add_component",
+            rule_id="components.unique_name", codes=("CB-02",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build, on the components as added, before the run prepares anything", enforcement="E",
+            checks="no second component with one component_id.key", lives="hisim/setup_rules/components.py:UniqueName",
         ),
         RuleRecord(
-            rule_id="components.unique_output_key", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="no two outputs with one full name", lives="hisim/component_wrapper.py:ComponentWrapper._register_output",
+            rule_id="components.unique_output_key", codes=("CB-03",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="no two outputs with one full name", lives="hisim/setup_rules/components.py:UniqueOutputKey",
         ),
         RuleRecord(
             rule_id="components.has_outputs", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a component registered at least one output", lives="ComponentWrapper.register_component_outputs",
+            note=(
+                "not moved in PR 5: the raise sits inside the loop after a registration and can never fire, so a rule of the evident intent "
+                "would refuse what runs today; an owner question"
+            ),
         ),
         RuleRecord(
             rule_id="components.name_is_identity", nature=RuleNature.LAW, when="build (construction)", enforcement="E",
@@ -524,75 +531,101 @@ class Inventory:
         RuleRecord(
             rule_id="components.connect_input_target", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="connect_input names an existing input, once", lives="hisim/component.py:Component.connect_input",
+            note="not moved in PR 5: a call that names no input leaves nothing in the built system a rule could read; an owner question",
         ),
         RuleRecord(
             rule_id="components.default_connections_wellformed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a default-connection list is non-empty, from one source class, and the connections asked for exist",
             lives="Component.add_default_connections, get_default_connections; hisim/dynamic_component.py",
+            note="not moved in PR 5: the declaration calls of a constructor, refused when they are made (D10); an owner question",
         ),
         RuleRecord(
             rule_id="components.load_type_agrees", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="input and output share a load type (ANY matches)", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs", note="one rule with EF-30",
+            codes=("CB-04",), checks="input and output share a load type (ANY matches)", lives="hisim/setup_rules/components.py:LoadTypeAgrees",
+            note="one rule with EF-30",
         ),
         RuleRecord(
             rule_id="components.unit_agrees", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E / L",
-            checks="concrete units agree; Units.ANY warns", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs",
+            codes=("CB-05",), checks="concrete units agree; Units.ANY warns", lives="hisim/setup_rules/components.py:UnitAgrees",
+            note="the warning for Units.ANY on one side stays with the connection, hisim/component_wrapper.py:ComponentWrapper.connect_inputs",
         ),
         RuleRecord(
             rule_id="components.mandatory_input_connected", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E / L",
-            checks="a mandatory input has a source (allow_unconnected_mandatory warns)", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs",
-            note="see §6.8; one rule with EF-31",
+            codes=("CB-06",), checks="a mandatory input has a source (allow_unconnected_mandatory warns)",
+            lives="hisim/setup_rules/components.py:MandatoryInputConnected",
+            note=(
+                "see §6.8; one rule with EF-31; the warning for allow_unconnected_mandatory stays with the connection, "
+                "hisim/component_wrapper.py:ComponentWrapper.connect_inputs"
+            ),
         ),
         RuleRecord(
             rule_id="components.auto_connect_possible", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="automatic connection finds default connections and one matching source",
-            lives="Simulator.connect_everything_automatically, connect_dynamic_component_automatically",
+            codes=("CB-07",), checks="automatic connection finds default connections and one matching source",
+            lives="hisim/setup_rules/components.py:AutoConnectPossible",
         ),
         RuleRecord(
             rule_id="components.no_duplicate_dynamic_feed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="one source output enters a dynamic component once", lives="hisim/dynamic_component.py:DynamicComponent.add_component_input_and_connect",
-            note="one rule with EF-25",
+            note=(
+                "one rule with EF-25; not moved in PR 5: refused before the second input is created, which "
+                "tests/test_duplicate_component_feeds.py pins; an owner question"
+            ),
         ),
         RuleRecord(
             rule_id="components.dispatch_port_unique", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="an aggregator has no two dispatch ports of one name or one type on one weight",
             lives="DynamicComponent._refuse_a_dispatch_port_this_aggregator_already_has",
+            note="not moved in PR 5: refused before the port is created, since the second port would overwrite the first's attribute; an owner question",
         ),
         RuleRecord(
             rule_id="components.default_connection_tag", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a default connection's tag is carried by its target output", lives="DynamicComponent.connect_with_dynamic_connections_list",
+            note="not moved in PR 5: refused before the target output is created; an owner question",
         ),
         RuleRecord(
             rule_id="components.channel_declared", nature=RuleNature.LAW, when="build / run", enforcement="E",
             checks="an aggregator asks only for a channel it declares", lives="DynamicComponent.get_channel", note="an internal contract",
         ),
         RuleRecord(
-            rule_id="components.cost_relevance_declared", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks=(
-                "with COMPUTE_LIFECYCLE_COSTS or LIFECYCLE_COST_REPORT: no class with cost_relevance UNDECLARED; a PRICED class has get_cost_facts or an adapter "
-                "entry"
+            rule_id="components.cost_relevance_declared", codes=("CB-08",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build, on the components as added, before the run prepares anything", enforcement="E",
+            checks="with COMPUTE_LIFECYCLE_COSTS or LIFECYCLE_COST_REPORT: no class with cost_relevance UNDECLARED",
+            lives="hisim/setup_rules/components.py:CostRelevanceDeclared",
+            note="the first half of Simulator.check_cost_declarations, split from components.priced_has_cost_facts in PR 5",
+        ),
+        RuleRecord(
+            rule_id="components.priced_has_cost_facts", codes=("CB-09",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build, on the components as added, before the run prepares anything", enforcement="E",
+            checks="with COMPUTE_LIFECYCLE_COSTS or LIFECYCLE_COST_REPORT: a PRICED class has get_cost_facts or an adapter entry",
+            lives="hisim/setup_rules/components.py:PricedHasCostFacts",
+            note=(
+                "the second half of Simulator.check_cost_declarations, split from components.cost_relevance_declared in PR 5: two refusals, "
+                "two errors (UnpriceableComponentError)"
             ),
-            lives="hisim/simulator.py:Simulator.check_cost_declarations",
         ),
         RuleRecord(
-            rule_id="components.source_output_registered", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="E",
-            checks="every connected input's source output belongs to an added component", lives="Simulator.evaluation_plan",
+            rule_id="components.source_output_registered", codes=("CB-10",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="every connected input's source output belongs to an added component",
+            lives="hisim/setup_rules/components.py:SourceOutputRegistered",
         ),
         RuleRecord(
-            rule_id="components.kind_in_evaluation_order", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="E",
-            checks="every kind is in EVALUATION_ORDER_OF_KINDS", lives="Simulator.evaluation_positions",
+            rule_id="components.kind_in_evaluation_order", codes=("CB-11",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="every kind is in EVALUATION_ORDER_OF_KINDS", lives="hisim/setup_rules/components.py:KindInEvaluationOrder",
         ),
         RuleRecord(
-            rule_id="components.no_physics_cycle", nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="L",
-            checks="the L1 device-before-store constraints form no cycle", lives="hisim/evaluation_order.py:PhysicsOrder.ordered",
+            rule_id="components.no_physics_cycle", codes=("CB-12",), nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="build",
+            enforcement="L", checks="the L1 device-before-store constraints form no cycle", lives="hisim/setup_rules/components.py:NoPhysicsCycle",
+            note="the cycles are found by hisim/evaluation_order.py:PhysicsOrder.ordered, through hisim/simulator.py:Simulator.evaluation_order_of",
         ),
         RuleRecord(
-            rule_id="components.no_l2_cycle", nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="L",
-            checks="L2 controllers read one another in no cycle", lives="L2Order.ordered",
+            rule_id="components.no_l2_cycle", codes=("CB-13",), nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="build",
+            enforcement="L", checks="L2 controllers read one another in no cycle", lives="hisim/setup_rules/components.py:NoL2Cycle",
+            note="the cycles are found by hisim/evaluation_order.py:L2Order.ordered, through hisim/simulator.py:Simulator.evaluation_order_of",
         ),
         RuleRecord(
-            rule_id="components.not_empty", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build / step", enforcement="E",
-            checks="the run has at least one component and one column", lives="Simulator.run_all_timesteps; process_one_timestep",
+            rule_id="components.not_empty", codes=("CB-14",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
+            when="build, on the components as added, before the run prepares anything", enforcement="E",
+            checks="the run has at least one component and one column", lives="hisim/setup_rules/components.py:NotEmpty",
         ),
         RuleRecord(
             rule_id="energy_ports.loop_pairing", codes=("EP-01",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,

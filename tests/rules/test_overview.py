@@ -125,7 +125,7 @@ def test_check_prints_both_faults_as_text_and_as_json_and_exits_non_zero(tmp_pat
     assert report["stages"][0]["faults"][1]["component"] == "weather"
 
 
-def test_check_builds_a_clean_file_and_runs_both_build_subjects() -> None:
+def test_check_builds_a_clean_file_and_runs_every_build_subject() -> None:
     """Catches a check that stops after the load rules, or fails a file every run accepts."""
     twin = Path(__file__).resolve().parents[2] / "energy_systems" / "simple_system_setup_one.energy_system.yaml"
 
@@ -135,6 +135,7 @@ def test_check_builds_a_clean_file_and_runs_both_build_subjects() -> None:
     assert out.splitlines() == [
         "load rules on the LoadedDocument (demo): no fault",
         "build rules on the BuiltDocument (demo): no fault",
+        "build rules on the AddedSystem (demo): no fault",
         "build rules on the BuiltSystem (demo): no fault",
     ]
 

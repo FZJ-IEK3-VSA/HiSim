@@ -38,52 +38,11 @@ class CostRelevance(str, enum.Enum):
     METER = "METER"  # must provide EnergyFlowFacts / BillingDeterminants
 
 
-class UndeclaredCostRelevanceError(ValueError):
-    """Raised before the run when a component class in a lifecycle-cost run declares no `cost_relevance`.
-
-    Raised by `simulator.check_cost_declarations`, so a year-long simulation refuses in its first second instead
-    of failing in postprocessing. It carries the offending classes. It is a `ValueError` because
-    `Simulator.run_all_timesteps` documents that as its refusal type. The bridge does not raise it; an undeclared
-    component reaching the bridge becomes an `UnresolvedSubject`.
-    """
-
-    def __init__(self, component_classes: List[type]) -> None:
-        """Build the message with one bullet per offending class, in registration order."""
-        self.component_classes: Tuple[type, ...] = tuple(component_classes)
-        bullets = "\n".join(f"  - {describe_undeclared_class(cls)}" for cls in self.component_classes)
-        super().__init__(
-            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
-            "component class(es) in this simulation declare no cost_relevance, so the cost model "
-            "cannot describe them (roadmap/cost_spec.md §9.2). The run is refused before the first "
-            "timestep rather than after the last one.\n" + bullets
-        )
-
-
-class UnpriceableComponentError(ValueError):
-    """Raised before the run when a component declares `PRICED` but no code can describe it.
-
-    Raised by `simulator.check_cost_declarations` next to `UndeclaredCostRelevanceError`. The fix differs: the
-    component needs a `get_cost_facts` hook or an adapter entry, and usually a ``devices_<COUNTRY>.json`` row. It
-    carries the offending classes and is a `ValueError` for the same reason as its sibling.
-    """
-
-    def __init__(self, component_classes: List[type]) -> None:
-        """Build the message with one bullet per offending class, in registration order."""
-        self.component_classes: Tuple[type, ...] = tuple(component_classes)
-        bullets = "\n".join(f"  - {describe_unpriceable_class(cls)}" for cls in self.component_classes)
-        super().__init__(
-            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
-            "component class(es) in this simulation declare cost_relevance PRICED while nothing "
-            "can produce cost facts for them, so the evaluation would abort after the run "
-            "(roadmap/cost_spec.md §9.1/§9.2, decision D7). The run is refused before the first timestep "
-            "rather than after the last one.\n" + bullets
-        )
-
-
 def describe_undeclared_class(component_class: type) -> str:
     """Return one sentence naming an undeclared component class, its module, and what its author must write.
 
-    Shared by the pre-run check and the bridge so both report the defect the same way.
+    Shared by the pre-run check (the setup rule ``CB-08``, ``hisim/setup_rules/components.py``) and the bridge so both
+    report the defect the same way.
 
     Args:
         component_class: The `Component` subclass that carries no own `cost_relevance`.
@@ -102,7 +61,8 @@ def describe_undeclared_class(component_class: type) -> str:
 def describe_unpriceable_class(component_class: type) -> str:
     """Return one sentence naming a PRICED class with no facts source, its module, and what its author must write.
 
-    Shared by the pre-run check and the adapter so both report the defect the same way.
+    Shared by the pre-run check (the setup rule ``CB-09``, ``hisim/setup_rules/components.py``) and the adapter so both
+    report the defect the same way.
 
     Args:
         component_class: The `Component` subclass declaring PRICED with no facts source.

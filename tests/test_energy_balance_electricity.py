@@ -174,3 +174,32 @@ def test_the_connected_diagram_draws_the_electricity_devices(twin: Tuple[str, Pa
     assert not {"undeclared: PVSystem", "undeclared: Battery", "undeclared: UTSPConnector"} & nodes
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
     assert not report["unlinked"], "every port finds its peer"
+
+
+@pytest.mark.extendedbase2
+def test_every_loss_goes_to_unconverted_sunlight_or_heat_loss_to_outdoors_and_no_node_is_outdoors(twin: Tuple[str, Path]) -> None:
+    """The PV system's solar loss goes to "unconverted sunlight", every other loss to "heat loss to outdoors" (D-e).
+
+    Owner decision D-e of ``roadmap/device_location_spec.md``: the single boundary sink "outdoors" is split by the
+    loss's carrier, so neither the balance report nor the Sankey names a node "outdoors" any more. In both households
+    the PV system, the battery, the occupancy and the building lose energy, so both sinks are drawn.
+
+    Catches: a loss that still goes to the retired node, a solar loss in the house's heat loss, and a heat loss
+    counted as unconverted sunlight.
+    """
+    _, results = twin
+    report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
+    loss_sinks = {
+        (port["carrier"], port["peer_kind"], port["peer"])
+        for entry in report["components"]
+        for port in entry["ports"]
+        if port["role"] == "loss"
+    }
+    for carrier, peer_kind, peer in loss_sinks:
+        expected = "unconverted sunlight" if carrier == "solar" else "heat loss to outdoors"
+        assert (peer_kind, peer) == ("boundary", expected), carrier
+    assert {"solar", "electricity", "room_heat", "space_heating_heat"} <= {carrier for carrier, _, _ in loss_sinks}
+    nodes = {node for _, source, target in overall_links(results) for node in (source, target)}
+    assert {"unconverted sunlight", "heat loss to outdoors"} <= nodes
+    assert "outdoors" not in nodes
+    assert '"outdoors"' not in json.dumps(report)

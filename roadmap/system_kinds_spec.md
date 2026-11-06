@@ -851,7 +851,7 @@ None. Every question of the draft of 2026-11-06 is decided (D2 to D11).
 
 ## 12. Beads
 
-Epic (proposed; the owner files the beads): hisim-setup-kinds-<hash>, P2, `core`, "every setup declares its kind,
+Epic hisim-setup-kinds-dd45 (children .1 to .14 as below; device-location bead hisim-device-location-820d.1 is blocked by .2), P2, `core`, "every setup declares its kind,
 every validation rule lives in `hisim/rules/`, and a rule a kind does not need is waived by name with a reason". The
 PR numbers of §8.
 

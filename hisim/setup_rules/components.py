@@ -20,7 +20,7 @@ collecting the rules imports no component module.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional, Sequence, Set, Type
+from typing import TYPE_CHECKING, ClassVar, FrozenSet, List, Optional, Sequence, Set, Type
 
 from hisim import loadtypes as lt
 from hisim.setup_rules.rule import Fault, RuleStage, SetupRule, SetupRuleViolation
@@ -29,6 +29,20 @@ from hisim.setup_rules.subjects import AddedSystem, BuiltSystem
 if TYPE_CHECKING:
     from hisim.component import Component
     from hisim.evaluation_order import EvaluationOrder
+
+
+class ConnectionRules:
+    """The codes of the rules that judge a connection, which every rule reading the wiring of a built system requires.
+
+    A connection between ports whose load types (``CB-04``) or units (``CB-05``) differ, or a mandatory input left
+    unconnected (``CB-06``), is the first fault of such a system: the fluid-loop and energy-port rules would follow
+    the broken wiring and report its consequences as faults of their own. Requiring these codes skips them, visibly,
+    so the build refuses a broken connection alone, as it did when the connection itself raised. For example,
+    ``FL-02`` declares ``REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES``.
+    """
+
+    #: The codes of the three connection rules.
+    CODES: ClassVar[FrozenSet[str]] = frozenset({"CB-04", "CB-05", "CB-06"})
 
 
 class UndeclaredCostRelevanceError(SetupRuleViolation):

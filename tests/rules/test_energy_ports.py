@@ -344,7 +344,7 @@ class TestRoomHeatNeedsReceiver:
 
     def test_it_waits_for_the_input_ports_to_pair(self) -> None:
         """Catches the rule judging a receiver whose input port does not pair with the output it reads, or grouping the port sets of a loop tagged by half."""
-        assert RoomHeatNeedsReceiver.REQUIRES == frozenset({"EP-05", "FL-01"})
+        assert RoomHeatNeedsReceiver.REQUIRES == frozenset({"EP-05", "FL-01", "CB-04", "CB-05", "CB-06"})
 
     @pytest.mark.parametrize(
         ("port", "releases"),

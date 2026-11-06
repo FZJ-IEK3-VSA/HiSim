@@ -22,6 +22,7 @@ from hisim.dynamic_component import DynamicComponent
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.components import (
     AutoConnectPossible,
+    ConnectionRules,
     CostDeclarationRule,
     CostRelevanceDeclared,
     EvaluationOrderRule,
@@ -41,6 +42,7 @@ from hisim.setup_rules.components import (
     UnpriceableComponentError,
 )
 from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
 from hisim.setup_rules.subjects import AddedSystem, BuiltSystem
 from hisim.simulationparameters import SimulationParameters
@@ -480,3 +482,29 @@ class TestTheSimulator:
             simulator.run_all_timesteps()
 
         assert [(fault.code, fault.port) for fault in raised.value.faults] == [("CB-04", "FromHeat"), ("CB-05", "FromPower"), ("CB-06", "FromNobody")]
+
+
+class TestTheRulesThatReadTheWiring:
+    """The fluid-loop and energy-port rules wait for the connection rules (``ConnectionRules``)."""
+
+    def test_a_broken_connection_is_refused_alone_and_the_rules_of_the_wiring_are_skipped(self) -> None:
+        """Catches a broken connection reported together with what the loop and port rules make of it.
+
+        Before the connection rules moved here, the connection raised first and nothing else was judged; the fluid-loop
+        rules that walk the wiring and every energy-port rule now require ``CB-04`` to ``CB-06`` and are skipped.
+        """
+        reader = Rig.reader_of(Rig.typed_source(lt.LoadTypes.HEATING, lt.Units.WATT), lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+
+        findings = SetupRuleRegistry.collect().findings(RuleStage.BUILD, Rig.built([reader]), SetupKind.RESIDENTIAL)
+
+        assert [fault.code for fault in findings.faults] == ["CB-04", "CB-10"]
+        skipped = {skip.code for skip in findings.skipped}
+        assert {"FL-02", "FL-08", "EP-01", "EP-05", "EP-06"} <= skipped and "FL-01" not in skipped
+
+    def test_the_rules_of_the_wiring_require_the_connection_rules(self) -> None:
+        """Catches a rule that reads the wiring and would judge a system whose connection is broken."""
+        wiring_rules = [
+            rule for rule in SetupRuleRegistry.collect().rules if rule.CODE.startswith(("EP-", "FL-")) and rule.CODE != "FL-01"
+        ]
+
+        assert wiring_rules and all(ConnectionRules.CODES <= rule.REQUIRES for rule in wiring_rules)

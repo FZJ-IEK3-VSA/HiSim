@@ -5,13 +5,16 @@ names and derives every quantity the rest of a scenario is sized against. The de
 those facts is on the configuration, in ``config.py``; this module is the physics behind them.
 """
 
+import enum
 import re
 from dataclasses import dataclass
-from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
+from types import MappingProxyType
+from typing import ClassVar, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
 
+from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.config import concrete
 from hisim.components.building.config import BuildingConfig
@@ -36,6 +39,38 @@ class ZeroReferenceWindowAreaError(ValueError):
     A row with no window data anywhere keeps a window area and scaling factor of 0. A caller
     who wants windows has to name a row whose reference window areas carry them.
     """
+
+
+@enum.unique
+class CellarCondition(str, enum.Enum):
+    """The condition of a TABULA row's cellar, as its column ``Code_CellarCond`` spells it.
+
+    The codes and their meanings come from TABULA's EU.01 geometry method (MOBASY 2021, Annex B.1: the codes ``-``,
+    ``N``, ``P``, ``C`` and ``NI``) and from the rows themselves: ``f_CellarCond``, the heated fraction of the
+    cellar; ``n_Storey_effective`` against ``n_Storey_effective_envelope``; and the floor's sub-elements with their
+    adjustment factors ``b_Transmission_Floor_*``. The meanings of ``NI`` and ``0`` are inferred from the rows and
+    are not yet checked against Annex B.1. In the German national rows ``N`` is the code of nearly every class up to
+    ``.10`` (single-family houses to 2001), ``-`` and ``NI`` are the codes of the classes ``.11`` and ``.12`` (from
+    2002 on).
+    """
+
+    #: An unheated cellar outside the thermal envelope: the floor to the cellar has b = 0.5, and the cellar adds no
+    #: storey to the envelope.
+    UNHEATED = "N"
+    #: A heated (conditioned) cellar: it adds one storey to the heated and to the envelope storey count.
+    HEATED = "C"
+    #: A partly heated cellar: it adds half a storey (``DE.N.MFH.03``, ``DE.N.TH.08``, ``DE.N.TH.10``).
+    PARTLY_HEATED = "P"
+    #: No cellar: the row states no floor to a cellar (``A_Floor_1`` = 0), its floor is ``Floor_2``, "Soil", with
+    #: b = 0.5 (``DE.N.SFH.11``, ``.12``, ``DE.N.MFH.11``, ``.12``).
+    NONE = "-"
+    #: An unheated cellar inside the insulated envelope (inferred): the cellar adds a storey to the envelope count but
+    #: not to the heated one, the floor to the cellar has b = 0 and the cellar's floor to the soil b = 0.5
+    #: (``DE.N.TH.11``, ``.12``).
+    UNHEATED_INSIDE_THE_ENVELOPE = "NI"
+    #: The code of the synthetic-average rows only (``DE.N.SFH-TH.01-06.Gen.SyAv.*``, ``MFH-AB.*``,
+    #: ``DE.TestRegion.*``), which state no geometry; read as "no cellar" by the owner on 2026-11-06.
+    SYNTHETIC_AVERAGE = "0"
 
 
 class BuildingInformation:
@@ -406,6 +441,76 @@ class BuildingInformation:
             )
             cls._housing_reference_dataframe = housing_reference_dataframe
         return housing_reference_dataframe
+
+    #: The column of the TABULA rows that states the condition of the cellar (:class:`CellarCondition`).
+    CELLAR_CONDITION_COLUMN: ClassVar[str] = "Code_CellarCond"
+
+    #: Where a house's technical room is, by the condition of its cellar. An unheated cellar is an unheated space; a
+    #: heated cellar and a house without a cellar keep the technical room in the heated zone. Owner decisions of
+    #: 2026-11-04: a partly heated cellar has its technical room in the heated part. Owner decision of 2026-11-06: an
+    #: unheated cellar inside the insulated envelope (``NI``, whose floor above has b = 0, so the cellar stays close
+    #: to the indoor temperature) and the synthetic averages (``0``) give the heated zone; both meanings are
+    #: unverified against MOBASY 2021 Annex B.1.
+    TECHNICAL_ROOM_LOCATION_BY_CELLAR_CONDITION: ClassVar[Mapping[CellarCondition, lt.InstallationLocation]] = (
+        MappingProxyType(
+            {
+                CellarCondition.UNHEATED: lt.InstallationLocation.UNHEATED_SPACE,
+                CellarCondition.HEATED: lt.InstallationLocation.HEATED_ZONE,
+                CellarCondition.PARTLY_HEATED: lt.InstallationLocation.HEATED_ZONE,
+                CellarCondition.NONE: lt.InstallationLocation.HEATED_ZONE,
+                CellarCondition.UNHEATED_INSIDE_THE_ENVELOPE: lt.InstallationLocation.HEATED_ZONE,
+                CellarCondition.SYNTHETIC_AVERAGE: lt.InstallationLocation.HEATED_ZONE,
+            }
+        )
+    )
+
+    @staticmethod
+    def technical_room_location_of_cellar_code(cellar_code: str) -> lt.InstallationLocation:
+        """Return where a house's technical room is, from the cellar code of its TABULA row.
+
+        The code is looked up in :attr:`TECHNICAL_ROOM_LOCATION_BY_CELLAR_CONDITION`. For example, ``"N"`` (an
+        unheated cellar) gives ``UNHEATED_SPACE``, and ``"-"`` (no cellar) gives ``HEATED_ZONE``. A code the table
+        does not know is refused, so a new TABULA export cannot slip a meaning past the table.
+
+        Args:
+            cellar_code: The row's ``Code_CellarCond``, for example ``"N"``.
+
+        Returns:
+            The heated zone or an unheated space; never outdoors.
+
+        Raises:
+            ValueError: If the code is not one of :class:`CellarCondition`.
+        """
+        try:
+            cellar_condition = CellarCondition(cellar_code)
+        except ValueError:
+            known = ", ".join(repr(condition.value) for condition in CellarCondition)
+            raise ValueError(
+                f"The TABULA cellar code {cellar_code!r} is unknown, so the technical room's location cannot be "
+                f"derived from it. The known codes are {known}; pin the building's technical_room_location instead."
+            ) from None
+        return BuildingInformation.TECHNICAL_ROOM_LOCATION_BY_CELLAR_CONDITION[cellar_condition]
+
+    @classmethod
+    def cellar_code_of(cls, building_code: str) -> str:
+        """Return the cellar code (``Code_CellarCond``) of the TABULA row a building code names.
+
+        For example, ``"DE.N.SFH.09.Gen.ReEx.001.002"`` (a single-family house of 1995 to 2001) gives ``"N"``.
+
+        Args:
+            building_code: The TABULA/EPISCOPE code of the row.
+
+        Returns:
+            The row's cellar code as the file spells it.
+
+        Raises:
+            ValueError: If no row has that code.
+        """
+        frame = cls.read_housing_reference_dataframe()
+        cellar_codes = frame.loc[frame["Code_BuildingVariant"] == building_code, cls.CELLAR_CONDITION_COLUMN]
+        if cellar_codes.empty:
+            raise ValueError(f"No TABULA row has the building code {building_code!r}, so it states no cellar code.")
+        return str(cellar_codes.iloc[0])
 
     @classmethod
     def national_mean_door_u_values(cls) -> Dict[Tuple[str, Optional[str]], float]:

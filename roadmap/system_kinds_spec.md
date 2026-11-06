@@ -2,7 +2,7 @@
 
 Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft, D12
 to D15 from the comparison with ruff, pylint, ESLint and clippy);
-nothing is built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
+PR 1 (the mechanism, bead .1) is built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
 PR: #1216 (spec only). Builds on: `roadmap/device_location_spec.md` (D-h: the build rule "room heat needs a
 receiver", PRs #1211 and #1213), `roadmap/complete_energy_sankeys_spec.md` (D1 and Q-B: a component declares its
 ports or is exempt with a reason; Q-H: the meter check is enforced only while nothing is undeclared),
@@ -567,7 +567,9 @@ one (§4.2); a row without one applies to every kind. The id column writes `<fam
 `NAME` is the kebab-case form of the name part, and its `CODE` is the EF code in brackets where the row shows
 one, else allocated by the family's PR in the row order of the scheme of §4.1 (D13). Paths are relative to the
 repository root; `es/` is `hisim/energy_system/`, `eb/` is
-`hisim/postprocessing/energy_balance/`, `cmp/` is `hisim/components/`.
+`hisim/postprocessing/energy_balance/`, `cmp/` is `hisim/components/`. Since PR 1 the records live as data in
+`hisim/setup_rules/inventory.py` (`Inventory.RECORDS`, one `RuleRecord` per row below, the paths written out), which
+is their source from then on: a family PR updates the records it moves there, not these tables.
 
 ### 6.1 Reading the document (declarative mode, stage LOAD)
 

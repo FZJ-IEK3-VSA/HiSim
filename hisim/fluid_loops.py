@@ -1,4 +1,4 @@
-"""The loop walk: the build finds every fluid loop of a run from the wiring and refuses one that is no loop.
+"""The loop walk: the build finds every fluid loop of a run from the wiring and names it after its pump owner.
 
 A component tags the channels of each fluid loop it is a member of (:class:`hisim.energy_port.FluidLoop`); grouped by
 loop they are its port sets (:meth:`hisim.component.Component.port_sets`), four channels each: the flow and the
@@ -8,30 +8,22 @@ one loop: the build follows the wiring (§3.3 of ``roadmap/fluid_loops_spec.md``
 again. For example, in a house with a gas boiler and a buffer the boiler's ``space_heating`` set sends its flow to the
 buffer's ``generator`` set, which sends it back: one loop of two members, ``CondensingGasBoiler.space_heating``.
 
-:meth:`FluidLoopWalk.find_loops` runs after the components are connected and before the first step
-(:meth:`hisim.simulator.Simulator.run_all_timesteps`) and refuses, with :class:`hisim.hydronics.FluidLoopWiringError`,
-every wiring that is no loop:
-
-* a tagged flow that leaves through or arrives from a channel without a fluid-loop tag;
-* a flow read by the ``flow_in`` of two port sets (one flow delivers its heat once; a split is a valve component with
-  one loop per branch);
-* a loop that does not close: a port set wired at all whose ``flow_out`` nobody reads or whose ``flow_in`` is not
-  connected;
-* a port set wired by half: its flows connected and a temperature not. A port set with none of its four channels
-  connected is idle and allowed, like the hot-water side of a boiler in a house without a tank;
-* a temperature wire that does not follow the flow wire;
-* members of one loop that state different carriers or different fluids;
-* a loop with no or two pump owners (members whose loop states ``pumps=True``).
+:class:`FluidLoopWalk` indexes the wiring and walks it; :meth:`FluidLoopWalk.find_loops` names the loops. What a
+wiring that is no loop breaks is judged by the fluid-loop setup rules (``hisim/setup_rules/fluid_loops.py``, ``FL-01``
+to ``FL-08``), which read this walk and refuse such a run after the components are connected and before the first step
+(:meth:`hisim.simulator.Simulator.run_all_timesteps`): a loop tagged by half, a tagged flow read through or fed from an
+untagged channel, a flow read by two port sets, a loop that does not close, a port set wired by half, a temperature
+wire that does not follow the flow, members that disagree on the carrier or the fluid, and a loop with no or two pump
+owners.
 
 A loop's id is ``<pump owner's component name>.<its loop name>``, for example ``hds.distribution``; it is unique in a
 run, since component names are unique and a component pumps each of its loops at most once. The number of suppliers
-(exactly one per loop) is checked with the energy ports (:meth:`hisim.postprocessing.energy_balance.ports.Wiring.loops`).
+(exactly one per loop) is checked with the energy ports (the setup rule ``EP-01``).
 """
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from hisim import hydronics
 from hisim.component import FluidLoopPortSet
 from hisim.energy_port import FluidLoopChannel, LoopQuantity
 
@@ -64,7 +56,8 @@ class FluidLoopWalk:
     """The connections of a run's tagged channels, and the walk that finds its fluid loops from them.
 
     Built from the components after their inputs are connected: every connected input is indexed by the output it
-    reads, every channel by the port set it belongs to. :meth:`find_loops` is the entry point.
+    reads, every channel by the port set it belongs to. :meth:`find_loops` names the loops; the fluid-loop setup rules
+    (``hisim/setup_rules/fluid_loops.py``) read the same index to judge the wiring.
     """
 
     def __init__(self, components: Sequence[Any]) -> None:
@@ -74,7 +67,7 @@ class FluidLoopWalk:
             components: The components of the run, with their inputs connected.
 
         Raises:
-            FluidLoopWiringError: If a component tags a loop by half.
+            FluidLoopError: If a component tags a loop by half, which the setup rule ``FL-01`` refuses first.
         """
         self.port_sets: List[FluidLoopPortSet] = [port_set for component in components for port_set in component.port_sets()]
         #: The fluid-loop tag of every output, ``(component, output) -> tag``; None for an untagged output.
@@ -101,10 +94,13 @@ class FluidLoopWalk:
 
     @classmethod
     def find_loops(cls, components: Sequence[Any]) -> Tuple[FluidLoopWiring, ...]:
-        """Find every fluid loop of a run from its wiring, or refuse the run naming every wiring that is no loop.
+        """Find every fluid loop of a run from its wiring, each named after its pump owner.
 
         For example, a house whose boiler charges a buffer and whose buffer feeds a heat distribution system has the
-        loops ``CondensingGasBoiler.space_heating`` and ``HeatDistributionSystem.distribution``.
+        loops ``CondensingGasBoiler.space_heating`` and ``HeatDistributionSystem.distribution``. The walk judges
+        nothing: it reads a wiring the fluid-loop setup rules accepted (``hisim/setup_rules/fluid_loops.py``). Given a
+        wiring they refuse, it returns the loops it can name, and a closed loop with no or two pump owners, which has
+        no id, is left out (``FL-08`` refuses it).
 
         Args:
             components: The components of the run, with their inputs connected.
@@ -113,40 +109,45 @@ class FluidLoopWalk:
             The loops, in the order of the run's port sets.
 
         Raises:
-            FluidLoopWiringError: Naming every breach of the rules of the module docstring, each with the loop's
-                members and the channel concerned.
+            FluidLoopError: If a component tags a loop by half, which the setup rule ``FL-01`` refuses first.
         """
-        walk = cls(components)
-        faults = walk.untagged_far_end_faults()
-        complete: List[FluidLoopPortSet] = []
-        for port_set in walk.port_sets:
-            fault = walk.connection_fault(port_set)
-            if fault is not None:
-                faults.append(fault)
-            elif walk.is_connected(port_set):
-                complete.append(port_set)
         loops: List[FluidLoopWiring] = []
+        for members in cls(components).closed_loops():
+            pumping = [member for member in members if member.loop.pumps]
+            if len(pumping) != 1:
+                continue
+            first = members.index(pumping[0])
+            loops.append(FluidLoopWiring(pumping[0].label, tuple(members[first:] + members[:first])))
+        return tuple(loops)
+
+    def complete_port_sets(self) -> List[FluidLoopPortSet]:
+        """The port sets that can be members of a loop: all four channels connected and the flow out read by one flow in.
+
+        For example, a boiler and a tank linked both ways are complete; a third tank that reads the boiler's flow as
+        well makes the boiler's set incomplete (its flow is read twice), and a boiler's hot-water side wired to nothing
+        is idle, not complete.
+        """
+        return [port_set for port_set in self.port_sets if self.is_connected(port_set) and len(self.flow_readers(port_set)) <= 1]
+
+    def closed_loops(self) -> List[List[FluidLoopPortSet]]:
+        """The members of every closed loop of complete port sets, each in the order of the flow from the first one met.
+
+        Each loop is listed once, starting at its member that comes first among the run's port sets. A walk that
+        leaves the complete sets (:meth:`members_from`) is no closed loop and is not listed. For example, a boiler and
+        a tank linked both ways give ``[[Boiler.space_heating, Tank.generator]]``.
+        """
+        complete = self.complete_port_sets()
+        loops: List[List[FluidLoopPortSet]] = []
         assigned: Set[str] = set()
         for start in complete:
             if start.label in assigned:
                 continue
-            members = walk.members_from(start, complete)
+            members = self.members_from(start, complete)
             if members is None:
                 continue
             assigned.update(member.label for member in members)
-            loop_faults = walk.loop_faults(members)
-            if loop_faults:
-                faults.extend(loop_faults)
-                continue
-            (pump_owner,) = [member for member in members if member.loop.pumps]
-            first = members.index(pump_owner)
-            loops.append(FluidLoopWiring(pump_owner.label, tuple(members[first:] + members[:first])))
-        if faults:
-            raise hydronics.FluidLoopWiringError(
-                "The fluid loops of this run are wired wrong (§3.3 of roadmap/fluid_loops_spec.md):\n"
-                + "\n".join(f"- {fault}" for fault in dict.fromkeys(faults))
-            )
-        return tuple(loops)
+            loops.append(members)
+        return loops
 
     @staticmethod
     def channel_name(port_set: FluidLoopPortSet, quantity: LoopQuantity) -> str:
@@ -197,64 +198,6 @@ class FluidLoopWalk:
         """Whether all four channels of ``port_set`` are connected, which makes it a member of a loop."""
         return all(self.connected_channels(port_set).values())
 
-    def untagged_far_end_faults(self) -> List[str]:
-        """A fault for every tagged flow that leaves through or arrives from a channel without a fluid-loop tag.
-
-        For example, a heat distribution system's ``flow_out`` read by a boiler's input that carries no tag: the
-        loop's flow would reach a member that does not say it is one, so the walk could not follow it.
-        """
-        faults: List[str] = []
-        for port_set in self.port_sets:
-            flow_out = port_set.channels[LoopQuantity.FLOW_OUT].field_name
-            for reader, field_name, tag in self.readers.get((port_set.component_name, flow_out), []):
-                if tag is None or tag.quantity is not LoopQuantity.FLOW_IN:
-                    faults.append(
-                        f"the loop {port_set.label} leaves {port_set.component_name}.{flow_out} for "
-                        f"{reader}.{field_name}, which carries no flow_in tag of a fluid loop"
-                    )
-            source = self.flow_source(port_set)
-            if source is None:
-                continue
-            source_tag = self.output_tags.get(source)
-            if source_tag is None or source_tag.quantity is not LoopQuantity.FLOW_OUT:
-                faults.append(
-                    f"the loop {port_set.label} arrives at {self.channel_name(port_set, LoopQuantity.FLOW_IN)} from "
-                    f"{'.'.join(source)}, which carries no flow_out tag of a fluid loop"
-                )
-        return faults
-
-    def connection_fault(self, port_set: FluidLoopPortSet) -> Optional[str]:
-        """Why ``port_set`` cannot be a member of a loop, or None when it is wired whole or not at all.
-
-        Its ``flow_out`` read by two port sets, a flow link missing (the loop does not close) and a temperature
-        missing beside connected flows (wired by half) are faults; a set with no channel connected is idle.
-        """
-        readers = self.flow_readers(port_set)
-        if len(readers) > 1:
-            return (
-                f"the flow {self.channel_name(port_set, LoopQuantity.FLOW_OUT)} of the loop {port_set.label} is read "
-                f"by {len(readers)} port sets, {', '.join(reader.label for reader in readers)}: one flow delivers its "
-                "heat once; a split is a valve component with one loop per branch"
-            )
-        connected = self.connected_channels(port_set)
-        if not any(connected.values()) or all(connected.values()):
-            return None
-        open_channels = ", ".join(
-            f"{self.channel_name(port_set, quantity)} ({quantity.value})"
-            for quantity, is_connected in connected.items()
-            if not is_connected
-        )
-        if not (connected[LoopQuantity.FLOW_OUT] and connected[LoopQuantity.FLOW_IN]):
-            return (
-                f"the loop through {self.members_label(self.chain_through(port_set))} does not close: {open_channels} "
-                f"of its member {port_set.label} is connected to no other member of a loop; a flow_out is read by "
-                "the flow_in of the next member and the flow returns to the first"
-            )
-        return (
-            f"{port_set.label} is wired by half: its flows are connected and {open_channels} is not; a member of a "
-            "fluid loop connects its four channels or none"
-        )
-
     def chain_through(self, port_set: FluidLoopPortSet) -> List[FluidLoopPortSet]:
         """The members a broken loop reaches from ``port_set``: back along its flow sources, then on along its readers.
 
@@ -286,8 +229,8 @@ class FluidLoopWalk:
         """The members of the loop through ``start``, in the order of the flow; None if the walk leaves the complete sets.
 
         Every complete set's ``flow_out`` is read by exactly one ``flow_in`` and its ``flow_in`` reads one output, so
-        the walk returns to ``start``; a walk that reaches a set wired wrong stops, that set's fault being reported
-        already.
+        the walk returns to ``start``; a walk that reaches a set wired wrong stops, that set's fault being one the
+        fluid-loop setup rules report.
         """
         members = [start]
         current = start
@@ -302,48 +245,3 @@ class FluidLoopWalk:
                 return None
             members.append(following)
             current = following
-
-    def loop_faults(self, members: Sequence[FluidLoopPortSet]) -> List[str]:
-        """The faults of one closed loop: its temperature wires, the agreement of its members, its pump owner.
-
-        Each member's ``temperature_in`` reads the ``temperature_out`` of the member whose flow it reads; every
-        member states the same carrier and the same fluid; exactly one member pumps (rule 3 of §3.3).
-
-        Args:
-            members: The loop's port sets in the order of the flow, as :meth:`members_from` returns them.
-
-        Returns:
-            One sentence per fault, empty for a loop that is wired right.
-        """
-        faults: List[str] = []
-        loop = self.members_label(members)
-        for position, member in enumerate(members):
-            previous = members[position - 1]
-            expected = (previous.component_name, previous.channels[LoopQuantity.TEMPERATURE_OUT].field_name)
-            temperature_in = (member.component_name, member.channels[LoopQuantity.TEMPERATURE_IN].field_name)
-            actual = self.sources.get(temperature_in)
-            if actual != expected:
-                faults.append(
-                    f"the temperature wire of the loop {loop} does not follow its flow: "
-                    f"{'.'.join(temperature_in)} reads {'.'.join(actual) if actual else 'nothing'}, but the flow "
-                    f"arrives from {previous.label}, so it reads {'.'.join(expected)}"
-                )
-        for attribute in ("carrier", "fluid"):
-            stated = {member.label: getattr(member.loop, attribute).value for member in members}
-            if len(set(stated.values())) > 1:
-                faults.append(
-                    f"the loop {loop} is {' and '.join(f'{value} at {label}' for label, value in stated.items())}: "
-                    f"every member of a loop states the same {attribute}"
-                )
-        pumping = [member for member in members if member.loop.pumps]
-        if len(pumping) != 1:
-            named = (
-                ", " + " and ".join(f"{member.label} ({self.channel_name(member, LoopQuantity.FLOW_OUT)})" for member in pumping)
-                if pumping
-                else f" (flows {', '.join(self.channel_name(member, LoopQuantity.FLOW_OUT) for member in members)})"
-            )
-            faults.append(
-                f"the loop {loop} has {len(pumping)} pumping port sets{named}; exactly one member of a loop pumps "
-                "(pumps=True)"
-            )
-        return faults

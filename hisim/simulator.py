@@ -14,7 +14,6 @@ import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
-from hisim.fluid_loops import FluidLoopWalk
 from hisim.evaluation_order import EvaluationOrder, L2Order, PhysicsOrder
 from hisim import sim_repository
 import hisim.component as cp
@@ -818,8 +817,9 @@ class Simulator:
                 requested while some component declares no `cost_relevance`
                 (`check_cost_declarations`).
             UndeclaredSetupKindError: If the setup declared no kind (:meth:`declare_setup_kind`), before the first step.
-            SetupRuleViolation: Listing every fault of the build rules of the system, before the first step; an
-                ``EnergyPortWiringError`` when only the energy-port rules found faults.
+            SetupRuleViolation: Listing every fault of the build rules of the system, before the first step; a
+                ``FluidLoopWiringError`` when only the fluid-loop rules found faults, an ``EnergyPortWiringError`` when
+                only the energy-port rules did.
         """
         # Error Tests
         # Test if all parameters were initialized
@@ -849,10 +849,8 @@ class Simulator:
         # Connects all components
         self.connect_all_components()
         components = [wrapped.my_component for wrapped in self.wrapped_components]
-        # a wiring that is no fluid loop fails now, not after the run (roadmap/fluid_loops_spec.md §3.3); first, since
-        # the energy-port rules read the loops it walks
-        FluidLoopWalk.find_loops(components)
-        # The setup rules of the built system, in both modes, the energy-port rules among them; a setup that declares
+        # The setup rules of the built system, in both modes, the fluid-loop and energy-port rules among them: a wiring
+        # that is no fluid loop or breaks a rule of the energy ports fails now, not after the run; a setup that declares
         # no kind is refused here
         SetupRuleRegistry.collect().run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), self.setup_kind)
         log.information(

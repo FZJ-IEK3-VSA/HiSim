@@ -583,11 +583,12 @@ def test_postprocessing_option_export_energy_balance(
     """Test that PostProcessingOptions.EXPORT_ENERGY_BALANCE writes the balance report and the Sankeys.
 
     The baseline setup declares no energy ports, so every component is listed as undeclared and the overall
-    Sankey is empty; the files appear all the same.
+    Sankey is empty: the report and the JSON appear all the same, and no HTML, since a view with no flow is not
+    drawn (spec ``roadmap/complete_energy_sankeys_spec.md`` §4.8).
     """
     postprocessing_option_framework.run(
         PostProcessingOptions.EXPORT_ENERGY_BALANCE,
-        expected_files=["balance_report.json", "energy_sankeys/energy_sankey.json", "energy_sankeys/overall.html"],
+        expected_files=["balance_report.json", "energy_sankeys/energy_sankey.json"],
     )
 
 

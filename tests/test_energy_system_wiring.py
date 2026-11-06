@@ -34,7 +34,6 @@ from hisim.components.loadprofilegenerator_utsp_connector import (
 from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import (
-    EnergySystemBindingError,
     EnergySystemFormatError,
     EnergySystemWiringError,
 )
@@ -43,6 +42,7 @@ from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.wiring import WiredSystem
 from hisim.simulationparameters import SimulationParameters
+from tests.functions_for_testing import WiringRules
 
 
 class Systems:
@@ -519,7 +519,7 @@ def test_a_feed_naming_a_tag_no_vocabulary_knows_is_rejected(tmp_path: Path) -> 
 """
     )
 
-    with pytest.raises(EnergySystemBindingError) as failure:
+    with pytest.raises(EnergySystemWiringError) as failure:
         Systems.build(entries, tmp_path)
 
     assert failure.value.error_id.value == "EF-2A"
@@ -635,6 +635,7 @@ def test_a_derived_port_name_colliding_with_an_existing_one_is_rejected() -> Non
     resolver = DynamicConnectionResolver({"occupancy": occupancy, "meter": meter})
     with pytest.raises(EnergySystemWiringError) as failure:
         resolver.resolve_target("meter", [feed])
+        WiringRules.refuse(resolver.refusals)
 
     assert failure.value.error_id.value == "EF-32"
     assert "ElectricalPowerConsumptionFromoccupancy" in str(failure.value)

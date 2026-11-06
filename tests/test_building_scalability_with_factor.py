@@ -10,6 +10,7 @@ from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
+from hisim.config import SizingContext
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
@@ -65,6 +66,8 @@ def test_building_scalability() -> None:
     my_residence_config.heating_reference_temperature_in_celsius = (
         my_weather_config.heating_reference_temperature_in_celsius
     )
+    # The technical room's location follows from the TABULA row; resolving sizes it, the only field left AUTO.
+    my_residence_config = my_residence_config.resolve(SizingContext())
     my_residence = building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -150,6 +153,7 @@ def test_building_scalability() -> None:
         my_residence_config.heating_reference_temperature_in_celsius = (
             my_weather_config.heating_reference_temperature_in_celsius
         )
+        my_residence_config = my_residence_config.resolve(SizingContext())
         my_residence = building.Building(
             config=my_residence_config,
             my_simulation_parameters=my_simulation_parameters,

@@ -76,6 +76,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         lifetime_in_years=100,
         maintenance_costs_in_euro_per_year=0.0,
         subsidy_as_percentage_of_investment_costs=0.0,
+        installation_location=lt.InstallationLocation.UNHEATED_SPACE,
     )
     my_simple_heat_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -117,6 +118,13 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     state_controller = cp.ComponentOutput(
         "FakeState", "State", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("FakeState")
     )
+    surrounding_temperature = cp.ComponentOutput(
+        "FakeCellar",
+        "TemperatureUnheatedCellarInCelsius",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=ComponentID("FakeCellar"),
+    )
 
     # connect fake inputs to simple hot water storage
     my_simple_heat_water_storage.water_mass_flow_rate_heat_distribution_system_input_channel.source_output = (
@@ -134,6 +142,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     )
 
     my_simple_heat_water_storage.state_channel.source_output = state_controller
+    my_simple_heat_water_storage.surrounding_temperature_channel.source_output = surrounding_temperature
 
     number_of_outputs = fft.get_number_of_outputs(
         [
@@ -143,6 +152,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
             water_mass_flow_rate_from_heat_generator,
             state_controller,
             my_simple_heat_water_storage,
+            surrounding_temperature,
         ]
     )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
@@ -156,9 +166,11 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
             water_mass_flow_rate_from_heat_generator,
             state_controller,
             my_simple_heat_water_storage,
+            surrounding_temperature,
         ]
     )
     stsv.values[water_mass_flow_rate_hds.global_index] = 0.787
+    stsv.values[surrounding_temperature.global_index] = 20.0
     stsv.values[water_temperature_input_from_heat_distribution_system.global_index] = 48
     stsv.values[water_temperature_input_from_heat_generator.global_index] = 52
     stsv.values[water_mass_flow_rate_from_heat_generator.global_index] = 0.59
@@ -171,8 +183,12 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     previous_mean_temperature_in_celsius = 50.0
     my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
 
-    water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[5]
-    water_temperature_output_in_celsius_to_heat_generator = stsv.values[6]
+    water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[
+        my_simple_heat_water_storage.water_temperature_heat_distribution_system_output_channel.global_index
+    ]
+    water_temperature_output_in_celsius_to_heat_generator = stsv.values[
+        my_simple_heat_water_storage.water_temperature_heat_generator_output_channel.global_index
+    ]
 
     # test mean water temperature calculation in storage
     mass_water_hds_in_kg = stsv.values[water_mass_flow_rate_hds.global_index] * sec_per_timesteps
@@ -243,7 +259,11 @@ def _buffer_sized_at(
         "SimpleHotWaterStorage"
     )
     config.sizing_option = sizing_option
-    return config.resolve(SizingContext(maximal_thermal_power_in_watt=power_in_watt))
+    return config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=power_in_watt, technical_room_location=lt.InstallationLocation.UNHEATED_SPACE
+        )
+    )
 
 
 @pytest.mark.base
@@ -343,7 +363,7 @@ def test_the_buffer_preset_pins_the_vessel_and_leaves_the_volume_open() -> None:
     assert config.lifetime_in_years is None
     assert config.maintenance_costs_in_euro_per_year is None
     assert config.subsidy_as_percentage_of_investment_costs is None
-    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter"}
+    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter", "installation_location"}
 
 
 @pytest.mark.base
@@ -371,12 +391,12 @@ def test_the_dhw_preset_sizes_the_vessel_from_the_apartment_count() -> None:
     sizer and RenoVisor reach.
     """
     single_family_house = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=1)
+        SizingContext(number_of_apartments=1, technical_room_location=lt.InstallationLocation.UNHEATED_SPACE)
     )
     assert single_family_house.volume_heating_water_storage_in_liter == 250.0
 
     multi_family_house = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=17)
+        SizingContext(number_of_apartments=17, technical_room_location=lt.InstallationLocation.UNHEATED_SPACE)
     )
     assert multi_family_house.volume_heating_water_storage_in_liter == 4250.0
 
@@ -390,7 +410,7 @@ def test_the_dhw_volume_law_sizes_one_apartment_for_a_building_that_reports_none
     no volume, whose water mass is zero and whose temperature the storage would then divide by.
     """
     no_apartments = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=0)
+        SizingContext(number_of_apartments=0, technical_room_location=lt.InstallationLocation.UNHEATED_SPACE)
     )
     assert no_apartments.volume_heating_water_storage_in_liter == 250.0
 
@@ -412,7 +432,7 @@ def test_the_dhw_preset_pins_the_losses_and_leaves_the_volume_open() -> None:
     assert config.lifetime_in_years is None
     assert config.maintenance_costs_in_euro_per_year is None
     assert config.subsidy_as_percentage_of_investment_costs is None
-    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter"}
+    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter", "installation_location"}
 
 
 @pytest.mark.base

@@ -277,7 +277,10 @@ def test_house(
 
     # DHW storage configs
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_building_information.number_of_apartments,
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -297,7 +300,8 @@ def test_house(
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(

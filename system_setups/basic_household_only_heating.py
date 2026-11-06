@@ -177,7 +177,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
 

@@ -1,7 +1,8 @@
 """The hot-water tank is a fully mixed node with a thermostatic tap valve.
 
 ``SimpleDHWStorage`` integrates its temperature over the step with :meth:`hisim.hydronics.MixedNode.step`: the supply
-of each charging circuit, the mains water that refills what the tap valve lets out and the standby loss to the room.
+of each charging circuit, the mains water that refills what the tap valve lets out and the standby loss to its
+surroundings, here 20 °C.
 These tests step the tank on its own, with fake inputs, and check what the node promises:
 
 * its balance closes on every step: the heat of the circuits, minus the tap's heat and the loss, is ``C (T_end - T0)``;
@@ -30,7 +31,10 @@ from tests import functions_for_testing as fft
 
 
 class Tank:
-    """A 250 l hot-water tank and the arithmetic the tests check it against."""
+    """A 250 l hot-water tank in 20 °C surroundings and the arithmetic the tests check it against."""
+
+    #: The temperature of the tank's surroundings, in °C, which it loses its standby heat to.
+    SURROUNDING_TEMPERATURE_IN_CELSIUS = 20.0
 
     #: (start temperature in °C, primary flow in kg/s and supply in °C, secondary flow and supply, demand in kg/s):
     #: a boiler charge, a solar preheat with a gas top-up, a shower from a hot tank, a shower from a lukewarm one,
@@ -48,7 +52,9 @@ class Tank:
         """Return a tank of the given volume for a day at the given resolution."""
         parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
         config = simple_water_storage.SimpleDHWStorageConfig(
-            component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=volume_in_liter
+            component_id=ComponentID(name="DHWStorage"),
+            volume_heating_water_storage_in_liter=volume_in_liter,
+            installation_location=lt.InstallationLocation.HEATED_ZONE,
         )
         storage: simple_water_storage.SimpleDHWStorage = simple_water_storage.SimpleDHWStorage(
             my_simulation_parameters=parameters, config=config
@@ -67,16 +73,18 @@ class Tank:
             start_temperature_in_celsius=start_temperature_in_celsius,
             generator_inflows=inflows,
             demand_in_kg_per_second=demand_in_kg_per_second,
+            surrounding_temperature_in_celsius=Tank.SURROUNDING_TEMPERATURE_IN_CELSIUS,
             tank=storage.tank,
         )
         return step
 
     @staticmethod
     def with_fake_inputs(seconds_per_timestep: int) -> Tuple[simple_water_storage.SimpleDHWStorage, Any, List[Any]]:
-        """Return a tank whose five inputs read fake outputs, the step values and the fakes in input order.
+        """Return a tank whose six inputs read fake outputs, the step values and the fakes in input order.
 
         The order is: water consumption (l per step), primary supply temperature, primary mass flow, secondary
-        supply temperature, secondary mass flow.
+        supply temperature, secondary mass flow, surrounding temperature. The surrounding temperature is set to
+        :attr:`SURROUNDING_TEMPERATURE_IN_CELSIUS`; every other fake reads 0.
         """
         storage = Tank.build(seconds_per_timestep)
         channels = [
@@ -93,6 +101,7 @@ class Tank:
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
             ),
+            (storage.surrounding_temperature_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
         ]
         fakes: List[Any] = []
         for number, (channel, load_type, unit) in enumerate(channels):
@@ -103,6 +112,7 @@ class Tank:
             fakes.append(fake)
         stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, storage]))
         fft.add_global_index_of_components([*fakes, storage])
+        stsv.set_output_value(fakes[-1], Tank.SURROUNDING_TEMPERATURE_IN_CELSIUS)
         return storage, stsv, fakes
 
     @staticmethod
@@ -167,7 +177,7 @@ def test_the_tank_never_leaves_the_range_of_what_it_mixes(
         inflows=inflows,
         fixed_temperatures_c=(
             storage.tank.mains_water_temperature_in_celsius,
-            storage.tank.ambient_temperature_in_celsius,
+            Tank.SURROUNDING_TEMPERATURE_IN_CELSIUS,
         ),
     )
     for temperature_in_celsius in (step.node.t_mean_c, step.node.t_end_c):
@@ -228,12 +238,12 @@ def test_the_tap_passes_the_demand_unmixed_below_the_tap_temperature_and_books_t
 def test_a_tank_at_the_mains_temperature_gives_nothing() -> None:
     """A tank at the mains temperature that let water out would book heat it does not have."""
     storage = Tank.build(900)
-    tank_in_a_cold_room = dataclasses.replace(storage.tank, ambient_temperature_in_celsius=10.0)
     step = simple_water_storage.SimpleDHWStorage.solve_tank_step(
         start_temperature_in_celsius=10.0,
         generator_inflows=[hydronics.Inflow(0.0, 10.0), hydronics.Inflow(0.0, 10.0)],
         demand_in_kg_per_second=0.1,
-        tank=tank_in_a_cold_room,
+        surrounding_temperature_in_celsius=10.0,
+        tank=storage.tank,
     )
     assert step.hot_water_mass_flow_in_kg_per_second == 0.0
     assert step.unmet_fraction == 1.0
@@ -255,6 +265,7 @@ def test_a_tank_held_at_its_hottest_inflow_is_solved_at_the_top_of_its_range() -
         start_temperature_in_celsius=70.0,
         generator_inflows=[hydronics.Inflow(1.0, 70.0), hydronics.Inflow(0.0, 0.0)],
         demand_in_kg_per_second=demand_in_kg_per_second,
+        surrounding_temperature_in_celsius=Tank.SURROUNDING_TEMPERATURE_IN_CELSIUS,
         tank=lossless_tank,
     )
     assert step.node.t_mean_c == pytest.approx(70.0, abs=1e-9)

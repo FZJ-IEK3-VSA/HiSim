@@ -77,8 +77,10 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector, {$port: heating}], "
-        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}}}"
+        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: buffer_heat}, {$port: cylinder_heat}], "
+        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}, "
+        "buffer_heat: {partner: SimpleHotWaterStorage, optional: true}, "
+        "cylinder_heat: {partner: SimpleDHWStorage, optional: true}}}"
     )
     #: The building reduced for expansion only, the partner of every tank's ``surroundings`` need: it reads no other
     #: site entry, so it binds no port of its own.

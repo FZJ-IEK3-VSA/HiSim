@@ -22,15 +22,19 @@ components:
     config:
       volume_heating_water_storage_in_liter: {$param: volume_in_liter}
     inputs:
-      - {$port: surroundings}                               # SurroundingTemperatureInCelsius, from the house it stands in
+      - {$port: surroundings}                               # IndoorAirTemperatureInCelsius, UnheatedCellarTemperatureInCelsius
+      - {$port: outside_air}                                # OutsideAirTemperatureInCelsius
       - {$port: hot_water_demand}                           # WaterConsumption
       - {$port: circuit}                                    # the generator's supply temperature and mass flow
 
 interface:
   needs:
     surroundings:     {into: [DHWStorage], partner: Building}
-                      # the temperature the cylinder loses its standby heat to: the house's air or its unheated cellar,
-                      # by where its technical room is
+                      # the house's air at the start of the step and its unheated cellar: the cylinder loses its standby
+                      # heat against the one its location picks, and the house reads the heat it releases into the
+                      # heated zone (HeatToHeatedZoneInWatt) through a port of its own
+    outside_air:      {into: [DHWStorage], partner: Weather}
+                      # the outside air the cylinder loses against when it stands outdoors; wired in every location
     hot_water_demand: {into: [DHWStorage], partner: UtspLpgConnector}
     circuit:          {circuit: dhw, member: DHWStorage}
                       # binds heating.dhw: supply leg and pump are the generator's, the return leg this cylinder's
@@ -54,7 +58,11 @@ tests:
     - {output: DHWStorage.ThermalEnergyUnmetDHWInWattHour, unit: WATT_HOUR, min: 0, max: 15000}
       # at most the whole demand of the step, the same shower peak
     - {output: DHWStorage.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -25000, max: 25000}
-    - {output: DHWStorage.StandbyHeatLoss, unit: WATT, min: 0, max: 500}                   # a 1000 l cylinder: 100-200 W
+    - {output: DHWStorage.HeatLossInWatt, unit: WATT, min: 0, max: 500}                    # a 1000 l cylinder: 100-200 W
+    - {output: DHWStorage.HeatToHeatedZoneInWatt, unit: WATT, min: 0, max: 500}
+    - {output: DHWStorage.SurroundingTemperatureInCelsius, unit: CELSIUS, min: -30, max: 40}
+      # the temperature of the place it stands in, in the test house its unheated cellar: between the outside air and
+      # the indoor air, within the weather's range in every location
     - {output: DHWStorage.ThermalPowerConsumptionDHW, unit: WATT, min: 0, max: 60000}      # below a 60 kW shower peak
     - {output: DHWStorage.ThermalPowerFromHeatGenerator, unit: WATT, min: -40000, max: 40000}
     - {output: DHWStorage.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}

@@ -141,6 +141,7 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
     assert model.components["boiler-Boiler"].inputs[1] == DefaultInputs(source="cylinder-DHWStorage")
     assert model.components["cylinder-DHWStorage"].inputs == (
         DefaultInputs(source="Building"),
+        DefaultInputs(source="Weather"),
         DefaultInputs(source="UTSPConnector"),
         DefaultInputs(source="boiler-Boiler"),
     )
@@ -201,7 +202,7 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "two: {assembly: heating/gas_condensing_boiler, bind: {dhw_temperature: cylinder}}",
         )
     )
-    assert model.components["cylinder-DHWStorage"].inputs[2] == DefaultInputs(source="two-Boiler")
+    assert model.components["cylinder-DHWStorage"].inputs[3] == DefaultInputs(source="two-Boiler")
     assert model.components["one-Boiler"].inputs[1] == DefaultInputs(source="tank-DHWStorage")
 
 

@@ -34,6 +34,10 @@ partners:
     # reads its HeatDistributionSystem or its ElectricHeating. The port is optional, so the house requires neither:
     # the harness binds the one candidate per isolation system, the subject's member or a partner (isolation.py,
     # bind_optional_partner_ports), and beside an assembly that heats nothing the house stays unheated.
+    # Its `buffer_heat` and `cylinder_heat` ports read the heat a buffer and a hot-water cylinder release into the
+    # heated zone, the subject's member or a partner, bound the same way: a tank's HeatToHeatedZoneInWatt needs a
+    # reader in every location (D-h of roadmap/device_location_spec.md), and is 0 here, where the house's TABULA row
+    # puts its technical room in an unheated cellar.
     serves: [{partner: Building}, {fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
              {fact: set_heating_temperature_in_celsius}, {fact: technical_room_location}]
     requires: [Weather, UTSPConnector]
@@ -44,9 +48,11 @@ partners:
         number_of_apartments: 1.0
         enable_opening_windows: true
         weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
-      inputs: [Weather, UTSPConnector, {$port: heating}]
+      inputs: [Weather, UTSPConnector, {$port: heating}, {$port: buffer_heat}, {$port: cylinder_heat}]
       ports:
         heating: {partner: [HeatDistribution, ElectricHeating], optional: true}   # ThermalPowerDelivered
+        buffer_heat: {partner: SimpleHotWaterStorage, optional: true}             # HeatToHeatedZoneInWatt
+        cylinder_heat: {partner: SimpleDHWStorage, optional: true}                # HeatToHeatedZoneInWatt
   HeatingCurveController:
     # The heating curve: the supply temperature set point and the heating season every space-heating L1 controller
     # reads. Its emitter type is pinned to the floor heating the heat distribution controller's partner states, so the
@@ -106,11 +112,11 @@ partners:
     serves: [{circuit: dhw, other_end: [MoreAdvancedHeatPumpHPLib]}, {circuit: dhw, other_end: [GenericBoiler]},
              {circuit: dhw, other_end: [ElectricHeating]}, {circuit: dhw, other_end: [DistrictHeating]},
              {partner: SimpleDHWStorage}]
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, {$port: dhw}]
+      inputs: [Building, Weather, UTSPConnector, {$port: dhw}]
       ports:
         dhw: {circuit: dhw}
 
@@ -120,11 +126,11 @@ partners:
     # a circuit end of the same assembly already brings, isolation.py). Without a back-up generator: the test day's
     # draws cool it, which the collector's contract does not depend on.
     serves: {circuit: solar_dhw, other_end: [SolarThermalSystem]}
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, {$port: solar_coil}]
+      inputs: [Building, Weather, UTSPConnector, {$port: solar_coil}]
       ports:
         solar_coil: {circuit: solar_dhw}
 
@@ -166,13 +172,13 @@ partners:
       inputs: [Weather, HeatingCurveController, Buffer]
   Buffer:
     # Reads the heat pump it joins with, without requiring it back.
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
       config:
         sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
-      inputs: [Building, {$port: space_heating}, HeatPump]
+      inputs: [Building, Weather, {$port: space_heating}, HeatPump]
       ports:
         space_heating: {circuit: space_heating}
 
@@ -211,22 +217,22 @@ partners:
       inputs: [HeatingCurveController, GasBoiler, GasCylinder, GasBuffer]
   GasBuffer:
     # Reads the boiler it joins with, without requiring it back.
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
       config:
         sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
-      inputs: [Building, {$port: space_heating}, GasBoiler]
+      inputs: [Building, Weather, {$port: space_heating}, GasBoiler]
       ports:
         space_heating: {circuit: space_heating}
   GasCylinder:
     # The boiler's own cylinder; reads the boiler it joins with, without requiring it back.
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, GasBoiler]
+      inputs: [Building, Weather, UTSPConnector, GasBoiler]
 
   # -------------------------------------------------------------------- heating oil: meter and burner
   OilMeter:
@@ -258,19 +264,19 @@ partners:
         with_domestic_hot_water_preparation: true
       inputs: [HeatingCurveController, OilBoiler, OilCylinder, OilBuffer]
   OilBuffer:
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
-      inputs: [Building, {$port: space_heating}, OilBoiler]
+      inputs: [Building, Weather, {$port: space_heating}, OilBoiler]
       ports:
         space_heating: {circuit: space_heating}
   OilCylinder:
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, OilBoiler]
+      inputs: [Building, Weather, UTSPConnector, OilBoiler]
 
   # ------------------------------------------------------------------------ pellets: meter and burner
   PelletMeter:
@@ -304,21 +310,21 @@ partners:
         minimum_resting_time_in_seconds: 900.0
       inputs: [HeatingCurveController, PelletBoiler, PelletCylinder, PelletBuffer]
   PelletBuffer:
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
       config:
         sizing_option: SIZE_ACCORDING_TO_PELLET_HEATING
-      inputs: [Building, {$port: space_heating}, PelletBoiler]
+      inputs: [Building, Weather, {$port: space_heating}, PelletBoiler]
       ports:
         space_heating: {circuit: space_heating}
   PelletCylinder:
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, PelletBoiler]
+      inputs: [Building, Weather, UTSPConnector, PelletBoiler]
 
   # --------------------------------------------------------------------- wood chips: meter and burner
   WoodChipMeter:
@@ -352,21 +358,21 @@ partners:
         minimum_resting_time_in_seconds: 1800.0
       inputs: [HeatingCurveController, WoodChipBoiler, WoodChipCylinder, WoodChipBuffer]
   WoodChipBuffer:
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
       config:
         sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
-      inputs: [Building, {$port: space_heating}, WoodChipBoiler]
+      inputs: [Building, Weather, {$port: space_heating}, WoodChipBoiler]
       ports:
         space_heating: {circuit: space_heating}
   WoodChipCylinder:
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, WoodChipBoiler]
+      inputs: [Building, Weather, UTSPConnector, WoodChipBoiler]
 
   # ----------------------------------------------------------------------- hydrogen: meter and burner
   HydrogenMeter:
@@ -398,21 +404,21 @@ partners:
         with_domestic_hot_water_preparation: true
       inputs: [HeatingCurveController, HydrogenBoiler, HydrogenCylinder, HydrogenBuffer]
   HydrogenBuffer:
-    requires: [HeatDistributionSystem, Building]
+    requires: [HeatDistributionSystem, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleHotWaterStorage
       preset: buffer
       config:
         sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
-      inputs: [Building, {$port: space_heating}, HydrogenBoiler]
+      inputs: [Building, Weather, {$port: space_heating}, HydrogenBoiler]
       ports:
         space_heating: {circuit: space_heating}
   HydrogenCylinder:
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, HydrogenBoiler]
+      inputs: [Building, Weather, UTSPConnector, HydrogenBoiler]
 
   # ------------------------------------------------------------- district heat: meter and connection
   DistrictHeatMeter:
@@ -451,11 +457,11 @@ partners:
         parallel_space_heating_and_dhw_option: true
       inputs: [HeatingCurveController, HeatDistributionSystemWithoutStorage, DistrictHeatingCylinder]
   DistrictHeatingCylinder:
-    requires: [UTSPConnector, Building]
+    requires: [UTSPConnector, Building, Weather]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
-      inputs: [Building, UTSPConnector, DistrictHeatingConsumer]
+      inputs: [Building, Weather, UTSPConnector, DistrictHeatingConsumer]
 
   # ------------------------------------------------------------- electricity: arrays, control, grid
   PVArray:

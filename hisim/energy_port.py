@@ -128,7 +128,7 @@ import dataclasses
 import enum
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple
+from typing import ClassVar, Dict, FrozenSet, Mapping, Optional, Tuple, assert_never
 
 from hisim import hydronics
 from hisim import loadtypes as lt
@@ -406,6 +406,34 @@ class EnergyPort:
         if self.carrier == lt.EnergyBalanceCarrier.SOLAR and self.role == lt.EnergyRole.CONSUMPTION:
             return lt.EnvironmentNode.SOLAR.value
         return None
+
+    @classmethod
+    def for_heat_released(cls, location: lt.InstallationLocation, carrier: lt.EnergyBalanceCarrier) -> "EnergyPort":
+        """Return the port of the heat a device releases to its surroundings, chosen by where the device stands.
+
+        A device in the heated zone hands its heat to the building as an internal gain, so the output is a
+        ``PRODUCTION`` port of ``ROOM_HEAT``, which the building reads as a dynamic input. A device in an unheated
+        space or outdoors loses the heat out of the house, so the output is a ``LOSS`` port of the device's own
+        carrier, which goes to its boundary node. For example, a buffer's standby loss is
+        ``EnergyPort(PRODUCTION, ROOM_HEAT)`` in the heated zone and ``EnergyPort(LOSS, SPACE_HEATING_HEAT)`` in an
+        unheated cellar. The heat given to an unheated cellar does not come back into the house: the building's
+        model already counts the floor toward the cellar as a loss, through the floor's adjustment factor.
+
+        Args:
+            location: Where the device stands.
+            carrier: The carrier the device loses when the heat leaves the house, for example
+                ``SPACE_HEATING_HEAT`` for a buffer or ``ELECTRICITY`` for a battery.
+
+        Returns:
+            The port the device's output of released heat declares.
+        """
+        match location:
+            case lt.InstallationLocation.HEATED_ZONE:
+                return cls(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT)
+            case lt.InstallationLocation.UNHEATED_SPACE | lt.InstallationLocation.OUTDOORS:
+                return cls(lt.EnergyRole.LOSS, carrier)
+            case _:
+                assert_never(location)
 
     @property
     def is_metered(self) -> bool:

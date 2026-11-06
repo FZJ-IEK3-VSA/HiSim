@@ -296,14 +296,13 @@ class CHP(PhysicsComponent):
             lt.Units.KG_PER_SEC,
             output_description=f"here a description for {self.GasDemandTarget} will follow.",
         )
-        # no production flag: the KPIs would then count the CHP's electricity as the household's generation, which
-        # changes the results of the setup that runs it
         self.el_power_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description="The electricity the CHP produces in the step, in W, >= 0.",
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.FUEL_CELL],
+            output_description="The electricity the CHP produces in the step, in W, >= 0; the KPIs count it as generation.",
             energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         self.number_of_cycles_channel: ComponentOutput = self.add_output(

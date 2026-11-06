@@ -1,7 +1,9 @@
-"""The port of the heat a device releases follows where the device stands (bead hisim-device-location-820d.1).
+"""Which of its two released-heat outputs a device fills follows where it stands (bead hisim-device-location-820d.1).
 
-A device in the heated zone hands its heat to the building as an internal gain, a ``PRODUCTION`` port of
-``ROOM_HEAT``; a device in an unheated space or outdoors loses it out of the house, a ``LOSS`` port of its own carrier.
+A located device has two fixed outputs of the heat it releases (owner decision D-h of the device-location spec):
+``HeatToHeatedZoneInWatt``, which declares ``EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE`` (``PRODUCTION`` of
+``ROOM_HEAT``) and which the building reads, and ``HeatLossInWatt``, a ``LOSS`` of the device's own carrier.
+``InstallationLocation.releases_into_heated_zone`` picks the one the location fills.
 """
 
 import pytest
@@ -12,59 +14,28 @@ from hisim.energy_port import EnergyPort
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("location", "carrier", "expected"),
+    ("location", "expected"),
     [
-        (
-            lt.InstallationLocation.HEATED_ZONE,
-            lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
-            EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
-        ),
-        (
-            lt.InstallationLocation.HEATED_ZONE,
-            lt.EnergyBalanceCarrier.ELECTRICITY,
-            EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
-        ),
-        (
-            lt.InstallationLocation.UNHEATED_SPACE,
-            lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
-            EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
-        ),
-        (
-            lt.InstallationLocation.UNHEATED_SPACE,
-            lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
-            EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
-        ),
-        (
-            lt.InstallationLocation.OUTDOORS,
-            lt.EnergyBalanceCarrier.ELECTRICITY,
-            EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
-        ),
+        (lt.InstallationLocation.HEATED_ZONE, True),
+        (lt.InstallationLocation.UNHEATED_SPACE, False),
+        (lt.InstallationLocation.OUTDOORS, False),
     ],
 )
-def test_the_heat_a_device_releases_is_a_gain_in_the_heated_zone_and_a_loss_elsewhere(
-    location: lt.InstallationLocation, carrier: lt.EnergyBalanceCarrier, expected: EnergyPort
+def test_only_a_device_in_the_heated_zone_releases_its_heat_into_it(
+    location: lt.InstallationLocation, expected: bool
 ) -> None:
-    """In the heated zone the heat is room heat for the building, in an unheated space and outdoors a loss.
-
-    Catches: a heated-zone device whose heat goes out of the house, a cellar or outdoor device whose heat is handed to
-    the building, and a loss booked under another carrier than the device's own.
-    """
-    assert EnergyPort.for_heat_released(location, carrier) == expected
+    """Catches a cellar or outdoor device handing its heat to the building, and a heated-zone device losing it outside."""
+    assert location.releases_into_heated_zone is expected
 
 
 @pytest.mark.base
-def test_a_loss_out_of_the_house_goes_to_its_boundary_and_heat_into_the_zone_has_none() -> None:
-    """A loss from an unheated space reaches its boundary node by itself; heat into the zone needs its reader.
+def test_the_heat_released_into_the_heated_zone_is_room_heat_produced_with_no_boundary() -> None:
+    """The port the building reads is production of room heat and needs its reader: no boundary node absorbs it.
 
-    Catches: a released-heat port in the heated zone that a boundary would absorb, so the building's input would book
-    a transfer the device did not send.
+    Catches: a port the building's dynamic inputs would not pair with (another role or carrier), and a boundary
+    default that would book the heat as delivered when no building reads it.
     """
-    assert EnergyPort.for_heat_released(
-        lt.InstallationLocation.UNHEATED_SPACE, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
-    ).default_boundary() == lt.EnvironmentNode.OUTDOORS.value
-    assert (
-        EnergyPort.for_heat_released(
-            lt.InstallationLocation.HEATED_ZONE, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
-        ).default_boundary()
-        is None
-    )
+    port = EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE
+    assert port == EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT)
+    assert port.pairs_with(EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT))
+    assert port.default_boundary() is None

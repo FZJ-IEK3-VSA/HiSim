@@ -383,12 +383,24 @@ class InstallationLocation(str, enum.Enum):
     The location decides the temperature a device's loss is computed against and where the loss goes: into the
     heated zone as an internal gain, or out of the house. The building's ``technical_room_location`` is one of the
     first two values; a device follows it unless its own configuration names another place. An energy-system file
-    spells a member by its name or by its value.
+    spells a member by its name (``HEATED_ZONE``), as it does every enum field, and the decoder also accepts the value
+    (``heated_zone``).
     """
 
     HEATED_ZONE = "heated_zone"
     UNHEATED_SPACE = "unheated_space"
     OUTDOORS = "outdoors"
+
+    @property
+    def releases_into_heated_zone(self) -> bool:
+        """Whether a device standing here releases its heat into the building's heated zone.
+
+        True for ``HEATED_ZONE`` only. A device in an unheated space or outdoors loses its heat out of the house: the
+        building counts an unheated cellar as outside its envelope, and nothing brings the heat back. A located device
+        has two fixed outputs of the heat it releases, one into the heated zone and one lost out of the house; this
+        property picks the one its location fills, and the other is 0 in every step.
+        """
+        return self is InstallationLocation.HEATED_ZONE
 
 
 @enum.unique

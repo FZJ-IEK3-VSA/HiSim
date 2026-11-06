@@ -156,7 +156,9 @@ class Building(DynamicComponent, cp.PhysicsComponent):
 
     The building is a dynamic component: besides its named inputs it grows one input for every output of another
     component that releases heat into its heated zone, an output declaring ``EnergyPort(PRODUCTION, ROOM_HEAT)``, such
-    as a tank standing in a heated utility room (:meth:`default_connections_for`). Their sum enters the internal gains
+    as a tank's ``HeatToHeatedZoneInWatt`` (:meth:`default_connections_for`). A located device offers that output
+    wherever it stands and fills it only in the heated zone, so the building reads it in every house and gets zeros
+    from a device in an unheated cellar. Their sum enters the internal gains
     beside the occupancy's, and :attr:`HeatReleasedByDevicesInWatt` publishes it. It also publishes the temperature
     of an unheated cellar below it, which a device standing there computes its loss against
     (:meth:`unheated_cellar_temperature_in_celsius`).
@@ -267,11 +269,6 @@ class Building(DynamicComponent, cp.PhysicsComponent):
     #: The unit the Building publishes every degree-hour KPI in.
     DEGREE_HOURS_UNIT = "°C*h"
 
-    #: The port of another component's output that releases heat into the heated zone, which the building reads as
-    #: an internal gain: the device's half of the transfer.
-    HEAT_RELEASED_INTO_THE_HEATED_ZONE: ClassVar[EnergyPort] = EnergyPort(
-        lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT
-    )
     #: Stable key of the channel of the heat devices release into the heated zone.
     DEVICE_HEAT_CHANNEL: ClassVar[str] = "device_heat"
     #: The one flow the building grows inputs for: heat a device releases into the heated zone, in W. The load type is
@@ -631,7 +628,7 @@ class Building(DynamicComponent, cp.PhysicsComponent):
             output_description=(
                 "The heat that devices standing in the heated zone release into it, in W: the sum of the building's "
                 "dynamic inputs, each reading an output with the port PRODUCTION of ROOM_HEAT, such as a tank's "
-                "standby loss. It enters the internal gains beside the occupancy's. The occupancy's appliances are not "
+                "HeatToHeatedZoneInWatt. It enters the internal gains beside the occupancy's. The occupancy's appliances are not "
                 f"part of it; they arrive on {self.HeatingByDevices}. The inputs carry the energy ports."
             ),
         )
@@ -895,12 +892,12 @@ class Building(DynamicComponent, cp.PhysicsComponent):
         """What the building reads of one component as heat released into its heated zone: every such port, by its role.
 
         An output of the source that declares ``EnergyPort(PRODUCTION, ROOM_HEAT)``
-        (:attr:`HEAT_RELEASED_INTO_THE_HEATED_ZONE`) is read through one dynamic input of the channel
+        (:attr:`EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE`) is read through one dynamic input of the channel
         :attr:`DEVICE_HEAT_CHANNEL`, at the monitored-only weight, and the input carries the channel's port. An output
         one of the building's named inputs reads by its static default connection is left out: the occupancy's
         ``HeatingByResidents`` and ``HeatingByDevices`` declare the same port, and reading them twice would count the
-        occupants' heat twice. For example, a tank in the heated zone whose standby loss declares the port is read
-        once, the occupancy not at all. Nothing depends on the source's class, so a new device in the heated zone
+        occupants' heat twice. For example, a tank's ``HeatToHeatedZoneInWatt``, which declares the port wherever the
+        tank stands, is read once, the occupancy not at all. Nothing depends on the source's class, so a new device in the heated zone
         needs no new input on the building. The building never reads itself.
 
         Args:
@@ -927,7 +924,7 @@ class Building(DynamicComponent, cp.PhysicsComponent):
                 energy_port=channel.energy_port,
             )
             for output in source_component.outputs
-            if output.energy_port == self.HEAT_RELEASED_INTO_THE_HEATED_ZONE and output.field_name not in read_by_name
+            if output.energy_port == EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE and output.field_name not in read_by_name
         ]
 
     # =================================================================================================================================

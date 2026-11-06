@@ -396,6 +396,13 @@ balance *report* (the collection of ports, the Sankey, `balance_report.json`) st
 computed. The component constructors' own refusals (`EnergyPort.__post_init__`, a config's `__post_init__`) are
 not rules of the system and stay (D10).
 
+*Amendment (owner, Noah, 2026-11-06, PR 4):* the `AFTER_RUN` rules run first thing in the post-processing, the
+energy balance's rules included, and a run they refuse stops there: no charts, KPIs or exports are written for it.
+Before, the balance was concluded last, so that every other output was written when it failed; that ordering is
+given up. The balance report and the Sankeys are still written first when `EXPORT_ENERGY_BALANCE` asks for them
+(`PostProcessor.judge_the_results`), since they show where the balance breaks; a run whose declared ports are not
+finite writes nothing.
+
 **The errors.** `SetupRuleViolation(ValueError)` carries the faults. The existing error classes stay as subclasses so
 that every `except` and every test keeps working: `EnergySystemFormatError`, `EnergySystemBindingError`,
 `EnergySystemSizingError`, `EnergySystemWiringError`, `EnergySystemAssemblyError` (`hisim/energy_system/errors.py`),

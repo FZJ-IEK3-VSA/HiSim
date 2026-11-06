@@ -41,7 +41,8 @@ absorbed by this spec; related hisim-6id7 (the largest `b_Transmission` of an el
 
 ## 2. Decisions
 
-The owner took every decision below on 2026-11-04. The letters keep the order of the interview.
+The owner took D-a to D-f on 2026-11-04 and D-g, the former Q1, on 2026-11-06. The letters keep the order of the
+interview.
 
 | ID | Decision | Owner | Date |
 |---|---|---|---|
@@ -51,14 +52,15 @@ The owner took every decision below on 2026-11-04. The letters keep the order of
 | D-d | First step: the buffer, the hot-water tank and the house battery; the PV inverter, the boiler's casing and the car battery later | Noah | 2026-11-04 |
 | D-e | The Sankey's "outdoors" splits into "unconverted sunlight" (`LOSS` of carrier `SOLAR`) and "heat loss to outdoors" (every other `LOSS`), chosen by the carrier | Noah | 2026-11-04 |
 | D-f | Spec first, then beads; the measurement is part of the first result-moving PR | Noah | 2026-11-04 |
+| D-g | TABULA's cellar codes `NI` and `0` give the heated zone, both marked unverified until MOBASY 2021 Annex B.1 is checked | Noah | 2026-11-06 |
 
 **D-a — one sized field on the building, the technical-room location, derived from TABULA's `Code_CellarCond`;
 every device's `installation_location` is a sized field that follows it, and a file may pin it per device**
 (owner, 2026-11-04). The house decides where its technical room is, once, from the one source HiSim has about the
 house: the TABULA row. A device follows the house unless a file says otherwise (a battery in the garage, a tank
 on the roof). The derivation of §4.2: an unheated cellar (`N`) gives an unheated space; a heated cellar (`C`), a
-partly heated cellar (`P`) and no cellar (`-`) give the heated zone; `NI` and `0` are Q1 of §10, with the
-recommendation heated zone. Rejected: a construction-year cut-off (HiSim has no source for the year of the
+partly heated cellar (`P`) and no cellar (`-`) give the heated zone; `NI` and `0` give the heated zone as well (D-g).
+Rejected: a construction-year cut-off (HiSim has no source for the year of the
 house it simulates; the TABULA class is a year band, the row's cellar code is the direct fact), a plain field
 with no derivation (every twin would then state it, and RenoVisor's requests do not carry it), and a field per
 device only (ten devices would repeat one fact about the house). RenoVisor overrides the building's field once the
@@ -111,6 +113,14 @@ no number does.
 **D-f — spec first, then beads; the measurement is part of the first result-moving PR** (owner, 2026-11-04). The
 expected effect is estimated in §7 from the numbers of §1; the PR of bead .2 measures it on both sizer twins and
 writes the table into §7. Consequence: no measurement bead; the verification of §8 lists what is measured.
+
+**D-g — TABULA's cellar codes `NI` and `0` give the heated zone** (owner, 2026-11-06; Q1 of §10 until then).
+`NI` reads from its rows as an unheated cellar inside the insulated envelope: the floor above it has b = 0, so the
+cellar stays close to the indoor temperature and a device's loss there stays in the house. Mapping it to the
+unheated space would compute the cellar from the floor's b of 0.5 (the soil floor) and make it far too cold. `0`
+is the owner's reading "no cellar" for the synthetic-average rows. Neither meaning is verified against MOBASY 2021
+Annex B.1; the table of §4.2 marks both, to be amended when the document is checked. Consequence: only the two
+newest terraced-house classes and the synthetic averages are affected, none of them a twin.
 
 ## 3. Terms
 
@@ -198,8 +208,8 @@ against `n_Storey_effective_envelope`; the floor sub-elements).
 | `C` | heated (conditioned) cellar | the cellar adds one storey to the heated and to the envelope count; b = 0.5 on the cellar floor | 1 | `HEATED_ZONE` |
 | `P` | partly heated cellar | adds 0.5 storey (`DE.N.MFH.03`, `TH.08`, `TH.10`) | 0.5 | `HEATED_ZONE` (the technical room is in the heated part; an owner assumption) |
 | `-` | no cellar (`storeys_geometry.md` maps the request's `none` to it) | `A_Floor_1` = 0, the floor is `Floor_2` "Soil" with b = 0.5 (`DE.N.SFH.11`, `.12`, `MFH.11`, `.12`) | 0 | `HEATED_ZONE` |
-| `NI` | unheated cellar inside the insulated envelope (inferred: the cellar adds a storey to the envelope count but not to the heated one, the floor to the cellar has b = 0, the cellar's floor to the soil b = 0.5; `DE.N.TH.11`, `.12`); **unverified** against MOBASY Annex B.1 | as stated | 0 | Q1 of §10; recommendation `HEATED_ZONE` |
-| `0` | only on the synthetic-average rows (`DE.N.SFH-TH.01-06.Gen.SyAv.*`, `MFH-AB.*`, `DE.TestRegion.*`: `n_Storey` = 0, no geometry), the owner read it as "no cellar"; **unverified** | b = 0.5 on `Floor_1` like an `N` row; the rows average classes that are nearly all `N` | 0 | Q1 of §10; the owner's mapping `HEATED_ZONE` until decided |
+| `NI` | unheated cellar inside the insulated envelope (inferred: the cellar adds a storey to the envelope count but not to the heated one, the floor to the cellar has b = 0, the cellar's floor to the soil b = 0.5; `DE.N.TH.11`, `.12`); **unverified** against MOBASY Annex B.1 | as stated | 0 | `HEATED_ZONE` (D-g; unverified) |
+| `0` | only on the synthetic-average rows (`DE.N.SFH-TH.01-06.Gen.SyAv.*`, `MFH-AB.*`, `DE.TestRegion.*`: `n_Storey` = 0, no geometry), the owner read it as "no cellar"; **unverified** | b = 0.5 on `Floor_1` like an `N` row; the rows average classes that are nearly all `N` | 0 | `HEATED_ZONE` (D-g; unverified) |
 
 A code outside the table refuses the build (fail loudly), so a new TABULA export cannot slip a meaning past the
 table. Every German class up to `.10` (to 1994 for single-family houses, 2001 for `SFH.09`) is `N`; `.11` and `.12`
@@ -374,7 +384,7 @@ Pull requests, in this order, one bead each (AGENTS.md); PR 4 is independent of 
 | later | hisim-device-location-820d.6 (components, P4; after hisim-boiler-auxiliary-losses-pbda) | the boiler's casing loss follows its installation location; the flue loss stays outdoors | | |
 | later | hisim-device-location-820d.7 (components, P4) | the car battery's `installation_location`, default `outdoors` | | none by default |
 | later | hisim-device-location-820d.8 (renovisor, P3, `external`; after hisim-envelope-geometry-4vho.1) | the translator writes `technical_room_location` from the request's basement condition (§4.7) | | RenoVisor packages with a stated basement condition |
-| decision | hisim-device-location-820d.9 (question, P3, `owner-decision`) | Q1 of §10: the meaning and mapping of `NI` and `0` | | |
+| decision | hisim-device-location-820d.9 (question, P3, closed) | Q1 of §10, decided as D-g: `NI` and `0` give the heated zone | | |
 
 ## 7. Expected effect and measured results
 
@@ -450,18 +460,8 @@ cooling demand, the building's balance residual, the number of moved goldens.
 ## 10. Open questions
 
 - **Q1. The meaning of the cellar codes `NI` and `0`, and their mapping** (bead hisim-device-location-820d.9,
-  `owner-decision`, P3). `NI` (18 German rows, `DE.N.TH.11` and `.12`, 2002 on; 51 rows in all) reads from the
-  rows as an unheated cellar inside the insulated envelope: it adds a storey to the envelope count and none to the
-  heated one, the floor above it has b = 0, its own floor to the soil b = 0.5. `0` (24 German rows) appears only on
-  the synthetic-average rows without geometry (`SyAv`, `n_Storey` = 0), with b = 0.5 on the floor like an `N` row,
-  averaging classes that are nearly all `N`. Neither meaning could be verified against MOBASY 2021 Annex B.1 (not in
-  the repository; a web search found nothing). Options for `NI`: (a) `HEATED_ZONE`: a cellar inside the insulation
-  keeps the heat in the envelope, and the building's floor b (the largest of the sub-elements, 0.5 from the soil
-  floor) would otherwise give the wrong cellar temperature; (b) `UNHEATED_SPACE`: the cellar is unheated, and
-  the loss leaves as for `N`. Options for `0`: (a) `HEATED_ZONE`, the owner's reading "no cellar"; (b)
-  `UNHEATED_SPACE`, the population the rows average. Recommendation: (a) for `NI`, and (a) for `0` as the owner
-  said, both marked in the table as unverified, to be amended when the document is checked. The rows affected are
-  the two newest terraced-house classes and the synthetic averages, none of them a twin.
+  closed). Decided by the owner on 2026-11-06 as D-g: both give the heated zone, marked unverified in §4.2 until
+  MOBASY 2021 Annex B.1 is checked.
 
 ## 11. Beads
 
@@ -477,7 +477,7 @@ Epic hisim-device-location-820d (P2, `components`).
 | hisim-device-location-820d.6 (P4, components) | the boiler's casing loss follows the location, after hisim-boiler-auxiliary-losses-pbda | – |
 | hisim-device-location-820d.7 (P4, components) | the car battery's location, default outdoors | – |
 | hisim-device-location-820d.8 (P3, renovisor, `external`) | the translator writes the location from the request's basement condition, after hisim-envelope-geometry-4vho.1 | – |
-| hisim-device-location-820d.9 (P3, question, `owner-decision`) | Q1 of §10 | – |
+| hisim-device-location-820d.9 (P3, question, closed) | Q1 of §10, decided as D-g | #1181 |
 | hisim-af8m (P3, closed) | absorbed by .2 | – |
 | hisim-6id7 (P2, components, related) | the floor's b per sub-element; the cellar temperature reads whatever b the floor uses | – |
 | hisim-opxv (P2, components, related) | airing; decides what the published air temperature is while the windows are open | – |

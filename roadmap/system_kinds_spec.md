@@ -69,8 +69,8 @@ reason it lost.
 | ID | Decision | Owner | Date |
 |---|---|---|---|
 | D1 | The validation rules are modular and live in one rules package, `hisim/rules/`: one module per rule family, each rule a self-contained unit that declares its id, what it checks and when it runs; a registry collects them; the hooks in the loader, the simulator and the post-processing only call the registry; the existing checks move out of their modules into the package | Noah | 2026-11-06 |
-| D2 | Every rule can be waived per kind through the waiver table, the physics and consistency rules included; no class of rules is unwaivable | Noah | 2026-11-06 |
-| D3 | Every rule applies to every kind unless the waiver table names (rule, kind, reason) | Noah | 2026-11-06 |
+| D2 | Every rule can be waived per kind through its own `WAIVED_FOR`, the physics and consistency rules included; no class of rules is unwaivable | Noah | 2026-11-06 |
+| D3 | Every rule applies to every kind unless it is waived for that kind with a reason; amended the same day: the waiver lives on the rule, not in a central table | Noah | 2026-11-06 |
 | D4 | A setup declares exactly one kind; there is no second axis per building | Noah | 2026-11-06 |
 | D5 | The kinds are `demo`, `residential`, `commercial` and `plant`, the enum `SetupKind`; the file key is `setup_kind` | Noah | 2026-11-06 |
 | D6 | A kind is only a switch that selects waivers; nothing checks that a kind fits its setup | Noah | 2026-11-06 |
@@ -90,9 +90,9 @@ module; every rule gets direct tests (§9).
 
 **D2 — every rule can be waived per kind, the physics and consistency rules included; no rule is unwaivable**
 (owner, 2026-11-06; against the draft's recommendation of two classes, §10). One mechanism for every rule, and the
-table is the whole truth about what a kind does not run: a reader of `Waivers.TABLE` needs no second list of
-exceptions to the exceptions. Consequence: the `Rule` base class carries no `UNIVERSAL` flag and the waiver test
-checks that a waiver names an existing rule, an existing kind and a non-empty reason, nothing more (§4.2, §9); the
+rule's `WAIVED_FOR` is the whole truth about which kinds do not run it: a reader needs no second list of
+exceptions to the exceptions. Consequence: the `Rule` base class carries no `UNIVERSAL` flag and the base's own
+check of a waiver asks only for an existing kind and a non-empty reason, nothing more (§4.1, §4.2, §9); the
 inventory keeps a descriptive column that says whether a rule is a law of the model or a domain rule (§6), which
 enforces nothing and tells a reviewer what a waiver would cost.
 
@@ -101,7 +101,13 @@ A forgotten waiver refuses a setup, which is noticed and fixed with one row; a f
 runs nowhere for that kind, which nothing notices. The pattern is the energy balance's: a component declares its
 ports or is exempt with a reason on its class, and `tests/test_energy_port_coverage.py` fails the one that does
 neither (`Exemptions`, `hisim/postprocessing/energy_balance/ports.py`; `Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
-Consequence: a rule says nothing about kinds; the table says what is waived and why (§4.2).
+Consequence: a rule applies until a waiver with a reason says otherwise (§4.2).
+
+*Amendment (owner, 2026-11-06):* the waivers live on the individual rules, not in a central table. The draft
+wrote one `Waivers.TABLE` in `hisim/rules/waivers.py` listing every (rule, kind, reason); such a table duplicates
+the rules it names and drifts from them, and everything about a rule lives in its own module, in line with D1. So
+each rule declares its own waivers in a class-scoped `WAIVED_FOR` mapping of kind to reason (§4.1), and the overview
+of every waiver per kind is generated from the registry, never written by hand (§4.2).
 
 **D4 — a setup declares exactly one kind; there is no second axis per building** (owner, 2026-11-06; against the
 draft's two axes, §10). One word per setup is what a reader of a file and a writer of a setup can state and check;
@@ -160,8 +166,8 @@ re-recorded twin, grouped and probe files.
 - **Setup**: one simulated system, however it is written: a Python setup (`system_setups/*.py`, its
   `setup_function`), an energy-system file (`*.energy_system.yaml`), a test fixture, or an isolation system the
   assembly harness builds.
-- **Kind**: the one word a setup declares about itself, from which the waiver table decides which rules it does
-  not run. One of the four values of `SetupKind` (D5): `DEMO` (a demonstration or a test rig: it shows a mechanism;
+- **Kind**: the one word a setup declares about itself, from which each rule's `WAIVED_FOR` decides whether that
+  rule runs. One of the four values of `SetupKind` (D5): `DEMO` (a demonstration or a test rig: it shows a mechanism;
   its numbers are not a statement about any house or plant), `RESIDENTIAL` (a building people live in: a household
   occupancy, apartments, domestic hot water per person), `COMMERCIAL` (a building people work in: usage profiles
   by zone type, no apartments), `PLANT` (a system without a building: a generator, a storage, a converter and the
@@ -178,9 +184,9 @@ re-recorded twin, grouped and probe files.
   like any other rule; the word tells a reviewer what the waiver gives up.
 - **Domain rule** (descriptive, §6): a rule that states what a correct system of some kind looks like: room heat
   needs a receiver, a bought carrier passes a meter, a heated building reaches its set point.
-- **Waiver**: one row of the waiver table, `Waiver(rule_id, kind, reason)`: the named rule does not run for that
-  kind, and the reason says why. The package's test refuses a waiver that names no existing rule or kind, or no
-  reason.
+- **Waiver**: one entry of a rule's `WAIVED_FOR` mapping, a kind and the reason the rule does not run for that
+  kind. The `Rule` base refuses, when the class is created, a key that is not a `SetupKind` and a reason that is
+  empty, so a malformed waiver fails at import.
 - **Registry**: the object that collects every rule of the package, answers which rules run at a stage for a
   kind, runs them and raises their faults as one error. It is built on demand, never stored in a module.
 - **Fault**: one finding of one rule: the rule id, the subject (a component, an output, a file location) and the
@@ -193,11 +199,10 @@ re-recorded twin, grouped and probe files.
 
 ```
 hisim/rules/
-  __init__.py        the package docstring: what a rule is, the stages, how a rule is added, how a waiver is added
+  __init__.py        the package docstring: what a rule is, the stages, how a rule and its waivers are declared
   rule.py            Rule (the base class), Fault, RuleStage, RuleViolation (the error)
   kinds.py           SetupKind (D5); nothing else
   registry.py        RuleRegistry: collect(), rules_for(stage, kind), run(stage, subject, kind)
-  waivers.py         Waiver, Waivers.TABLE: every (rule, kind, reason)
   inventory.py       RuleRecord, Inventory.RECORDS: every rule id with its family, stage, nature and where it lives
   subjects.py        the subject of each stage: LoadedDocument, BuiltSystem, RunResults
   document.py        the structural rules on a loaded document (EF-05, EF-06, EF-08, EF-11, ..., EF-57)
@@ -221,6 +226,10 @@ class RoomHeatNeedsReceiver(Rule):
     ID = "energy_ports.room_heat_needs_receiver"
     STAGE = RuleStage.BUILD
     ENFORCED = True
+    WAIVED_FOR = MappingProxyType({
+        SetupKind.DEMO: "a demo may run an occupancy without a building; the heat it does not place is reported as unlinked",
+        SetupKind.PLANT: "a plant has no heated zone; heat a device releases there has no receiver by construction",
+    })
 
     def check(self, system: BuiltSystem) -> Sequence[Fault]:
         ...
@@ -229,8 +238,12 @@ class RoomHeatNeedsReceiver(Rule):
 `ID` is unique across the package (the registry's test checks it); `STAGE` picks the subject the rule receives;
 `ENFORCED` says whether its faults raise or are logged (§4.5). A document rule adds `CODE = "EF-31"`, which its
 messages carry as today, so the error catalogue of `roadmap/declarative_energy_systems/` and every test that
-asserts on a message stay valid. A rule declares nothing about kinds (D3): the waiver table does. `check` returns
-faults and raises nothing; a rule that needs a value it does not have (a column missing from the table) returns a
+asserts on a message stay valid. `WAIVED_FOR: ClassVar[Mapping[SetupKind, str]]` names the kinds that do not run
+the rule, each with its reason (D3 as amended); the base's default is an empty `MappingProxyType({})`, read-only
+like every class constant of the package (`coding_style.md` §4), and a rule that waives nothing writes nothing.
+`Rule.__init_subclass__` checks the mapping when the class is created: a key that is not a `SetupKind` and a
+reason that is empty or blank raise a `TypeError` naming the rule, so a malformed waiver fails at import, before
+any run, and no test needs to look for it. `check` returns faults and raises nothing; a rule that needs a value it does not have (a column missing from the table) returns a
 fault that says so. The class holds no state between calls. Everything is class-scoped or an `Enum`
 (`system_docs/coding_style.md` §4); the package writes no file and prints nothing, so the semgrep gates
 (`.semgrep/file_writes.yml`, `.semgrep/no_print.yml`) need no entry.
@@ -247,7 +260,7 @@ checks that import no component today (`hisim/energy_system/validation.py` keeps
 and gathers every `Rule` subclass that declares an `ID`; it returns a registry object the caller keeps for the
 calculation. Nothing is cached at module level (`coding_style.md` §4: no mutable module state); the simulator
 holds the registry it built, as it holds its components. `registry.run(stage, subject, kind)` refuses a subject
-whose kind is not declared (D7), picks the rules of the stage, drops those the waiver table waives for the kind,
+whose kind is not declared (D7), picks the rules of the stage, drops those whose `WAIVED_FOR` names the kind,
 runs each, and raises one `RuleViolation` listing every fault of the enforced rules, logging the faults of the
 others (§4.5). The order of rules within a stage is the order of the inventory, so the message is stable.
 
@@ -275,36 +288,39 @@ that every `except` and every test keeps working: `EnergySystemFormatError`, `En
 own subclass; the message formats do not change in the migration (§8: a migration PR moves code and changes no
 message, so the tests that assert on messages prove the move).
 
-### 4.2 Every rule applies unless waived; every rule can be waived (D2, D3)
+### 4.2 Every rule applies unless waived; a rule waives itself (D2, D3)
 
-A rule says nothing about kinds. The waiver table says what a kind does not run and why, and the generic test of
-§9 fails a waiver that names a rule or a kind that does not exist, a waiver without a reason, and a waiver
-written twice. A forgotten entry then fails loudly (a demo is refused by a rule it should not see, and the fix is
-one row with a reason) instead of silently. Under D2 the table may name any rule, the balance and the loop rules
-included: the inventory's nature column (§6) says which rules are laws of the model, so that a reviewer of a
-waiver on one of them knows the run then publishes numbers the model does not vouch for, but nothing in the code
-refuses such a row.
+A rule applies to every kind until its own `WAIVED_FOR` names a kind with a reason (D3 as amended). There is no
+central list: what a kind does not run is read off the rules, one `WAIVED_FOR` each, and nothing else has to be
+kept in step with them. A forgotten waiver fails loudly (a demo is refused by a rule it should not see, and the fix
+is one entry with a reason on that rule) instead of silently. Under D2 any rule may carry a waiver, the balance and
+the loop rules included: the inventory's nature column (§6) says which rules are laws of the model, so that a
+reviewer of a waiver on one of them knows the run then publishes numbers the model does not vouch for, but nothing
+in the code refuses such an entry.
 
-The waiver table, in `hisim/rules/waivers.py`:
+**What a waiver looks like.** On the rule, as in the example of §4.1: `WAIVED_FOR = MappingProxyType({SetupKind.DEMO:
+"<reason>"})`. The reason is a sentence a reader of the overview understands without the rule's code. A waiver is
+global per kind, never per setup: a per-setup waiver would be the switch the owner wants to avoid, and a setup
+whose kind does not fit a rule declares another kind or fixes the system.
 
-```python
-class Waivers:
-    """Every rule a kind does not run, with the reason."""
+**The day-one waivers**, three entries on two rules, nothing else:
 
-    TABLE: ClassVar[Tuple[Waiver, ...]] = (
-        Waiver("energy_ports.room_heat_needs_receiver", SetupKind.DEMO,
-               "a demo may run an occupancy without a building; the heat it does not place is reported as unlinked"),
-        Waiver("energy_ports.room_heat_needs_receiver", SetupKind.PLANT,
-               "a plant has no heated zone; heat a device releases there has no receiver by construction"),
-        Waiver("meters.metered_port_has_a_meter", SetupKind.DEMO,
-               "a demo may leave a bought carrier unmetered; the balance reports the port as unmetered"),
-        ...
-    )
-```
+| Rule | Kind | Reason |
+|---|---|---|
+| `energy_ports.room_heat_needs_receiver` | `demo` | a demo may run an occupancy without a building; the heat it does not place is reported as unlinked |
+| `energy_ports.room_heat_needs_receiver` | `plant` | a plant has no heated zone; heat a device releases there has no receiver by construction |
+| `meters.metered_port_has_a_meter` | `demo` | a demo may leave a bought carrier unmetered; the balance reports the port as unmetered |
 
-A waiver is global per kind, never per setup: a per-setup waiver would be the switch the owner wants to avoid, and
-a setup whose kind does not fit a rule declares another kind or fixes the system. The day-one table holds the
-three rows above and nothing else: every other rule applies to every kind, as today.
+**The overview is generated, never written.** The one place that shows every waiver per kind is the registry,
+through a CLI command: `hisim rules list` prints every rule with its id, family, stage, nature, whether it is
+enforced and the kinds that waive it with their reasons, in the inventory's order; `hisim rules waivers [--kind
+<kind>]` prints the waivers grouped by kind; `hisim rules show <id>` prints one rule's docstring and declarations.
+The commands live beside `hisim energy-system describe` (`hisim/cli.py`, `hisim/cli_render.py`) and read nothing
+but `RuleRegistry.collect()`, so they cannot disagree with the code. No overview page is committed: a committed
+page would be the central table under another name, and the inventory of §6 is a design record of this spec's
+date, not a page the code keeps in step. The test of §9 runs `hisim rules list` on the registry and checks that
+every rule and every waiver appears once with its reason, which is the same check a committed page would need,
+without the page.
 
 ### 4.3 One kind per setup (D4, D5)
 
@@ -381,7 +397,7 @@ turns "unlinked" into a failure (PR 6 of the complete Sankey spec) then flips on
 ### 4.6 The room-heat rule lands scoped
 
 `energy_ports.room_heat_needs_receiver` (D-h of the device-location spec) is the first rule written directly into
-the package: stage `BUILD`, enforced, waived by the table for two kinds:
+the package: stage `BUILD`, enforced, and it declares two waivers on itself in its `WAIVED_FOR` (§4.1):
 
 - **`demo`**: "a demo may run an occupancy without a building; the heat it does not place is reported as
   unlinked". The occupancy's two `ROOM_HEAT` outputs (`HeatingByResidents`, `HeatingByDevices`) are `PRODUCTION`
@@ -398,7 +414,7 @@ Consequences for the systems of §1: `dynamic_components` declares `demo`; `two_
 dispatch test and the assembly-crossing test declare `demo` or get a building, whichever the test is about; the
 isolation runs are `demo` by construction (§4.4). Every residential twin has a building and is not affected; a
 `commercial` setup is not waived (a commercial building takes room heat as a house does). PR #1211 is rebased onto
-the mechanism PR and adds the rule to `energy_ports.py` with its two waivers, instead of a fourth fault list in
+the mechanism PR and adds the rule to `energy_ports.py` with its two waivers on the class, instead of a fourth fault list in
 `Wiring.refuse_a_broken_wiring`.
 
 ## 5. What changes and what does not
@@ -426,8 +442,8 @@ its nature; the target module in `hisim/rules/`. The nature is descriptive (D2: 
 says what a waiver gives up): **L** a law of the model or a consistency the code relies on; **D** a domain rule
 about the whole system; **B** a domain rule about a building (no subject in a plant); **R** a residential
 assumption; **P** a parse fault, stays in the reader (D9); **K** a device's own physics guard, stays in the
-component (D10); **C** a CI gate or harness contract. "Waived for" names the day-one waivers (§4.2); a row without
-one applies to every kind. Paths are relative to the repository root; `es/` is `hisim/energy_system/`, `eb/` is
+component (D10); **C** a CI gate or harness contract. "Waived for" names the kinds in the rule's `WAIVED_FOR` on day
+one (§4.2); a row without one applies to every kind. Paths are relative to the repository root; `es/` is `hisim/energy_system/`, `eb/` is
 `hisim/postprocessing/energy_balance/`, `cmp/` is `hisim/components/`.
 
 ### 6.1 Reading the document (declarative mode, stage LOAD)
@@ -759,7 +775,7 @@ carries #1211; the families follow in the order of their coupling; PR 10 is the 
 
 | PR | Content | Moves | Results |
 |---|---|---|---|
-| 1 | `hisim/rules/`: `Rule`, `Fault`, `RuleStage`, `RuleViolation`, `RuleRegistry.collect`, `Waivers.TABLE` (empty), `Inventory.RECORDS` (every rule id of §6 with its family, stage, nature and where it lives today), the subjects; `SetupKind`, the `setup_kind` key (model, reader, emitter, schema, executor), `Simulator.declare_setup_kind`, the registry's refusal of an undeclared kind, the recorder, every setup's declaration, every twin re-recorded, the fixtures and the harness declaring; the generic tests of §9; the four hooks calling an (empty) registry | nothing | none |
+| 1 | `hisim/rules/`: `Rule`, `Fault`, `RuleStage`, `RuleViolation`, `RuleRegistry.collect`, `Rule.WAIVED_FOR` with its `__init_subclass__` checks, the `hisim rules` commands, `Inventory.RECORDS` (every rule id of §6 with its family, stage, nature and where it lives today), the subjects; `SetupKind`, the `setup_kind` key (model, reader, emitter, schema, executor), `Simulator.declare_setup_kind`, the registry's refusal of an undeclared kind, the recorder, every setup's declaration, every twin re-recorded, the fixtures and the harness declaring; the generic tests of §9; the four hooks calling an (empty) registry | nothing | none |
 | 2 | `energy_ports.py`: the three fault lists of `Wiring.refuse_a_broken_wiring` and `energy_ports.room_heat_needs_receiver` with its `demo` and `plant` waivers; #1211 rebased onto PR 1 and reduced to the device side | `eb/ports.py:Wiring.*_faults` | none (the rule refuses nothing that runs today once the demos and the plant are declared) |
 | 3 | `fluid_loops.py`: the refusals of `FluidLoopWalk.find_loops`; the walk keeps discovering loop ids | `hisim/fluid_loops.py` (part) | none |
 | 4 | `results.py`, `meters.py`: the finite check, the balance, the links, the circuit faults, the meter balance, the unmetered ports (Q-H kept; the `demo` waiver of `meters.metered_port_has_a_meter`), the log-only `port_linked` and `component_declared` | `hisim/postprocessing/finite_results.py`; `eb/check.py`, `eb/meters.py` (the judging halves) | none |
@@ -782,8 +798,14 @@ Generic tests, in `tests/rules/`, each one test for the whole package:
   where `<module>` is its module, a `STAGE` and `ENFORCED`; the registry collects exactly the classes the
   inventory records as "in the package"; the order of a stage is the inventory's; the registry refuses a subject
   without a kind with the message of §4.4.
-- `test_waivers.py`: every waiver names an existing rule, an existing `SetupKind` and a non-empty reason; no
-  waiver twice. Nothing else (D2).
+- `test_rule_base.py`: the direct tests of `Rule.__init_subclass__`: a subclass whose `WAIVED_FOR` has a key that is
+  not a `SetupKind`, or a reason that is empty or blank, fails at class creation with a `TypeError` naming the
+  rule; a subclass without `WAIVED_FOR` inherits the empty read-only mapping and cannot mutate it; a well-formed
+  mapping is kept as declared. Nothing else is checked about a waiver (D2).
+- `test_overview.py`: `hisim rules list` and `hisim rules waivers` print every rule of the registry once with its
+  id, stage, nature, enforcement and every `WAIVED_FOR` entry with its reason, in the inventory's order, and
+  `hisim rules show <id>` prints each rule's declarations; the output is compared with what the registry holds,
+  not with a committed page (§4.2).
 - `test_inventory.py`: every rule id of the registry is in the inventory and vice versa; every record names a
   nature, a stage and a place; the records of this spec's §6 are the file's (the spec cites the file as its source
   after PR 1).
@@ -799,7 +821,7 @@ Generic tests, in `tests/rules/`, each one test for the whole package:
   freshness gate, parity and the goldens stay green (the one re-recording in PR 1 is the `setup_kind` key).
 - The room-heat rule: `tests/rules/test_energy_ports.py` builds a system with an unread `ROOM_HEAT` output and
   sees the fault for `residential` and `commercial`, no fault for `demo` and `plant`, and a fault again for `demo`
-  with the waiver table emptied (the waiver, not the rule, is what the demo relies on).
+  with the rule's `WAIVED_FOR` patched empty (the waiver, not the rule, is what the demo relies on).
 - D11: the PR of bead .10 measures the KPIs of `simple_air_conditioner_household_building_sizer` before and after
   the residents (the five golden windows) and writes the table into its description; the golden update runs through
   `golden-update.yml` on current main.
@@ -825,7 +847,12 @@ alternatives both rejected.
   never a RenoVisor base or a test-partner source. The owner chose a switch: the declaration is trusted, and the
   one setup the contract would have caught is fixed by hand (D11).
 - **Per-rule kind lists (the owner's first form).** A new kind starts with no checks, and a rule that forgets a
-  kind runs nowhere for it, both silently; with a waiver table a forgotten entry refuses, which is noticed (D3).
+  kind runs nowhere for it, both silently; with apply-unless-waived a forgotten waiver refuses, which is noticed (D3).
+- **A central waiver table** (`Waivers.TABLE` in `hisim/rules/waivers.py`, the draft's form; the owner's amendment of
+  D3, 2026-11-06). A table that names rules duplicates them and drifts from them, and everything about a rule
+  lives in its own module (D1); the waivers are on the rules, and the overview is generated (§4.2).
+- **A committed overview page of the waivers, kept in step by a test.** It would be the central table under another
+  name; the generated `hisim rules` output is the overview, and the test checks the generator against the registry.
 - **Per-setup waivers.** A setup that does not fit its kind declares another kind or is fixed; a switch per file is
   the state the owner wants to leave.
 - **A kind in `SimulationParameters`.** The parameter files are a shared library, any system runs from any of
@@ -857,7 +884,7 @@ PR numbers of §8.
 
 | Bead | Content | PR |
 |---|---|---|
-| .1 (P2) | the mechanism: the package, the registry, the waiver table, the inventory as data, the subjects, the hooks; `SetupKind`, `setup_kind` and `declare_setup_kind` declared everywhere; the twins re-recorded; the generic tests | PR 1 |
+| .1 (P2) | the mechanism: the package, the registry, `Rule.WAIVED_FOR` and the generated `hisim rules` overview, the inventory as data, the subjects, the hooks; `SetupKind`, `setup_kind` and `declare_setup_kind` declared everywhere; the twins re-recorded; the generic tests | PR 1 |
 | .2 (P2) | the energy-port family, with `room_heat_needs_receiver` and its `demo` and `plant` waivers; #1211 rebased onto it | PR 2 |
 | .3 (P3) | the fluid-loop family | PR 3 |
 | .4 (P3) | the after-run and meter families, with the `demo` waiver of `meters.metered_port_has_a_meter` | PR 4 |

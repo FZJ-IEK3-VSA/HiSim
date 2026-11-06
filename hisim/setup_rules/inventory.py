@@ -1,9 +1,10 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 129 that move into the rules package and the 71 that stay where
-they are: a parse fault of the reader, a device's own physics guard, a recorder check, a CI gate, a policy of the
-run. Each record names the check, its nature, when it runs, whether it refuses or logs, where it lives today and,
-for a check that moves, the module of ``hisim/setup_rules/`` it moves to and its stage. When a family moves, its
+The inventory is the one list of the checks, the 123 that move into the rules package and the 77 that stay where
+they are: a parse fault of the reader, a device's own physics guard, a call of the component API refused when it is
+made, a recorder check, a CI gate, a policy of the run, and one retired check that never fired. Each record names
+the check, its nature, when it runs, whether it refuses or logs, where it lives today and, for a check that moves,
+the module of ``hisim/setup_rules/`` it moves to and its stage. When a family moves, its
 pull request sets each moved record's ``lives`` to its place in the package and its ``codes`` to the codes it
 allocated; ``tests/rules/test_inventory.py`` holds the registry and the records in step.
 """
@@ -516,12 +517,9 @@ class Inventory:
             enforcement="E", checks="no two outputs with one full name", lives="hisim/setup_rules/components.py:UniqueOutputKey",
         ),
         RuleRecord(
-            rule_id="components.has_outputs", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a component registered at least one output", lives="ComponentWrapper.register_component_outputs",
-            note=(
-                "not moved in PR 5: the raise sits inside the loop after a registration and can never fire, so a rule of the evident intent "
-                "would refuse what runs today; an owner question"
-            ),
+            rule_id="components.has_outputs", nature=RuleNature.LAW, when="never (retired in PR 5)", enforcement="E",
+            checks="a component registered at least one output", lives="removed from ComponentWrapper.register_component_outputs in PR 5",
+            note="retired: never fired, the raise sat after a registration inside the loop; no code was allocated",
         ),
         RuleRecord(
             rule_id="components.name_is_identity", nature=RuleNature.LAW, when="build (construction)", enforcement="E",
@@ -529,15 +527,15 @@ class Inventory:
             lives="hisim/component.py:Component.__init__", note="a constructor contract, D10",
         ),
         RuleRecord(
-            rule_id="components.connect_input_target", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="components.connect_input_target", nature=RuleNature.LAW, when="build (the call)", enforcement="E",
             checks="connect_input names an existing input, once", lives="hisim/component.py:Component.connect_input",
-            note="not moved in PR 5: a call that names no input leaves nothing in the built system a rule could read; an owner question",
+            note="stays: fires at the call that would leave a broken component; a rule could only see the broken state afterwards (decided for PR 5)",
         ),
         RuleRecord(
-            rule_id="components.default_connections_wellformed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="components.default_connections_wellformed", nature=RuleNature.LAW, when="build (the call)", enforcement="E",
             checks="a default-connection list is non-empty, from one source class, and the connections asked for exist",
             lives="Component.add_default_connections, get_default_connections; hisim/dynamic_component.py",
-            note="not moved in PR 5: the declaration calls of a constructor, refused when they are made (D10); an owner question",
+            note="stays: fires at the call that would leave a broken component; a rule could only see the broken state afterwards (decided for PR 5)",
         ),
         RuleRecord(
             rule_id="components.load_type_agrees", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
@@ -564,23 +562,23 @@ class Inventory:
             lives="hisim/setup_rules/components.py:AutoConnectPossible",
         ),
         RuleRecord(
-            rule_id="components.no_duplicate_dynamic_feed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="components.no_duplicate_dynamic_feed", nature=RuleNature.LAW, when="build (the call)", enforcement="E",
             checks="one source output enters a dynamic component once", lives="hisim/dynamic_component.py:DynamicComponent.add_component_input_and_connect",
             note=(
-                "one rule with EF-25; not moved in PR 5: refused before the second input is created, which "
-                "tests/test_duplicate_component_feeds.py pins; an owner question"
+                "the imperative twin of EF-25; stays: fires at the call that would leave a broken component; a rule could only see the broken state "
+                "afterwards (decided for PR 5)"
             ),
         ),
         RuleRecord(
-            rule_id="components.dispatch_port_unique", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="components.dispatch_port_unique", nature=RuleNature.LAW, when="build (the call)", enforcement="E",
             checks="an aggregator has no two dispatch ports of one name or one type on one weight",
             lives="DynamicComponent._refuse_a_dispatch_port_this_aggregator_already_has",
-            note="not moved in PR 5: refused before the port is created, since the second port would overwrite the first's attribute; an owner question",
+            note="stays: fires at the call that would leave a broken component; a rule could only see the broken state afterwards (decided for PR 5)",
         ),
         RuleRecord(
-            rule_id="components.default_connection_tag", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="components.default_connection_tag", nature=RuleNature.LAW, when="build (the call)", enforcement="E",
             checks="a default connection's tag is carried by its target output", lives="DynamicComponent.connect_with_dynamic_connections_list",
-            note="not moved in PR 5: refused before the target output is created; an owner question",
+            note="stays: fires at the call that would leave a broken component; a rule could only see the broken state afterwards (decided for PR 5)",
         ),
         RuleRecord(
             rule_id="components.channel_declared", nature=RuleNature.LAW, when="build / run", enforcement="E",

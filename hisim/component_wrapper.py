@@ -56,10 +56,8 @@ class ComponentWrapper:
             wrapped_components_so_far: ComponentWrappers already registered, used to
                 check whether dynamic-output source components exist.
 
-        Raises:
-            ValueError: If the component ends up with no outputs registered. An output whose full
-                name is registered already is registered again; the setup rule ``CB-03``
-                (``hisim/setup_rules/components.py``) refuses it before the first step.
+        An output whose full name is registered already is registered again; the setup rule
+        ``CB-03`` (``hisim/setup_rules/components.py``) refuses it before the first step.
         """
 
         log.debug(f"Registering component outputs on {self.my_component.component_name}")
@@ -103,8 +101,6 @@ class ComponentWrapper:
                 )
                 continue  # skip this output, because the source component is not wrapped yet
             self._register_output(output, all_outputs)
-            if not self.component_outputs:
-                raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
     def _register_output(self, output: cp.ComponentOutput, all_outputs: list[cp.ComponentOutput]) -> None:
         """Gives one output its global index and adds it to the global and the wrapper's list.

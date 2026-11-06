@@ -73,12 +73,14 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
       - UTSPConnector
       - ConventionalOilBoiler
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer
     inputs:
+      - Building
       - HeatDistributionSystem
       - ConventionalOilBoiler
   HeatDistributionSystem:

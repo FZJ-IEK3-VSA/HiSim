@@ -75,6 +75,7 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
       - UTSPConnector
       - ConventionalWoodChipBoiler
   SimpleHotWaterStorage:
@@ -83,6 +84,7 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
     inputs:
+      - Building
       - HeatDistributionSystem
       - ConventionalWoodChipBoiler
   HeatDistributionSystem:

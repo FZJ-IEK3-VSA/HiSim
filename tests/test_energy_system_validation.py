@@ -384,7 +384,7 @@ components:
 """
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(text)
-    assert caught.value.error_id is EnergySystemErrorId.DUPLICATE_WIRE
+    assert caught.value.error_id is EnergySystemErrorId.WRITTEN_DUPLICATE_WIRE
     assert "TemperatureInputPrimary" in str(caught.value)
 
 
@@ -416,7 +416,7 @@ components:
 """
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(text)
-    assert caught.value.error_id is EnergySystemErrorId.DUPLICATE_FEED
+    assert caught.value.error_id is EnergySystemErrorId.WRITTEN_DUPLICATE_FEED
     assert "occupancy.ElectricityOutput" in str(caught.value)
 
 

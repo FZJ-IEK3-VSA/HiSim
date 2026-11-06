@@ -62,7 +62,10 @@ class EnergySystemErrorId(enum.Enum):
     Three bands run past ten members and continue with letters rather than renumbering the
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
     a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
-    tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
+    tag name no enum knows and two participants claiming one control signal, ``EF-2C``/``EF-2D``
+    refuse a feed or a wire written twice in one consumer's input list, which the structural rules
+    find in the document before any class is imported (``EF-25``/``EF-26`` refuse what the wiring
+    plans twice, the expansion of bare items included), and ``EF-4A`` …
     ``EF-4H`` wrap the eight failure modes of the sizing
     kernel one-to-one, ``EF-4J`` its refusal of a group of fields its class sizes together stated
     only in part (a battery's capacity without its inverter power), with ``EF-4X`` for a kernel
@@ -134,6 +137,8 @@ class EnergySystemErrorId(enum.Enum):
     DISPATCH_RULE_VIOLATED = "EF-29"
     UNKNOWN_TAG = "EF-2A"
     AMBIGUOUS_DISPATCH_SIGNAL = "EF-2B"
+    WRITTEN_DUPLICATE_FEED = "EF-2C"
+    WRITTEN_DUPLICATE_WIRE = "EF-2D"
     PORT_TYPE_MISMATCH = "EF-30"
     UNCONNECTED_MANDATORY_INPUT = "EF-31"
     PORT_NAME_COLLISION = "EF-32"

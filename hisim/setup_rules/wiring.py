@@ -496,8 +496,11 @@ class PortTypesAgree(WiringRule):
         return faults
 
 
-class MandatoryInputConnected(WiringRule):
+class MandatoryInputFed(WiringRule):
     """What it checks: every mandatory input of every component is fed by a wire, unless its component declares that it may stay open.
+
+    The component-build rule ``CB-06`` (``mandatory-input-connected``) asks the same of a simulator's connected inputs
+    in either mode; this one asks it of the file's planned wires, before anything is connected, naming the file's items.
 
     Why: a half-wired system that starts and produces numbers is the failure the format exists to remove; a port
     whose source may legitimately be absent (a heat pump's hot-water input with hot-water preparation off) says so
@@ -511,7 +514,7 @@ class MandatoryInputConnected(WiringRule):
     """
 
     CODE = "EF-31"
-    NAME = "mandatory-input-connected"
+    NAME = "mandatory-input-fed"
     STAGE = RuleStage.BUILD
     ENFORCED = True
     REQUIRES: ClassVar[FrozenSet[str]] = WiringRule.PLAN_RULES

@@ -35,7 +35,7 @@ from hisim.setup_rules.wiring import (
     FeedUnique,
     InputExists,
     KnownTag,
-    MandatoryInputConnected,
+    MandatoryInputFed,
     MeterFeedCount,
     NoDoubleCount,
     NoInputFedTwice,
@@ -240,11 +240,11 @@ def test_mandatory_input_connected_refuses_an_open_input_unless_its_component_al
     """Catches an open mandatory input passing, or an input its component allows to stay open refused."""
     allowed = Rig.wired([Rig.component("building", inputs=[Rig.input("Temperature", mandatory=True, allowed_open=True)])])
 
-    faults = MandatoryInputConnected().check(Rig.subject(Rig.weather_and_building([])))
+    faults = MandatoryInputFed().check(Rig.subject(Rig.weather_and_building([])))
 
     assert [fault.code for fault in faults] == ["EF-31"] and "of the energy system 'house'" in faults[0].message
-    assert not codes(MandatoryInputConnected, Rig.weather_and_building([Rig.good_wire()]))
-    assert not codes(MandatoryInputConnected, allowed)
+    assert not codes(MandatoryInputFed, Rig.weather_and_building([Rig.good_wire()]))
+    assert not codes(MandatoryInputFed, allowed)
 
 
 def test_consuming_output_carrier_refuses_another_carrier_and_a_missing_port() -> None:

@@ -15,7 +15,7 @@ import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import ClassVar, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -188,7 +188,8 @@ class HeatedZoneDay:
         synthetic_source = SimpleNamespace(
             component_name=OneDaySnapshot.SYNTHETIC_SOURCE_NAME, inputs=[], outputs=list(self.source_outputs.values())
         )
-        wrapped = [SimpleNamespace(my_component=component) for component in [synthetic_source, *self.components]]
+        # Stand-ins for the simulator's wrappers: the balance reads only the component each one carries.
+        wrapped: List[Any] = [SimpleNamespace(my_component=component) for component in [synthetic_source, *self.components]]
         return EnergyBalanceReport(table, self.all_outputs, wrapped, SyntheticDayProfiles.SECONDS_PER_TIMESTEP)
 
 

@@ -279,8 +279,9 @@ class SankeyDiagram:
 
     #: The colour of each carrier's links, from the colour-blind-safe Okabe-Ito palette (hisim-energy-sankeys-9uoo.18). The
     #: bought fuels and district heat share one colour: their supply nodes tell them apart. Okabe-Ito has eight colours, so
-    #: the two carriers beyond them take colours of Paul Tol's colour-blind-safe muted palette: driving olive, and the
-    #: vehicle electricity a car battery gives its car indigo, a darker blue than the electricity it was charged with.
+    #: the carriers beyond them take colours of Paul Tol's colour-blind-safe muted palette: driving olive, the vehicle
+    #: electricity a car battery gives its car indigo, a darker blue than the electricity it was charged with, and the
+    #: electricity of a wind turbine the run does not model teal.
     CARRIER_COLOURS: ClassVar[Mapping[lt.EnergyBalanceCarrier, str]] = {
         lt.EnergyBalanceCarrier.ELECTRICITY: "#0072B2",
         lt.EnergyBalanceCarrier.NATURAL_GAS: "#CC79A7",
@@ -298,6 +299,7 @@ class SankeyDiagram:
         lt.EnergyBalanceCarrier.SOLAR: "#F0E442",
         lt.EnergyBalanceCarrier.DRIVING: "#999933",
         lt.EnergyBalanceCarrier.VEHICLE_ELECTRICITY: "#332288",
+        lt.EnergyBalanceCarrier.WIND_ELECTRICITY: "#44AA99",
     }
     #: The colour of a link without a carrier: a converter's residual.
     NO_CARRIER_COLOUR: ClassVar[str] = "#999999"

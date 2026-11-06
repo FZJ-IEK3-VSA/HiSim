@@ -497,6 +497,9 @@ class DeviceEnergySpecs:
         "IdealizedElectricHeater": (),
         # Auxiliary pump electricity of a solar thermal loop.
         "SolarThermalSystem": (),
+        # The transformer passes on electricity its source (a wind turbine, a PV array) already produced; what it
+        # delivers is the source's generation and what its consumers draw, so a row would count it twice.
+        "Transformer": (),
         # The hydrogen chain (electrolyzers, fuel cells, reversible cells, CHP and their storage):
         # electricity that leaves or enters the house as hydrogen. The balance has no hydrogen
         # terminal, and half of these channels are the same energy seen twice (a load in W beside

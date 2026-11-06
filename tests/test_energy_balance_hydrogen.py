@@ -1,22 +1,20 @@
 """The two setups with hydrogen and CHP components close their balance with the components' new energy ports.
 
 Complete Sankey spec, PR 5c. ``dynamic_components`` runs two hydrogen CHPs beside the PV system, two batteries and the
-occupancy; ``electrolyzer_with_renewables`` feeds a wind series through a transformer and rectifier into an
-electrolyzer. Each CHP burns hydrogen, counted on the mass flow it draws, ``GasDemandReal`` in kg/s, by its lower
-heating value, into electricity, heat and a loss; the transformer receives electricity, delivers it and loses the
-rest; the electrolyzer turns electricity into hydrogen and loses the rest. ``dynamic_components`` meters what it buys
-(bead hisim-meter-bought-carriers-lyfl): an electricity meter reads every electricity port, a hydrogen meter the CHPs'
-mass flows. ``electrolyzer_with_renewables`` has no meter yet: where its wind electricity and its hydrogen go is the
-open owner decision of bead hisim-component-physics-4g9.69, so every electricity and hydrogen port that no component
-reads is unlinked and unmetered; the CSV series declares no ports yet, so neither finding is enforced (owner decision
-Q-H).
+occupancy; ``electrolyzer_with_renewables`` is a grid-connected electrolyzer plant fed by a wind turbine. Each CHP
+burns hydrogen, counted on the mass flow it draws, ``GasDemandReal`` in kg/s, by its lower heating value, into
+electricity, heat and a loss. ``dynamic_components`` meters what it buys (bead hisim-meter-bought-carriers-lyfl): an
+electricity meter reads every electricity port, a hydrogen meter the CHPs' mass flows.
 
-The electrolyzer reads its load through its controller, a decision the balance never follows, so the electricity
-the transformer delivers and the electricity the electrolyzer draws are two unlinked ports: in this week the
-electrolyzer draws about half of what the transformer delivers, and the rest reaches no component (bead
-hisim-component-physics-4g9.69). The CHPs of ``dynamic_components`` never run, because its energy manager does not
-read the occupancy's consumption and so never asks them for power (bead hisim-dynamic-components-chp-idle-v8mt);
-their ports close at zero.
+In ``electrolyzer_with_renewables`` (owner decision of 2026-10-28 on bead hisim-component-physics-4g9.69) the
+transformer and rectifier receives the wind turbine's electricity, read from a series, from the "wind turbine" boundary
+node, delivers it times its efficiency and loses the rest; it is rated to the turbine's 5,000 kW, so no wind is
+curtailed. The electrolyzer turns the electricity it draws into hydrogen, published as a mass flow in kg/s, and loses
+the rest. The electricity meter reads what the transformer delivers and what the electrolyzer draws and exports the
+difference to the grid; the hydrogen meter reads the hydrogen and passes it out of the system. The CSV series declares
+no ports, so the meters' findings are reported, not enforced (owner decision Q-H). The CHPs of ``dynamic_components``
+never run, because its energy manager does not read the occupancy's consumption and so never asks them for power (bead
+hisim-dynamic-components-chp-idle-v8mt); their ports close at zero.
 
 The second January week of 2021 at 900 s of each setup, run once per module: the run finishing proves every declared
 balance closes; the tests read its report.
@@ -24,7 +22,7 @@ balance closes; the tests read its report.
 
 import json
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Set, Tuple
+from typing import Any, ClassVar, Dict, Tuple
 
 import pytest
 
@@ -53,28 +51,30 @@ class Expected:
         "dynamic_components": {"CHP1": CHP_PORTS, "CHP2": CHP_PORTS},
         "electrolyzer_with_renewables": {
             "StandardTransformerAndRectifier": {
-                "MyTransformerOutput": ("production", "electricity"),
-                "ElectricityReceivedInKilowatt": ("consumption", "electricity"),
-                "ConversionLossInKilowatt": ("loss", "electricity"),
+                "ElectricityDeliveredInWatt": ("production", "electricity"),
+                "ElectricityReceivedInWatt": ("consumption", "wind_electricity"),
+                "ConversionLossInWatt": ("loss", "electricity"),
             },
             "Electrolyzer": {
                 "CurrentLoad": ("consumption", "electricity"),
-                "HydrogenProductionInWatt": ("production", "hydrogen"),
+                "CurrentHydrogenFlowRate": ("production", "hydrogen"),
                 "ConversionLossInWatt": ("loss", "electricity"),
             },
         },
     }
 
-    #: The new components' metered ports that no component or meter reads in the setup without a meter, as
-    #: ``setup -> {(component, output)}``; those that move energy in the week are unlinked.
-    UNLINKED: ClassVar[Dict[str, Set[Tuple[str, str]]]] = {
-        "electrolyzer_with_renewables": {
-            ("StandardTransformerAndRectifier", "MyTransformerOutput"),
-            ("StandardTransformerAndRectifier", "ElectricityReceivedInKilowatt"),
-            ("Electrolyzer", "CurrentLoad"),
-            ("Electrolyzer", "HydrogenProductionInWatt"),
-        },
+    #: The peer of every exchange port of the grid-connected electrolyzer plant, as ``(component, output) -> peer``:
+    #: the wind comes from its boundary node, the electricity and the hydrogen pass their meters.
+    PLANT_PEERS: ClassVar[Dict[Tuple[str, str], str]] = {
+        ("StandardTransformerAndRectifier", "ElectricityReceivedInWatt"): "wind turbine",
+        ("StandardTransformerAndRectifier", "ElectricityDeliveredInWatt"): "ElectricityMeter",
+        ("Electrolyzer", "CurrentLoad"): "ElectricityMeter",
+        ("Electrolyzer", "CurrentHydrogenFlowRate"): "HydrogenMeter",
     }
+
+    #: The transformer's rating in the setup, in kW: the wind turbine's 5,000 kW, the peak of its series (owner decision
+    #: of 2026-10-28), so it carries all the wind and none is curtailed.
+    TRANSFORMER_RATING_IN_KILOWATT: ClassVar[float] = 5000.0
 
 
 @pytest.fixture(name="setup_results", scope="module", params=Expected.SETUPS)
@@ -111,20 +111,23 @@ def test_the_new_components_declare_their_ports_and_close_in_every_step(setup_re
 
 @pytest.mark.extendedbase2
 @pytest.mark.parametrize("setup_results", ["electrolyzer_with_renewables"], indirect=True)
-def test_the_wind_reaches_the_electrolyzer_only_in_part_and_it_makes_hydrogen_at_a_physical_efficiency(
+def test_the_transformer_delivers_up_to_its_rating_and_the_electrolyzer_makes_hydrogen_at_a_physical_efficiency(
     setup_results: Tuple[str, Path],
 ) -> None:
-    """The transformer loses 5 %, the electrolyzer draws less than it delivers and turns 50 to 80 % into hydrogen.
+    """The transformer loses 5 %, delivers at most its rating, and the electrolyzer turns 50 to 80 % into hydrogen.
 
-    Catches a transformer loss of the wrong size, a hydrogen production rate in kg/h read as kg/s, and an
-    electrolyzer that draws more than the transformer delivers.
+    Catches a transformer that passes more than its rating (bead hisim-component-physics-4g9.69), a loss of the wrong
+    size, a hydrogen flow in kg/h read as kg/s, and an electrolyzer that draws more than the transformer delivers.
     """
     _, results = setup_results
     transformer = {port["output"]: port["total_kwh"] for port in balance_entry(results, "StandardTransformerAndRectifier")["ports"]}
     electrolyzer = {port["output"]: port["total_kwh"] for port in balance_entry(results, "Electrolyzer")["ports"]}
-    assert transformer["ConversionLossInKilowatt"] == pytest.approx(0.05 * transformer["ElectricityReceivedInKilowatt"], rel=1e-9)
-    assert 0.0 < electrolyzer["CurrentLoad"] < transformer["MyTransformerOutput"]
-    assert 0.5 < electrolyzer["HydrogenProductionInWatt"] / electrolyzer["CurrentLoad"] < 0.8
+    report = report_of(results)
+    hours = report["timesteps"] * report["seconds_per_timestep"] / 3600.0
+    assert transformer["ConversionLossInWatt"] == pytest.approx(0.05 * transformer["ElectricityReceivedInWatt"], rel=1e-9)
+    assert 0.0 < transformer["ElectricityDeliveredInWatt"] < Expected.TRANSFORMER_RATING_IN_KILOWATT * hours
+    assert 0.0 < electrolyzer["CurrentLoad"] < transformer["ElectricityDeliveredInWatt"]
+    assert 0.5 < electrolyzer["CurrentHydrogenFlowRate"] / electrolyzer["CurrentLoad"] < 0.8
 
 
 @pytest.mark.extendedbase2
@@ -153,27 +156,38 @@ def test_the_chps_electricity_and_hydrogen_pass_their_meters_and_no_port_is_unme
 
 @pytest.mark.extendedbase2
 @pytest.mark.parametrize("setup_results", ["electrolyzer_with_renewables"], indirect=True)
-def test_the_ports_no_component_reads_are_unlinked_and_unmetered_and_not_enforced(setup_results: Tuple[str, Path]) -> None:
-    """Without a meter the electricity and hydrogen ports nobody reads are unlinked and unmetered, reported, not failing.
+def test_the_plants_electricity_and_hydrogen_pass_their_meters_and_no_port_is_unmetered_or_unlinked(
+    setup_results: Tuple[str, Path],
+) -> None:
+    """The wind comes from its node, the electricity meter exports the surplus, the hydrogen meter passes the hydrogen out.
 
-    Catches a port of these components linked to a controller (which decides and moves no energy), and an unmetered
-    finding that fails the run while a component is still undeclared.
+    The electricity meter reads the transformer's delivery and the electrolyzer's draw and publishes their difference,
+    as export where the delivery is larger and as import where the electrolyzer draws more; the hydrogen meter
+    publishes all the hydrogen as export. Both agree in every step, and no port is unmetered or unlinked: the
+    delivered electricity the electrolyzer does not draw, which reached no component before the owner's decision, now
+    leaves through the meter. Catches a port taking a boundary past its meter, a meter that drops the surplus, and the
+    controller (which decides and moves no energy) drawn as a peer.
     """
-    setup, results = setup_results
+    _, results = setup_results
     report = report_of(results)
-    new_components = set(Expected.PORTS[setup])
-    moving = {
-        (component, port["output"])
-        for component in new_components
+    peers = {
+        (component, port["output"]): port["peer"]
+        for component in ("StandardTransformerAndRectifier", "Electrolyzer")
         for port in balance_entry(results, component)["ports"]
-        if port["total_kwh"] != 0.0
+        if port["role"] != "loss"
     }
-    unlinked = {(port["component"], port["output"]) for port in report["unlinked"] if port["component"] in new_components}
-    assert unlinked == Expected.UNLINKED[setup] & moving
-    unmetered = report["unmetered"]
-    assert unmetered["enforced"] is False and "undeclared" in unmetered["not_enforced_because"]
-    unmetered_ports = {(port["component"], port["output"]): port["peer"] for port in unmetered["ports"]}
-    for component, output in Expected.UNLINKED[setup]:
-        assert unmetered_ports[(component, output)] == "unlinked"
-    assert not report["links"] and not report["meters"]
-    assert not new_components & {entry["component"] for entry in report["undeclared"]}
+    assert peers == Expected.PLANT_PEERS
+    assert not report["unmetered"]["ports"] and not report["unlinked"]
+    assert report["unmetered"]["enforced"] is False and "undeclared" in report["unmetered"]["not_enforced_because"]
+    assert [entry["component"] for entry in report["undeclared"]] == ["CSV"]
+    meters = {meter["meter"]: meter for meter in report["meters"]}
+    assert {name: meter["carrier"] for name, meter in meters.items()} == {"ElectricityMeter": "electricity", "HydrogenMeter": "hydrogen"}
+    assert all(meter["verdict"] == "agrees" and meter["failing_steps"] == 0 for meter in meters.values())
+    electricity = meters["ElectricityMeter"]
+    assert electricity["published_export_kwh"] - electricity["published_import_kwh"] == pytest.approx(
+        electricity["produced_kwh"] - electricity["consumed_kwh"], rel=1e-9
+    )
+    assert electricity["published_export_kwh"] > 0.0 and electricity["published_import_kwh"] >= 0.0
+    hydrogen = meters["HydrogenMeter"]
+    assert hydrogen["published_import_kwh"] == 0.0
+    assert hydrogen["published_export_kwh"] == pytest.approx(hydrogen["produced_kwh"], rel=1e-9) and hydrogen["produced_kwh"] > 0.0

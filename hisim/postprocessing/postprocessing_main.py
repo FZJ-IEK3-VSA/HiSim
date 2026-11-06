@@ -29,10 +29,13 @@ Execution flow
 --------------
 :meth:`PostProcessor.run` executes the enabled steps in a fixed order:
 
-0. **Finite results** -- in every run, before anything reads the result table: every column must hold
-   only finite values unless its output declares ``may_be_non_finite``, and the run fails with
-   :class:`~hisim.postprocessing.finite_results.NonFiniteResultsError` naming every column that does not
-   (:mod:`hisim.postprocessing.finite_results`).
+0. **The setup rules after the run** -- in every run, before anything reads the result table
+   (:meth:`PostProcessor.judge_the_results`): every column must hold only finite values unless its output declares
+   ``may_be_non_finite`` (:class:`~hisim.setup_rules.results.NonFiniteResultsError` names every column that does
+   not), and every component that declares energy ports must close its balance, with its links, loops and
+   meters (:class:`~hisim.setup_rules.results.EnergyBalanceError`; ``hisim/setup_rules/results.py``,
+   ``hisim/setup_rules/meters.py``). A run whose balance fails writes the balance report first when
+   ``EXPORT_ENERGY_BALANCE`` asks for it.
 1. **Plots** -- line, carpet, single-day, and (for near-year-long runs) monthly bar charts
    are generated and collected as report image entries.
 2. **Exports** -- the result ``DataFrame`` is written to CSV and/or Pickle.
@@ -49,11 +52,9 @@ Execution flow
    pyam-style output preparation for scenario evaluation.
 7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
    (including the building-sizer format) are written to JSON files.
-8. **Energy balance** -- in every run, whatever the options: every component that declares energy
-   ports must close its balance, and the run fails with
-   :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError` when one does not
-   (:mod:`hisim.postprocessing.energy_balance`). ``EXPORT_ENERGY_BALANCE`` also writes the report
-   and the Sankeys.
+8. **Energy balance** -- in every run, whatever the options: the summary of the balance the rules judged in step 0
+   is logged (:mod:`hisim.postprocessing.energy_balance`); ``EXPORT_ENERGY_BALANCE`` also writes the report and the
+   Sankeys.
 """
 from __future__ import annotations
 import importlib
@@ -75,11 +76,11 @@ from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
 from hisim.postprocessing.chart_selection import ChartSelection
-from hisim.postprocessing.finite_results import FiniteResultsCheck
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.results import EnergyBalanceError
 from hisim.setup_rules.rule import RuleStage
 from hisim.setup_rules.subjects import RunResults
 
@@ -290,11 +291,13 @@ class PostProcessor:
                 and if ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while ``MAKE_NETWORK_CHARTS``
                 is not, because no network chart would have been drawn.
             UndeclaredSetupKindError: If the run carries no setup kind.
-            SetupRuleViolation: Listing every fault of the setup rules after the run, before anything is written.
+            SetupRuleViolation: Listing every fault of the setup rules after the run, before anything is written
+                (:meth:`judge_the_results`).
             NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
-                does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
+                does not declare ``may_be_non_finite`` (``hisim/setup_rules/results.py``, ``AR-01``).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
-                balance does not close or the two sides of a transfer disagree (a ``ValueError``).
+                balance does not close, the two sides of a transfer disagree, a loop breaks a rule or an enforced
+                meter rule fails (a ``ValueError``).
         """
         # Define the directory name
         log.information("Main post processing function")
@@ -303,25 +306,21 @@ class PostProcessor:
         log.information(f"Selected {len(ppdt.post_processing_options)} post processing options:")
         for option in ppdt.post_processing_options:
             log.information(f"Selected post processing option: {option}")
-        # The setup rules after the run judge the results before anything reads or writes them
-        SetupRuleRegistry.collect().run(
-            RuleStage.AFTER_RUN,
+        # The setup rules after the run judge the results, and the energy balance read from them, before anything else
+        # reads the table; the same balance is written at the end.
+        energy_balance = self.judge_the_results(
+            ppdt,
             RunResults(
                 results=ppdt.results,
                 outputs=tuple(ppdt.all_outputs),
                 components=tuple(wrapped.my_component for wrapped in ppdt.wrapped_components),
+                read_energy_balance=lambda: self.check_energy_balance(ppdt),
             ),
-            ppdt.setup_kind,
         )
         report_image_entries: List[ReportImageEntry] = []
         report: Optional[reportgenerator.ReportGenerator] = None
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
-        # Every result column must be finite unless its output declares otherwise; checked once, before anything
-        # reads the table, since the components do not check it on every pass.
-        FiniteResultsCheck.require_finite(ppdt.results, ppdt.all_outputs)
-        # Collected first, from the result table as the simulator left it; concluded last (below)
-        energy_balance = self.check_energy_balance(ppdt)
         # Which outputs get charts: not the constant ones and not those declaring the aggregation
         # NONE; the report lists both with the reason. The exports below still write every output.
         chart_selection = ChartSelection.of_results(ppdt.all_outputs, ppdt.results)
@@ -552,7 +551,7 @@ class PostProcessor:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
 
-        # In every run, last, so every other output is written when a balance that does not close fails the run
+        # In every run, last: the balance the rules judged first, written when asked
         self.export_sankeys(ppdt, energy_balance)
 
         log.information("Finished main post processing function.")
@@ -1175,29 +1174,61 @@ class PostProcessor:
             log.information("Not on Windows. Can't open explorer.")
 
     @staticmethod
+    def judge_the_results(ppdt: PostProcessingDataTransfer, subject: RunResults) -> "EnergyBalanceReport":
+        """Run the setup rules after the run on the results, and return the energy balance they judged.
+
+        The registry runs every rule of the stage ``AFTER_RUN`` the run's kind does not waive
+        (``hisim/setup_rules/results.py``, ``hisim/setup_rules/meters.py``) and raises one violation listing every
+        fault. A run whose energy balance the rules refuse (:class:`~hisim.setup_rules.results.EnergyBalanceError`)
+        first writes ``balance_report.json`` and the Sankeys when ``EXPORT_ENERGY_BALANCE`` asks for them, since the
+        report is what tells where the balance breaks, unless a declared port is not finite: no balance can be read
+        from it, and nothing is written. A run whose result columns are not finite fails before its balance is read.
+
+        Args:
+            ppdt: The finished run: its options, its result directory and its setup kind.
+            subject: The run's results, which read the energy balance when a rule first asks for it.
+
+        Returns:
+            The run's energy balance, for :meth:`export_sankeys`.
+
+        Raises:
+            UndeclaredSetupKindError: If the run carries no setup kind.
+            SetupRuleViolation: Listing every fault of the enforced rules after the run, as the family's error
+                (``NonFiniteResultsError``, ``EnergyBalanceError``) when one family found them all.
+        """
+        try:
+            SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, subject, ppdt.setup_kind)
+        except EnergyBalanceError:
+            # Every rule of this error read the balance, so it is there; written when asked, unless it is not finite
+            if PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options and not subject.energy_balance.nonfinite:
+                report_path = subject.energy_balance.write(ppdt.simulation_parameters.result_directory)
+                log.error(f"The energy balance of this run does not close; its report is {report_path}.")
+            raise
+        return subject.energy_balance
+
+    @staticmethod
     def check_energy_balance(ppdt: PostProcessingDataTransfer) -> "EnergyBalanceReport":
-        """Check every declared component's energy balance and every paired link of the run (in every run).
+        """Compute every declared component's energy balance, every link and every meter of the run (in every run).
 
         Reads only the declared energy ports (:mod:`hisim.postprocessing.energy_balance`); a run in which no
-        component declares a port has nothing to check. :meth:`export_sankeys` concludes it.
+        component declares a port has nothing to compute. The setup rules after the run judge it
+        (:meth:`judge_the_results`); :meth:`export_sankeys` writes it.
         """
         from hisim.postprocessing.energy_balance import EnergyBalanceReport  # pylint: disable=import-outside-toplevel
 
         return EnergyBalanceReport(
             results=ppdt.results,
             all_outputs=ppdt.all_outputs,
-            wrapped_components=ppdt.wrapped_components,
+            components=[wrapped.my_component for wrapped in ppdt.wrapped_components],
             seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
         )
 
     @staticmethod
     def export_sankeys(ppdt: PostProcessingDataTransfer, energy_balance: "EnergyBalanceReport") -> None:
-        """Write the balance report and the Sankeys when asked; fail the run when a balance does not hold.
+        """Write the balance report and the Sankeys when asked, and log what the balance found.
 
-        ``EXPORT_ENERGY_BALANCE`` writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory;
-        whether it is set or not, a declared port that is not finite, a balance that does not close or a link
-        whose two sides disagree fails the run with
-        :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError`.
+        ``EXPORT_ENERGY_BALANCE`` writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory.
+        The balance was judged first thing (:meth:`judge_the_results`), so this never fails the run.
         """
         write = PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options
         start = timer()

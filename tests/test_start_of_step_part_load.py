@@ -127,7 +127,7 @@ def test_an_actual_ratio_outside_zero_to_one_is_refused(rule, name: str) -> None
     """An actual ratio outside [0, 1] is refused by both rules.
 
     A non-finite temperature is not checked here: the rules run on every pass, and a NaN or infinite value is caught
-    once after the run by the check of the result columns (hisim/postprocessing/finite_results.py).
+    once after the run by the check of the result columns (the setup rule AR-01, hisim/setup_rules/results.py).
     """
     limit = {f"{name}_temperature_in_celsius": 20.0}
     with pytest.raises(ValueError):

@@ -3,12 +3,13 @@
 Epic hisim-energy-sankeys-9uoo; the graph model is ``roadmap/complete_energy_sankeys_spec.md`` §4. ``ports`` reads
 the declared ports and the meters of a run and finds each port's peer through the wiring: a meter that reads it,
 also through the exempt controllers, or a component that moves energy, else the port's carrier default; ``check``
-closes each component's balance and each link between declared components (both sides must book it); ``meters``
-checks per step that each meter publishes what it reads from the declared ports linked to it, and that every
-metered port passes a meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier;
-``export`` fails the run when they do not hold and writes the report and the Sankeys into the result directory. The
-check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE``
-only writes the files.
+computes each component's balance and each link between declared components (both sides must book it); ``meters``
+computes per step whether each meter publishes what it reads from the declared ports linked to it, and which
+metered ports pass no meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier;
+``export`` writes the report and the Sankeys into the result directory. The balance is computed in every
+simulation, and the setup rules after the run (``hisim/setup_rules/results.py``, ``hisim/setup_rules/meters.py``)
+fail the run with :class:`~hisim.setup_rules.results.EnergyBalanceError` when it does not hold;
+:class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only writes the files.
 
 Coverage: the heat generators, the electricity devices and the occupancy declare their ports, the meters their
 published exchanges; the water storages and the heat distribution system behind a buffer tag their water circuits
@@ -21,7 +22,6 @@ buffer with hisim-pnw7; until then they are drawn as undeclared nodes. The energ
 from hisim.postprocessing.energy_balance.check import (
     BalanceCheck,
     ComponentBalance,
-    EnergyBalanceError,
     LinkBalance,
     Tolerance,
 )
@@ -42,7 +42,6 @@ __all__ = [
     "LoopColumns",
     "ComponentBalance",
     "DeclaredPorts",
-    "EnergyBalanceError",
     "EnergyBalanceReport",
     "Exemptions",
     "LinkBalance",

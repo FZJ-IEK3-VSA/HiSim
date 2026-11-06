@@ -15,7 +15,9 @@ publishes an import of 0.3 kWh; if it publishes 0.4 kWh, 0.1 kWh is unaccounted.
 
 Besides, every metered port must pass a meter (:meth:`~.ports.DeclaredPorts.unmetered`). Both findings are written
 to the report in every run; they fail the run only once no component of the run is undeclared (owner decision Q-H),
-since until then a meter may read the flows of a device that declares no port.
+since until then a meter may read the flows of a device that declares no port. This module computes both and which
+of them fail the run (:attr:`MeterCheck.failing`, :attr:`MeterCheck.failing_unmetered`); the setup rules ``MT-01``
+and ``MT-02`` of ``hisim/setup_rules/meters.py`` refuse the run on them.
 """
 
 from __future__ import annotations

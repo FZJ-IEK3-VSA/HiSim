@@ -4,15 +4,17 @@ One frozen object per hook. ``LoadedDocument`` is the energy-system file as the 
 ``BuiltDocument`` is the expanded file with its constructed, wired components, which the declarative build hands
 over (stage ``BUILD``, declarative mode only). ``BuiltSystem`` is the simulator's components with their inputs
 connected, before the first step (stage ``BUILD``, both modes). ``RunResults`` is the result table and the outputs
-after the run (stage ``AFTER_RUN``). A rule reads its subject and nothing else: no component module, no
-``SimRepository``. The types of the energy-system format and of the simulator are imported for type checking only,
-so importing the rules package imports neither.
+after the run, with the energy balance read from them when a rule first asks for it (stage ``AFTER_RUN``). A rule
+reads its subject and nothing else: no component module, no ``SimRepository``. The types of the energy-system format,
+of the simulator and of the energy balance are imported for type checking only, so importing the rules package
+imports none of them.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Mapping, Optional, Tuple
+from functools import cached_property
+from typing import TYPE_CHECKING, Callable, ClassVar, Mapping, Optional, Tuple
 
 from hisim.setup_rules.rule import RuleStage, RuleSubject
 
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
     from hisim.energy_system.model import EnergySystemFile
     from hisim.energy_system.path_resolver import PathResolver
     from hisim.energy_system.wiring import WiredSystem
+    from hisim.postprocessing.energy_balance import EnergyBalanceReport
 
 
 @dataclass(frozen=True)
@@ -72,10 +75,16 @@ class BuiltSystem(RuleSubject):
 
 @dataclass(frozen=True)
 class RunResults(RuleSubject):
-    """The results of one run, as the simulator hands them to the post-processing.
+    """The results of one run, as the simulator hands them to the post-processing, and the run's energy balance.
 
     ``results`` is the result table, one row per step and one column per output; ``outputs`` are the outputs in the
     order of the columns; ``components`` are the components of the run in the order they were added.
+    ``read_energy_balance`` computes the run's energy balance (the declared ports, each component's balance, the links
+    and the meters, :class:`~hisim.postprocessing.energy_balance.EnergyBalanceReport`) from those; :attr:`energy_balance`
+    calls it once, when the first rule reads the balance. A rule that requires the finite-results rule therefore
+    never makes the balance read a table that holds NaN, and the post-processing writes the report and the Sankeys
+    from the same balance the rules judged. The subject imports nothing of the post-processing: the hook hands the
+    function over.
     """
 
     STAGE: ClassVar[RuleStage] = RuleStage.AFTER_RUN
@@ -83,3 +92,17 @@ class RunResults(RuleSubject):
     results: pd.DataFrame
     outputs: Tuple[ComponentOutput, ...]
     components: Tuple[Component, ...]
+    read_energy_balance: Callable[[], EnergyBalanceReport]
+
+    @cached_property
+    def energy_balance(self) -> EnergyBalanceReport:
+        """Return the run's energy balance, computed by ``read_energy_balance`` on the first call and kept for the next.
+
+        Example: the component-balance rule and the link rule of ``hisim/setup_rules/results.py`` both read it, and the
+        balance is computed once for the two.
+
+        Raises:
+            ValueError: As :meth:`~hisim.postprocessing.energy_balance.ports.DeclaredPorts.collect` raises it, for a
+                port or a loop the result table cannot be read for.
+        """
+        return self.read_energy_balance()

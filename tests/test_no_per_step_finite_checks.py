@@ -1,7 +1,7 @@
 """Non-finite values are caught once after the run, not by checks that run on every step or pass.
 
 The owner decided on 2026-10-17 that a run fails after its time loop if a result column holds NaN or an infinite
-value (``hisim/postprocessing/finite_results.py``), and that the simulation's hot path carries no per-call
+value (the setup rule ``AR-01``, ``hisim/setup_rules/results.py``), and that the simulation's hot path carries no per-call
 finiteness checks: they ran tens of millions of times a year and caught nothing the post-run check does not. This
 module keeps that decision from eroding. It scans the modules whose code runs on every pass (the components, the
 hydronics and part-load arithmetic, the simulator) and refuses a call of ``isfinite`` or ``isnan`` outside the
@@ -128,7 +128,7 @@ def test_the_hot_path_checks_finiteness_only_at_build_time_or_in_documented_exce
             offending.append(f"{relative}:{line} in {function_name}")
     assert not offending, (
         "Finiteness checks in code that runs on every step or pass (owner decision 2026-10-17: NaN and infinite "
-        "values are caught once after the run by hisim/postprocessing/finite_results.py):\n" + "\n".join(offending)
+        "values are caught once after the run by the setup rule AR-01, hisim/setup_rules/results.py):\n" + "\n".join(offending)
     )
 
 

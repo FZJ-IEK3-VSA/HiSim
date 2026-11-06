@@ -5,8 +5,9 @@ import importlib
 import dataclasses
 import math
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Dict, Iterable, List, Any, Sequence, Tuple, Optional, TypeVar
+from typing import Callable, ClassVar, Dict, Iterable, List, Any, Mapping, Sequence, Tuple, Optional, TypeVar
 from enum import Enum, unique
+from types import MappingProxyType
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -403,59 +404,233 @@ class SimpleWaterStorage(cp.PhysicsComponent):
     #: Plausible range of a storage's converged mean water temperature. Outside it the run fails.
     PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS: ClassVar[Tuple[float, float]] = (0.0, 90.0)
 
-    #: The input of the temperature of the tank's surroundings, in °C, which its standby loss is computed against.
+    #: The input of the building's indoor air temperature at the start of the step, in °C: the surroundings of a tank in
+    #: the heated zone. The start-of-step value is fixed for the step, so the tank's own heat, which the building takes
+    #: in, does not feed back into the temperature the tank reads while the step iterates.
+    IndoorAirTemperatureInCelsius = "IndoorAirTemperatureInCelsius"
+    #: The input of the temperature of the building's unheated cellar, in °C: the surroundings of a tank in an unheated
+    #: space.
+    UnheatedCellarTemperatureInCelsius = "UnheatedCellarTemperatureInCelsius"
+    #: The input of the outside air temperature, in °C: the surroundings of a tank outdoors.
+    OutsideAirTemperatureInCelsius = "OutsideAirTemperatureInCelsius"
+    #: The output of the temperature the tank loses its standby heat to, in °C: the one of the three temperature inputs
+    #: its installation location picks.
     SurroundingTemperatureInCelsius = "SurroundingTemperatureInCelsius"
+    #: The output of the standby heat the tank releases into the building's heated zone, in W: its standby loss in the
+    #: heated zone, 0 elsewhere.
+    HeatToHeatedZoneInWatt = "HeatToHeatedZoneInWatt"
+    #: The output of the standby heat the tank loses out of the house, in W: its standby loss in an unheated space or
+    #: outdoors, 0 in the heated zone.
+    HeatLossInWatt = "HeatLossInWatt"
 
-    #: Where a tank's surrounding temperature comes from, by its installation location: the class and the output its
-    #: input :attr:`SurroundingTemperatureInCelsius` reads by default. In the heated zone it is the building's indoor
-    #: air temperature at the start of the step: the building takes the tank's loss in as a gain, and a value fixed for
-    #: the step keeps that heat from feeding back into the temperature the tank reads while the step iterates. In an
-    #: unheated space it is the temperature of the unheated cellar the building publishes, outdoors the weather's
-    #: outside air temperature.
-    SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION: ClassVar[Dict[lt.InstallationLocation, Tuple[str, str]]] = {
-        lt.InstallationLocation.HEATED_ZONE: (
-            Building.get_classname(),
-            Building.TemperatureIndoorAirAtStartOfStepInCelsius,
-        ),
-        lt.InstallationLocation.UNHEATED_SPACE: (Building.get_classname(), Building.TemperatureUnheatedCellarInCelsius),
-        lt.InstallationLocation.OUTDOORS: (Weather.get_classname(), Weather.TemperatureOutside),
-    }
+    #: The temperature input a tank computes its standby loss against, by its installation location (owner decision
+    #: D-h of the device-location spec): the building's start-of-step air temperature in the heated zone, its unheated
+    #: cellar in an unheated space, the weather's outside temperature outdoors.
+    SURROUNDING_TEMPERATURE_INPUT_BY_LOCATION: ClassVar[Mapping[lt.InstallationLocation, str]] = MappingProxyType(
+        {
+            lt.InstallationLocation.HEATED_ZONE: IndoorAirTemperatureInCelsius,
+            lt.InstallationLocation.UNHEATED_SPACE: UnheatedCellarTemperatureInCelsius,
+            lt.InstallationLocation.OUTDOORS: OutsideAirTemperatureInCelsius,
+        }
+    )
 
-    #: Where a tank's standby loss goes, by its installation location, as its output's description states it.
-    STANDBY_LOSS_DESTINATION_BY_LOCATION: ClassVar[Dict[lt.InstallationLocation, str]] = {
-        lt.InstallationLocation.HEATED_ZONE: (
-            "The tank stands in the heated zone, so this heat enters the building as an internal gain: the output is "
-            "room heat (PRODUCTION of ROOM_HEAT), which the building reads."
-        ),
-        lt.InstallationLocation.UNHEATED_SPACE: (
-            "The tank stands in an unheated space, so this heat leaves the house: the building counts the unheated "
-            "space as outside its envelope, and nothing brings the heat back."
-        ),
-        lt.InstallationLocation.OUTDOORS: "The tank stands outdoors, so this heat leaves the house.",
-    }
+    def add_surrounding_temperature_inputs(self, installation_location: lt.InstallationLocation) -> ComponentInput:
+        """Add the three temperature inputs a tank may lose its standby heat to, and return the one its location picks.
 
-    def add_surrounding_temperature_input(self, installation_location: lt.InstallationLocation) -> ComponentInput:
-        """Add the input of the temperature the tank loses its standby heat to, wired by default as its location says.
-
-        The input :attr:`SurroundingTemperatureInCelsius` is mandatory. Its default connection reads the source
-        :attr:`SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION` names for the location: for example, a tank in an unheated
-        space reads ``Building.TemperatureUnheatedCellarInCelsius``, a tank outdoors ``Weather.TemperatureOutside``.
-        Both tanks call it while they are built, once their configuration has settled the location.
+        The inputs :attr:`IndoorAirTemperatureInCelsius`, :attr:`UnheatedCellarTemperatureInCelsius` and
+        :attr:`OutsideAirTemperatureInCelsius` are mandatory, each with one static default connection, the same for
+        every location: ``Building.TemperatureIndoorAirAtStartOfStepInCelsius``,
+        ``Building.TemperatureUnheatedCellarInCelsius`` and ``Weather.TemperatureOutside``. So a file recorded for a
+        house with an unheated cellar is wired right for a house whose tank stands in the heated zone; the location
+        decides only which input the tank reads (:attr:`SURROUNDING_TEMPERATURE_INPUT_BY_LOCATION`). For example, a
+        tank in an unheated space returns the input of the cellar's temperature. Both tanks call it while they are
+        built, once their configuration has settled the location.
 
         Args:
             installation_location: Where the tank stands.
 
         Returns:
-            The new input, in °C.
+            The input of the location's temperature, in °C.
         """
-        surrounding_temperature_input = self.add_input(
-            self.component_name, self.SurroundingTemperatureInCelsius, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
-        )
-        source_class_name, source_output_name = self.SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION[installation_location]
+        inputs = {
+            field_name: self.add_input(
+                self.component_name, field_name, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
+            )
+            for field_name in (
+                self.IndoorAirTemperatureInCelsius,
+                self.UnheatedCellarTemperatureInCelsius,
+                self.OutsideAirTemperatureInCelsius,
+            )
+        }
         self.add_default_connections(
-            [cp.ComponentConnection(self.SurroundingTemperatureInCelsius, source_class_name, source_output_name)]
+            [
+                cp.ComponentConnection(
+                    self.IndoorAirTemperatureInCelsius,
+                    Building.get_classname(),
+                    Building.TemperatureIndoorAirAtStartOfStepInCelsius,
+                ),
+                cp.ComponentConnection(
+                    self.UnheatedCellarTemperatureInCelsius,
+                    Building.get_classname(),
+                    Building.TemperatureUnheatedCellarInCelsius,
+                ),
+            ]
         )
-        return surrounding_temperature_input
+        self.add_default_connections(
+            [cp.ComponentConnection(self.OutsideAirTemperatureInCelsius, Weather.get_classname(), Weather.TemperatureOutside)]
+        )
+        return inputs[self.SURROUNDING_TEMPERATURE_INPUT_BY_LOCATION[installation_location]]
+
+    #: The output of the picked surrounding temperature (:meth:`add_surroundings_outputs`).
+    surrounding_temperature_output_channel: ComponentOutput
+    #: The output of the standby heat released into the heated zone (:meth:`add_surroundings_outputs`).
+    heat_to_heated_zone_channel: ComponentOutput
+    #: The output of the standby heat lost out of the house (:meth:`add_surroundings_outputs`).
+    heat_loss_channel: ComponentOutput
+
+    def add_surroundings_outputs(
+        self, carrier: lt.EnergyBalanceCarrier, tank_label: str
+    ) -> Tuple[ComponentOutput, ComponentOutput, ComponentOutput]:
+        """Add the picked surrounding temperature and the two fixed outputs of the standby heat the tank releases.
+
+        Owner decision D-h of the device-location spec: the tank states its standby heat on one output per
+        destination, whatever its location. :attr:`HeatToHeatedZoneInWatt` declares
+        :attr:`hisim.energy_port.EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE` and is read by the building;
+        :attr:`HeatLossInWatt` is a ``LOSS`` of the tank's own carrier, which leaves the house. The location fills one
+        of them (:meth:`publish_surroundings`); the other is 0 in every step and books nothing. For example, a buffer
+        in an unheated cellar publishes its loss on ``HeatLossInWatt`` as a loss of ``SPACE_HEATING_HEAT``.
+
+        Args:
+            carrier: The carrier the tank stores and loses outside the heated zone.
+            tank_label: How the descriptions name the tank, for example ``"buffer"``.
+
+        Returns:
+            The outputs :attr:`SurroundingTemperatureInCelsius`, :attr:`HeatToHeatedZoneInWatt` and
+            :attr:`HeatLossInWatt`, in this order.
+        """
+        surrounding_temperature_output = self.add_output(
+            self.component_name,
+            self.SurroundingTemperatureInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                f"The temperature the {tank_label} loses its standby heat to, in °C: the one of its inputs "
+                f"{self.IndoorAirTemperatureInCelsius}, {self.UnheatedCellarTemperatureInCelsius} and "
+                f"{self.OutsideAirTemperatureInCelsius} that its installation location (the heated zone, an unheated "
+                "space or outdoors) picks."
+            ),
+        )
+        standby_loss = (
+            f"The standby heat the {tank_label} loses to its surroundings, in W, the mean over the step: its loss "
+            f"coefficient UA times its temperature less {self.SurroundingTemperatureInCelsius}; negative in a step in "
+            "which the surroundings are warmer than the water."
+        )
+        heat_to_heated_zone_output = self.add_output(
+            self.component_name,
+            self.HeatToHeatedZoneInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"{standby_loss} It carries the number when the {tank_label} stands in the heated zone, where the heat "
+                "enters the building as an internal gain (PRODUCTION of ROOM_HEAT, read by the building), and is 0 "
+                f"in every step elsewhere."
+            ),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
+        )
+        heat_loss_output = self.add_output(
+            self.component_name,
+            self.HeatLossInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                f"{standby_loss} It carries the number when the {tank_label} stands in an unheated space or outdoors, "
+                "where the heat leaves the house (a LOSS of the tank's carrier: the building counts an unheated space "
+                "as outside its envelope, and nothing brings the heat back), and is 0 in every step in the heated zone."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, carrier),
+        )
+        return surrounding_temperature_output, heat_to_heated_zone_output, heat_loss_output
+
+    def publish_surroundings(
+        self,
+        stsv: SingleTimeStepValues,
+        installation_location: lt.InstallationLocation,
+        surrounding_temperature_in_celsius: float,
+        standby_heat_loss_in_watt: float,
+    ) -> None:
+        """Publish the picked surrounding temperature and the standby loss on the output of the tank's location.
+
+        The loss goes to :attr:`HeatToHeatedZoneInWatt` in the heated zone and to :attr:`HeatLossInWatt` elsewhere
+        (:attr:`hisim.loadtypes.InstallationLocation.releases_into_heated_zone`); the other output gets 0.
+
+        Args:
+            stsv: The step's values.
+            installation_location: Where the tank stands.
+            surrounding_temperature_in_celsius: The temperature the loss was computed against, in °C.
+            standby_heat_loss_in_watt: The standby loss of the step, in W.
+        """
+        stsv.set_output_value(self.surrounding_temperature_output_channel, surrounding_temperature_in_celsius)
+        if installation_location.releases_into_heated_zone:
+            stsv.set_output_value(self.heat_to_heated_zone_channel, standby_heat_loss_in_watt)
+            stsv.set_output_value(self.heat_loss_channel, 0.0)
+        else:
+            stsv.set_output_value(self.heat_to_heated_zone_channel, 0.0)
+            stsv.set_output_value(self.heat_loss_channel, standby_heat_loss_in_watt)
+
+    @staticmethod
+    def standby_heat_loss_in_kilowatt_hour(
+        heat_to_heated_zone_in_watt: pd.Series, heat_loss_in_watt: pd.Series, seconds_per_timestep: int
+    ) -> float:
+        """Return a tank's standby heat loss over the run, in kWh to one decimal, from its two released-heat outputs.
+
+        The two outputs are summed step by step (one of them is 0 in every step), and the steps in which the tank
+        lost heat are added up; a step in which warmer surroundings heated the tank counts nothing. For example, a
+        tank losing 100 W in four 900 s steps, two on each output, and gaining 50 W in a fifth loses 0.1 kWh. The
+        KPIs "Standby heat loss of Hot water storage" and "Standby heat loss of DHW storage" are this number.
+
+        Args:
+            heat_to_heated_zone_in_watt: The output :attr:`HeatToHeatedZoneInWatt` over the run, in W.
+            heat_loss_in_watt: The output :attr:`HeatLossInWatt` over the run, in W.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The standby heat loss, in kWh, rounded to one decimal.
+        """
+        released_in_watt = heat_to_heated_zone_in_watt + heat_loss_in_watt
+        return round(
+            KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=released_in_watt.loc[released_in_watt > 0.0],
+                time_resolution_in_seconds=seconds_per_timestep,
+            ),
+            1,
+        )
+
+    def standby_heat_loss_kpi_value_in_kilowatt_hour(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame
+    ) -> Optional[float]:
+        """Return the tank's standby heat loss over the run, in kWh, from its two columns; None without them.
+
+        Args:
+            all_outputs: Every output of the run, in the order of the result columns.
+            postprocessing_results: The run's results, one column per output.
+
+        Returns:
+            :meth:`standby_heat_loss_in_kilowatt_hour` of the tank's two released-heat columns.
+        """
+        columns = {
+            output.field_name: index
+            for index, output in enumerate(all_outputs)
+            if output.component_name == self.component_name
+            and output.field_name in (self.HeatToHeatedZoneInWatt, self.HeatLossInWatt)
+            and output.unit == lt.Units.WATT
+        }
+        if len(columns) != 2:
+            return None
+        return self.standby_heat_loss_in_kilowatt_hour(
+            heat_to_heated_zone_in_watt=postprocessing_results.iloc[:, columns[self.HeatToHeatedZoneInWatt]],
+            heat_loss_in_watt=postprocessing_results.iloc[:, columns[self.HeatLossInWatt]],
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+        )
 
     def check_converged_mean_water_temperature(
         self, mean_water_temperature_in_celsius: float, storage_label: str
@@ -792,11 +967,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     (:class:`~hisim.energy_port.FluidLoop`): the heat each generator's loop brings, which the generator supplies, and
     the heat the distribution system's loop takes, which the buffer supplies; its standby loss and the change of the
     heat it holds (``STORED_CHANGE``). The standby loss is ``UA`` times the buffer's temperature less the temperature
-    of its surroundings, which it reads on :attr:`SurroundingTemperatureInCelsius` from the source its installation
-    location names: the building's start-of-step air temperature in the heated zone, the building's unheated cellar
-    in an unheated space, the weather's outside temperature outdoors. In the heated zone the loss is room heat the
-    building takes in (``PRODUCTION`` of ``ROOM_HEAT``), elsewhere a ``LOSS`` that leaves the house
-    (:meth:`hisim.energy_port.EnergyPort.for_heat_released`). The balance derives
+    of its surroundings, which it publishes as :attr:`SurroundingTemperatureInCelsius`: of its three temperature
+    inputs, the one its installation location picks, the building's start-of-step air temperature in the heated zone,
+    the building's unheated cellar in an unheated space, the weather's outside temperature outdoors. The loss goes on
+    one of two fixed outputs: :attr:`HeatToHeatedZoneInWatt`, room heat the building takes in (``PRODUCTION`` of
+    ``ROOM_HEAT``), in the heated zone, and :attr:`HeatLossInWatt`, a ``LOSS`` that leaves the house, elsewhere; the
+    other is 0. The balance derives
     each circuit's heat from the flow and the two temperatures both ends read, so it checks that the buffer's node
     step books what its circuits carry. The mass-mixing path declares the same ports; it is not energy-consistent
     (hydronic coupling spec §4.5), so a run with it fails the balance and names the buffer.
@@ -869,7 +1045,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     ThermalEnergyFromHeatDistribution = "ThermalEnergyFromHeatDistribution"
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
-    StandbyHeatLoss = "StandbyHeatLoss"
     ThermalPowerConsumptionHeatDistribution = "ThermalPowerConsumptionHeatDistribution"
     ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
     ThermalPowerFromSecondaryHeatGenerator = "ThermalPowerFromSecondaryHeatGenerator"
@@ -999,7 +1174,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         #: Where the buffer stands, which decides the temperature it loses its standby heat to and where that heat goes.
         self.installation_location: lt.InstallationLocation = concrete(self.waterstorageconfig.installation_location)
-        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_input(
+        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_inputs(
             self.installation_location
         )
 
@@ -1162,21 +1337,11 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             ),
             energy_port=EnergyPort(lt.EnergyRole.STORED_CHANGE, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
-        self.stand_by_heat_loss_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.StandbyHeatLoss,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            output_description=(
-                "Heat the buffer loses to its surroundings, in W, the mean over the step: its loss coefficient UA "
-                f"times its temperature less the surrounding temperature it reads on {self.SurroundingTemperatureInCelsius}; "
-                "negative in a step in which the surroundings are warmer than the water. "
-                + self.STANDBY_LOSS_DESTINATION_BY_LOCATION[self.installation_location]
-            ),
-            energy_port=EnergyPort.for_heat_released(
-                self.installation_location, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
-            ),
-        )
+        (
+            self.surrounding_temperature_output_channel,
+            self.heat_to_heated_zone_channel,
+            self.heat_loss_channel,
+        ) = self.add_surroundings_outputs(lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, "buffer")
         self.thermal_power_heat_distribution_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerConsumptionHeatDistribution,
@@ -1652,7 +1817,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             * (end_temperature_in_celsius - start_temperature_in_celsius)
             / joules_per_watt_hour,
         )
-        stsv.set_output_value(self.stand_by_heat_loss_channel, loss_in_joule / dt_in_seconds)
+        self.publish_surroundings(
+            stsv,
+            self.installation_location,
+            stsv.get_input_value(self.surrounding_temperature_channel),
+            loss_in_joule / dt_in_seconds,
+        )
         stsv.set_output_value(self.thermal_power_heat_distribution_channel, -heat_distribution_in_joule / dt_in_seconds)
         stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
         stsv.set_output_value(
@@ -1894,8 +2064,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             thermal_energy_increase_current_vs_previous_mean_temperature_in_watt_hour,
         )
 
-        stsv.set_output_value(
-            self.stand_by_heat_loss_channel,
+        self.publish_surroundings(
+            stsv,
+            self.installation_location,
+            stsv.get_input_value(self.surrounding_temperature_channel),
             self.state.heat_loss_in_watt,
         )
 
@@ -2046,29 +2218,17 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         list_of_kpi_entries: List[KpiEntry] = []
-        for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name:
-                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
-                    # calc heat loss
-                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] > 0.0
-                    ]
-                    # get energy from power
-                    heat_loss_in_kilowatt_hour = round(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=heat_loss_in_watt,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        ),
-                        1,
-                    )
-                    heat_loss_entry = KpiEntry(
-                        name="Standby heat loss of Hot water storage",
-                        unit="kWh",
-                        value=heat_loss_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(heat_loss_entry)
+        heat_loss_in_kilowatt_hour = self.standby_heat_loss_kpi_value_in_kilowatt_hour(all_outputs, postprocessing_results)
+        if heat_loss_in_kilowatt_hour is not None:
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name="Standby heat loss of Hot water storage",
+                    unit="kWh",
+                    value=heat_loss_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
+                    description=self.component_name,
+                )
+            )
         return list_of_kpi_entries
 
 
@@ -2251,12 +2411,12 @@ class SimpleDHWStorage(SimpleWaterStorage):
     change of the heat it holds (``STORED_CHANGE``). The unmet hot water is no flow, since it was never delivered, and
     has no port.
 
-    The standby loss is ``UA (T̄ - T_amb)``, with ``T_amb`` the temperature of the tank's surroundings, which it reads
-    on :attr:`SurroundingTemperatureInCelsius` from the source its installation location names: the building's
-    start-of-step air temperature in the heated zone, the building's unheated cellar in an unheated space, the
-    weather's outside temperature outdoors. In the heated zone the loss is room heat the building takes in
-    (``PRODUCTION`` of ``ROOM_HEAT``), elsewhere a ``LOSS`` that leaves the house
-    (:meth:`hisim.energy_port.EnergyPort.for_heat_released`).
+    The standby loss is ``UA (T̄ - T_amb)``, with ``T_amb`` the temperature of the tank's surroundings, which it
+    publishes as :attr:`SurroundingTemperatureInCelsius`: of its three temperature inputs, the one its installation
+    location picks, the building's start-of-step air temperature in the heated zone, the building's unheated cellar in
+    an unheated space, the weather's outside temperature outdoors. The loss goes on one of two fixed outputs:
+    :attr:`HeatToHeatedZoneInWatt`, room heat the building takes in (``PRODUCTION`` of ``ROOM_HEAT``), in the heated
+    zone, and :attr:`HeatLossInWatt`, a ``LOSS`` that leaves the house, elsewhere; the other is 0 in every step.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -2305,7 +2465,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
     ThermalPowerConsumptionDHW = "ThermalPowerConsumptionDHW"
     ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
     ThermalPowerFromSecondaryHeatGenerator = "ThermalPowerFromSecondaryHeatGenerator"
-    StandbyHeatLoss = "StandbyHeatLoss"
     WaterMassFlowRateOfDHW = "WaterMassFlowRateOfDHW"
     HotWaterMassFlowRateFromStorageInKgPerSecond = "HotWaterMassFlowRateFromStorageInKgPerSecond"
     #: The flow of each charging coil, in kg/s, passed back to the generator that pumps it, unchanged.
@@ -2351,7 +2510,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
         #: Where the tank stands, which decides the temperature it loses its standby heat to and where that heat goes.
         self.installation_location: lt.InstallationLocation = concrete(self.waterstorageconfig.installation_location)
-        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_input(
+        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_inputs(
             self.installation_location
         )
         # Each charging coil is a water loop with its own return (owner decision of 2026-10-21 on
@@ -2557,21 +2716,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
             energy_port=EnergyPort(lt.EnergyRole.STORED_CHANGE, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
         )
 
-        self.stand_by_heat_loss_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.StandbyHeatLoss,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            output_description=(
-                "The standby heat loss of the step to the tank's surroundings, in W: UA (T̄ - T_amb), with T_amb the "
-                f"surrounding temperature it reads on {self.SurroundingTemperatureInCelsius}; negative in a step in "
-                "which the surroundings are warmer than the water. "
-                + self.STANDBY_LOSS_DESTINATION_BY_LOCATION[self.installation_location]
-            ),
-            energy_port=EnergyPort.for_heat_released(
-                self.installation_location, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT
-            ),
-        )
+        (
+            self.surrounding_temperature_output_channel,
+            self.heat_to_heated_zone_channel,
+            self.heat_loss_channel,
+        ) = self.add_surroundings_outputs(lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, "hot-water tank")
 
         self.thermal_power_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -3160,7 +3309,12 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.thermal_energy_increase_in_storage_channel,
             heat_capacity_in_joule_per_kelvin * (node.t_end_c - start_temperature_in_celsius) / joules_per_watt_hour,
         )
-        stsv.set_output_value(self.stand_by_heat_loss_channel, node.loss_j / dt_in_seconds)
+        self.publish_surroundings(
+            stsv,
+            self.installation_location,
+            stsv.get_input_value(self.surrounding_temperature_channel),
+            node.loss_j / dt_in_seconds,
+        )
         stsv.set_output_value(self.thermal_power_dhw_channel, heat_tap_in_joule / dt_in_seconds)
         stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
         stsv.set_output_value(
@@ -3227,27 +3381,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
-                    # calc heat loss
-                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] > 0.0
-                    ]
-                    # get energy from power
-                    heat_loss_in_kilowatt_hour = round(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=heat_loss_in_watt,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        ),
-                        1,
-                    )
-                    heat_loss_entry = KpiEntry(
-                        name="Standby heat loss of DHW storage",
-                        unit="kWh",
-                        value=heat_loss_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(heat_loss_entry)
                 if output.field_name == self.ThermalEnergyUnmetDHWInWattHour and output.unit == lt.Units.WATT_HOUR:
                     # the hot-water heat the tank could not cover, summed over the run
                     unmet_in_kilowatt_hour = round(
@@ -3264,4 +3397,15 @@ class SimpleDHWStorage(SimpleWaterStorage):
                             description=self.component_name,
                         )
                     )
+        heat_loss_in_kilowatt_hour = self.standby_heat_loss_kpi_value_in_kilowatt_hour(all_outputs, postprocessing_results)
+        if heat_loss_in_kilowatt_hour is not None:
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name="Standby heat loss of DHW storage",
+                    unit="kWh",
+                    value=heat_loss_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
+                    description=self.component_name,
+                )
+            )
         return list_of_kpi_entries

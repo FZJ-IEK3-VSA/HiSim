@@ -98,7 +98,7 @@ class ExampleSystem:
                 ),
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: read_in_celsius
                 - self.DISTRIBUTION_DROP_IN_KELVIN,
-                SimpleHotWaterStorage.SurroundingTemperatureInCelsius: self.SURROUNDING_TEMPERATURE_IN_CELSIUS,
+                SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius: self.SURROUNDING_TEMPERATURE_IN_CELSIUS,
             },
         )
 
@@ -175,7 +175,7 @@ def test_the_iterated_buffer_closes_its_balance_on_every_pass(seconds_per_timest
             + outputs[SimpleHotWaterStorage.ThermalEnergyFromSecondaryHeatGenerator]
             + outputs[SimpleHotWaterStorage.ThermalEnergyFromHeatDistribution]
         )
-        loss_in_watt_hour = outputs[SimpleHotWaterStorage.StandbyHeatLoss] * hours
+        loss_in_watt_hour = outputs[SimpleHotWaterStorage.HeatLossInWatt] * hours
         stored_in_watt_hour = outputs[SimpleHotWaterStorage.ThermalEnergyIncreaseInStorage]
         assert heats_in_watt_hour - loss_in_watt_hour == pytest.approx(stored_in_watt_hour, rel=1e-9, abs=1e-9)
         read_in_celsius = outputs[SimpleHotWaterStorage.WaterTemperatureToHeatGenerator]

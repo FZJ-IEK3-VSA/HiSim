@@ -490,7 +490,7 @@ def setup_function(
         my_heatpump.MassFlowOutputDHW,
     )
     # The temperature the cylinder loses its standby heat to, from the building it stands in
-    my_dhw_storage.connect_only_predefined_connections(my_building)
+    my_dhw_storage.connect_only_predefined_connections(my_building, my_weather)
     my_sim.add_component(my_dhw_storage)
 
     # Build Electricity Meter

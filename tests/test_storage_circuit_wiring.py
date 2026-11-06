@@ -132,7 +132,9 @@ class StorageWiring:
             SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem,
             SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
             SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
-            SimpleHotWaterStorage.SurroundingTemperatureInCelsius,
+            SimpleHotWaterStorage.IndoorAirTemperatureInCelsius,
+            SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius,
+            SimpleHotWaterStorage.OutsideAirTemperatureInCelsius,
         ]
 
     @staticmethod
@@ -146,7 +148,9 @@ class StorageWiring:
             SimpleDHWStorage.WaterConsumption,
             SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
             SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
-            SimpleDHWStorage.SurroundingTemperatureInCelsius,
+            SimpleDHWStorage.IndoorAirTemperatureInCelsius,
+            SimpleDHWStorage.UnheatedCellarTemperatureInCelsius,
+            SimpleDHWStorage.OutsideAirTemperatureInCelsius,
         ]
 
 

@@ -30,9 +30,11 @@ has no carrier, appears only in ``overall``. Links are coloured by carrier with 
 palette; the renderer is plotly (D4).
 
 ``energy_sankey.json`` keeps every edge of every view. :class:`SankeyDrawing` decides what a view's HTML draws
-(spec §4.8, owner amendment of 2026-11-06, bead hisim-sankey-readability-8e20): ``overall`` starts a component that
-converts sunlight at what it makes of it, flows below 1 Wh are left out, flows below a share of the view's largest
-flow merge into "other" nodes, and every node is labelled on one line with a display name and its energy.
+(spec §4.8, owner amendments of 2026-11-06, beads hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8):
+``overall`` starts a component that converts sunlight at what it makes of it, an exchange both ways between two nodes
+is drawn as its net, flows below 1 Wh are left out, flows below a share of the view's largest flow merge into "other"
+nodes, and every node is labelled on one line with a display name and its energy. :class:`SankeyLayout` places the
+nodes in explicit columns, sources left and sinks right, with a label line of room around every node.
 """
 
 from __future__ import annotations
@@ -421,17 +423,20 @@ class DrawnNode:
 class SankeyDrawing:
     """What the HTML of one view draws: the view's links made readable, its nodes labelled (spec §4.8).
 
-    The JSON keeps the whole graph; only the drawing changes it, in this order (owner amendment of 2026-11-06, bead
-    hisim-sankey-readability-8e20):
+    The JSON keeps the whole graph; only the drawing changes it, in this order (owner amendments of 2026-11-06, beads
+    hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8):
 
     1. ``overall`` nets a component's solar losses against the sunlight it receives (:meth:`net_solar_losses`): the
        PV system starts at its electricity, and the split of the sunlight is drawn in the ``solar`` view only.
-    2. A flow below :attr:`EMPTY_FLOW_IN_KILOWATT_HOUR` is left out (:meth:`drop_empty`), and a node left with no
+    2. An exchange both ways between two nodes on one carrier is drawn as its net (:meth:`net_two_way`), so a battery
+       that gives back to the meter part of what it took from it draws no ring.
+    3. A flow below :attr:`EMPTY_FLOW_IN_KILOWATT_HOUR` is left out (:meth:`drop_empty`), and a node left with no
        flow goes with it. A view with nothing left is not drawn.
-    3. Small nodes, through which less than :attr:`SMALL_FLOW_SHARE` of the view's largest flow passes, merge into
+    4. Small nodes, through which less than :attr:`SMALL_FLOW_SHARE` of the view's largest flow passes, merge into
        "other" nodes, one per sink (:meth:`merge_small`); the hover text lists what each stands for. An "other" node
        that stands for a single node keeps that node's name and colour, since merging one node gains nothing.
-    4. Every node is labelled on one line, "name · energy" (:meth:`label`), with a display name (:meth:`display_name`).
+    5. Every node is labelled on one line, "name · energy" (:meth:`label`), with a display name (:meth:`display_name`).
+    6. :class:`SankeyLayout` places every node in an explicit column, with room for its label (:meth:`figure`).
 
     Example: ``SankeyDrawing.of(diagrams["overall"], "overall").figure("…")`` is the plotly figure of ``overall``.
     """
@@ -470,6 +475,9 @@ class SankeyDrawing:
             "TransmissionLossWindowsAndDoorsInWatt": "window and door transmission loss",
         }
     )
+    #: The figure's margins around the plot: room for the title on top, little elsewhere, since the labels of the
+    #: first column are right of their nodes and those of the last column left of theirs.
+    MARGIN_IN_PIXELS: ClassVar[Mapping[str, int]] = MappingProxyType({"t": 60, "b": 30, "l": 20, "r": 20})
     #: The words of a CamelCase name: an acronym ("DHW"), a capitalised or lower-case word, or a number.
     WORD_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")
 
@@ -505,7 +513,7 @@ class SankeyDrawing:
 
     @classmethod
     def of(cls, diagram: Mapping[str, Any], view: str) -> "SankeyDrawing":
-        """The drawing of one view of ``energy_sankey.json``, made readable in the four steps of the class.
+        """The drawing of one view of ``energy_sankey.json``, made readable in the first five steps of the class.
 
         Args:
             diagram: One view as :meth:`SankeyDiagram.data` writes it.
@@ -514,6 +522,7 @@ class SankeyDrawing:
         links, kinds = cls.links_of(diagram)
         if view == SankeyDiagram.OVERALL:
             links = cls.net_solar_losses(links, kinds)
+        links = cls.net_two_way(links)
         links = cls.drop_empty(links, cls.EMPTY_FLOW_IN_KILOWATT_HOUR)
         largest = max((link.kilowatt_hours for link in links), default=0.0)
         links, merged = cls.merge_small(links, kinds, cls.SMALL_FLOW_SHARE * largest)
@@ -583,6 +592,47 @@ class SankeyDrawing:
                     label=f"{link.label}, net of {link.target}'s solar losses ({lost[link.target]:,.1f} kWh)",
                 )
             netted.append(link)
+        return netted
+
+    @classmethod
+    def net_two_way(cls, links: Sequence[SankeyLink]) -> List[SankeyLink]:
+        """Draw an exchange both ways between two nodes on one carrier as one link of its net, the way the larger goes.
+
+        A battery takes 3,488 kWh from the meter over the year and gives 2,541 kWh back. Drawn as two links, the
+        pair is a cycle, which plotly draws as a ring around both nodes; drawn as its net, "ElectricityMeter →
+        Battery" carries 947 kWh, what the battery's losses cost beyond what it gave up from its store, and its hover
+        text lists both flows. Links between two nodes one way only are kept as they are, parallel ones too; flows of
+        different carriers are never netted against each other, since they are different energies.
+
+        Args:
+            links: The links of one view.
+
+        Returns:
+            The links, every two-way exchange replaced by one link at the place of its first link; an exchange that
+            nets to zero is a link of 0 kWh, which :meth:`drop_empty` leaves out.
+        """
+        totals: Dict[Tuple[str, str, Optional[str]], float] = {}
+        for link in links:
+            key = (link.source, link.target, link.carrier)
+            totals[key] = totals.get(key, 0.0) + link.kilowatt_hours
+        netted: List[SankeyLink] = []
+        done: Set[Tuple[FrozenSet[str], Optional[str]]] = set()
+        for link in links:
+            if (link.target, link.source, link.carrier) not in totals:
+                netted.append(link)
+                continue
+            pair = (frozenset((link.source, link.target)), link.carrier)
+            if pair in done:
+                continue
+            done.add(pair)
+            there = totals[(link.source, link.target, link.carrier)]
+            back = totals[(link.target, link.source, link.carrier)]
+            source, target = (link.source, link.target) if there >= back else (link.target, link.source)
+            parts = [part for part in links if (frozenset((part.source, part.target)), part.carrier) == pair]
+            label = "net of both ways:<br>" + "<br>".join(
+                f"{part.label}: {cls.amount(part.kilowatt_hours)} kWh{'' if part.source == source else ' (back)'}" for part in parts
+            )
+            netted.append(SankeyLink(source, target, abs(there - back), link.carrier, label, link.kind))
         return netted
 
     @staticmethod
@@ -773,20 +823,30 @@ class SankeyDrawing:
         return f"{display}{Peer.NODE_SEPARATOR}{cls.amount(kilowatt_hours)} kWh"
 
     def figure(self, title: str) -> Any:
-        """The plotly figure of the drawing: nodes coloured by kind, links by carrier, hover text on both."""
+        """The plotly figure of the drawing: nodes where :class:`SankeyLayout` puts them, coloured by kind, links by
+        carrier, hover text on both, and the figure as tall as the layout needs.
+
+        plotly takes the positions with ``arrangement="snap"``: it keeps them, and a node the reader drags snaps to a
+        column and keeps the label gap to its neighbours.
+        """
         import plotly.graph_objects as go  # pylint: disable=import-outside-toplevel
 
+        layout = SankeyLayout.of(self.links, {node.name: node.label for node in self.nodes})
         positions = {node.name: index for index, node in enumerate(self.nodes)}
         figure = go.Figure(
             go.Sankey(
                 valueformat=",.1f",
                 valuesuffix=" kWh",
+                arrangement="snap",
                 node={
                     "label": [node.label for node in self.nodes],
                     "color": [node.colour for node in self.nodes],
                     "customdata": [node.hover for node in self.nodes],
                     "hovertemplate": "%{customdata}<br>%{value:,.1f} kWh<extra></extra>",
-                    "pad": 18,
+                    "pad": SankeyLayout.LABEL_GAP_IN_PIXELS,
+                    "thickness": SankeyLayout.NODE_THICKNESS_IN_PIXELS,
+                    "x": [layout.x[node.name] for node in self.nodes],
+                    "y": [layout.y[node.name] for node in self.nodes],
                 },
                 link={
                     "source": [positions[link.source] for link in self.links],
@@ -797,5 +857,316 @@ class SankeyDrawing:
                 },
             )
         )
-        figure.update_layout(title_text=title, font_size=12)
+        margin = self.MARGIN_IN_PIXELS
+        figure.update_layout(
+            title_text=title,
+            font_size=SankeyLayout.FONT_SIZE_IN_PIXELS,
+            height=round(layout.height_in_pixels + margin["t"] + margin["b"]),
+            width=round(layout.width_in_pixels + margin["l"] + margin["r"]),
+            margin=dict(margin),
+        )
         return figure
+
+
+@dataclass(frozen=True)
+class SankeyLayout:
+    """Where the drawing puts each node: its column, its height and the room for its label beside it.
+
+    plotly places a label beside its node, right of it but in the last column left of it, and has no collision
+    handling, so the labels of nodes a few pixels high overlap where plotly stacks them closer than a line, and a long
+    label runs into the next column (spec §4.8, step 6, owner amendment of 2026-11-06, bead hisim-sankey-layout-48b8).
+    The layout therefore decides every node's position itself and hands it to plotly as ``node.x``/``node.y``:
+
+    1. **Columns** (:meth:`columns`): a node that only gives is in the first column (the boundaries energy enters
+       from, a store giving up energy), a node that only takes in the last (the boundaries energy leaves to, a store
+       taking energy), every other node in the column of its longest path from a node of the first column; a link
+       that would close a cycle (:meth:`back_links`) does not count.
+    2. **Order in a column** (:meth:`orders`): by energy, largest on top, then sorted again by the energy-weighted
+       mean height of the nodes each node is linked to, column by column forth and back, so that links cross less.
+    3. **Heights** (:meth:`stack`): every node as tall as its energy, the fullest column's energy
+       :attr:`NODE_HEIGHT_IN_PIXELS` tall, the nodes of a column at least :attr:`LABEL_GAP_IN_PIXELS` apart, one
+       label line, and each column centred. The plot is as tall as the column that needs most room
+       (:meth:`plot_height_in_pixels`), so a column of many small nodes makes the figure taller instead of stacking
+       their labels on each other.
+    4. **Widths** (:meth:`column_centres`): the gap after a column holds its longest label, the last gap the
+       longest labels of both its columns, since the last column's labels face left. The plot is as wide as that
+       needs, at least :attr:`SMALLEST_PLOT_WIDTH_IN_PIXELS`, so a long label widens the figure instead of running
+       over the next column.
+
+    Example: ``SankeyLayout.of(drawing.links, labels)`` lays out a drawing; ``layout.x["grid import"]`` is near 0,
+    the first column, and ``layout.x["grid export"]`` near 1, the last.
+
+    Attributes:
+        column_of: The column of every node, 0 the first.
+        column_nodes: The nodes of each column, top first.
+        x: Every node's horizontal centre, 0 at the left to 1, as plotly's ``node.x`` takes it.
+        y: Every node's vertical centre, 0 at the top to 1, as plotly's ``node.y`` takes it.
+        height_in_pixels: The height of the plot area the positions are computed for.
+        width_in_pixels: The width of the plot area the positions are computed for.
+    """
+
+    column_of: Mapping[str, int]
+    column_nodes: Tuple[Tuple[str, ...], ...]
+    x: Mapping[str, float]
+    y: Mapping[str, float]
+    height_in_pixels: float
+    width_in_pixels: float
+
+    #: The font size of the labels.
+    FONT_SIZE_IN_PIXELS: ClassVar[int] = 12
+    #: The width of a label's character, as a share of the font size: 0.55 is a little more than plotly's sans-serif
+    #: font needs on average, so that an estimated label is never shorter than the drawn one.
+    CHARACTER_WIDTH_SHARE: ClassVar[float] = 0.55
+    #: The distance between a node and its label, a little more than plotly leaves.
+    LABEL_OFFSET_IN_PIXELS: ClassVar[float] = 8.0
+    #: The least distance between the nodes of a column: one label line at :attr:`FONT_SIZE_IN_PIXELS` and a little
+    #: air. plotly's ``node.pad``, so that plotly keeps the same gap when it snaps a dragged node.
+    LABEL_GAP_IN_PIXELS: ClassVar[float] = 20.0
+    #: The width of a node, plotly's ``node.thickness``.
+    NODE_THICKNESS_IN_PIXELS: ClassVar[float] = 20.0
+    #: The height of the nodes of the column with most energy, gaps not counted.
+    NODE_HEIGHT_IN_PIXELS: ClassVar[float] = 560.0
+    #: The least width of the plot: a view with few short labels is spread over it.
+    SMALLEST_PLOT_WIDTH_IN_PIXELS: ClassVar[float] = 1200.0
+    #: How often the columns are sorted forth and back by the heights of their neighbours.
+    SWEEPS: ClassVar[int] = 4
+    #: The bounds of a vertical position: plotly ignores a position of exactly 0.
+    FIRST_POSITION: ClassVar[float] = 0.001
+    LAST_POSITION: ClassVar[float] = 0.999
+
+    @classmethod
+    def of(cls, links: Sequence[SankeyLink], labels: Mapping[str, str]) -> "SankeyLayout":
+        """The layout of a drawing's links, in the four steps of the class.
+
+        Args:
+            links: The links the drawing draws; every node they name gets a position.
+            labels: The label of every node, whose length sets the room beside it.
+        """
+        columns = cls.columns(links)
+        throughputs = SankeyDrawing.throughputs(links)
+        count = max(columns.values(), default=0) + 1
+        energy_per_column = [0.0] * count
+        for node, column in columns.items():
+            energy_per_column[column] += throughputs[node]
+        fullest = max(energy_per_column, default=0.0)
+        pixels_per_kilowatt_hour = cls.NODE_HEIGHT_IN_PIXELS / fullest if fullest > 0.0 else 0.0
+        heights = {node: kilowatt_hours * pixels_per_kilowatt_hour for node, kilowatt_hours in throughputs.items()}
+        orders = cls.orders(links, columns, heights)
+        plot_height = cls.plot_height_in_pixels(orders, heights, cls.LABEL_GAP_IN_PIXELS)
+        y: Dict[str, float] = {}
+        for column_nodes in orders:
+            centres = cls.stack([heights[node] for node in column_nodes], cls.LABEL_GAP_IN_PIXELS, plot_height)
+            for node, centre in zip(column_nodes, centres):
+                y[node] = min(max(centre / plot_height, cls.FIRST_POSITION), cls.LAST_POSITION)
+        label_widths = [max((cls.label_width_in_pixels(labels[node]) for node in column_nodes), default=0.0) for column_nodes in orders]
+        centres, plot_width = cls.column_centres(label_widths)
+        x = {node: centres[column] / plot_width for node, column in columns.items()}
+        return cls(
+            MappingProxyType(columns),
+            tuple(tuple(column_nodes) for column_nodes in orders),
+            MappingProxyType(x),
+            MappingProxyType(y),
+            plot_height,
+            plot_width,
+        )
+
+    @staticmethod
+    def back_links(links: Sequence[SankeyLink]) -> FrozenSet[Tuple[str, str]]:
+        """The links that close a cycle, as (source, target): what a depth-first walk from the sources finds going back.
+
+        The walk starts at the nodes without inflow, in the order the links name them, then at any node not yet
+        reached (a cycle no source leads to), and follows each node's links in their order. Example: of
+        "grid → Meter", "Meter → Battery" and "Battery → Meter", the last closes the cycle and is the back link.
+        """
+        successors: Dict[str, List[str]] = {}
+        nodes: List[str] = []
+        takes: Set[str] = set()
+        for link in links:
+            for node in (link.source, link.target):
+                if node not in successors:
+                    successors[node] = []
+                    nodes.append(node)
+            successors[link.source].append(link.target)
+            takes.add(link.target)
+        on_path: Set[str] = set()
+        visited: Set[str] = set()
+        back: Set[Tuple[str, str]] = set()
+        for start in [node for node in nodes if node not in takes] + nodes:
+            if start in visited:
+                continue
+            visited.add(start)
+            on_path.add(start)
+            path = [(start, iter(successors[start]))]
+            while path:
+                node, children = path[-1]
+                for child in children:
+                    if child in on_path:
+                        back.add((node, child))
+                    elif child not in visited:
+                        visited.add(child)
+                        on_path.add(child)
+                        path.append((child, iter(successors[child])))
+                        break
+                else:
+                    on_path.discard(node)
+                    path.pop()
+        return frozenset(back)
+
+    @classmethod
+    def columns(cls, links: Sequence[SankeyLink]) -> Dict[str, int]:
+        """The column of every node: sources first, sinks last, every other node by its longest path from a source.
+
+        A node that only gives is in column 0, a node that only takes in the last column, the column of the longest
+        path; every other node is in the column of the number of links on its longest path from column 0, back
+        links (:meth:`back_links`) left out. Example: "grid import → Meter → HeatPump → Building → Building · loss →
+        outdoors" and "Meter → grid export" put grid import in 0, the meter in 1, the heat pump in 2, the building
+        in 3, its loss node in 4 and both outdoors and grid export in 5.
+
+        Returns:
+            The column of every node, in the order the links name them.
+        """
+        back = cls.back_links(links)
+        forward = [link for link in links if (link.source, link.target) not in back]
+        depth: Dict[str, int] = {}
+        for link in links:
+            depth.setdefault(link.source, 0)
+            depth.setdefault(link.target, 0)
+        inflows = {node: 0 for node in depth}
+        for link in forward:
+            inflows[link.target] += 1
+        ready = [node for node in depth if inflows[node] == 0]
+        while ready:
+            node = ready.pop(0)
+            for link in forward:
+                if link.source != node:
+                    continue
+                depth[link.target] = max(depth[link.target], depth[node] + 1)
+                inflows[link.target] -= 1
+                if inflows[link.target] == 0:
+                    ready.append(link.target)
+        last = max(depth.values(), default=0)
+        gives = {link.source for link in links}
+        takes = {link.target for link in links}
+        columns: Dict[str, int] = {}
+        for node, node_depth in depth.items():
+            if node not in gives:
+                columns[node] = last
+            elif node not in takes:
+                columns[node] = 0
+            else:
+                columns[node] = node_depth
+        return columns
+
+    @classmethod
+    def orders(cls, links: Sequence[SankeyLink], columns: Mapping[str, int], heights: Mapping[str, float]) -> List[List[str]]:
+        """The nodes of each column, top first: by height, then by the weighted mean height of their neighbours.
+
+        First every column is sorted by its nodes' heights, the tallest on top. Then, :attr:`SWEEPS` times, the
+        columns are sorted from the second to the last by the mean centre of each node's neighbours in the columns
+        before it, weighted by the energy of the links to them, and from the last but one to the first by those in
+        the columns after it. A node without such a neighbour keeps its centre; equal keys keep their order. Example:
+        a source S2 of 110 kWh above a source S1 of 100 kWh, S1 feeding the sink Ta (100 kWh) and S2 the sinks Tc
+        (60 kWh) and Tb (50 kWh): sorted by height the sinks are Ta, Tc, Tb, so Ta's link would cross both others;
+        sorted by their neighbours they are Tc, Tb, Ta, and no link crosses.
+
+        Args:
+            links: The links of the drawing.
+            columns: The column of every node (:meth:`columns`).
+            heights: Every node's height in pixels.
+        """
+        count = max(columns.values(), default=0) + 1
+        orders: List[List[str]] = [[] for _ in range(count)]
+        for node, column in columns.items():
+            orders[column].append(node)
+        for column_nodes in orders:
+            column_nodes.sort(key=lambda node: -heights[node])
+        gap = cls.LABEL_GAP_IN_PIXELS
+        for _ in range(cls.SWEEPS):
+            for column, before in [(column, True) for column in range(1, count)] + [(column, False) for column in range(count - 2, -1, -1)]:
+                plot_height = cls.plot_height_in_pixels(orders, heights, gap)
+                centres: Dict[str, float] = {}
+                for column_nodes in orders:
+                    centres.update(zip(column_nodes, cls.stack([heights[node] for node in column_nodes], gap, plot_height)))
+                weighted: Dict[str, float] = {}
+                weights: Dict[str, float] = {}
+                for link in links:
+                    for node, neighbour in ((link.target, link.source), (link.source, link.target)):
+                        if columns[node] != column or (columns[neighbour] < column) != before or columns[neighbour] == column:
+                            continue
+                        weighted[node] = weighted.get(node, 0.0) + link.kilowatt_hours * centres[neighbour]
+                        weights[node] = weights.get(node, 0.0) + link.kilowatt_hours
+                keys = {
+                    node: weighted[node] / weights[node] if weights.get(node, 0.0) > 0.0 else centres[node]
+                    for node in orders[column]
+                }
+                orders[column].sort(key=keys.__getitem__)
+        return orders
+
+    @staticmethod
+    def stack(heights: Sequence[float], gap_in_pixels: float, plot_height_in_pixels: float) -> List[float]:
+        """The vertical centres of nodes stacked from the top, ``gap_in_pixels`` apart, the column centred in the plot.
+
+        Example: heights 100 and 20 with a gap of 20 in a plot 200 high take 140 pixels, start 30 pixels down and
+        have their centres at 80 and 160.
+        """
+        total = sum(heights) + gap_in_pixels * max(len(heights) - 1, 0)
+        top = (plot_height_in_pixels - total) / 2.0
+        centres: List[float] = []
+        for height in heights:
+            centres.append(top + height / 2.0)
+            top += height + gap_in_pixels
+        return centres
+
+    @staticmethod
+    def plot_height_in_pixels(orders: Sequence[Sequence[str]], heights: Mapping[str, float], gap_in_pixels: float) -> float:
+        """The height the fullest column needs: its nodes' heights and a gap between each two of them.
+
+        Example: a column of nodes 560, 1 and 1 pixel high with a gap of 20 needs 602 pixels, a column of twelve
+        nodes of 1 pixel 232: the plot is 602 high.
+        """
+        return max(
+            (sum(heights[node] for node in column) + gap_in_pixels * max(len(column) - 1, 0) for column in orders),
+            default=0.0,
+        )
+
+    @classmethod
+    def label_width_in_pixels(cls, label: str) -> float:
+        """The width a label takes, estimated from its characters: :attr:`CHARACTER_WIDTH_SHARE` of the font size each.
+
+        Example: "grid import · 1,805 kWh", 23 characters at 12 pixels, is estimated at 151.8 pixels.
+        """
+        return len(label) * cls.CHARACTER_WIDTH_SHARE * cls.FONT_SIZE_IN_PIXELS
+
+    @classmethod
+    def column_centres(cls, label_widths: Sequence[float]) -> Tuple[List[float], float]:
+        """The horizontal centre of each column in pixels, and the width of the plot, so that every label fits.
+
+        A column's labels are right of its nodes, the last column's left of them. So the gap after a column holds a
+        node, the label offset and the column's longest label; the gap before the last column holds the longest
+        labels of both its columns. A plot narrower than :attr:`SMALLEST_PLOT_WIDTH_IN_PIXELS` is widened to it, every
+        gap in proportion. Example: with labels of 100, 200 and 50 pixels, nodes 20 wide and an offset of 8, the
+        centres are 10, 138 and 424 in a plot 434 wide, which is then widened to 1200.
+
+        Args:
+            label_widths: The width of each column's longest label, in pixels.
+
+        Returns:
+            The centres, the first at half a node from the left edge and the last at half a node from the right, and
+            the plot's width; a single column is one node wide, since there is no gap to widen.
+        """
+        thickness = cls.NODE_THICKNESS_IN_PIXELS
+        offset = cls.LABEL_OFFSET_IN_PIXELS
+        centres = [thickness / 2.0]
+        last = len(label_widths) - 1
+        for column in range(1, last + 1):
+            gap = thickness + offset + label_widths[column - 1]
+            if column == last:
+                gap += offset + label_widths[last]
+            centres.append(centres[-1] + gap)
+        width = centres[-1] + thickness / 2.0
+        smallest = cls.SMALLEST_PLOT_WIDTH_IN_PIXELS
+        if thickness < width < smallest:
+            stretch = (smallest - thickness) / (width - thickness)
+            centres = [thickness / 2.0 + (centre - thickness / 2.0) * stretch for centre in centres]
+            width = smallest
+        return centres, width

@@ -65,6 +65,7 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
       - UTSPConnector
       - ElectricHeating
   ElectricityMeter:

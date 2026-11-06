@@ -75,6 +75,7 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
     inputs:
+      - Building
       - HeatDistributionSystem
       - CondensingGasBoiler
   HeatDistributionSystem:
@@ -101,6 +102,7 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
       - UTSPConnector
       - CondensingGasBoiler
       - SolarThermalSystem

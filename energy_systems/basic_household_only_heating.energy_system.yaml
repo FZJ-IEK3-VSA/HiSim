@@ -42,6 +42,7 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
     inputs:
+      - Building
       - HeatDistributionSystem
       - CondensingGasBoiler
   CondensingGasBoiler:

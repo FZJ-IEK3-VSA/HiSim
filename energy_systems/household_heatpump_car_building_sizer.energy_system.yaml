@@ -85,6 +85,7 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
       - UTSPConnector
       - MoreAdvancedHeatPumpHPLib
   SimpleHotWaterStorage:
@@ -93,6 +94,7 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
     inputs:
+      - Building
       - HeatDistributionSystem
       - MoreAdvancedHeatPumpHPLib
   HeatDistributionSystem:

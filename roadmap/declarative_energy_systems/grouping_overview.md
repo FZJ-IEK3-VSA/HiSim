@@ -811,14 +811,14 @@ flowchart TD
 
 ## `electrolyzer_with_renewables`
 
-Recorded from `system_setups/electrolyzer_with_renewables.py`, described in the recorded twin as "Simple Electrolyzer system setup." Its 4 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
+Recorded from `system_setups/electrolyzer_with_renewables.py`, described in the recorded twin as "Simple Electrolyzer system setup." Its 6 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["electrolyzer_with_renewables"]
-    components["components (4)<br/>StandardTransformerAndRectifier<br/>CSV<br/>L1ElectrolyzerController<br/>Electrolyzer"]
+    components["components (6)<br/>StandardTransformerAndRectifier<br/>CSV<br/>L1ElectrolyzerController<br/>Electrolyzer<br/>ElectricityMeter<br/>HydrogenMeter"]
 
     setup --> components
 ```

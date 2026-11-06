@@ -6,6 +6,7 @@ import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
+from hisim.energy_port import EnergyPort
 from hisim.config import ConfigBase, DisplayConfig, NameSyntax
 from hisim.config.channels import (
     ChannelDeclarationError,
@@ -73,6 +74,11 @@ class DynamicComponentConnection:
     #: rather than only measuring it. ``None`` for a pure measurement — a PV system's production,
     #: say — and for a participant whose target port the system setup creates by hand.
     target_output: Optional[DynamicComponentTargetOutput] = None
+    #: The energy port the input this connection grows carries, or ``None`` for an input that books
+    #: nothing, as a meter's. A physics component that receives energy from the participant states
+    #: the port of the channel the feed lands on, so the input it grows is the one a declarative
+    #: file's feed grows (:attr:`hisim.config.channels.DynamicConnectionChannel.energy_port`).
+    energy_port: Optional[EnergyPort] = None
 
 
 @dataclass
@@ -487,7 +493,8 @@ class DynamicComponent(Component):
         bookkeeping finds it under, which removes the positional ``Input_<source>_<field>_<n>``
         naming and with it a whole class of insertion-order bugs. Load type and unit come from
         the matched channel rather than from the participant's port, because the channel is the
-        aggregator's declared reading of the flow — and the two were already checked to agree.
+        aggregator's declared reading of the flow — and the two were already checked to agree. So
+        does the energy port, where the channel states one.
 
         Args:
             connection: The resolved feed to create the input for.
@@ -502,6 +509,7 @@ class DynamicComponent(Component):
             connection.channel.load_type,
             connection.channel.unit,
             True,
+            energy_port=connection.channel.energy_port,
         )
         self.inputs.append(created_input)
         setattr(self, label, created_input)
@@ -593,8 +601,21 @@ class DynamicComponent(Component):
         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         source_weight: int,
         allow_unconnected_mandatory: bool = False,
+        *,
+        energy_port: Optional[EnergyPort] = None,
     ) -> None:
         """Adds a component input and connects it at once.
+
+        Args:
+            source_component_output: The output the input reads.
+            source_object_name: The component that publishes it.
+            source_load_type: The input's load type.
+            source_unit: The input's unit.
+            source_tags: The tags the runtime lookups find the input by.
+            source_weight: The input's rank; the monitored-only weight for an input that is only read.
+            allow_unconnected_mandatory: Whether connecting the run may leave the input unconnected.
+            energy_port: What the energy arriving on the input is in this component's balance, as ``add_input``
+                takes it; None for an input that books nothing, as every meter's.
 
         Raises:
             DuplicateComponentFeedError: if this component is already fed by that source output.
@@ -634,6 +655,7 @@ class DynamicComponent(Component):
             source_unit,
             True,
             allow_unconnected_mandatory=allow_unconnected_mandatory,
+            energy_port=energy_port,
         )
         self.inputs.append(myinput)
         myinput.src_object_name = source_object_name
@@ -765,6 +787,7 @@ class DynamicComponent(Component):
                 source_weight=connection.source_weight,
                 source_object_name=src_name,
                 allow_unconnected_mandatory=connection.allow_unconnected_mandatory,
+                energy_port=connection.energy_port,
             )
 
             if connection.target_output is None:

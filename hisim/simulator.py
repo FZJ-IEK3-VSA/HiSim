@@ -1116,23 +1116,26 @@ class Simulator:
         source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
         target_component: Union[cp.Component, dcp.DynamicComponent],
     ) -> None:
-        """Connects a target component to source components via default connections.
+        """Connects a target component to source components via its default connections, static and dynamic.
 
-        Args:
-            source_component_list: Candidate source components to connect from.
-            target_component: The component whose default connections to resolve.
+        A static default connection names a source class and wires its outputs into the target's named inputs. A
+        dynamic component also says what it reads of each source through the inputs it grows
+        (``default_connections_for``): the declarations for the source's class, or, for the electricity meter, every
+        electricity port the source declares. A component may declare both: the building reads the weather and the
+        occupancy by name and grows an input for every device that releases heat into its heated zone. Each kind is
+        applied to the sources it names; a component never reads its own outputs.
 
         A target that declares no default connections, or none from any source of the run, is
         connected to nothing here; the setup rule ``CB-07`` (``hisim/setup_rules/components.py``)
         refuses it before the first step.
 
+        Args:
+            source_component_list: Candidate source components to connect from, in the order of the run.
+            target_component: The component whose default connections to resolve.
+
         Raises:
             TypeError: If target_component is not a Component or DynamicComponent.
         """
-
-        if isinstance(target_component, dcp.DynamicComponent):
-            self.connect_dynamic_component_automatically(source_component_list, target_component)
-            return
         if not isinstance(target_component, cp.Component):
             raise TypeError(
                 f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
@@ -1143,17 +1146,20 @@ class Simulator:
             if source_component.get_classname() in target_default_connection_dict:
                 connections = target_component.get_default_connections(source_component=source_component)
                 target_component.connect_with_connections_list(connections=connections)
+        if isinstance(target_component, dcp.DynamicComponent):
+            self.connect_dynamic_component_automatically(source_component_list, target_component)
 
     @staticmethod
     def connect_dynamic_component_automatically(
         source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
         target_component: dcp.DynamicComponent,
     ) -> None:
-        """Connects a dynamic component to every source it declares default connections from.
+        """Connects a dynamic component to every source it declares dynamic default connections from.
 
         The dynamic component itself says what it reads of each source (``default_connections_for``): the
-        declarations for the source's class, or for the electricity meter every electricity port the source declares.
-        It never reads its own outputs.
+        declarations for the source's class, or for the electricity meter every electricity port the source declares,
+        or for the building every port of heat released into its heated zone. It never reads its own outputs. Its
+        static default connections are applied by :meth:`connect_everything_automatically` before this.
 
         A target that declares no default connections, or none from any source of the run, is connected to nothing
         here; the setup rule ``CB-07`` (``hisim/setup_rules/components.py``) refuses it before the first step.

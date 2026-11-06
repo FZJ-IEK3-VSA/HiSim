@@ -314,6 +314,7 @@ class PostProcessor:
                 results=ppdt.results,
                 outputs=tuple(ppdt.all_outputs),
                 components=tuple(wrapped.my_component for wrapped in ppdt.wrapped_components),
+                timesteps=ppdt.simulation_parameters.timesteps,
                 read_energy_balance=lambda: self.check_energy_balance(ppdt),
             ),
         )
@@ -551,7 +552,7 @@ class PostProcessor:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
 
-        # In every run, last: the balance the rules judged first, written when asked
+        # The balance the setup rules judged first thing (judge_the_results), written when asked
         self.export_sankeys(ppdt, energy_balance)
 
         log.information("Finished main post processing function.")

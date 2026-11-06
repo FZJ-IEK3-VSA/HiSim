@@ -681,8 +681,9 @@ class Inventory:
             lives="hisim/setup_rules/results.py:Finite",
         ),
         RuleRecord(
-            rule_id="results.all_rows", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="the table has one row per timestep", lives="Simulator.prepare_post_processing", note="its code AR-02 is kept for it",
+            rule_id="results.all_rows", codes=("AR-02",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="the table has one row per timestep", lives="hisim/setup_rules/results.py:AllRows",
+            note="moved from hisim/simulator.py:Simulator.prepare_post_processing, which now indexes whatever rows it has",
         ),
         RuleRecord(
             rule_id="results.port_finite", codes=("AR-03",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
@@ -718,15 +719,19 @@ class Inventory:
             ),
         ),
         RuleRecord(
-            rule_id="results.loop_columns", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist",
-            lives="hisim/postprocessing/energy_balance/ports.py:LoopColumns.heat_in_kilowatt_hours_per_step, DeclaredPorts.add_input_ports, read_meters",
-            note="its code AR-07 is kept for it",
+            rule_id="results.loop_columns", codes=("AR-07",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist",
+            lives="hisim/setup_rules/results.py:ColumnsReadable",
+            note=(
+                "the faults are recorded by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect, add_input_ports, add_loops "
+                "(LoopColumns.refusal), read_meters, which raised a ValueError for each before"
+            ),
         ),
         RuleRecord(
             rule_id="results.no_port_on_a_node", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
             checks="an exempt component or a meter declares no port",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing", note="its code AR-08 is kept for it",
+            codes=("AR-08",), lives="hisim/setup_rules/results.py:NoPortOnANode",
+            note="the faults are recorded by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.node_port_fault, which raised a ValueError before",
         ),
         RuleRecord(
             rule_id="meters.meter_balance", codes=("MT-01",), nature=RuleNature.LAW, target="meters", stage=RuleStage.AFTER_RUN, when="after the run",

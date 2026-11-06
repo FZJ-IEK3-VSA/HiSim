@@ -153,14 +153,14 @@ class AfterRunRules:
 
     A test of the balance builds an :class:`~hisim.postprocessing.energy_balance.EnergyBalanceReport` from a hand-made
     result table and stand-ins; these helpers hand it to the rules as the run's balance, beside an empty result table
-    with no outputs, which the finite-results rule ``AR-01`` passes. So the rules judge exactly the balance the test
+    with no outputs and no steps, which the rules of the table (``AR-01``, ``AR-02``) pass. So the rules judge exactly the balance the test
     built, and a port the test fills with NaN reaches the port rule ``AR-03``, as it did when the balance judged itself.
     """
 
     @staticmethod
     def subject(balance: EnergyBalanceReport) -> RunResults:
         """The results of a run whose energy balance is ``balance``."""
-        return RunResults(results=pd.DataFrame(), outputs=(), components=(), read_energy_balance=lambda: balance)
+        return RunResults(results=pd.DataFrame(), outputs=(), components=(), timesteps=0, read_energy_balance=lambda: balance)
 
     @classmethod
     def refuse(cls, balance: EnergyBalanceReport, kind: SetupKind = SetupKind.RESIDENTIAL) -> None:

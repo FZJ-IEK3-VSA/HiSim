@@ -221,20 +221,40 @@ class LoopColumns:
                 raises them for one step.
         """
         mass_flow = np.asarray(mass_flow_in_kg_per_second, dtype=float)
-        if seconds_per_timestep <= 0.0:
-            raise hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
-        negative = mass_flow < 0.0
-        if negative.any():
-            first = int(np.argmax(negative))
-            raise hydronics.NegativeMassFlowError(
-                f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow[first]!r} in step {first}."
-            )
+        refusal = LoopColumns.refusal(mass_flow, seconds_per_timestep)
+        if refusal is not None:
+            raise refusal
         supply = np.asarray(supply_temperature_in_celsius, dtype=float)
         returned = np.asarray(return_temperature_in_celsius, dtype=float)
         power_in_watt = mass_flow * specific_heat_in_joule_per_kilogram_kelvin * (supply - returned)
         return np.asarray(
             power_in_watt * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR, dtype=float
         )
+
+    @staticmethod
+    def refusal(mass_flow_in_kg_per_second: np.ndarray, seconds_per_timestep: float) -> Optional[hydronics.HydronicsError]:
+        """Return the error a loop's heat cannot be derived for, without raising it, or ``None`` when it can.
+
+        A step that is not positive gives a ``NonPositiveTimestepError``, a negative flow in some step a
+        ``NegativeMassFlowError`` naming the first such step, as :func:`hisim.hydronics.circuit_power_w` refuses them
+        for one step. For example, flows of ``[0.1, -0.1]`` kg/s give "mass_flow_kg_per_s must be >= 0 kg/s, got -0.1
+        in step 1."; the balance reports it as a fault of the setup rule ``AR-07`` and leaves the loop out.
+
+        Args:
+            mass_flow_in_kg_per_second: The loop's mass flow per step, in kg/s.
+            seconds_per_timestep: The step duration, in s.
+
+        Returns:
+            The error, or ``None``.
+        """
+        if seconds_per_timestep <= 0.0:
+            return hydronics.NonPositiveTimestepError(f"seconds_per_timestep must be > 0 s, got {seconds_per_timestep!r}.")
+        mass_flow = np.asarray(mass_flow_in_kg_per_second, dtype=float)
+        negative = mass_flow < 0.0
+        if negative.any():
+            first = int(np.argmax(negative))
+            return hydronics.NegativeMassFlowError(f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow[first]!r} in step {first}.")
+        return None
 
     @property
     def label(self) -> str:
@@ -328,6 +348,20 @@ class MeterReading:
     export_kilowatt_hours: np.ndarray
 
 
+@dataclass(frozen=True)
+class ReadingFault:
+    """A port, a loop or a meter reading the balance cannot take from the run: the sentence, and where it is found.
+
+    For example, ``ReadingFault("EMS", "EMS declares the energy port Power, but it is exempt from the energy balance:
+    it decides.", "Power")``. ``component`` is ``None`` for a fault of the whole table, ``port`` ``None`` for one of a
+    whole component. The balance leaves out what it cannot read; the setup rules ``AR-07`` and ``AR-08`` refuse it.
+    """
+
+    component: Optional[str]
+    message: str
+    port: Optional[str] = None
+
+
 @dataclass
 class DeclaredPorts:
     """Every declared port of a run, by component; the meters; the components that declare none, exempt or not."""
@@ -341,6 +375,11 @@ class DeclaredPorts:
     meters: List[MeterReading] = field(default_factory=list)
     #: Every breach of the loop rules (:mod:`hisim.energy_port`), at its component; the setup rule AR-06 refuses each.
     loop_breaches: List["LoopFault"] = field(default_factory=list)
+    #: Every port, loop or meter reading whose column the run does not have or whose flow or step cannot be read;
+    #: the setup rule AR-07 refuses each.
+    column_faults: List[ReadingFault] = field(default_factory=list)
+    #: Every energy port an exempt component or a meter declares, which moves no energy of its own; AR-08 refuses each.
+    node_port_faults: List[ReadingFault] = field(default_factory=list)
     index: Optional[pd.Index] = None
 
     @property
@@ -368,9 +407,13 @@ class DeclaredPorts:
         """Read the declared ports and the meters from the result table, whose columns are ``all_outputs`` in order.
 
         An output port's series is its own column; an input port's the column of the output connected to it, and an
-        input port whose input is not connected is left out (:meth:`add_input_ports`). A loop end an exempt
-        component or a meter declares is not read; it is a breach (:attr:`loop_breaches`), which the setup rule
-        ``AR-06`` refuses, as the build's ``EP-03`` refuses it before the run.
+        input port whose input is not connected is left out (:meth:`add_input_ports`). Nothing the table cannot give
+        raises: it is left out and recorded, for the setup rules after the run to refuse. A loop end an exempt
+        component or a meter declares is a breach (:attr:`loop_breaches`, rule ``AR-06``, as the build's ``EP-03``
+        refuses it before the run); a port an exempt component or a meter declares is a :attr:`node_port_faults` entry
+        (``AR-08``); a table without one column per output, a port, loop or meter reading an output the run does not
+        have, and a loop whose flow is negative in some step or whose step is not positive are
+        :attr:`column_faults` entries (``AR-07``). A table without one column per output is read no further.
 
         Args:
             results: The result table, one column per output and one row per step.
@@ -378,13 +421,11 @@ class DeclaredPorts:
             components: The components of the run, in the order they were added, with their inputs connected.
             seconds_per_timestep: The length of one step.
 
-        Raises:
-            ValueError: If the table does not have one column per output, if an exempt component or a meter declares a
-                port (a controller or meter that moves energy contradicts its kind), or if a meter declares a metered
-                exchange on an output it does not have.
+        Returns:
+            The declared ports, the meters and what could not be read.
         """
         if results.shape[1] != len(all_outputs):
-            raise ValueError(f"The result table has {results.shape[1]} columns for {len(all_outputs)} outputs.")
+            return cls(index=results.index, column_faults=[ReadingFault(None, f"The result table has {results.shape[1]} columns for {len(all_outputs)} outputs.")])
         metered_carriers, exempt = cls.classify(components)
         wiring = Wiring(components, exempt, metered_carriers)
         declared = cls(index=results.index, exempt=exempt)
@@ -396,9 +437,10 @@ class DeclaredPorts:
             port = output.energy_port
             if port is None:  # pragma: no cover - the columns are the declared ones
                 continue
-            cls.refuse_a_port_of_a_node_that_moves_nothing(
-                output.component_name, output.field_name, exempt, metered_carriers
-            )
+            node_fault = cls.node_port_fault(output.component_name, output.field_name, exempt, metered_carriers)
+            if node_fault is not None:
+                declared.node_port_faults.append(ReadingFault(output.component_name, node_fault, output.field_name))
+                continue
             factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, port.carrier)
             sign = -1.0 if port.negated else 1.0
             series = PortSeries(
@@ -418,20 +460,22 @@ class DeclaredPorts:
             name = component.component_name
             if name not in declared.by_component and name not in exempt and name not in metered_carriers:
                 declared.undeclared.append(name)
-        declared.meters = cls.read_meters(results, all_outputs, components, seconds_per_timestep)
+        declared.meters, meter_faults = cls.read_meters(results, all_outputs, components, seconds_per_timestep)
+        declared.column_faults.extend(meter_faults)
         return declared
 
     @staticmethod
-    def refuse_a_port_of_a_node_that_moves_nothing(
+    def node_port_fault(
         component_name: str,
         channel_name: str,
         exempt: Mapping[str, str],
         metered_carriers: Mapping[str, FrozenSet[lt.EnergyBalanceCarrier]],
-    ) -> None:
-        """Refuse an energy port declared by an exempt component or a meter, which move no energy of their own.
+    ) -> Optional[str]:
+        """Return why an energy port cannot be declared where it is, by an exempt component or a meter, or ``None``.
 
         For example, an L1 controller declaring a port on its output, or the electricity meter on an input, contradicts
-        its kind: a controller decides, a meter publishes what it meters (:meth:`classify`).
+        its kind: a controller decides, a meter publishes what it meters (:meth:`classify`). The balance leaves such a
+        port out, and the setup rule ``AR-08`` refuses it.
 
         Args:
             component_name: The declaring component.
@@ -439,19 +483,20 @@ class DeclaredPorts:
             exempt: The exempt components with their reasons.
             metered_carriers: The meters with the carriers each meters.
 
-        Raises:
-            ValueError: If the component is exempt or a meter, naming the channel and the reason.
+        Returns:
+            The sentence naming the channel and the reason, or ``None`` for a component that moves energy.
         """
         if component_name in exempt:
-            raise ValueError(
+            return (
                 f"{component_name} declares the energy port {channel_name}, but it is exempt from the "
                 f"energy balance: {exempt[component_name]}."
             )
         if component_name in metered_carriers:
-            raise ValueError(
+            return (
                 f"{component_name} declares the energy port {channel_name}, but it is a meter: it "
                 f"publishes what it meters (metered_exchanges) and moves no energy of its own."
             )
+        return None
 
     def add_input_ports(
         self,
@@ -468,11 +513,9 @@ class DeclaredPorts:
         input that is not connected moves nothing in this run and is left out, as an optional input without a source
         is. For example, a building's input ``HeatReceivedInWatt`` with
         ``EnergyPort(CONSUMPTION, SPACE_HEATING_HEAT)``, connected to a distribution system's ``HeatDeliveredInWatt``,
-        books that column as space heating received from the distribution system.
-
-        Raises:
-            ValueError: If an exempt component or a meter declares an input port, or an input reads an output the run
-                does not have.
+        books that column as space heating received from the distribution system. An input port an exempt component
+        or a meter declares (:attr:`node_port_faults`) and one reading an output the run does not have
+        (:attr:`column_faults`) are left out and recorded.
         """
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
         for component in components:
@@ -481,17 +524,23 @@ class DeclaredPorts:
                 port = component_input.energy_port
                 if port is None:
                     continue
-                self.refuse_a_port_of_a_node_that_moves_nothing(
-                    name, component_input.field_name, wiring.exempt, wiring.metered_carriers
-                )
+                node_fault = self.node_port_fault(name, component_input.field_name, wiring.exempt, wiring.metered_carriers)
+                if node_fault is not None:
+                    self.node_port_faults.append(ReadingFault(name, node_fault, component_input.field_name))
+                    continue
                 source = wiring.source_outputs.get((name, component_input.field_name))
                 if source is None:
                     continue
                 if source not in position_of:
-                    raise ValueError(
-                        f"{name}.{component_input.field_name} declares an energy port and reads {'.'.join(source)}, "
-                        "an output the run does not have."
+                    self.column_faults.append(
+                        ReadingFault(
+                            name,
+                            f"{name}.{component_input.field_name} declares an energy port and reads {'.'.join(source)}, "
+                            "an output the run does not have.",
+                            component_input.field_name,
+                        )
                     )
+                    continue
                 output = all_outputs[position_of[source]]
                 factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, port.carrier)
                 sign = -1.0 if port.negated else 1.0
@@ -562,10 +611,9 @@ class DeclaredPorts:
         :attr:`loop_breaches`, and so does an end that pumps water into a loop it cannot follow: one whose own flow
         is not 0 in some step while one of the quantities it reads is not connected. An open end that moves no water is
         left out without a fault: a buffer's loop to a second generator the house does not have, a boiler's
-        hot-water loop in a house without a tank.
-
-        Raises:
-            ValueError: If an end names an output the run does not have.
+        hot-fluid loop in a house without a tank. An end naming an output the run does not have, and a loop whose
+        flow is negative in some step or whose step is not positive (:meth:`LoopColumns.refusal`, recorded once per
+        loop), are left out and recorded in :attr:`column_faults`.
         """
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
         self.loop_breaches.extend(loops.breaches)
@@ -585,31 +633,41 @@ class DeclaredPorts:
                         flow,
                     )
                 )
-        heat_of: Dict[Tuple[LoopColumns, float], np.ndarray] = {}
+        # The heat of each loop, once for both ends; None for a loop whose flow or step cannot be read
+        heat_of: Dict[Tuple[LoopColumns, float], Optional[np.ndarray]] = {}
         for name, port_set, columns, peer_name in loops.ends:
-            for leg in LoopColumns.LEGS:
-                if getattr(columns, leg) not in position_of:
-                    raise ValueError(
-                        f"{name} declares a loop whose {leg} is {'.'.join(getattr(columns, leg))}, an output the "
-                        "run does not have."
+            missing = [leg for leg in LoopColumns.LEGS if getattr(columns, leg) not in position_of]
+            if missing:
+                self.column_faults.extend(
+                    ReadingFault(
+                        name,
+                        f"{name} declares a loop whose {leg} is {'.'.join(getattr(columns, leg))}, an output the run does not have.",
+                        port_set.loop.name,
                     )
+                    for leg in missing
+                )
+                continue
             specific_heat = port_set.loop.fluid.specific_heat_j_per_kg_k
             if (columns, specific_heat) not in heat_of:
                 mass_flow, supply, returned = (
                     results.iloc[:, position_of[getattr(columns, leg)]].to_numpy(dtype=float)
                     for leg in LoopColumns.LEGS
                 )
-                heat_of[(columns, specific_heat)] = LoopColumns.heat_in_kilowatt_hours_per_step(
+                refusal = LoopColumns.refusal(mass_flow, seconds_per_timestep)
+                if refusal is not None:
+                    self.column_faults.append(ReadingFault(name, f"the {columns.label} of {name}: {refusal}", columns.mass_flow[1]))
+                heat_of[(columns, specific_heat)] = None if refusal is not None else LoopColumns.heat_in_kilowatt_hours_per_step(
                     mass_flow_in_kg_per_second=mass_flow,
                     supply_temperature_in_celsius=supply,
                     return_temperature_in_celsius=returned,
                     seconds_per_timestep=seconds_per_timestep,
                     specific_heat_in_joule_per_kilogram_kelvin=specific_heat,
                 )
+            heat = heat_of[(columns, specific_heat)]
+            if heat is None:
+                continue
             peer = Peer.unlinked() if peer_name is None else Peer(PeerKind.COMPONENT, peer_name)
-            for port, kilowatt_hours in self.book_by_the_supplier_s_sign(
-                heat_of[(columns, specific_heat)], port_set.loop.carrier, supplies=port_set.loop.supplies
-            ):
+            for port, kilowatt_hours in self.book_by_the_supplier_s_sign(heat, port_set.loop.carrier, supplies=port_set.loop.supplies):
                 flow_output = all_outputs[position_of[columns.mass_flow]]
                 series = PortSeries(
                     component=name,
@@ -660,36 +718,59 @@ class DeclaredPorts:
         all_outputs: Sequence[ComponentOutput],
         components: Sequence[Any],
         seconds_per_timestep: float,
-    ) -> List[MeterReading]:
+    ) -> Tuple[List[MeterReading], List[ReadingFault]]:
         """What every component that declares :meth:`~hisim.component.Component.metered_exchanges` publishes, per step.
 
-        Raises:
-            ValueError: If a declared exchange names an output the component does not have.
+        An exchange naming an output the component does not have is left out and returned as a fault, for the setup
+        rule ``AR-07``. For example, a meter declaring its import on ``FromGridInWatt`` without that output gives no
+        reading and the fault "Meter declares that it meters electricity on its output FromGridInWatt, which it does
+        not have.".
+
+        Args:
+            results: The result table, one column per output and one row per step.
+            all_outputs: The run's outputs, in the order of the table's columns.
+            components: The components of the run.
+            seconds_per_timestep: The length of one step.
+
+        Returns:
+            The readings, one per metered exchange that can be read, and the faults of those that cannot.
         """
         position_of = {
             (output.component_name, output.field_name): column for column, output in enumerate(all_outputs)
         }
         readings: List[MeterReading] = []
+        faults: List[ReadingFault] = []
         for component in components:
             for exchange in DeclaredPorts.exchanges_of(component):
+                missing = [
+                    field_name
+                    for field_name in (exchange.import_output, exchange.export_output)
+                    if field_name is not None and (component.component_name, field_name) not in position_of
+                ]
+                faults.extend(
+                    ReadingFault(
+                        component.component_name,
+                        f"{component.component_name} declares that it meters {exchange.carrier.value} on its "
+                        f"output {field_name}, which it does not have.",
+                        field_name,
+                    )
+                    for field_name in missing
+                )
+                if missing:
+                    continue
                 series: List[np.ndarray] = []
                 building: Optional[str] = None
                 for field_name in (exchange.import_output, exchange.export_output):
                     if field_name is None:
                         series.append(np.zeros(len(results)))
                         continue
-                    column = position_of.get((component.component_name, field_name))
-                    if column is None:
-                        raise ValueError(
-                            f"{component.component_name} declares that it meters {exchange.carrier.value} on its "
-                            f"output {field_name}, which it does not have."
-                        )
+                    column = position_of[(component.component_name, field_name)]
                     output = all_outputs[column]
                     building = output.component_id.building
                     factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep, exchange.carrier)
                     series.append(results.iloc[:, column].to_numpy(dtype=float) * factor)
                 readings.append(MeterReading(component.component_name, building, exchange, series[0], series[1]))
-        return readings
+        return readings, faults
 
     def is_declared(self, component_name: str) -> bool:
         """Whether the component declares at least one port."""

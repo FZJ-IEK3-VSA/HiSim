@@ -16,12 +16,16 @@ import pytest
 from hisim import loadtypes as lt
 from hisim.component import ComponentOutput
 from hisim.config import ComponentID
-from hisim.energy_port import EnergyPort
+from hisim import hydronics
+from hisim.energy_port import EnergyPort, MeteredExchange
+from hisim.postprocessing.energy_balance.ports import LoopColumns
 from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.results import (
+    AllRows,
     LoopFaults,
+    ColumnsReadable,
     ComponentBalanceCloses,
     ComponentDeclared,
     EnergyBalanceError,
@@ -30,14 +34,15 @@ from hisim.setup_rules.results import (
     LinkCloses,
     NonFiniteColumn,
     NonFiniteResultsError,
+    NoPortOnANode,
     PortFinite,
     PortLinked,
 )
-from hisim.setup_rules.rule import RuleStage, Skip
+from hisim.setup_rules.rule import RuleStage, SetupRuleViolation, Skip
 from hisim.setup_rules.subjects import RunResults
 from tests import functions_for_testing as fft
 from tests.rules.test_energy_ports import ExemptController
-from tests.test_energy_balance import CONSUMPTION, PRODUCTION, SH, Column, chain, report, vessel
+from tests.test_energy_balance import CONSUMPTION, PRODUCTION, SH, Column, Manager, Meter, chain, report, vessel, wired_input
 from tests.test_energy_port_hydronic import LoopRig
 
 pytestmark = pytest.mark.base
@@ -67,7 +72,7 @@ class Table:
         """The results of a run whose table holds ``values`` (one list per column), four 15-minute steps long at most."""
         index = pd.date_range("2021-01-01", periods=len(values[0]) if values else 0, freq="900s")
         table = pd.DataFrame({f"c{position}": column for position, column in enumerate(values)}, index=index)
-        return RunResults(results=table, outputs=tuple(outputs), components=(), read_energy_balance=cls.no_balance)
+        return RunResults(results=table, outputs=tuple(outputs), components=(), timesteps=len(table), read_energy_balance=cls.no_balance)
 
 
 def codes_and_places(faults: Any) -> List[Any]:
@@ -119,7 +124,32 @@ class TestFinite:
             SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, subject, SetupKind.RESIDENTIAL)
 
         assert [fault.code for fault in raised.value.faults] == ["AR-01"]
-        assert Skip("AR-03", ("AR-01",)) in raised.value.skipped
+        assert Skip("AR-07", ("AR-01",)) in raised.value.skipped and Skip("AR-03", ("AR-07", "AR-08")) in raised.value.skipped
+
+
+class TestAllRows:
+    """``AR-02``: the table has a row for every step."""
+
+    def test_a_table_short_of_a_step_is_a_fault_and_a_whole_one_none(self) -> None:
+        """Catches totals of part of a run stated as the whole run, and a refusal of a whole table."""
+        subject = Table.subject([[1.0, 2.0]], Table.outputs(1))
+        short = RunResults(results=subject.results, outputs=subject.outputs, components=(), timesteps=3, read_energy_balance=Table.no_balance)
+
+        (fault,) = AllRows().check(short)
+
+        assert fault.code == "AR-02"
+        assert fault.message.startswith("not all lines were generated: the result table has 2 rows for 3 steps")
+        assert not AllRows().check(subject)
+
+    def test_the_balance_waits_for_it(self) -> None:
+        """Catches a balance read from a table that is not the run's whole window."""
+        short = RunResults(results=pd.DataFrame(), outputs=(), components=(), timesteps=4, read_energy_balance=Table.no_balance)
+
+        with pytest.raises(SetupRuleViolation) as raised:
+            SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, short, SetupKind.RESIDENTIAL)
+
+        assert [fault.code for fault in raised.value.faults] == ["AR-02"]
+        assert Skip("AR-07", ("AR-02",)) in raised.value.skipped
 
 
 class TestPortFinite:
@@ -220,6 +250,80 @@ class TestLoopFaults:
         assert any("Tank declares the fluid loop 'space_heating', but it is exempt" in fault.message for fault in faults)
 
 
+class TestColumnsReadable:
+    """``AR-07``: every column a port, a loop or a meter names can be read, every loop's flow and step too."""
+
+    def test_a_negative_flow_is_a_fault_and_the_loop_left_out(self) -> None:
+        """Catches a negative flow refused by a bare error that names no loop, or booked as heat flowing back."""
+        columns = LoopRig.boiler_columns(-0.1) + LoopRig.tank_columns()
+        balance = LoopRig.report(
+            columns, {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
+            {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END]},
+        )
+
+        (fault,) = ColumnsReadable().check(fft.AfterRunRules.subject(balance))
+
+        assert codes_and_places([fault]) == [("AR-07", "Boiler", "Flow")]
+        assert "the loop Boiler.Flow of Boiler: mass_flow_kg_per_s must be >= 0 kg/s, got -0.1 in step 0." in fault.message
+        assert all(series.loop is None for series in balance.declared.all_series())
+        assert not ColumnsReadable().check(fft.AfterRunRules.subject(LoopRig.paired()))
+
+    def test_a_meter_naming_an_output_it_does_not_have_is_a_fault(self) -> None:
+        """Catches a meter reading taken from a column that is not there, which raised a bare error before."""
+
+        class Misnamed(Meter):
+            """A meter whose exchange names an import output it does not publish."""
+
+            def metered_exchanges(self) -> Any:
+                """The grid import, on an output the meter does not have."""
+                return (MeteredExchange(lt.EnergyBalanceCarrier.ELECTRICITY, "NoSuchOutput"),)
+
+        balance = report([("Meter", "FromGridInWatt", lt.Units.WATT, None, [0.0])], classes={"Meter": Misnamed})
+
+        (fault,) = ColumnsReadable().check(fft.AfterRunRules.subject(balance))
+
+        assert codes_and_places([fault]) == [("AR-07", "Meter", "NoSuchOutput")]
+        assert fault.message.startswith("Meter declares that it meters electricity on its output NoSuchOutput, which it does not have.")
+        assert not balance.meter_check.balances
+
+    def test_refusal_names_a_negative_flow_or_a_step_that_is_not_positive(self) -> None:
+        """Catches the balance and the hydronic arithmetic disagreeing on what a loop's heat cannot be derived for."""
+        negative = LoopColumns.refusal(np.array([0.1, -0.1]), 900.0)
+        empty_step = LoopColumns.refusal(np.array([0.1]), 0.0)
+
+        assert isinstance(negative, hydronics.NegativeMassFlowError) and "got -0.1 in step 1" in str(negative)
+        assert isinstance(empty_step, hydronics.NonPositiveTimestepError)
+        assert LoopColumns.refusal(np.array([0.0, 0.1]), 900.0) is None
+
+
+class TestNoPortOnANode:
+    """``AR-08``: neither an exempt component nor a meter declares an energy port."""
+
+    def test_a_port_on_a_controller_is_a_fault_and_one_on_a_device_none(self) -> None:
+        """Catches a controller's port booked on a node that moves no energy, and a refusal of a device's port."""
+        port = EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY)
+        balance = report(
+            [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
+            inputs={"EMS": [wired_input("Power", "Tank", "HeatOut", port)]}, extra_components=["EMS"], classes={"EMS": Manager},
+        )
+
+        (fault,) = NoPortOnANode().check(fft.AfterRunRules.subject(balance))
+
+        assert codes_and_places([fault]) == [("AR-08", "EMS", "Power")]
+        assert "EMS declares the energy port Power, but it is exempt from the energy balance" in fault.message
+        assert not NoPortOnANode().check(fft.AfterRunRules.subject(report(vessel(4000.0, 700.0, 200.0, 250.0))))
+
+    def test_the_balance_rules_wait_for_it(self) -> None:
+        """Catches a balance judged although it left a port out."""
+        balance = report([("EMS", "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY), [1.0])], classes={"EMS": Manager})
+
+        with pytest.raises(EnergyBalanceError) as raised:
+            fft.AfterRunRules.refuse(balance)
+
+        assert [fault.code for fault in raised.value.faults] == ["AR-08"]
+        assert Skip("AR-03", ("AR-08",)) in raised.value.skipped
+
+
 class TestPortLinked:
     """``AR-09``: a port that moves energy has a peer; it only logs."""
 
@@ -263,7 +367,7 @@ class TestTheFamily:
 
     def test_the_balance_rules_raise_energy_balance_error(self) -> None:
         """Catches an ``except EnergyBalanceError`` (the assembly harness has one) that a balance fault would slip past."""
-        rules = (PortFinite, ComponentBalanceCloses, LinkCloses, LoopFaults, PortLinked, ComponentDeclared)
+        rules = (ColumnsReadable, NoPortOnANode, PortFinite, ComponentBalanceCloses, LinkCloses, LoopFaults, PortLinked, ComponentDeclared)
         assert all(rule.VIOLATION is EnergyBalanceError for rule in rules)
         assert issubclass(EnergyBalanceError, ValueError) and EnergyBalanceRule.VIOLATION is EnergyBalanceError
 
@@ -277,7 +381,7 @@ class TestTheFamily:
             reads.append(1)
             return balance
 
-        subject = RunResults(results=pd.DataFrame(), outputs=(), components=(), read_energy_balance=read)
+        subject = RunResults(results=pd.DataFrame(), outputs=(), components=(), timesteps=0, read_energy_balance=read)
         SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, subject, SetupKind.RESIDENTIAL)
 
         assert subject.energy_balance is balance and len(reads) == 1
@@ -287,7 +391,7 @@ class TestTheFamily:
         balance = report(vessel(4000.0, 700.0, 200.0, 250.0))
         subject = RunResults(
             results=pd.DataFrame(np.ones((1, 1)), index=pd.date_range("2021-01-01", periods=1, freq="900s")),
-            outputs=tuple(Table.outputs(1)), components=(), read_energy_balance=lambda: balance,
+            outputs=tuple(Table.outputs(1)), components=(), timesteps=1, read_energy_balance=lambda: balance,
         )
 
         findings = SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, subject, SetupKind.RESIDENTIAL)

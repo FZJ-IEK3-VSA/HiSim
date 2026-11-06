@@ -38,7 +38,9 @@ from hisim.config import (
     preset,
     sized_field,
 )
+from hisim.components.building.building import Building
 from hisim.components.configuration import PhysicsConfig
+from hisim.components.weather import Weather
 from hisim.components import configuration
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
@@ -259,6 +261,12 @@ class SimpleHotWaterStorageConfig(ConfigBase):
         unit=lt.Units.LITER,
         note="the generator's power in kW times the litres per kW of the sibling sizing_option",
     )
+    #: Where the vessel stands: in the heated zone, in an unheated space or outdoors. Sizable: left ``AUTO`` it follows
+    #: the building's technical room, the fact ``technical_room_location``; a file pins it for a vessel that stands
+    #: elsewhere. It decides the temperature the standby loss is computed against and where that heat goes.
+    installation_location: Sizable[lt.InstallationLocation] = sized_field(
+        rule=Size.TECHNICAL_ROOM_LOCATION, value_type=lt.InstallationLocation
+    )
 
     @preset
     @classmethod
@@ -271,13 +279,14 @@ class SimpleHotWaterStorageConfig(ConfigBase):
         What the preset does not fix is how large the tank is:
         ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that :data:`VOLUME_LAW`
         derives it from the generator's maximal thermal power, and an author who knows the vessel
-        pins the field instead.
+        pins the field instead. Nor does it fix where the tank stands: ``installation_location``
+        stays ``AUTO`` and follows the building's technical room.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
 
         Returns:
-            SimpleHotWaterStorageConfig: The preset configuration, with the volume unsized.
+            SimpleHotWaterStorageConfig: The preset configuration, with the volume and the location unsized.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -324,6 +333,12 @@ class SimpleDHWStorageConfig(ConfigBase):
     #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from
     #: the apartment count the building contributes.
     volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW, unit=lt.Units.LITER)
+    #: Where the vessel stands: in the heated zone, in an unheated space or outdoors. Sizable: left ``AUTO`` it follows
+    #: the building's technical room, the fact ``technical_room_location``; a file pins it for a vessel that stands
+    #: elsewhere. It decides the temperature the standby loss is computed against and where that heat goes.
+    installation_location: Sizable[lt.InstallationLocation] = sized_field(
+        rule=Size.TECHNICAL_ROOM_LOCATION, value_type=lt.InstallationLocation
+    )
 
     @preset
     @classmethod
@@ -334,13 +349,14 @@ class SimpleDHWStorageConfig(ConfigBase):
         to its surroundings. What the preset does not fix is how large the tank is:
         ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that :data:`VOLUME_LAW`
         derives it from the building's apartment count, and an author who knows the vessel pins
-        the field instead.
+        the field instead. Nor does it fix where the tank stands: ``installation_location`` stays
+        ``AUTO`` and follows the building's technical room.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
 
         Returns:
-            SimpleDHWStorageConfig: The preset configuration, with the volume unsized.
+            SimpleDHWStorageConfig: The preset configuration, with the volume and the location unsized.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -386,6 +402,60 @@ class SimpleWaterStorage(cp.PhysicsComponent):
 
     #: Plausible range of a storage's converged mean water temperature. Outside it the run fails.
     PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS: ClassVar[Tuple[float, float]] = (0.0, 90.0)
+
+    #: The input of the temperature of the tank's surroundings, in °C, which its standby loss is computed against.
+    SurroundingTemperatureInCelsius = "SurroundingTemperatureInCelsius"
+
+    #: Where a tank's surrounding temperature comes from, by its installation location: the class and the output its
+    #: input :attr:`SurroundingTemperatureInCelsius` reads by default. In the heated zone it is the building's indoor
+    #: air temperature at the start of the step: the building takes the tank's loss in as a gain, and a value fixed for
+    #: the step keeps that heat from feeding back into the temperature the tank reads while the step iterates. In an
+    #: unheated space it is the temperature of the unheated cellar the building publishes, outdoors the weather's
+    #: outside air temperature.
+    SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION: ClassVar[Dict[lt.InstallationLocation, Tuple[str, str]]] = {
+        lt.InstallationLocation.HEATED_ZONE: (
+            Building.get_classname(),
+            Building.TemperatureIndoorAirAtStartOfStepInCelsius,
+        ),
+        lt.InstallationLocation.UNHEATED_SPACE: (Building.get_classname(), Building.TemperatureUnheatedCellarInCelsius),
+        lt.InstallationLocation.OUTDOORS: (Weather.get_classname(), Weather.TemperatureOutside),
+    }
+
+    #: Where a tank's standby loss goes, by its installation location, as its output's description states it.
+    STANDBY_LOSS_DESTINATION_BY_LOCATION: ClassVar[Dict[lt.InstallationLocation, str]] = {
+        lt.InstallationLocation.HEATED_ZONE: (
+            "The tank stands in the heated zone, so this heat enters the building as an internal gain: the output is "
+            "room heat (PRODUCTION of ROOM_HEAT), which the building reads."
+        ),
+        lt.InstallationLocation.UNHEATED_SPACE: (
+            "The tank stands in an unheated space, so this heat leaves the house: the building counts the unheated "
+            "space as outside its envelope, and nothing brings the heat back."
+        ),
+        lt.InstallationLocation.OUTDOORS: "The tank stands outdoors, so this heat leaves the house.",
+    }
+
+    def add_surrounding_temperature_input(self, installation_location: lt.InstallationLocation) -> ComponentInput:
+        """Add the input of the temperature the tank loses its standby heat to, wired by default as its location says.
+
+        The input :attr:`SurroundingTemperatureInCelsius` is mandatory. Its default connection reads the source
+        :attr:`SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION` names for the location: for example, a tank in an unheated
+        space reads ``Building.TemperatureUnheatedCellarInCelsius``, a tank outdoors ``Weather.TemperatureOutside``.
+        Both tanks call it while they are built, once their configuration has settled the location.
+
+        Args:
+            installation_location: Where the tank stands.
+
+        Returns:
+            The new input, in °C.
+        """
+        surrounding_temperature_input = self.add_input(
+            self.component_name, self.SurroundingTemperatureInCelsius, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
+        )
+        source_class_name, source_output_name = self.SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION[installation_location]
+        self.add_default_connections(
+            [cp.ComponentConnection(self.SurroundingTemperatureInCelsius, source_class_name, source_output_name)]
+        )
+        return surrounding_temperature_input
 
     def check_converged_mean_water_temperature(
         self, mean_water_temperature_in_celsius: float, storage_label: str
@@ -720,8 +790,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     In the energy balance (complete Sankey spec §5.1, hydronic stage E) the buffer tags its circuits as fluid loops
     (:class:`~hisim.energy_port.FluidLoop`): the heat each generator's loop brings, which the generator supplies, and
-    the heat the distribution system's loop takes, which the buffer supplies; its standby loss (``LOSS``, to outdoors: owner decision Q-F, the
-    buffer stands in an unheated room) and the change of the heat it holds (``STORED_CHANGE``). The balance derives
+    the heat the distribution system's loop takes, which the buffer supplies; its standby loss and the change of the
+    heat it holds (``STORED_CHANGE``). The standby loss is ``UA`` times the buffer's temperature less the temperature
+    of its surroundings, which it reads on :attr:`SurroundingTemperatureInCelsius` from the source its installation
+    location names: the building's start-of-step air temperature in the heated zone, the building's unheated cellar
+    in an unheated space, the weather's outside temperature outdoors. In the heated zone the loss is room heat the
+    building takes in (``PRODUCTION`` of ``ROOM_HEAT``), elsewhere a ``LOSS`` that leaves the house
+    (:meth:`hisim.energy_port.EnergyPort.for_heat_released`). The balance derives
     each circuit's heat from the flow and the two temperatures both ends read, so it checks that the buffer's node
     step books what its circuits carry. The mass-mixing path declares the same ports; it is not energy-consistent
     (hydronic coupling spec §4.5), so a run with it fails the balance and names the buffer.
@@ -922,6 +997,11 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, False
         )
+        #: Where the buffer stands, which decides the temperature it loses its standby heat to and where that heat goes.
+        self.installation_location: lt.InstallationLocation = concrete(self.waterstorageconfig.installation_location)
+        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_input(
+            self.installation_location
+        )
 
         # Output channels
 
@@ -1088,11 +1168,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=(
-                "Heat the buffer loses to its surroundings, in W, the mean over the step; negative in a step in "
-                "which the surroundings are warmer than the water. It leaves the house: the buffer stands in an "
-                "unheated room (owner decision Q-F of the complete Sankey spec)."
+                "Heat the buffer loses to its surroundings, in W, the mean over the step: its loss coefficient UA "
+                f"times its temperature less the surrounding temperature it reads on {self.SurroundingTemperatureInCelsius}; "
+                "negative in a step in which the surroundings are warmer than the water. "
+                + self.STANDBY_LOSS_DESTINATION_BY_LOCATION[self.installation_location]
             ),
-            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+            energy_port=EnergyPort.for_heat_released(
+                self.installation_location, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
+            ),
         )
         self.thermal_power_heat_distribution_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1361,13 +1444,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         its step mean ``T_mean`` and its end temperature ``T_end`` in closed form. ``T_mean`` is published as the
         return to both generators and as the supply to the distribution system, so each circuit's heat,
         ``m c (T_in - T_mean) dt``, is the same number at both ends once the step's passes have converged; ``T0`` is
-        published for the controllers. The heats and the loss ``UA (T_mean - 20 °C) dt`` close the balance
+        published for the controllers. The heats and the loss ``UA (T_mean - T_amb) dt``, with ``T_amb`` the surrounding
+        temperature the buffer reads (:attr:`SurroundingTemperatureInCelsius`), close the balance
         ``sum of circuits - loss = C (T_end - T0)`` on every pass. The three end temperatures without a circuit carry
         ``T_end``: only the part-load controls read them, and only above the threshold, where this path does not run
         (owner decision Q2 of ``roadmap/two_mode_buffer_spec.md``).
 
         For example, 200 kg at 35 °C, a heat pump bringing 0.3 kg/s at 10 K above the step mean and a floor heating
-        returning 0.5 kg/s at 4 K below it, with 2 W/K to a 20 °C room, converge in five passes of a 60 s step to
+        returning 0.5 kg/s at 4 K below it, with 2 W/K to 20 °C surroundings, converge in five passes of a 60 s step to
         ``T_mean`` = 35.155 °C and ``T_end`` = 35.298 °C; the heat pump brings 752.4 kJ and the floor heating takes
         501.6 kJ.
 
@@ -1379,7 +1463,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             t0_c=start_temperature_in_celsius,
             inflows=self.circuit_inflows(stsv),
             ua_w_per_k=self.heat_loss_coefficient_in_watt_per_kelvin,
-            t_amb_c=self.ambient_temperature_in_celsius,
+            t_amb_c=stsv.get_input_value(self.surrounding_temperature_channel),
             dt_s=self.seconds_per_timestep,
             heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
         )
@@ -1467,13 +1551,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         heat distribution system and as the sensor its generators' controllers read, so a generator's heat is
         ``m c (T_sup - T0)``, the distribution's ``m c (T0 - T_ret)``, and the buffer, a start-of-step node
         (:meth:`start_of_step_node_step`), ends at ``T0 + (heats - loss) / C`` with the standby loss
-        ``UA (T0 - 20 °C)``. Every output is computed from the same node step, so the buffer's balance closes on every
-        step, and none of the temperatures it publishes changes while the step iterates. It also publishes its end
-        temperature, and per circuit its end temperature without that circuit, ``T_end`` less the circuit's heat over
-        ``C``: a generator's or the distribution system's controller sets the fraction of a coarse step its device
-        runs from these (:class:`hisim.part_load.StartOfStepPartLoadRule`). For example, a 170 kg buffer at 40 °C
-        that a boiler charges with 0.3 kg/s at 45 °C while the distribution returns 0.27 kg/s at 35 °C over 900 s,
-        losing 3.58 W/K, ends at 40.70 °C.
+        ``UA (T0 - T_amb)`` against the surrounding temperature it reads (:attr:`SurroundingTemperatureInCelsius`).
+        Every output is computed from the same node step, so the buffer's balance closes on every step, and none of
+        the temperatures it publishes changes while the step iterates. It also publishes its end temperature, and per
+        circuit its end temperature without that circuit, ``T_end`` less the circuit's heat over ``C``: a generator's
+        or the distribution system's controller sets the fraction of a coarse step its device runs from these
+        (:class:`hisim.part_load.StartOfStepPartLoadRule`). For example, a 170 kg buffer at 40 °C in 20 °C
+        surroundings that a boiler charges with 0.3 kg/s at 45 °C while the distribution returns 0.27 kg/s at 35 °C
+        over 900 s, losing 3.58 W/K, ends at 40.70 °C.
 
         Args:
             stsv: The step's values.
@@ -1483,7 +1568,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             t0_c=start_temperature_in_celsius,
             inflows=self.circuit_inflows(stsv),
             ua_w_per_k=self.heat_loss_coefficient_in_watt_per_kelvin,
-            t_amb_c=self.ambient_temperature_in_celsius,
+            t_amb_c=stsv.get_input_value(self.surrounding_temperature_channel),
             dt_s=self.seconds_per_timestep,
             heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
         )
@@ -1836,7 +1921,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
-            ambient_temperature_in_celsius=self.ambient_temperature_in_celsius,
+            ambient_temperature_in_celsius=stsv.get_input_value(self.surrounding_temperature_channel),
         )
 
         self.state.temperature_loss_in_celsius_per_timestep = t_loss * self.seconds_per_timestep
@@ -1891,9 +1976,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.heat_loss_coefficient_in_watt_per_kelvin = (
             self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2
         )
-
-        # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located
-        self.ambient_temperature_in_celsius = 20.0
 
         self.heat_exchanger_is_present = heat_exchanger_is_present
         # if heat exchanger is present, the heat is perfectly exchanged so the water output temperature corresponds to the mean temperature
@@ -2014,7 +2096,7 @@ class TemperatureRange:
     A fully mixed node relaxes towards a weighted mean of its inflow and ambient temperatures, so its step mean and
     its end temperature never leave the range of those and its start temperature. The range brackets the hot-water
     tank's tap solve (:meth:`SimpleDHWStorage.solve_tank_step`). For example, a tank at 50 °C charged at 70 °C,
-    refilled at 10 °C and losing heat to a 20 °C room mixes temperatures from 10 to 70 °C.
+    refilled at 10 °C and losing heat to 20 °C surroundings mixes temperatures from 10 to 70 °C.
     """
 
     #: The lowest temperature the node mixes, in °C.
@@ -2088,16 +2170,15 @@ class DhwTankProperties:
     """The constants of a hot-water tank that one tank step computes with.
 
     A value object built once from the configuration, so the tank step is a pure function of its start temperature,
-    its inflows, the demand and these properties. For example, the 250 l preset tank holds 248 kg, has a heat
-    capacity of 1.04 MJ/K and loses 0.83 W/K to a 20 °C room.
+    its inflows, the demand, the temperature of its surroundings and these properties. For example, the 250 l preset
+    tank holds 248 kg, has a heat capacity of 1.04 MJ/K and loses 0.83 W/K to its surroundings. The temperature of the
+    surroundings is not one of them: it is an input of the step, which follows the tank's installation location.
     """
 
     #: The tank's heat capacity ``C = M c``, in J/K.
     heat_capacity_in_joule_per_kelvin: float
-    #: The tank's loss coefficient ``UA`` to the room, in W/K.
+    #: The tank's loss coefficient ``UA`` to its surroundings, in W/K.
     loss_coefficient_in_watt_per_kelvin: float
-    #: The temperature of the room the tank stands in, in °C.
-    ambient_temperature_in_celsius: float
     #: The temperature the household asks its warm water at, in °C.
     tap_temperature_in_celsius: float
     #: The temperature of the mains water that refills the tank, in °C.
@@ -2142,8 +2223,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
     A node is a component that holds water and integrates its temperature over the step
     (:class:`hisim.hydronics.MixedNode`): with its start temperature ``T0``, the supply temperature and mass flow of
-    each charging circuit, the cold mains water that refills what the tap takes and the standby loss to a 20 °C room,
-    it computes in closed form the step mean ``T̄`` and the end temperature ``T_end``. Example: a 248 kg tank at
+    each charging circuit, the cold mains water that refills what the tap takes and the standby loss to its
+    surroundings, it computes in closed form the step mean ``T̄`` and the end temperature ``T_end``. Example: a 248 kg tank at
     ``T0 = 50 °C`` charged for 900 s by a boiler at 0.2 kg/s and 70 °C ends at 60.3 °C, with ``T̄ = 55.8 °C``.
 
     The tank publishes ``T̄`` as the return temperature of every charging circuit
@@ -2166,15 +2247,19 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
     In the energy balance (complete Sankey spec §5.1, hydronic stage E) the tank tags each charging coil's circuit as
     a fluid loop (:class:`~hisim.energy_port.FluidLoop`) its generator supplies, the heat drawn at the taps (``PRODUCTION``, to the boundary node
-    "hot water drawn at the taps": the occupancy reads nothing, so it cannot take it in), its standby loss (``LOSS``,
-    to outdoors: owner decision Q-F) and the change of the heat it holds (``STORED_CHANGE``). The unmet hot water is
-    no flow, since it was never delivered, and has no port.
+    "hot water drawn at the taps": the occupancy reads nothing, so it cannot take it in), its standby loss and the
+    change of the heat it holds (``STORED_CHANGE``). The unmet hot water is no flow, since it was never delivered, and
+    has no port.
+
+    The standby loss is ``UA (T̄ - T_amb)``, with ``T_amb`` the temperature of the tank's surroundings, which it reads
+    on :attr:`SurroundingTemperatureInCelsius` from the source its installation location names: the building's
+    start-of-step air temperature in the heated zone, the building's unheated cellar in an unheated space, the
+    weather's outside temperature outdoors. In the heated zone the loss is room heat the building takes in
+    (``PRODUCTION`` of ``ROOM_HEAT``), elsewhere a ``LOSS`` that leaves the house
+    (:meth:`hisim.energy_port.EnergyPort.for_heat_released`).
     """
 
     cost_relevance = CostRelevance.PRICED
-
-    #: The temperature of the room the tank stands in, which it loses its standby heat to.
-    AMBIENT_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 20.0
 
     #: The tank's temperature before its first step, in °C: a tank at half its usable charge. Below the 40 °C the
     #: household draws its warm water at (``HouseholdWarmWaterDemandConfig.ww_temperature_demand`` minus
@@ -2263,6 +2348,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
             True,
+        )
+        #: Where the tank stands, which decides the temperature it loses its standby heat to and where that heat goes.
+        self.installation_location: lt.InstallationLocation = concrete(self.waterstorageconfig.installation_location)
+        self.surrounding_temperature_channel: ComponentInput = self.add_surrounding_temperature_input(
+            self.installation_location
         )
         # Each charging coil is a water loop with its own return (owner decision of 2026-10-21 on
         # hisim-dhw-tank-one-return-7kq2): the primary generator reads the first of the two step-mean outputs, the
@@ -2473,10 +2563,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=(
-                "The standby heat loss of the step to the room, UA (T̄ - T_amb); it leaves the house, as the tank "
-                "stands in an unheated room (owner decision Q-F of the complete Sankey spec)."
+                "The standby heat loss of the step to the tank's surroundings, in W: UA (T̄ - T_amb), with T_amb the "
+                f"surrounding temperature it reads on {self.SurroundingTemperatureInCelsius}; negative in a step in "
+                "which the surroundings are warmer than the water. "
+                + self.STANDBY_LOSS_DESTINATION_BY_LOCATION[self.installation_location]
             ),
-            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT),
+            energy_port=EnergyPort.for_heat_released(
+                self.installation_location, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT
+            ),
         )
 
         self.thermal_power_dhw_channel: ComponentOutput = self.add_output(
@@ -2704,7 +2798,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         The heat capacity is ``C = M c`` with ``M`` the volume times 0.992 kg/l and ``c`` the hydronics library's
         4180 J/(kg K); the loss coefficient is ``UA``, the configured heat transfer coefficient times the surface of a
         cylinder four radii high. For example, the 250 l preset tank holds 248 kg, ``C = 1.04 MJ/K``, and loses
-        ``UA = 0.83 W/K`` to the room.
+        ``UA = 0.83 W/K`` to its surroundings.
 
         Raises:
             ValueError: If the tank holds no water (a volume of zero or less).
@@ -2721,7 +2815,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             loss_coefficient_in_watt_per_kelvin=(
                 self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * storage_surface_in_m2
             ),
-            ambient_temperature_in_celsius=self.AMBIENT_TEMPERATURE_IN_CELSIUS,
             tap_temperature_in_celsius=(
                 warm_water_demand.ww_temperature_demand - warm_water_demand.temperature_difference_hot
             ),
@@ -2899,6 +2992,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         start_temperature_in_celsius: float,
         generator_inflows: Sequence[hydronics.Inflow],
         demand_in_kg_per_second: float,
+        surrounding_temperature_in_celsius: float,
         tank: DhwTankProperties,
     ) -> DhwTankStep:
         """Return the tank's step with its charging circuits and its tap valve, solved on its own step mean.
@@ -2910,14 +3004,15 @@ class SimpleDHWStorage(SimpleWaterStorage):
         which brackets it (:meth:`solve_bracketed_fixed_point`), to
         :attr:`TAP_SOLVE_TOLERANCE_IN_KELVIN`. Without a demand the node step is evaluated once.
 
-        Example: a 248 kg tank at 55 °C asked for 0.05 kg/s of 40 °C water over 900 s cools to a step mean of
-        52.2 °C and lets out 0.0355 kg/s, about 30 % less than the demand; the heat drawn,
+        Example: a 248 kg tank at 55 °C in 20 °C surroundings asked for 0.05 kg/s of 40 °C water over 900 s cools to
+        a step mean of 52.2 °C and lets out 0.0355 kg/s, about 30 % less than the demand; the heat drawn,
         ``m_hot c (T̄ - 10) dt``, equals the demand ``0.05 c (40 - 10) dt`` to the tolerance.
 
         Args:
             start_temperature_in_celsius: The tank's temperature at the start of the step, in °C.
             generator_inflows: The supply of each charging circuit, in the order the tank books them.
             demand_in_kg_per_second: The warm water the household asks for at the tap temperature, in kg/s.
+            surrounding_temperature_in_celsius: The temperature the tank loses its standby heat to, in °C.
             tank: The tank's constants.
 
         Returns:
@@ -2935,7 +3030,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 inflows=list(generator_inflows)
                 + [hydronics.Inflow(hot_water_in_kg_per_second, tank.mains_water_temperature_in_celsius)],
                 ua_w_per_k=tank.loss_coefficient_in_watt_per_kelvin,
-                t_amb_c=tank.ambient_temperature_in_celsius,
+                t_amb_c=surrounding_temperature_in_celsius,
                 dt_s=tank.seconds_per_timestep,
                 heat_capacity_j_per_k=tank.heat_capacity_in_joule_per_kelvin,
             )
@@ -2956,7 +3051,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         mixed_range = TemperatureRange.of_node(
             t0_c=start_temperature_in_celsius,
             inflows=generator_inflows,
-            fixed_temperatures_c=(tank.mains_water_temperature_in_celsius, tank.ambient_temperature_in_celsius),
+            fixed_temperatures_c=(tank.mains_water_temperature_in_celsius, surrounding_temperature_in_celsius),
         )
         solved_step: DhwTankStep = SimpleDHWStorage.solve_bracketed_fixed_point(
             evaluate=tank_step_at,
@@ -2971,8 +3066,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Integrate the tank over the step, publish its step mean to its charging circuits and book every heat.
 
-        Reads the supply temperature and mass flow of both charging circuits and the household's warm-water demand,
-        solves the step with the tap valve (:meth:`solve_tank_step`) from the saved start temperature, and publishes
+        Reads the supply temperature and mass flow of both charging circuits, the household's warm-water demand and
+        the temperature of the tank's surroundings, solves the step with the tap valve (:meth:`solve_tank_step`) from the saved start temperature, and publishes
         the step mean ``T̄`` as both circuits' return temperature and every heat flow from the same node step, so
         the balance closes (:meth:`publish_tank_step`). The end temperature becomes the state the next step starts
         from. Each coil's flow leaves as it arrived, back to its generator: the tank moves no water.
@@ -3005,6 +3100,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             start_temperature_in_celsius=start_temperature_in_celsius,
             generator_inflows=generator_inflows,
             demand_in_kg_per_second=demand_in_kg_per_second,
+            surrounding_temperature_in_celsius=stsv.get_input_value(self.surrounding_temperature_channel),
             tank=self.tank,
         )
         self.publish_tank_step(stsv, start_temperature_in_celsius, generator_inflows, demand_in_kg_per_second, tank_step)

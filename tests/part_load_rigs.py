@@ -93,7 +93,7 @@ class TankRig:
         """
         parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
         config = simple_water_storage.SimpleDHWStorageConfig(
-            component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0
+            component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0, installation_location=lt.InstallationLocation.UNHEATED_SPACE
         )
         tank = simple_water_storage.SimpleDHWStorage(my_simulation_parameters=parameters, config=config)
         stsv, fakes = Rig.wire(

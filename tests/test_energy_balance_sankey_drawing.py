@@ -1,9 +1,9 @@
 """How a view of the energy Sankey is drawn: solar losses netted, two-way exchanges netted, empty flows dropped, small
-nodes merged, one-line labels, and every node placed in an explicit column with room for its label.
+nodes merged, one-line labels, a figure as tall as its fullest column needs, and no label beside a node too low for it.
 
 Spec ``roadmap/complete_energy_sankeys_spec.md`` §4.8 (owner amendments of 2026-11-06, beads
-hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8). Every function of :class:`SankeyDrawing` and
-:class:`SankeyLayout` is tested on hand-built links whose numbers can be read off the test; ``energy_sankey.json`` is
+hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8). Every function of :class:`SankeyDrawing` is tested on
+hand-built links whose numbers can be read off the test; ``energy_sankey.json`` is
 never changed by the drawing.
 """
 
@@ -18,7 +18,6 @@ from hisim.postprocessing.energy_balance.sankey import (
     NodeKind,
     SankeyDiagram,
     SankeyDrawing,
-    SankeyLayout,
     SankeyLink,
 )
 
@@ -372,30 +371,13 @@ def test_the_figure_draws_the_labels_and_the_links_of_the_drawing() -> None:
 
 
 @pytest.mark.base
-def test_the_figure_places_the_nodes_where_the_layout_puts_them_and_is_as_large_as_it_needs() -> None:
-    """node.x/node.y are the layout's, plotly snaps with the label gap as its pad, and the figure is the plot and its
-    margins."""
-    links, kinds = house_with_small_flows()
-    drawing = SankeyDrawing.of(diagram_of(links, kinds), "electricity")
-    layout = SankeyLayout.of(drawing.links, {node.name: node.label for node in drawing.nodes})
-    figure = drawing.figure("t")
-    trace = figure.data[0]
-    assert trace.arrangement == "snap"
-    assert list(trace.node.x) == [layout.x[node.name] for node in drawing.nodes]
-    assert list(trace.node.y) == [layout.y[node.name] for node in drawing.nodes]
-    assert trace.node.pad == SankeyLayout.LABEL_GAP_IN_PIXELS
-    assert figure.layout.height == round(layout.height_in_pixels + 90)
-    assert figure.layout.width == round(layout.width_in_pixels + 40)
-
-
-@pytest.mark.base
 def test_a_drawing_draws_a_two_way_exchange_once_so_the_battery_draws_no_ring() -> None:
     """The battery's charge and discharge are one link of their net; its store is a node of its own."""
     links, kinds = battery_ring()
     drawing = SankeyDrawing.of(diagram_of(links, kinds), "electricity")
     assert ("Battery", "Meter") not in pairs(drawing.links)
     assert pairs(drawing.links)[("Meter", "Battery")] == pytest.approx(947.3)
-    assert SankeyLayout.back_links(drawing.links) == frozenset()
+    assert SankeyDrawing.back_links(drawing.links) == frozenset()
 
 
 @pytest.mark.base
@@ -403,9 +385,9 @@ def test_the_link_that_closes_a_cycle_is_the_back_link() -> None:
     """The walk from the grid goes Meter -> Battery and finds Battery -> Meter going back; a cycle without a source is
     walked from its first node."""
     links = [link("grid", "Meter"), link("Meter", "Battery"), link("Battery", "Meter"), link("Battery", "loss")]
-    assert SankeyLayout.back_links(links) == frozenset({("Battery", "Meter")})
-    assert SankeyLayout.back_links([link("A", "B"), link("B", "A")]) == frozenset({("B", "A")})
-    assert SankeyLayout.back_links([link("A", "B"), link("A", "C"), link("B", "C")]) == frozenset()
+    assert SankeyDrawing.back_links(links) == frozenset({("Battery", "Meter")})
+    assert SankeyDrawing.back_links([link("A", "B"), link("B", "A")]) == frozenset({("B", "A")})
+    assert SankeyDrawing.back_links([link("A", "B"), link("A", "C"), link("B", "C")]) == frozenset()
 
 
 @pytest.mark.base
@@ -419,7 +401,7 @@ def test_sources_are_first_sinks_last_and_every_other_node_in_the_column_of_its_
         link("Building · loss", "outdoors"),
         link("Meter", "grid export"),
     ]
-    assert SankeyLayout.columns(links) == {
+    assert SankeyDrawing.columns(links) == {
         "grid import": 0,
         "Meter": 1,
         "HeatPump": 2,
@@ -443,7 +425,7 @@ def test_a_store_is_a_source_when_it_gives_and_a_sink_when_it_takes_and_a_back_l
         link("Meter", "Tank"),
         link("Tank", "taps"),
     ]
-    assert SankeyLayout.columns(links) == {
+    assert SankeyDrawing.columns(links) == {
         "grid": 0,
         "Meter": 1,
         "Battery": 2,
@@ -455,58 +437,61 @@ def test_a_store_is_a_source_when_it_gives_and_a_sink_when_it_takes_and_a_back_l
 
 
 @pytest.mark.base
-def test_a_column_is_sorted_by_height_then_by_the_heights_of_its_neighbours() -> None:
-    """By height the sinks would be Ta, Tc, Tb, and Ta's link from the lower source would cross both others; by their
-    neighbours they are Tc, Tb, Ta (Tc and Tb share a neighbour and keep their order), and the sources stay."""
-    links = [link("S1", "Ta", 100.0), link("S2", "Tc", 60.0), link("S2", "Tb", 50.0)]
-    columns = {"S1": 0, "Ta": 1, "S2": 0, "Tc": 1, "Tb": 1}
-    heights = {"S1": 100.0, "Ta": 100.0, "S2": 110.0, "Tc": 60.0, "Tb": 50.0}
-    assert SankeyLayout.orders(links, columns, heights) == [["S2", "S1"], ["Tc", "Tb", "Ta"]]
+def test_the_plot_grows_with_the_nodes_of_its_fullest_column() -> None:
+    """Seven nodes in one column fit into 900 pixels; twenty need a line and a gap each and 400 for their energy."""
+    seven = {f"n{index}": 1 for index in range(7)}
+    assert SankeyDrawing.plot_height_in_pixels({**seven, "a": 0, "b": 2}) == 900.0
+    twenty = {f"n{index}": 1 for index in range(20)}
+    assert SankeyDrawing.plot_height_in_pixels({**twenty, "a": 0}) == 20 * (16.0 + 24.0) + 400.0
+    assert SankeyDrawing.plot_height_in_pixels({}) == 900.0
 
 
 @pytest.mark.base
-def test_nodes_are_stacked_a_gap_apart_and_the_column_is_centred() -> None:
-    """Heights 100 and 20, gap 20, plot 200: the column takes 140 pixels, starts 30 down, centres at 80 and 160."""
-    assert SankeyLayout.stack([100.0, 20.0], 20.0, 200.0) == [80.0, 160.0]
-    assert not SankeyLayout.stack([], 20.0, 200.0)
+def test_nodes_are_drawn_at_the_one_scale_that_lets_every_column_fit() -> None:
+    """Plot 900, gap 24: three nodes of 1,000 kWh leave 852 pixels, two of 2,000 kWh 876 pixels; the scale is 0.438
+    pixels per kWh, the smaller of the two, so a node of 10 kWh is 4.38 pixels high."""
+    columns = {"a": 0, "b": 0, "c": 0, "d": 1, "e": 1}
+    throughputs = {"a": 990.0, "b": 0.0, "c": 10.0, "d": 1000.0, "e": 1000.0}
+    heights = SankeyDrawing.node_heights_in_pixels(columns, throughputs, 900.0, 24.0)
+    assert heights["c"] == pytest.approx(4.38)
+    assert heights["d"] == pytest.approx(438.0)
+    assert SankeyDrawing.node_heights_in_pixels({"a": 0}, {"a": 0.0}, 900.0, 24.0) == {"a": 0.0}
 
 
 @pytest.mark.base
-def test_the_plot_is_as_tall_as_the_column_that_needs_most_room() -> None:
-    """Nodes of 560, 1 and 1 pixels need 602 with two gaps of 20; twelve nodes of 1 pixel 232."""
-    heights = {"big": 560.0, "a": 1.0, "b": 1.0, **{f"n{index}": 1.0 for index in range(12)}}
-    assert SankeyLayout.plot_height_in_pixels([["big", "a", "b"], [f"n{index}" for index in range(12)]], heights, 20.0) == 602.0
-    assert SankeyLayout.plot_height_in_pixels([[f"n{index}" for index in range(12)]], heights, 20.0) == 232.0
+def test_a_node_too_low_for_a_label_line_shows_no_label_unless_it_is_always_labelled() -> None:
+    """A 4-pixel loss node shows no label, a 16-pixel one does; a 4-pixel boundary node keeps its label."""
+    loss = DrawnNode("Battery · CellLossInWatt", "Battery · cell loss · 158 kWh", "Battery · CellLossInWatt", "#e08a2c")
+    grid = DrawnNode("grid import", "grid import · 1,805 kWh", "grid import", "#3c9d5d", True)
+    assert SankeyDrawing.shown_label(loss, 4.0) == ""
+    assert SankeyDrawing.shown_label(loss, 16.0) == "Battery · cell loss · 158 kWh"
+    assert SankeyDrawing.shown_label(grid, 4.0) == "grid import · 1,805 kWh"
 
 
 @pytest.mark.base
-def test_a_label_is_estimated_at_its_characters_times_a_share_of_the_font_size() -> None:
-    """23 characters at 12 pixels and a share of 0.55: 151.8 pixels."""
-    assert SankeyLayout.label_width_in_pixels("grid import · 1,805 kWh") == pytest.approx(151.8)
+def test_boundaries_meters_and_faults_are_always_labelled_and_other_nodes_are_not() -> None:
+    """The drawing marks the nodes of the kinds it never merges; components, losses, stores and "other" nodes it does not."""
+    links, kinds = house_with_small_flows()
+    nodes = {node.name: node for node in SankeyDrawing.of(diagram_of(links, kinds), "electricity").nodes}
+    assert {name for name, node in nodes.items() if node.always_labelled} == {"Meter", "grid import", "outdoors", "unaccounted"}
 
 
 @pytest.mark.base
-def test_the_gap_after_a_column_holds_its_longest_label_and_the_last_gap_both_columns_labels() -> None:
-    """Labels of 500, 600 and 400 pixels: centres 10, 538 and 1574 in a plot 1584 wide; labels of 100, 200 and 50:
-    centres 10, 138 and 424 in 434 pixels, spread over the smallest width of 1200."""
-    assert SankeyLayout.column_centres([500.0, 600.0, 400.0]) == ([10.0, 538.0, 1574.0], 1584.0)
-    centres, width = SankeyLayout.column_centres([100.0, 200.0, 50.0])
-    assert width == 1200.0
-    assert centres == [10.0, pytest.approx(10.0 + 128.0 * 1180.0 / 414.0), pytest.approx(1190.0)]
-    assert SankeyLayout.column_centres([0.0]) == ([10.0], 20.0)
-
-
-@pytest.mark.base
-def test_the_layout_gives_every_label_a_line_of_its_own() -> None:
-    """In every column the centres are at least a label gap apart, sources are on the left, sinks on the right."""
+def test_the_figure_hides_the_label_of_a_tiny_node_in_its_hover_text_and_is_as_tall_as_it_needs() -> None:
+    """The 1 kWh "other → outdoors" node is a fraction of a pixel high: no label, its label in the hover text; the 2 kWh
+    grid import, a boundary, keeps its label; plotly arranges the nodes, with a gap of 24 pixels."""
     links, kinds = house_with_small_flows()
     drawing = SankeyDrawing.of(diagram_of(links, kinds), "electricity")
-    layout = SankeyLayout.of(drawing.links, {node.name: node.label for node in drawing.nodes})
-    assert set(layout.x) == set(layout.y) == {node.name for node in drawing.nodes}
-    for column_nodes in layout.column_nodes:
-        centres = [layout.y[node] * layout.height_in_pixels for node in column_nodes]
-        assert all(lower - upper >= SankeyLayout.LABEL_GAP_IN_PIXELS - 1e-9 for upper, lower in zip(centres, centres[1:]))
-    assert layout.x["grid import"] == min(layout.x.values())
-    assert layout.x["outdoors"] == max(layout.x.values())
-    assert all(0.0 < value < 1.0 for value in list(layout.x.values()) + list(layout.y.values()))
-    assert layout.column_of["Heater"] == 2
+    figure = drawing.figure("t")
+    trace = figure.data[0]
+    shown = dict(zip([node.name for node in drawing.nodes], trace.node.label))
+    hover = dict(zip([node.name for node in drawing.nodes], trace.node.customdata))
+    assert shown["other → outdoors"] == ""
+    assert hover["other → outdoors"].startswith("other (2 flows) · 3 kWh<br>other (2 flows):")
+    assert shown["grid import"] == "grid import · 2 kWh"
+    assert hover["grid import"] == "grid import"
+    assert shown["Heater"] == "Heater · 1,000 kWh"
+    assert trace.node.pad == 24.0
+    assert trace.node.x is None and trace.node.y is None and trace.arrangement is None
+    assert figure.layout.height == 900 + 60 + 30
+    assert figure.layout.width is None

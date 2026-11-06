@@ -22,8 +22,8 @@ unlinked port; every undeclared component; and every exempt component with its r
 one filter per carrier, every edge of each) and one plotly HTML per view with a flow to draw, which share one
 ``plotly.min.js``. The HTML draws a view made readable (:class:`~.sankey.SankeyDrawing`: ``overall`` starts the PV at
 its electricity, an exchange both ways is drawn as its net, flows below 1 Wh are left out, small nodes merge into
-"other" nodes, labels are one line, and :class:`~.sankey.SankeyLayout` places the nodes in columns with room for every
-label); a view with nothing left to draw, such as a cooling view with a few mWh, gets no HTML.
+"other" nodes, labels are one line, and a node too low for a label line shows its label on hover only); a view with
+nothing left to draw, such as a cooling view with a few mWh, gets no HTML.
 """
 
 from __future__ import annotations

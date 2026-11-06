@@ -139,6 +139,12 @@ class EnergyPortRules(FamilyRules):
     FAMILY: ClassVar[str] = "energy_ports"
 
 
+class FluidLoopRules(FamilyRules):
+    """The fluid-loop setup rules (``hisim/setup_rules/fluid_loops.py``) run on components; their faults raise ``FluidLoopWiringError``."""
+
+    FAMILY: ClassVar[str] = "fluid_loops"
+
+
 class SetupTestParameters:
     """Simulation parameters for a system-setup test, with the KPI machinery switched on.
 

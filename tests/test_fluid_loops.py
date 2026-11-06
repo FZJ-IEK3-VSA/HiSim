@@ -20,14 +20,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytest
 
 from hisim import component as cp
-from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim.calculation_scope import CalculationScope
 from hisim.config import ComponentID
 from hisim.energy_port import FluidLoop, FluidLoopChannel, LoopFluid, LoopQuantity
 from hisim.energy_system.executor import build_energy_system
 from hisim.fluid_loops import FluidLoopWalk
+from hisim.setup_rules.fluid_loops import FluidLoopWiringError
 from hisim.simulationparameters import SimulationParameters
+from tests import functions_for_testing as fft
 
 pytestmark = pytest.mark.base
 
@@ -128,9 +129,9 @@ class Member:
 
 
 def refusal(components: List[Any]) -> str:
-    """The message of the walk's refusal of ``components``; fails the test if the walk accepts them."""
-    with pytest.raises(hydronics.FluidLoopWiringError) as raised:
-        FluidLoopWalk.find_loops(components)
+    """The message of the fluid-loop rules' refusal of ``components``; fails the test if the rules accept them."""
+    with pytest.raises(FluidLoopWiringError) as raised:
+        fft.FluidLoopRules.refuse_a_broken_wiring(components)
     return str(raised.value)
 
 
@@ -419,7 +420,9 @@ def test_every_recorded_file_builds_and_each_loop_gets_its_id(stem: str, tmp_pat
     parameters.result_directory = str(tmp_path / "results")
     with CalculationScope.open(label=str(path), run_directory=parameters.result_directory):
         built = build_energy_system(path, parameters, rerun=stem.endswith(".realized"))
-        loops = FluidLoopWalk.find_loops([wrapped.my_component for wrapped in built.simulator.wrapped_components])
+        components = [wrapped.my_component for wrapped in built.simulator.wrapped_components]
+        fft.FluidLoopRules.refuse_a_broken_wiring(components)
+        loops = FluidLoopWalk.find_loops(components)
     assert sorted(loop.loop_id for loop in loops) == sorted(RecordedSystems.expected()[stem])
     for loop in loops:
         assert len(loop.port_sets) == 2 and loop.pump_owner.loop.pumps

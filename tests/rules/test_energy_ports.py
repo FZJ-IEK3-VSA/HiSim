@@ -222,7 +222,7 @@ class TestNoLoopOnANode:
 
     def test_the_loop_rules_wait_for_it(self) -> None:
         """Catches pairing faults reported against a loop whose end on a controller was never resolved."""
-        registry = SetupRuleRegistry([LoopPairing, OneReaderPerFlow, NoLoopOnANode])
+        registry = fft.EnergyPortRules.registry([LoopPairing, OneReaderPerFlow, NoLoopOnANode])
 
         findings = registry.findings(RuleStage.BUILD, self.controller_with_a_loop(), SetupKind.RESIDENTIAL)
 
@@ -343,8 +343,8 @@ class TestRoomHeatNeedsReceiver:
         assert codes_and_places(findings.faults) == expected
 
     def test_it_waits_for_the_input_ports_to_pair(self) -> None:
-        """Catches the rule judging a receiver whose input port does not pair with the output it reads."""
-        assert RoomHeatNeedsReceiver.REQUIRES == frozenset({"EP-05"})
+        """Catches the rule judging a receiver whose input port does not pair with the output it reads, or grouping the port sets of a loop tagged by half."""
+        assert RoomHeatNeedsReceiver.REQUIRES == frozenset({"EP-05", "FL-01"})
 
     @pytest.mark.parametrize(
         ("port", "releases"),

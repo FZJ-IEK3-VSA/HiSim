@@ -20,7 +20,6 @@ import json
 import pandas as pd
 
 from hisim import config as cfg
-from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
@@ -262,15 +261,69 @@ class FluidLoopPortSet:
         return f"{self.component_name}.{self.loop.name}"
 
     @staticmethod
+    def tagged_channels(
+        channels: Sequence[Union[ComponentInput, ComponentOutput]],
+    ) -> Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]]:
+        """Return a component's tagged channels by the fluid loop their tags name, each keyed by its quantity.
+
+        The loops come in the order they first appear in ``channels``; untagged channels are skipped, and a channel
+        without a ``fluid_loop`` attribute counts as untagged. For example, a boiler's four space-heating channels and
+        its four hot-water channels give two loops of four channels each; a tank that tags only its flow in gives one
+        loop with one channel.
+
+        Args:
+            channels: The component's inputs and outputs.
+
+        Returns:
+            The channels of each loop by quantity.
+        """
+        grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
+        for channel in channels:
+            tag: Optional[FluidLoopChannel] = getattr(channel, "fluid_loop", None)
+            if tag is not None:
+                grouped.setdefault(tag.loop, {})[tag.quantity] = channel
+        return grouped
+
+    @staticmethod
+    def half_tagged(component_name: str, channels: Sequence[Union[ComponentInput, ComponentOutput]]) -> List[str]:
+        """Return one sentence for every loop a component tags by half, without all four quantities; empty when there is none.
+
+        Rule 0 of §3.3 of ``roadmap/fluid_loops_spec.md``: a member of a loop has a flow in, a flow out, a temperature
+        in and a temperature out. For example, a tank that tags its flow in and both temperatures of its loop
+        ``generator`` gives ``Tank tags the loop 'generator' by half: it tags FlowIn (flow_in), TemperatureIn
+        (temperature_in), TemperatureOut (temperature_out) and lacks flow_out; ...``. The build refuses such a loop
+        with the setup rule ``FL-01`` (``hisim/setup_rules/fluid_loops.py``), and :meth:`group` refuses it again for a
+        caller outside a build.
+
+        Args:
+            component_name: The component the channels belong to.
+            channels: Its inputs and outputs (:meth:`tagged_channels`).
+
+        Returns:
+            The sentences, one per loop tagged by half, in the order the loops first appear.
+        """
+        sentences: List[str] = []
+        for loop, by_quantity in FluidLoopPortSet.tagged_channels(channels).items():
+            missing = [quantity.value for quantity in LoopQuantity if quantity not in by_quantity]
+            if missing:
+                tagged = ", ".join(f"{channel.field_name} ({quantity.value})" for quantity, channel in by_quantity.items())
+                sentences.append(
+                    f"{component_name} tags the loop {loop.name!r} by half: it tags {tagged} and lacks "
+                    f"{', '.join(missing)}; a member of a fluid loop has a flow in, a flow out, a temperature in and "
+                    "a temperature out."
+                )
+        return sentences
+
+    @staticmethod
     def group(
         component_name: str, channels: Sequence[Union[ComponentInput, ComponentOutput]]
     ) -> Tuple["FluidLoopPortSet", ...]:
         """Group a component's channels by the fluid loop their tags name, one port set per loop.
 
-        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop
-        tagged by half, one without all four quantities, is refused (rule 0 of §3.3 of
-        ``roadmap/fluid_loops_spec.md``). For example, a boiler's four space-heating channels and its four hot-water
-        channels give two sets.
+        The sets come in the order their loops first appear in ``channels`` (:meth:`tagged_channels`). Untagged
+        channels are skipped. For example, a boiler's four space-heating channels and its four hot-water channels give
+        two sets. A loop tagged by half cannot be a port set: the build refuses it first, with the setup rule
+        ``FL-01``, and a caller outside a build gets the same sentence here (:meth:`half_tagged`).
 
         Args:
             component_name: The component the channels belong to.
@@ -280,27 +333,16 @@ class FluidLoopPortSet:
             The port sets.
 
         Raises:
-            FluidLoopWiringError: For a loop tagged by half, naming the component, the loop, the channels it tags and
-                the quantities it lacks.
+            FluidLoopError: For a loop tagged by half, naming the component, the loop, the channels it tags and the
+                quantities it lacks.
         """
-        grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
-        for channel in channels:
-            tag: Optional[FluidLoopChannel] = getattr(channel, "fluid_loop", None)
-            if tag is not None:
-                grouped.setdefault(tag.loop, {})[tag.quantity] = channel
-        port_sets: List[FluidLoopPortSet] = []
-        for loop, by_quantity in grouped.items():
-            missing = [quantity.value for quantity in LoopQuantity if quantity not in by_quantity]
-            if missing:
-                tagged = ", ".join(f"{channel.field_name} ({quantity.value})" for quantity, channel in by_quantity.items())
-                raise hydronics.FluidLoopWiringError(
-                    f"{component_name} tags the loop {loop.name!r} by half: it tags {tagged} and lacks "
-                    f"{', '.join(missing)}; a member of a fluid loop has a flow in, a flow out, a temperature in and "
-                    "a temperature out."
-                )
-
-            port_sets.append(FluidLoopPortSet(component_name, loop, by_quantity))
-        return tuple(port_sets)
+        half_tagged = FluidLoopPortSet.half_tagged(component_name, channels)
+        if half_tagged:
+            raise FluidLoopError(half_tagged[0])
+        return tuple(
+            FluidLoopPortSet(component_name, loop, by_quantity)
+            for loop, by_quantity in FluidLoopPortSet.tagged_channels(channels).items()
+        )
 
 
 class SingleTimeStepValues:
@@ -667,7 +709,8 @@ class Component:
         loops.
 
         Raises:
-            FluidLoopWiringError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`), which the build refuses
+                first (setup rule ``FL-01``).
         """
         return FluidLoopPortSet.group(self.component_name, [*self.inputs, *self.outputs])
 
@@ -680,7 +723,8 @@ class Component:
         stage 3 of ``roadmap/fluid_loops_spec.md`` and is drawn as undeclared, as before.
 
         Raises:
-            FluidLoopWiringError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`), which the build refuses
+                first (setup rule ``FL-01``).
         """
         return self.port_sets()
 

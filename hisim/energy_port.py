@@ -537,10 +537,11 @@ class FluidLoopError(ValueError):
 
     """A fluid-loop declaration that cannot describe a loop, refused when the component declares it.
 
-    Raised by :class:`FluidLoop` for a malformed loop and by ``add_input`` and ``add_output`` for a loop tag that does
-    not fit its channel or repeats one of the component's. It is a ``ValueError``, as every invalid declaration of this
-    module is. A loop tagged by half and a loop wired wrong are refused at build, with
-    :class:`hisim.hydronics.FluidLoopWiringError`.
+    Raised by :class:`FluidLoop` for a malformed loop, by ``add_input`` and ``add_output`` for a loop tag that does
+    not fit its channel or repeats one of the component's, and by :meth:`hisim.component.FluidLoopPortSet.group` for a
+    loop tagged by half when its port sets are asked for outside a build. It is a ``ValueError``, as every invalid
+    declaration of this module is. The build refuses a loop tagged by half and a loop wired wrong first, with the
+    fluid-loop setup rules (``hisim/setup_rules/fluid_loops.py``, ``FluidLoopWiringError``).
     """
 
 

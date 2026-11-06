@@ -28,7 +28,6 @@ import pytest
 
 from hisim import loadtypes as lt
 from hisim.components.advanced_battery_bslib import Battery
-from hisim.components.advanced_fuel_cell import CHP
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.transformer_rectifier import Transformer
 from hisim.energy_port import EnergyPort

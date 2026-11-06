@@ -403,7 +403,7 @@ def test_a_tank_reading_the_advanced_electrolyzer_s_hydrogen_links_to_it_through
     assert isinstance(tank, HydrogenStorage)
     tank.charging_hydrogen.src_object_name = electrolyzer.component_name
     tank.charging_hydrogen.src_field_name = AdvancedElectrolyzer.HydrogenOutput
-    Wiring.refuse_a_broken_wiring([electrolyzer, tank])
+    fft.EnergyPortRules.refuse_a_broken_wiring([electrolyzer, tank])
     wiring = Wiring([electrolyzer, tank])
     output_port = electrolyzer.hydrogen_output_channel.energy_port
     input_port = tank.charging_hydrogen.energy_port

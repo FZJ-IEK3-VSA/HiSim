@@ -1,8 +1,9 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 123 that move into the rules package and the 77 that stay where
-they are: a parse fault of the reader, a device's own physics guard, a call of the component API refused when it is
-made, a recorder check, a CI gate, a policy of the run, and one retired check that never fired. Each record names
+The inventory is the one list of the checks, the 115 that move into the rules package and the 87 that stay where
+they are: a parse fault of the reader, a check the reader makes while it builds the model, a device's own physics
+guard, a call of the component API refused when it is made, a recorder check, a CI gate, a policy of the run, and
+one retired check that never fired. Each record names
 the check, its nature, when it runs, whether it refuses or logs, where it lives today and, for a check that moves,
 the module of ``hisim/setup_rules/`` it moves to and its stage. When a family moves, its
 pull request sets each moved record's ``lives`` to its place in the package and its ``codes`` to the codes it
@@ -121,99 +122,216 @@ class Inventory:
             ),
         ),
         RuleRecord(
-            rule_id="document.no_absolute_path", codes=("EF-05",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load, again at build",
-            enforcement="E", checks="no absolute filesystem path in a value", lives="hisim/energy_system/validation.py:StructuralValidator._check_no_absolute_paths",
+            rule_id="document.no_absolute_path", codes=("EF-05",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded, again when recorded",
+            enforcement="E", checks="no absolute filesystem path in a value",
+            lives="hisim/setup_rules/document.py:NoAbsolutePath",
+            note=(
+                "the recorder runs the same walk, NoAbsolutePath.absolute_paths, in hisim/energy_system/recording/builder.py:PortablePathGuard"
+            ),
         ),
         RuleRecord(
-            rule_id="document.reference_syntax", codes=("EF-06",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="no wildcard or relative reference", lives="hisim/energy_system/names.py:NameRules._reference_error",
+            rule_id="document.reference_syntax", codes=("EF-06",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="no wildcard or relative reference",
+            lives="hisim/energy_system/names.py:NameRules._reference_error",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7)"
+            ),
         ),
         RuleRecord(
-            rule_id="document.valid_name", codes=("EF-08",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a component, group, variant or option name is an identifier",
-            lives="hisim/energy_system/names.py:NameRules.check_identifier; hisim/energy_system/validation.py:StructuralValidator._check_expanded_names",
+            rule_id="document.valid_name", codes=("EF-08",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="a component, group, variant or option name is an identifier",
+            lives="hisim/setup_rules/document.py:ValidName",
+            note=(
+                "the rule refuses a hyphenated name the expansion did not produce; the identifier check of every name as it is read, "
+                "hisim/energy_system/names.py:NameRules.check_identifier, stays in the reader: the reader decides it while it builds the model, which cannot "
+                "hold the fault; a rule could only see the file once the reader built it (D9's reason for a parse fault, decided for PR 7)"
+            ),
         ),
         RuleRecord(
-            rule_id="document.no_metadata_on_a_plain_run", codes=("EF-09",), nature=RuleNature.LAW, target="document", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="a file with metadata: (a run record) is only re-run", lives="hisim/energy_system/executor.py:EnergySystemExecutor.check_metadata",
+            rule_id="document.no_metadata_on_a_plain_run", codes=("EF-09",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load, in a run on the expanded file",
+            enforcement="E", checks="a file with metadata: (a run record) is only re-run",
+            lives="hisim/setup_rules/document.py:NoMetadataOnAPlainRun",
+            note=(
+                "moved from hisim/energy_system/executor.py:EnergySystemExecutor.check_metadata; a LOAD rule, since it reads the document and whether the run"
+                " is a re-run (LoadedDocument.rerun), not the built components"
+            ),
         ),
         RuleRecord(
-            rule_id="document.one_configuration_origin", codes=("EF-11", "EF-12"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
-            enforcement="E", checks="an entry names a preset or a constructor, never both, and at least one of preset, constructor, config",
-            lives="hisim/energy_system/validation.py:StructuralValidator._check_configuration_origin",
+            rule_id="document.one_configuration_origin", codes=("EF-11",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="an entry names a preset or a constructor, never both",
+            lives="hisim/setup_rules/document.py:OneConfigurationOrigin",
+            note=(
+                "split in PR 7 from the record of EF-11 and EF-12, one rule per code"
+            ),
         ),
         RuleRecord(
-            rule_id="document.constructor_block", codes=("EF-14",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a constructor block names exactly one constructor", lives="hisim/energy_system/entries.py:EntryReader._constructor",
+            rule_id="document.configuration_stated", codes=("EF-12",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="an entry names at least one of preset, constructor, config",
+            lives="hisim/setup_rules/document.py:ConfigurationStated",
+            note=(
+                "split in PR 7 from the record of EF-11 and EF-12, one rule per code"
+            ),
         ),
         RuleRecord(
-            rule_id="document.known_entry_keys", codes=("EF-18",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            rule_id="document.constructor_block", codes=("EF-14",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="a constructor block names exactly one constructor",
+            lives="hisim/energy_system/entries.py:EntryReader._constructor",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7)"
+            ),
+        ),
+        RuleRecord(
+            rule_id="document.known_entry_keys", codes=("EF-18",), nature=RuleNature.LAW, when="load", enforcement="E",
             checks="an entry, group, variant or option uses only its closed key set",
             lives="hisim/energy_system/entries.py:EntryReader.entry; hisim/energy_system/loader.py:EnergySystemReader._check_block_keys",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7); the entry reader also reads the members of an assembly file"
+            ),
         ),
         RuleRecord(
-            rule_id="document.input_item_shape", codes=("EF-19",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="an input item is a defaults, wire or feed item", lives="hisim/energy_system/entries.py:EntryReader._check_item_keys",
+            rule_id="document.input_item_shape", codes=("EF-19",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="an input item is a defaults, wire or feed item",
+            lives="hisim/energy_system/entries.py:EntryReader._check_item_keys",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7)"
+            ),
         ),
         RuleRecord(
-            rule_id="document.known_source", codes=("EF-20",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="an input item names a component the selected world has", lives="hisim/energy_system/validation.py:StructuralValidator._check_reference_closure",
+            rule_id="document.known_source", codes=("EF-20",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="an input item names a component the file declares",
+            lives="hisim/setup_rules/document.py:KnownSource",
         ),
         RuleRecord(
-            rule_id="document.one_input_spelling", codes=("EF-24",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="one consumer-source pair is spelled as wires or as feeds, not both; no defaults item repeated",
-            lives="hisim/energy_system/validation.py:StructuralValidator._require_new_spelling",
+            rule_id="document.one_input_spelling", codes=("EF-24",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="one consumer-source pair is spelled as wires or as feeds, not both; no defaults item repeated",
+            lives="hisim/setup_rules/document.py:OneInputSpelling",
         ),
         RuleRecord(
-            rule_id="document.no_duplicate_feed", codes=("EF-25",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="one source output fed once into an aggregator (file level)", lives="hisim/energy_system/validation.py:StructuralValidator._check_input_shapes",
+            rule_id="document.no_duplicate_feed", codes=("EF-2C", "EF-25"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="one source output fed once into an aggregator (file level)",
+            lives="hisim/setup_rules/document.py:NoDuplicateFeed",
+            note=(
+                "the rule's code is EF-2C, since the wiring rule wiring.feed_unique holds EF-25; its messages keep the catalogue code EF-25"
+            ),
         ),
         RuleRecord(
-            rule_id="document.no_duplicate_wire", codes=("EF-26",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="one input wired once (file level)", lives="hisim/energy_system/validation.py:StructuralValidator._check_input_shapes",
+            rule_id="document.no_duplicate_wire", codes=("EF-2D", "EF-26"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="one input wired once (file level)",
+            lives="hisim/setup_rules/document.py:NoDuplicateWire",
+            note=(
+                "the rule's code is EF-2D, since the wiring rule wiring.no_input_fed_twice holds EF-26; its messages keep the catalogue code EF-26"
+            ),
         ),
         RuleRecord(
-            rule_id="document.known_sizing_source", codes=("EF-40", "EF-41"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
-            enforcement="E", checks="sizing_sources names an existing component and the fact it maps",
-            lives="hisim/energy_system/validation.py:StructuralValidator._check_reference_closure",
+            rule_id="document.known_sizing_source", codes=("EF-40",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="sizing_sources names an existing component",
+            lives="hisim/setup_rules/document.py:KnownSizingSource",
+            note=(
+                "split in PR 7 from the record of EF-40 and EF-41, one rule per code"
+            ),
         ),
         RuleRecord(
-            rule_id="document.no_nested_group", codes=("EF-50",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="an entry carries no group keys", lives="hisim/energy_system/entries.py:EntryReader.entry",
+            rule_id="document.sizing_source_names_its_fact", codes=("EF-41",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="a sizing_sources reference names the fact it is written under",
+            lives="hisim/setup_rules/document.py:SizingSourceNamesItsFact",
+            note=(
+                "split in PR 7 from the record of EF-40 and EF-41, one rule per code"
+            ),
         ),
         RuleRecord(
-            rule_id="document.one_group_per_component", codes=("EF-51",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a component is in at most one group", lives="hisim/energy_system/validation.py:StructuralValidator._check_names",
+            rule_id="document.no_nested_group", codes=("EF-50",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="an entry carries no group keys",
+            lives="hisim/energy_system/entries.py:EntryReader.entry",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7)"
+            ),
         ),
         RuleRecord(
-            rule_id="document.unique_name", codes=("EF-52",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load / build", enforcement="E",
-            checks="component, group, variant and expanded import names do not collide",
-            lives="hisim/energy_system/validation.py:StructuralValidator._check_names; hisim/energy_system/assemblies/expansion.py:ImportExpander._check_names",
+            rule_id="document.one_group_per_component", codes=("EF-51",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="a component is in at most one group",
+            lives="hisim/setup_rules/document.py:OneGroupPerComponent",
         ),
         RuleRecord(
-            rule_id="document.group_enabled_flag", codes=("EF-53",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a group's enabled is a bool", lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+            rule_id="document.no_name_collision", codes=("EF-52",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
+            enforcement="E", checks="component, group, variant and expanded import names do not collide",
+            lives="hisim/setup_rules/document.py:NoNameCollision",
+            note=(
+                "named document.unique_name in the design record, renamed in PR 7 since components.unique_name (CB-02) holds the name; "
+                "the collision of two expanded import names stays with the expansion, "
+                "hisim/energy_system/assemblies/expansion.py:ImportExpander._check_names, which cannot build the expanded file it would hand the rule"
+            ),
         ),
         RuleRecord(
-            rule_id="document.group_not_empty", codes=("EF-54",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a group lists a component", lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+            rule_id="document.group_enabled_flag", codes=("EF-53",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="a group's enabled is a bool",
+            lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7)"
+            ),
         ),
         RuleRecord(
-            rule_id="document.known_variant_option", codes=("EF-55",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="selected names an option", lives="hisim/energy_system/loader.py:EnergySystemReader._build_variants",
+            rule_id="document.group_not_empty", codes=("EF-54",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="a group lists a component",
+            lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7); a run checks the expanded file, which keeps no group, so a rule would see the group only"
+                " in the raw document"
+            ),
         ),
         RuleRecord(
-            rule_id="document.variant_not_empty", codes=("EF-56",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a variant offers an option", lives="hisim/energy_system/loader.py:EnergySystemReader._build_options",
+            rule_id="document.known_variant_option", codes=("EF-55",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="selected names an option",
+            lives="hisim/energy_system/loader.py:EnergySystemReader._build_variants",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7); the expansion of a run cannot resolve a selection naming no option, so a rule after it "
+                "would come too late"
+            ),
         ),
         RuleRecord(
-            rule_id="document.one_variant_per_component", codes=("EF-57",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
+            rule_id="document.variant_not_empty", codes=("EF-56",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="a variant offers an option",
+            lives="hisim/energy_system/loader.py:EnergySystemReader._build_options",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7); the expansion of a run cannot resolve a variant without options, so a rule after it "
+                "would come too late"
+            ),
+        ),
+        RuleRecord(
+            rule_id="document.one_variant_per_component", codes=("EF-57",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="a component is declared by at most one variant",
-            lives="hisim/energy_system/validation.py:StructuralValidator._check_option_member",
+            lives="hisim/setup_rules/document.py:OneVariantPerComponent",
         ),
         RuleRecord(
-            rule_id="document.not_cut_from_v1", codes=("EF-73",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
-            checks="a construct cut from v1 is refused by name", lives="hisim/energy_system/imports_reader.py:CutConstructs.error",
+            rule_id="document.not_cut_from_v1", codes=("EF-73",), nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="a construct cut from v1 is refused by name",
+            lives="hisim/energy_system/imports_reader.py:CutConstructs.error",
+            note=(
+                "stays: the reader decides it while it builds the model, which cannot hold the fault; a rule could only see the file once the reader built it"
+                " (D9's reason for a parse fault, decided for PR 7); the imports reader and the assembly reader refuse the same constructs"
+            ),
         ),
         RuleRecord(
             rule_id="bindings.class_importable", codes=("EF-10",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",

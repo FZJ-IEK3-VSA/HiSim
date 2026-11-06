@@ -47,7 +47,7 @@ from hisim.energy_system.recording.configs import (
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
 from hisim.energy_system.recording.observe import ObservedComponent, RecordedSystem
-from hisim.energy_system.validation import StructuralValidator
+from hisim.setup_rules.document import NoAbsolutePath
 
 
 class PortablePathGuard:
@@ -59,8 +59,9 @@ class PortablePathGuard:
     nowhere else, and, worse, one whose re-recording on another machine differs in a line that says
     nothing about the system.
 
-    The scan is not a rule of its own: the guard runs the structural validator's own walk over the
-    block it is about to write, so the recorder cannot come to disagree with the loader about what
+    The scan is not a rule of its own: the guard runs the walk of the structural rule ``EF-05``
+    (``NoAbsolutePath.absolute_paths``, ``hisim/setup_rules/document.py``) over the block it is
+    about to write, so the recorder cannot come to disagree with the loader about what
     counts as an absolute path or about which keys name a location. Running it here rather than
     leaving it to load time is what lets the refusal name the setup and the component, which is
     what a person re-recording a fleet needs, instead of only the key path inside a file.
@@ -74,32 +75,31 @@ class PortablePathGuard:
             block: The encoded configuration block about to be written.
             name: The component's runtime name, for the message.
             setup: The setup module being recorded, for the message.
-            location: Dotted key path of the block inside the entry, which the validator's own
+            location: Dotted key path of the block inside the entry, which the rule's own
                 walk grows as it descends.
 
         Raises:
             EnergySystemRecordingError: ``EF-R3`` naming the setup, the component, the field and
                 the path.
         """
-        try:
-            StructuralValidator.scan_for_absolute_paths(block, location)
-        except EnergySystemFormatError as refusal:
-            raise cls._error(name, setup, refusal) from refusal
+        refusals = NoAbsolutePath.absolute_paths(block, location)
+        if refusals:
+            raise cls._error(name, setup, refusals[0]) from refusals[0]
 
     @classmethod
     def _error(
         cls, name: str, setup: str, refusal: EnergySystemFormatError
     ) -> EnergySystemRecordingError:
-        """Translates the validator's load-time rejection into the recorder's own; caller raises.
+        """Translates the structural rule's load-time rejection into the recorder's own; caller raises.
 
-        The validator's message names the key path and the value and nothing else, because at load
+        The rule's message names the key path and the value and nothing else, because at load
         time there is nothing else to name. Both are carried over verbatim so that the two
         refusals point at the same field, and the setup and the component are added in front.
 
         Args:
             name: The component's runtime name.
             setup: The setup module being recorded.
-            refusal: The validator's ``EF-05``, whose location and problem are reused.
+            refusal: The rule's ``EF-05``, whose location and problem are reused.
 
         Returns:
             The exception to raise.

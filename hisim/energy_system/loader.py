@@ -10,9 +10,10 @@ version, an unknown top-level key, a group without a flag, a variant whose selec
 no option. What a single component entry looks like is read one module below, in
 :mod:`hisim.energy_system.entries`, so that this module is about the document and that one
 about the block every container of components repeats. Rules that span more than one entry —
-unique names, group and variant membership, a closed reference graph — belong to the
-structural validator, which :func:`load_energy_system` runs afterwards. No step here imports
-a component class, so nothing is decided yet about presets, fields or ports.
+unique names, group and variant membership, a closed reference graph — are the structural
+rules of the setup rules (``hisim/setup_rules/document.py``), which :func:`load_energy_system`
+runs afterwards. No step here imports a component class, so nothing is decided yet about
+presets, fields or ports.
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatEr
 from hisim.energy_system.imports_reader import ImportsReader
 from hisim.energy_system.model import EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
-from hisim.energy_system.validation import validate_structure
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage
@@ -62,7 +62,7 @@ class EnergySystemReader:
             source: A path to a ``.yaml`` or ``.yml`` file, or YAML text itself.
 
         Returns:
-            The parsed file, before the structural validator has seen it.
+            The parsed file, before the structural rules have seen it.
 
         Raises:
             EnergySystemFormatError: For any problem in the text, the top level or the
@@ -80,7 +80,7 @@ class EnergySystemReader:
             origin: Label of the document, prefixing every key path in a message.
 
         Returns:
-            The parsed file, before structural validation.
+            The parsed file, before the structural rules have seen it.
 
         Raises:
             EnergySystemFormatError: ``EF-01`` for a missing or unsupported schema version or a
@@ -247,7 +247,7 @@ class EnergySystemReader:
         """Builds the variants block: named exclusive choices, each resolved to one option.
 
         Both keys of a variant are required, and the selection is checked against the options
-        right here rather than left to the validator, because the message that makes the
+        right here rather than left to the structural rules, because the message that makes the
         mistake trivial to fix is the one that lists the options the variant actually has.
 
         Raises:
@@ -338,10 +338,11 @@ def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:
     """Loads an energy-system file and checks everything decidable without its classes.
 
     This is the entry point for every reader of the format. It reads the YAML, rejects
-    duplicate and unknown keys, builds the model, runs the structural validator and then the
-    setup rules of the ``LOAD`` stage, so a file that comes back has a valid shape, unique
-    names, legal groups and a closed reference graph. It imports no component class, so
-    nothing is said yet about whether a preset, a config field or a port exists.
+    duplicate and unknown keys, builds the model and runs the setup rules of the ``LOAD``
+    stage, the structural rules among them, on the file as read, so a file that comes back has
+    a valid shape, unique names, legal groups and a closed reference graph. It imports no
+    component class, so nothing is said yet about whether a preset, a config field or a port
+    exists.
 
     Args:
         source: A path to a ``.yaml`` or ``.yml`` file, or a string holding the YAML text.
@@ -351,40 +352,43 @@ def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:
         The loaded and structurally valid energy system.
 
     Raises:
-        EnergySystemFormatError: On the first problem found, naming the offending element
-            and, where a closed set of valid values exists, listing it.
+        EnergySystemFormatError: On the first problem the reader finds, naming the offending
+            element and, where a closed set of valid values exists, listing it.
+        EnergySystemStructureError: Listing every fault of the structural rules, a format error as well.
         SetupRuleViolation: Listing every fault of the ``LOAD`` rules the file's kind runs.
     """
     document, origin = RawDocument.read(source)
     model = EnergySystemReader.build(document, origin)
-    validate_structure(model)
     run_load_rules(model, document, None if origin == RawDocument.TEXT_ORIGIN else str(source))
     return model
 
 
 def run_load_rules(model: EnergySystemFile, document: Mapping[str, Any], file: Optional[str]) -> None:
-    """Runs the setup rules of the ``LOAD`` stage on a file the reader built: the loader's hook into the rules.
+    """Runs the setup rules of the ``LOAD`` stage on a file that is only loaded: the loader's hook into the rules.
 
-    Both ways a file reaches HiSim call it once: :func:`load_energy_system`, which tools and the translator use,
-    and the build of a run (:func:`hisim.energy_system.executor.build_energy_system`), which reads the file with
-    the reader alone because the structural validation of a file that imports assemblies waits for the expansion.
+    :func:`load_energy_system` calls it on the file as the reader built it, and a tool that expanded a file itself
+    (``hisim energy-system render``, the translator's economics stage) on the expanded file, with an empty
+    ``document``. A run calls the rules itself, on the file after its imports and groups were expanded
+    (:meth:`hisim.energy_system.executor.EnergySystemExecutor.construct`), because a file that imports assemblies
+    names their members only once they are expanded. Example: ``run_load_rules(expanded, {}, None)``.
 
     Args:
-        model: The file as the reader built it.
-        document: The top-level mapping the reader built it from.
+        model: The file the rules check.
+        document: The top-level mapping the reader built it from; empty when the caller holds none.
         file: The file's path, ``None`` for a document read from text.
 
     Raises:
+        EnergySystemStructureError: Listing every fault of the structural rules.
         SetupRuleViolation: Listing every fault of the ``LOAD`` rules the file's kind runs.
     """
     SetupRuleRegistry.collect().run(RuleStage.LOAD, LoadedDocument(model=model, document=document, file=file), model.setup_kind)
 
 
 def parse_energy_system(source: Union[str, Path]) -> EnergySystemFile:
-    """Reads an energy-system file into the model without running structural validation.
+    """Reads an energy-system file into the model without running the structural rules.
 
     Tools that inspect or repair a file known to be incomplete — an editor showing a
-    half-written document, a test exercising the validator on a model it built itself —
+    half-written document, a test exercising the structural rules on a model it built itself —
     need the parse step alone. Everything the reader itself decides, from the file suffix
     to the shape of an input item, is still enforced.
 
@@ -392,7 +396,7 @@ def parse_energy_system(source: Union[str, Path]) -> EnergySystemFile:
         source: A path to a ``.yaml`` or ``.yml`` file, or a string holding YAML text.
 
     Returns:
-        The parsed energy system, which may still violate structural rules.
+        The parsed energy system, which may still break a structural rule.
 
     Raises:
         EnergySystemFormatError: On any problem in the text or in the shape of a block.

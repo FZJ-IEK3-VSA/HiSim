@@ -33,6 +33,8 @@ from hisim.energy_port import EnergyPort
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessing.energy_balance.ports import Peer, PeerKind
+from hisim.setup_rules.energy_ports import RoomHeatNeedsReceiver
+from hisim.setup_rules.subjects import BuiltSystem
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 from tests.test_building_one_day_snapshot import OneDaySnapshot, SyntheticDayProfiles
@@ -186,9 +188,8 @@ class HeatedZoneDay:
         synthetic_source = SimpleNamespace(
             component_name=OneDaySnapshot.SYNTHETIC_SOURCE_NAME, inputs=[], outputs=list(self.source_outputs.values())
         )
-        # Stand-ins for the simulator's wrappers: the balance reads only the component each one carries.
-        wrapped: List[Any] = [SimpleNamespace(my_component=component) for component in [synthetic_source, *self.components]]
-        return EnergyBalanceReport(table, self.all_outputs, wrapped, SyntheticDayProfiles.SECONDS_PER_TIMESTEP)
+        components: List[Any] = [synthetic_source, *self.components]
+        return EnergyBalanceReport(table, self.all_outputs, components, SyntheticDayProfiles.SECONDS_PER_TIMESTEP)
 
 
 @pytest.fixture(name="redirected_solar_gain_cache")
@@ -409,3 +410,41 @@ def test_the_occupancy_s_room_heat_is_read_once_by_name_when_connected_automatic
         Building.HeatingByResidents: ["UTSPConnector", UtspLpgConnector.HeatingByResidents],
         Building.HeatingByDevices: ["UTSPConnector", UtspLpgConnector.HeatingByDevices],
     }
+
+
+@pytest.mark.base
+def test_room_heat_that_no_component_reads_is_a_fault_naming_the_device_and_the_output(
+    redirected_solar_gain_cache,
+) -> None:
+    """A heater whose heat nobody reads is one ``EP-06`` fault naming it; the same heater read by the building is none.
+
+    Owner decision D-h of the device-location spec: room heat is a transfer with a missing end when nothing takes it,
+    not a loss. The rule itself is tested in ``tests/rules/test_energy_ports.py``; this test is the building's side.
+    Catches: the building's dynamic room-heat input not counted as the heater's receiver, so every house with a device
+    in the heated zone would be refused, and the heat of a device nobody reads dropped in silence.
+    """
+    del redirected_solar_gain_cache
+    read = HeatedZoneDay(with_heater=True, replaced_inputs={})
+    assert not RoomHeatNeedsReceiver().check(BuiltSystem(components=tuple(read.components)))
+    unread = HeatedZoneDay(with_heater=False, replaced_inputs={})
+    faults = RoomHeatNeedsReceiver().check(BuiltSystem(components=(unread.heater,)))
+    assert [(fault.component, fault.port) for fault in faults] == [("RoomHeater", "HeatReleasedInWatt")]
+    assert faults[0].message.startswith("room heat needs a receiver: RoomHeater.HeatReleasedInWatt declares PRODUCTION of ROOM_HEAT")
+
+
+@pytest.mark.base
+def test_a_heater_the_building_reads_with_zeros_every_step_books_nothing_and_is_not_unlinked(
+    redirected_solar_gain_cache,
+) -> None:
+    """A device in an unheated cellar feeds the building 0 W every step: an idle transfer, no link and nothing unlinked.
+
+    Catches: a released-heat output that stands idle in every house where the device is not in the heated zone but
+    still shows up as a link of zero or as an unlinked port in the balance.
+    """
+    del redirected_solar_gain_cache
+    day = HeatedZoneDay(with_heater=True, replaced_inputs={})
+    day.heater.config.heat_released_in_watt = 0.0
+    report = day.balance_report(day.run())
+    assert {balance.component: balance.closes for balance in report.balances} == {"Building": True, "RoomHeater": True}
+    assert not [link for link in report.links if "RoomHeater" in (link.sender, link.receiver)]
+    assert not report.declared.unlinked()

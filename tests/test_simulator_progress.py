@@ -16,8 +16,8 @@ import pytest
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import ProgressEvent, SimulationProgress, Simulator
-from tests import functions_for_testing as fft
 from hisim.setup_rules.kinds import SetupKind
+from tests import functions_for_testing as fft
 
 pytestmark = pytest.mark.base
 

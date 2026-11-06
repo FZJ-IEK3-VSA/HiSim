@@ -30,8 +30,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.postprocessing import postprocessing_main
-from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework, _prepare_case
 from hisim.setup_rules.kinds import SetupKind
+from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework, _prepare_case
 
 
 pytestmark: pytest.MarkDecorator = pytest.mark.postprocessingoptions

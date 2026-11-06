@@ -23,8 +23,8 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulator import SimulationParameters
 from hisim import log
-from tests.idealized_heater_rig import controller_between, heat_into
 from hisim.setup_rules.kinds import SetupKind
+from tests.idealized_heater_rig import controller_between, heat_into
 
 
 # PATH and FUNC needed to build simulator, PATH is fake

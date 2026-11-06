@@ -11,8 +11,8 @@ from hisim.simulator import Simulator
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, SizingContext, describe_config
-from tests import functions_for_testing as fft
 from hisim.setup_rules.kinds import SetupKind
+from tests import functions_for_testing as fft
 
 
 @pytest.mark.base

@@ -11,8 +11,8 @@ from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.config import AUTO, ComponentID, SizableFieldKind, describe_config
-from tests import functions_for_testing as fft
 from hisim.setup_rules.kinds import SetupKind
+from tests import functions_for_testing as fft
 
 
 @pytest.mark.system_setups

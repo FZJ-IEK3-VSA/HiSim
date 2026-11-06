@@ -29,8 +29,8 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim import log
-from tests import functions_for_testing as fft
 from hisim.setup_rules.kinds import SetupKind
+from tests import functions_for_testing as fft
 
 
 # PATH and FUNC needed to build simulator, PATH is fake

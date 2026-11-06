@@ -35,7 +35,6 @@ class TestWaivers:
     def test_a_rule_without_waivers_inherits_the_empty_read_only_mapping(self) -> None:
         """Catches a default that is a shared mutable dict, which one rule could change for every other rule."""
 
-
         class Unwaived(SetupRule[BuiltSystem]):
             __doc__ = SampleRules.DOCSTRING
             CODE = "EP-01"

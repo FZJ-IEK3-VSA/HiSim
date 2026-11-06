@@ -41,8 +41,8 @@ from hisim.economics.facts import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
-from tests.fake_component_source import NamedComponentSource
 from hisim.setup_rules.kinds import SetupKind
+from tests.fake_component_source import NamedComponentSource
 
 pytestmark = pytest.mark.base
 

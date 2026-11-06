@@ -14,9 +14,9 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim.components import electricity_meter
 from hisim.config import ComponentID, SizingContext
+from hisim.setup_rules.kinds import SetupKind
 from tests.testing_utils import TestingUtils
 from tests.idealized_heater_rig import controller_between, heat_into
-from hisim.setup_rules.kinds import SetupKind
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"

@@ -67,9 +67,9 @@ from hisim.components import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 from tests.fake_component_source import NamedComponentSource
 from tests.idealized_heater_rig import controller_between, heat_into
-from hisim.setup_rules.kinds import SetupKind
 
 # PATH needed to build simulator, PATH is fake
 PATH: str = "../system_setups/household_for_test_economics_bridge.py"

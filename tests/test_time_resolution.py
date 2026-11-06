@@ -31,8 +31,8 @@ from hisim.components import (
 )
 
 from hisim import loadtypes as lt
-from tests.testing_utils import TestingUtils
 from hisim.setup_rules.kinds import SetupKind
+from tests.testing_utils import TestingUtils
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:

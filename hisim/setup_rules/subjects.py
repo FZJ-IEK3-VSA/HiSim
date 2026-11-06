@@ -1,6 +1,7 @@
 """The subjects of the setup rules: what each hook hands to the rules of its stage.
 
-One frozen object per hook. ``LoadedDocument`` is the energy-system file as the reader built it (stage ``LOAD``).
+One frozen object per hook. ``LoadedDocument`` is the energy-system file before any class is imported: as the reader
+built it, or, in a run, with its imports and groups expanded (stage ``LOAD``).
 ``BuiltDocument`` is the expanded file with its constructed, wired components, which the declarative build hands
 over (stage ``BUILD``, declarative mode only). ``AddedSystem`` is the simulator's components as they were added, which
 the run hands over first, before it prepares anything (stage ``BUILD``, both modes). ``BuiltSystem`` is the
@@ -32,11 +33,16 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class LoadedDocument(RuleSubject):
-    """An energy-system file as the reader built it, before any component class is imported.
+    """An energy-system file as it will be built, before any component class is imported.
 
-    ``model`` is the parsed file; ``document`` is the top-level mapping the reader parsed it from, for a rule that
-    needs to point at a key the model does not keep; ``file`` is the file's path, ``None`` for a document read from
-    text.
+    ``model`` is the file the rules check: the file as the reader built it when it is only loaded
+    (``load_energy_system``), and, in a run, the file after its imports and groups were expanded, the selected world
+    the run builds. A file that imports assemblies names its members only once they are expanded, so a run checks the
+    expanded file. ``document`` is the top-level mapping the reader parsed it from, for a rule that needs to point at
+    a key the model does not keep, empty when the caller holds none; ``file`` is the file's path, ``None`` for a
+    document read from text. ``source_map`` says which import produced a component, for a message to name it
+    (``None`` for a file without imports). ``rerun`` says whether a run declared itself the re-run of a record: ``True``
+    or ``False`` in a run, ``None`` when the file is only loaded.
     """
 
     STAGE: ClassVar[RuleStage] = RuleStage.LOAD
@@ -44,6 +50,8 @@ class LoadedDocument(RuleSubject):
     model: EnergySystemFile
     document: Mapping[str, object]
     file: Optional[str] = None
+    source_map: Optional[SourceMap] = None
+    rerun: Optional[bool] = None
 
 
 @dataclass(frozen=True)

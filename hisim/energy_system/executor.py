@@ -9,18 +9,17 @@ whole sequence is in view, and the two entry points a caller reaches for.
 
 The order is not arbitrary. Groups are expanded before anything is validated, so that a
 switched-off component's class never has to import and the off rule cannot leak into a later
-stage. Structural validation runs before any class is imported, so that a file can be checked
-for shape without HiSim's component tree. Sizing completes before the first component exists, so
+stage. The structural rules (``hisim/setup_rules/document.py``) run on the expanded file before any
+class is imported, so that a file can be checked for shape without HiSim's component tree. Sizing completes before the first component exists, so
 that a contradiction is reported with nothing built. And the connections are checked only after
 construction, because a component's ports come into being inside its constructor.
 
-Two things belong to this module alone. The **simulation parameters** — the period, the
+One thing belongs to this module alone. The **simulation parameters** — the period, the
 resolution, the post-processing to run — live in their own file, because the same energy system
 is run over different periods and mixing the two would force a copy of the system per run; both
 the JSON spelling the existing setups use and the YAML spelling new files prefer are accepted.
-And a file carrying a ``metadata`` block is refused on a plain run: such a block is written by a
-generator, so its presence means the caller handed in a generated record rather than an authored
-file, which is a legitimate thing to do but has to be said out loud.
+A file carrying a ``metadata`` block is refused on a plain run by the structural rule ``EF-09``, which
+reads whether the run declared itself a re-run.
 """
 
 from __future__ import annotations
@@ -51,17 +50,16 @@ from hisim.energy_system.errors import (
 )
 from hisim.energy_system.groups import ExpansionRecord, expand_groups
 from hisim.energy_system.document import RawDocument
-from hisim.energy_system.loader import EnergySystemReader, run_load_rules
+from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.parameters_format import ParameterFileWriter, ParameterNormalisation
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.source_lines import LineIndex
-from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
-from hisim.setup_rules.subjects import BuiltDocument
+from hisim.setup_rules.subjects import BuiltDocument, LoadedDocument
 from hisim.setup_rules.wiring import UnconsumedSource
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import (
@@ -243,10 +241,10 @@ class EnergySystemExecutor:
     that configurations size correctly — can stop where it likes, and :meth:`build` is the whole
     sequence for the callers that want all of it.
 
-    Nothing here decides anything a stage could decide for itself. The two judgements that
-    genuinely belong to the sequence are the ``metadata`` gate, which needs to know whether the
-    caller asked for a re-run, and the registration of the components with the simulator, which
-    needs both the file's order and the simulator's own bookkeeping.
+    Nothing here decides anything a stage could decide for itself. The judgement that genuinely
+    belongs to the sequence is the registration of the components with the simulator, which
+    needs both the file's order and the simulator's own bookkeeping; whether the caller asked for
+    a re-run is handed to the structural rules, which refuse a record run as an authored file.
     """
 
     #: Whether the simulator should apply its own automatic default connections when a component
@@ -267,6 +265,7 @@ class EnergySystemExecutor:
         rerun: bool = False,
         assembly_resolver: Optional[AssemblyResolver] = None,
         source_lines: Optional[LineIndex] = None,
+        document: Optional[Mapping[str, Any]] = None,
     ) -> None:
         """Prepares an executor for one loaded energy system.
 
@@ -284,6 +283,8 @@ class EnergySystemExecutor:
             assembly_resolver: Finds the assemblies the file imports; this machine's search path
                 (``energy_systems/assemblies/``, then ``HISIM_ASSEMBLY_PATH``) when omitted.
             source_lines: The file's line index, which the source maps of its imports cite.
+            document: The top-level mapping the reader built the model from, which the structural rules may point
+                into; ``None`` when the caller holds none.
         """
         self.model = model
         self.simulation_parameters = simulation_parameters
@@ -295,6 +296,7 @@ class EnergySystemExecutor:
         self.rerun = rerun
         self.assembly_resolver = assembly_resolver
         self.source_lines = source_lines
+        self.document = document
 
     def build(self) -> BuiltEnergySystem:
         """Runs every stage from the loaded file to a registered simulator, then the build rules of the file, then connects it.
@@ -310,8 +312,8 @@ class EnergySystemExecutor:
             EnergySystemError: For any condition of the error catalogue; the file is rejected at
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
-            SetupRuleViolation: Listing every fault of the ``BUILD`` rules that read the built file, as an
-                ``EnergySystemWiringError`` when only the wiring rules found faults.
+            SetupRuleViolation: Listing every fault of the ``LOAD`` rules on the expanded file, or of the ``BUILD``
+                rules that read the built file, as an ``EnergySystemWiringError`` when only the wiring rules found faults.
         """
         built = self.construct()
         try:
@@ -354,11 +356,12 @@ class EnergySystemExecutor:
 
         Raises:
             EnergySystemError: For any condition of the error catalogue.
+            SetupRuleViolation: Listing every fault of the ``LOAD`` rules, the structural rules of the expanded file
+                among them (:meth:`loaded_document`).
         """
-        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
-        expanded, expansion = expand_groups(imported)
+        expanded, expansion, imports = self.expand()
+        SetupRuleRegistry.collect().run(RuleStage.LOAD, self.loaded_document(expanded, imports), self.model.setup_kind)
         try:
-            validate_structure(expanded)
             bindings = validate_classes(expanded)
             configured = configure_energy_system(
                 expanded, bindings=bindings, path_resolver=self.path_resolver
@@ -395,6 +398,41 @@ class EnergySystemExecutor:
             path_resolver=self.path_resolver,
             rerun=self.rerun,
             imports=imports,
+        )
+
+    def expand(self) -> Tuple[EnergySystemFile, ExpansionRecord, ImportRecord]:
+        """Expands the file's imports, then its groups and variants: the file the run builds, before any class is imported.
+
+        Returns:
+            The expanded file, what the expansion of the groups resolved and what the expansion of the imports did.
+
+        Raises:
+            EnergySystemError: For a condition of the error catalogue the expansion meets.
+        """
+        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
+        expanded, expansion = expand_groups(imported)
+        return expanded, expansion, imports
+
+    def loaded_document(self, expanded: EnergySystemFile, imports: ImportRecord) -> LoadedDocument:
+        """Returns the subject of the ``LOAD`` rules in a run: the expanded file, its source map and whether the run is a re-run.
+
+        A run checks the file it builds, the selected world after its imports and groups were expanded, which is what
+        the structural validator checked before the rules moved: a file that imports assemblies names their members
+        only once they are expanded. ``load_energy_system`` checks the file as read instead.
+
+        Args:
+            expanded: The file after :meth:`expand`.
+            imports: What the expansion of the imports did, for the source map of the components it produced.
+
+        Returns:
+            The subject.
+        """
+        return LoadedDocument(
+            model=expanded,
+            document=self.document or {},
+            file=self.source_energy_system or None,
+            source_map=imports.source_map,
+            rerun=self.rerun,
         )
 
     @staticmethod
@@ -480,37 +518,6 @@ class EnergySystemExecutor:
         )
         return f"{model.name} [{selected}]"
 
-    @classmethod
-    def check_metadata(cls, model: EnergySystemFile, location: str, rerun: bool) -> None:
-        """Refuses a file carrying a ``metadata`` block unless the caller asked for a re-run.
-
-        A ``metadata`` block is written by a generator, never by hand, so a file that has one is
-        a record of a previous run rather than an authored energy system. Re-running such a
-        record is a legitimate and useful thing to do — it is how a run is reproduced exactly —
-        but it is a different intent from running an authored file, and silently accepting both
-        would make it impossible to tell which one happened.
-
-        Args:
-            model: The loaded energy system.
-            location: Path of the file, used in the message.
-            rerun: Whether the caller stated that it means to re-run a record.
-
-        Raises:
-            EnergySystemFormatError: ``EF-09`` if the file carries metadata and ``rerun`` is
-                not set.
-        """
-        if model.metadata is None or rerun:
-            return
-        raise EnergySystemFormatError(
-            EnergySystemErrorId.METADATA_ON_A_PLAIN_RUN,
-            location,
-            "this file carries a 'metadata' block, which only a generated run record has.",
-            remedy=(
-                "Re-run it explicitly if that is what you mean, or strip the metadata block to "
-                "treat it as an authored energy system."
-            ),
-        )
-
 
 def build_energy_system(
     energy_system_path: Any,
@@ -551,8 +558,6 @@ def build_energy_system(
     path = Path(energy_system_path)
     document, origin = RawDocument.read(path)
     model = EnergySystemReader.build(document, origin)
-    EnergySystemExecutor.check_metadata(model, str(path), rerun)
-    run_load_rules(model, document, str(path))
     source_lines = (
         LineIndex.from_text(path.read_text(encoding="utf-8"), path.name)
         if model.schema_version == EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION
@@ -569,6 +574,7 @@ def build_energy_system(
         rerun=rerun,
         assembly_resolver=assembly_resolver,
         source_lines=source_lines,
+        document=document,
     )
     return executor.build()
 

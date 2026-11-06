@@ -51,7 +51,7 @@ from hisim.energy_system.sizing_bridge import (
     sizing_sources_bridge,
     unconsumed_warnings,
 )
-from hisim.energy_system.validation import StructuralValidator
+from hisim.setup_rules.document import NoAbsolutePath
 
 
 @dataclass(frozen=True)
@@ -127,9 +127,9 @@ class EntryConfigurator:
     """
 
     #: Nouns that make a configuration field path-valued, matching the rule the structural
-    #: validator uses to find the paths it forbids to be absolute. A field is a path when its
+    #: rule ``EF-05`` uses to find the paths it forbids to be absolute. A field is a path when its
     #: name is one of these or ends in one after an underscore.
-    PATH_KEY_NOUNS: ClassVar[Tuple[str, ...]] = StructuralValidator.PATH_KEY_NOUNS
+    PATH_KEY_NOUNS: ClassVar[Tuple[str, ...]] = NoAbsolutePath.PATH_KEY_NOUNS
 
     def __init__(self, binding: ClassBinding, resolver: PathResolver, identity: Optional[ComponentID] = None) -> None:
         """Prepares the configurator for one entry.

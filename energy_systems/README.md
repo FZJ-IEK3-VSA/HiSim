@@ -27,6 +27,15 @@ Two kinds of file live side by side and are never mixed:
   `*.simulation.json` of the same shape is read as well, which is what the Python setups in
   `system_setups/` already ship.
 
+Every energy-system file states what it is in its top-level key `setup_kind`, written after
+`name`: `demo` (a demonstration or a test rig), `residential` (a building people live in),
+`commercial` (a building people work in) or `plant` (a system without a building). The key is
+mandatory and has no default; a Python setup declares the same with
+`my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)` as the first line of its setup function. The
+kind selects which setup rules the system waives: `hisim setup-rules list` prints every rule and
+the kinds that waive it, and `hisim setup-rules check <file>` runs the rules on a file without
+simulating it.
+
 ## Running one
 
 Either of these runs the same thing:

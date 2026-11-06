@@ -5,7 +5,8 @@ the declared ports and the meters of a run and finds each port's peer through th
 also through the exempt controllers, or a component that moves energy, else the port's carrier default; ``check``
 closes each component's balance and each link between declared components (both sides must book it); ``meters``
 checks per step that each meter publishes what it reads from the declared ports linked to it, and that every
-metered port passes a meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier;
+metered port passes a meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier,
+and makes each view readable for its HTML (solar losses netted in ``overall``, small nodes merged, one-line labels);
 ``export`` fails the run when they do not hold and writes the report and the Sankeys into the result directory. The
 check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE``
 only writes the files.

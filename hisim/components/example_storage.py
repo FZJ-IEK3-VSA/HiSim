@@ -117,6 +117,13 @@ class SimpleStorage(PhysicsComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = (
+        "a teaching example: its load type and unit are configurable, so its fill carries no fixed carrier "
+        "the balance could book"
+    )
+
     #: The share of the usable range, from the floor to the capacity, that the storage holds before the first step,
     #: dimensionless between 0 and 1: a half-full storage, which can take a charge and give one from the first step,
     #: rather than an empty or a full one, as the hydrogen tank's fraction

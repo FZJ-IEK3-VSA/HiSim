@@ -12,6 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
+from hisim.components import electricity_meter
 from hisim.config import ComponentID, SizingContext
 from tests.testing_utils import TestingUtils
 from tests.idealized_heater_rig import controller_between, heat_into
@@ -238,6 +239,15 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     my_sim.add_component(my_building)
     my_sim.add_component(controller_between(my_building, my_idealized_electric_heater))
     my_sim.add_component(my_idealized_electric_heater)
+    # The electricity of the occupancy and the heater passes a meter: with the weather exempt, no component of this
+    # run is undeclared, so the energy balance fails an electricity port no meter reads (owner decision Q-H).
+    my_sim.add_component(
+        electricity_meter.ElectricityMeter(
+            my_simulation_parameters=my_simulation_parameters,
+            config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+        ),
+        connect_automatically=True,
+    )
 
     my_sim.run_all_timesteps()
 

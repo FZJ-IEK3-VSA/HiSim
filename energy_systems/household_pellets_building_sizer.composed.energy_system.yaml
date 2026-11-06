@@ -31,8 +31,12 @@ components:
       - {$port: temperature_modifier}
       - HeatDistributionSystem
       - UTSPConnector
+      - {$port: cylinder_heat}
+      - {$port: buffer_heat}
     ports:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifierInKelvin
+      cylinder_heat: {partner: SimpleDHWStorage}          # the cylinder's HeatToHeatedZoneInWatt, 0 while it stands in an unheated cellar
+      buffer_heat: {partner: SimpleHotWaterStorage}       # the buffer's HeatToHeatedZoneInWatt, 0 while it stands in an unheated cellar
     optional-bind: {temperature_modifier: control}
   UTSPConnector:
     order: 2

@@ -64,15 +64,19 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING     # sized from the boiler's maximal thermal power
     inputs:
-      - {$port: surroundings}                               # SurroundingTemperatureInCelsius, from the house it stands in
+      - {$port: surroundings}                               # IndoorAirTemperatureInCelsius, UnheatedCellarTemperatureInCelsius
+      - {$port: outside_air}                                # OutsideAirTemperatureInCelsius
       - {$port: space_heating}                              # the distribution's return temperature and mass flow
       - Boiler                                              # WaterOutputTemperatureSh, WaterOutputMassFlowSh
 
 interface:
   needs:
     surroundings:     {into: [Buffer], partner: Building}
-                      # the temperature the buffer loses its standby heat to: the house's air or its unheated cellar,
-                      # by where its technical room is
+                      # the house's air at the start of the step and its unheated cellar: the buffer loses its standby
+                      # heat against the one its location picks, and the house reads the heat it releases into the
+                      # heated zone (HeatToHeatedZoneInWatt) through a port of its own
+    outside_air:      {into: [Buffer], partner: Weather}
+                      # the outside air the buffer loses against when it stands outdoors; wired in every location
     heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
@@ -138,9 +142,13 @@ tests:
     - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -18750, max: 18750}  # zero here
     - {output: Buffer.ThermalEnergyFromHeatDistribution, unit: WATT_HOUR, min: -18750, max: 18750}
     - {output: Buffer.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -37500, max: 37500}
-    - {output: Buffer.StandbyHeatLoss, unit: WATT, min: -2500, max: 2500}
+    - {output: Buffer.HeatLossInWatt, unit: WATT, min: -2500, max: 2500}
+    - {output: Buffer.HeatToHeatedZoneInWatt, unit: WATT, min: -2500, max: 2500}
       # 3000 l lose about 340 W at 35 °C, six times that near 100 °C; negative while colder than the room
       # (measured 42 to 609 W)
+    - {output: Buffer.SurroundingTemperatureInCelsius, unit: CELSIUS, min: -30, max: 40}
+      # the temperature of the place it stands in, in the test house its unheated cellar: between the outside air and
+      # the indoor air, within the weather's range in every location
     - {output: Buffer.ThermalPowerConsumptionHeatDistribution, unit: WATT, min: -75000, max: 75000}
     - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -75000, max: 75000}
     - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -75000, max: 75000}   # zero here

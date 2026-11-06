@@ -87,6 +87,10 @@ class HeatPumpHouse:
         heating["assembly"] = "heating/air_source_heat_pump_space_heating_only"
         heating["optional-bind"] = {"ems_modifier": "control"}
         del document["imports"]["dhw"]
+        # without the cylinder the building has no cylinder's heat to read
+        building = document["components"]["Building"]
+        building["inputs"] = [item for item in building["inputs"] if item != {"$port": "cylinder_heat"}]
+        del building["ports"]["cylinder_heat"]
         return cls.text(document)
 
     @classmethod

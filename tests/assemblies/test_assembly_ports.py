@@ -6,7 +6,7 @@ from typing import Tuple
 
 import pytest
 
-from hisim.energy_system.assemblies.binding import Owner, PortBinder
+from hisim.energy_system.assemblies.binding import Owner, PortBinder, PortRefused
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.errors import EnergySystemAssemblyError
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState
@@ -135,7 +135,7 @@ def test_a_provided_output_whose_member_is_absent_is_refused_by_name() -> None:
     target = Owner("gen", "import 'gen'", "the import 'gen'", BindingVerbs(), {}, {"power": provided}, states)
     owner = Owner("tank", "import 'tank'", "the import 'tank'", BindingVerbs(), {}, {"heat": need}, {})
     binder = PortBinder({}, {"gen": [target], "tank": [owner]}, ImportRecord())
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7D") as refusal:
+    with pytest.raises(PortRefused, match="EF-7D") as refusal:
         binder.provided(owner, need, target, "power", "gen.power")
     for name in ("gen.power", "'Gen'", "import 'gen'"):
         assert name in str(refusal.value)

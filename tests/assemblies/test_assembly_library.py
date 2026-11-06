@@ -12,7 +12,7 @@ from hisim import cli
 from hisim import loadtypes as lt
 from hisim.config import ComponentID, ConfigBase, preset, sized_field
 from hisim.config.sizing import declared_field_unit
-from hisim.energy_system.assemblies.library import check_assembly
+from hisim.setup_rules.assemblies import LibraryChecker
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
 from tests.assemblies.helpers import Library, Mocks, expand_text, site
@@ -51,7 +51,7 @@ def problems_of(tmp_path: Path, text: str, library_path: str = "test/base") -> s
     """The library check's problems of one file, joined."""
     library = Library(tmp_path)
     library.add(library_path, text)
-    return " | ".join(check_assembly(library.resolver().resolve(library_path, "test")))
+    return " | ".join(LibraryChecker(library.resolver().resolve(library_path, "test")).check())
 
 
 def with_parameter(line: str) -> str:

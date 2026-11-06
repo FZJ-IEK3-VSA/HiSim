@@ -48,8 +48,9 @@ from hisim.energy_system.resolution import ResolvedDynamicConnection, ResolvedDy
 from hisim.simulationparameters import SimulationParameters
 
 #: What selects observers' feeds among the constructed components: an expansion of imports'
-#: selection plan (``assemblies_spec.md`` §4.2), which the planner plans like written feeds.
-FeedSelection = Callable[[Mapping[str, Component]], Mapping[str, Sequence[AggregatorFeed]]]
+#: selection plan (``assemblies_spec.md`` §4.2), which the planner plans like written feeds. It returns
+#: the feeds per observer and what it refused, which the assembly rules refuse.
+FeedSelection = Callable[[Mapping[str, Component]], Tuple[Mapping[str, Sequence[AggregatorFeed]], Sequence[WiringRefusal]]]
 
 
 @dataclass(frozen=True)
@@ -306,7 +307,9 @@ class WiringPlanner:
                     self._collect_feed(name, self._feed_from(name, item))
                 elif isinstance(item, DefaultInputs):
                     self._expand_default_item(name, item)
-        for observer, feeds in (self.selection(self.components_by_name) if self.selection else {}).items():
+        selected, refused = self.selection(self.components_by_name) if self.selection else ({}, ())
+        self.refusals.extend(refused)
+        for observer, feeds in selected.items():
             self.selected[observer] = tuple(feeds)
             for feed in feeds:
                 self._collect_feed(observer, self._feed_from(observer, feed))
@@ -531,10 +534,8 @@ def wire_energy_system(
             observer, controllable or landed meter feed.
 
     Returns:
-        The wired system: its components, the planned wires and every refusal the wiring recorded.
-
-    Raises:
-        EnergySystemAssemblyError: As the selection raises it (``EF-7S``, ``EF-7U``, ``EF-7V``).
+        The wired system: its components, the planned wires and every refusal the wiring recorded, those of the
+        selection (``EF-7S``, ``EF-7U``, ``EF-7V``) among them.
     """
     components, construction_refusals = ComponentBuilder(system, simulation_parameters).build()
     if construction_refusals:

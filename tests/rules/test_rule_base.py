@@ -11,7 +11,7 @@ from typing import ClassVar, FrozenSet, Sequence
 import pytest
 
 from hisim.setup_rules.kinds import SetupKind
-from hisim.setup_rules.rule import Fault, RuleCodes, RuleDocstring, RuleStage, RuleSubject, SetupRule
+from hisim.setup_rules.rule import Fault, RuleCodes, RuleDocstring, RuleStage, RuleSubject, SetupRule, SetupRuleViolation
 from hisim.setup_rules.subjects import BuiltSystem, LoadedDocument, RunResults
 from tests.rules.sample_rules import SampleRules
 
@@ -143,6 +143,22 @@ class TestCodesAndNames:
                 """A rule with only a code."""
 
                 CODE = "EP-01"
+
+    def test_a_violation_that_is_no_setup_rule_violation_fails_at_class_creation(self) -> None:
+        """Catches a family naming an error the registry cannot build with the faults, or one an ``except SetupRuleViolation`` misses."""
+        with pytest.raises(TypeError, match="its VIOLATION <class 'ValueError'> is not a subclass of SetupRuleViolation"):
+
+            class WrongError(SetupRule[BuiltSystem]):  # pylint: disable=unused-variable  # its creation is the test
+                __doc__ = SampleRules.DOCSTRING
+                CODE = "EP-01"
+                NAME = "wrong-error"
+                STAGE = RuleStage.BUILD
+                ENFORCED = True
+                VIOLATION = ValueError  # type: ignore[assignment]  # the wrong type is the test
+
+    def test_a_rule_without_a_violation_raises_the_base_error(self) -> None:
+        """Catches a default that is no error class, which would break every rule that names none."""
+        assert SampleRules.rule("EP-01", "a-rule").VIOLATION is SetupRuleViolation
 
     def test_a_class_without_a_code_is_a_family_base_and_not_checked(self) -> None:
         """Catches the base refusing a shared parent of a family's rules, which has no code of its own."""

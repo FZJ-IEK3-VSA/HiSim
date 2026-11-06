@@ -29,6 +29,13 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.config import DisplayConfig
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.dynamic_component import (
+    DynamicComponent,
+    DynamicComponentConnection,
+    DynamicConnectionInput,
+    DynamicConnectionOutput,
+)
 from hisim.energy_port import EnergyPort
 from hisim.economics.facts import CostRelevance
 
@@ -140,13 +147,19 @@ class BuildingState:
         )
 
 
-# class Building(dynamic_component.DynamicComponent):
-class Building(cp.PhysicsComponent):
+class Building(DynamicComponent, cp.PhysicsComponent):
     """Building class.
 
     This class calculates the thermal behaviour of the building based on the RC Simulator (** paper [1]) and the EN ISO 13790 norm (see header).
     The corresponding functions and variables are also described in the paper [2].
     Also it provides multiple typologies of residences based on the EPISCOPE/TABULA project database (* Check header).
+
+    The building is a dynamic component: besides its named inputs it grows one input for every output of another
+    component that releases heat into its heated zone, an output declaring ``EnergyPort(PRODUCTION, ROOM_HEAT)``, such
+    as a tank standing in a heated utility room (:meth:`default_connections_for`). Their sum enters the internal gains
+    beside the occupancy's, and :attr:`HeatReleasedByDevicesInWatt` publishes it. It also publishes the temperature
+    of an unheated cellar below it, which a device standing there computes its loss against
+    (:meth:`unheated_cellar_temperature_in_celsius`).
 
     Parameters
     ----------
@@ -223,6 +236,10 @@ class Building(cp.PhysicsComponent):
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
     OpenWindow = "OpenWindow"
+    #: The temperature of an unheated cellar below the heated zone, in °C (:meth:`unheated_cellar_temperature_in_celsius`).
+    TemperatureUnheatedCellarInCelsius = "TemperatureUnheatedCellarInCelsius"
+    #: The heat that devices standing in the heated zone release into it, in W: the sum of the dynamic inputs.
+    HeatReleasedByDevicesInWatt = "HeatReleasedByDevicesInWatt"
     # Outputs -> the energy ports of the heated zone (its losses to the outside and the change of the heat its thermal
     # mass holds)
     VentilationLossInWatt = "VentilationLossInWatt"
@@ -250,6 +267,28 @@ class Building(cp.PhysicsComponent):
     #: The unit the Building publishes every degree-hour KPI in.
     DEGREE_HOURS_UNIT = "°C*h"
 
+    #: The port of another component's output that releases heat into the heated zone, which the building reads as
+    #: an internal gain: the device's half of the transfer.
+    HEAT_RELEASED_INTO_THE_HEATED_ZONE: ClassVar[EnergyPort] = EnergyPort(
+        lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT
+    )
+    #: Stable key of the channel of the heat devices release into the heated zone.
+    DEVICE_HEAT_CHANNEL: ClassVar[str] = "device_heat"
+    #: The one flow the building grows inputs for: heat a device releases into the heated zone, in W. The load type is
+    #: the wildcard because the port, not the load type, says what the flow is: a battery publishes its losses as
+    #: electricity. Each input carries the building's half of the transfer, ``EnergyPort(CONSUMPTION, ROOM_HEAT)``,
+    #: so the device and the building book the same column. The building sends nothing back.
+    CHANNELS: ClassVar[Tuple[DynamicConnectionChannel, ...]] = (
+        DynamicConnectionChannel(
+            key=DEVICE_HEAT_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_TO_BUILDING}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
+        ),
+    )
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -262,8 +301,12 @@ class Building(cp.PhysicsComponent):
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
+        self.my_component_inputs: List[DynamicConnectionInput] = []
+        self.my_component_outputs: List[DynamicConnectionOutput] = []
         component_name = self.get_component_name()
         super().__init__(
+            self.my_component_inputs,
+            self.my_component_outputs,
             name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
@@ -287,6 +330,18 @@ class Building(cp.PhysicsComponent):
         self.my_building_information = BuildingInformation(
             config=self.buildingconfig,
         )
+        #: The floor's transmission adjustment factor b, dimensionless, from which the cellar temperature follows.
+        self.floor_adjustment_factor: float = self.my_building_information.element_values()["floor"].adjustment_factor
+        # The cellar temperature refuses a factor outside [0, 1]; evaluating it once here refuses it when the building
+        # is built rather than in its first step.
+        self.unheated_cellar_temperature_in_celsius(
+            indoor_air_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
+            outside_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
+            floor_adjustment_factor=self.floor_adjustment_factor,
+        )
+        #: The inputs of the heat devices release into the heated zone, gathered at the first simulated step, once
+        #: the wiring has grown them; see :meth:`i_simulate`.
+        self.device_heat_inputs: List[cp.ComponentInput] = []
 
         self.build()
 
@@ -556,6 +611,30 @@ class Building(cp.PhysicsComponent):
             lt.Units.TIMESTEPS,
             output_description=f"here a description for {self.OpenWindow} will follow.",
         )
+        self.unheated_cellar_temperature_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TemperatureUnheatedCellarInCelsius,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The temperature of an unheated cellar below the heated zone, in °C: the indoor air temperature at the "
+                "start of the step minus the floor's adjustment factor b times its difference to the outside "
+                "temperature. The building publishes it whether or not it has such a cellar. b is a seasonal mean, so "
+                "the cellar follows the outside air without the ground's and its own inertia."
+            ),
+        )
+        self.heat_released_by_devices_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatReleasedByDevicesInWatt,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "The heat that devices standing in the heated zone release into it, in W: the sum of the building's "
+                "dynamic inputs, each reading an output with the port PRODUCTION of ROOM_HEAT, such as a tank's "
+                "standby loss. It enters the internal gains beside the occupancy's. The occupancy's appliances are not "
+                f"part of it; they arrive on {self.HeatingByDevices}. The inputs carry the energy ports."
+            ),
+        )
         self.add_energy_port_outputs()
 
         # =================================================================================================================================
@@ -574,7 +653,8 @@ class Building(cp.PhysicsComponent):
         removes, both on input ports (:attr:`HeatReceivedInWatt`, ``SPACE_HEATING_HEAT``, and
         :attr:`HeatRemovedByCoolingInWatt`, ``COOLING``), the heat of a CHP on its input :attr:`ThermalPowerCHP`, the
         internal gains on its inputs :attr:`HeatingByResidents` and :attr:`HeatingByDevices` (``ROOM_HEAT``, from the
-        occupancy) and the sun's heat through the windows on its output :attr:`SolarGainThroughWindows` (``SOLAR``).
+        occupancy) and on its dynamic inputs of the heat devices release into the heated zone (``ROOM_HEAT``) and the
+        sun's heat through the windows on its output :attr:`SolarGainThroughWindows` (``SOLAR``).
         The outputs added here are what it loses to the outside by ventilation, by transmission through windows and
         doors and through the opaque elements, and through the share of the gains on the window surfaces, and what its
         thermal mass stores (all ``ROOM_HEAT``). Every step of the 5R1C model closes over these ports to float
@@ -807,6 +887,49 @@ class Building(cp.PhysicsComponent):
         )
         return connections
 
+    def declares_default_connections(self) -> bool:
+        """Whether the building declares dynamic default connections: always, since it reads every room-heat port it finds."""
+        return True
+
+    def default_connections_for(self, source_component: cp.Component) -> List[DynamicComponentConnection]:
+        """What the building reads of one component as heat released into its heated zone: every such port, by its role.
+
+        An output of the source that declares ``EnergyPort(PRODUCTION, ROOM_HEAT)``
+        (:attr:`HEAT_RELEASED_INTO_THE_HEATED_ZONE`) is read through one dynamic input of the channel
+        :attr:`DEVICE_HEAT_CHANNEL`, at the monitored-only weight, and the input carries the channel's port. An output
+        one of the building's named inputs reads by its static default connection is left out: the occupancy's
+        ``HeatingByResidents`` and ``HeatingByDevices`` declare the same port, and reading them twice would count the
+        occupants' heat twice. For example, a tank in the heated zone whose standby loss declares the port is read
+        once, the occupancy not at all. Nothing depends on the source's class, so a new device in the heated zone
+        needs no new input on the building. The building never reads itself.
+
+        Args:
+            source_component: A component of the run.
+
+        Returns:
+            The building's dynamic connections from it, in the order of its outputs.
+        """
+        if source_component is self:
+            return []
+        read_by_name = {
+            connection.source_output_name for connection in self.default_connections.get(source_component.get_classname(), [])
+        }
+        channel = self.get_channel(self.DEVICE_HEAT_CHANNEL)
+        return [
+            DynamicComponentConnection(
+                source_component_class=type(source_component),
+                source_class_name=source_component.get_classname(),
+                source_component_field_name=output.field_name,
+                source_load_type=output.load_type,
+                source_unit=output.unit,
+                source_tags=sorted(channel.tags, key=lambda tag: tag.name),
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+                energy_port=channel.energy_port,
+            )
+            for output in source_component.outputs
+            if output.energy_port == self.HEAT_RELEASED_INTO_THE_HEATED_ZONE and output.field_name not in read_by_name
+        ]
+
     # =================================================================================================================================
     # Simulation of the building class
 
@@ -817,12 +940,24 @@ class Building(cp.PhysicsComponent):
             self.solar_heat_gain_through_windows = self.fetch_solar_heat_gains_through_windows()
         if not self.internal_heat_gain_inputs_checked:
             self.warn_about_unconnected_internal_heat_gains()
+            # The wiring has grown every dynamic input by now; their order is the summation order of the channel.
+            self.device_heat_inputs = self.get_channel_inputs(self.DEVICE_HEAT_CHANNEL)
             self.internal_heat_gain_inputs_checked = True
 
         # Gets inputs
         internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(self.occupancy_heat_gain_channel)
 
         internal_heat_gains_through_devices_in_watt = stsv.get_input_value(self.device_heat_gain_channel)
+
+        heat_released_by_devices_in_watt = 0.0
+        for device_heat_input in self.device_heat_inputs:
+            heat_released_by_devices_in_watt += stsv.get_input_value(device_heat_input)
+        # Adding the devices' heat last keeps the occupancy's sum bit-identical where no device stands in the zone.
+        internal_heat_gains_in_watt = (
+            internal_heat_gains_through_occupancy_in_watt
+            + internal_heat_gains_through_devices_in_watt
+            + heat_released_by_devices_in_watt
+        )
 
         temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
 
@@ -847,10 +982,7 @@ class Building(cp.PhysicsComponent):
         # calc total thermal power to building from all heat sources
 
         total_thermal_power_to_residence_in_watt = (
-            internal_heat_gains_through_occupancy_in_watt
-            + internal_heat_gains_through_devices_in_watt
-            + solar_heat_gain_through_windows_in_watt
-            + thermal_power_delivered_in_watt
+            internal_heat_gains_in_watt + solar_heat_gain_through_windows_in_watt + thermal_power_delivered_in_watt
         )
 
         # calc temperatures and heat flow rates with crank nicolson method from ISO 13790
@@ -866,8 +998,7 @@ class Building(cp.PhysicsComponent):
             total_thermal_mass_heat_flux_in_watt,
         ) = self.calc_crank_nicolson(
             thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
-            internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt
-            + internal_heat_gains_through_devices_in_watt,
+            internal_heat_gains_in_watt=internal_heat_gains_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows_in_watt,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
@@ -883,8 +1014,7 @@ class Building(cp.PhysicsComponent):
             internal_surface_temperature_in_celsius=internal_surface_temperature_in_celsius,
             thermal_mass_temperature_in_celsius=thermal_mass_average_bulk_temperature_in_celsius,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
-            internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt
-            + internal_heat_gains_through_devices_in_watt,
+            internal_heat_gains_in_watt=internal_heat_gains_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows_in_watt,
         )
         thermal_mass_stored_energy_increase_in_watt_hour = (
@@ -958,6 +1088,15 @@ class Building(cp.PhysicsComponent):
             self.indoor_air_temperature_at_start_of_step_channel,
             indoor_air_temperature_at_start_of_step_in_celsius,
         )
+        stsv.set_output_value(
+            self.unheated_cellar_temperature_channel,
+            self.unheated_cellar_temperature_in_celsius(
+                indoor_air_temperature_in_celsius=indoor_air_temperature_at_start_of_step_in_celsius,
+                outside_temperature_in_celsius=temperature_outside_in_celsius,
+                floor_adjustment_factor=self.floor_adjustment_factor,
+            ),
+        )
+        stsv.set_output_value(self.heat_released_by_devices_channel, heat_released_by_devices_in_watt)
         self.state.indoor_air_temperature_in_celsius = indoor_air_temperature_in_celsius
 
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
@@ -1021,6 +1160,41 @@ class Building(cp.PhysicsComponent):
         )
 
     # =================================================================================================================================
+
+    @staticmethod
+    def unheated_cellar_temperature_in_celsius(
+        *, indoor_air_temperature_in_celsius: float, outside_temperature_in_celsius: float, floor_adjustment_factor: float
+    ) -> float:
+        """Return the temperature of an unheated cellar below the heated zone, in °C, from the floor's adjustment factor.
+
+        The adjustment factor b of an unconditioned space (EN ISO 13789) is the fraction of the inside-to-outside
+        temperature difference the surface toward that space sees, b = (T_in - T_cellar) / (T_in - T_out); solved for
+        the cellar, T_cellar = T_in - b (T_in - T_out). For example, with b = 0.5 the cellar is at 6.5 °C with 20 °C
+        inside and -7 °C outside, at 15 °C with 10 °C outside, and at 24.5 °C with 24 °C inside and 25 °C outside.
+        b is the building's seasonal mean for its floor, so the cellar follows the outside air step by step, without
+        the ground's and the cellar's own inertia; the model has no cellar node.
+
+        Args:
+            indoor_air_temperature_in_celsius: The heated zone's air temperature, T_in, in °C.
+            outside_temperature_in_celsius: The outside air temperature, T_out, in °C.
+            floor_adjustment_factor: The floor's adjustment factor b, dimensionless, from 0 (the cellar is as warm as
+                the heated zone) to 1 (it is as cold as the outside).
+
+        Returns:
+            The cellar's temperature, in °C.
+
+        Raises:
+            ValueError: If the adjustment factor lies outside [0, 1], where it would put the cellar beyond the indoor
+                or the outside temperature.
+        """
+        if not 0.0 <= floor_adjustment_factor <= 1.0:
+            raise ValueError(
+                f"The floor's adjustment factor b is {floor_adjustment_factor!r}, but it is a fraction of the inside-to-"
+                "outside temperature difference and lies between 0 and 1; the cellar's temperature cannot follow from it."
+            )
+        return indoor_air_temperature_in_celsius - floor_adjustment_factor * (
+            indoor_air_temperature_in_celsius - outside_temperature_in_celsius
+        )
 
     @classmethod
     def occupants_open_the_windows(

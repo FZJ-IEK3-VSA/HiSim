@@ -3,7 +3,7 @@
 Beads hisim-energy-sankeys-9uoo.5 and .8.
 
 Complete Sankey spec, §5.3 and §4.4 (``roadmap/complete_energy_sankeys_spec.md``, owner decision Q-J). The PV system
-takes the sun on its modules and gives its AC power to the electricity meter, losing the rest outdoors (Q-D); the
+takes the sun on its modules and gives its AC power to the electricity meter, the rest is unconverted sunlight (Q-D); the
 battery charges from the meter and discharges to it, loses in its inverter and in its cells, and stores the change;
 the occupancy takes the appliances' electricity from the meter and the residents' body heat from the residents,
 releases the device heat gains and the body heat into the building, and loses the electricity the device heat gains
@@ -72,7 +72,7 @@ class Expected:
         ("solar", "sun", "PVSystem"),
         ("electricity", "PVSystem", "ElectricityMeter"),
         ("solar", "PVSystem", "PVSystem · ModuleAndInverterLossInWatt"),
-        ("solar", "PVSystem · ModuleAndInverterLossInWatt", "outdoors"),
+        ("solar", "PVSystem · ModuleAndInverterLossInWatt", "unconverted sunlight"),
         ("electricity", "ElectricityMeter", "Battery"),
         ("electricity", "Battery", "ElectricityMeter"),
         ("electricity", "Battery", "Battery · InverterLossInWatt"),

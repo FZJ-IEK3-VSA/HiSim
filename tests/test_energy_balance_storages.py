@@ -111,7 +111,7 @@ def test_the_buffer_declares_its_loops_loss_and_stored_heat_and_closes(twin: Tup
     assert peers[Expected.DISTRIBUTION_LOOP] == ("component", "HeatDistributionSystem")
     # the twins stand on a row with an unheated cellar: the loss leaves the house, and the building reads the idle
     # output of the heat into its heated zone
-    assert peers["HeatLossInWatt"] == ("boundary", "outdoors")
+    assert peers["HeatLossInWatt"] == ("boundary", "heat loss to outdoors")
     assert peers["HeatToHeatedZoneInWatt"] == ("component", "Building")
     # a week in January: the generator charges, the distribution draws, the buffer loses
     assert entry["consumption_kwh"] > 10.0 and entry["production_kwh"] > 10.0 and entry["loss_kwh"] > 0.0
@@ -193,10 +193,10 @@ def test_the_connected_diagram_runs_from_the_generators_through_the_storages(twi
         ("space_heating_heat", "SimpleHotWaterStorage", "HeatDistributionSystem"),
         ("space_heating_heat", "HeatDistributionSystem", "Building"),
         ("space_heating_heat", "SimpleHotWaterStorage", "SimpleHotWaterStorage · HeatLossInWatt"),
-        ("space_heating_heat", "SimpleHotWaterStorage · HeatLossInWatt", "outdoors"),
+        ("space_heating_heat", "SimpleHotWaterStorage · HeatLossInWatt", "heat loss to outdoors"),
         ("domestic_hot_water_heat", "DHWStorage", "hot water drawn at the taps"),
         ("domestic_hot_water_heat", "DHWStorage", "DHWStorage · HeatLossInWatt"),
-        ("domestic_hot_water_heat", "DHWStorage · HeatLossInWatt", "outdoors"),
+        ("domestic_hot_water_heat", "DHWStorage · HeatLossInWatt", "heat loss to outdoors"),
     }
     expected |= {("domestic_hot_water_heat", name, "DHWStorage") for name in charging if name != "SolarThermalSystem"}
     assert expected <= links, sorted(expected - links)

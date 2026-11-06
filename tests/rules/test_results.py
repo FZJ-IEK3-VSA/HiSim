@@ -393,8 +393,8 @@ class TestTheFamily:
 
     @staticmethod
     def linked_vessel() -> EnergyBalanceReport:
-        """A vessel that closes and whose heat comes from and goes to the outdoors, so every port has a peer."""
-        outdoors = lt.EnvironmentNode.OUTDOORS
+        """A vessel that closes and whose heat comes from and goes to the boundary "heat loss to outdoors", so every port has a peer."""
+        outdoors = lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS
         heat_in, heat_out, loss, stored = vessel(4000.0, 700.0, 200.0, 250.0)
         return report(
             [

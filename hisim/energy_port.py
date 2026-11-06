@@ -34,7 +34,8 @@ A port names no other component; the other side is found from the wiring (comple
   checked against what it reads, never assumed.
 * A port that finds no peer takes its carrier's boundary default (:meth:`EnergyPort.default_boundary`): a bought
   carrier's ``CONSUMPTION`` port that carrier's supply node ("natural gas supply"), ambient heat and the sun their
-  nodes, and every ``LOSS`` port ``OUTDOORS``. Electricity and heat have no default; such a port is *unlinked*. A
+  nodes, a ``LOSS`` port of sunlight ``UNCONVERTED_SUNLIGHT`` and every other ``LOSS`` port ``HEAT_LOSS_TO_OUTDOORS``
+  (owner decision D-e of ``roadmap/device_location_spec.md``). Electricity and heat have no default; such a port is *unlinked*. A
   metered port whose peer is no meter and no component is *unmetered*, which the balance reports.
 
 A transfer between two components that both declare ports is booked by both: the sender's ``PRODUCTION`` port whose
@@ -397,9 +398,13 @@ class EnergyPort:
         such a port with no peer is unlinked. For example, a boiler's natural-gas ``CONSUMPTION`` port that no meter reads goes
         to "natural gas supply", a heat pump's ambient-heat ``CONSUMPTION`` port to "ambient heat source", an air conditioner's
         ambient-heat ``PRODUCTION`` port (the heat it rejects while cooling) to "ambient heat sink", a collector's solar
-        ``CONSUMPTION`` port to "sun" and every ``LOSS`` port to "outdoors". The source and the sink of ambient heat are two
-        nodes (owner decision Q-M of the complete Sankey spec), so the Sankey draws the one left and the other right. A
-        port that names its ``environment`` goes there.
+        ``CONSUMPTION`` port to "sun", the solar ``LOSS`` port of a PV system or a collector (the sunlight it does not
+        convert) to "unconverted sunlight" and every other ``LOSS`` port, a building's ventilation loss or a boiler's flue loss, to
+        "heat loss to outdoors". The source and the sink of ambient heat are two nodes (owner decision Q-M of the
+        complete Sankey spec), so the Sankey draws the one left and the other right. The two sinks of a loss are chosen
+        by its carrier alone, with no list of devices: a loss of sunlight is light that was never converted, every other
+        loss ends as heat outside the house (owner decision D-e of ``roadmap/device_location_spec.md``). A port that
+        names its ``environment`` goes there.
 
         Returns:
             The boundary node's name, or None for a port whose carrier has no boundary default for its role.
@@ -407,7 +412,9 @@ class EnergyPort:
         if self.environment is not None:
             return self.environment.value
         if self.role == lt.EnergyRole.LOSS:
-            return lt.EnvironmentNode.OUTDOORS.value
+            unconverted_sunlight = self.carrier == lt.EnergyBalanceCarrier.SOLAR
+            sink = lt.EnvironmentNode.UNCONVERTED_SUNLIGHT if unconverted_sunlight else lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS
+            return sink.value
         if self.role == lt.EnergyRole.CONSUMPTION and self.carrier in self.SUPPLIED_CARRIERS:
             return self.supply_node_name(self.carrier)
         if self.carrier == lt.EnergyBalanceCarrier.AMBIENT_HEAT and self.role in self.AMBIENT_HEAT_NODES:

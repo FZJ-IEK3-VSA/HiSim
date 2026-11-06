@@ -15,7 +15,8 @@ negative total turns the edge round) and the port it came from:
 * **boundary**: a ``CONSUMPTION`` port from its boundary node ("natural gas supply", "ambient heat source", "sun") or a
   ``PRODUCTION`` port to one ("ambient heat sink", "driving").
 * **loss**: a ``LOSS`` port to its own loss node, "<component> · <output>", which carries the total on to its
-  boundary node, "outdoors" unless the port names another.
+  boundary node: "unconverted sunlight" for a loss of sunlight, "heat loss to outdoors" for every other loss, unless
+  the port names another.
 * **storage**: a ``STORED_CHANGE`` port to the component's storage node, "<component> · stored", or from it when
   the component gave up more than it stored.
 * **residual**: a component's or a meter's residual to or from the red ``unaccounted`` node, drawn only where it is

@@ -9,9 +9,12 @@ import yaml
 from hisim.component import ComponentOutput
 from hisim.components.example_component import ExampleComponentConfig
 from hisim.config import ComponentID, SizingContext
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.codec import ConfigValueCodec
+from hisim.energy_system.configure import ConfigurationOutcome
+from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import WiringRefusal
-from hisim.energy_system.loader import parse_energy_system
+from hisim.energy_system.loader import EnergySystemReader, parse_energy_system
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
@@ -21,7 +24,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry, StageFindings
 from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
-from hisim.setup_rules.subjects import BuiltDocument, BuiltSystem, LoadedDocument, RunResults
+from hisim.setup_rules.subjects import BoundDocument, BuiltDocument, BuiltSystem, ConfiguredDocument, LoadedDocument, RunResults
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -206,6 +209,46 @@ class DocumentRules(FamilyRules):
         """Run the structural rules alone on a document written as YAML text, and return what they found without raising."""
         subject = cls.subject(text, rerun)
         return cls.registry().findings(RuleStage.LOAD, subject, subject.model.setup_kind)
+
+
+class BindingRules(FamilyRules):
+    """The binding setup rules (``hisim/setup_rules/bindings.py``) run on a file written as YAML text; their faults raise ``EnergySystemClassBindingError``.
+
+    The bound file is bound by the real binder and the configured file configured by the real configurator, so a test
+    writes the entries that break a rule and sees what a run of the file would see.
+    """
+
+    FAMILY: ClassVar[str] = "bindings"
+
+    @staticmethod
+    def file(entries: str) -> EnergySystemFile:
+        """The file of a ``demo`` system whose ``components`` block holds the given entries, indented by two spaces."""
+        text = f"schema_version: 3\nname: binding rule under test\nsetup_kind: demo\ncomponents:\n{entries}"
+        return EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
+
+    @classmethod
+    def bound(cls, entries: str) -> BoundDocument:
+        """The bound file of the given entries, as ``validate_classes`` hands it to the rules."""
+        model = cls.file(entries)
+        return BoundDocument(model=model, bindings=ClassBinder(model).bind())
+
+    @classmethod
+    def configured(cls, entries: str, resolver: Optional[PathResolver] = None) -> ConfiguredDocument:
+        """The configured file of the given entries, as ``configure_energy_system`` hands it to the rules; the entries must bind."""
+        model = cls.file(entries)
+        outcome = ConfigurationOutcome.attempt(model, ClassBinder(model).bind(), resolver or PathResolver.default())
+        return ConfiguredDocument(model=model, outcome=outcome)
+
+    @classmethod
+    def findings(cls, subject: Any, rules: Optional[Sequence[Type[SetupRule]]] = None) -> StageFindings:
+        """Run the family's rules, or the rules given, on a subject and return what they found without raising."""
+        return cls.registry(rules).findings(RuleStage.BUILD, subject, SetupKind.DEMO)
+
+
+class SizingRules(BindingRules):
+    """The sizing setup rules (``hisim/setup_rules/sizing.py``) run on a configured file; their faults raise ``EnergySystemSizingError``."""
+
+    FAMILY: ClassVar[str] = "sizing"
 
 
 class AfterRunRules:

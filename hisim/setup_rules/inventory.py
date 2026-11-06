@@ -1,6 +1,6 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 115 that move into the rules package and the 87 that stay where
+The inventory is the one list of the checks, the 114 that move into the rules package and the 88 that stay where
 they are: a parse fault of the reader, a check the reader makes while it builds the model, a device's own physics
 guard, a call of the component API refused when it is made, a recorder check, a CI gate, a policy of the run, and
 one retired check that never fired. Each record names
@@ -338,94 +338,123 @@ class Inventory:
         RuleRecord(
             rule_id="bindings.class_importable", codes=("EF-10",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="the dotted class path imports a HiSim component with an annotated config",
-            lives="hisim/energy_system/classes.py:ClassBinder._import_component_class",
+            lives="hisim/setup_rules/bindings.py:ClassImportable",
+            note="the refusals are recorded by hisim/energy_system/classes.py:ClassBinder.resolve_classes",
         ),
         RuleRecord(
             rule_id="bindings.known_preset", codes=("EF-13",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the preset is declared by the config class", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.resolve_preset",
+            checks="the preset is declared by the config class", lives="hisim/setup_rules/bindings.py:KnownPreset",
         ),
         RuleRecord(
             rule_id="bindings.known_constructor", codes=("EF-15",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the constructor is declared by the config class", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.resolve_constructor",
+            checks="the constructor is declared by the config class", lives="hisim/setup_rules/bindings.py:KnownConstructor",
         ),
         RuleRecord(
             rule_id="bindings.constructor_arguments", codes=("EF-16",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="no unknown and no missing required argument", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_constructor_arguments",
+            checks="no unknown and no missing required argument", lives="hisim/setup_rules/bindings.py:ConstructorArguments",
         ),
         RuleRecord(
             rule_id="bindings.known_config_field", codes=("EF-17",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="every config key is a field; component_id is not set in config", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_config_keys",
+            checks="every config key is a field; component_id is not set in config", lives="hisim/setup_rules/bindings.py:KnownConfigField",
         ),
         RuleRecord(
             rule_id="bindings.decodable_value", codes=("EF-1A",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a value decodes into its field's type",
-            lives="hisim/energy_system/codec.py:ConfigValueCodec.*; hisim/energy_system/configure.py:EntryConfigurator._realize_origin",
+            lives="hisim/setup_rules/bindings.py:DecodableValue",
+            note=(
+                "the refusals are raised by hisim/energy_system/codec.py:ConfigValueCodec and hisim/energy_system/configure.py:EntryConfigurator and "
+                "recorded per entry by hisim/energy_system/configure.py:ConfigurationOutcome.attempt"
+            ),
         ),
         RuleRecord(
             rule_id="bindings.auto_only_on_a_sized_field", codes=("EF-1B",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="AUTO only on a field with a sizing law", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_config_keys",
+            enforcement="E", checks="AUTO only on a field with a sizing law", lives="hisim/setup_rules/bindings.py:AutoOnlyOnASizedField",
         ),
         RuleRecord(
             rule_id="bindings.sizing_fact_is_read", codes=("EF-43",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="sizing_sources names a fact the class's laws read", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_sizing_facts",
+            checks="sizing_sources names a fact the class's laws read", lives="hisim/setup_rules/bindings.py:SizingFactIsRead",
         ),
         RuleRecord(
             rule_id="bindings.path_variable_known", codes=("EF-04",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a ${name} names a registered path variable", lives="hisim/energy_system/path_resolver.py:PathResolver._substitute",
+            checks="a ${name} names a registered path variable", lives="hisim/setup_rules/bindings.py:PathVariableKnown",
+            note=(
+                "the refusals are raised by hisim/energy_system/path_resolver.py:PathResolver.resolve and recorded per entry by "
+                "hisim/energy_system/configure.py:ConfigurationOutcome.attempt; a path resolved outside the configuring of a file still raises there"
+            ),
         ),
         RuleRecord(
             rule_id="sizing.fact_provided", codes=("EF-4A",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a fact a law reads is provided by somebody",
-            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            lives="hisim/setup_rules/sizing.py:FactProvided",
             note="the vocabulary is the house's, §4.3; the rule is not",
         ),
         RuleRecord(
             rule_id="sizing.provider_unambiguous", codes=("EF-4B",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="several providers need a source line", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            checks="several providers need a source line", lives="hisim/setup_rules/sizing.py:ProviderUnambiguous",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.source_is_a_provider", codes=("EF-4C",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a source line names a component that declares the fact",
-            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            lives="hisim/setup_rules/sizing.py:SourceIsAProvider",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.fact_not_null", codes=("EF-4D",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the provider gives a value", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            checks="the provider gives a value", lives="hisim/setup_rules/sizing.py:FactNotNull",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.source_shape", codes=("EF-4E",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="the mapping shape fits the law's cardinality",
-            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            lives="hisim/setup_rules/sizing.py:SourceShape",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.no_field_cycle", codes=("EF-4F",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="sibling Self(...) reads form no cycle", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            checks="sibling Self(...) reads form no cycle", lives="hisim/setup_rules/sizing.py:NoFieldCycle",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.one_read_shape", codes=("EF-4G",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
             checks="a fact is read many-fold or once, not both; no repeated provider",
-            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            lives="hisim/setup_rules/sizing.py:OneReadShape",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
             rule_id="sizing.unique_instance", codes=("EF-4H",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="every config has component_id.name, no two share it", lives="hisim/config/engine.py:SizingFactEngine.register",
+            checks="every config has component_id.name, no two share it", lives="hisim/setup_rules/sizing.py:UniqueInstance",
+            note=(
+                "the kernel's refusal is raised by hisim/config/engine.py:SizingFactEngine.register and recorded by "
+                "hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it"
+            ),
         ),
         RuleRecord(
             rule_id="sizing.sized_together", codes=("EF-4J",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a SizedTogether group is stated whole or not at all", lives="hisim/config/sizing.py:SizedTogether.check",
+            checks="a SizedTogether group is stated whole or not at all", lives="hisim/setup_rules/sizing.py:SizedTogetherWhole",
+            note=(
+                "the kernel's refusal is raised by hisim/config/sizing.py:SizedTogether.check and recorded by "
+                "hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it"
+            ),
         ),
         RuleRecord(
             rule_id="sizing.resolved", codes=("EF-4X",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the kernel made progress and no law raised", lives="hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            checks="the kernel made progress and no law raised", lives="hisim/setup_rules/sizing.py:Resolved",
+            note="the kernel's refusal is raised by hisim/config/engine.py and recorded by hisim/energy_system/sizing_bridge.py:resolve_sizing; the rule classifies it",
         ),
         RuleRecord(
-            rule_id="sizing.unconsumed_fact", nature=RuleNature.DOMAIN, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="L",
-            checks="a provided fact nobody reads", lives="hisim/energy_system/sizing_bridge.py:unconsumed_warnings",
+            rule_id="sizing.unconsumed_fact", codes=("EF-4K",), nature=RuleNature.DOMAIN, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="L",
+            checks="a provided fact nobody reads", lives="hisim/setup_rules/sizing.py:UnconsumedFact",
+            note="the run record keeps the lines as warnings (hisim/energy_system/configure.py:ConfigurationOutcome.configured)",
         ),
         RuleRecord(
-            rule_id="sizing.sizing_source_enabled", codes=("EF-42",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="sizing.sizing_source_enabled", codes=("EF-42",), nature=RuleNature.LAW, when="build", enforcement="E",
             checks="a scalar sizing source is not in a disabled group or unselected option",
             lives="hisim/energy_system/groups.py:GroupExpander._dangling_scalar_error; hisim/energy_system/assemblies/addresses.py:_rewrite_sizing",
+            note=(
+                "stays: the expansion of groups and imports decides it while it builds the expanded file, which cannot hold a source "
+                "naming a removed component; a rule could only see the file once it was expanded (decided for PR 8)"
+            ),
         ),
         RuleRecord(
             rule_id="wiring.output_exists", codes=("EF-21",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",

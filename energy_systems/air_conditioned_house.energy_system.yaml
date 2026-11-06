@@ -109,6 +109,7 @@ components:
       subsidy_as_percentage_of_investment_costs: null
       heating_reference_temperature_in_celsius: 5.7
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
+      technical_room_location: HEATED_ZONE
     inputs:
       - Weather
       - UTSPConnector

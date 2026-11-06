@@ -370,6 +370,28 @@ class EnergyBalanceCarrier(str, enum.Enum):
 
 
 @enum.unique
+class InstallationLocation(str, enum.Enum):
+
+    """Where a device stands: inside the building's heated zone, in an unheated space under its roof, or outdoors.
+
+    The heated zone is the zone inside the building's thermal envelope, the one the building's 5R1C model simulates.
+    An unheated space is an unheated cellar or utility room outside the envelope but under the house. Outdoors is
+    outside the house altogether: a roof, a garage, a wall-mounted inverter. For example, a buffer tank in the cellar
+    of a 1995 house with an unheated cellar stands in ``UNHEATED_SPACE``, the same tank in the utility room of a 2005
+    house without a cellar in ``HEATED_ZONE``.
+
+    The location decides the temperature a device's loss is computed against and where the loss goes: into the
+    heated zone as an internal gain, or out of the house. The building's ``technical_room_location`` is one of the
+    first two values; a device follows it unless its own configuration names another place. An energy-system file
+    spells a member by its name or by its value.
+    """
+
+    HEATED_ZONE = "heated_zone"
+    UNHEATED_SPACE = "unheated_space"
+    OUTDOORS = "outdoors"
+
+
+@enum.unique
 class EnvironmentNode(str, enum.Enum):
 
     """The boundary nodes of the balance and the Sankey: where energy comes from or goes to outside the house.

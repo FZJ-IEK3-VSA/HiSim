@@ -78,7 +78,8 @@ class RunResults(RuleSubject):
     """The results of one run, as the simulator hands them to the post-processing, and the run's energy balance.
 
     ``results`` is the result table, one row per step and one column per output; ``outputs`` are the outputs in the
-    order of the columns; ``components`` are the components of the run in the order they were added.
+    order of the columns; ``components`` are the components of the run in the order they were added; ``timesteps``
+    is the number of steps the simulation parameters ask for, which the table has one row for each.
     ``read_energy_balance`` computes the run's energy balance (the declared ports, each component's balance, the links
     and the meters, :class:`~hisim.postprocessing.energy_balance.EnergyBalanceReport`) from those; :attr:`energy_balance`
     calls it once, when the first rule reads the balance. A rule that requires the finite-results rule therefore
@@ -92,6 +93,7 @@ class RunResults(RuleSubject):
     results: pd.DataFrame
     outputs: Tuple[ComponentOutput, ...]
     components: Tuple[Component, ...]
+    timesteps: int
     read_energy_balance: Callable[[], EnergyBalanceReport]
 
     @cached_property

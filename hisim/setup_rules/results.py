@@ -6,14 +6,15 @@ ports in kWh per step, each component's balance, each link between declared comp
 meters). The balance computes; these rules judge what it computed, and the balance report and the Sankeys stay in
 ``hisim/postprocessing/energy_balance/``.
 
-``AR-01`` checks every result column for NaN and infinity, before anything reads the table; its faults raise
-``NonFiniteResultsError``. The rules of the balance (``AR-03`` to ``AR-06``, and the meter rules of
-``hisim/setup_rules/meters.py``) raise ``EnergyBalanceError`` and require ``AR-03``, the declared ports being finite,
-which requires ``AR-01``: a balance read from NaN reports nothing useful. ``AR-09`` (an unlinked port) and ``AR-10``
-(an undeclared component) only log, as the balance report has always listed them without failing the run. The codes
-follow the rows of the inventory: ``AR-02`` (one row per step), ``AR-07`` (the columns a loop names) and ``AR-08``
-(no port on a node) are kept for the three checks that still raise where they are, in the simulator and in
-:meth:`~hisim.postprocessing.energy_balance.ports.DeclaredPorts.collect`.
+``AR-01`` checks every result column for NaN and infinity and ``AR-02`` that the table has a row for every step,
+before anything reads the table; ``AR-01``'s faults raise ``NonFiniteResultsError``. The rules of the balance raise
+``EnergyBalanceError``: ``AR-07`` (every column a port, a loop or a meter names can be read) and ``AR-08`` (no port
+on an exempt component or a meter) require the two rules of the table, and ``AR-03`` (the declared ports are finite)
+requires those two, since a balance that left out what it could not read is not the run's. ``AR-04`` to ``AR-06``
+and the meter rules of ``hisim/setup_rules/meters.py`` require ``AR-03``: a balance read from NaN reports nothing
+useful. ``AR-09`` (an unlinked port) and ``AR-10`` (an undeclared component) only log, as the balance report has
+always listed them without failing the run. The codes follow the rows of the inventory. No rule raises: the balance
+records what it cannot read, and the rules report it.
 
 The balance is imported where it is read, by the subject's ``read_energy_balance``, so that collecting the rules
 imports no module of the post-processing.
@@ -162,6 +163,33 @@ class Finite(SetupRule[RunResults]):
         return found
 
 
+class AllRows(SetupRule[RunResults]):
+    """What it checks: the result table has one row for every step the simulation parameters ask for.
+
+    The simulator appends one row per step it finished; the post-processing reads the table as the whole window.
+
+    Why: a table missing steps would make every total, every KPI and every balance a total of part of the run,
+    stated as the whole of it, and the time index would no longer name the steps it labels.
+
+    Example of a fault: ``not all lines were generated: the result table has 95 rows for 96 steps``.
+
+    How to fix: the simulator's loop stopped early or skipped a step; find the step it left out in the log. A setup
+    cannot cause it by its components alone.
+    """
+
+    CODE = "AR-02"
+    NAME = "all-rows"
+    STAGE = RuleStage.AFTER_RUN
+    ENFORCED = True
+
+    def check(self, subject: RunResults) -> Sequence[Fault]:
+        """Return one fault when the table's row count is not the number of steps."""
+        rows = len(subject.results)
+        if rows == subject.timesteps:
+            return []
+        return [self.fault(f"not all lines were generated: the result table has {rows} rows for {subject.timesteps} steps")]
+
+
 class EnergyBalanceRule(SetupRule[RunResults]):
     """The shared base of the rules of the energy balance after the run: the subject they read and the error they raise.
 
@@ -193,8 +221,9 @@ class PortFinite(EnergyBalanceRule):
     NAME = "port-finite"
     STAGE = RuleStage.AFTER_RUN
     ENFORCED = True
-    # A NaN column is reported by its column first; the ports of such a table are not read.
-    REQUIRES = frozenset({"AR-01"})
+    # A balance that left out what it could not read is not the run's; those two rules wait for the rules of the
+    # table in turn, so a NaN column is reported by its column first.
+    REQUIRES = frozenset({"AR-07", "AR-08"})
 
     def check(self, subject: RunResults) -> Sequence[Fault]:
         """Return one fault per declared port that is NaN or infinite in some step, naming its first such step."""
@@ -346,6 +375,71 @@ class LoopFaults(EnergyBalanceRule):
         return [
             self.fault(f"loop: {breach.message}", component=breach.component, port=breach.port)
             for breach in subject.energy_balance.declared.loop_breaches
+        ]
+
+
+class ColumnsReadable(EnergyBalanceRule):
+    """What it checks: the balance can read every column a declared port, a loop end or a meter names, and every loop's flow and step.
+
+    An input port reads the output connected to it; a loop end the three outputs of its loop (mass flow,
+    supply and return temperature); a meter the outputs it declares in ``metered_exchanges``. Each must be a column of
+    the run. A loop's mass flow is never negative and the step is positive, as the hydronic arithmetic requires
+    (:func:`hisim.hydronics.circuit_power_w`). What cannot be read is left out of the balance.
+
+    Why: a port, a loop or a meter left out of the balance would make every component around it fail or pass for
+    the wrong reason. A negative flow is always the caller's error: a loop's direction is its topology.
+
+    Example of a fault: ``Meter declares that it meters electricity on its output FromGridInWatt, which it does not
+    have.``; ``the loop Boiler.Flow of Tank: mass_flow_kg_per_s must be >= 0 kg/s, got -0.1 in step 1.``
+
+    How to fix: correct the output named in the component's ``metered_exchanges`` or its loop tags, or correct the
+    component that publishes a negative mass flow.
+    """
+
+    CODE = "AR-07"
+    NAME = "loop-columns"
+    STAGE = RuleStage.AFTER_RUN
+    ENFORCED = True
+    # The balance is read only from a whole table whose columns are finite.
+    REQUIRES = frozenset({"AR-01", "AR-02"})
+
+    def check(self, subject: RunResults) -> Sequence[Fault]:
+        """Return one fault per column, loop or meter reading the balance could not read, at its component."""
+        return [
+            self.fault(fault.message, component=fault.component, port=fault.port)
+            for fault in subject.energy_balance.declared.column_faults
+        ]
+
+
+class NoPortOnANode(EnergyBalanceRule):
+    """What it checks: no component that is exempt from the energy balance, and no meter, declares an energy port on an output or an input.
+
+    A component is exempt when its kind moves no energy (a controller decides) or its class states why in
+    ``ENERGY_PORTS_EXEMPT_BECAUSE``; a meter is a node that publishes what it meters (``metered_exchanges``). The
+    balance leaves such a port out.
+
+    Why: a controller or a meter that declares a port contradicts its kind; the balance never takes either as the
+    peer of a port, so the port's energy would be booked on a node that moves none.
+
+    Example of a fault: ``EMS declares the energy port Power, but it is exempt from the energy balance: an L2
+    controller decides, it moves no energy.``
+
+    How to fix: move the port to the device whose energy it is, or, if the component does move energy, remove the
+    reason it is exempt.
+    """
+
+    CODE = "AR-08"
+    NAME = "no-port-on-a-node"
+    STAGE = RuleStage.AFTER_RUN
+    ENFORCED = True
+    # The balance is read only from a whole table whose columns are finite.
+    REQUIRES = frozenset({"AR-01", "AR-02"})
+
+    def check(self, subject: RunResults) -> Sequence[Fault]:
+        """Return one fault per energy port an exempt component or a meter declares."""
+        return [
+            self.fault(fault.message, component=fault.component, port=fault.port)
+            for fault in subject.energy_balance.declared.node_port_faults
         ]
 
 

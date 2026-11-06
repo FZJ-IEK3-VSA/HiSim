@@ -185,4 +185,5 @@ class TestTheColumnsAreFoundOverTheWholeTable:
         """Catches a check that takes a column's overflowing sum for a non-finite value."""
         results = pd.DataFrame({"a": [1e308, 1e308, 1e308]}, index=pd.date_range("2021-01-01", periods=3, freq="h"))
 
-        assert not Finite().check(RunResults(results=results, outputs=tuple(self.outputs(1)), components=(), read_energy_balance=self.no_balance))
+        subject = RunResults(results=results, outputs=tuple(self.outputs(1)), components=(), timesteps=3, read_energy_balance=self.no_balance)
+        assert not Finite().check(subject)

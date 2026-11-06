@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -1144,11 +1145,13 @@ def test_a_tank_that_stores_less_hydrogen_than_it_is_handed_does_not_close() -> 
 def test_an_exempt_component_or_a_meter_with_an_input_port_is_refused(name: str, kind: type, refusal: str) -> None:
     """A controller or a meter moves no energy of its own, on an input no more than on an output."""
     with pytest.raises(ValueError, match=f"{name} declares the energy port HeatIn, but {refusal}"):
-        report(
-            [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
-            inputs={name: [wired_input("HeatIn", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))]},
-            extra_components=[name],
-            classes={name: kind},
+        fft.AfterRunRules.refuse(
+            report(
+                [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
+                inputs={name: [wired_input("HeatIn", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))]},
+                extra_components=[name],
+                classes={name: kind},
+            )
         )
 
 
@@ -1156,11 +1159,10 @@ def test_an_exempt_component_or_a_meter_with_an_input_port_is_refused(name: str,
 def test_a_port_of_a_component_that_moves_nothing_is_refused_naming_the_reason() -> None:
     """An exempt component's port names its reason; a meter's says it is a meter; any other passes."""
     meters = {"Meter": frozenset({ELECTRICITY})}
-    with pytest.raises(ValueError, match="EMS declares the energy port Power, but it is exempt .*: it decides"):
-        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("EMS", "Power", {"EMS": "it decides"}, meters)
-    with pytest.raises(ValueError, match="Meter declares the energy port Power, but it is a meter"):
-        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Meter", "Power", {}, meters)
-    DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Tank", "Power", {"EMS": "it decides"}, meters)
+    exempt_fault = DeclaredPorts.node_port_fault("EMS", "Power", {"EMS": "it decides"}, meters) or ""
+    assert re.search("EMS declares the energy port Power, but it is exempt .*: it decides", exempt_fault)
+    assert re.search("Meter declares the energy port Power, but it is a meter", DeclaredPorts.node_port_fault("Meter", "Power", {}, meters) or "")
+    assert DeclaredPorts.node_port_fault("Tank", "Power", {"EMS": "it decides"}, meters) is None
 
 
 # --- the graph model of the complete Sankey (roadmap/complete_energy_sankeys_spec.md §4, owner decision Q-J) ----
@@ -1538,7 +1540,7 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
 def test_an_exempt_component_or_a_meter_that_declares_a_port_is_refused(name: str, kind: type, refusal: str) -> None:
     """A controller or a meter moves no energy of its own: one that declares an energy port contradicts its kind."""
     with pytest.raises(ValueError, match=f"{name} declares the energy port Power, but {refusal}"):
-        report([(name, "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [1.0])], classes={name: kind})
+        fft.AfterRunRules.refuse(report([(name, "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [1.0])], classes={name: kind}))
 
 
 @pytest.mark.base

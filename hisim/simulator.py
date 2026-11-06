@@ -961,8 +961,8 @@ class Simulator:
     def prepare_post_processing(self, all_result_lines, start_counter):
         """Assembles simulation results into a DataFrame and prepares data for post-processing.
 
-        Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
-        simulation start/end dates and timestep size, and optionally computes monthly, daily,
+        Builds a pandas DataFrame from simulation outputs, assigns a datetime index from the
+        simulation's start date and timestep size, one entry per row, and optionally computes monthly, daily,
         hourly, and cumulative aggregations: all four for the monthly and scenario-evaluation
         options, only the cumulative one (the sums and means over the run) for
         ``MAKE_NETWORK_CHARTS``. Returns a PostProcessingDataTransfer object containing all
@@ -976,9 +976,8 @@ class Simulator:
             PostProcessingDataTransfer: Object bundling results, outputs, parameters, and timing for post-processing.
         """
         log.information("Preparing post processing")
-        # Prepares the results from the simulation for the post processing.
-        if len(all_result_lines) != self._simulation_parameters.timesteps:
-            raise ValueError("not all lines were generated")
+        # Prepares the results from the simulation for the post processing. A table without one row per step is
+        # refused by the setup rule AR-02 (hisim/setup_rules/results.py), first thing in the post-processing.
         colum_names = []
         if self.setup_function is None:
             raise ValueError("No setup function was set")
@@ -990,9 +989,9 @@ class Simulator:
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         df_index = pd.date_range(
             start=self._simulation_parameters.start_date,
-            end=self._simulation_parameters.end_date,
+            periods=len(all_result_lines),
             freq=f"{self._simulation_parameters.seconds_per_timestep}s",
-        )[:-1]
+        )
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter

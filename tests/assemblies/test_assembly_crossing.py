@@ -140,6 +140,7 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
 
     assert model.components["boiler-Boiler"].inputs[1] == DefaultInputs(source="cylinder-DHWStorage")
     assert model.components["cylinder-DHWStorage"].inputs == (
+        DefaultInputs(source="Building"),
         DefaultInputs(source="UTSPConnector"),
         DefaultInputs(source="boiler-Boiler"),
     )
@@ -160,7 +161,7 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
 @pytest.mark.assemblies
 def test_a_required_circuit_end_without_the_other_end_is_refused() -> None:
     """Catches a cylinder left without its boiler."""
-    message = refusal(site(Real.WEATHER, Real.OCCUPANCY) + imports(Gas.CYLINDER))
+    message = refusal(site(Real.WEATHER, Real.OCCUPANCY, Real.BUILDING_FOR_EXPANSION) + imports(Gas.CYLINDER))
     assert message.startswith("EF-7A at import 'cylinder'")
     assert "an end of the circuit dhw" in message
 
@@ -177,7 +178,14 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "ports:", "bind: {space_heating: two}, ports:"
         ),
     )
-    house = site(Real.WEATHER, Real.OCCUPANCY, Real.HEAT_DISTRIBUTION_CONTROLLER, Real.HEATING_CURVE, *distributions)
+    house = site(
+        Real.WEATHER,
+        Real.OCCUPANCY,
+        Real.BUILDING_FOR_EXPANSION,
+        Real.HEAT_DISTRIBUTION_CONTROLLER,
+        Real.HEATING_CURVE,
+        *distributions,
+    )
     boilers = ("one: {assembly: heating/gas_condensing_boiler}", "two: {assembly: heating/gas_condensing_boiler}")
     message = refusal(house + imports(Gas.CONNECTION, Gas.CYLINDER, *boilers))
     assert message.startswith("EF-7B at import 'cylinder'") and "one.dhw, two.dhw" in message
@@ -193,7 +201,7 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "two: {assembly: heating/gas_condensing_boiler, bind: {dhw_temperature: cylinder}}",
         )
     )
-    assert model.components["cylinder-DHWStorage"].inputs[1] == DefaultInputs(source="two-Boiler")
+    assert model.components["cylinder-DHWStorage"].inputs[2] == DefaultInputs(source="two-Boiler")
     assert model.components["one-Boiler"].inputs[1] == DefaultInputs(source="tank-DHWStorage")
 
 

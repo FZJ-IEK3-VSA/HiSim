@@ -64,11 +64,15 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING     # sized from the boiler's maximal thermal power
     inputs:
+      - {$port: surroundings}                               # SurroundingTemperatureInCelsius, from the house it stands in
       - {$port: space_heating}                              # the distribution's return temperature and mass flow
       - Boiler                                              # WaterOutputTemperatureSh, WaterOutputMassFlowSh
 
 interface:
   needs:
+    surroundings:     {into: [Buffer], partner: Building}
+                      # the temperature the buffer loses its standby heat to: the house's air or its unheated cellar,
+                      # by where its technical room is
     heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end

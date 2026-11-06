@@ -23,7 +23,9 @@ system only as another partner's requirement:
 - ``{partner: <class name>}`` — the partner of a need whose ``partner:`` lists that class;
 - ``{circuit: <circuit>, other_end: [<class name>, …]}`` — the other end of a circuit whose end in
   the assembly consists of members of exactly those classes;
-- ``{carrier: <carrier>}`` — the provider a carrier need of that carrier binds;
+- ``{carrier: <carrier>}`` — the provider a carrier need of that carrier binds, and the meter of that carrier an
+  isolation system gets when its components move the carrier through a metered port no meter of it reads
+  (:func:`~.isolation.carriers_to_meter`);
 - ``{consumes: <carrier>}`` — a consumer of a fuel the assembly provides (an idle provider is refused, §5.2);
 - ``{fact: <fact>}`` — a component whose class contributes that sizing fact;
 - ``{observed_by: <class name>}`` — a component an observer member of that class observes (§4.3);

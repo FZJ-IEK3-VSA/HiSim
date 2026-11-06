@@ -417,7 +417,7 @@ class Component:
     # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
     # UNDECLARED is only the loadable default, and a component that still carries it aborts any
     # lifecycle-cost run it appears in — at simulation start via
-    # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
+    # the setup rules CB-08 and CB-09 (hisim/setup_rules/components.py), and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     #: Why this component declares no energy port although it is neither a controller nor a meter, or None.
@@ -1168,8 +1168,9 @@ class ComponentKindNotDeclaredError(TypeError):
     """A component class inherits no kind base class, or more than one, so the simulator cannot place it in a pass.
 
     For example, a class derived from :class:`Component` or :class:`StatelessComponent` alone has no kind. Raised by
-    :meth:`ComponentKinds.of`, which the simulator calls when a component is added, so the error comes while the
-    system is built rather than at the first time step.
+    :meth:`ComponentKinds.of` when a class without one kind is looked up. A run never gets that far: the setup rule
+    ``CB-01`` (``hisim/setup_rules/components.py``) refuses such a class first thing, before the run prepares
+    anything.
     """
 
 
@@ -1195,6 +1196,31 @@ class ComponentKinds:
     )
 
     @classmethod
+    def problem(cls, component_class: type) -> Optional[str]:
+        """Return why a class has no one kind, or ``None`` when it inherits exactly one kind base class.
+
+        For example, a class derived from :class:`StatelessComponent` alone gives ``The component class
+        tests.Probe must inherit exactly one kind base class of [...] from hisim.component; it inherits none.``, and
+        ``Weather`` gives ``None``. The build refuses such a class with the setup rule ``CB-01``
+        (``hisim/setup_rules/components.py``), and :meth:`of` refuses a lookup of it with the same sentence.
+
+        Args:
+            component_class: The component class to look at; any class, so that a stand-in is judged, not crashed on.
+
+        Returns:
+            The sentence, or ``None``.
+        """
+        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
+        if len(kinds) == 1:
+            return None
+        found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
+        return (
+            f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
+            f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
+            f"{found}."
+        )
+
+    @classmethod
     def of(cls, component_class: Type[Component]) -> Type[Component]:
         """Return the kind base class a component class inherits.
 
@@ -1209,17 +1235,13 @@ class ComponentKinds:
             The one class of :attr:`BASES` in the method resolution order of ``component_class``.
 
         Raises:
-            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one.
+            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one
+                (:meth:`problem`).
         """
-        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
-        if len(kinds) != 1:
-            found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
-            raise ComponentKindNotDeclaredError(
-                f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
-                f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
-                f"{found}."
-            )
-        return kinds[0]
+        problem = cls.problem(component_class)
+        if problem is not None:
+            raise ComponentKindNotDeclaredError(problem)
+        return next(base for base in component_class.__mro__ if base in cls.BASES)
 
 
 @dataclass

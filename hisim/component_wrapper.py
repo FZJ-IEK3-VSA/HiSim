@@ -57,8 +57,9 @@ class ComponentWrapper:
                 check whether dynamic-output source components exist.
 
         Raises:
-            ValueError: If an output with the same full_name is already registered,
-                or if the component ends up with no outputs registered.
+            ValueError: If the component ends up with no outputs registered. An output whose full
+                name is registered already is registered again; the setup rule ``CB-03``
+                (``hisim/setup_rules/components.py``) refuses it before the first step.
         """
 
         log.debug(f"Registering component outputs on {self.my_component.component_name}")
@@ -109,20 +110,15 @@ class ComponentWrapper:
         """Gives one output its global index and adds it to the global and the wrapper's list.
 
         The single place a port becomes a result column, so that registering a port the component
-        grew while it was wired cannot drift from registering one it was born with.
+        grew while it was wired cannot drift from registering one it was born with. Two outputs of
+        one full name are both registered: the setup rule ``CB-03``
+        (``hisim/setup_rules/components.py``) refuses them together with every other fault of the
+        build, before the first step.
 
         Args:
             output: The output to register.
             all_outputs: Global list of all ComponentOutput objects registered so far.
-
-        Raises:
-            ValueError: If an output of that full name is already registered.
         """
-        if any(output.full_name == out.full_name for out in all_outputs):
-            raise ValueError(
-                f"Trying to register the same key twice: {output.full_name}. "
-                "Check if more than one building is being modeled."
-            )
         # set the global index of the output column
         output.global_index = len(all_outputs)  # noqa
         # add the output column to the global list of outputs
@@ -143,9 +139,6 @@ class ComponentWrapper:
 
         Args:
             all_outputs: Global list of all ComponentOutput objects registered so far.
-
-        Raises:
-            ValueError: If a grown output's full name is already registered.
         """
         for output in self.my_component.get_outputs():
             if id(output) in self._outputs_present_at_registration:
@@ -211,19 +204,19 @@ class ComponentWrapper:
         self.my_component.i_prepare_simulation()
 
     def connect_inputs(self, all_outputs: list[cp.ComponentOutput]) -> None:
-        """Connect each of the component's inputs to a matching global output.
+        """Connect each of the component's inputs to the global output it names.
 
-        Matches by source component name and field name, verifying load-type and unit
-        compatibility. Two concretely differing load types or units are a hard error.
-        ``LoadTypes.ANY`` on either side is a legitimate wildcard (control and state
-        signals) and connects silently; ``Units.ANY`` mismatches log a warning.
+        An input names its source by the source component's name and the output's field name; the
+        output of that name, if one is registered, becomes the input's ``source_output``. Whether the
+        connection is sound is judged afterwards, by the setup rules of the built system
+        (``hisim/setup_rules/components.py``), which refuse every fault of the build at once before
+        the first step: ``CB-04`` two concretely differing load types, ``CB-05`` two concretely
+        differing units, ``CB-06`` a mandatory input that names no registered output. Two cases are
+        only logged here: a unit ``Units.ANY`` on one side only (the units might not fit), and a
+        mandatory input marked ``allow_unconnected_mandatory`` that stays unconnected.
 
         Args:
             all_outputs: Global list of all ComponentOutput objects to match against.
-
-        Raises:
-            ValueError: If a matched input and output have incompatible load types or
-                units, or if a mandatory input has no matching output.
         """
 
         # Returns a List of ComponentInputs
@@ -234,9 +227,6 @@ class ComponentWrapper:
             # Adds to the ComponentInput List of ComponentWrapper
             self.component_inputs.append(component_input)
 
-            # Creates a ComponentOutput variable
-            global_output: cp.ComponentOutput
-
             # Loop through all the existent component outputs in the current simulation
             for global_output in all_outputs:
                 # Check if ComponentOutput and ComponentInput match
@@ -244,58 +234,23 @@ class ComponentWrapper:
                     global_output.component_name == component_input.src_object_name
                     and global_output.field_name == component_input.src_field_name
                 ):
-                    # Check if ComponentOutput and ComponentInput have the same load type.
-                    # LoadTypes.ANY on either side is a legitimate wildcard (control and
-                    # state signals) and connects without any diagnostics.
-                    if component_input.loadtype != global_output.load_type:
-                        if lt.LoadTypes.ANY not in (component_input.loadtype, global_output.load_type):
-                            raise ValueError(
-                                f"The input {component_input.field_name} (cp: {component_input.component_name}, "
-                                f"load type: {component_input.loadtype}) and output {global_output.field_name} "
-                                f"(cp: {global_output.component_name}, load type: {global_output.load_type}) "
-                                f"do not have the same load type! Align the two port declarations (see the "
-                                f"LoadTypes canonicalization convention: temperature signals are TEMPERATURE, "
-                                f"water mass flows are WARM_WATER)."
-                            )
-                    # Check if ComponentOutput and ComponentInput have the same units
-                    if component_input.unit != global_output.unit:
-                        # Check the use of "Units.Any"
-                        if (component_input.unit == lt.Units.ANY and global_output.unit != lt.Units.ANY) or (
-                            component_input.unit != lt.Units.ANY and global_output.unit == lt.Units.ANY
-                        ):
-                            log.warning(
-                                f"The input {component_input.field_name} (cp: {component_input.component_name}, unit: {component_input.unit}) "
-                                f"and output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
-                                f"might not have compatible units."
-                            )  #
-                            # Connect, i.e, save ComponentOutput in ComponentInput
-                            component_input.source_output = global_output
-                            log.debug(f"Connected input '{component_input.fullname}' to '{global_output.full_name}'")
-                        else:
-                            raise ValueError(
-                                f"The input {component_input.field_name} (cp: {component_input.component_name}, unit: {component_input.unit}) and "
-                                f"output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
-                                f"do not have the same unit!"
-                            )  #
-                    else:
-                        # Connect, i.e, save ComponentOutput in ComponentInput
-                        component_input.source_output = global_output
-                        log.debug(f"connected input {component_input.fullname} to {global_output.full_name}")
+                    # A unit Units.ANY on one side only connects, with a warning; two concretely differing load types
+                    # or units connect too, and the setup rules CB-04 and CB-05 refuse them before the first step.
+                    if component_input.unit != global_output.unit and lt.Units.ANY in (component_input.unit, global_output.unit):
+                        log.warning(
+                            f"The input {component_input.field_name} (cp: {component_input.component_name}, unit: {component_input.unit}) "
+                            f"and output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
+                            f"might not have compatible units."
+                        )
+                    # Connect, i.e, save ComponentOutput in ComponentInput
+                    component_input.source_output = global_output
+                    log.debug(f"Connected input '{component_input.fullname}' to '{global_output.full_name}'")
 
-            # Check if there are inputs that have been not connected
-            if component_input.is_mandatory and component_input.source_output is None:
-                if component_input.allow_unconnected_mandatory:
-                    log.warning(
-                        f"The input {component_input.field_name} (cp: {component_input.component_name}, "
-                        f"unit: {component_input.unit}) is not connected to any ComponentOutput. "
-                        "This mandatory input is marked as allow_unconnected_mandatory, so the simulation proceeds without it. "
-                        "Likely, the source component does not provide this output in the current configuration."
-                    )
-                else:
-                    raise ValueError(
-                        f"The ComponentInput {component_input.field_name} (cp: {component_input.component_name}, "
-                        f"unit: {component_input.unit}) is not connected to any ComponentOutput. "
-                        "You could run debug mode (logging_level=4) to check all inputs, outputs and connections. "
-                        f"Likely, no match was found between {component_input.src_object_name} and {[output.component_name for output in all_outputs]} & "
-                        f"and between {component_input.src_field_name} and {[output.field_name for output in all_outputs]}."
-                    )  #
+            # A mandatory input that stays unconnected is refused by the setup rule CB-06, unless it may stay so
+            if component_input.is_mandatory and component_input.source_output is None and component_input.allow_unconnected_mandatory:
+                log.warning(
+                    f"The input {component_input.field_name} (cp: {component_input.component_name}, "
+                    f"unit: {component_input.unit}) is not connected to any ComponentOutput. "
+                    "This mandatory input is marked as allow_unconnected_mandatory, so the simulation proceeds without it. "
+                    "Likely, the source component does not provide this output in the current configuration."
+                )

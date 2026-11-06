@@ -31,6 +31,11 @@ from hisim.components.simple_water_storage import (
 )
 from hisim.config import ComponentID
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.components import MandatoryInputConnected
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import BuiltSystem
+from tests import functions_for_testing as fft
 from tests.part_load_rigs import AllInputsRig
 
 
@@ -90,7 +95,7 @@ class StorageWiring:
 
         Raises:
             CoilWiredByHalfError: If the component refuses a secondary circuit wired by half while it is prepared.
-            ValueError: If a mandatory input is left unwired when the inputs are resolved.
+            ValueError: If a mandatory input is left unwired when the inputs are resolved (the setup rule CB-06).
         """
         inputs_by_name = {component_input.field_name: component_input for component_input in component.inputs}
         outputs: List[cp.ComponentOutput] = []
@@ -105,6 +110,10 @@ class StorageWiring:
         wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
         wrapper.prepare_calculation()
         wrapper.connect_inputs(outputs)
+        # The connection judges nothing; the build rule of mandatory inputs does, as in a run.
+        fft.ComponentRules.registry([MandatoryInputConnected]).run(
+            RuleStage.BUILD, BuiltSystem(components=(component,), outputs=tuple(outputs)), SetupKind.RESIDENTIAL
+        )
 
     @staticmethod
     def buffer_primary_inputs() -> List[str]:

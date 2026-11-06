@@ -29,7 +29,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 0.0
+    "value": -5797.898698000001
   },
   "BUI1.Costs.Costs of grid gas for simulated period": {
     "building": "BUI1",
@@ -53,7 +53,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 0.0
+    "value": -5797.898698000001
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -77,7 +77,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2128.62
+    "value": 2552.08
   },
   "BUI1.Costs.Investment costs for equipment per simulated period minus subsidies": {
     "building": "BUI1",
@@ -85,7 +85,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2128.62
+    "value": 2552.08
   },
   "BUI1.Costs.Investment costs for equipment without heatpump per simulated period": {
     "building": "BUI1",
@@ -93,7 +93,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2128.62
+    "value": 2552.08
   },
   "BUI1.Costs.Investment costs for equipment without heatpump per simulated period minus subsidies": {
     "building": "BUI1",
@@ -101,7 +101,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2128.62
+    "value": 2552.08
   },
   "BUI1.Costs.Investment costs upfront for equipment period minus subsidies": {
     "building": "BUI1",
@@ -109,7 +109,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1733433.75
+    "value": 2329500.0
   },
   "BUI1.Costs.Maintenance costs for simulated period": {
     "building": "BUI1",
@@ -117,7 +117,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 952.95
+    "value": 1124.33
   },
   "BUI1.Costs.Maintenance costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -133,7 +133,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 952.95
+    "value": 1124.33
   },
   "BUI1.Costs.Total costs for simulated period": {
     "building": "BUI1",
@@ -141,7 +141,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 3081.5699999999997
+    "value": -2121.488698000001
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -157,7 +157,157 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 3081.5699999999997
+    "value": -2121.488698000001
+  },
+  "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "CO2 footprint of electricity consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kg",
+    "value": 2.0582
+  },
+  "BUI1.Electricity Meter.Max power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Max power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 8.09536006337645
+  },
+  "BUI1.Electricity Meter.Max power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Max power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 3721.775
+  },
+  "BUI1.Electricity Meter.Mean power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Mean power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.029896347451664092
+  },
+  "BUI1.Electricity Meter.Mean power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Mean power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 458.4366536947067
+  },
+  "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Min power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.0
+  },
+  "BUI1.Electricity Meter.Min power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Min power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.0
+  },
+  "BUI1.Electricity Meter.Opex costs of electricity consumption from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Opex costs of electricity consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "Euro",
+    "value": -5797.898698000001
+  },
+  "BUI1.Electricity Meter.Total energy from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Total energy from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kWh",
+    "value": 5.02258637187955
+  },
+  "BUI1.Electricity Meter.Total energy to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Total energy to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kWh",
+    "value": 77017.35782071075
   },
   "BUI1.Electrolyzer.Electrical energy consumed (Electrolyzer)": {
     "building": "BUI1",
@@ -218,7 +368,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 284.22
+    "value": 453.49
   },
   "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": {
     "building": "BUI1",
@@ -226,7 +376,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 284.22
+    "value": 453.49
   },
   "BUI1.Emissions.CO2 footprint of grid electricity for simulated period": {
     "building": "BUI1",
@@ -234,7 +384,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 0.0
+    "value": 2.0582
   },
   "BUI1.Emissions.CO2 footprint of grid gas for simulated period": {
     "building": "BUI1",
@@ -258,7 +408,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 284.22
+    "value": 455.5482
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -274,7 +424,67 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 284.22
+    "value": 455.5482
+  },
+  "BUI1.Gas Meter.CO2 footprint of gas consumption from grid (HydrogenMeter)": {
+    "building": "BUI1",
+    "name": "CO2 footprint of gas consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "HydrogenMeter",
+      "name": "HydrogenMeter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kg",
+    "value": 0.0
+  },
+  "BUI1.Gas Meter.Opex costs of gas consumption from grid (HydrogenMeter)": {
+    "building": "BUI1",
+    "name": "Opex costs of gas consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "HydrogenMeter",
+      "name": "HydrogenMeter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "Euro",
+    "value": 0.0
+  },
+  "BUI1.Gas Meter.Total gas consumption (HydrogenMeter)": {
+    "building": "BUI1",
+    "name": "Total gas consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "HydrogenMeter",
+      "name": "HydrogenMeter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Gas Meter.Total gas demand from grid (HydrogenMeter)": {
+    "building": "BUI1",
+    "name": "Total gas demand from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "HydrogenMeter",
+      "name": "HydrogenMeter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kWh",
+    "value": 0.0
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -282,7 +492,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 168588.78086755233
+    "value": 77017.35782071072
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -298,7 +508,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 0.0
+    "value": 5.02258637187955
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -306,7 +516,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 0.0
   },
   "BUI1.General.Ratio between PV production and total consumption": {
     "building": "BUI1",
@@ -314,7 +524,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 0.0
   },
   "BUI1.General.Ratio between Windturbine production and total consumption": {
     "building": "BUI1",
@@ -322,7 +532,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 0.0
   },
   "BUI1.General.Ratio between total production and total consumption": {
     "building": "BUI1",
@@ -330,7 +540,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 184.09633923150506
   },
   "BUI1.General.Relative electricity demand from grid": {
     "building": "BUI1",
@@ -338,7 +548,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 0.005459921988634627
   },
   "BUI1.General.Self-consumption of electricity": {
     "building": "BUI1",
@@ -346,7 +556,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 0.0
+    "value": 91571.42304684156
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -354,7 +564,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 54.31644461511633
   },
   "BUI1.General.Self-consumption rate of electricity": {
     "building": "BUI1",
@@ -362,7 +572,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 0.0
+    "value": 54.31643326652872
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -370,7 +580,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 99.99454007801137
   },
   "BUI1.General.Self-sufficiency rate of electricity": {
     "building": "BUI1",
@@ -378,7 +588,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 0.0
+    "value": 99.99456524480279
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -386,7 +596,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 0.0
+    "value": 91576.4
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",
@@ -402,7 +612,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": null
+    "value": 99.99
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -426,6 +636,21 @@
     "tag": "Transformer",
     "unit": "kWh",
     "value": 8873.094
+  },
+  "BUI1.Transformer.Curtailed input energy (StandardTransformerAndRectifier)": {
+    "building": "BUI1",
+    "name": "Curtailed input energy",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "StandardTransformerAndRectifier",
+      "name": "StandardTransformerAndRectifier",
+      "path": []
+    },
+    "tag": "Transformer",
+    "unit": "kWh",
+    "value": 0.0
   },
   "BUI1.Transformer.Electrical energy delivered (StandardTransformerAndRectifier)": {
     "building": "BUI1",

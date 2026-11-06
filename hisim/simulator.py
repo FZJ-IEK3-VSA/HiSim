@@ -32,6 +32,10 @@ from hisim import postprocessingoptions
 from hisim.loadtypes import OutputAggregation
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.write_guard import CalculationDirectories
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import BuiltSystem
 
 
 def _has_cost_facts_source(component_class: type) -> bool:
@@ -245,6 +249,10 @@ class Simulator:
         #: documents the system. Nothing in post-processing has read it since ``scenario.json``
         #: retired with its writer (F-9, 2026-09-18); it is carried, not consumed.
         self.description: str = ""
+        #: What the simulated system is (:meth:`declare_setup_kind`): a demo, a residential or a commercial building,
+        #: or a plant. ``None`` until the setup declares it, and a run that never declares it is refused before its
+        #: first step: the kind selects the setup rules the system waives, and no default stands in for it.
+        self.setup_kind: Optional[SetupKind] = None
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
@@ -255,6 +263,28 @@ class Simulator:
         self._progress_callbacks: List[ProgressCallback] = []
         #: The wrapped components in the order a pass evaluates them (:meth:`evaluation_plan`).
         self._evaluation_plan: Optional[List[ComponentWrapper]] = None
+
+    def declare_setup_kind(self, setup_kind: SetupKind) -> None:
+        """Declare what the simulated system is; every setup does this once, as the first line of its setup function.
+
+        Example: ``my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)``. A declarative run declares the kind its file
+        states. The kind decides which setup rules the run waives (``hisim setup-rules waivers``); nothing checks
+        that it fits the system.
+
+        Args:
+            setup_kind: The kind of the system.
+
+        Raises:
+            TypeError: If the argument is not a ``SetupKind``.
+            ValueError: If the setup already declared another kind: a setup has exactly one.
+        """
+        if not isinstance(setup_kind, SetupKind):
+            raise TypeError(f"declare_setup_kind takes a SetupKind, not {setup_kind!r}")
+        if self.setup_kind is not None and self.setup_kind != setup_kind:
+            raise ValueError(
+                f"this setup declared the kind {self.setup_kind.value} already and now declares {setup_kind.value}: a setup has one kind"
+            )
+        self.setup_kind = setup_kind
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -788,6 +818,8 @@ class Simulator:
                 are defined, post-processing data transfer is None, or lifecycle costs were
                 requested while some component declares no `cost_relevance`
                 (`check_cost_declarations`).
+            UndeclaredSetupKindError: If the setup declared no kind (:meth:`declare_setup_kind`), before the first step.
+            SetupRuleViolation: Listing every fault of the build rules of the system, before the first step.
         """
         # Error Tests
         # Test if all parameters were initialized
@@ -817,6 +849,8 @@ class Simulator:
         # Connects all components
         self.connect_all_components()
         components = [wrapped.my_component for wrapped in self.wrapped_components]
+        # The setup rules of the built system, in both modes; a setup that declares no kind is refused here
+        SetupRuleRegistry.collect().run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), self.setup_kind)
         # a wiring that is no fluid loop, or breaks a rule of the energy ports, fails now, not after the run
         # (roadmap/fluid_loops_spec.md §3.3; hisim-hydronics-fxix.6)
         FluidLoopWalk.find_loops(components)
@@ -1008,6 +1042,7 @@ class Simulator:
             execution_time_in_s=execution_time,
             scenario_name=scenario_name,
             description=self.description,
+            setup_kind=self.setup_kind,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,

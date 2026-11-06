@@ -17,6 +17,7 @@
 # ---------------------------------------------------------------------------
 schema_version: 3
 name: MFH, three apartments, central heat pump, central PV with battery and EMS
+setup_kind: residential
 description: >
   Three-apartment building. Central heating (heat pump + buffer) with a different
   distribution system per apartment; decentralized DHW, one car per apartment;

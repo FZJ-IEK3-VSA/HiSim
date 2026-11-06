@@ -179,6 +179,7 @@ class EnergySystemBuilder:
         recorded = EnergySystemFile(
             schema_version=self.SCHEMA_VERSION,
             name=name,
+            setup_kind=self.recorded.setup_kind,
             description=description,
             components=components,
         )

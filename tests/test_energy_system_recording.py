@@ -77,6 +77,7 @@ from hisim.energy_system.recording.parameters import ParameterNormalisation
 from hisim.energy_system.recording.session import RecordedFileWriter, RecordingSession
 from hisim.energy_system.resolution import ResolvedDynamicConnection
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 
 
 class Fixtures:
@@ -222,6 +223,7 @@ class Synthetic:
             components=(producer, consumer),
             wiring=snapshot,
             simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            setup_kind=SetupKind.DEMO,
         )
 
     @classmethod
@@ -281,6 +283,7 @@ class Synthetic:
             components=(producer, aggregator),
             wiring=snapshot,
             simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            setup_kind=SetupKind.DEMO,
         )
 
     @classmethod

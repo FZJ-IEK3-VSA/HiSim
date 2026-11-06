@@ -98,6 +98,7 @@ class Household:
         """
         return f"""schema_version: 3
 name: pv battery ems household
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather

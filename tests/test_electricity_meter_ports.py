@@ -24,6 +24,7 @@ from hisim.components import advanced_battery_bslib, controller_l2_energy_manage
 from hisim.components import advanced_ev_battery_bslib, generic_car, more_advanced_heat_pump_hplib
 from hisim.config import SizingContext
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 
 
 class MeteredHouse:
@@ -52,6 +53,7 @@ class MeteredHouse:
             module_filename="household_for_test_meter_ports",
             my_simulation_parameters=parameters,
         )
+        self.simulator.declare_setup_kind(SetupKind.DEMO)
         self.simulator.set_simulation_parameters(parameters)
         heat_pump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         heat_pump_config.set_thermal_output_power_in_watt = 8000.0

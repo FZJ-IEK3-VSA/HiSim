@@ -22,6 +22,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -261,6 +262,7 @@ def _prepare_case(
         module_filename=setup_module_name,
         my_simulation_parameters=simulation_parameters,
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.scenario_name = scenario_name
     simulator.description = description
     setup_module = importlib.import_module(f"system_setups.{setup_module_name}")
@@ -345,6 +347,7 @@ def _clone_ppdt(
         execution_time_in_s=case.ppdt.execution_time_in_s,
         scenario_name=case.ppdt.scenario_name,
         description=case.ppdt.description,
+        setup_kind=case.ppdt.setup_kind,
         results_monthly=case.ppdt.results_monthly,
         results_hourly=case.ppdt.results_hourly,
         results_cumulative=case.ppdt.results_cumulative,

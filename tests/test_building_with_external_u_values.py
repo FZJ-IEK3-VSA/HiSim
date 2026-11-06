@@ -20,6 +20,7 @@ from hisim import log
 from hisim import utils
 from hisim.config import ComponentID, SizingContext
 from tests.idealized_heater_rig import controller_between, heat_into
+from hisim.setup_rules.kinds import SetupKind
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -375,6 +376,7 @@ def house_with_idealized_electric_heater_for_testing_u_values(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_building_u_vbalues",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     u_value_params = BuildingUValueParams(

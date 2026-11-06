@@ -31,6 +31,7 @@ from hisim.components import weather
 from hisim.config import SizingContext
 from hisim.sim_repository import SimRepository
 from hisim.simulator import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark: MarkDecorator = pytest.mark.base
 
@@ -234,6 +235,7 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_sim_repository",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather

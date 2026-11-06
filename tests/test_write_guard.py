@@ -31,6 +31,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.write_guard import CalculationDirectories, CalculationDirectoryError, GuardMode, StrayWriteError, WriteGuard
+from hisim.setup_rules.kinds import SetupKind
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -144,6 +145,7 @@ def _simulator(directory: Path, name: str = "twin") -> Simulator:
     simulator: Simulator = Simulator(
         module_directory=str(directory), module_filename=name, my_simulation_parameters=parameters
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     return simulator
 
 
@@ -166,6 +168,7 @@ def test_two_calculations_get_two_result_directories(
             simulator = Simulator(
                 module_directory=str(tmp_path), module_filename="twin", my_simulation_parameters=parameters
             )
+            simulator.declare_setup_kind(SetupKind.DEMO)
             simulator.prepare_simulation_directory()
             directories.append(simulator.simulation_parameters.result_directory)
             Path(directories[-1], "marker.txt").write_text("mine", encoding="utf-8")

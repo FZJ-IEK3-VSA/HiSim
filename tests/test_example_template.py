@@ -12,6 +12,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, SizingContext, describe_config
 from tests import functions_for_testing as fft
+from hisim.setup_rules.kinds import SetupKind
 
 
 @pytest.mark.base
@@ -283,6 +284,7 @@ def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: P
         module_filename="template_component_in_a_simulator",
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     my_source = example_component.ExampleComponent(

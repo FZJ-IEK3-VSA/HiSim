@@ -29,6 +29,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "Kristina Dabrock, Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -63,6 +64,7 @@ def setup_function(
         - Heat Distribution Controller
         - DHW Water Storage
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # =================================================================================================================================
 

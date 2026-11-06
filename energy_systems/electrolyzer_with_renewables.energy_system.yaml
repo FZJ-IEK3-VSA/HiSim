@@ -2,6 +2,7 @@
 # Recorded from system_setups/electrolyzer_with_renewables.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: electrolyzer_with_renewables
+setup_kind: plant
 description: Simple Electrolyzer system setup.
 components:
   StandardTransformerAndRectifier:

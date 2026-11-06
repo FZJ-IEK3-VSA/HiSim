@@ -251,6 +251,7 @@ class TwoGroupFile:
     #: The part both variants share: everything up to the groups.
     SHARED: ClassVar[str] = """schema_version: 3
 name: Identity probe
+setup_kind: demo
 description: The minimal household with its meter in a group of its own.
 components:
   weather:

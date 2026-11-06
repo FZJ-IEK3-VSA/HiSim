@@ -59,6 +59,7 @@ class Documents:
     #: empty file, and the rejections cannot be caused by a missing components block.
     BUILDING: str = """schema_version: 3
 name: variant rule under test
+setup_kind: demo
 components:
   building:
     class: hisim.components.building.Building

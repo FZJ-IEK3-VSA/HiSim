@@ -21,6 +21,7 @@ from hisim.components import advanced_fuel_cell
 # from hisim.components.random_numbers import RandomNumbers
 # from hisim.components.example_transformer import ExampleTransformer
 from hisim import loadtypes as lt
+from hisim.setup_rules.kinds import SetupKind
 
 # from hisim import component as cp
 # import numpy as np
@@ -37,6 +38,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     are added. An electricity meter reads every electricity port, and a hydrogen meter
     reads the hydrogen the two CHPs burn.
     """
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     year = 2018
     seconds_per_timestep = 60 * 15
 

@@ -115,7 +115,7 @@ class Systems:
         Raises:
             EnergySystemError: Whatever the file under test provokes.
         """
-        text = f"schema_version: 3\nname: wiring rule under test\ncomponents:\n{entries}"
+        text = f"schema_version: 3\nname: wiring rule under test\nsetup_kind: demo\ncomponents:\n{entries}"
         model = EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
         parameters = SimulationParameters.one_day_only(2021, 900)
         parameters.result_directory = str(result_directory)

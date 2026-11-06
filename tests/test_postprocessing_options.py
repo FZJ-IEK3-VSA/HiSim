@@ -31,6 +31,7 @@ from hisim.simulator import Simulator
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.postprocessing import postprocessing_main
 from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework, _prepare_case
+from hisim.setup_rules.kinds import SetupKind
 
 
 pytestmark: pytest.MarkDecorator = pytest.mark.postprocessingoptions
@@ -329,6 +330,7 @@ def _run_converging_feedback_simulation(
         module_filename="feedback_iteration_test",
         my_simulation_parameters=simulation_parameters,
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
 
     component_a = _ConvergingFeedbackComponent(
         name="FeedbackA",

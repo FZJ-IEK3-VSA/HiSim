@@ -36,6 +36,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
 )
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -73,6 +74,7 @@ def setup_function(
         - Electric Car Battery
         -
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # =================================================================================================================================
     # Set System Parameters from Config

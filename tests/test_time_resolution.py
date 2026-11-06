@@ -32,6 +32,7 @@ from hisim.components import (
 
 from hisim import loadtypes as lt
 from tests.testing_utils import TestingUtils
+from hisim.setup_rules.kinds import SetupKind
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
@@ -555,6 +556,7 @@ def run_cluster_house(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_test_timeresolutions",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================

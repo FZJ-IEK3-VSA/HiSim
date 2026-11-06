@@ -384,6 +384,7 @@ def test_the_double_count_check_covers_hand_written_files(tmp_path: Path, reside
     text = f"""\
 schema_version: 3
 name: written
+setup_kind: demo
 components:
   {Real.WEATHER}
   {Real.OCCUPANCY}

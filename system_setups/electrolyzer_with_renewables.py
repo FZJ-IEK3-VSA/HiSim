@@ -26,6 +26,7 @@ from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -46,6 +47,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     meter reads the hydrogen produced and passes it out of the system (owner decisions of 2026-10-28
     on bead hisim-component-physics-4g9.69).
     """
+    my_sim.declare_setup_kind(SetupKind.PLANT)
     log.information("Starting basic electrolyzer system setup")
 
     # =================================================================================================================================

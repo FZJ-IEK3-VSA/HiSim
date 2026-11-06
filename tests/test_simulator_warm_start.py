@@ -24,6 +24,7 @@ from hisim.component import ComponentInput, ComponentOutput, PhysicsComponent, S
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -186,6 +187,7 @@ def run_reader_before_source(tmp_path: Path, constant_source: bool) -> WarmStart
     simulator = Simulator(
         module_directory=str(tmp_path), module_filename="warm_start", my_simulation_parameters=parameters
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     reader = WarmStartReader(parameters, WarmStartStubConfig(component_id=ComponentID(name="Reader")))
     source = WarmStartSource(

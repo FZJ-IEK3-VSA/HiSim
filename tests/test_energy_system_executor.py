@@ -267,6 +267,7 @@ def test_a_file_with_a_metadata_block_is_refused_on_a_plain_run(tmp_path: Path) 
     path.write_text(
         "schema_version: 3\n"
         "name: a generated record\n"
+        "setup_kind: demo\n"
         "components:\n"
         "  weather:\n"
         "    class: hisim.components.weather.Weather\n"
@@ -295,6 +296,7 @@ def test_a_file_with_a_metadata_block_runs_when_the_caller_asks_for_a_re_run(tmp
     path.write_text(
         "schema_version: 3\n"
         "name: a generated record\n"
+        "setup_kind: demo\n"
         "components:\n"
         "  weather:\n"
         "    class: hisim.components.weather.Weather\n"

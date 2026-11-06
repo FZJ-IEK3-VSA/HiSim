@@ -64,6 +64,7 @@ class Fork:
     BASELINE: ClassVar[str] = """
 schema_version: 3
 name: fork
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -91,6 +92,7 @@ components:
     NO_BATTERY: ClassVar[str] = """
 schema_version: 3
 name: fork
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -772,6 +774,7 @@ def test_a_group_registered_between_ungrouped_components_still_reproduces_byte_f
     baseline_text = """
 schema_version: 3
 name: interleaved
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -792,6 +795,7 @@ components:
     bare_text = """
 schema_version: 3
 name: interleaved
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -980,6 +984,7 @@ class SparseBlock:
     BASELINE: ClassVar[str] = """
 schema_version: 3
 name: sparse_block
+setup_kind: demo
 components:
   pv:
     class: hisim.components.generic_pv_system.PVSystem
@@ -992,6 +997,7 @@ components:
     RELOCATED: ClassVar[str] = """
 schema_version: 3
 name: sparse_block
+setup_kind: demo
 components:
   pv:
     class: hisim.components.generic_pv_system.PVSystem
@@ -1084,6 +1090,7 @@ class BlocklessEntry:
     BASELINE: ClassVar[str] = """
 schema_version: 3
 name: blockless_entry
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -1099,6 +1106,7 @@ components:
     RELOCATED: ClassVar[str] = """
 schema_version: 3
 name: blockless_entry
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather

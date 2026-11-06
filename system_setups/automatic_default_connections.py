@@ -15,6 +15,7 @@ from hisim.components import (
     heat_distribution_system,
     more_advanced_heat_pump_hplib
 )
+from hisim.setup_rules.kinds import SetupKind
 
 
 def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
@@ -36,6 +37,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         - Heat Water Storage
 
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # ==== System Parameters ====
 

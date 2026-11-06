@@ -79,6 +79,9 @@ from hisim.postprocessing.finite_results import FiniteResultsCheck
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import RunResults
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
@@ -286,6 +289,8 @@ class PostProcessor:
                 ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``;
                 and if ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while ``MAKE_NETWORK_CHARTS``
                 is not, because no network chart would have been drawn.
+            UndeclaredSetupKindError: If the run carries no setup kind.
+            SetupRuleViolation: Listing every fault of the setup rules after the run, before anything is written.
             NonFiniteResultsError: In every run, when a result column holds NaN or infinite values and its output
                 does not declare ``may_be_non_finite`` (:mod:`hisim.postprocessing.finite_results`).
             EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
@@ -298,6 +303,16 @@ class PostProcessor:
         log.information(f"Selected {len(ppdt.post_processing_options)} post processing options:")
         for option in ppdt.post_processing_options:
             log.information(f"Selected post processing option: {option}")
+        # The setup rules after the run judge the results before anything reads or writes them
+        SetupRuleRegistry.collect().run(
+            RuleStage.AFTER_RUN,
+            RunResults(
+                results=ppdt.results,
+                outputs=tuple(ppdt.all_outputs),
+                components=tuple(wrapped.my_component for wrapped in ppdt.wrapped_components),
+            ),
+            ppdt.setup_kind,
+        )
         report_image_entries: List[ReportImageEntry] = []
         report: Optional[reportgenerator.ReportGenerator] = None
         system_chart_entries: List[SystemChartEntry] = []

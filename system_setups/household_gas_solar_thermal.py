@@ -26,6 +26,7 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import electricity_meter
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 
 __authors__ = "Kristina Dabrock"
@@ -61,6 +62,7 @@ def setup_function(
         - Heat Distribution Controller
         - DHW Water Storage
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # =================================================================================================================================
     # Set System Parameters

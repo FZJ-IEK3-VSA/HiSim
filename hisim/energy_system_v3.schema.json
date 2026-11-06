@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "name"
+    "name",
+    "setup_kind"
   ],
   "properties": {
     "schema_version": {
@@ -20,6 +21,15 @@
     "name": {
       "type": "string",
       "description": "The name of the energy system."
+    },
+    "setup_kind": {
+      "enum": [
+        "demo",
+        "residential",
+        "commercial",
+        "plant"
+      ],
+      "description": "What the system is: a demo (a demonstration or a test rig), a residential or a commercial building, or a plant (a system without a building). It selects the setup rules the system waives."
     },
     "description": {
       "type": "string"

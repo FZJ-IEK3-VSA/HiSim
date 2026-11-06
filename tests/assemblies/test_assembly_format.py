@@ -52,7 +52,7 @@ def test_a_version_4_file_round_trips_with_its_imports_verbs_ports_and_placehold
 def test_a_version_3_file_that_imports_is_refused() -> None:
     """Catches a flat file silently gaining imports without declaring the version that reads them."""
     with pytest.raises(EnergySystemFormatError, match="EF-01") as refusal:
-        read_system("schema_version: 3\nname: x\nimports: {pv: {assembly: pv/array}}\n")
+        read_system("schema_version: 3\nname: x\nsetup_kind: demo\nimports: {pv: {assembly: pv/array}}\n")
     assert "imports" in str(refusal.value)
 
 
@@ -60,7 +60,7 @@ def test_a_version_3_file_that_imports_is_refused() -> None:
 def test_a_version_3_entry_with_ports_or_verbs_is_refused() -> None:
     """Catches the keys of version 4 leaking into a version-3 file or into a group's entry."""
     with pytest.raises(EnergySystemFormatError, match="EF-18"):
-        read_system(f"schema_version: 3\nname: x\ncomponents:\n  {Mocks.WEATHER.replace('}', ', bind: {a: b}}')}\n")
+        read_system(f"schema_version: 3\nname: x\nsetup_kind: demo\ncomponents:\n  {Mocks.WEATHER.replace('}', ', bind: {a: b}}')}\n")
 
 
 @pytest.mark.assemblies

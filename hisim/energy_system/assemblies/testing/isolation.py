@@ -81,6 +81,7 @@ from hisim.energy_system.executor import SimulationParametersReader, build_energ
 from hisim.energy_system.imports_model import Port, PortKind, PortState
 from hisim.energy_system.model import EnergySystemFile
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.setup_rules.kinds import SetupKind
 
 #: The import key of the assembly under test in its isolation system.
 SUBJECT = "subject"
@@ -359,6 +360,8 @@ def isolation_document(
     return {
         "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
         "name": f"isolation_{assembly.path.replace('/', '_')}",
+        # An isolation system is a test rig by construction: the assembly and the partners its ports need.
+        "setup_kind": SetupKind.DEMO.value,
         "description": f"The isolation system of {assembly.path} (assemblies_spec.md §9.4).",
         "components": components,
         "imports": {SUBJECT: entry},

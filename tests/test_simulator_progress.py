@@ -17,6 +17,7 @@ from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import ProgressEvent, SimulationProgress, Simulator
 from tests import functions_for_testing as fft
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -30,6 +31,7 @@ def one_day_simulator(tmp_path: Path) -> Simulator:
         module_filename="progress_hook",
         my_simulation_parameters=parameters,
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     simulator.add_component(
         example_component.ExampleComponent(

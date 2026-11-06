@@ -13,7 +13,7 @@ from hisim.energy_system.record import ConfigBlockWriter
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
-from hisim.setup_rules.rule import RuleCodes, RuleStage
+from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
 from hisim.setup_rules.subjects import BuiltSystem
 from hisim.simulationparameters import SimulationParameters
 
@@ -87,29 +87,56 @@ def round_trip_config_block(config: Any, config_class: Type, component_name: str
     return config_class.from_dict(payload)
 
 
-class EnergyPortRules:
-    """The energy-port setup rules (``hisim/setup_rules/energy_ports.py``) run on components, as the build runs them.
+class FamilyRules:
+    """The setup rules of one family run alone on components, as the build runs them.
 
-    A test that wires stand-ins by hand runs only this family, so that the rules of the other families, which may read
-    what a stand-in lacks, stay out of it.
+    A test that wires stand-ins by hand runs only one family, so that the rules of the other families, which may read
+    what a stand-in lacks, stay out of it. A registry needs every code a rule requires, so a rule the family requires
+    from another family is taken as met: a sample rule with its code that finds nothing stands in for it. For example,
+    the circuit rules require the fluid-loop rules, which cannot walk a hand-built circuit whose channels carry no loop
+    tags; the energy-port tests judge the energy ports, not the loops.
     """
 
-    #: The family of the rules.
-    FAMILY: ClassVar[str] = "energy_ports"
+    #: The family of the rules, the module of ``hisim/setup_rules/`` that holds them.
+    FAMILY: ClassVar[str]
+
+    @classmethod
+    def registry(cls, rules: Optional[Sequence[Type[SetupRule]]] = None) -> SetupRuleRegistry:
+        """Return a registry of the given rules, by default every rule of the family, with their other requirements taken as met.
+
+        Args:
+            rules: The rules to run; ``None`` for every rule of the family.
+
+        Returns:
+            The registry: the rules, and for every code they require that is none of them, a sample rule that finds nothing.
+        """
+        # The sample rules are a tool of the tests of the rules package.
+        from tests.rules.sample_rules import SampleRules  # pylint: disable=import-outside-toplevel
+
+        chosen = list(rules) if rules is not None else [rule for rule in SetupRuleRegistry.discover() if RuleCodes.family_of(rule.__module__) == cls.FAMILY]
+        codes = {rule.CODE for rule in chosen}
+        met = sorted({code for rule in chosen for code in rule.REQUIRES} - codes)
+        return SetupRuleRegistry(chosen + [SampleRules.rule(code, f"taken-as-met-{code.lower()}") for code in met])
 
     @classmethod
     def refuse_a_broken_wiring(cls, components: Sequence[Any], kind: SetupKind = SetupKind.RESIDENTIAL) -> None:
-        """Run the energy-port rules on components whose inputs are connected, as the simulator does before the first step.
+        """Run the family's rules on components whose inputs are connected, as the simulator does before the first step.
 
         Args:
             components: The components, or stand-ins with ``component_name``, ``inputs``, ``outputs`` and ``port_sets``.
             kind: The kind the system declares.
 
         Raises:
-            EnergyPortWiringError: Listing every fault the rules found.
+            SetupRuleViolation: Listing every fault the rules found, as the family's error (for example
+                ``EnergyPortWiringError``).
         """
-        rules = [rule for rule in SetupRuleRegistry.discover() if RuleCodes.family_of(rule.__module__) == cls.FAMILY]
-        SetupRuleRegistry(rules).run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), kind)
+        cls.registry().run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), kind)
+
+
+class EnergyPortRules(FamilyRules):
+    """The energy-port setup rules (``hisim/setup_rules/energy_ports.py``) run on components; their faults raise ``EnergyPortWiringError``."""
+
+    FAMILY: ClassVar[str] = "energy_ports"
 
 
 class SetupTestParameters:

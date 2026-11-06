@@ -1,0 +1,1056 @@
+"""The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
+
+The inventory is the one list of the checks, the 128 that move into the rules package and the 71 that stay where
+they are: a parse fault of the reader, a device's own physics guard, a recorder check, a CI gate, a policy of the
+run. Each record names the check, its nature, when it runs, whether it refuses or logs, where it lives today and,
+for a check that moves, the module of ``hisim/setup_rules/`` it moves to and its stage. When a family moves, its
+pull request sets each moved record's ``lives`` to its place in the package and its ``codes`` to the codes it
+allocated; ``tests/rules/test_inventory.py`` holds the registry and the records in step.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import ClassVar, Optional, Tuple
+
+from hisim.setup_rules.rule import RuleStage
+
+
+class RuleNature(str, Enum):
+    """What kind of statement a check makes, which tells a reviewer what a waiver of it would give up.
+
+    The nature is descriptive: any rule may be waived for a kind, and the nature enforces nothing. The values are
+    the letters of the inventory's tables.
+    """
+
+    #: A law of the model or a consistency the code relies on: energy is conserved, a loop closes, no result is NaN.
+    LAW = "L"
+    #: A domain rule about the whole system: room heat needs a receiver, a bought carrier passes a meter.
+    DOMAIN = "D"
+    #: A domain rule about a building, which has no subject in a plant.
+    BUILDING = "B"
+    #: An assumption that holds only for a household.
+    RESIDENTIAL = "R"
+    #: A parse fault, met before there is a document to check; it stays in the reader.
+    PARSE = "P"
+    #: A device's own physics guard or a class's declaration; it stays in the component.
+    COMPONENT = "K"
+    #: A CI gate or a contract of a test harness.
+    GATE = "C"
+
+
+@dataclass(frozen=True)
+class RuleRecord:
+    """One check HiSim applies to a setup, as the inventory records it.
+
+    ``rule_id`` is ``<family>.<snake_name>``: for a check that moves, the family is its target module and the
+    snake name is its rule's ``NAME`` with underscores (``energy_ports.room_heat_needs_receiver`` for
+    ``room-heat-needs-receiver``); a check that stays is filed under ``reader``, ``run``, ``costs``, ``recorder``,
+    ``house`` or ``gate``. ``codes`` are the error codes the check carries today, empty where it has none yet.
+    ``checks`` says what it checks, ``lives`` where it lives (a path with ``Class.method``; ``hisim/setup_rules/...``
+    once moved), ``when`` when it runs and ``enforcement`` whether it refuses (``E``), only logs (``L``) or either.
+    ``target`` is the module of the rules package it moves to and ``stage`` the stage it runs at there; both are
+    ``None`` for a check that stays. ``note`` holds what the inventory adds: a qualification of the nature, the
+    scope a gate gets, or why a check stays.
+    """
+
+    rule_id: str
+    nature: RuleNature
+    when: str
+    enforcement: str
+    checks: str
+    lives: str
+    codes: Tuple[str, ...] = ()
+    target: Optional[str] = None
+    stage: Optional[RuleStage] = None
+    note: str = ""
+
+    #: Where a moved check lives: a module of the rules package.
+    PACKAGE_PATH: ClassVar[str] = "hisim/setup_rules/"
+
+    @property
+    def family(self) -> str:
+        """The part of the id before the dot: the target module of a moved check, or the group of one that stays."""
+        return self.rule_id.partition(".")[0]
+
+    @property
+    def in_package(self) -> bool:
+        """Whether the check already lives in the rules package, as a rule the registry collects."""
+        return self.lives.startswith(self.PACKAGE_PATH)
+
+    @property
+    def moves(self) -> bool:
+        """Whether the check moves into the rules package, or has moved; a check with no target stays where it is."""
+        return self.target is not None
+
+
+class Inventory:
+    """Every check of a setup HiSim applies, in the order of the reader, the build, the run, the recorder, the house and CI.
+
+    The records of the spec of the setup kinds, section 6, kept here as the one list; the spec cites this file as
+    its source.
+    """
+
+    RECORDS: ClassVar[Tuple[RuleRecord, ...]] = (
+        RuleRecord(
+            rule_id="reader.ef_00", codes=("EF-00",), nature=RuleNature.PARSE, when="load", enforcement="E", checks="the file suffix is .yaml/.yml",
+            lives="hisim/energy_system/document.py:RawDocument._read_text; hisim/energy_system/executor.py:SimulationParametersReader.read",
+        ),
+        RuleRecord(
+            rule_id="reader.ef_01", codes=("EF-01",), nature=RuleNature.PARSE, when="load", enforcement="E",
+            checks="schema_version present and in (3, 4); a v3 file has no imports; an assembly file is v4",
+            lives="hisim/energy_system/loader.py:EnergySystemReader._check_schema_version; hisim/energy_system/assemblies/reader.py:AssemblyReader.build",
+        ),
+        RuleRecord(
+            rule_id="reader.ef_02", codes=("EF-02",), nature=RuleNature.PARSE, when="load", enforcement="E", checks="no YAML key written twice",
+            lives="hisim/energy_system/document.py:RawDocument._reject_duplicate_keys",
+        ),
+        RuleRecord(
+            rule_id="reader.ef_03", codes=("EF-03",), nature=RuleNature.PARSE, when="load", enforcement="E",
+            checks="readable YAML, a mapping, no unknown top-level key, some components",
+            lives="hisim/energy_system/document.py:RawDocument._parse; hisim/energy_system/loader.py:EnergySystemReader._build", note="a missing setup_kind joins it",
+        ),
+        RuleRecord(
+            rule_id="reader.ef_07", codes=("EF-07",), nature=RuleNature.PARSE, when="load / build", enforcement="E",
+            checks="a block has the YAML type expected; a simulation-parameters file, address table or consuming block is well-formed",
+            lives=(
+                "hisim/energy_system/document.py:RawDocument.malformed; hisim/energy_system/address_table.py; "
+                "hisim/energy_system/executor.py:SimulationParametersReader"
+            ),
+        ),
+        RuleRecord(
+            rule_id="document.no_absolute_path", codes=("EF-05",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load, again at build",
+            enforcement="E", checks="no absolute filesystem path in a value", lives="hisim/energy_system/validation.py:StructuralValidator._check_no_absolute_paths",
+        ),
+        RuleRecord(
+            rule_id="document.reference_syntax", codes=("EF-06",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="no wildcard or relative reference", lives="hisim/energy_system/names.py:NameRules._reference_error",
+        ),
+        RuleRecord(
+            rule_id="document.valid_name", codes=("EF-08",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a component, group, variant or option name is an identifier",
+            lives="hisim/energy_system/names.py:NameRules.check_identifier; hisim/energy_system/validation.py:StructuralValidator._check_expanded_names",
+        ),
+        RuleRecord(
+            rule_id="document.no_metadata_on_a_plain_run", codes=("EF-09",), nature=RuleNature.LAW, target="document", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a file with metadata: (a run record) is only re-run", lives="hisim/energy_system/executor.py:EnergySystemExecutor.check_metadata",
+        ),
+        RuleRecord(
+            rule_id="document.one_configuration_origin", codes=("EF-11", "EF-12"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
+            enforcement="E", checks="an entry names a preset or a constructor, never both, and at least one of preset, constructor, config",
+            lives="hisim/energy_system/validation.py:StructuralValidator._check_configuration_origin",
+        ),
+        RuleRecord(
+            rule_id="document.constructor_block", codes=("EF-14",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a constructor block names exactly one constructor", lives="hisim/energy_system/entries.py:EntryReader._constructor",
+        ),
+        RuleRecord(
+            rule_id="document.known_entry_keys", codes=("EF-18",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="an entry, group, variant or option uses only its closed key set",
+            lives="hisim/energy_system/entries.py:EntryReader.entry; hisim/energy_system/loader.py:EnergySystemReader._check_block_keys",
+        ),
+        RuleRecord(
+            rule_id="document.input_item_shape", codes=("EF-19",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="an input item is a defaults, wire or feed item", lives="hisim/energy_system/entries.py:EntryReader._check_item_keys",
+        ),
+        RuleRecord(
+            rule_id="document.known_source", codes=("EF-20",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="an input item names a component the selected world has", lives="hisim/energy_system/validation.py:StructuralValidator._check_reference_closure",
+        ),
+        RuleRecord(
+            rule_id="document.one_input_spelling", codes=("EF-24",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="one consumer-source pair is spelled as wires or as feeds, not both; no defaults item repeated",
+            lives="hisim/energy_system/validation.py:StructuralValidator._require_new_spelling",
+        ),
+        RuleRecord(
+            rule_id="document.no_duplicate_feed", codes=("EF-25",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="one source output fed once into an aggregator (file level)", lives="hisim/energy_system/validation.py:StructuralValidator._check_input_shapes",
+        ),
+        RuleRecord(
+            rule_id="document.no_duplicate_wire", codes=("EF-26",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="one input wired once (file level)", lives="hisim/energy_system/validation.py:StructuralValidator._check_input_shapes",
+        ),
+        RuleRecord(
+            rule_id="document.known_sizing_source", codes=("EF-40", "EF-41"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
+            enforcement="E", checks="sizing_sources names an existing component and the fact it maps",
+            lives="hisim/energy_system/validation.py:StructuralValidator._check_reference_closure",
+        ),
+        RuleRecord(
+            rule_id="document.no_nested_group", codes=("EF-50",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="an entry carries no group keys", lives="hisim/energy_system/entries.py:EntryReader.entry",
+        ),
+        RuleRecord(
+            rule_id="document.one_group_per_component", codes=("EF-51",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a component is in at most one group", lives="hisim/energy_system/validation.py:StructuralValidator._check_names",
+        ),
+        RuleRecord(
+            rule_id="document.unique_name", codes=("EF-52",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load / build", enforcement="E",
+            checks="component, group, variant and expanded import names do not collide",
+            lives="hisim/energy_system/validation.py:StructuralValidator._check_names; hisim/energy_system/assemblies/expansion.py:ImportExpander._check_names",
+        ),
+        RuleRecord(
+            rule_id="document.group_enabled_flag", codes=("EF-53",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a group's enabled is a bool", lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+        ),
+        RuleRecord(
+            rule_id="document.group_not_empty", codes=("EF-54",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a group lists a component", lives="hisim/energy_system/loader.py:EnergySystemReader._build_groups",
+        ),
+        RuleRecord(
+            rule_id="document.known_variant_option", codes=("EF-55",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="selected names an option", lives="hisim/energy_system/loader.py:EnergySystemReader._build_variants",
+        ),
+        RuleRecord(
+            rule_id="document.variant_not_empty", codes=("EF-56",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a variant offers an option", lives="hisim/energy_system/loader.py:EnergySystemReader._build_options",
+        ),
+        RuleRecord(
+            rule_id="document.one_variant_per_component", codes=("EF-57",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load",
+            enforcement="E", checks="a component is declared by at most one variant",
+            lives="hisim/energy_system/validation.py:StructuralValidator._check_option_member",
+        ),
+        RuleRecord(
+            rule_id="document.not_cut_from_v1", codes=("EF-73",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD, when="load", enforcement="E",
+            checks="a construct cut from v1 is refused by name", lives="hisim/energy_system/imports_reader.py:CutConstructs.error",
+        ),
+        RuleRecord(
+            rule_id="bindings.class_importable", codes=("EF-10",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the dotted class path imports a HiSim component with an annotated config",
+            lives="hisim/energy_system/classes.py:ClassBinder._import_component_class",
+        ),
+        RuleRecord(
+            rule_id="bindings.known_preset", codes=("EF-13",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the preset is declared by the config class", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.resolve_preset",
+        ),
+        RuleRecord(
+            rule_id="bindings.known_constructor", codes=("EF-15",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the constructor is declared by the config class", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.resolve_constructor",
+        ),
+        RuleRecord(
+            rule_id="bindings.constructor_arguments", codes=("EF-16",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="no unknown and no missing required argument", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_constructor_arguments",
+        ),
+        RuleRecord(
+            rule_id="bindings.known_config_field", codes=("EF-17",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="every config key is a field; component_id is not set in config", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_config_keys",
+        ),
+        RuleRecord(
+            rule_id="bindings.decodable_value", codes=("EF-1A",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a value decodes into its field's type",
+            lives="hisim/energy_system/codec.py:ConfigValueCodec.*; hisim/energy_system/configure.py:EntryConfigurator._realize_origin",
+        ),
+        RuleRecord(
+            rule_id="bindings.auto_only_on_a_sized_field", codes=("EF-1B",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="AUTO only on a field with a sizing law", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_config_keys",
+        ),
+        RuleRecord(
+            rule_id="bindings.sizing_fact_is_read", codes=("EF-43",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="sizing_sources names a fact the class's laws read", lives="hisim/energy_system/bindings.py:ConfigOriginChecker.check_sizing_facts",
+        ),
+        RuleRecord(
+            rule_id="bindings.path_variable_known", codes=("EF-04",), nature=RuleNature.LAW, target="bindings", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a ${name} names a registered path variable", lives="hisim/energy_system/path_resolver.py:PathResolver._substitute",
+        ),
+        RuleRecord(
+            rule_id="sizing.fact_provided", codes=("EF-4A",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a fact a law reads is provided by somebody",
+            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+            note="the vocabulary is the house's, §4.3; the rule is not",
+        ),
+        RuleRecord(
+            rule_id="sizing.provider_unambiguous", codes=("EF-4B",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="several providers need a source line", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.source_is_a_provider", codes=("EF-4C",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a source line names a component that declares the fact",
+            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.fact_not_null", codes=("EF-4D",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the provider gives a value", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.source_shape", codes=("EF-4E",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the mapping shape fits the law's cardinality",
+            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.no_field_cycle", codes=("EF-4F",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="sibling Self(...) reads form no cycle", lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.one_read_shape", codes=("EF-4G",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a fact is read many-fold or once, not both; no repeated provider",
+            lives="hisim/config/engine.py, classified by hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.unique_instance", codes=("EF-4H",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="every config has component_id.name, no two share it", lives="hisim/config/engine.py:SizingFactEngine.register",
+        ),
+        RuleRecord(
+            rule_id="sizing.sized_together", codes=("EF-4J",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a SizedTogether group is stated whole or not at all", lives="hisim/config/sizing.py:SizedTogether.check",
+        ),
+        RuleRecord(
+            rule_id="sizing.resolved", codes=("EF-4X",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the kernel made progress and no law raised", lives="hisim/energy_system/sizing_bridge.py:KernelFailure.classify",
+        ),
+        RuleRecord(
+            rule_id="sizing.unconsumed_fact", nature=RuleNature.DOMAIN, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="L",
+            checks="a provided fact nobody reads", lives="hisim/energy_system/sizing_bridge.py:unconsumed_warnings",
+        ),
+        RuleRecord(
+            rule_id="sizing.sizing_source_enabled", codes=("EF-42",), nature=RuleNature.LAW, target="sizing", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a scalar sizing source is not in a disabled group or unselected option",
+            lives="hisim/energy_system/groups.py:GroupExpander._dangling_scalar_error; hisim/energy_system/assemblies/addresses.py:_rewrite_sizing",
+        ),
+        RuleRecord(
+            rule_id="wiring.output_exists", codes=("EF-21",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a wire, feed or consuming output names an existing output; a written wire never names a derived one; default feeds are unambiguous",
+            lives=(
+                "hisim/energy_system/wiring_checks.py:WiringChecker._check_ports_exist, _check_written_wires_avoid_derived_ports; "
+                "hisim/energy_system/feed_resolution.py; hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created"
+            ),
+        ),
+        RuleRecord(
+            rule_id="wiring.input_exists", codes=("EF-22",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the same for inputs",
+            lives=(
+                "hisim/energy_system/wiring_checks.py:WiringChecker._check_ports_exist, _check_written_wires_avoid_derived_ports; "
+                "hisim/energy_system/feed_resolution.py; hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created"
+            ),
+        ),
+        RuleRecord(
+            rule_id="wiring.defaults_declared", codes=("EF-23",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a bare defaults item has default connections declared for the source class",
+            lives="hisim/energy_system/wiring.py:WiringPlanner._expand_default_item",
+        ),
+        RuleRecord(
+            rule_id="wiring.no_input_fed_twice", codes=("EF-26",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="after default expansion, one input has one wire", lives="hisim/energy_system/wiring_checks.py:WiringChecker._check_no_input_is_fed_twice",
+        ),
+        RuleRecord(
+            rule_id="wiring.feed_unique", codes=("EF-25",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="one participant output enters an aggregator once",
+            lives="hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_participant_ports_are_unique",
+        ),
+        RuleRecord(
+            rule_id="wiring.target_is_an_aggregator", codes=("EF-27",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="feeds go to a component with dynamic channels", lives="hisim/energy_system/feed_resolution.py:DynamicConnectionResolver._require_channels",
+        ),
+        RuleRecord(
+            rule_id="wiring.channel_matches", codes=("EF-28",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a feed's tags match exactly one channel", lives="hisim/energy_system/channel_matching.py:ChannelMatcher.match",
+        ),
+        RuleRecord(
+            rule_id="wiring.dispatch_rule", codes=("EF-29",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a dispatch block where and only where the channel dispatches; no rank on a forbidding channel; allowed dispatch tags",
+            lives="hisim/energy_system/channel_matching.py:ChannelMatcher._check_dispatch_rule, _check_dispatch_tags",
+        ),
+        RuleRecord(
+            rule_id="wiring.known_tag", codes=("EF-2A",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a component-type or flow tag is a known enum member", lives="hisim/energy_system/channels.py:TagDecoder.component_type, flow_tags",
+        ),
+        RuleRecord(
+            rule_id="wiring.dispatch_signal_unique", codes=("EF-2B",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="two feeds do not claim one control signal", lives="hisim/energy_system/dispatch_signals.py:DispatchSignalPlanner._refuse_if_claimed",
+        ),
+        RuleRecord(
+            rule_id="wiring.port_types_agree", codes=("EF-30",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="load type and unit agree across a wire or feed (ANY matches)",
+            lives=(
+                "hisim/energy_system/wiring_checks.py:WiringChecker._check_port_types_agree; hisim/energy_system/channel_matching.py:ChannelMatcher._check_port_types"
+            ),
+        ),
+        RuleRecord(
+            rule_id="wiring.mandatory_input_connected", codes=("EF-31",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E (L when allowed)", checks="a mandatory input is fed; allow_unconnected_mandatory only logs",
+            lives="hisim/energy_system/wiring_checks.py:WiringChecker._check_mandatory_inputs_are_connected",
+            note="the inputs that make a device need a building are listed in §6.8",
+        ),
+        RuleRecord(
+            rule_id="wiring.port_name_free", codes=("EF-32",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="feed resolution creates no port name that exists", lives="hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_port_names_are_free",
+        ),
+        RuleRecord(
+            rule_id="wiring.constructed", codes=("EF-33",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a component constructor did not raise", lives="hisim/energy_system/wiring.py:ComponentBuilder._construct",
+        ),
+        RuleRecord(
+            rule_id="wiring.consuming_output_carrier", codes=("EF-7M",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a consuming output's energy port carries the need's carrier", lives="hisim/energy_system/wiring_checks.py:check_consuming_outputs",
+        ),
+        RuleRecord(
+            rule_id="wiring.meter_feed_count", codes=("EF-7N",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the meter's class declares exactly one feed per consuming output", lives="hisim/energy_system/wiring_checks.py:meter_feed_of",
+        ),
+        RuleRecord(
+            rule_id="wiring.no_double_count", codes=("EF-7T",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an aggregator does not read another aggregator's output while both observe one flow",
+            lives="hisim/energy_system/wiring_checks.py:check_double_count",
+        ),
+        RuleRecord(
+            rule_id="wiring.unconsumed_source", nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="L",
+            checks="a component feeds nobody", lives="hisim/energy_system/wiring_checks.py:unconsumed_sources",
+        ),
+        RuleRecord(
+            rule_id="wiring.unmetered_output_of_a_need", nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="L",
+            checks="a metered consumer's other outputs of the same carrier are named in the need", lives="hisim/energy_system/wiring_checks.py:unmetered_outputs",
+        ),
+        RuleRecord(
+            rule_id="reader.ef_70", codes=("EF-70",), nature=RuleNature.PARSE, when="load / build", enforcement="E",
+            checks="an assembly or imports block is well-formed; the assembly's kind is assembly",
+            lives="hisim/energy_system/imports_reader.py:ImportsReader.shape_error; hisim/energy_system/assemblies/reader.py:AssemblyReader.build",
+        ),
+        RuleRecord(
+            rule_id="assemblies.found", codes=("EF-71",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the assembly is in one library directory", lives="hisim/energy_system/assemblies/resolver.py:AssemblyResolver.resolve",
+        ),
+        RuleRecord(
+            rule_id="assemblies.found_once", codes=("EF-72",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="not in two", lives="hisim/energy_system/assemblies/resolver.py:AssemblyResolver.resolve",
+        ),
+        RuleRecord(
+            rule_id="assemblies.library_valid", codes=("EF-75",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build; CI tests/assemblies/test_assembly_library.py", enforcement="E",
+            checks=(
+                "the assembly file passes the library check (the 45 problems LibraryChecker.check lists: name equals path, members load, parameters described with "
+                "defaults, units and ranges, constraints consistent, variants cover the selector, ports and placeholders name members, a tests: contract with bounds,"
+                " monotone and expect entries)"
+            ),
+            lives="hisim/energy_system/assemblies/library.py:LibraryChecker.check, require_valid",
+            note="the checker moves whole; its problems are one rule with 45 messages",
+        ),
+        RuleRecord(
+            rule_id="assemblies.parameter_valid", codes=("EF-76",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an import parameter has the type, value and range its declaration states", lives="hisim/energy_system/assemblies/parameters.py:select",
+        ),
+        RuleRecord(
+            rule_id="assemblies.constraint_holds", codes=("EF-77",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="exactly_one_of / all_or_none_of hold", lives="hisim/energy_system/assemblies/parameters.py:select",
+        ),
+        RuleRecord(
+            rule_id="assemblies.parameter_unit", codes=("EF-78", "EF-79"), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build / CI",
+            enforcement="E", checks="a parameter's unit equals its field's; a fed field has a unit",
+            lives="hisim/energy_system/assemblies/library.py:LibraryChecker._unit",
+        ),
+        RuleRecord(
+            rule_id="assemblies.port_has_a_partner", codes=("EF-7A",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a required port finds a candidate; a many-fact port a provider", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.port_unambiguous", codes=("EF-7B",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="several candidates need a verb", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.required_port_not_declined", codes=("EF-7C",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="no none: on a required port", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.bound_partner_exists", codes=("EF-7D",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="the bind target exists", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.optional_port_decided", codes=("EF-7E",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="an optional port with candidates carries a verb", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.verb_on_an_active_port", codes=("EF-7F",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="no verb on a switched-off port", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+        ),
+        RuleRecord(
+            rule_id="assemblies.known_port", codes=("EF-7G",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a verb names an existing port of the right kind", lives="PortBinder.bind",
+        ),
+        RuleRecord(
+            rule_id="assemblies.bound_output_is_read", codes=("EF-7H",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a bound provided output is one the port's wires name", lives="PortBinder.provided",
+        ),
+        RuleRecord(
+            rule_id="assemblies.port_contract", codes=("EF-7J",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a port fits its members (carrier, fact, circuit lowering, observer, controllables); placeholders have counterparts",
+            lives="PortBinder._carrier, _land_fact, _lower_circuit, _observe, _plan_controllables; hisim/energy_system/assemblies/expansion.py:ImportExpander",
+        ),
+        RuleRecord(
+            rule_id="assemblies.circuit_ends_match", codes=("EF-7K",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="both ends of a circuit binding name one circuit, written consistently", lives="PortBinder._joined, resolve",
+        ),
+        RuleRecord(
+            rule_id="assemblies.one_provider_per_carrier", codes=("EF-7L",), nature=RuleNature.DOMAIN, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a carrier has exactly one provider; a provider has a bound consumer; a required need a provider",
+            lives="PortBinder._carrier, bind",
+            note="one site with one supply per carrier: a district or a plant with two grid connections is refused; today no setup has two",
+        ),
+        RuleRecord(
+            rule_id="assemblies.order_valid", codes=("EF-7P",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an evaluation order names each number once; recorded members follow the record's sequence",
+            lives="hisim/energy_system/assemblies/addresses.py:sequence; expansion.py:_check_recorded_sequence",
+        ),
+        RuleRecord(
+            rule_id="assemblies.observer_selection", codes=("EF-7S",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an observes: selector resolves", lives="hisim/energy_system/assemblies/selection.py:SelectionPlan._select",
+        ),
+        RuleRecord(
+            rule_id="assemblies.actuation_selection", codes=("EF-7U",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a controllable selection resolves", lives="SelectionPlan.__call__",
+        ),
+        RuleRecord(
+            rule_id="assemblies.weight_free", codes=("EF-7V",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a derived weight reaches no other kind's base weight", lives="SelectionPlan._refuse_collision",
+        ),
+        RuleRecord(
+            rule_id="components.one_kind_base", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="the class inherits exactly one of the five kind bases", lives="hisim/component.py:ComponentKinds.of, from Simulator.add_component",
+        ),
+        RuleRecord(
+            rule_id="components.unique_name", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="no second component with one component_id.key", lives="hisim/simulator.py:Simulator.add_component",
+        ),
+        RuleRecord(
+            rule_id="components.unique_output_key", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="no two outputs with one full name", lives="hisim/component_wrapper.py:ComponentWrapper._register_output",
+        ),
+        RuleRecord(
+            rule_id="components.has_outputs", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a component registered at least one output", lives="ComponentWrapper.register_component_outputs",
+        ),
+        RuleRecord(
+            rule_id="components.name_is_identity", nature=RuleNature.LAW, when="build (construction)", enforcement="E",
+            checks="the constructor name equals config.component_id.key; the name is an identifier; the config is a ConfigBase; no AUTO left; parameters set",
+            lives="hisim/component.py:Component.__init__", note="a constructor contract, D10",
+        ),
+        RuleRecord(
+            rule_id="components.connect_input_target", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="connect_input names an existing input, once", lives="hisim/component.py:Component.connect_input",
+        ),
+        RuleRecord(
+            rule_id="components.default_connections_wellformed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a default-connection list is non-empty, from one source class, and the connections asked for exist",
+            lives="Component.add_default_connections, get_default_connections; hisim/dynamic_component.py",
+        ),
+        RuleRecord(
+            rule_id="components.load_type_agrees", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="input and output share a load type (ANY matches)", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs", note="one rule with EF-30",
+        ),
+        RuleRecord(
+            rule_id="components.unit_agrees", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E / L",
+            checks="concrete units agree; Units.ANY warns", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs",
+        ),
+        RuleRecord(
+            rule_id="components.mandatory_input_connected", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E / L",
+            checks="a mandatory input has a source (allow_unconnected_mandatory warns)", lives="hisim/component_wrapper.py:ComponentWrapper.connect_inputs",
+            note="see §6.8; one rule with EF-31",
+        ),
+        RuleRecord(
+            rule_id="components.auto_connect_possible", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="automatic connection finds default connections and one matching source",
+            lives="Simulator.connect_everything_automatically, connect_dynamic_component_automatically",
+        ),
+        RuleRecord(
+            rule_id="components.no_duplicate_dynamic_feed", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="one source output enters a dynamic component once", lives="hisim/dynamic_component.py:DynamicComponent.add_component_input_and_connect",
+            note="one rule with EF-25",
+        ),
+        RuleRecord(
+            rule_id="components.dispatch_port_unique", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an aggregator has no two dispatch ports of one name or one type on one weight",
+            lives="DynamicComponent._refuse_a_dispatch_port_this_aggregator_already_has",
+        ),
+        RuleRecord(
+            rule_id="components.default_connection_tag", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a default connection's tag is carried by its target output", lives="DynamicComponent.connect_with_dynamic_connections_list",
+        ),
+        RuleRecord(
+            rule_id="components.channel_declared", nature=RuleNature.LAW, when="build / run", enforcement="E",
+            checks="an aggregator asks only for a channel it declares", lives="DynamicComponent.get_channel", note="an internal contract",
+        ),
+        RuleRecord(
+            rule_id="components.cost_relevance_declared", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks=(
+                "with COMPUTE_LIFECYCLE_COSTS or LIFECYCLE_COST_REPORT: no class with cost_relevance UNDECLARED; a PRICED class has get_cost_facts or an adapter "
+                "entry"
+            ),
+            lives="hisim/simulator.py:Simulator.check_cost_declarations",
+        ),
+        RuleRecord(
+            rule_id="components.source_output_registered", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="E",
+            checks="every connected input's source output belongs to an added component", lives="Simulator.evaluation_plan",
+        ),
+        RuleRecord(
+            rule_id="components.kind_in_evaluation_order", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="E",
+            checks="every kind is in EVALUATION_ORDER_OF_KINDS", lives="Simulator.evaluation_positions",
+        ),
+        RuleRecord(
+            rule_id="components.no_physics_cycle", nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="L",
+            checks="the L1 device-before-store constraints form no cycle", lives="hisim/evaluation_order.py:PhysicsOrder.ordered",
+        ),
+        RuleRecord(
+            rule_id="components.no_l2_cycle", nature=RuleNature.DOMAIN, target="components", stage=RuleStage.BUILD, when="first plan", enforcement="L",
+            checks="L2 controllers read one another in no cycle", lives="L2Order.ordered",
+        ),
+        RuleRecord(
+            rule_id="components.not_empty", nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD, when="build / step", enforcement="E",
+            checks="the run has at least one component and one column", lives="Simulator.run_all_timesteps; process_one_timestep",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.circuit_pairing", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; again after the run",
+            enforcement="E", checks="an end's other end declares the circuit; a circuit has exactly one supplier",
+            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.pairing_fault, Wiring.circuits",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.one_reader_per_flow", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; after the run",
+            enforcement="E", checks="a circuit's mass flow is read by one circuit-declaring component",
+            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.circuits",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.no_circuit_on_a_node", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; after the run",
+            enforcement="E", checks="an exempt component or a meter declares no circuit end", lives="hisim/postprocessing/energy_balance/ports.py:Wiring.circuits",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.receiver_unambiguous", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an output port read through paired inputs by one component; a non-metered PRODUCTION port read by one declared component unless an input is tagged",
+            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.ambiguous_receiver_faults",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.input_port_pairs", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="an input port pairs with the output port it reads (same carrier, opposite role)",
+            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.unpaired_input_port_faults",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.room_heat_needs_receiver", nature=RuleNature.DOMAIN, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a PRODUCTION port of ROOM_HEAT is read by a component", lives="PR #1211 (Wiring.refuse_a_broken_wiring, fourth fault list)",
+            note=", waived for demo and plant",
+        ),
+        RuleRecord(
+            rule_id="energy_ports.loop_tagged_whole", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a port set tags all four loop quantities", lives="hisim/component.py:FluidLoopPortSet.group",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.far_end_tagged", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a tagged flow is read by, or fed from, a tagged channel", lives="hisim/fluid_loops.py:FluidLoopWalk.untagged_far_end_faults",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.flow_read_once", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="one flow out is read by one flow in (a split needs a valve)", lives="FluidLoopWalk.connection_fault",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.closes", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a wired port set's flow out is read and its flow in fed", lives="FluidLoopWalk.connection_fault",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.wired_whole", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="flows and temperatures are connected together, or neither", lives="FluidLoopWalk.connection_fault",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.temperature_follows_flow", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="a member's temperature in reads the member whose flow it reads", lives="FluidLoopWalk.loop_faults",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.one_carrier_one_fluid", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="all members state one carrier and one fluid", lives="FluidLoopWalk.loop_faults",
+        ),
+        RuleRecord(
+            rule_id="fluid_loops.one_pump_owner", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
+            checks="exactly one member pumps", lives="FluidLoopWalk.loop_faults",
+        ),
+        RuleRecord(
+            rule_id="results.finite", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run, first", enforcement="E",
+            checks="no result column holds NaN or inf unless its output declares may_be_non_finite; one column per output",
+            lives="hisim/postprocessing/finite_results.py:FiniteResultsCheck.require_finite",
+        ),
+        RuleRecord(
+            rule_id="results.all_rows", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="the table has one row per timestep", lives="Simulator.prepare_post_processing",
+        ),
+        RuleRecord(
+            rule_id="results.port_finite", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="a declared port is finite in every step", lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.nonfinite",
+            note="one rule with results.finite",
+        ),
+        RuleRecord(
+            rule_id="results.component_balance_closes", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="per component, consumption − production − loss − stored change ≤ 0.1 % of throughput over the run and per step (Tolerance)",
+            lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.balance, run",
+        ),
+        RuleRecord(
+            rule_id="results.link_closes", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="every PRODUCTION→CONSUMPTION transfer between declared components is booked by both sides within 0.1 %",
+            lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.links; hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.declared_links",
+        ),
+        RuleRecord(
+            rule_id="results.circuit_faults", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="the circuit rules of §6.5 on the run's columns, plus: an open end pumps no water",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.circuit_faults, add_circuits",
+        ),
+        RuleRecord(
+            rule_id="results.circuit_columns", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="a circuit's mass flow is never negative, the timestep positive; the columns a port, circuit or exchange names exist",
+            lives="hisim/postprocessing/energy_balance/ports.py:CircuitColumns.heat_in_kilowatt_hours_per_step, DeclaredPorts.add_input_ports, read_meters",
+        ),
+        RuleRecord(
+            rule_id="results.no_port_on_a_node", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="an exempt component or a meter declares no port",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing",
+        ),
+        RuleRecord(
+            rule_id="meters.meter_balance", nature=RuleNature.LAW, target="meters", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E (conditional)",
+            checks="per meter and carrier, import − export equals the ports it reads, within tolerance; enforced only while nothing is undeclared (Q-H)",
+            lives="hisim/postprocessing/energy_balance/meters.py:MeterBalance.of, MeterCheck.failing",
+        ),
+        RuleRecord(
+            rule_id="meters.metered_port_has_a_meter", nature=RuleNature.DOMAIN, target="meters", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E (conditional)", checks="a metered port's peer is a meter or a component; enforced only while nothing is undeclared",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unmetered; hisim/postprocessing/energy_balance/meters.py:MeterCheck.failing_unmetered",
+            note=", waived for demo",
+        ),
+        RuleRecord(
+            rule_id="results.port_linked", nature=RuleNature.DOMAIN, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="L (the acceptance PR makes it E)", checks="a non-idle port has a peer",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unlinked", note=", waived for demo",
+        ),
+        RuleRecord(
+            rule_id="results.component_declared", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="L (CI makes it E, §6.9)", checks="a component declares ports or is exempt with a reason",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect",
+        ),
+        RuleRecord(
+            rule_id="costs.lifecycle_engine", nature=RuleNature.LAW, when="post-processing", enforcement="E / L",
+            checks="the cost engine finished; CostDataError always propagates, other errors fail only with require_lifecycle_costs",
+            lives="hisim/postprocessing/postprocessing_main.py:PostProcessor.compute_lifecycle_costs", note="the engine's own policy",
+        ),
+        RuleRecord(
+            rule_id="run.write_guard", nature=RuleNature.LAW, when="every write", enforcement="E",
+            checks="no write outside the calculation's directories; one result directory per calculation; not under hisim/inputs",
+            lives="hisim/write_guard.py:WriteGuard._hook, CalculationDirectories", note="not a rule on a system",
+        ),
+        RuleRecord(
+            rule_id="run.simulation_window", nature=RuleNature.LAW, when="load", enforcement="E",
+            checks="the step divides a day, the span is whole days in one year, the start is midnight; weather_year, part_load_above_seconds, cache_directories valid",
+            lives="hisim/simulationparameters.py:SimulationParameters.validated_window and siblings", note="parameters, not the system",
+        ),
+        RuleRecord(
+            rule_id="run.convergence", nature=RuleNature.LAW, when="per step", enforcement="E",
+            checks="a step converges within max(100, 100·s/60) passes; after 10 it is forced", lives="Simulator.process_one_timestep", note="the loop",
+        ),
+        RuleRecord(
+            rule_id="run.post_processing_options", nature=RuleNature.LAW, when="post-processing", enforcement="E",
+            checks="report writers need GENERATE_PDF_REPORT; KPI JSON needs COMPUTE_KPIS; network charts need MAKE_NETWORK_CHARTS and dot",
+            lives="PostProcessor.run and siblings",
+        ),
+        RuleRecord(
+            rule_id="run.kpi_consistency", nature=RuleNature.LAW, when="post-processing", enforcement="E",
+            checks=(
+                "self-sufficiency, relative demand, self-consumption ≤ 100 %; batteries publish their stored-energy increase; KPI entries have a source, a tag, a "
+                "unique address"
+            ),
+            lives="hisim/postprocessing/kpi_computation/kpi_preparation.py, kpi_structure.py, kpi_address.py",
+            note="the HTW Berlin definitions are a prosumer household's, noted",
+        ),
+        RuleRecord(
+            rule_id="run.building_sizer_kpi_json", nature=RuleNature.BUILDING, when="post-processing", enforcement="E",
+            checks="a building object has a positive conditioned floor area", lives="PostProcessor.write_kpis_to_json_for_building_sizer",
+        ),
+        RuleRecord(
+            rule_id="run.scenario_kpis_read_bui1", nature=RuleNature.RESIDENTIAL, when="post-processing", enforcement="E (KeyError)",
+            checks="write_kpis_in_dict reads the default building label", lives="PostProcessor.write_kpis_in_dict", note="R-shaped (one house); a district bead",
+        ),
+        RuleRecord(
+            rule_id="run.economics", nature=RuleNature.RESIDENTIAL, when="post-processing", enforcement="E",
+            checks=(
+                "DeviceEnergySpecs rows for every electricity publisher; useful-heat sources are Building.TheoreticalHeatingEnergyDemand and "
+                "SimpleDHWStorage.ThermalEnergyConsumptionDHW; EconomicContext (tenancy, envelope), perspectives (owner-occupier, landlord, tenant), the subsidy "
+                "context (dwelling units, household size)"
+            ),
+            lives="hisim/economics/bridge.py, adapter.py, perspectives.py, subsidies/context.py",
+            note="the cost engine is a household's; scoped when the engine runs for a commercial case",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_name_invalid", codes=("EF-R1",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a component's runtime name is an identifier", lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_qualified_identity", codes=("EF-R2",), nature=RuleNature.RESIDENTIAL, when="recording", enforcement="E",
+            checks="no component carries a building or a unit in its identity (blocks a district twin)", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_absolute_path", codes=("EF-R3",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="no absolute path survives re-symbolisation", lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_preset_gone", codes=("EF-R4",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a preset provenance names a builder the class still has", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_file_rejected", codes=("EF-R5",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="the written file loads and builds again", lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.grouping_unassigned_difference", codes=("EF-R6",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a grouping assigns every difference between its probes", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.grouping_unknown_option", codes=("EF-R7",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a grouping names only options it declares", lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.equal_parameter_files", codes=("EF-R8",), nature=RuleNature.LAW, when="recording", enforcement="L",
+            checks="no two simulation-parameter files normalise equal (the fleet driver checks it without raising)", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.probe_list_malformed", codes=("EF-R9",), nature=RuleNature.LAW, when="recording", enforcement="E", checks="a probe list is well-formed",
+            lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.grouping_not_reproduced", codes=("EF-R10",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="the grouped file reproduces every probe", lives="hisim/energy_system/recording/", note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_dispatch_ambiguous", codes=("EF-R11",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="an aggregator's control outputs for one participant can be told apart", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_would_overwrite", codes=("EF-R12",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a recording never overwrites a file the recorder did not produce", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_auto_differs", codes=("EF-R13",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="a field left to its preset re-resolves to the number the run produced", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="recorder.recorded_field_missing", codes=("EF-R14",), nature=RuleNature.LAW, when="recording", enforcement="E",
+            checks="the rebuilt file holds every component and field the run had", lives="hisim/energy_system/recording/",
+            note="checks a recording against its run, not a system",
+        ),
+        RuleRecord(
+            rule_id="house.heat_distribution_system_needs_building", nature=RuleNature.BUILDING, when="build (EF-31)", enforcement="E",
+            checks=(
+                "a heat distribution system needs a building: mandatory inputs TheoreticalThermalBuildingDemand, ResidenceTemperatureIndoorAir only a Building feeds"
+            ),
+            lives="hisim/components/heat_distribution_system.py:HeatDistribution.__init__, HeatDistributionController.__init__", note="right for any heated building",
+        ),
+        RuleRecord(
+            rule_id="house.room_temperature_controllers_need_building", nature=RuleNature.BUILDING, when="build (EF-31)", enforcement="E",
+            checks=(
+                "room-temperature controllers need a building: mandatory indoor temperature: AirConditionerController, SimpleAirConditioner, L1CHPController, "
+                "IdealizedElectricHeaterController"
+            ),
+            lives="hisim/components/air_conditioner.py, simple_air_conditioner.py, generic_chp/controller.py, idealized_electric_heater.py",
+            note="right for any heated building",
+        ),
+        RuleRecord(
+            rule_id="house.heating_season_input", nature=RuleNature.BUILDING, when="build", enforcement="E",
+            checks=(
+                "heating-season input: boiler, district heating, electric heating, heat-pump space heating and HDS controllers read HeatingSeason from the heating "
+                "curve, whose laws read the building's load per m²"
+            ),
+            lives=(
+                "hisim/components/generic_boiler.py, generic_district_heating.py, generic_electric_heating.py, more_advanced_heat_pump_hplib.py, "
+                "heating_curve.py:HEATING_THRESHOLD_LAW"
+            ),
+            note="a process-heat boiler has no season; a commercial building has one",
+        ),
+        RuleRecord(
+            rule_id="house.building_without_residents_warns", nature=RuleNature.RESIDENTIAL, when="first step", enforcement="L",
+            checks="a building without residents warns: HeatingByResidents and HeatingByDevices optional; 0 W when unconnected",
+            lives="hisim/components/building/building.py:Building.warn_about_unconnected_internal_heat_gains",
+            note="D11 adds residents to the one setup that lacks them",
+        ),
+        RuleRecord(
+            rule_id="house.tabula_windows_scaling_apartments", nature=RuleNature.RESIDENTIAL, when="build", enforcement="E",
+            checks=(
+                "TABULA windows, scaling, apartments: a row with no reference window area is refused; floor area and base area exclusive; apartments ≥ 0 (else floor "
+                "area / 92.1 m²)"
+            ),
+            lives="hisim/components/building/information.py", note="TABULA is residential",
+        ),
+        RuleRecord(
+            rule_id="house.design_heating_load", nature=RuleNature.BUILDING, when="build (sizing)", enforcement="E",
+            checks="the design heating load: (H_tr + H_ve)·(T_in − T_ref), DIN EN 12831 steady state",
+            lives="hisim/components/building/information.py:get_max_thermal_building_demand", note="the same law for both uses",
+        ),
+        RuleRecord(
+            rule_id="house.building_provides_facts", nature=RuleNature.BUILDING, when="build", enforcement="E",
+            checks="the building provides the facts: heating load, apartments, floor area, roof area, set points; a consumer without a building fails EF-4A",
+            lives="hisim/components/building/config.py:SIZING_CONTRIBUTIONS", note="(apartments: R)",
+        ),
+        RuleRecord(
+            rule_id="house.per_apartment_sizing_laws", nature=RuleNature.RESIDENTIAL, when="build", enforcement="E",
+            checks="per-apartment sizing laws: DHW tank 250 l per apartment; collector 4 m² per apartment; boiler floor 2,500 W per apartment",
+            lives="hisim/components/simple_water_storage.py:SimpleDHWStorageConfig.VOLUME_LAW; solar_thermal_system.py; generic_boiler.py",
+            note="commercial laws per use",
+        ),
+        RuleRecord(
+            rule_id="house.rooftop_pv_needs_roof_area_buffer", nature=RuleNature.BUILDING, when="build", enforcement="E",
+            checks="rooftop PV needs a roof area; a buffer needs the generator's power",
+            lives="hisim/components/generic_pv_system/config.py:_rooftop_power_in_watt; simple_water_storage.py:_buffer_volume_in_liter", note="/ L",
+        ),
+        RuleRecord(
+            rule_id="house.domestic_hot_water", nature=RuleNature.RESIDENTIAL, when="per step", enforcement="E",
+            checks="domestic hot water: tap 45 °C, fresh water 10 °C, 2,000 kWh/a per household",
+            lives="hisim/components/configuration.py:HouseholdWarmWaterDemandConfig", note="per use for commercial",
+        ),
+        RuleRecord(
+            rule_id="house.heating_curve_design_day", nature=RuleNature.BUILDING, when="build / step", enforcement="E",
+            checks="heating-curve design day: the reference temperature is below the set point; the load fraction ≥ 0",
+            lives="hisim/components/heating_curve.py:HeatingCurveController.__init__",
+        ),
+        RuleRecord(
+            rule_id="house.comfort_bands", nature=RuleNature.BUILDING, when="build", enforcement="E",
+            checks="comfort bands: heating set < cooling set, finite, positive hysteresis",
+            lives="hisim/components/air_conditioner.py:AirConditionerController.__init__", note="the band's values by use",
+        ),
+        RuleRecord(
+            rule_id="house.cooling_through_emitter_needs_floor_heating", nature=RuleNature.BUILDING, when="build / step", enforcement="E",
+            checks="cooling through the emitter needs floor heating; HDS cooling needs cooling_enabled",
+            lives="hisim/components/more_advanced_heat_pump_hplib.py; heat_distribution_system.py",
+        ),
+        RuleRecord(
+            rule_id="house.household_occupancy", nature=RuleNature.RESIDENTIAL, when="build", enforcement="E",
+            checks=(
+                "a household occupancy: one household per connector (more through the LPG); a predefined profile exists; a car's profile is published by exactly one "
+                "occupancy; a car runs on electricity or diesel"
+            ),
+            lives="hisim/components/loadprofilegenerator_utsp_connector.py; lpg_car_information.py; generic_car.py:CarConfig.for_household",
+        ),
+        RuleRecord(
+            rule_id="house.substation_dhw_share", nature=RuleNature.BUILDING, when="per step", enforcement="E",
+            checks="substation DHW share: in parallel mode the DHW load is below the connected load",
+            lives="hisim/components/generic_district_heating.py; generic_electric_heating.py",
+        ),
+        RuleRecord(
+            rule_id="house.storage_s_converged_temperature", nature=RuleNature.COMPONENT, when="per step", enforcement="E",
+            checks="the storage's converged temperature: the mean water temperature in [0, 90] °C after convergence",
+            lives="hisim/components/simple_water_storage.py:SimpleWaterStorage.check_converged_mean_water_temperature (the one non-empty i_doublecheck)",
+            note="a domestic tank's cap; a process tank would raise it",
+        ),
+        RuleRecord(
+            rule_id="house.loop_carriers", nature=RuleNature.COMPONENT, when="declaration", enforcement="E",
+            checks="the loop carriers: SPACE_HEATING_HEAT, DOMESTIC_HOT_WATER_HEAT, AMBIENT_HEAT", lives="hisim/energy_port.py:FluidLoop.LOOP_CARRIERS",
+            note="a process-heat loop needs a carrier",
+        ),
+        RuleRecord(
+            rule_id="gate.golden_check", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every (setup, parameters) pair reproduces its KPI leaves in Python, twin and composed mode",
+            lives=(
+                "scripts/golden_check.py, golden_kpis.py, golden_config.json; .github/workflows/golden-check.yml, golden-year.yml; tests/test_golden_matrix.py (every"
+                " setup is in the config)"
+            ),
+            note="every kind (D8)",
+        ),
+        RuleRecord(
+            rule_id="gate.twin_freshness", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every setup re-records byte-identically; no skip list; no two parameter files describe one run",
+            lives="scripts/record_all_setups.py --check; .github/workflows/energy-system-freshness.yml; tests/test_energy_system_recording_fleet.py",
+            note="every kind; checks the setup_kind key",
+        ),
+        RuleRecord(
+            rule_id="gate.parity", nature=RuleNature.GATE, when="CI", enforcement="E", checks="a Python setup equals its twin, wiring and results",
+            lives="scripts/p3_parity_check.py; tests/test_p3_parity.py", note="every kind",
+        ),
+        RuleRecord(
+            rule_id="gate.schema", nature=RuleNature.GATE, when="CI", enforcement="E", checks="the committed schema equals a fresh export; every twin validates",
+            lives="tests/test_energy_system_schema.py", note="every kind",
+        ),
+        RuleRecord(
+            rule_id="gate.port_coverage", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every component class declares ports or is exempt with a reason stated on its own body; an exempt class declares nothing",
+            lives="tests/test_energy_port_coverage.py, tests/component_sweep.py (sizes every preset against ComponentSweep.REFERENCE_HOUSE, a single-family archetype)",
+            note="L; the reference house is R-shaped (a commercial sweep when a commercial archetype exists)",
+        ),
+        RuleRecord(
+            rule_id="gate.flag_agreement", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="an electricity postprocessing flag agrees with its energy port; the one-sided list only shrinks", lives="tests/test_energy_port_flag_agreement.py",
+            note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.kind_base", nature=RuleNature.GATE, when="CI", enforcement="E", checks="every component class has one kind; the evaluation order",
+            lives="tests/test_component_kinds.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.cost_declarations", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every class declares cost_relevance; adapter keys resolve; AUTO_SUBSTITUTES are the single-family archetype",
+            lives="tests/test_economics_adapter_contract.py, test_economics_declaration_gate.py; tests/renovisor/test_twin_cost_declarations.py",
+            note="L; substitutes R-shaped",
+        ),
+        RuleRecord(
+            rule_id="gate.no_per_step_finite_checks", nature=RuleNature.GATE, when="CI", enforcement="E", checks="no isfinite in hot paths",
+            lives="tests/test_no_per_step_finite_checks.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.explicit_state_controllers", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="no hidden state; the committed state reproduces the outputs", lives="tests/test_explicit_state_controllers.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.fluid_loop_fleet", nature=RuleNature.GATE, when="CI", enforcement="E", checks="every recorded file builds and gets its loop ids",
+            lives="tests/test_fluid_loops.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.dhw_and_buffer_twins", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every file with a tank closes it; both circuit ends agree; the forced-step share is bounded",
+            lives="tests/test_dhw_chain_twins.py, test_space_heating_buffer_twins.py, test_part_load_twins.py", note="B (files with a tank)",
+        ),
+        RuleRecord(
+            rule_id="gate.sizing_scalability", nature=RuleNature.GATE, when="CI", enforcement="E", checks="components scale ×5 with the floor area",
+            lives="tests/test_sizing_energy_systems.py", note="R",
+        ),
+        RuleRecord(
+            rule_id="gate.assembly_library", nature=RuleNature.GATE, when="CI", enforcement="E", checks="EF-75 on every library file",
+            lives="tests/assemblies/test_assembly_library.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.assembly_contracts_run_balance_finite_bounds", nature=RuleNature.GATE, when="CI", enforcement="E", checks="per sample",
+            lives="tests/assemblies/test_library_contracts.py; hisim/energy_system/assemblies/testing/checks.py", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.assembly_contract_heat_delivered", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="no HEATING input left unconnected when a default connection serves it", lives="checks.py:HeatDelivery.lost, check_heat_delivered", note="B",
+        ),
+        RuleRecord(
+            rule_id="gate.assembly_contract_room_heated", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every heated building's day-mean air within 1 K (Building.UNDERHEATING_TOLERANCE_IN_KELVIN) of its set point", lives="checks.py:check_room_heated",
+            note="B (a heated building)",
+        ),
+        RuleRecord(
+            rule_id="gate.isolation_harness", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every carrier moved through a metered port gets a meter partner; a port with no partner refuses the build",
+            lives="hisim/energy_system/assemblies/testing/isolation.py, partners.py", note="the isolation system is demo",
+        ),
+        RuleRecord(
+            rule_id="gate.composed_twin_gates", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every composed file equals its twin outside the neutral swaps", lives="tests/assemblies/test_twin_gates.py, test_composed_twins.py",
+            note="every kind",
+        ),
+        RuleRecord(
+            rule_id="gate.layering_lints", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="nothing outside hisim/renovisor imports it; subcomponents import only the kernel; a component imports no file format",
+            lives="tests/test_renovisor_import_lint.py, test_subcomponent_import_lint.py, test_energy_system_layering.py",
+            note="L; the rules package joins the layering test (imports no component)",
+        ),
+        RuleRecord(
+            rule_id="gate.semgrep", nature=RuleNature.GATE, when="CI", enforcement="E", checks="no file write outside the allowlist; no print",
+            lives=".semgrep/file_writes.yml, no_print.yml; quality.yml", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.stray_files", nature=RuleNature.GATE, when="CI", enforcement="E", checks="a test dirties nothing outside its result directory",
+            lives="tests/conftest.py:guard_against_stray_files", note="L",
+        ),
+        RuleRecord(
+            rule_id="gate.renovisor_path_verification", nature=RuleNature.GATE, when="CI", enforcement="E",
+            checks="every probe path translates and diffs against its base", lives="python -m hisim.renovisor verify; .github/workflows/path-verification.yml",
+            note="R (RenoVisor)",
+        ),
+    )
+
+    @classmethod
+    def record(cls, rule_id: str) -> Optional[RuleRecord]:
+        """Return the record with this id, for example ``energy_ports.room_heat_needs_receiver``, or ``None``."""
+        return next((record for record in cls.RECORDS if record.rule_id == rule_id), None)

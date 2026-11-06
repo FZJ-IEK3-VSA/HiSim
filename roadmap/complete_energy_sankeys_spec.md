@@ -1,7 +1,7 @@
 # Spec: one connected energy Sankey shows the whole house, from the grid, the fuels and the environment to every end use and loss
 
 Status: draft, D1 to D4 decided (owner, 2026-10-19), D1 revised for meters by Q-J (2026-10-20), D4 amended for the
-drawing (2026-11-06, §4.8), open questions in §8. Nothing of §4 is built: today only the
+drawing and its layout (2026-11-06, §4.8), open questions in §8. Nothing of §4 is built: today only the
 five heat generators declare energy ports, and the Sankeys are one diagram per carrier. Owner: Noah Pflugradt. Epic:
 hisim-energy-sankeys-9uoo, acceptance bead hisim-mzft. Builds on: #870 and #871 (the energy-port contract, the balance check, the
 per-carrier Sankeys), `roadmap/hydronic_coupling_spec.md` (stages B to D built, stage E is part of §9),
@@ -78,6 +78,15 @@ and a view with nothing left gets no HTML, nodes below 0.5 % of the view's large
 per sink, and labels are one line, "name · 1,234 kWh", with display names. `energy_sankey.json` keeps every view and
 every edge, unmerged: it is what tests and tools read, so it stays the whole graph, and a drawing step can change
 without touching a number. Q-D stands for the graph: the PV starts at the sun in the JSON and in the `solar` view.
+
+**D4 layout amendment — plotly arranges the nodes; the drawing sizes the figure and leaves out labels that have no
+room** (owner Noah Pflugradt, 2026-11-06, bead hisim-sankey-layout-48b8). After the first amendment labels still
+overlapped where plotly stacked small nodes of one column and in front of the last column, and the battery drew a ring
+from and to the meter. Consequence (§4.8, steps 2 and 6): an exchange both ways between two nodes on one carrier is
+drawn as its net; the figure grows with the nodes of its fullest column, plotly keeps a wider gap between nodes, and a
+node too low for a label line shows its label in its hover text only. Explicit node positions (`node.x`/`node.y`)
+were built and rejected (§10): plotly sizes the nodes itself, so positions computed for assumed node heights never
+matched the nodes it drew, and links ran across each other and through nodes.
 
 The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sankeys-9uoo: 0.1 % of the run's throughput, per step
 `max(1e-6 kWh, 0.1 %)`), and every failing balance or one-sided link fails the run (owner, 2026-10-02).
@@ -301,11 +310,12 @@ through the wire that carries the fuel (owner, 2026-10-28):
   carries the port: `AdvancedElectrolyzer.HydrogenProductionInWatt`, `HydrogenStorage.HydrogenReceivedInWatt`,
   `CHP.FuelConsumptionInWatt` (no KPI reads any of them).
 
-### 4.8 Drawing a view (D4 amendment, 2026-11-06, hisim-sankey-readability-8e20)
+### 4.8 Drawing a view (D4 amendment, 2026-11-06, hisim-sankey-readability-8e20; layout amendment, 2026-11-06, hisim-sankey-layout-48b8)
 
 `energy_sankey.json` is the graph: every view, `overall` and one filter per carrier, with every edge of §4.2, which
 nothing below changes. The HTML of a view is a drawing of it (`SankeyDrawing` in
-`hisim/postprocessing/energy_balance/sankey.py`), made readable in four steps, in this order:
+`hisim/postprocessing/energy_balance/sankey.py`), made readable in six steps, in this order (steps 2 and 6: owner
+Noah Pflugradt, 2026-11-06, bead hisim-sankey-layout-48b8):
 
 1. **`overall` starts a solar converter at what it makes of the sunlight.** In the drawing of `overall` only, a
    component's `SOLAR` `LOSS` ports are netted against the `SOLAR` it receives: its solar loss nodes are left out, and
@@ -313,11 +323,18 @@ nothing below changes. The HTML of a view is a drawing of it (`SankeyDrawing` in
    collector the heat it absorbs. The `solar` view, the filter of the carrier `SOLAR`, draws the whole split: `sun` →
    PV system → its module and inverter loss → its boundary node. No other view has a `SOLAR` edge. The sunlight a
    building takes through its windows has no solar loss and is drawn in full.
-2. **Empty flows are left out.** An edge below 1 Wh is not drawn, and a node left without edges goes with it; a view
+2. **An exchange both ways is drawn as its net.** Where two nodes exchange energy of one carrier both ways, the
+   drawing draws one link of the difference, the way the larger flow goes, and its hover text lists both. A battery
+   that takes 3,488 kWh from the meter and gives 2,541 kWh back draws `ElectricityMeter → Battery` at 947 kWh
+   instead of two links, which form a cycle that plotly draws as a ring around both nodes. Flows of different
+   carriers are never netted, and parallel links one way stay as they are. The storage's own change is the edge to
+   or from its node `<component> · stored` (§4.2, 7), which plotly places by its sign: a store that gave up energy
+   only gives and is drawn in the first column, one that took energy only takes and is drawn in the last.
+3. **Empty flows are left out.** An edge below 1 Wh is not drawn, and a node left without edges goes with it; a view
    with nothing left gets no HTML (the JSON keeps it). 1 Wh, not 1 kWh, so that the flows of a short run are still
    drawn. Example: the 2.4e-7 kWh of cooling the heat-pump twins' hot-water circuit books over a year, and with it
    their `cooling` view.
-3. **Small nodes merge into "other" nodes, one per sink.** A component, loss or storage node through which less than
+4. **Small nodes merge into "other" nodes, one per sink.** A component, loss or storage node through which less than
    0.5 % of the view's largest edge passes is small. Boundary nodes, meters and the nodes that show a fault
    (`unaccounted`, `undeclared: …`, `unlinked`) are always drawn, so a merge never hides where energy enters or leaves
    or what fails. Small nodes linked to each other form a group (a small battery with its losses and its store), and
@@ -329,7 +346,7 @@ nothing below changes. The HTML of a view is a drawing of it (`SankeyDrawing` in
    (for `other (sinks)`: takes in), and its hover text lists the nodes it stands for; one that stands for a single
    node keeps that node's name and colour, since merging one node gains nothing. A group linked to nothing outside it
    is drawn as it is.
-4. **Labels are one line, "name · energy".** Whole kWh with thousands separators from 10 kWh on ("grid import ·
+5. **Labels are one line, "name · energy".** Whole kWh with thousands separators from 10 kWh on ("grid import ·
    1,805 kWh"), two significant digits below ("Tank · stored · 0.25 kWh"). A component keeps the name the energy
    system gives it; a loss node writes its port in words: the unit suffix (`InWatt`, `InWattHour`, `InKilowatt`,
    `InKilowattHour`, `InKilogramPerSecond`) left out, CamelCase split into lower-case words, acronyms kept
@@ -338,16 +355,36 @@ nothing below changes. The HTML of a view is a drawing of it (`SankeyDrawing` in
    `TransmissionLossWindowsAndDoorsInWatt` → "window and door transmission loss",
    `ApplianceElectricityNotReleasedIndoorsInWatt` → "appliance energy leaving the house". A node's hover text names
    it as the JSON does.
+6. **plotly arranges the nodes; the figure makes room and a tiny node keeps its label for the hover.** plotly
+   places the nodes itself (its "justify" alignment: sources in the first column, sinks in the last, every other
+   node by its longest path from a source) and places a label beside its node, right of it, left of it in the last
+   column, without collision handling. The drawing does not fight that arrangement:
+   - **Height.** The plot is as tall as the column with most nodes needs, a label line (16 pixels at font size 12)
+     and a gap per node and 400 pixels for their energy, at least 900 pixels, about what plotly fills a browser
+     window with. The columns are estimated by plotly's rule only to size the figure. The width stays plotly's.
+   - **Gap.** plotly keeps 24 pixels between two nodes of a column (`node.pad`, 18 before), more than a label line.
+   - **Labels of tiny nodes.** A node that plotly draws lower than a label line shows no label beside it; its
+     "name · energy" opens its hover text instead. The drawing estimates the height as plotly scales the nodes: one
+     scale for all, the largest at which every column fits its nodes and gaps into the plot. Boundary nodes, meters
+     and the nodes that show a fault (`unaccounted`, `undeclared: …`, `unlinked`) always keep their label, so a
+     drawing never hides where energy enters or leaves or what fails.
+
+   Rejected (owner, 2026-11-06): explicit node positions. plotly takes `node.x`/`node.y` but not node sizes; it
+   scales the nodes to the real plot itself, so positions computed for assumed node heights did not match the nodes
+   it drew, and links ran across each other and through nodes, worse than plotly's own arrangement.
 
 Example, `household_heatpump_building_sizer`, 2021 at 900 s: `overall` draws `sun · 30,137 kWh` (26,315 kWh to the
 PV system, 3,822 kWh through the windows) instead of 130,746 kWh, the largest edge is 26,315 kWh and the threshold
 132 kWh; the stores of the building, the battery and the two tanks (19, 11, 2 and 2 kWh) come from one
 `other (4 flows) · 34 kWh`, the building's 47 kWh of gains lost through its windows keep their name, and the
-`cooling` view gets no HTML. Labels still overlap where plotly stacks small nodes of one column (the battery's cell
-loss on the hot-water tank) and in front of the boundary column (the building's loss nodes beside `grid export`), and
-the battery still draws a ring from and to the meter; the follow-ups are explicit node columns (`node.x`/`node.y`)
-with a minimum gap per label and a height scaled by the nodes per column, and a storage's change as a node of its
-own instead of the ring.
+`cooling` view gets no HTML. With steps 2 and 6 the battery draws 947 kWh from the meter and no ring, the figure is
+990 pixels high, and the battery's two loss nodes, the two tanks' standby losses, the building's lost gains and the
+`other (4 flows)` of the stores show their labels on hover only. What plotly's arrangement still does: a long link
+passes behind a node of a column it crosses (the residents' body heat to `UTSPConnector` behind `ElectricityMeter`;
+in the gas twin the meter's export behind `HeatDistributionSystem`), and a long label of one column runs into the
+next (`MoreAdvancedHeatPumpHPLib · 15,644 kWh` under `SimpleHotWaterStorage`, the building's loss labels over the
+last column, the window and door transmission loss cut at the right margin; in the gas twin the `UTSPConnector`
+appliance loss label into the `Building` label).
 
 Nothing else changes: the graph, `energy_sankey.json`, `balance_report.json`, every number and KPI.
 
@@ -783,7 +820,8 @@ Epic hisim-energy-sankeys-9uoo, acceptance hisim-mzft.
 |---|---|---|
 | hisim-energy-sankeys-9uoo.18 (P1) | D1, D2 recorded; colours by carrier, electricity from its physical source | 1 |
 | hisim-energy-sankeys-9uoo.19 (P3) | The arrow-style renderer (D4) | after 6 |
-| hisim-sankey-readability-8e20 (P2) | The drawing of a view (D4 amendment, §4.8): solar netted in `overall`, empty flows left out, small nodes merged, one-line labels; then node columns and a storage node of its own if labels still overlap | – |
+| hisim-sankey-readability-8e20 (P2) | The drawing of a view (D4 amendment, §4.8): solar netted in `overall`, empty flows left out, small nodes merged, one-line labels | – |
+| hisim-sankey-layout-48b8 (P2) | The drawing's room for labels (§4.8, steps 2 and 6): an exchange both ways drawn as its net (no battery ring), the figure as tall as its fullest column needs, a wider node gap, and no label beside a node too low for one. Rejected: explicit node positions (`node.x`/`node.y`), since plotly sizes the nodes itself | – |
 | hisim-energy-sankeys-9uoo.3 (P1), hisim-hydronics-fxix.6 | Storages and HDS, hydronic stage E | 3 |
 | hisim-energy-sankeys-9uoo.5 (P1) | Electricity devices | 2, 5b |
 | hisim-energy-sankeys-9uoo.6 (P1) | The building | 4 (4a first) |

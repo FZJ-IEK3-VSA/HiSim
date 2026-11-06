@@ -30,9 +30,11 @@ has no carrier, appears only in ``overall``. Links are coloured by carrier with 
 palette; the renderer is plotly (D4).
 
 ``energy_sankey.json`` keeps every edge of every view. :class:`SankeyDrawing` decides what a view's HTML draws
-(spec §4.8, owner amendment of 2026-11-06, bead hisim-sankey-readability-8e20): ``overall`` starts a component that
-converts sunlight at what it makes of it, flows below 1 Wh are left out, flows below a share of the view's largest
-flow merge into "other" nodes, and every node is labelled on one line with a display name and its energy.
+(spec §4.8, owner amendments of 2026-11-06, beads hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8):
+``overall`` starts a component that converts sunlight at what it makes of it, an exchange both ways between two nodes
+is drawn as its net, flows below 1 Wh are left out, flows below a share of the view's largest flow merge into "other"
+nodes, and every node is labelled on one line with a display name and its energy. plotly arranges the nodes; the
+figure grows with the nodes of its fullest column, and a node too low for a label line shows its label on hover only.
 """
 
 from __future__ import annotations
@@ -410,28 +412,35 @@ class DrawnNode:
         label: The one-line label beside the node, for example "PVSystem · module and inverter loss · 1,234 kWh".
         hover: The hover text: the node's full name, or the nodes an "other" node stands for.
         colour: The node's colour, by its kind.
+        always_labelled: Whether the label is drawn however small the node: a boundary node, a meter, and a node that
+            shows a fault (:attr:`SankeyDrawing.ALWAYS_DRAWN`).
     """
 
     name: str
     label: str
     hover: str
     colour: str
+    always_labelled: bool = False
 
 
 class SankeyDrawing:
     """What the HTML of one view draws: the view's links made readable, its nodes labelled (spec §4.8).
 
-    The JSON keeps the whole graph; only the drawing changes it, in this order (owner amendment of 2026-11-06, bead
-    hisim-sankey-readability-8e20):
+    The JSON keeps the whole graph; only the drawing changes it, in this order (owner amendments of 2026-11-06, beads
+    hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8):
 
     1. ``overall`` nets a component's solar losses against the sunlight it receives (:meth:`net_solar_losses`): the
        PV system starts at its electricity, and the split of the sunlight is drawn in the ``solar`` view only.
-    2. A flow below :attr:`EMPTY_FLOW_IN_KILOWATT_HOUR` is left out (:meth:`drop_empty`), and a node left with no
+    2. An exchange both ways between two nodes on one carrier is drawn as its net (:meth:`net_two_way`), so a battery
+       that gives back to the meter part of what it took from it draws no ring.
+    3. A flow below :attr:`EMPTY_FLOW_IN_KILOWATT_HOUR` is left out (:meth:`drop_empty`), and a node left with no
        flow goes with it. A view with nothing left is not drawn.
-    3. Small nodes, through which less than :attr:`SMALL_FLOW_SHARE` of the view's largest flow passes, merge into
+    4. Small nodes, through which less than :attr:`SMALL_FLOW_SHARE` of the view's largest flow passes, merge into
        "other" nodes, one per sink (:meth:`merge_small`); the hover text lists what each stands for. An "other" node
        that stands for a single node keeps that node's name and colour, since merging one node gains nothing.
-    4. Every node is labelled on one line, "name · energy" (:meth:`label`), with a display name (:meth:`display_name`).
+    5. Every node is labelled on one line, "name · energy" (:meth:`label`), with a display name (:meth:`display_name`).
+    6. plotly arranges the nodes. The figure is as tall as its fullest column needs (:meth:`plot_height_in_pixels`),
+       and a node too low for a label line shows its label in its hover text only (:meth:`shown_label`).
 
     Example: ``SankeyDrawing.of(diagrams["overall"], "overall").figure("…")`` is the plotly figure of ``overall``.
     """
@@ -470,6 +479,19 @@ class SankeyDrawing:
             "TransmissionLossWindowsAndDoorsInWatt": "window and door transmission loss",
         }
     )
+    #: The font size of the labels.
+    FONT_SIZE_IN_PIXELS: ClassVar[int] = 12
+    #: The height of one label line at :attr:`FONT_SIZE_IN_PIXELS`: a node drawn lower than this shows no label.
+    LABEL_LINE_IN_PIXELS: ClassVar[float] = 16.0
+    #: The least gap plotly keeps between two nodes of a column, its ``node.pad``: more than a label line, so that
+    #: the labels of two neighbouring small nodes do not touch.
+    NODE_PAD_IN_PIXELS: ClassVar[float] = 24.0
+    #: The plot is at least this tall, about as tall as plotly fills a browser window.
+    SMALLEST_PLOT_HEIGHT_IN_PIXELS: ClassVar[float] = 900.0
+    #: The height a column keeps for its nodes' energy beside a label line and a gap per node.
+    NODE_ROOM_IN_PIXELS: ClassVar[float] = 400.0
+    #: The figure's top and bottom margins: room for the title on top, little below. Left and right stay plotly's.
+    MARGIN_IN_PIXELS: ClassVar[Mapping[str, int]] = MappingProxyType({"t": 60, "b": 30})
     #: The words of a CamelCase name: an acronym ("DHW"), a capitalised or lower-case word, or a number.
     WORD_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")
 
@@ -501,11 +523,12 @@ class SankeyDrawing:
                 display = self.display_name(name, kinds[name])
                 hover = name
                 colour = SankeyDiagram.COLOURS[kinds[name]]
-            self.nodes.append(DrawnNode(name, self.label(display, kilowatt_hours), hover, colour))
+            always = name in kinds and kinds[name] in self.ALWAYS_DRAWN
+            self.nodes.append(DrawnNode(name, self.label(display, kilowatt_hours), hover, colour, always))
 
     @classmethod
     def of(cls, diagram: Mapping[str, Any], view: str) -> "SankeyDrawing":
-        """The drawing of one view of ``energy_sankey.json``, made readable in the four steps of the class.
+        """The drawing of one view of ``energy_sankey.json``, made readable in the first five steps of the class.
 
         Args:
             diagram: One view as :meth:`SankeyDiagram.data` writes it.
@@ -514,6 +537,7 @@ class SankeyDrawing:
         links, kinds = cls.links_of(diagram)
         if view == SankeyDiagram.OVERALL:
             links = cls.net_solar_losses(links, kinds)
+        links = cls.net_two_way(links)
         links = cls.drop_empty(links, cls.EMPTY_FLOW_IN_KILOWATT_HOUR)
         largest = max((link.kilowatt_hours for link in links), default=0.0)
         links, merged = cls.merge_small(links, kinds, cls.SMALL_FLOW_SHARE * largest)
@@ -583,6 +607,47 @@ class SankeyDrawing:
                     label=f"{link.label}, net of {link.target}'s solar losses ({lost[link.target]:,.1f} kWh)",
                 )
             netted.append(link)
+        return netted
+
+    @classmethod
+    def net_two_way(cls, links: Sequence[SankeyLink]) -> List[SankeyLink]:
+        """Draw an exchange both ways between two nodes on one carrier as one link of its net, the way the larger goes.
+
+        A battery takes 3,488 kWh from the meter over the year and gives 2,541 kWh back. Drawn as two links, the
+        pair is a cycle, which plotly draws as a ring around both nodes; drawn as its net, "ElectricityMeter →
+        Battery" carries 947 kWh, what the battery's losses cost beyond what it gave up from its store, and its hover
+        text lists both flows. Links between two nodes one way only are kept as they are, parallel ones too; flows of
+        different carriers are never netted against each other, since they are different energies.
+
+        Args:
+            links: The links of one view.
+
+        Returns:
+            The links, every two-way exchange replaced by one link at the place of its first link; an exchange that
+            nets to zero is a link of 0 kWh, which :meth:`drop_empty` leaves out.
+        """
+        totals: Dict[Tuple[str, str, Optional[str]], float] = {}
+        for link in links:
+            key = (link.source, link.target, link.carrier)
+            totals[key] = totals.get(key, 0.0) + link.kilowatt_hours
+        netted: List[SankeyLink] = []
+        done: Set[Tuple[FrozenSet[str], Optional[str]]] = set()
+        for link in links:
+            if (link.target, link.source, link.carrier) not in totals:
+                netted.append(link)
+                continue
+            pair = (frozenset((link.source, link.target)), link.carrier)
+            if pair in done:
+                continue
+            done.add(pair)
+            there = totals[(link.source, link.target, link.carrier)]
+            back = totals[(link.target, link.source, link.carrier)]
+            source, target = (link.source, link.target) if there >= back else (link.target, link.source)
+            parts = [part for part in links if (frozenset((part.source, part.target)), part.carrier) == pair]
+            label = "net of both ways:<br>" + "<br>".join(
+                f"{part.label}: {cls.amount(part.kilowatt_hours)} kWh{'' if part.source == source else ' (back)'}" for part in parts
+            )
+            netted.append(SankeyLink(source, target, abs(there - back), link.carrier, label, link.kind))
         return netted
 
     @staticmethod
@@ -772,21 +837,178 @@ class SankeyDrawing:
         """
         return f"{display}{Peer.NODE_SEPARATOR}{cls.amount(kilowatt_hours)} kWh"
 
+    @staticmethod
+    def back_links(links: Sequence[SankeyLink]) -> FrozenSet[Tuple[str, str]]:
+        """The links that close a cycle, as (source, target): what a depth-first walk from the sources finds going back.
+
+        The walk starts at the nodes without inflow, in the order the links name them, then at any node not yet
+        reached (a cycle no source leads to), and follows each node's links in their order. Example: of
+        "grid → Meter", "Meter → Battery" and "Battery → Meter", the last closes the cycle and is the back link.
+        """
+        successors: Dict[str, List[str]] = {}
+        nodes: List[str] = []
+        takes: Set[str] = set()
+        for link in links:
+            for node in (link.source, link.target):
+                if node not in successors:
+                    successors[node] = []
+                    nodes.append(node)
+            successors[link.source].append(link.target)
+            takes.add(link.target)
+        on_path: Set[str] = set()
+        visited: Set[str] = set()
+        back: Set[Tuple[str, str]] = set()
+        for start in [node for node in nodes if node not in takes] + nodes:
+            if start in visited:
+                continue
+            visited.add(start)
+            on_path.add(start)
+            path = [(start, iter(successors[start]))]
+            while path:
+                node, children = path[-1]
+                for child in children:
+                    if child in on_path:
+                        back.add((node, child))
+                    elif child not in visited:
+                        visited.add(child)
+                        on_path.add(child)
+                        path.append((child, iter(successors[child])))
+                        break
+                else:
+                    on_path.discard(node)
+                    path.pop()
+        return frozenset(back)
+
+    @classmethod
+    def columns(cls, links: Sequence[SankeyLink]) -> Dict[str, int]:
+        """The column plotly draws every node in, estimated: sources first, sinks last, the rest by longest path.
+
+        plotly arranges the nodes itself (its "justify" alignment), and this repeats its rule only to size the figure
+        and to estimate how tall plotly draws a node (:meth:`node_heights_in_pixels`). A node that only gives is in
+        column 0, a node that only takes in the last column, the column of the longest path; every other node is in
+        the column of the number of links on its longest path from column 0, back links (:meth:`back_links`) left
+        out. Example: "grid import → Meter → HeatPump → Building → Building · loss →
+        outdoors" and "Meter → grid export" put grid import in 0, the meter in 1, the heat pump in 2, the building
+        in 3, its loss node in 4 and both outdoors and grid export in 5.
+
+        plotly places a store by the sign of its change the same way: one that gave up energy only gives (first
+        column), one that took energy only takes (last column).
+
+        Returns:
+            The column of every node, in the order the links name them.
+        """
+        back = cls.back_links(links)
+        forward = [link for link in links if (link.source, link.target) not in back]
+        depth: Dict[str, int] = {}
+        for link in links:
+            depth.setdefault(link.source, 0)
+            depth.setdefault(link.target, 0)
+        inflows = {node: 0 for node in depth}
+        for link in forward:
+            inflows[link.target] += 1
+        ready = [node for node in depth if inflows[node] == 0]
+        while ready:
+            node = ready.pop(0)
+            for link in forward:
+                if link.source != node:
+                    continue
+                depth[link.target] = max(depth[link.target], depth[node] + 1)
+                inflows[link.target] -= 1
+                if inflows[link.target] == 0:
+                    ready.append(link.target)
+        last = max(depth.values(), default=0)
+        gives = {link.source for link in links}
+        takes = {link.target for link in links}
+        columns: Dict[str, int] = {}
+        for node, node_depth in depth.items():
+            if node not in gives:
+                columns[node] = last
+            elif node not in takes:
+                columns[node] = 0
+            else:
+                columns[node] = node_depth
+        return columns
+
+    @classmethod
+    def plot_height_in_pixels(cls, columns: Mapping[str, int]) -> float:
+        """The height of the plot: a label line and a gap for each node of the column with most nodes, and room for
+        their energy, at least :attr:`SMALLEST_PLOT_HEIGHT_IN_PIXELS`.
+
+        plotly fits the nodes into the plot it is given, so a taller plot is what gives a column of many nodes room
+        for their labels. Example: a column of 20 nodes needs 20 × (16 + 24) + 400 = 1,200 pixels; a column of 7
+        nodes fits into the smallest height of 900.
+
+        Args:
+            columns: The column of every node (:meth:`columns`).
+        """
+        counts: Dict[int, int] = {}
+        for column in columns.values():
+            counts[column] = counts.get(column, 0) + 1
+        fullest = max(counts.values(), default=0)
+        needed = fullest * (cls.LABEL_LINE_IN_PIXELS + cls.NODE_PAD_IN_PIXELS) + cls.NODE_ROOM_IN_PIXELS
+        return max(cls.SMALLEST_PLOT_HEIGHT_IN_PIXELS, needed)
+
+    @staticmethod
+    def node_heights_in_pixels(
+        columns: Mapping[str, int], throughputs: Mapping[str, float], plot_height_in_pixels: float, pad_in_pixels: float
+    ) -> Dict[str, float]:
+        """How tall plotly draws each node, estimated as plotly scales them: one scale for all nodes, the largest that
+        lets every column fit its nodes and the gaps between them into the plot.
+
+        Example: in a plot 900 high with a gap of 24, a column of 3 nodes with 1,000 kWh leaves 852 pixels for
+        1,000 kWh and one of 2 nodes with 2,000 kWh 876 pixels for 2,000 kWh; the scale is 0.438 pixels per kWh, so a
+        node of 10 kWh is drawn 4.4 pixels high.
+
+        Args:
+            columns: The column of every node (:meth:`columns`).
+            throughputs: The energy through every node (:meth:`throughputs`).
+            plot_height_in_pixels: The height of the plot.
+            pad_in_pixels: The gap between two nodes of a column.
+        """
+        energy: Dict[int, float] = {}
+        counts: Dict[int, int] = {}
+        for node, column in columns.items():
+            energy[column] = energy.get(column, 0.0) + throughputs[node]
+            counts[column] = counts.get(column, 0) + 1
+        scales = [(plot_height_in_pixels - (counts[column] - 1) * pad_in_pixels) / kilowatt_hours for column, kilowatt_hours in energy.items() if kilowatt_hours > 0.0]
+        scale = min(scales, default=0.0)
+        return {node: throughputs[node] * scale for node in columns}
+
+    @classmethod
+    def shown_label(cls, node: DrawnNode, height_in_pixels: float) -> str:
+        """The label drawn beside a node: none for a node lower than a label line, unless it is always labelled.
+
+        plotly stacks the labels of nodes a few pixels high on each other; such a node's label is in its hover text
+        instead. A boundary node, a meter and a node that shows a fault keep their label however small, so a drawing
+        never hides where energy enters or leaves or what fails. Example: a 4-pixel "Battery · cell loss · 158 kWh"
+        shows no label, a 4-pixel "grid import · 1,805 kWh" does.
+        """
+        if node.always_labelled or height_in_pixels >= cls.LABEL_LINE_IN_PIXELS:
+            return node.label
+        return ""
+
     def figure(self, title: str) -> Any:
-        """The plotly figure of the drawing: nodes coloured by kind, links by carrier, hover text on both."""
+        """The plotly figure of the drawing: nodes coloured by kind, links by carrier, hover text on both.
+
+        plotly arranges the nodes itself. The figure is as tall as :meth:`plot_height_in_pixels` says, and a node too
+        low for a label line shows its label only in its hover text (:meth:`shown_label`).
+        """
         import plotly.graph_objects as go  # pylint: disable=import-outside-toplevel
 
+        plot_height = self.plot_height_in_pixels(self.columns(self.links))
+        heights = self.node_heights_in_pixels(self.columns(self.links), self.throughputs(self.links), plot_height, self.NODE_PAD_IN_PIXELS)
+        labels = [self.shown_label(node, heights[node.name]) for node in self.nodes]
         positions = {node.name: index for index, node in enumerate(self.nodes)}
         figure = go.Figure(
             go.Sankey(
                 valueformat=",.1f",
                 valuesuffix=" kWh",
                 node={
-                    "label": [node.label for node in self.nodes],
+                    "label": labels,
                     "color": [node.colour for node in self.nodes],
-                    "customdata": [node.hover for node in self.nodes],
+                    "customdata": [node.hover if shown else f"{node.label}<br>{node.hover}" for node, shown in zip(self.nodes, labels)],
                     "hovertemplate": "%{customdata}<br>%{value:,.1f} kWh<extra></extra>",
-                    "pad": 18,
+                    "pad": self.NODE_PAD_IN_PIXELS,
                 },
                 link={
                     "source": [positions[link.source] for link in self.links],
@@ -797,5 +1019,11 @@ class SankeyDrawing:
                 },
             )
         )
-        figure.update_layout(title_text=title, font_size=12)
+        margin = self.MARGIN_IN_PIXELS
+        figure.update_layout(
+            title_text=title,
+            font_size=self.FONT_SIZE_IN_PIXELS,
+            height=round(plot_height + margin["t"] + margin["b"]),
+            margin=dict(margin),
+        )
         return figure

@@ -1,8 +1,10 @@
-"""How a view of the energy Sankey is drawn: solar losses netted, empty flows dropped, small nodes merged, one-line labels.
+"""How a view of the energy Sankey is drawn: solar losses netted, two-way exchanges netted, empty flows dropped, small
+nodes merged, one-line labels, a figure as tall as its fullest column needs, and no label beside a node too low for it.
 
-Spec ``roadmap/complete_energy_sankeys_spec.md`` §4.8 (owner amendment of 2026-11-06, bead
-hisim-sankey-readability-8e20). Every function of :class:`SankeyDrawing` is tested on hand-built links whose numbers
-can be read off the test; ``energy_sankey.json`` is never changed by the drawing.
+Spec ``roadmap/complete_energy_sankeys_spec.md`` §4.8 (owner amendments of 2026-11-06, beads
+hisim-sankey-readability-8e20 and hisim-sankey-layout-48b8). Every function of :class:`SankeyDrawing` is tested on
+hand-built links whose numbers can be read off the test; ``energy_sankey.json`` is
+never changed by the drawing.
 """
 
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
@@ -85,6 +87,55 @@ def test_a_component_that_loses_all_its_sunlight_is_not_drawn_from_the_sun() -> 
     ]
     kinds = {"sun": K.B, "Collector": K.C, "Collector · CollectorHeatLoss": K.L, "outdoors": K.B}
     assert not SankeyDrawing.net_solar_losses(links, kinds)
+
+
+def battery_ring() -> Tuple[List[SankeyLink], Dict[str, NodeKind]]:
+    """A battery charged with 3,488.5 kWh from the meter that gives 2,541.2 kWh back, 11.2 kWh from its store, and
+    loses 958.5 kWh; the meter takes 1,000 kWh from the grid."""
+    links = [
+        link("grid import", "Meter", 1000.0, kind=EdgeKind.METER_BOUNDARY),
+        link("Meter", "Battery", 3488.5, kind=EdgeKind.METERED, label="Battery.ChargingPower"),
+        link("Battery", "Meter", 2541.2, kind=EdgeKind.METERED, label="Battery.DischargingPower"),
+        link("Battery · stored", "Battery", 11.2, kind=EdgeKind.STORAGE),
+        link("Battery", "Battery · CellLossInWatt", 958.5, kind=EdgeKind.LOSS),
+        link("Battery · CellLossInWatt", "outdoors", 958.5, kind=EdgeKind.LOSS),
+    ]
+    kinds = {"grid import": K.B, "Meter": K.M, "Battery": K.C, "Battery · stored": K.S, "Battery · CellLossInWatt": K.L, "outdoors": K.B}
+    return links, kinds
+
+
+@pytest.mark.base
+def test_an_exchange_both_ways_is_drawn_as_its_net_with_both_flows_in_the_hover_text() -> None:
+    """Meter -> Battery 3,488.5 and Battery -> Meter 2,541.2 kWh become one Meter -> Battery link of 947.3 kWh, at the
+    place of the first; the rest stays as it is."""
+    links, _ = battery_ring()
+    netted = SankeyDrawing.net_two_way(links)
+    assert [(item.source, item.target) for item in netted] == [
+        ("grid import", "Meter"),
+        ("Meter", "Battery"),
+        ("Battery · stored", "Battery"),
+        ("Battery", "Battery · CellLossInWatt"),
+        ("Battery · CellLossInWatt", "outdoors"),
+    ]
+    assert (netted[1].source, netted[1].target, netted[1].carrier, netted[1].kind) == ("Meter", "Battery", K.ELECTRICITY, EdgeKind.METERED)
+    assert netted[1].kilowatt_hours == pytest.approx(947.3)
+    assert netted[1].label == "net of both ways:<br>Battery.ChargingPower: 3,488 kWh<br>Battery.DischargingPower: 2,541 kWh (back)"
+
+
+@pytest.mark.base
+def test_the_net_of_an_exchange_goes_the_way_of_the_larger_flow_summed_over_parallel_links() -> None:
+    """A -> B 2 + 3 kWh against B -> A 8 kWh is B -> A 3 kWh; a link of 0 kWh stands for an exchange that nets to zero."""
+    links = [link("A", "B", 2.0, label="a1"), link("B", "A", 8.0, label="b"), link("A", "B", 3.0, label="a2"), link("C", "D", 4.0), link("D", "C", 4.0)]
+    netted = SankeyDrawing.net_two_way(links)
+    assert [(item.source, item.target, item.kilowatt_hours) for item in netted] == [("B", "A", 3.0), ("C", "D", 0.0)]
+    assert netted[0].label == "net of both ways:<br>a1: 2 kWh (back)<br>b: 8 kWh<br>a2: 3 kWh (back)"
+
+
+@pytest.mark.base
+def test_one_way_links_and_flows_of_different_carriers_are_not_netted() -> None:
+    """Two parallel links one way stay two links; heat one way and electricity the other are different energies."""
+    links = [link("A", "B", 2.0), link("A", "B", 3.0), link("B", "A", 1.0, K.ROOM_HEAT)]
+    assert SankeyDrawing.net_two_way(links) == links
 
 
 @pytest.mark.base
@@ -317,3 +368,130 @@ def test_the_figure_draws_the_labels_and_the_links_of_the_drawing() -> None:
     assert list(trace.link.value) == [item.kilowatt_hours for item in drawing.links]
     names = [node.name for node in drawing.nodes]
     assert [(names[source], names[target]) for source, target in zip(trace.link.source, trace.link.target)] == [(item.source, item.target) for item in drawing.links]
+
+
+@pytest.mark.base
+def test_a_drawing_draws_a_two_way_exchange_once_so_the_battery_draws_no_ring() -> None:
+    """The battery's charge and discharge are one link of their net; its store is a node of its own."""
+    links, kinds = battery_ring()
+    drawing = SankeyDrawing.of(diagram_of(links, kinds), "electricity")
+    assert ("Battery", "Meter") not in pairs(drawing.links)
+    assert pairs(drawing.links)[("Meter", "Battery")] == pytest.approx(947.3)
+    assert SankeyDrawing.back_links(drawing.links) == frozenset()
+
+
+@pytest.mark.base
+def test_the_link_that_closes_a_cycle_is_the_back_link() -> None:
+    """The walk from the grid goes Meter -> Battery and finds Battery -> Meter going back; a cycle without a source is
+    walked from its first node."""
+    links = [link("grid", "Meter"), link("Meter", "Battery"), link("Battery", "Meter"), link("Battery", "loss")]
+    assert SankeyDrawing.back_links(links) == frozenset({("Battery", "Meter")})
+    assert SankeyDrawing.back_links([link("A", "B"), link("B", "A")]) == frozenset({("B", "A")})
+    assert SankeyDrawing.back_links([link("A", "B"), link("A", "C"), link("B", "C")]) == frozenset()
+
+
+@pytest.mark.base
+def test_sources_are_first_sinks_last_and_every_other_node_in_the_column_of_its_longest_path() -> None:
+    """grid import 0, meter 1, heat pump 2, building 3, its loss node 4; outdoors and grid export, both sinks, 5."""
+    links = [
+        link("grid import", "Meter"),
+        link("Meter", "HeatPump"),
+        link("HeatPump", "Building"),
+        link("Building", "Building · loss"),
+        link("Building · loss", "outdoors"),
+        link("Meter", "grid export"),
+    ]
+    assert SankeyDrawing.columns(links) == {
+        "grid import": 0,
+        "Meter": 1,
+        "HeatPump": 2,
+        "Building": 3,
+        "Building · loss": 4,
+        "outdoors": 5,
+        "grid export": 5,
+    }
+
+
+@pytest.mark.base
+def test_a_store_is_a_source_when_it_gives_and_a_sink_when_it_takes_and_a_back_link_does_not_count() -> None:
+    """The tank's store gives up energy: first column; the battery's store takes some: last column. The battery's
+    discharge back to the meter closes a cycle and does not push the meter behind the battery."""
+    links = [
+        link("grid", "Meter"),
+        link("Meter", "Battery"),
+        link("Battery", "Meter"),
+        link("Battery", "Battery · stored"),
+        link("Tank · stored", "Tank"),
+        link("Meter", "Tank"),
+        link("Tank", "taps"),
+    ]
+    assert SankeyDrawing.columns(links) == {
+        "grid": 0,
+        "Meter": 1,
+        "Battery": 2,
+        "Battery · stored": 3,
+        "Tank · stored": 0,
+        "Tank": 2,
+        "taps": 3,
+    }
+
+
+@pytest.mark.base
+def test_the_plot_grows_with_the_nodes_of_its_fullest_column() -> None:
+    """Seven nodes in one column fit into 900 pixels; twenty need a line and a gap each and 400 for their energy."""
+    seven = {f"n{index}": 1 for index in range(7)}
+    assert SankeyDrawing.plot_height_in_pixels({**seven, "a": 0, "b": 2}) == 900.0
+    twenty = {f"n{index}": 1 for index in range(20)}
+    assert SankeyDrawing.plot_height_in_pixels({**twenty, "a": 0}) == 20 * (16.0 + 24.0) + 400.0
+    assert SankeyDrawing.plot_height_in_pixels({}) == 900.0
+
+
+@pytest.mark.base
+def test_nodes_are_drawn_at_the_one_scale_that_lets_every_column_fit() -> None:
+    """Plot 900, gap 24: three nodes of 1,000 kWh leave 852 pixels, two of 2,000 kWh 876 pixels; the scale is 0.438
+    pixels per kWh, the smaller of the two, so a node of 10 kWh is 4.38 pixels high."""
+    columns = {"a": 0, "b": 0, "c": 0, "d": 1, "e": 1}
+    throughputs = {"a": 990.0, "b": 0.0, "c": 10.0, "d": 1000.0, "e": 1000.0}
+    heights = SankeyDrawing.node_heights_in_pixels(columns, throughputs, 900.0, 24.0)
+    assert heights["c"] == pytest.approx(4.38)
+    assert heights["d"] == pytest.approx(438.0)
+    assert SankeyDrawing.node_heights_in_pixels({"a": 0}, {"a": 0.0}, 900.0, 24.0) == {"a": 0.0}
+
+
+@pytest.mark.base
+def test_a_node_too_low_for_a_label_line_shows_no_label_unless_it_is_always_labelled() -> None:
+    """A 4-pixel loss node shows no label, a 16-pixel one does; a 4-pixel boundary node keeps its label."""
+    loss = DrawnNode("Battery · CellLossInWatt", "Battery · cell loss · 158 kWh", "Battery · CellLossInWatt", "#e08a2c")
+    grid = DrawnNode("grid import", "grid import · 1,805 kWh", "grid import", "#3c9d5d", True)
+    assert SankeyDrawing.shown_label(loss, 4.0) == ""
+    assert SankeyDrawing.shown_label(loss, 16.0) == "Battery · cell loss · 158 kWh"
+    assert SankeyDrawing.shown_label(grid, 4.0) == "grid import · 1,805 kWh"
+
+
+@pytest.mark.base
+def test_boundaries_meters_and_faults_are_always_labelled_and_other_nodes_are_not() -> None:
+    """The drawing marks the nodes of the kinds it never merges; components, losses, stores and "other" nodes it does not."""
+    links, kinds = house_with_small_flows()
+    nodes = {node.name: node for node in SankeyDrawing.of(diagram_of(links, kinds), "electricity").nodes}
+    assert {name for name, node in nodes.items() if node.always_labelled} == {"Meter", "grid import", "outdoors", "unaccounted"}
+
+
+@pytest.mark.base
+def test_the_figure_hides_the_label_of_a_tiny_node_in_its_hover_text_and_is_as_tall_as_it_needs() -> None:
+    """The 1 kWh "other → outdoors" node is a fraction of a pixel high: no label, its label in the hover text; the 2 kWh
+    grid import, a boundary, keeps its label; plotly arranges the nodes, with a gap of 24 pixels."""
+    links, kinds = house_with_small_flows()
+    drawing = SankeyDrawing.of(diagram_of(links, kinds), "electricity")
+    figure = drawing.figure("t")
+    trace = figure.data[0]
+    shown = dict(zip([node.name for node in drawing.nodes], trace.node.label))
+    hover = dict(zip([node.name for node in drawing.nodes], trace.node.customdata))
+    assert shown["other → outdoors"] == ""
+    assert hover["other → outdoors"].startswith("other (2 flows) · 3 kWh<br>other (2 flows):")
+    assert shown["grid import"] == "grid import · 2 kWh"
+    assert hover["grid import"] == "grid import"
+    assert shown["Heater"] == "Heater · 1,000 kWh"
+    assert trace.node.pad == 24.0
+    assert trace.node.x is None and trace.node.y is None and trace.arrangement is None
+    assert figure.layout.height == 900 + 60 + 30
+    assert figure.layout.width is None

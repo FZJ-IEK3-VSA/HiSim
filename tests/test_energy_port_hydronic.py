@@ -25,12 +25,12 @@ from hisim.energy_port import EnergyPort, FluidLoop, FluidLoopChannel, FluidLoop
 from hisim.postprocessing.energy_balance import (
     LoopColumns,
     DeclaredPorts,
-    EnergyBalanceError,
     EnergyBalanceReport,
     PeerKind,
 )
 from hisim.postprocessing.energy_balance.sankey import SankeyBuilder
 from hisim.setup_rules.energy_ports import EnergyPortWiringError
+from hisim.setup_rules.results import EnergyBalanceError
 from tests import functions_for_testing as fft
 
 pytestmark = pytest.mark.base
@@ -365,9 +365,7 @@ class LoopRig:
             [[value for *_, value in columns]],
             index=pd.date_range("2021-01-01", periods=1, freq=f"{cls.SECONDS_PER_TIMESTEP}s"),
         )
-        stand_ins = cls.stand_ins(outputs, inputs, ends)
-        wrapped: List[Any] = [SimpleNamespace(my_component=stand_in) for stand_in in stand_ins]
-        return EnergyBalanceReport(table, outputs, wrapped, cls.SECONDS_PER_TIMESTEP)
+        return EnergyBalanceReport(table, outputs, cls.stand_ins(outputs, inputs, ends), cls.SECONDS_PER_TIMESTEP)
 
     @staticmethod
     def outputs_of(columns: Sequence["LoopRig.Column"]) -> List[cp.ComponentOutput]:
@@ -453,7 +451,7 @@ def test_both_ends_of_a_loop_share_one_heat_and_pair_through_the_wiring() -> Non
     assert not report.declared.loop_faults and not report.fails
     (link,) = report.links
     assert (link.sender, link.receiver, link.closes) == ("Boiler", "Tank", True)
-    report.conclude()
+    fft.AfterRunRules.refuse(report)
     entry = report.report()
     tank_ports = [port for item in entry["components"] if item["component"] == "Tank" for port in item["ports"]]
     assert {"output": "loop Boiler.Flow", "unit": "kWh"}.items() <= tank_ports[-1].items()
@@ -502,7 +500,7 @@ def test_a_step_in_which_the_supplier_cools_the_water_is_booked_as_cooling_towar
     links = {(link.sender, link.receiver, link.carrier): link for link in report.links}
     assert links[("Tank", "Boiler", cooling.value)].closes
     assert not report.declared.loop_faults and not report.fails
-    report.conclude()
+    fft.AfterRunRules.refuse(report)
 
 
 def test_the_supplier_s_sign_splits_a_loop_into_its_two_directions() -> None:
@@ -538,7 +536,7 @@ def test_one_flow_read_by_two_ends_fails_the_run() -> None:
     faults = report.declared.loop_faults
     assert any("Boiler.Flow is read by 2 components" in fault and "Twin" in fault for fault in faults)
     with pytest.raises(EnergyBalanceError, match="one flow delivers its heat once"):
-        report.conclude()
+        fft.AfterRunRules.refuse(report)
     # the wiring alone shows it: the run is refused before it simulates
     components = LoopRig.stand_ins(LoopRig.outputs_of(columns), inputs, ends)
     with pytest.raises(EnergyPortWiringError, match="Boiler.Flow is read by 2 components"):
@@ -554,7 +552,7 @@ def test_an_other_end_that_declares_ports_but_not_the_loop_fails_the_run() -> No
     )
     assert any("its other end, Tank, declares ports and not this loop" in f for f in report.declared.loop_faults)
     with pytest.raises(EnergyBalanceError, match="loop: Boiler tags its end"):
-        report.conclude()
+        fft.AfterRunRules.refuse(report)
 
 
 def test_an_other_end_that_declares_no_ports_is_drawn_as_undeclared() -> None:
@@ -566,7 +564,7 @@ def test_an_other_end_that_declares_no_ports_is_drawn_as_undeclared() -> None:
         {"Boiler": [LoopRig.SUPPLY_END]},
     )
     assert not report.declared.loop_faults and report.declared.undeclared == ["Tank"]
-    report.conclude()
+    fft.AfterRunRules.refuse(report)
     links = SankeyBuilder(report.declared, report.balances, (), report.links).build()
     assert ("Boiler", "undeclared: Tank") in {(link.source, link.target) for link in links}
 

@@ -93,7 +93,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values, for example a quantity that
         is undefined while a device stands still. Every other output must be finite in every step: after the run,
-        :class:`~hisim.postprocessing.finite_results.FiniteResultsCheck` fails a run whose result table holds a NaN
+        the setup rule ``AR-01`` (:class:`~hisim.setup_rules.results.Finite`) fails a run whose result table holds a NaN
         or an infinity in a column that does not declare it.
 
         ``aggregation`` says how post-processing combines the output's time steps into monthly
@@ -634,7 +634,7 @@ class Component:
         """Adds an output definition; ``energy_port`` declares its role in the energy balance.
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
-        after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
+        after the run (the setup rule ``AR-01``, :mod:`hisim.setup_rules.results`) skips its column and fails the run on a NaN or an
         infinity in any other. ``aggregation`` declares how its time steps are combined into monthly values and a
         run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`). ``fluid_loop``
         tags the output as a leg of one of the component's fluid loops; an output takes it or ``energy_port``, never

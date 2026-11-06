@@ -1,7 +1,9 @@
 """Helper functions for testing."""
 import dataclasses
+from types import SimpleNamespace
 from typing import Any, ClassVar, Optional, Sequence, Tuple, Type
 
+import pandas as pd
 import yaml
 
 from hisim.component import ComponentOutput
@@ -10,11 +12,12 @@ from hisim.config import ComponentID, SizingContext
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
+from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
-from hisim.setup_rules.subjects import BuiltSystem
+from hisim.setup_rules.subjects import BuiltSystem, RunResults
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -143,6 +146,39 @@ class FluidLoopRules(FamilyRules):
     """The fluid-loop setup rules (``hisim/setup_rules/fluid_loops.py``) run on components; their faults raise ``FluidLoopWiringError``."""
 
     FAMILY: ClassVar[str] = "fluid_loops"
+
+
+class AfterRunRules:
+    """The setup rules after the run on an energy balance built by hand, as the post-processing runs them.
+
+    A test of the balance builds an :class:`~hisim.postprocessing.energy_balance.EnergyBalanceReport` from a hand-made
+    result table and stand-ins; these helpers hand it to the rules as the run's balance, beside an empty result table
+    with no outputs, which the finite-results rule ``AR-01`` passes. So the rules judge exactly the balance the test
+    built, and a port the test fills with NaN reaches the port rule ``AR-03``, as it did when the balance judged itself.
+    """
+
+    @staticmethod
+    def subject(balance: EnergyBalanceReport) -> RunResults:
+        """The results of a run whose energy balance is ``balance``."""
+        return RunResults(results=pd.DataFrame(), outputs=(), components=(), read_energy_balance=lambda: balance)
+
+    @classmethod
+    def refuse(cls, balance: EnergyBalanceReport, kind: SetupKind = SetupKind.RESIDENTIAL) -> None:
+        """Run every rule after the run on ``balance``, as the post-processing does first thing.
+
+        Raises:
+            EnergyBalanceError: Listing every fault of the balance's rules.
+        """
+        SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, cls.subject(balance), kind)
+
+    @staticmethod
+    def post_processing(result_directory: str, export: bool, kind: SetupKind = SetupKind.RESIDENTIAL) -> Any:
+        """The part of a post-processing transfer the judging reads: options with or without ``EXPORT_ENERGY_BALANCE``, a directory, a kind."""
+        return SimpleNamespace(
+            post_processing_options=[PostProcessingOptions.EXPORT_ENERGY_BALANCE] if export else [],
+            simulation_parameters=SimpleNamespace(result_directory=result_directory, seconds_per_timestep=900),
+            setup_kind=kind,
+        )
 
 
 class SetupTestParameters:

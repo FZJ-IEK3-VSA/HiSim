@@ -34,9 +34,10 @@ and the receiver's ``CONSUMPTION`` port of the loop's carrier; where it cools it
 supplier's ``CONSUMPTION`` port of ``COOLING``. Each end has the other as its peer (:meth:`Wiring.loop_peer`). So a loop
 is a transfer like any other, which :meth:`DeclaredPorts.declared_links` pairs, and it cannot disagree with itself.
 What breaks the rules of :mod:`hisim.energy_port` (two readers of one flow, an end without its match, no or two
-suppliers, a loop that pumps water it cannot account for) is a :attr:`DeclaredPorts.loop_faults` entry, which
-fails the run. The rules that need no value of the run refuse it before its first step: the energy-port rules of
-``hisim/setup_rules/energy_ports.py``, which read the wiring through :class:`Wiring`.
+suppliers, an end on an exempt component or a meter, a loop that pumps water it cannot account for) is a
+:attr:`DeclaredPorts.loop_breaches` entry, which the setup rule ``AR-06`` of ``hisim/setup_rules/results.py``
+refuses after the run. The rules that need no value of the run refuse it before its first step: the energy-port
+rules of ``hisim/setup_rules/energy_ports.py``, which read the wiring through :class:`Wiring`.
 
 Beside the ports, :class:`DeclaredPorts` reads what each meter publishes (:class:`MeterReading`, from
 :meth:`hisim.component.Component.metered_exchanges`), which :mod:`.meters` checks against the ports it reads.
@@ -64,7 +65,6 @@ from hisim.component import (
     L2ControllerComponent,
     MeterComponent,
 )
-from hisim.component_wrapper import ComponentWrapper
 from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_port import EnergyPort, LoopQuantity, MeteredExchange
 
@@ -339,9 +339,14 @@ class DeclaredPorts:
     exempt: Dict[str, str] = field(default_factory=dict)
     #: What each meter of the run publishes, one reading per metered exchange.
     meters: List[MeterReading] = field(default_factory=list)
-    #: Every breach of the loop rules (:mod:`hisim.energy_port`), one sentence each; any of them fails the run.
-    loop_faults: List[str] = field(default_factory=list)
+    #: Every breach of the loop rules (:mod:`hisim.energy_port`), at its component; the setup rule AR-06 refuses each.
+    loop_breaches: List["LoopFault"] = field(default_factory=list)
     index: Optional[pd.Index] = None
+
+    @property
+    def loop_faults(self) -> List[str]:
+        """Every breach of the loop rules as its sentence, in the order found, as the balance report lists them."""
+        return [breach.message for breach in self.loop_breaches]
 
     @staticmethod
     def exchanges_of(component: Any) -> Tuple[MeteredExchange, ...]:
@@ -357,22 +362,29 @@ class DeclaredPorts:
         cls,
         results: pd.DataFrame,
         all_outputs: Sequence[ComponentOutput],
-        wrapped_components: Sequence[ComponentWrapper],
+        components: Sequence[Any],
         seconds_per_timestep: float,
     ) -> "DeclaredPorts":
         """Read the declared ports and the meters from the result table, whose columns are ``all_outputs`` in order.
 
         An output port's series is its own column; an input port's the column of the output connected to it, and an
-        input port whose input is not connected is left out (:meth:`add_input_ports`).
+        input port whose input is not connected is left out (:meth:`add_input_ports`). A loop end an exempt
+        component or a meter declares is not read; it is a breach (:attr:`loop_breaches`), which the setup rule
+        ``AR-06`` refuses, as the build's ``EP-03`` refuses it before the run.
+
+        Args:
+            results: The result table, one column per output and one row per step.
+            all_outputs: The run's outputs, in the order of the table's columns.
+            components: The components of the run, in the order they were added, with their inputs connected.
+            seconds_per_timestep: The length of one step.
 
         Raises:
             ValueError: If the table does not have one column per output, if an exempt component or a meter declares a
-                port or a loop end (a controller or meter that moves energy contradicts its kind), or if a meter
-                declares a metered exchange on an output it does not have.
+                port (a controller or meter that moves energy contradicts its kind), or if a meter declares a metered
+                exchange on an output it does not have.
         """
         if results.shape[1] != len(all_outputs):
             raise ValueError(f"The result table has {results.shape[1]} columns for {len(all_outputs)} outputs.")
-        components = [wrapped.my_component for wrapped in wrapped_components]
         metered_carriers, exempt = cls.classify(components)
         wiring = Wiring(components, exempt, metered_carriers)
         declared = cls(index=results.index, exempt=exempt)
@@ -400,9 +412,6 @@ class DeclaredPorts:
             declared.by_component.setdefault(output.component_name, []).append(series)
         declared.add_input_ports(results, all_outputs, components, wiring, seconds_per_timestep)
         loops = wiring.loops(components)
-        # the build refuses it first (rule EP-03); a table read without that build is refused here, as it always was
-        if loops.node_end_faults:
-            raise ValueError(loops.node_end_faults[0].message)
         declared.add_loops(results, all_outputs, loops, seconds_per_timestep)
         for component in components:
             declared.class_names[component.component_name] = type(component).__name__
@@ -550,7 +559,7 @@ class DeclaredPorts:
         The heat of each loop is derived once from its three columns (:meth:`LoopColumns.heat_in_kilowatt_hours_per_step`,
         with the specific heat of the loop's fluid), and both ends book that series by the supplier's sign
         (:meth:`book_by_the_supplier_s_sign`). The wiring's faults (:meth:`Wiring.loops`) become
-        :attr:`loop_faults`, and so does an end that pumps water into a loop it cannot follow: one whose own flow
+        :attr:`loop_breaches`, and so does an end that pumps water into a loop it cannot follow: one whose own flow
         is not 0 in some step while one of the quantities it reads is not connected. An open end that moves no water is
         left out without a fault: a buffer's loop to a second generator the house does not have, a boiler's
         hot-water loop in a house without a tank.
@@ -559,18 +568,22 @@ class DeclaredPorts:
             ValueError: If an end names an output the run does not have.
         """
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
-        self.loop_faults.extend(loops.faults)
+        self.loop_breaches.extend(loops.breaches)
         for name, port_set, open_quantity in loops.open_ends:
             if not port_set.loop.pumps:
                 continue
             flow = port_set.channels[LoopQuantity.FLOW_OUT].field_name
             column = position_of.get((name, flow))
             if column is not None and np.any(results.iloc[:, column].to_numpy(dtype=float) != 0.0):
-                self.loop_faults.append(
-                    f"{name} pumps water through its loop {port_set.loop.name!r} ({flow}, "
-                    f"{port_set.loop.carrier.value}), but its {open_quantity.value} input "
-                    f"{port_set.channels[open_quantity].field_name} is not connected: the heat of that water goes "
-                    "nowhere the balance can see"
+                self.loop_breaches.append(
+                    LoopFault(
+                        name,
+                        f"{name} pumps water through its loop {port_set.loop.name!r} ({flow}, "
+                        f"{port_set.loop.carrier.value}), but its {open_quantity.value} input "
+                        f"{port_set.channels[open_quantity].field_name} is not connected: the heat of that water goes "
+                        "nowhere the balance can see",
+                        flow,
+                    )
                 )
         heat_of: Dict[Tuple[LoopColumns, float], np.ndarray] = {}
         for name, port_set, columns, peer_name in loops.ends:
@@ -773,7 +786,7 @@ class LoopWiring:
     """The declared loop ends of a run, its port sets, as the wiring resolves them, before any value is read.
 
     The faults are kept by the rule they break, so that each setup rule of ``hisim/setup_rules/energy_ports.py`` reports
-    its own and the balance after the run lists the same sentences (:attr:`faults`).
+    its own and the balance after the run lists the same ones (:attr:`breaches`).
 
     Attributes:
         ends: Every resolved end as ``(component, port set, its three outputs, the other end or None)``.
@@ -792,13 +805,14 @@ class LoopWiring:
     node_end_faults: List[LoopFault] = field(default_factory=list)
 
     @property
-    def faults(self) -> List[str]:
-        """Every breach of the loop rules of :mod:`hisim.energy_port` the wiring shows, one sentence each.
+    def breaches(self) -> List[LoopFault]:
+        """Every breach of the loop rules of :mod:`hisim.energy_port` the wiring shows, at its component.
 
-        The pairing faults come first, then the shared flows, the order the balance after the run lists them in. An
-        end on an exempt component or a meter is not among them: it refuses the balance outright.
+        The pairing faults come first, then the shared flows, then the ends on an exempt component or a meter, the
+        order the balance after the run lists them in. For example, a boiler and a tank that both state
+        ``supplies=True`` give one pairing fault, found at the boiler.
         """
-        return [fault.message for fault in self.pairing_faults + self.shared_flow_faults]
+        return self.pairing_faults + self.shared_flow_faults + self.node_end_faults
 
 
 class Wiring:

@@ -14,7 +14,7 @@ port's peer is the component it reads; an output port's is the component that re
 port it pairs with, else, for a ``PRODUCTION`` port, the component that reads it; a metered port of electricity or a
 bought carrier goes to the meter that reads it, directly or through exempt components, or to a component that reads
 it. A port with no peer falls back to its carrier's boundary default
-(:meth:`hisim.energy_port.EnergyPort.default_boundary`), such as "natural gas supply" or "outdoors", or to nobody, which
+(:meth:`hisim.energy_port.EnergyPort.default_boundary`), such as "natural gas supply" or "heat loss to outdoors", or to nobody, which
 leaves the port *unlinked*. A metered port whose peer is no meter and no component is *unmetered*
 (:meth:`DeclaredPorts.unmetered`).
 
@@ -75,7 +75,8 @@ class PeerKind(str, enum.Enum):
     """What the other side of a port is (complete Sankey spec, §4.1 and §4.3).
 
     ``COMPONENT`` is another component, declared or not; ``METER`` a meter that reads the port (owner decision Q-J);
-    ``BOUNDARY`` a node where energy enters or leaves the house ("natural gas supply", "ambient heat source", "outdoors");
+    ``BOUNDARY`` a node where energy enters or leaves the house ("natural gas supply", "ambient heat source",
+    "unconverted sunlight", "heat loss to outdoors");
     ``STORE`` the component's own store, the other side of its storage change; ``UNLINKED`` nobody, a port whose
     wiring names no meter and no component that moves energy and whose carrier has no default.
     """

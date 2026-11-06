@@ -178,35 +178,60 @@ def test_a_port_naming_its_environment_goes_there_whoever_reads_it() -> None:
     [
         (EnergyPort(CONSUMPTION, ELECTRICITY), None),
         (EnergyPort(PRODUCTION, ELECTRICITY), None),
-        (EnergyPort(LOSS, ELECTRICITY), "outdoors"),
+        (EnergyPort(LOSS, ELECTRICITY), "heat loss to outdoors"),
         (EnergyPort(CONSUMPTION, GAS), "natural gas supply"),
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.HEATING_OIL), "heating oil supply"),
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.WOOD_CHIPS), "wood chips supply"),
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.DISTRICT_HEAT), "district heat supply"),
         (EnergyPort(PRODUCTION, GAS), None),
-        (EnergyPort(LOSS, GAS), "outdoors"),
+        (EnergyPort(LOSS, GAS), "heat loss to outdoors"),
         (EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat source"),
         (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), "ambient heat sink"),
         (EnergyPort(CONSUMPTION, SOLAR), "sun"),
         (EnergyPort(PRODUCTION, SOLAR), None),
+        (EnergyPort(LOSS, SOLAR), "unconverted sunlight"),
         (EnergyPort(CONSUMPTION, SH), None),
         (EnergyPort(PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT), None),
-        (EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT), "outdoors"),
+        (EnergyPort(LOSS, lt.EnergyBalanceCarrier.ROOM_HEAT), "heat loss to outdoors"),
     ],
 )
 def test_every_carrier_has_the_boundary_default_of_the_spec(port: EnergyPort, boundary: Optional[str]) -> None:
-    """Spec §4.3: bought carriers from their supply, losses outdoors; electricity and heat have no default (Q-J)."""
+    """Spec §4.3: bought carriers from their supply, losses to their two sinks (D-e); electricity and heat have none (Q-J)."""
     assert port.default_boundary() == boundary
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("carrier", list(lt.EnergyBalanceCarrier))
+def test_a_loss_goes_to_unconverted_sunlight_when_it_is_sunlight_and_to_heat_loss_to_outdoors_otherwise(
+    carrier: lt.EnergyBalanceCarrier,
+) -> None:
+    """A ``LOSS`` port with no peer goes to one of two sinks, chosen by its carrier alone (device-location spec, D-e).
+
+    The sunlight a PV module or a collector does not convert goes to "unconverted sunlight", every other loss, of
+    whichever carrier, ends as heat outside the house in "heat loss to outdoors"; no loss goes to the retired single
+    sink "outdoors". A port that names its node keeps it.
+
+    Catches: a new carrier whose loss finds no boundary, a solar loss mixed into the house's heat loss again, and the
+    carrier rule overriding a node a port names itself.
+    """
+    expected = (
+        lt.EnvironmentNode.UNCONVERTED_SUNLIGHT
+        if carrier == lt.EnergyBalanceCarrier.SOLAR
+        else lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS
+    )
+    assert EnergyPort(LOSS, carrier).default_boundary() == expected.value
+    assert "outdoors" not in {node.value for node in lt.EnvironmentNode}
+    assert EnergyPort(LOSS, carrier, environment=lt.EnvironmentNode.AMBIENT_HEAT_SINK).default_boundary() == "ambient heat sink"
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
     ("role", "carrier", "environment", "refusal"),
     [
-        (CONSUMPTION, ELECTRICITY, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
-        (PRODUCTION, ELECTRICITY, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
-        (CONSUMPTION, GAS, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
-        (CONSUMPTION, lt.EnergyBalanceCarrier.DISTRICT_HEAT, lt.EnvironmentNode.OUTDOORS, "is metered and names no environment"),
+        (CONSUMPTION, ELECTRICITY, lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS, "is metered and names no environment"),
+        (PRODUCTION, ELECTRICITY, lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS, "is metered and names no environment"),
+        (CONSUMPTION, GAS, lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS, "is metered and names no environment"),
+        (CONSUMPTION, lt.EnergyBalanceCarrier.DISTRICT_HEAT, lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS, "is metered and names no environment"),
         (CONSUMPTION, ELECTRICITY, lt.EnvironmentNode.GRID_IMPORT, "cannot name 'grid import'"),
         (LOSS, ELECTRICITY, lt.EnvironmentNode.GRID_EXPORT, "cannot name 'grid export'"),
         (PRODUCTION, SH, lt.EnvironmentNode.GRID_EXPORT, "cannot name 'grid export'"),
@@ -221,7 +246,7 @@ def test_a_port_cannot_name_an_environment_that_takes_its_flow_past_every_meter(
     """
     with pytest.raises(ValueError, match=refusal):
         EnergyPort(role, carrier, environment=environment)
-    assert EnergyPort(LOSS, ELECTRICITY, environment=lt.EnvironmentNode.OUTDOORS).default_boundary() == "outdoors"
+    assert EnergyPort(LOSS, ELECTRICITY, environment=lt.EnvironmentNode.AMBIENT_HEAT_SINK).default_boundary() == "ambient heat sink"
     assert not EnergyPort(LOSS, ELECTRICITY).is_metered and EnergyPort(CONSUMPTION, GAS).is_metered
 
 
@@ -652,7 +677,7 @@ def test_the_sankey_draws_each_transfer_once_and_only_residuals_beyond_the_toler
     assert heat == {
         ("undeclared: Boiler", "Tank"): pytest.approx(1.0),
         ("Tank", "Tank · Loss"): pytest.approx(0.05),
-        ("Tank · Loss", "outdoors"): pytest.approx(0.05),
+        ("Tank · Loss", "heat loss to outdoors"): pytest.approx(0.05),
         ("Tank", "Tank · stored"): pytest.approx(0.25),
         ("Tank", "Loop"): pytest.approx(0.6996),
         ("Loop", "undeclared: Building"): pytest.approx(0.6496),
@@ -662,7 +687,7 @@ def test_the_sankey_draws_each_transfer_once_and_only_residuals_beyond_the_toler
     assert link.closes and link.as_dict()["difference_kwh"] == pytest.approx(0.0004)
     kinds = {node["name"]: node["kind"] for node in diagrams["overall"]["nodes"]}
     assert kinds["undeclared: Boiler"] == "undeclared" and kinds["unaccounted"] == "unaccounted"
-    assert kinds["outdoors"] == "boundary" and kinds["Tank · stored"] == "storage" and kinds["Tank · Loss"] == "loss"
+    assert kinds["heat loss to outdoors"] == "boundary" and kinds["Tank · stored"] == "storage" and kinds["Tank · Loss"] == "loss"
     assert kinds["unlinked"] == "unlinked"
 
     overall = flows(diagrams["overall"])
@@ -1189,7 +1214,7 @@ def house(
             "HeatPump",
             "HeatOut",
             lt.Units.KWH,
-            EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.OUTDOORS),
+            EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS),
             [4.0, 0.8, 0.0],
         ),
         ("PV", "SunIn", lt.Units.KWH, EnergyPort(CONSUMPTION, SOLAR), [0.4, 0.5, 0.3]),
@@ -1338,7 +1363,7 @@ def boiler(metered: bool, extra_components: Sequence[str] = ()) -> EnergyBalance
     columns: List[Column] = [
         ("Boiler", "GasIn", lt.Units.KWH, EnergyPort(CONSUMPTION, GAS), [1.0]),
         ("Boiler", "FlueLoss", lt.Units.KWH, EnergyPort(LOSS, GAS), [0.1]),
-        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.OUTDOORS), [0.9]),
+        ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS), [0.9]),
         ("GasMeter", "GasFromGrid", lt.Units.KWH, None, [1.0]),
     ]
     inputs = {"GasMeter": [wired_input("Gas", "Boiler", "GasIn")]} if metered else {}
@@ -1359,8 +1384,8 @@ def test_a_fuel_port_its_gas_meter_reads_comes_from_the_supply_through_the_meter
         ("natural gas supply", "GasMeter"): pytest.approx(1.0),
         ("GasMeter", "Boiler"): pytest.approx(1.0),
         ("Boiler", "Boiler · FlueLoss"): pytest.approx(0.1),
-        ("Boiler · FlueLoss", "outdoors"): pytest.approx(0.1),
-        ("Boiler", "outdoors"): pytest.approx(0.9),
+        ("Boiler · FlueLoss", "heat loss to outdoors"): pytest.approx(0.1),
+        ("Boiler", "heat loss to outdoors"): pytest.approx(0.9),
     }
     (meter,) = balance_report.meter_check.balances
     assert meter.agrees and meter.carrier == GAS

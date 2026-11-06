@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: Per setup: the generator, the carriers it takes in, the carriers it gives out, and links its Sankey must show.
 #: The fuel and the electricity come through the meter that reads them: the electricity meter reads every electricity
-#: port by its role (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way outdoors.
+#: port by its role (spec §4.3, §4.4, §5.2); a loss passes its own loss node on its way to its boundary sink.
 GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
@@ -39,7 +39,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
             ("natural_gas", "natural gas supply", "GasMeter"),
             ("natural_gas", "GasMeter", "CondensingGasBoiler"),
             ("natural_gas", "CondensingGasBoiler", "CondensingGasBoiler · CombustionHeatLoss"),
-            ("natural_gas", "CondensingGasBoiler · CombustionHeatLoss", "outdoors"),
+            ("natural_gas", "CondensingGasBoiler · CombustionHeatLoss", "heat loss to outdoors"),
             ("space_heating_heat", "CondensingGasBoiler", "SimpleHotWaterStorage"),
             ("domestic_hot_water_heat", "CondensingGasBoiler", "DHWStorage"),
         },
@@ -85,7 +85,7 @@ GENERATORS: Dict[str, Tuple[str, Set[str], Set[str], Set[Tuple[str, str, str]]]]
         {
             ("solar", "sun", "SolarThermalSystem"),
             ("solar", "SolarThermalSystem", "SolarThermalSystem · CollectorHeatLoss"),
-            ("solar", "SolarThermalSystem · CollectorHeatLoss", "outdoors"),
+            ("solar", "SolarThermalSystem · CollectorHeatLoss", "unconverted sunlight"),
         },
     ),
 }

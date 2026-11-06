@@ -55,7 +55,7 @@ class RoomHeaterConfig(ConfigBase):
 class RoomHeater(cp.PhysicsComponent):
     """A test double of a device standing in the heated zone: it releases a constant heat drawn from a store of its own.
 
-    Its released heat is ``EnergyPort.for_heat_released(HEATED_ZONE, ...)``, a ``PRODUCTION`` port of ``ROOM_HEAT``,
+    Its released heat is ``EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE``, a ``PRODUCTION`` port of ``ROOM_HEAT``,
     and its store gives up the same energy (a ``STORED_CHANGE`` port), so its own balance closes in every step.
     """
 
@@ -77,9 +77,7 @@ class RoomHeater(cp.PhysicsComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description="The heat released into the heated zone, in W.",
-            energy_port=EnergyPort.for_heat_released(
-                lt.InstallationLocation.HEATED_ZONE, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
-            ),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
         )
         self.stored_channel = self.add_output(
             self.component_name,

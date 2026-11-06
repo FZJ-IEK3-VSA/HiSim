@@ -585,7 +585,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
-            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
         )
         self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -593,7 +593,7 @@ class UtspLpgConnector(cp.DataSourceComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description="Inner device heat gains, which heat the building (not intentionally)",
-            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,

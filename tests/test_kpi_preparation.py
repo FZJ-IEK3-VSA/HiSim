@@ -90,8 +90,9 @@ def test_production_without_consumption_reports_zero_self_sufficiency() -> None:
 def test_a_run_that_consumes_and_buys_nothing_has_no_relative_grid_demand() -> None:
     """Catches 0 kWh bought of 0 kWh consumed reported as NaN, which no golden can compare, or as a number.
 
-    The simple air conditioner's household neither cools nor consumes in a January week, and its meter reads 0 kWh
-    from the grid. A run that buys what it does not count as consumed still fails: that is a consumer the KPIs miss.
+    A house without residents whose air conditioner never cools in a January week consumes nothing, and its meter
+    reads 0 kWh from the grid. A run that buys what it does not count as consumed still fails: that is a consumer the
+    KPIs miss.
     """
     preparation = _bare_preparation("BUI1")
 
@@ -111,6 +112,83 @@ def test_a_run_that_consumes_and_buys_nothing_has_no_relative_grid_demand() -> N
             building_objects_in_district="BUI1",
             kpi_tag=KpiTagEnumClass.GENERAL,
         )
+
+
+@pytest.mark.base
+def test_a_ratio_of_a_zero_consumption_is_emitted_without_a_value() -> None:
+    """Catches a proportion of zero consumption reported as 0 % or ending the KPI run with ZeroDivisionError.
+
+    A system that consumes no electricity, such as a house without residents whose air conditioner stays off on a
+    January day, has no total for the production to be a proportion of. The ratio is undefined, so its entry is
+    written with no value; a consumption above zero gives the plain percentage.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    preparation.compute_ratio_between_two_values_and_set_as_kpi(
+        denominator_value=0.0,
+        numerator_value=0.0,
+        kpi_name="Ratio between total production and total consumption",
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+    preparation.compute_ratio_between_two_values_and_set_as_kpi(
+        denominator_value=1.0,
+        numerator_value=4.0,
+        kpi_name="Ratio between PV production and total consumption",
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    collected = preparation.kpi_collection_dict_unsorted["BUI1"]
+    assert collected["Ratio between total production and total consumption"]["value"] is None
+    assert collected["Ratio between PV production and total consumption"]["value"] == pytest.approx(25.0)
+
+
+@pytest.mark.base
+def test_an_undefined_relative_grid_demand_gives_an_undefined_self_sufficiency() -> None:
+    """Catches the self-sufficiency of a system that consumes nothing reported as 100 %, the complement of nothing.
+
+    The rate is 100 % minus the relative demand from the grid; when that demand is undefined (``None``, nothing
+    consumed), the rate is undefined too and its entry carries no value.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    preparation.compute_self_sufficiency_according_to_solar_htw_berlin(
+        relative_electricity_demand_in_percent=None,
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    collected = preparation.kpi_collection_dict_unsorted["BUI1"]
+    assert collected["Self-sufficiency rate according to solar htw berlin"]["value"] is None
+
+
+@pytest.mark.base
+def test_the_total_energy_self_sufficiency_of_no_consumption_is_undefined() -> None:
+    """Catches a total-energy self-sufficiency of a system without any consumption reported as a number.
+
+    Both ways the figure is undefined return ``None``: an electricity rate that is itself undefined, and a total
+    consumption of zero across electricity, gas and other fuels, which would otherwise be a ZeroDivisionError.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    undefined_electricity_rate = preparation.get_total_energy_self_sufficiency(
+        self_sufficency_rate_for_electricity_in_percent=None,
+        total_electricity_consumption_in_kwh=10.0,
+        gas_demand_from_grid_in_kwh=0.0,
+        total_gas_consumption_in_kwh=0.0,
+        other_fuel_consumption_in_kwh=0.0,
+    )
+    no_consumption = preparation.get_total_energy_self_sufficiency(
+        self_sufficency_rate_for_electricity_in_percent=0.0,
+        total_electricity_consumption_in_kwh=0.0,
+        gas_demand_from_grid_in_kwh=0.0,
+        total_gas_consumption_in_kwh=0.0,
+        other_fuel_consumption_in_kwh=0.0,
+    )
+
+    assert undefined_electricity_rate is None
+    assert no_consumption is None
 
 
 def _source(component_name: str) -> KpiSource:

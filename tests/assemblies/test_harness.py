@@ -334,6 +334,7 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
             heating_site + ["DHWStorage", "GasMeter", "HeatDistributionController", "HeatDistributionSystem"],
             {
                 "bind": {
+                    "surroundings": "Building",
                     "heating_curve": "HeatingCurveController",
                     "dhw_temperature": "DHWStorage",
                     "space_heating": "HeatDistributionSystem",

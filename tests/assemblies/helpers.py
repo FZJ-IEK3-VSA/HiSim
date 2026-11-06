@@ -47,9 +47,9 @@ class Real:
 
     ``WEATHER``, ``OCCUPANCY`` and ``BUILDING`` are written as the composed files and
     ``energy_systems/assemblies/test_partners.yaml`` write them, so a build constructs what a composed
-    file constructs; a test holds them equal to the partners. ``HEAT_DISTRIBUTION_CONTROLLER`` and
-    ``HEAT_DISTRIBUTION`` are reduced for expansion only: they read no other site entry,
-    so :meth:`heating_site` needs no building, and a site of them expands but does not build. A build of
+    file constructs; a test holds them equal to the partners. ``BUILDING_FOR_EXPANSION``,
+    ``HEAT_DISTRIBUTION_CONTROLLER`` and ``HEAT_DISTRIBUTION`` are reduced for expansion only: they read no other
+    site entry, so a site of them expands but does not build. A build of
     a PV array states its power: at its default the array is sized from the building's roof, which needs
     a ``Building``.
     """
@@ -79,6 +79,11 @@ class Real:
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
         "inputs: [Weather, UTSPConnector, {$port: heating}], "
         "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}}}"
+    )
+    #: The building reduced for expansion only, the partner of every tank's ``surroundings`` need: it reads no other
+    #: site entry, so it binds no port of its own.
+    BUILDING_FOR_EXPANSION: ClassVar[str] = (
+        "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home}"
     )
     HEAT_DISTRIBUTION_CONTROLLER: ClassVar[str] = (
         "HeatDistributionController: "
@@ -112,11 +117,12 @@ class Real:
 
     @classmethod
     def heating_site(cls, *extra: str) -> str:
-        """The site a heating assembly binds to: weather, residents, heat distribution, its controller, the curve.
+        """The site a heating assembly binds to: weather, residents, the building, heat distribution, its controller, the curve.
 
         Example: ``Real.heating_site() + imports("gas: {assembly: supply/gas_connection}", ...)``. The
-        distribution is the other end of every space-heating assembly's ``space_heating`` circuit. The site has
-        no building, so it expands but does not build; a build of a heating assembly reads a composed file.
+        distribution is the other end of every space-heating assembly's ``space_heating`` circuit, and the building
+        the partner of every tank's ``surroundings`` need. The building, the distribution and its controller are
+        reduced, so the site expands but does not build; a build of a heating assembly reads a composed file.
 
         Args:
             extra: Further site entries, each one indented YAML block.
@@ -127,6 +133,7 @@ class Real:
         return site(
             cls.WEATHER,
             cls.OCCUPANCY,
+            cls.BUILDING_FOR_EXPANSION,
             cls.HEAT_DISTRIBUTION_CONTROLLER,
             cls.HEATING_CURVE,
             cls.HEAT_DISTRIBUTION,

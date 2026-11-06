@@ -22,11 +22,15 @@ components:
     config:
       volume_heating_water_storage_in_liter: {$param: volume_in_liter}
     inputs:
+      - {$port: surroundings}                               # SurroundingTemperatureInCelsius, from the house it stands in
       - {$port: hot_water_demand}                           # WaterConsumption
       - {$port: circuit}                                    # the generator's supply temperature and mass flow
 
 interface:
   needs:
+    surroundings:     {into: [DHWStorage], partner: Building}
+                      # the temperature the cylinder loses its standby heat to: the house's air or its unheated cellar,
+                      # by where its technical room is
     hot_water_demand: {into: [DHWStorage], partner: UtspLpgConnector}
     circuit:          {circuit: dhw, member: DHWStorage}
                       # binds heating.dhw: supply leg and pump are the generator's, the return leg this cylinder's

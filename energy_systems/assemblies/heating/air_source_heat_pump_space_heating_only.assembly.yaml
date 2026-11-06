@@ -59,11 +59,15 @@ components:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP            # 50 l/kW of the heat pump's maximal thermal power
       volume_heating_water_storage_in_liter: {$param: buffer_volume_in_liter}
     inputs:
+      - {$port: surroundings}                               # SurroundingTemperatureInCelsius, from the house it stands in
       - {$port: space_heating}                              # the distribution's return temperature and mass flow
       - HeatPump                                            # TemperatureOutputSH, MassFlowOutputSH
 
 interface:
   needs:
+    surroundings:     {into: [Buffer], partner: Building}
+                      # the temperature the buffer loses its standby heat to: the house's air or its unheated cellar,
+                      # by where its technical room is
     weather:          {into: [ControllerSH], partner: Weather}
     ambient:          {into: [HeatPump], partner: Weather,
                        wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,

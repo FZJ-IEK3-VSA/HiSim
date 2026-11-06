@@ -1,15 +1,18 @@
 """Simple air-conditioner household building-sizer system setup.
 
 This setup pairs a :class:`~hisim.components.building.Building` with
-:class:`~hisim.components.weather.Weather`, a
+:class:`~hisim.components.weather.Weather`, the residents of a
+:class:`~hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector`, a
 :class:`~hisim.components.simple_air_conditioner.SimpleAirConditioner`, its
 :class:`~hisim.components.simple_air_conditioner.SimpleAirConditionerController` and an
-:class:`~hisim.components.electricity_meter.ElectricityMeter` for the electricity the air
-conditioner buys.
+:class:`~hisim.components.electricity_meter.ElectricityMeter` for the electricity the residents
+and the air conditioner buy.
 
 It is derived from ``household_heatpump_building_sizer.py`` but stripped down to
-weather + building + AC + controller + electricity meter only — no UTSP/occupancy, PV, battery,
-EMS, heat pump, heat distribution or DHW storage.
+weather + building + occupancy + AC + controller + electricity meter only — no PV, battery,
+EMS, heat pump, heat distribution or DHW storage. The residents' body heat and the heat of their
+devices warm the building (its internal gains), and their electricity passes the meter. Their
+hot-water draw has no consumer here: the setup has no hot-water storage, so it stays unread.
 """
 
 import re
@@ -17,6 +20,7 @@ from typing import Optional, Any
 
 from hisim.simulator import SimulationParameters
 from hisim.components import weather
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.config import SizingContext
 from hisim.components import building
 from hisim.components import simple_air_conditioner
@@ -47,10 +51,11 @@ def setup_function(
 
     Components:
         - Building (German single-family home, cooling setpoint 25 °C)
+        - Occupancy (the archetype's LPG households: internal gains and electricity)
         - Weather
         - SimpleAirConditioner (Carnot-efficiency cooling model)
         - SimpleAirConditionerController (hysteresis on indoor temperature)
-        - ElectricityMeter (reads the air conditioner's electricity)
+        - ElectricityMeter (reads the residents' and the air conditioner's electricity)
     """
     my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
     # =================================================================================================================================
@@ -91,6 +96,7 @@ def setup_function(
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = arche_type_config_.conditioned_floor_area_in_m2
     number_of_apartments = arche_type_config_.number_of_dwellings_per_building
+    lpg_households = arche_type_config_.resolve_lpg_households()
 
     # =================================================================================================================================
     # Build Building
@@ -122,6 +128,17 @@ def setup_function(
     )
 
     # =================================================================================================================================
+    # Build Occupancy
+    # The residents of the other household building-sizer setups: the archetype's LPG households, computed by the
+    # local LoadProfileGenerator. Their heat gains reach the building through its default connections.
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
+    my_occupancy_config.household = lpg_households
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # =================================================================================================================================
     # Build Weather
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -150,9 +167,12 @@ def setup_function(
     # =================================================================================================================================
     # Wire and add components
 
-    # Building: connect weather defaults, then add
+    # Building: connect weather defaults, then add; connecting automatically also wires the residents' heat gains
     my_building.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_building, connect_automatically=True)
+
+    # Occupancy: add (no inputs)
+    my_sim.add_component(my_occupancy)
 
     # Weather: add (no auto-connect needed)
     my_sim.add_component(my_weather)

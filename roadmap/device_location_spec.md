@@ -157,8 +157,8 @@ on its own (a connection the file does not show, against the recorded file being
 system); and, with two outputs, the balance's "unlinked" log line as the only sign of room heat that nobody reads (a
 heated-zone output is a transfer with a missing end, not a loss, so it is a build error, §4.5). Consequence: §4.4
 and §4.5 are revised; `EnergyPort.for_heat_released` goes and the port `EnergyPort(PRODUCTION, ROOM_HEAT)` is
-declared once in `hisim/energy_port.py`; the build rule "room heat needs a receiver" joins
-`Wiring.refuse_a_broken_wiring`; the recorder writes the building's bare items for its located devices into every
+declared once in `hisim/energy_port.py`; the build rule "room heat needs a receiver" is the setup rule EP-06
+(`roadmap/system_kinds_spec.md` §4.6), waived for demos and plants; the recorder writes the building's bare items for its located devices into every
 twin; PR 1 and PR 2 are reworked before they merge and PR 3 takes the same shape; no number of PR 2's measurement
 moves (§7).
 
@@ -404,14 +404,14 @@ one dynamic input on the building. Each output's description states what it carr
 
 **Room heat needs a receiver (D-h).** A `PRODUCTION` port of `ROOM_HEAT` that no component reads is a transfer
 with a missing end, not a loss: the device says its heat went into the heated zone and nothing took it. The build
-refuses it. `Wiring.refuse_a_broken_wiring` (`hisim/postprocessing/energy_balance/ports.py`), which
-`Simulator.run_all_timesteps` calls right after `connect_all_components` and beside `FluidLoopWalk.find_loops`,
-before the first step and in both modes, gets a fourth fault list, `unread_room_heat_faults`: one fault per such
-output, naming the component and the output ("room heat needs a receiver: `buffer.HeatToHeatedZoneInWatt`
-declares PRODUCTION of ROOM_HEAT and no component reads it"), raised with the other faults as
-`EnergyPortWiringError`. The rule is structural, needs no value of the run and names no class: the occupancy's two
-`ROOM_HEAT` outputs fall under it too, so a run with an occupancy and no building is refused instead of dropping
-the occupants' heat (every twin and setup with an occupancy has a building; a test that has none gets one). It
+refuses it: the setup rule EP-06 `room-heat-needs-receiver` (`hisim/setup_rules/energy_ports.py`, the setup-kinds
+spec's §4.6), run by the registry right after `connect_all_components`, before the first step and in both modes,
+finds one fault per such output, naming the component and the output ("room heat needs a receiver: `buffer.HeatToHeatedZoneInWatt`
+declares PRODUCTION of ROOM_HEAT and no component reads it"), raised with the other energy-port faults as
+`EnergyPortWiringError`; it is waived for the setup kinds `demo` and `plant`. The rule is structural, needs no value of the run and names no class: the occupancy's two
+`ROOM_HEAT` outputs fall under it too, so a residential or commercial run with an occupancy and no building is
+refused instead of dropping the occupants' heat; a demo (dynamic_components, the test rigs) or a plant is waived
+and its unread heat is reported as unlinked. It
 replaces the balance's "unlinked" log line for this case; that line stays for the other carriers after the run.
 
 Rejected for the outputs: one output whose port the location chooses, with its reader wired only when the location
@@ -457,7 +457,7 @@ the twin lists its tanks under the building, and the tanks' `HeatToHeatedZoneInW
   `IndoorAirTemperatureInCelsius`, `UnheatedCellarTemperatureInCelsius` and `OutsideAirTemperatureInCelsius` and
   their output `SurroundingTemperatureInCelsius`; the released-heat outputs `HeatToHeatedZoneInWatt` and
   `HeatLossInWatt` on both tanks and the battery; `EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE`; the build rule
-  "room heat needs a receiver" in `Wiring.refuse_a_broken_wiring`; `energy_port=` on
+  "room heat needs a receiver" (setup rule EP-06); `energy_port=` on
   `DynamicComponent.add_component_input_and_connect`; the boundary nodes `UNCONVERTED_SUNLIGHT` and
   `HEAT_LOSS_TO_OUTDOORS` in place of `OUTDOORS` (a `balance_report.json` and diagram label change). Removed from
   the first builds of PR 1 and PR 2 (D-h): `EnergyPort.for_heat_released`, the tanks' input
@@ -483,7 +483,7 @@ Pull requests, in this order, one bead each (AGENTS.md); PR 4 is independent of 
 
 | PR | Bead | Content | Tests | Results |
 |---|---|---|---|---|
-| 1 | hisim-device-location-820d.1 (components, P2; #1211, open) | `lt.InstallationLocation` with `releases_into_heated_zone`; the building's `technical_room_location`, its law over the TABULA row with the table of §4.2 and the refusal of an unknown code or of `OUTDOORS`; the fact and `Size.TECHNICAL_ROOM_LOCATION`; `TemperatureUnheatedCellarInCelsius` (§4.3); the building as a `DynamicComponent` with `default_connections_for` by the `ROOM_HEAT` `PRODUCTION` port, dynamic inputs carrying ports, `HeatReleasedByDevicesInWatt` (§4.4); `EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE` in `hisim/energy_port.py`; the build rule "room heat needs a receiver" in `Wiring.refuse_a_broken_wiring` (§4.5). Rework to D-h of its first build: `EnergyPort.for_heat_released` goes, the port constant moves out of the building, the build rule comes in; the dynamic inputs, `HeatReleasedByDevicesInWatt` and the cellar-temperature output stay as built | the table of §4.2 row by row (each German class, `N` → unheated, `-`/`C`/`P` → heated, a foreign code refused); the cellar formula at the three worked points of §3 and b outside [0, 1] refused; a test double with a `ROOM_HEAT` `PRODUCTION` output wired by default connection, its heat in the building's gains and both sides booking the same column; the occupancy's ports not read twice; a `ROOM_HEAT` `PRODUCTION` output that nobody reads refuses the build before the first step, naming the component and the output, in both modes; the same double read by the building with zeros every step books nothing and is not listed as unlinked | no number moves; the new output columns; the recorded twins re-recorded with the building's bare items for their located devices (D-i: no field spelled out) |
+| 1 | hisim-device-location-820d.1 (components, P2; #1211, open) | `lt.InstallationLocation` with `releases_into_heated_zone`; the building's `technical_room_location`, its law over the TABULA row with the table of §4.2 and the refusal of an unknown code or of `OUTDOORS`; the fact and `Size.TECHNICAL_ROOM_LOCATION`; `TemperatureUnheatedCellarInCelsius` (§4.3); the building as a `DynamicComponent` with `default_connections_for` by the `ROOM_HEAT` `PRODUCTION` port, dynamic inputs carrying ports, `HeatReleasedByDevicesInWatt` (§4.4); `EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE` in `hisim/energy_port.py`; the build rule "room heat needs a receiver" as setup rule EP-06 (§4.5). Rework to D-h of its first build: `EnergyPort.for_heat_released` goes, the port constant moves out of the building, the build rule comes in; the dynamic inputs, `HeatReleasedByDevicesInWatt` and the cellar-temperature output stay as built | the table of §4.2 row by row (each German class, `N` → unheated, `-`/`C`/`P` → heated, a foreign code refused); the cellar formula at the three worked points of §3 and b outside [0, 1] refused; a test double with a `ROOM_HEAT` `PRODUCTION` output wired by default connection, its heat in the building's gains and both sides booking the same column; the occupancy's ports not read twice; a `ROOM_HEAT` `PRODUCTION` output that nobody reads refuses the build before the first step, naming the component and the output, in both modes; the same double read by the building with zeros every step books nothing and is not listed as unlinked | no number moves; the new output columns; the recorded twins re-recorded with the building's bare items for their located devices (D-i: no field spelled out) |
 | 2 | hisim-device-location-820d.2 (components, P2; absorbs hisim-af8m; #1213, open) | `installation_location` on both tanks; the three temperature inputs with the static default connections of §4.5 and `SurroundingTemperatureInCelsius` as the output of the picked one; the standby loss against it in both node steps; the two released-heat outputs; the tanks' `StandbyHeatLoss` removed, its KPIs computed from the two channels; the output descriptions; the measurement of §7. Rework to D-h of its first build: the one input wired by the location and the port by the location go | a buffer in an unheated space at 50 °C and a 6.5 °C cellar loses `UA · 43.5` W on `HeatLossInWatt` while `HeatToHeatedZoneInWatt` is 0; the same buffer in the heated zone loses against the start-of-step air temperature on `HeatToHeatedZoneInWatt`, `HeatLossInWatt` is 0, and the building books it; a buffer pinned outdoors picks the weather's temperature; the three inputs wired by the same defaults in all three locations; an `AUTO` location without a building fails naming the fact; both tanks' balances close in all three locations with the idle output unlisted; the sizer twins' balance closes every step; the heat-pump sizer twin, recorded on its `N` row, run with a heated-zone building row and no other edit: the tanks' losses arrive in `HeatReleasedByDevicesInWatt`, no port unlinked | every tank twin moves; goldens re-blessed; §7 filled (the measurement of the first build stays valid, §7) |
 | 3 | hisim-device-location-820d.3 (components, P2) | `installation_location` on the battery; its two released-heat outputs carrying the sum of its inverter and cell loss, the two loss outputs without ports | the battery in the heated zone hands the sum to the building through one dynamic input and its balance closes, `HeatLossInWatt` idle; outdoors `HeatLossInWatt` carries the sum and `HeatToHeatedZoneInWatt` is idle | the heated-zone twins move; goldens re-blessed |
 | 4 | hisim-device-location-820d.4 (postprocessing, P2; #1212, open) | the two sinks of §4.6 in `lt.EnvironmentNode` and `default_boundary`; the Sankey spec's table revised; docstrings and tests | `default_boundary` of a `SOLAR` `LOSS` and of every other `LOSS`; a run's report naming no "outdoors" | labels only |

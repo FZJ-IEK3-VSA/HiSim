@@ -253,17 +253,17 @@ class TestInputShapes:
         assert not check(OneInputSpelling, Texts.with_inputs("weather", self.WIRE))
 
     def test_a_feed_written_twice_is_a_fault_with_the_catalogue_code(self) -> None:
-        """Catches a source output fed twice, reported under the code its message has always carried."""
+        """Catches a source output fed twice, its message under the rule's own code."""
         faults = check(NoDuplicateFeed, Texts.with_inputs(self.FEED, self.FEED))
 
-        assert faults[0].code == "EF-2C" and faults[0].message.startswith("EF-25 at components.boiler.inputs[1]: 'boiler' is fed twice")
+        assert faults[0].code == "EF-2C" and faults[0].message.startswith("EF-2C at components.boiler.inputs[1]: 'boiler' is fed twice")
         assert not check(NoDuplicateFeed, Texts.with_inputs(self.FEED))
 
     def test_a_wire_written_twice_is_a_fault_with_the_catalogue_code(self) -> None:
         """Catches an input wired twice, which would leave the winner to list order."""
         faults = check(NoDuplicateWire, Texts.with_inputs(self.WIRE, self.WIRE))
 
-        assert faults[0].code == "EF-2D" and "wires its input 'TemperatureOutside' twice" in faults[0].message
+        assert faults[0].code == "EF-2D" and faults[0].message.startswith("EF-2D at components.boiler.inputs[1]: 'boiler' wires its input 'TemperatureOutside' twice")
         assert not check(NoDuplicateWire, Texts.with_inputs(self.WIRE))
 
     def test_the_spelling_of_an_item_and_the_clashes_between_spellings(self) -> None:

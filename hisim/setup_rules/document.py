@@ -510,15 +510,16 @@ class OneInputSpelling(DocumentRule):
 
 
 class NoDuplicateFeed(DocumentRule):
-    """What it checks: one consumer is fed each source output once, as the file writes its feeds.
+    """What it checks: one consumer's input list writes each feed of a source output once.
 
-    The wiring rule ``EF-25`` checks the same of the participant outputs once the feeds are resolved; this rule
-    checks the feeds as written, before any class is imported, unselected options included. Its faults carry the
-    catalogue code ``EF-25`` the validator raised.
+    Two feed items of one consumer with the same source and the same output, or both without an output, are a
+    duplicate. The rule reads the items as written, before any class is imported, unselected options included. The
+    wiring rule ``EF-25`` (``feed-unique``) checks something else: the participant outputs an aggregator measures once
+    its feeds are resolved and its bare items expanded, which only the built components know.
 
     Why: an aggregator accepts each source output once; a second feed would leave the winner to list order.
 
-    Example of a fault: ``EF-25 at components.meter.inputs[1]: 'meter' is fed twice from 'pv.ElectricityOutput'.``
+    Example of a fault: ``EF-2C at components.meter.inputs[1]: 'meter' is fed twice from 'pv.ElectricityOutput'.``
 
     How to fix: delete the second feed.
     """
@@ -539,7 +540,7 @@ class NoDuplicateFeed(DocumentRule):
                 feed_key = (item.source, item.output or "")
                 if feed_key in fed_outputs:
                     refusal = EnergySystemFormatError(
-                        EnergySystemErrorId.DUPLICATE_FEED,
+                        EnergySystemErrorId.WRITTEN_DUPLICATE_FEED,
                         f"components.{entry.name}.inputs[{index}]",
                         f"'{entry.name}' is fed twice from '{item.source}{'.' + item.output if item.output else ''}'.",
                         remedy="An aggregator accepts each source output once.",
@@ -550,15 +551,15 @@ class NoDuplicateFeed(DocumentRule):
 
 
 class NoDuplicateWire(DocumentRule):
-    """What it checks: one consumer wires each of its inputs once, as the file writes its wires.
+    """What it checks: one consumer's input list writes one explicit wire per input.
 
-    The wiring rule ``EF-26`` checks the same once the defaults items are expanded; this rule checks the wires as
-    written, before any class is imported, unselected options included. Its faults carry the catalogue code ``EF-26``
-    the validator raised.
+    The rule reads the explicit wires as written, before any class is imported, unselected options included. The
+    wiring rule ``EF-26`` (``no-input-fed-twice``) checks something else: every wire the build plans, those the
+    expansion of a bare defaults item adds included, which only the component classes know.
 
     Why: an input takes exactly one source; a second wire would leave the winner to list order.
 
-    Example of a fault: ``EF-26 at components.boiler.inputs[2]: 'boiler' wires its input 'TemperatureOutside' twice.``
+    Example of a fault: ``EF-2D at components.boiler.inputs[2]: 'boiler' wires its input 'TemperatureOutside' twice.``
 
     How to fix: delete one of the two wires.
     """
@@ -578,7 +579,7 @@ class NoDuplicateWire(DocumentRule):
                     continue
                 if item.input in wired_inputs:
                     refusal = EnergySystemFormatError(
-                        EnergySystemErrorId.DUPLICATE_WIRE,
+                        EnergySystemErrorId.WRITTEN_DUPLICATE_WIRE,
                         f"components.{entry.name}.inputs[{index}]",
                         f"'{entry.name}' wires its input '{item.input}' twice.",
                         remedy="An input takes exactly one source.",

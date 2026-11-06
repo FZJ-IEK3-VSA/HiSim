@@ -218,21 +218,23 @@ class Inventory:
             lives="hisim/setup_rules/document.py:OneInputSpelling",
         ),
         RuleRecord(
-            rule_id="document.no_duplicate_feed", codes=("EF-2C", "EF-25"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            rule_id="document.no_duplicate_feed", codes=("EF-2C",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="one source output fed once into an aggregator (file level)",
             lives="hisim/setup_rules/document.py:NoDuplicateFeed",
             note=(
-                "the rule's code is EF-2C, since the wiring rule wiring.feed_unique holds EF-25; its messages keep the catalogue code EF-25"
+                "the validator raised it as EF-25; PR 7 gave it the catalogue code EF-2C, since the wiring rule wiring.feed_unique (EF-25) "
+                "checks something else, the participant outputs an aggregator measures after its feeds are resolved"
             ),
         ),
         RuleRecord(
-            rule_id="document.no_duplicate_wire", codes=("EF-2D", "EF-26"), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
+            rule_id="document.no_duplicate_wire", codes=("EF-2D",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="one input wired once (file level)",
             lives="hisim/setup_rules/document.py:NoDuplicateWire",
             note=(
-                "the rule's code is EF-2D, since the wiring rule wiring.no_input_fed_twice holds EF-26; its messages keep the catalogue code EF-26"
+                "the validator raised it as EF-26; PR 7 gave it the catalogue code EF-2D, since the wiring rule wiring.no_input_fed_twice (EF-26) "
+                "checks something else, every wire the build plans, those a bare defaults item adds included"
             ),
         ),
         RuleRecord(

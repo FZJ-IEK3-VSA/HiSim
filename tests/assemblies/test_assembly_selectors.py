@@ -35,10 +35,11 @@ from hisim.dynamic_component import DynamicComponentConnection
 from hisim.energy_system.assemblies.selection import Observer, SelectionPlan
 from hisim.energy_system.assemblies.twins import COMPOSED_TWINS, rename_reference
 from hisim.energy_system.channels import FeedRequest
-from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordError, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
+from hisim.setup_rules.rule import SetupRuleViolation
 from tests.assemblies.helpers import Mocks, Real, build_text, expand_text, imports, site
 
 #: The weight of a feed an observer only measures.
@@ -117,10 +118,10 @@ def build(text: str, directory: Path) -> EnergySystemFile:
 
 
 def refusal(text: str, directory: Path) -> str:
-    """The message a build refuses an inline file with: a catalogue error's, or the wiring rules' faults, one per line."""
+    """The message a build refuses an inline file with: a catalogue error's, or the setup rules' faults, one per line."""
     with pytest.raises(EnergySystemError) as raised:
         build_text(text, directory)
-    if isinstance(raised.value, EnergySystemWiringError):
+    if isinstance(raised.value, SetupRuleViolation):
         return "\n".join(fault.message for fault in raised.value.faults)
     return str(raised.value)
 
@@ -213,7 +214,7 @@ def ranked_by_fake_controller(
     }
     components["Controller"] = FakeComponent("FakeController", declared)
     plan = SelectionPlan(observers=[Observer("Controller", Selection(), "Controller")])
-    return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)["Controller"]]
+    return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)[0]["Controller"]]
 
 
 @pytest.mark.assemblies

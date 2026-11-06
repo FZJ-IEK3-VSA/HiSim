@@ -32,7 +32,10 @@ document at once as :class:`EnergySystemStructureError`, a format error that is 
 violation. The binding rules and the sizing rules of the setup rules (``hisim/setup_rules/bindings.py``,
 ``sizing.py``) likewise raise every fault of a file at once, as :class:`EnergySystemClassBindingError`, a
 binding error, and as :class:`EnergySystemSizingError`. All three derive from :class:`CatalogueViolation`,
-which reads the identifier and the location of the first fault.
+which reads the identifier and the location of the first fault, as does :class:`EnergySystemImportsError`,
+an assembly error that the assembly rules (``hisim/setup_rules/assemblies.py``) raise with every fault of a
+file's imports. The rules refuse what the stages recorded as :class:`CatalogueRefusal` records:
+:class:`WiringRefusal` from the wiring, :class:`ImportRefusal` from the expansion of imports.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ import difflib
 import enum
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Iterable, Optional, Pattern, Sequence, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Iterable, Optional, Pattern, Sequence, Tuple, Type, TypeVar, Union
 
 from hisim.setup_rules.rule import SetupRuleViolation
 
@@ -88,13 +91,14 @@ class EnergySystemErrorId(enum.Enum):
     (§3.3), ``EF-7J`` for a port that does not fit its assembly's members, ``EF-7K`` for circuit
     ends of different circuits, ``EF-7L`` for a carrier without exactly one provider or a provider
     without a consumer, ``EF-7P`` for an evaluation order that names one number twice or a record
-    whose components do not stand in the sequence its import record states. Those are raised by the
-    expansion of imports, from the files alone. The wiring raises the rest, on the constructed
+    whose components do not stand in the sequence its import record states. Those are found by the
+    expansion of imports, from the files alone. The wiring finds the rest, on the constructed
     components: ``EF-7M`` for a consuming output whose energy port carries another carrier, ``EF-7N``
     for a consuming output named that its meter's class declares no feed or more than one feed for
     (D30), ``EF-7S`` for an observer's selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an
-    actuation and ``EF-7V`` for a derived weight that reaches another kind's base weight. The letters
-    ``I`` and ``O`` are skipped, as they read like a one and a zero.
+    actuation and ``EF-7V`` for a derived weight that reaches another kind's base weight. Each is a setup
+    rule now (``hisim/setup_rules/assemblies.py``, ``wiring.py``), except ``EF-70`` and ``EF-73``, which the
+    readers raise. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -611,7 +615,9 @@ class WiringRefusal(CatalogueRefusal):
     what it could not do it records here, and the wiring rules of the setup rules
     (``hisim/setup_rules/wiring.py``) refuse it. Example: ``WiringRefusal(EnergySystemErrorId.NOT_AN_AGGREGATOR,
     "components.building.inputs", "'building' (...) is not an aggregator ...")``. ``cause`` holds the
-    exception a component's constructor raised, for ``EF-33``.
+    exception a component's constructor raised, for ``EF-33``. The selection of an observer's feeds
+    records its refusals (``EF-7S``, ``EF-7U``, ``EF-7V``) here too, as it runs inside the wiring; the
+    assembly rules refuse them.
     """
 
 
@@ -644,7 +650,54 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     wrong type, value, range or unit, a violated constraint, and a port that cannot be bound
     (§3.3). Every message names the import (and instance) and the port, and the binding refusals
     that decide among candidates list them and end in a paste-ready verb line.
+
+    The conditions the assembly rules judge (``hisim/setup_rules/assemblies.py``) are raised together as the
+    subclass :class:`EnergySystemImportsError`; this class itself is still raised by the checks that stay where they
+    fire: a library directory that does not exist, a lookup of one assembly by a tool, an import named like a
+    component, a sizing source naming a member the variants left out.
     """
+
+
+class EnergySystemImportsError(CatalogueViolation, EnergySystemAssemblyError):  # pylint: disable=too-many-ancestors  # a catalogue error and a rule violation
+    """Every fault the assembly rules found in a file's imports, raised together.
+
+    The assembly rules (``hisim/setup_rules/assemblies.py``) refuse what the expansion of imports recorded instead of
+    raising -- an assembly found nowhere or twice, a library check that fails, a parameter or constraint an import
+    breaks, a port that cannot be bound, two blocks of one evaluation order -- and what the selection of the
+    observers' feeds recorded during the wiring. Each fault's message is the catalogue message ``EF-7x at <location>:
+    <problem>`` the expansion raised before the checks moved, followed by the pointer to the rule. It is an assembly
+    error, so an ``except EnergySystemAssemblyError`` keeps catching it, and a :class:`CatalogueViolation`, and with
+    it a ``ValueError``.
+
+    ``error_id``, ``location`` and ``problem`` are those of the first fault (:class:`CatalogueViolation`), the faults
+    being ordered by code, so a caller that reads them as from a single assembly error keeps working. Example: a file whose only fault is an
+    ambiguous port gives ``error_id`` ``EnergySystemErrorId.PORT_AMBIGUOUS``. ``alternatives`` is empty: the list
+    of valid values is part of the message.
+    """
+
+
+@dataclass(frozen=True)
+class ImportRefusal(CatalogueRefusal):
+    """One condition the expansion of a file's imports met, recorded where it was found instead of raised.
+
+    The expansion goes on past a fault where the rest of its stage does not depend on it -- the next import, the
+    next parameter, the next port -- so that a file shows every fault of its imports at once, and stops before a
+    stage that would read what a fault left undecided; the assembly rules refuse what it recorded. ``key_path``
+    locates the fault in the energy-system file, from its top level (``("imports", "heating")``), and is empty where
+    the fault lies in an assembly file; ``owner`` is the import or component the fault belongs to, as the file
+    names it (``heating``, ``pv.east``, ``Building``), or ``None``, and :attr:`component` reads it, since the
+    location of an import's refusal is a label, not a key path. Example: ``ImportRefusal(EnergySystemErrorId.
+    ASSEMBLY_NOT_FOUND, "imports.tank", "the assembly 'test/bse' is in none of the library directories (...).",
+    key_path=("imports", "tank"), owner="tank")``.
+    """
+
+    key_path: Tuple[Union[str, int], ...] = ()
+    owner: Optional[str] = None
+
+    @property
+    def component(self) -> Optional[str]:
+        """The import or component the refusal belongs to, as the file names it: ``tank`` for a refusal of the import ``tank``."""
+        return self.owner
 
 
 class EnergySystemRecordError(EnergySystemCatalogueError):

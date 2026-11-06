@@ -16,20 +16,23 @@ and records the rest.
 Every fault keeps the catalogue message the error raised before the checks moved, ``EF-nn at <location>:
 <problem>``, with the source of a component an import produced, and the registry raises them together as
 ``EnergySystemWiringError``. Every rule requires ``EF-33``: a component that could not be constructed leaves nothing
-to plan. The rules that read the whole plan, ``EF-31`` and the logged ``EF-34``, also require every rule whose
-fault leaves the plan incomplete, since a refused item, feed or aggregator contributes no wire. ``EF-34`` and
-``EF-35`` only log.
+to plan. Every rule also requires the assembly rules of the selection of the observers' feeds (``EF-7S``, ``EF-7U``,
+``EF-7V``, ``hisim/setup_rules/assemblies.py``): the selection plans the feeds of meters and controllers, and a
+refused selection leaves an observer without feeds or a controllable input fed by no controller or by two, which the
+wiring rules would report again as an open or doubly fed input. The rules that read the whole plan, ``EF-31`` and the
+logged ``EF-34``, also require every rule whose fault leaves the plan incomplete, since a refused item, feed or
+aggregator contributes no wire. ``EF-34`` and ``EF-35`` only log.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple, Type
 
 from hisim import loadtypes as lt
 from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError, WiringRefusal
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
-from hisim.setup_rules.rule import Fault, RuleStage, SetupRule
+from hisim.setup_rules.rule import Fault, RuleStage, SetupRule, SetupRuleViolation
 from hisim.setup_rules.subjects import BuiltDocument
 
 if TYPE_CHECKING:
@@ -43,16 +46,22 @@ class WiringRule(SetupRule[BuiltDocument]):
     """The shared base of the wiring rules: the subject they read, the error they raise and how a refusal becomes a fault.
 
     It declares no ``CODE``, so it is no rule itself. Its rules read the built file and raise ``EnergySystemWiringError``;
-    each requires ``EF-33``, since a component that could not be constructed leaves no plan to judge.
+    each requires ``EF-33``, since a component that could not be constructed leaves no plan to judge, and the rules of
+    the selection, since a refused selection leaves the plan without the feeds it would have selected.
     """
 
-    VIOLATION = EnergySystemWiringError
-    REQUIRES: ClassVar[FrozenSet[str]] = frozenset({"EF-33"})
+    VIOLATION: ClassVar[Type[SetupRuleViolation]] = EnergySystemWiringError
+
+    #: The assembly rules of the selection of the observers' feeds, which runs inside the wiring and plans feeds.
+    SELECTION_RULES: ClassVar[FrozenSet[str]] = frozenset({"EF-7S", "EF-7U", "EF-7V"})
+
+    REQUIRES: ClassVar[FrozenSet[str]] = frozenset({"EF-33"}) | SELECTION_RULES
 
     #: The rules whose faults leave the plan incomplete: an item, a feed or an aggregator they refuse contributes no
-    #: wire, so a rule that reads the whole plan would report an input as open that the file does feed.
-    PLAN_RULES: ClassVar[FrozenSet[str]] = frozenset(
-        {"EF-21", "EF-22", "EF-23", "EF-25", "EF-27", "EF-28", "EF-29", "EF-2A", "EF-2B", "EF-30", "EF-32", "EF-33", "EF-7N"}
+    #: wire, and a refused selection no feed, so a rule that reads the whole plan would report an input as open, or an
+    #: output as unread, that the file does connect.
+    PLAN_RULES: ClassVar[FrozenSet[str]] = (
+        frozenset({"EF-21", "EF-22", "EF-23", "EF-25", "EF-27", "EF-28", "EF-29", "EF-2A", "EF-2B", "EF-30", "EF-32", "EF-33", "EF-7N"}) | SELECTION_RULES
     )
 
     @classmethod

@@ -165,8 +165,8 @@ def test_the_simple_heat_source_gives_the_brine_loop_the_heat_it_takes_from_the_
 ) -> None:
     """At a 10 °C day the ground collector supplies 8.67 °C brine: colder returning brine takes heat, warmer gives it.
 
-    The source tags its brine loop (its published flow, the returning temperature it reads and the supply it
-    publishes), and its ambient ports carry the loop's heat, ``m c (T_out - T_in)`` with the brine's specific heat,
+    The source tags its brine loop (the flow it reads and the flow it publishes, the returning temperature it reads and
+    the supply it publishes) and pumps it by default, and its ambient ports carry the loop's heat, ``m c (T_out - T_in)`` with the brine's specific heat,
     within the difference between that and the configured mixture's (pygfunction's 3976.77 against 3976.8 J/(kg K)).
     Catches a loop tagged by half or of the wrong fluid, and ambient heat of the wrong sign or size.
     """
@@ -179,13 +179,15 @@ def test_the_simple_heat_source_gives_the_brine_loop_the_heat_it_takes_from_the_
     port_sets = source.port_sets()
     assert len(port_sets) == 1
     port_set = port_sets[0]
-    assert (port_set.loop.name, port_set.loop.carrier, port_set.loop.fluid, port_set.loop.supplies) == (
+    assert (port_set.loop.name, port_set.loop.carrier, port_set.loop.fluid, port_set.loop.supplies, port_set.loop.pumps) == (
         "brine",
         lt.EnergyBalanceCarrier.AMBIENT_HEAT,
         LoopFluid.BRINE,
         True,
+        True,
     )
     assert {quantity: channel.field_name for quantity, channel in port_set.channels.items()} == {
+        LoopQuantity.FLOW_IN: SimpleHeatSource.MassFlow,
         LoopQuantity.FLOW_OUT: SimpleHeatSource.MassFlowOutput,
         LoopQuantity.TEMPERATURE_IN: SimpleHeatSource.TemperatureInput,
         LoopQuantity.TEMPERATURE_OUT: SimpleHeatSource.TemperatureOutput,

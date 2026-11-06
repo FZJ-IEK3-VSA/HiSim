@@ -761,6 +761,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
+    #: The flow of each loop, in kg/s, passed back to the member that pumps it, unchanged: a buffer moves no water.
+    WaterMassFlowRateToHeatGenerator = "WaterMassFlowRateToHeatGenerator"
+    WaterMassFlowRateToSecondaryHeatGenerator = "WaterMassFlowRateToSecondaryHeatGenerator"
+    WaterMassFlowRateToHeatDistributionSystem = "WaterMassFlowRateToHeatDistributionSystem"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
     #: The buffer's temperature at the start of the step, the sensor value its generators' controllers decide on. It
     #: is the start temperature in every path, the stratification path included (owner decision 2026-10-19).
@@ -946,6 +950,40 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToSecondaryHeatGenerator} will follow.",
             fluid_loop=self.secondary_generator_loop.temperature_out if parallel else None,
+        )
+        # The fourth channel of each loop: the flow passed back unchanged. In series with its heat source the buffer
+        # has no generator loops of its own and publishes no generator flow (0 kg/s).
+        self.water_mass_flow_rate_to_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateToHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=(
+                "The generator loop's flow, kg/s, passed back to the generator unchanged: the buffer pumps nothing."
+            ),
+            fluid_loop=self.generator_loop.flow_out if parallel else None,
+        )
+        self.water_mass_flow_rate_to_secondary_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateToSecondaryHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=(
+                "The secondary generator loop's flow, kg/s, passed back to that generator unchanged: the buffer pumps "
+                "nothing."
+            ),
+            fluid_loop=self.secondary_generator_loop.flow_out if parallel else None,
+        )
+        self.water_mass_flow_rate_to_heat_distribution_system_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateToHeatDistributionSystem,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=(
+                "The distribution loop's flow, kg/s, passed on to the heat distribution system unchanged: the buffer "
+                "pumps nothing."
+            ),
+            fluid_loop=self.distribution_loop.flow_out,
         )
 
         self.water_temperature_mean_channel: ComponentOutput = self.add_output(
@@ -1251,13 +1289,40 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         balance closes on every step in both. Without it the buffer keeps its earlier mass-mixing law and its
         mixing-factor outlets (:meth:`simulate_stratification_path`), which is not energy-consistent and which no
         recorded energy system uses.
+
+        In every model the buffer first passes each loop's flow on unchanged (:meth:`pass_the_flows_on`).
         """
+        self.pass_the_flows_on(stsv)
         if not self.heat_exchanger_is_present:
             self.simulate_stratification_path(timestep, stsv, force_convergence)
         elif self.runs_start_of_step_node:
             self.simulate_start_of_step_node(stsv)
         else:
             self.simulate_mixed_node(stsv)
+
+    def pass_the_flows_on(self, stsv: SingleTimeStepValues) -> None:
+        """Publish each loop's flow as it arrived: the buffer moves no water, so what flows in flows out.
+
+        For example, a boiler's 0.36 kg/s arriving at ``WaterMassFlowRateFromHeatGenerator`` leaves at
+        ``WaterMassFlowRateToHeatGenerator``, back to the boiler. A buffer in series with its heat source has no
+        generator flows and publishes 0 kg/s there.
+
+        Args:
+            stsv: The step's values.
+        """
+        parallel = self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
+        stsv.set_output_value(
+            self.water_mass_flow_rate_to_heat_generator_channel,
+            stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel) if parallel else 0.0,
+        )
+        stsv.set_output_value(
+            self.water_mass_flow_rate_to_secondary_heat_generator_channel,
+            stsv.get_input_value(self.water_mass_flow_rate_secondary_heat_generator_input_channel) if parallel else 0.0,
+        )
+        stsv.set_output_value(
+            self.water_mass_flow_rate_to_heat_distribution_system_channel,
+            stsv.get_input_value(self.water_mass_flow_rate_heat_distribution_system_input_channel),
+        )
 
     def circuit_inflows(self, stsv: SingleTimeStepValues) -> List[hydronics.Inflow]:
         """Return the three streams entering the buffer: both generators' supplies and the distribution's return.
@@ -2158,6 +2223,9 @@ class SimpleDHWStorage(SimpleWaterStorage):
     StandbyHeatLoss = "StandbyHeatLoss"
     WaterMassFlowRateOfDHW = "WaterMassFlowRateOfDHW"
     HotWaterMassFlowRateFromStorageInKgPerSecond = "HotWaterMassFlowRateFromStorageInKgPerSecond"
+    #: The flow of each charging coil, in kg/s, passed back to the generator that pumps it, unchanged.
+    WaterMassFlowRateToHeatGenerator = "WaterMassFlowRateToHeatGenerator"
+    WaterMassFlowRateToSecondaryHeatGenerator = "WaterMassFlowRateToSecondaryHeatGenerator"
 
     @utils.measure_execution_time
     def __init__(
@@ -2276,6 +2344,29 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 "The tank's step mean temperature T̄, the return temperature of the secondary charging circuit."
             ),
             fluid_loop=self.secondary_generator_loop.temperature_out,
+        )
+        # The fourth channel of each coil's loop: the flow passed back to its generator unchanged.
+        self.water_mass_flow_rate_to_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateToHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=(
+                "The primary charging circuit's flow, kg/s, passed back to its generator unchanged: the tank pumps "
+                "nothing."
+            ),
+            fluid_loop=self.generator_loop.flow_out,
+        )
+        self.water_mass_flow_rate_to_secondary_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateToSecondaryHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=(
+                "The secondary charging circuit's flow, kg/s, passed back to its generator unchanged: the tank pumps "
+                "nothing."
+            ),
+            fluid_loop=self.secondary_generator_loop.flow_out,
         )
 
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(
@@ -2884,8 +2975,16 @@ class SimpleDHWStorage(SimpleWaterStorage):
         solves the step with the tap valve (:meth:`solve_tank_step`) from the saved start temperature, and publishes
         the step mean ``T̄`` as both circuits' return temperature and every heat flow from the same node step, so
         the balance closes (:meth:`publish_tank_step`). The end temperature becomes the state the next step starts
-        from.
+        from. Each coil's flow leaves as it arrived, back to its generator: the tank moves no water.
         """
+        stsv.set_output_value(
+            self.water_mass_flow_rate_to_heat_generator_channel,
+            stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel),
+        )
+        stsv.set_output_value(
+            self.water_mass_flow_rate_to_secondary_heat_generator_channel,
+            stsv.get_input_value(self.water_mass_flow_rate_secondary_heat_generator_input_channel),
+        )
         demand_in_kg_per_second = (
             stsv.get_input_value(self.water_consumption_channel)
             * hydronics.Water.DENSITY_KG_PER_LITER

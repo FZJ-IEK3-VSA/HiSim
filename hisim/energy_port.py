@@ -67,22 +67,29 @@ of hydrogen, 29.99 kWh in a step of 900 s.
 Fluid loops
 -----------
 
-A water loop carries no energy output: each of its members publishes or reads a mass flow and two temperatures, and
-the loop's heat is derived from them, ``m c (T_out - T_in) dt``. A component says which of its channels belong to a
-loop with a tag on the channel itself, passed to ``add_input`` or ``add_output`` as ``fluid_loop=``
-(:class:`FluidLoopChannel`): which of the component's loops (:class:`FluidLoop`) and which of the four quantities
-(:class:`LoopQuantity`). The component's tagged channels, grouped by loop, are its *port sets*
-(:meth:`hisim.component.Component.port_sets`); nothing else declares a loop (D8 of
-``roadmap/hydraulic_circuits_spec.md``). Each :class:`FluidLoop` states the facts the wiring cannot tell: the heat
-the loop carries while it heats (``carrier``), its fluid (``fluid``, which gives ``c``), whether this member supplies
-the loop (``supplies``, its generator end), whether it pumps it (``pumps``) and whether it lets the loop cool
-(``may_cool``). For example, a buffer reads its generator's flow and supply and publishes the return::
+A water loop carries no energy output: each of its members reads the fluid arriving and publishes the fluid
+leaving, each as a mass flow and a temperature, and the loop's heat is derived from them, ``m c (T_out - T_in) dt``.
+A component says which of its channels belong to a loop with a tag on the channel itself, passed to ``add_input`` or
+``add_output`` as ``fluid_loop=`` (:class:`FluidLoopChannel`): which of the component's loops (:class:`FluidLoop`)
+and which of the four quantities (:class:`LoopQuantity`). The component's tagged channels, grouped by loop, are its
+*port sets* (:meth:`hisim.component.Component.port_sets`), four channels each; nothing else declares a loop (D8 of
+``roadmap/fluid_loops_spec.md``). Each :class:`FluidLoop` states the facts the wiring cannot tell: the heat the loop
+carries while it heats (``carrier``), its fluid (``fluid``, which gives ``c``), whether this member supplies the
+loop (``supplies``, its generator end), whether it pumps it (``pumps``) and whether it lets the loop cool
+(``may_cool``). The member that pumps publishes the flow it moves; every other member passes the flow it reads on
+unchanged, so the flow that returns to the pump owner is the flow it sent. For example, a buffer reads its
+generator's flow and supply, publishes the return and passes the flow back::
 
     self.generator_loop = FluidLoop(
         "generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, fluid=LoopFluid.WATER,
         supplies=False, may_cool=True, pumps=False,
     )
     self.add_input(..., lt.Units.KG_PER_SEC, True, fluid_loop=self.generator_loop.flow_in)
+    self.add_output(..., lt.Units.KG_PER_SEC, ..., fluid_loop=self.generator_loop.flow_out)
+
+The build walks the wiring from port set to port set and finds every loop (:mod:`hisim.fluid_loops`): each loop
+closes, each port set is wired whole or not at all, its members agree on carrier and fluid, and exactly one member
+pumps it; the loop's id is its pump owner's ``component.loop``.
 
 The balance check (:mod:`hisim.postprocessing.energy_balance.ports`) follows each tagged input to the output
 connected to it, so both members of a loop resolve to the same flow and the same two temperatures, derives the
@@ -530,10 +537,10 @@ class FluidLoopError(ValueError):
 
     """A fluid-loop declaration that cannot describe a loop, refused when the component declares it.
 
-    Raised by :class:`FluidLoop` for a malformed loop, by ``add_input`` and ``add_output`` for a loop tag that does not
-    fit its channel, and when a component's tagged channels are grouped into port sets
-    (:meth:`hisim.component.Component.port_sets`) for a loop tagged by half. It is a ``ValueError``, as every invalid
-    declaration of this module is.
+    Raised by :class:`FluidLoop` for a malformed loop and by ``add_input`` and ``add_output`` for a loop tag that does
+    not fit its channel or repeats one of the component's. It is a ``ValueError``, as every invalid declaration of this
+    module is. A loop tagged by half and a loop wired wrong are refused at build, with
+    :class:`hisim.hydronics.FluidLoopWiringError`.
     """
 
 
@@ -544,9 +551,9 @@ class FluidLoop:
 
     A component creates one per loop it can be a member of and tags each channel of that loop with it
     (:class:`FluidLoopChannel`, through :attr:`flow_in`, :attr:`flow_out`, :attr:`temperature_in` and
-    :attr:`temperature_out`). The two members of a loop each state their own: the balance check books the loop's heat
-    by its supplier, and the build refuses a loop with no or two suppliers. For example, a buffer's loop to its
-    generator::
+    :attr:`temperature_out`). The members of a loop each state their own: the balance check books the loop's heat by
+    its supplier, and the build refuses a loop with no or two suppliers or with no or two pump owners. For example, a
+    buffer's loop to its generator::
 
         FluidLoop("generator", carrier=lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, fluid=LoopFluid.WATER,
                   supplies=False, may_cool=True, pumps=False)
@@ -562,8 +569,10 @@ class FluidLoop:
         supplies: Whether this member is the loop's generator end, the one whose heat the other member receives.
         may_cool: Whether this member lets the loop remove heat from the room side; a loop may cool only if every
             member allows it. Stage 2 of the spec fails a run that cools a loop that may not.
-        pumps: Whether this member moves the loop's fluid; None where the component can do either and does not state
-            it yet (stage 1b of the spec states it on every loop).
+        pumps: Whether this member moves the loop's fluid, deciding its flow and publishing it as its ``flow_out``;
+            every other member of the loop passes the flow it reads on unchanged. Fixed in code where the component
+            can only pump or never pumps, from its configuration where it can do either (D16 of
+            ``roadmap/fluid_loops_spec.md``, for example a boiler's ``pumps_space_heating_loop``).
     """
 
     name: str
@@ -572,7 +581,7 @@ class FluidLoop:
     fluid: LoopFluid
     supplies: bool
     may_cool: bool
-    pumps: Optional[bool] = None
+    pumps: bool
 
     #: The heat a loop can carry while it heats: space heating, hot water, or the environment's heat on a collector loop.
     LOOP_CARRIERS: ClassVar[Tuple[lt.EnergyBalanceCarrier, ...]] = (
@@ -582,7 +591,7 @@ class FluidLoop:
     )
 
     def __post_init__(self) -> None:
-        """Refuse an empty name, a carrier that is no loop's heat, a fluid that is no :class:`LoopFluid` and a non-bool.
+        """Refuse an empty name, a carrier that is no loop's heat, a fluid that is no :class:`LoopFluid` and a non-bool flag.
 
         Raises:
             FluidLoopError: For any of the above, naming the loop.
@@ -596,11 +605,9 @@ class FluidLoop:
             )
         if not isinstance(self.fluid, LoopFluid):
             raise FluidLoopError(f"The fluid loop {self.name!r} names its fluid by LoopFluid, got {self.fluid!r}.")
-        for flag, value in (("supplies", self.supplies), ("may_cool", self.may_cool)):
+        for flag, value in (("supplies", self.supplies), ("may_cool", self.may_cool), ("pumps", self.pumps)):
             if not isinstance(value, bool):
                 raise FluidLoopError(f"The fluid loop {self.name!r} states {flag} as True or False, got {value!r}.")
-        if self.pumps is not None and not isinstance(self.pumps, bool):
-            raise FluidLoopError(f"The fluid loop {self.name!r} states pumps as True, False or None, got {self.pumps!r}.")
 
     @property
     def flow_in(self) -> "FluidLoopChannel":
@@ -645,7 +652,7 @@ class FluidLoopChannel:
         is_input: bool,
         energy_port: Optional[EnergyPort] = None,
     ) -> None:
-        """Refuse this tag on a channel it cannot describe (§3.1 of ``roadmap/hydraulic_circuits_spec.md``).
+        """Refuse this tag on a channel it cannot describe (§3.1 of ``roadmap/fluid_loops_spec.md``).
 
         A flow is in kg/s and a temperature in °C; the fluid arriving is read through an input and the fluid leaving
         published through an output; a channel is a leg of a loop or an energy port, never both. For example, the tag

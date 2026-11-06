@@ -181,6 +181,19 @@ class SetTemperatureAboveMaximumError(HydronicsError):
     """
 
 
+class FluidLoopWiringError(HydronicsError):
+
+    """A fluid loop whose tags or wiring the build cannot make one closed loop of, refused before the run simulates.
+
+    Raised by :meth:`hisim.component.FluidLoopPortSet.group` for a loop tagged by half and by
+    :meth:`hisim.fluid_loops.FluidLoopWalk.find_loops` for a wiring that is no loop (§3.3 of
+    ``roadmap/fluid_loops_spec.md``): a loop that does not close, a port set wired by half, a tagged flow read through
+    an untagged channel, members that disagree on the carrier or the fluid, a flow read by two port sets, a temperature
+    wire that does not follow the flow, and a loop with no or two pump owners. Each message names the loop's members
+    and the channel concerned.
+    """
+
+
 def circuit_power_w(*, mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> float:
     """Return the heat flow a circuit's water carries, ``m c (T_sup - T_ret)``, in W.
 

@@ -1,16 +1,21 @@
 """Direct tests of the energy-port rules: each rule on a hand-built system with its fault and on one without.
 
 The systems are stand-ins, each a component name with its outputs, its connected inputs and its fluid-loop port sets,
-as the tests of the energy balance build them (``tests/test_energy_port_hydronic.py``).
+as the tests of the energy balance build them (``tests/test_energy_port_hydronic.py``). The room-heat rule is tested
+for every kind: it refuses a residential and a commercial system whose occupancy heat nobody reads, waives a demo and
+a plant, and refuses the demo again once its waiver is removed, which shows that the waiver, not the rule, is what the
+demo relies on.
 """
 
-from types import SimpleNamespace
+from pathlib import Path
+from types import MappingProxyType, SimpleNamespace
 from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 import pytest
 
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.cli_setup_rules import SetupRuleCommands
 from hisim.config import ComponentID
 from hisim.energy_port import EnergyPort
 from hisim.postprocessing.energy_balance.ports import CircuitFault
@@ -22,6 +27,7 @@ from hisim.setup_rules.energy_ports import (
     NoCircuitOnANode,
     OneReaderPerFlow,
     ReceiverUnambiguous,
+    RoomHeatNeedsReceiver,
 )
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
@@ -276,3 +282,80 @@ class TestInputPortPairs:
         assert codes_and_places(faults) == ([("EP-05", "Loop", "HeatIn")] if refused else [])
         if refused:
             assert "reads the energy port Tank.HeatOut (production, space_heating_heat)" in faults[0].message
+
+
+class TestRoomHeatNeedsReceiver:
+    """``EP-06``: heat released into the heated zone has a receiver, except in a demo and a plant."""
+
+    @pytest.mark.parametrize("kind", [SetupKind.RESIDENTIAL, SetupKind.COMMERCIAL])
+    def test_an_occupancy_without_a_building_is_refused_for_a_house_naming_both_outputs(self, kind: SetupKind) -> None:
+        """Catches the residents' heat dropped in silence in a house, which would then miss its internal gains."""
+        with pytest.raises(EnergyPortWiringError) as refused:
+            fft.EnergyPortRules.refuse_a_broken_wiring(Rig.occupancy().components, kind)
+
+        assert codes_and_places(refused.value.faults) == [
+            ("EP-06", "UTSPConnector", "HeatingByDevices"),
+            ("EP-06", "UTSPConnector", "HeatingByResidents"),
+        ]
+        assert (
+            "room heat needs a receiver: UTSPConnector.HeatingByResidents declares PRODUCTION of ROOM_HEAT and no component reads it; "
+            "list the component under the inputs of the building whose heated zone it heats; see: hisim setup-rules show EP-06"
+        ) in str(refused.value)
+
+    @pytest.mark.parametrize("kind", [SetupKind.DEMO, SetupKind.PLANT])
+    def test_a_demo_and_a_plant_run_without_a_receiver(self, kind: SetupKind) -> None:
+        """Catches the rule refusing the demo setups without a building and a plant that has no heated zone."""
+        fft.EnergyPortRules.refuse_a_broken_wiring(Rig.occupancy().components, kind)
+
+    def test_without_its_waiver_the_rule_refuses_the_demo_too(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Catches a demo that passes because the rule skips it some other way, not because of the waiver it declares."""
+        monkeypatch.setattr(RoomHeatNeedsReceiver, "WAIVED_FOR", MappingProxyType({}))
+
+        with pytest.raises(EnergyPortWiringError, match=r"EP-06 room-heat-needs-receiver: room heat needs a receiver: UTSPConnector\.HeatingByDevices"):
+            fft.EnergyPortRules.refuse_a_broken_wiring(Rig.occupancy().components, SetupKind.DEMO)
+
+    def test_a_building_reading_the_heat_satisfies_the_rule_and_an_exempt_reader_does_not(self) -> None:
+        """Catches a refusal of the ordinary house, and a controller counted as the heat's receiver."""
+        assert not RoomHeatNeedsReceiver().check(Rig.occupancy("Building"))
+        assert len(RoomHeatNeedsReceiver().check(Rig.occupancy("Controller"))) == 2
+
+    def test_a_port_that_names_its_environment_is_not_affected(self) -> None:
+        """Catches the rule refusing heat whose boundary node takes it."""
+        assert not RoomHeatNeedsReceiver().check(Rig.occupancy(environment=lt.EnvironmentNode.OUTDOORS))
+
+    @pytest.mark.parametrize(("kind", "refused"), [("demo", False), ("residential", True)])
+    def test_the_demo_twin_without_a_building_passes_as_a_demo_only(self, tmp_path: Path, kind: str, refused: bool) -> None:
+        """Catches the rule missing the real occupancy's ports when a file is built, or refusing the demo it waives.
+
+        The twin of ``system_setups/dynamic_components.py`` runs residents, PV, batteries and fuel cells without a
+        building; declared ``residential``, its residents' two room-heat outputs are refused.
+        """
+        twin = Path(__file__).resolve().parents[2] / "energy_systems" / "dynamic_components.energy_system.yaml"
+        text = twin.read_text(encoding="utf-8")
+        assert "\nsetup_kind: demo\n" in text
+        declared = tmp_path / twin.name
+        declared.write_text(text.replace("\nsetup_kind: demo\n", f"\nsetup_kind: {kind}\n"), encoding="utf-8")
+
+        findings = SetupRuleCommands(SetupRuleRegistry.collect()).findings_of(declared, RuleStage.BUILD)[-1]
+
+        assert findings.subject == "BuiltSystem"
+        expected = [("EP-06", "UTSPConnector", output) for output in sorted(Rig.OCCUPANCY_OUTPUTS)] if refused else []
+        assert codes_and_places(findings.faults) == expected
+
+    def test_it_waits_for_the_input_ports_to_pair(self) -> None:
+        """Catches the rule judging a receiver whose input port does not pair with the output it reads."""
+        assert RoomHeatNeedsReceiver.REQUIRES == frozenset({"EP-05"})
+
+    @pytest.mark.parametrize(
+        ("port", "releases"),
+        [
+            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT), True),
+            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=lt.EnvironmentNode.OUTDOORS), False),
+            (EnergyPort(lt.EnergyRole.LOSS, ROOM_HEAT), False),
+            (EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING), False),
+            (None, False),
+        ],
+    )
+    def test_which_ports_release_room_heat(self, port: Optional[EnergyPort], releases: bool) -> None:
+        """Catches the rule applied to a building's room-heat loss, to space heating, or to an output without a port."""
+        assert RoomHeatNeedsReceiver.releases_room_heat(port) is releases

@@ -5,7 +5,8 @@ so the build refuses a breach before the first step. Three of them are the circu
 :mod:`hisim.energy_port` (``EP-01`` to ``EP-03``): the circuit ends of a run are resolved by the energy balance's
 :class:`~hisim.postprocessing.energy_balance.ports.Wiring`, which the balance after the run reads again, so those
 rules report what its resolution found. ``EP-04`` and ``EP-05`` are the two rules of the wiring of an
-:class:`~hisim.energy_port.EnergyPort`: one receiver per transfer, and the two ports of one wire pair.
+:class:`~hisim.energy_port.EnergyPort`: one receiver per transfer, and the two ports of one wire pair. ``EP-06`` is
+the domain rule that heat released into the heated zone has a receiver, waived for a demo and a plant.
 
 The faults of these rules alone raise ``EnergyPortWiringError``, the error the build raised for them before they
 moved here. The energy balance's wiring is imported when a rule runs, not with the module, so that collecting the
@@ -14,9 +15,11 @@ rules imports no component module.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, List, Optional, Sequence
 
 from hisim import loadtypes as lt
+from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.rule import Fault, RuleStage, SetupRule, SetupRuleViolation
 from hisim.setup_rules.subjects import BuiltSystem
 
@@ -277,3 +280,78 @@ class InputPortPairs(EnergyPortRule):
                         )
                     )
         return faults
+
+
+class RoomHeatNeedsReceiver(EnergyPortRule):
+    """What it checks: every output declaring ``PRODUCTION`` of ``ROOM_HEAT`` is read by a component that moves energy.
+
+    Such a port says its heat went into the heated zone: the residents' body heat and the heat of their devices
+    (``HeatingByResidents``, ``HeatingByDevices`` of the occupancy), or a device installed in the heated zone. A port
+    that names its ``environment`` is not affected: its boundary node takes the heat. A reader that is exempt from the
+    balance or a meter does not count (owner decision D-h of ``roadmap/device_location_spec.md``).
+
+    Why: room heat is a transfer into the heated zone, not a loss. An output nobody reads is a transfer with a missing
+    end: the heat would vanish from the balance and from the building it should warm.
+
+    Example of a fault: ``room heat needs a receiver: UTSPConnector.HeatingByResidents declares PRODUCTION of
+    ROOM_HEAT and no component reads it; list the component under the inputs of the building whose heated zone it
+    heats``.
+
+    How to fix: list the component under the inputs of the building whose heated zone it heats, or install the device
+    in an unheated space, so that its heat leaves as a loss. A demo or a plant does not run the rule.
+    """
+
+    CODE = "EP-06"
+    NAME = "room-heat-needs-receiver"
+    STAGE = RuleStage.BUILD
+    ENFORCED = True
+    # An input port must pair with the output it reads before it counts as that output's receiver.
+    REQUIRES = frozenset({"EP-05"})
+    WAIVED_FOR = MappingProxyType(
+        {
+            SetupKind.DEMO: "a demo may run an occupancy without a building; the heat it does not place is reported as unlinked",
+            SetupKind.PLANT: "a plant has no heated zone; heat a device releases there has no receiver by construction",
+        }
+    )
+
+    def check(self, subject: BuiltSystem) -> Sequence[Fault]:
+        """Return one fault per room-heat output that no component reads, naming the component and the output."""
+        wiring = self.wiring_of(subject)
+        faults: List[Fault] = []
+        for component in subject.components:
+            for output in component.outputs:
+                port = output.energy_port
+                if not self.releases_room_heat(port):
+                    continue
+                assert port is not None  # releases_room_heat holds only for a port
+                if wiring.component_peer(component.component_name, output.field_name, port) is None:
+                    faults.append(
+                        self.fault(
+                            f"room heat needs a receiver: {component.component_name}.{output.field_name} declares "
+                            f"{lt.EnergyRole.PRODUCTION.name} of {lt.EnergyBalanceCarrier.ROOM_HEAT.name} and no component "
+                            "reads it; list the component under the inputs of the building whose heated zone it heats",
+                            component=component.component_name,
+                            port=output.field_name,
+                        )
+                    )
+        return faults
+
+    @staticmethod
+    def releases_room_heat(port: Optional[EnergyPort]) -> bool:
+        """Return whether an output port releases heat into the heated zone: ``PRODUCTION`` of ``ROOM_HEAT``, no environment.
+
+        Example: the occupancy's ``EnergyPort(PRODUCTION, ROOM_HEAT)`` does; the same port naming the environment
+        ``OUTDOORS`` does not, nor the building's ``EnergyPort(LOSS, ROOM_HEAT)``, nor an output without a port.
+
+        Args:
+            port: The output's energy port, ``None`` when it declares none.
+
+        Returns:
+            Whether the rule applies to the output.
+        """
+        return (
+            port is not None
+            and port.role == lt.EnergyRole.PRODUCTION
+            and port.carrier == lt.EnergyBalanceCarrier.ROOM_HEAT
+            and port.environment is None
+        )

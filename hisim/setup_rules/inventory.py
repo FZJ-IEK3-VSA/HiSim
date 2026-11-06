@@ -633,8 +633,9 @@ class Inventory:
             lives="hisim/setup_rules/energy_ports.py:InputPortPairs",
         ),
         RuleRecord(
-            rule_id="energy_ports.room_heat_needs_receiver", nature=RuleNature.DOMAIN, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a PRODUCTION port of ROOM_HEAT is read by a component", lives="PR #1211 (Wiring.refuse_a_broken_wiring, fourth fault list)",
+            rule_id="energy_ports.room_heat_needs_receiver", codes=("EP-06",), nature=RuleNature.DOMAIN, target="energy_ports", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="a PRODUCTION port of ROOM_HEAT is read by a component",
+            lives="hisim/setup_rules/energy_ports.py:RoomHeatNeedsReceiver",
             note=", waived for demo and plant",
         ),
         RuleRecord(

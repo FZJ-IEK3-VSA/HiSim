@@ -233,6 +233,7 @@ class PinnedTwin:
         """Run the twin with both tanks at ``location`` (``None``: as recorded) and return the built system and results.
 
         Outdoors, each tank's bare item ``Building`` becomes ``Weather``, whose default connection the location names.
+        In the heated zone the building's inputs gain both tanks, so that it grows the inputs of their heat.
 
         Args:
             directory: Where the files and results go.
@@ -252,6 +253,9 @@ class PinnedTwin:
                 entry = document["components"][tank]
                 entry.setdefault("config", {})["installation_location"] = location.name
                 entry["inputs"] = [cls.SOURCE[location] if item == "Building" else item for item in entry["inputs"]]
+        if location is lt.InstallationLocation.HEATED_ZONE:
+            # A file names the components the building reads; a bare item lets it grow the input of each tank's heat.
+            document["components"]["Building"]["inputs"] += list(cls.TANKS)
         energy_system = directory / "pinned.energy_system.yaml"
         energy_system.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         parameters = directory / "period.simulation.yaml"
@@ -278,8 +282,7 @@ class PinnedTwin:
     @staticmethod
     def component(built: Any, name: str) -> Any:
         """Return the component of the run named ``name``."""
-        (found,) = [wrapper.my_component for wrapper in built.simulator.wrapped_components if wrapper.my_component.component_name == name]
-        return found
+        return built.wired.component_of(name)
 
     @staticmethod
     def balance_entries(results: Path) -> Mapping[str, Dict[str, Any]]:

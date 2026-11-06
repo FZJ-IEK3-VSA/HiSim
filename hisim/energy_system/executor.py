@@ -60,8 +60,9 @@ from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.setup_rules.registry import SetupRuleRegistry
-from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
 from hisim.setup_rules.subjects import BuiltDocument
+from hisim.setup_rules.wiring import UnconsumedSource
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import (
     PartLoadThresholdError,
@@ -226,7 +227,11 @@ class BuiltEnergySystem:
     def built_document(self) -> BuiltDocument:
         """Return the subject the build rules of a file read: the expanded file, its wired components, the path resolver and the file."""
         return BuiltDocument(
-            model=self.model, wired=self.wired, path_resolver=self.path_resolver, file=self.source_energy_system or None
+            model=self.model,
+            wired=self.wired,
+            path_resolver=self.path_resolver,
+            file=self.source_energy_system or None,
+            source_map=self.imports.source_map,
         )
 
 
@@ -292,7 +297,11 @@ class EnergySystemExecutor:
         self.source_lines = source_lines
 
     def build(self) -> BuiltEnergySystem:
-        """Runs every stage from the loaded file to a wired, registered simulator, then the build rules of the file.
+        """Runs every stage from the loaded file to a registered simulator, then the build rules of the file, then connects it.
+
+        The components are connected (:meth:`WiredSystem.apply`) only once the build rules found nothing, so a file
+        the rules refuse leaves no half-wired simulator behind. A refusal of a component that could not be
+        constructed is raised ``from`` the exception its constructor raised.
 
         Returns:
             The built system, its simulator ready for the run.
@@ -301,20 +310,47 @@ class EnergySystemExecutor:
             EnergySystemError: For any condition of the error catalogue; the file is rejected at
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
-            SetupRuleViolation: Listing every fault of the ``BUILD`` rules that read the built file.
+            SetupRuleViolation: Listing every fault of the ``BUILD`` rules that read the built file, as an
+                ``EnergySystemWiringError`` when only the wiring rules found faults.
         """
         built = self.construct()
-        SetupRuleRegistry.collect().run(RuleStage.BUILD, built.built_document(), built.model.setup_kind)
+        try:
+            SetupRuleRegistry.collect().run(RuleStage.BUILD, built.built_document(), built.model.setup_kind)
+        except SetupRuleViolation as violation:
+            cause = built.wired.construction_cause()
+            if cause is None:
+                raise
+            raise violation from cause
+        self.connect(built)
         return built
 
-    def construct(self) -> BuiltEnergySystem:
-        """Runs every stage from the loaded file to a wired, registered simulator, without the setup rules of the build.
+    @classmethod
+    def connect(cls, built: BuiltEnergySystem) -> None:
+        """Connects the planned wires and registers every component with the simulator, in file order.
 
-        :meth:`build` is this followed by the build rules; ``hisim setup-rules check`` calls it to run the rules
-        itself, so that it can report every fault instead of stopping at the first stage that refuses.
+        Called once the build rules found nothing in the file: the wires are applied first, as the wiring
+        stage always did, and then the components are added, which reads their outputs and so never sees a
+        component the rules refuse. The simulator's automatic default connection is switched off
+        (:attr:`CONNECT_AUTOMATICALLY`), because every connection this format makes is an item of the file and
+        has already been made.
+
+        Args:
+            built: The constructed system, its simulator still empty.
+        """
+        built.wired.apply(built.model.name)
+        for _name, component in built.wired.components:
+            built.simulator.add_component(component, connect_automatically=cls.CONNECT_AUTOMATICALLY)
+
+    def construct(self) -> BuiltEnergySystem:
+        """Runs every stage from the loaded file to a registered simulator, without the setup rules of the build.
+
+        :meth:`build` is this followed by the build rules and the connection of the planned wires; ``hisim
+        setup-rules check`` calls it to run the rules itself, so that it can report every fault instead of stopping
+        at the first stage that refuses. The wires are planned, not connected: what the wiring could not do is
+        recorded in the wired system for the rules to refuse.
 
         Returns:
-            The built system, its simulator ready for the run.
+            The built system, its components not yet connected and its simulator still empty (:meth:`connect`).
 
         Raises:
             EnergySystemError: For any condition of the error catalogue.
@@ -327,17 +363,13 @@ class EnergySystemExecutor:
             configured = configure_energy_system(
                 expanded, bindings=bindings, path_resolver=self.path_resolver
             )
-            wired, wiring_warnings = wire_energy_system(
+            wired = wire_energy_system(
                 expanded,
                 configured,
                 self.simulation_parameters,
-                # The selection checks the consuming outputs it lands at a meter; the wiring checks the rest. A
-                # re-run of a record expands nothing and lands nothing; its record states every output to check.
-                consuming=[
-                    item
-                    for item in imports.consuming or ImportRecord.consuming_of(self.model.metadata)
-                    if item not in imports.selection.landings
-                ],
+                # The rules check every consuming output, those the selection lands at a meter among them. A re-run of
+                # a record expands nothing and lands nothing; its record states every output to check.
+                consuming=imports.consuming or ImportRecord.consuming_of(self.model.metadata),
                 selection=imports.selection if imports.selection else None,
             )
             expanded = self.with_selected_feeds(expanded, wired)
@@ -345,10 +377,11 @@ class EnergySystemExecutor:
             # A refusal of a component the expansion of imports produced names where it came from.
             imports.source_map.annotate(error)
             raise
-        simulator = self.register(expanded, wired, expansion)
-        warnings = configured.warnings + wiring_warnings
-        for warning in warnings:
+        simulator = self.register(expanded, expansion)
+        for warning in configured.warnings:
             log.warning(warning)
+        # The run record keeps the components nothing reads as warnings; the wiring rule EF-34 logs them.
+        warnings = configured.warnings + UnconsumedSource.lines(wired)
         return BuiltEnergySystem(
             model=expanded,
             expansion=expansion,
@@ -380,15 +413,12 @@ class EnergySystemExecutor:
             )
         return model.model_copy(update={"components": components})
 
-    def register(
-        self, model: EnergySystemFile, wired: WiredSystem, expansion: ExpansionRecord
-    ) -> sim.Simulator:
-        """Creates the simulator and registers every component in file order.
+    def register(self, model: EnergySystemFile, expansion: ExpansionRecord) -> sim.Simulator:
+        """Creates the simulator of the run, without its components.
 
-        File order decides the order of the global output list and therefore the column order of
-        a result frame, so it is preserved exactly. The simulator's automatic default connection
-        is switched off, because every connection this format makes is an item of the file and
-        has already been made.
+        The components are added by :meth:`connect`, in file order, once the build rules found nothing: file
+        order decides the order of the global output list and therefore the column order of a result frame,
+        so it is preserved exactly.
 
         The run metadata a Python setup has to assemble by hand — the scenario name, the
         description and the kind of setup — the file already carries: its ``name`` becomes the scenario name that
@@ -406,12 +436,11 @@ class EnergySystemExecutor:
 
         Args:
             model: The expanded energy system, for its name and description.
-            wired: The constructed and connected components.
             expansion: What the expansion resolved, for the variant selections that name the
                 run alongside the file's own name.
 
         Returns:
-            The simulator holding every component of the system.
+            The simulator, holding no component yet.
         """
         simulator: sim.Simulator = sim.Simulator(
             module_directory=self.source_directory,
@@ -423,8 +452,6 @@ class EnergySystemExecutor:
         simulator.scenario_name = self.scenario_name_of(model, expansion)
         simulator.description = model.description or ""
         simulator.declare_setup_kind(model.setup_kind)
-        for _name, component in wired.components:
-            simulator.add_component(component, connect_automatically=self.CONNECT_AUTOMATICALLY)
         return simulator
 
     @staticmethod

@@ -38,8 +38,7 @@ from hisim.energy_system.errors import (
 )
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
-from hisim.energy_system.model import AggregatorFeed, DefaultInputs, EnergySystemFile, SourceReference
-from hisim.energy_system.wiring_checks import ConsumingOutput
+from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DefaultInputs, EnergySystemFile, SourceReference
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from tests.assemblies.helpers import EMPTY_CONTRACT, Library, Mocks, Real, build_text, expand_text, imports, site
 from tests.assemblies.mock_components import MEASURED
@@ -99,11 +98,13 @@ def refusal(text: str, library: Library = None) -> str:  # type: ignore[assignme
 
 
 def build_refusal(text: str, directory: Path, library: Library = None) -> str:  # type: ignore[assignment]
-    """The message a build refuses a file with whose expansion succeeds."""
+    """The message a build refuses a file with whose expansion succeeds: a catalogue error's, or the wiring rules' faults, one per line."""
     resolver = library.resolver() if library is not None else None
     expand_text(text, resolver)
-    with pytest.raises(EnergySystemCatalogueError) as raised:
+    with pytest.raises((EnergySystemCatalogueError, EnergySystemWiringError)) as raised:
         build_text(text, directory, resolver)
+    if isinstance(raised.value, EnergySystemWiringError):
+        return "\n".join(fault.message for fault in raised.value.faults)
     return str(raised.value)
 
 

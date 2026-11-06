@@ -10,14 +10,17 @@ from hisim.component import ComponentOutput
 from hisim.components.example_component import ExampleComponentConfig
 from hisim.config import ComponentID, SizingContext
 from hisim.energy_system.codec import ConfigValueCodec
+from hisim.energy_system.errors import WiringRefusal
+from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
+from hisim.energy_system.wiring import WiredSystem
 from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
-from hisim.setup_rules.subjects import BuiltSystem, RunResults
+from hisim.setup_rules.subjects import BuiltDocument, BuiltSystem, RunResults
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -152,6 +155,39 @@ class ComponentRules(FamilyRules):
     """The component-build setup rules (``hisim/setup_rules/components.py``) run alone; their faults raise ``SetupRuleViolation``, or the cost rules' errors."""
 
     FAMILY: ClassVar[str] = "components"
+
+
+class WiringRules(FamilyRules):
+    """The wiring setup rules (``hisim/setup_rules/wiring.py``) run on a built file; their faults raise ``EnergySystemWiringError``.
+
+    A test that drives the feed resolver or the channel matcher directly holds the refusals they recorded; :meth:`refuse`
+    hands them to the rules as the wiring of a file with no wire, as the build does, so the test sees the error the build
+    would raise.
+    """
+
+    FAMILY: ClassVar[str] = "wiring"
+
+    @classmethod
+    def subject(cls, wired: Any, name: str = "wiring under test") -> BuiltDocument:
+        """The built file of a wired system, its model a file of this name that holds nothing else."""
+        model = EnergySystemFile.model_construct(name=name, components={}, setup_kind=SetupKind.DEMO)
+        return BuiltDocument(model=model, wired=wired)
+
+    @classmethod
+    def refuse(cls, refusals: Sequence[WiringRefusal]) -> None:
+        """Run the wiring rules on the refusals a resolver or a matcher recorded, as the build does.
+
+        The wired system holds no component and no wire, so that no rule of the plan judges components the test never
+        meant to wire.
+
+        Args:
+            refusals: The refusals the test's resolver or matcher recorded.
+
+        Raises:
+            EnergySystemWiringError: Listing every refusal, when there is one.
+        """
+        wired = WiredSystem(components=(), wires=(), resolved_feeds=(), refusals=tuple(refusals))
+        cls.registry().run(RuleStage.BUILD, cls.subject(wired), SetupKind.DEMO)
 
 
 class AfterRunRules:

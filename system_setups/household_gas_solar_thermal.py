@@ -346,7 +346,7 @@ def setup_function(
     )
     my_sim.add_component(my_heating_curve, connect_automatically=True)
     # The temperature the cylinder loses its standby heat to, from the building it stands in
-    my_dhw_storage.connect_only_predefined_connections(my_building)
+    my_dhw_storage.connect_only_predefined_connections(my_building, my_weather)
     my_sim.add_component(my_dhw_storage, connect_automatically=False)
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)

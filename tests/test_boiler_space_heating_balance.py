@@ -135,9 +135,10 @@ def test_the_boiler_books_the_space_heating_its_buffer_receives(twin: str, tmp_p
     delivered_in_watt = BoilerTwinDay.column(
         frame, f"HeatDistributionSystem - {HeatDistribution.ThermalPowerDelivered} ["
     )
+    # the standby loss is on one of the two released-heat outputs, by where the buffer stands; the other is 0
     standby_loss_in_watt = BoilerTwinDay.column(
-        frame, f"SimpleHotWaterStorage - {SimpleHotWaterStorage.StandbyHeatLoss} ["
-    )
+        frame, f"SimpleHotWaterStorage - {SimpleHotWaterStorage.HeatLossInWatt} ["
+    ) + BoilerTwinDay.column(frame, f"SimpleHotWaterStorage - {SimpleHotWaterStorage.HeatToHeatedZoneInWatt} [")
     content_in_wh = BoilerTwinDay.column(
         frame, f"SimpleHotWaterStorage - {SimpleHotWaterStorage.ThermalEnergyInStorage} ["
     )

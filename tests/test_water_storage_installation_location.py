@@ -1,18 +1,19 @@
 """The buffer and the hot-water tank lose their standby heat to the place they stand in, and hand it where that place says.
 
-Bead hisim-device-location-820d.2. Each tank's ``installation_location`` is a sized field that follows the building's
-technical room (the fact ``technical_room_location``) and that a file may pin. The location decides two things:
+Bead hisim-device-location-820d.2, in the shape of owner decision D-h of ``roadmap/device_location_spec.md``. Each
+tank's ``installation_location`` is a sized field that follows the building's technical room (the fact
+``technical_room_location``) and that a file may pin. Nothing in a tank's wiring depends on it:
 
-* the temperature the standby loss ``UA (T_tank - T_surrounding)`` is computed against, read on the input
-  ``SurroundingTemperatureInCelsius`` whose default connection the location names: the building's air temperature at
-  the start of the step in the heated zone, the building's unheated cellar in an unheated space, the weather's outside
-  temperature outdoors;
-* the port of the standby loss: room heat the building takes in as an internal gain in the heated zone
-  (``PRODUCTION`` of ``ROOM_HEAT``), a ``LOSS`` of the tank's own carrier that leaves the house elsewhere.
+* three mandatory temperature inputs with one static default connection each, the same in every location
+  (``Building.TemperatureIndoorAirAtStartOfStepInCelsius``, ``Building.TemperatureUnheatedCellarInCelsius``,
+  ``Weather.TemperatureOutside``); the location picks the one the standby loss ``UA (T_tank - T_surrounding)`` is
+  computed against, published as ``SurroundingTemperatureInCelsius``;
+* two fixed outputs of the standby heat, ``HeatToHeatedZoneInWatt`` (``PRODUCTION`` of ``ROOM_HEAT``, read by the
+  building) and ``HeatLossInWatt`` (a ``LOSS`` of the tank's carrier); the location fills one, the other is 0.
 
-The first tests build a tank alone and step it on fake inputs; the last ones run the heat-pump and the gas
-building-sizer twins for three January days at 900 s with the tanks pinned to each location, and read the run's
-results and its energy balance report.
+The first tests build a tank alone and step it on fake inputs; the last ones run the building-sizer twins for three
+January days at 900 s with the tanks pinned to each location, or with the building's row replaced by a heated-zone
+row, and read the run's results and its energy balance report.
 """
 
 import json
@@ -34,8 +35,11 @@ from hisim.components.simple_water_storage import (
 )
 from hisim.components.weather import Weather
 from hisim.config import ComponentID, ConfigSizingError, SizingContext
+from hisim.caching import CacheSettings
 from hisim.energy_port import EnergyPort
+from hisim.energy_system.recording.observe import SystemObserver
 from tests.part_load_rigs import AllInputsRig, Parameters
+from tests.test_building_one_day_snapshot import OneDaySnapshot
 
 #: Either tank class.
 TankClass = Union[type[SimpleHotWaterStorage], type[SimpleDHWStorage]]
@@ -53,6 +57,50 @@ class Tanks:
         SimpleHotWaterStorage.__name__: lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT,
         SimpleDHWStorage.__name__: lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
     }
+
+    #: The source of each temperature input, the same in every location.
+    TEMPERATURE_SOURCES: ClassVar[Dict[str, Tuple[str, str]]] = {
+        SimpleHotWaterStorage.IndoorAirTemperatureInCelsius: (
+            Building.__name__,
+            Building.TemperatureIndoorAirAtStartOfStepInCelsius,
+        ),
+        SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius: (
+            Building.__name__,
+            Building.TemperatureUnheatedCellarInCelsius,
+        ),
+        SimpleHotWaterStorage.OutsideAirTemperatureInCelsius: (Weather.__name__, Weather.TemperatureOutside),
+    }
+    #: Three different temperatures on the three inputs, all below the tanks' start temperature, °C.
+    DISTINCT_TEMPERATURES_IN_CELSIUS: ClassVar[Dict[str, float]] = {
+        SimpleHotWaterStorage.IndoorAirTemperatureInCelsius: 21.0,
+        SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius: 9.0,
+        SimpleHotWaterStorage.OutsideAirTemperatureInCelsius: -4.0,
+    }
+
+    @staticmethod
+    def expected_standby_loss_in_watt(
+        tank: Union[SimpleHotWaterStorage, SimpleDHWStorage], outputs: Mapping[str, float], surrounding_in_celsius: float
+    ) -> float:
+        """Return ``UA (T - T_surrounding)`` of one step: the buffer's start temperature at 900 s, the tank's step mean.
+
+        Args:
+            tank: The stepped tank.
+            outputs: Its outputs of the step.
+            surrounding_in_celsius: The temperature it should have lost against, °C.
+
+        Returns:
+            The standby loss, W.
+        """
+        if isinstance(tank, SimpleDHWStorage):
+            return float(
+                tank.tank.loss_coefficient_in_watt_per_kelvin
+                * (outputs[SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius] - surrounding_in_celsius)
+            )
+        assert isinstance(tank, SimpleHotWaterStorage)
+        return float(
+            tank.heat_loss_coefficient_in_watt_per_kelvin
+            * (outputs[SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius] - surrounding_in_celsius)
+        )
 
     @classmethod
     def build(
@@ -86,66 +134,72 @@ class Tanks:
 
 @pytest.mark.base
 @pytest.mark.parametrize("tank_class", [SimpleHotWaterStorage, SimpleDHWStorage])
-@pytest.mark.parametrize(
-    "location, source_class, source_output",
-    [
-        (lt.InstallationLocation.HEATED_ZONE, Building, Building.TemperatureIndoorAirAtStartOfStepInCelsius),
-        (lt.InstallationLocation.UNHEATED_SPACE, Building, Building.TemperatureUnheatedCellarInCelsius),
-        (lt.InstallationLocation.OUTDOORS, Weather, Weather.TemperatureOutside),
-    ],
-)
-def test_each_location_wires_the_surrounding_temperature_to_the_place_the_tank_stands_in(
-    tank_class: TankClass, location: lt.InstallationLocation, source_class: type, source_output: str
+@pytest.mark.parametrize("location", list(lt.InstallationLocation))
+def test_the_three_temperature_inputs_are_wired_by_the_same_defaults_in_every_location(
+    tank_class: TankClass, location: lt.InstallationLocation
 ) -> None:
-    """A tank whose default connection read another place would compute its loss against the wrong temperature.
-
-    The air temperature in the heated zone is the one at the start of the step, which the tank's own heat does not
-    move while the step iterates.
+    """A default connection that followed the location would make a recorded file right only for the house it was
+    recorded on (D-h); all three inputs are mandatory, so a file without a building or a weather is refused.
     """
     tank = Tanks.build(tank_class, location)
-    surrounding = [
-        connection
+    wired = {
+        connection.target_input_name: (connection.source_class_name, connection.source_output_name)
         for connections in tank.default_connections.values()
         for connection in connections
-        if connection.target_input_name == tank_class.SurroundingTemperatureInCelsius
-    ]
-    assert [(connection.source_class_name, connection.source_output_name) for connection in surrounding] == [
-        (source_class.__name__, source_output)
-    ]
-    assert tank.surrounding_temperature_channel.field_name == tank_class.SurroundingTemperatureInCelsius
-    assert tank.surrounding_temperature_channel.is_mandatory
-    assert tank.surrounding_temperature_channel.unit == lt.Units.CELSIUS
+        if connection.target_input_name in Tanks.TEMPERATURE_SOURCES
+    }
+    assert wired == Tanks.TEMPERATURE_SOURCES
+    inputs = {component_input.field_name: component_input for component_input in tank.inputs}
+    for field_name in Tanks.TEMPERATURE_SOURCES:
+        assert inputs[field_name].is_mandatory and inputs[field_name].unit == lt.Units.CELSIUS
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("tank_class", [SimpleHotWaterStorage, SimpleDHWStorage])
-def test_the_standby_loss_is_room_heat_in_the_heated_zone_and_a_loss_of_the_tank_s_carrier_elsewhere(
-    tank_class: TankClass,
-) -> None:
-    """A loss port that ignored the location would send a heated room's tank heat out of the house, or the reverse."""
+def test_the_two_released_heat_outputs_have_the_same_ports_in_every_location(tank_class: TankClass) -> None:
+    """A port that followed the location would bring back the location-dependent wiring D-h removed; the standby loss
+    output of the first build is gone, since the two channels say all it said.
+    """
     carrier = Tanks.CARRIER[tank_class.__name__]
-    expected = {
-        lt.InstallationLocation.HEATED_ZONE: EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT),
-        lt.InstallationLocation.UNHEATED_SPACE: EnergyPort(lt.EnergyRole.LOSS, carrier),
-        lt.InstallationLocation.OUTDOORS: EnergyPort(lt.EnergyRole.LOSS, carrier),
-    }
-    for location, port in expected.items():
+    for location in lt.InstallationLocation:
         tank = Tanks.build(tank_class, location)
-        assert tank.stand_by_heat_loss_channel.energy_port == port, location
-        description = tank.stand_by_heat_loss_channel.output_description
-        assert description is not None
-        assert tank_class.STANDBY_LOSS_DESTINATION_BY_LOCATION[location] in description
-        assert tank_class.SurroundingTemperatureInCelsius in description
+        assert tank.heat_to_heated_zone_channel.energy_port == EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE
+        assert tank.heat_loss_channel.energy_port == EnergyPort(lt.EnergyRole.LOSS, carrier)
+        assert tank.surrounding_temperature_output_channel.energy_port is None
+        assert "StandbyHeatLoss" not in {output.field_name for output in tank.outputs}
 
 
 @pytest.mark.base
-def test_every_location_names_a_source_and_a_destination() -> None:
+def test_every_location_picks_a_temperature_input() -> None:
     """A location without an entry would fail only when a tank first stood there, not when the code changed."""
-    for table in (
-        SimpleHotWaterStorage.SURROUNDING_TEMPERATURE_SOURCE_BY_LOCATION,
-        SimpleHotWaterStorage.STANDBY_LOSS_DESTINATION_BY_LOCATION,
-    ):
-        assert set(table) == set(lt.InstallationLocation)
+    assert set(SimpleHotWaterStorage.SURROUNDING_TEMPERATURE_INPUT_BY_LOCATION) == set(lt.InstallationLocation)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tank_class", [SimpleHotWaterStorage, SimpleDHWStorage])
+@pytest.mark.parametrize("location", list(lt.InstallationLocation))
+def test_each_location_picks_its_temperature_and_fills_its_own_released_heat_output(
+    tank_class: TankClass, location: lt.InstallationLocation
+) -> None:
+    """With three different temperatures on the three inputs, the tank loses against its place's and books the loss on
+    its place's output; the other output is 0.
+
+    Catches: a tank that reads another place's temperature, publishes another than it computed with, or books its heat
+    on the output of another destination.
+    """
+    tank = Tanks.build(tank_class, location)
+    outputs = AllInputsRig.step_once(tank, dict(Tanks.DISTINCT_TEMPERATURES_IN_CELSIUS))
+    picked_in_celsius = Tanks.DISTINCT_TEMPERATURES_IN_CELSIUS[tank_class.SURROUNDING_TEMPERATURE_INPUT_BY_LOCATION[location]]
+    assert outputs[tank_class.SurroundingTemperatureInCelsius] == picked_in_celsius
+    expected_in_watt = Tanks.expected_standby_loss_in_watt(tank, outputs, picked_in_celsius)
+    assert expected_in_watt > 0.0
+    filled, idle = (
+        (tank_class.HeatToHeatedZoneInWatt, tank_class.HeatLossInWatt)
+        if location is lt.InstallationLocation.HEATED_ZONE
+        else (tank_class.HeatLossInWatt, tank_class.HeatToHeatedZoneInWatt)
+    )
+    assert outputs[filled] == pytest.approx(expected_in_watt, rel=1e-9)
+    assert outputs[idle] == 0.0
 
 
 @pytest.mark.base
@@ -154,14 +208,22 @@ def test_a_buffer_in_an_unheated_space_at_50_degrees_loses_ua_times_43_5_kelvin_
 
     At 900 s the buffer is a start-of-step node: its loss over the step is ``UA (T0 - T_surrounding)`` with ``T0`` its
     start temperature, so 50 °C against the 6.5 °C of a cellar at -7 °C outside (b = 0.5, 20 °C inside) is
-    ``UA · 43.5 K``.
+    ``UA · 43.5 K``, on ``HeatLossInWatt``; ``HeatToHeatedZoneInWatt`` is 0.
     """
     buffer = Tanks.build(SimpleHotWaterStorage, lt.InstallationLocation.UNHEATED_SPACE)
     assert isinstance(buffer, SimpleHotWaterStorage)
     buffer.state = SimpleWaterStorageState(mean_water_temperature_in_celsius=50.0)
-    outputs = AllInputsRig.step_once(buffer, {SimpleHotWaterStorage.SurroundingTemperatureInCelsius: 6.5})
+    outputs = AllInputsRig.step_once(
+        buffer,
+        {
+            SimpleHotWaterStorage.IndoorAirTemperatureInCelsius: 20.0,
+            SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius: 6.5,
+            SimpleHotWaterStorage.OutsideAirTemperatureInCelsius: -7.0,
+        },
+    )
     ua_in_watt_per_kelvin = buffer.heat_loss_coefficient_in_watt_per_kelvin
-    assert outputs[SimpleHotWaterStorage.StandbyHeatLoss] == pytest.approx(ua_in_watt_per_kelvin * 43.5, rel=1e-12)
+    assert outputs[SimpleHotWaterStorage.HeatLossInWatt] == pytest.approx(ua_in_watt_per_kelvin * 43.5, rel=1e-12)
+    assert outputs[SimpleHotWaterStorage.HeatToHeatedZoneInWatt] == 0.0
 
 
 @pytest.mark.base
@@ -178,17 +240,56 @@ def test_the_hot_water_tank_loses_against_the_surrounding_temperature_it_reads(
     tank = Tanks.build(SimpleDHWStorage, lt.InstallationLocation.UNHEATED_SPACE)
     assert isinstance(tank, SimpleDHWStorage)
     outputs = AllInputsRig.step_once(
-        tank, {SimpleDHWStorage.SurroundingTemperatureInCelsius: surrounding_temperature_in_celsius}
+        tank, {SimpleDHWStorage.UnheatedCellarTemperatureInCelsius: surrounding_temperature_in_celsius}
     )
     step_mean_in_celsius = outputs[SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius]
     expected_in_watt = tank.tank.loss_coefficient_in_watt_per_kelvin * (
         step_mean_in_celsius - surrounding_temperature_in_celsius
     )
-    assert outputs[SimpleDHWStorage.StandbyHeatLoss] == pytest.approx(expected_in_watt, rel=1e-9, abs=1e-12)
+    loss_in_watt = outputs[SimpleDHWStorage.HeatLossInWatt]
+    assert loss_in_watt == pytest.approx(expected_in_watt, rel=1e-9, abs=1e-12)
     start_in_celsius = SimpleDHWStorage.INITIAL_TEMPERATURE_IN_CELSIUS
-    assert (outputs[SimpleDHWStorage.StandbyHeatLoss] > 0.0) == (surrounding_temperature_in_celsius < start_in_celsius)
+    assert (loss_in_watt > 0.0) == (surrounding_temperature_in_celsius < start_in_celsius)
     if surrounding_temperature_in_celsius == start_in_celsius:
-        assert outputs[SimpleDHWStorage.StandbyHeatLoss] == pytest.approx(0.0, abs=1e-12)
+        assert loss_in_watt == pytest.approx(0.0, abs=1e-12)
+
+
+@pytest.mark.base
+def test_the_standby_loss_kpi_sums_both_channels_and_counts_only_the_steps_that_lose() -> None:
+    """The KPIs "Standby heat loss of ..." keep their numbers: the positive steps of the sum of the two channels.
+
+    Four 900 s steps losing 100 W, two on each channel, and a fifth gaining 50 W lose 0.1 kWh. Catches: a KPI that reads
+    one channel only (half of a tank that moved), and one that nets the gaining step against the losing ones.
+    """
+    heat_to_heated_zone_in_watt = pd.Series([100.0, 100.0, 0.0, 0.0, 0.0])
+    heat_loss_in_watt = pd.Series([0.0, 0.0, 100.0, 100.0, -50.0])
+    assert SimpleHotWaterStorage.standby_heat_loss_in_kilowatt_hour(heat_to_heated_zone_in_watt, heat_loss_in_watt, 900) == 0.1
+    assert SimpleHotWaterStorage.standby_heat_loss_in_kilowatt_hour(pd.Series([-1.0]), pd.Series([0.0]), 900) == 0.0
+
+
+@pytest.mark.base
+def test_the_recorder_sees_the_building_read_each_tank_s_heat_into_the_heated_zone_in_every_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The building reads ``HeatToHeatedZoneInWatt`` of a tank in an unheated cellar too, so a twin lists every tank.
+
+    Catches a transfer the recorder would only see in the heated zone, which would make a file recorded on one house
+    wrong for another (D-h); a tank grows no inputs and declares none.
+    """
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path))
+    building = Building(
+        config=OneDaySnapshot.config_for(OneDaySnapshot.DEFAULT_VARIANT_NAME),
+        my_simulation_parameters=OneDaySnapshot.simulation_parameters(),
+    )
+    for location in lt.InstallationLocation:
+        buffer = Tanks.build(SimpleHotWaterStorage, location)
+        tank = Tanks.build(SimpleDHWStorage, location)
+        components = (building, buffer, tank)
+        assert SystemObserver._transfer_defaults(building, components) == {  # pylint: disable=protected-access
+            buffer.component_name: (SimpleHotWaterStorage.HeatToHeatedZoneInWatt,),
+            tank.component_name: (SimpleDHWStorage.HeatToHeatedZoneInWatt,),
+        }
+        assert not SystemObserver._transfer_defaults(buffer, components)  # pylint: disable=protected-access
 
 
 @pytest.mark.base
@@ -214,31 +315,36 @@ def test_an_auto_location_follows_the_technical_room_and_a_pinned_one_stays(pres
 
 
 class PinnedTwin:
-    """A building-sizer twin run for three January days at 900 s with both tanks pinned to one location, or left AUTO."""
+    """A building-sizer twin run for three January days at 900 s as recorded, with only one setting changed.
+
+    Either both tanks are pinned to one location, or the building's TABULA row is replaced by a heated-zone row. Nothing
+    else of the file changes: its wiring is the same for every house and every location (D-h).
+    """
 
     #: The period: three January days, cold enough for the cellar to sit well below the house.
     START: ClassVar[str] = "2021-01-10"
     END: ClassVar[str] = "2021-01-13"
     #: The tanks of every building-sizer twin.
     TANKS: ClassVar[Tuple[str, str]] = ("SimpleHotWaterStorage", "DHWStorage")
-    #: The source class each location reads its surrounding temperature from, as an input item names it.
-    SOURCE: ClassVar[Dict[lt.InstallationLocation, str]] = {
-        lt.InstallationLocation.HEATED_ZONE: "Building",
-        lt.InstallationLocation.UNHEATED_SPACE: "Building",
-        lt.InstallationLocation.OUTDOORS: "Weather",
-    }
+    #: A single-family house of 2002 to 2009 without a cellar (cellar code ``-``), whose technical room is in the
+    #: heated zone; the twins stand on ``DE.N.SFH.09.Gen.ReEx.001.002``, a house with an unheated cellar.
+    HEATED_ZONE_ROW: ClassVar[str] = "DE.N.SFH.11.Gen.ReEx.001.002"
 
     @classmethod
-    def run(cls, directory: Path, twin: str, location: Optional[lt.InstallationLocation]) -> Tuple[Any, Path]:
-        """Run the twin with both tanks at ``location`` (``None``: as recorded) and return the built system and results.
-
-        Outdoors, each tank's bare item ``Building`` becomes ``Weather``, whose default connection the location names.
-        In the heated zone the building's inputs gain both tanks, so that it grows the inputs of their heat.
+    def run(
+        cls,
+        directory: Path,
+        twin: str,
+        location: Optional[lt.InstallationLocation],
+        building_code: Optional[str] = None,
+    ) -> Tuple[Any, Path]:
+        """Run the twin with both tanks at ``location`` (``None``: as recorded), or on another building row.
 
         Args:
             directory: Where the files and results go.
             twin: The twin's stem.
             location: Where both tanks stand, or ``None`` to leave the recorded ``AUTO``.
+            building_code: The TABULA row to put the building on, or ``None`` for the recorded one.
 
         Returns:
             The built system after the run, and the result directory.
@@ -250,12 +356,9 @@ class PinnedTwin:
         document = yaml.safe_load(text.replace("USE_LOCAL_LPG", "USE_PREDEFINED_PROFILE"))
         if location is not None:
             for tank in cls.TANKS:
-                entry = document["components"][tank]
-                entry.setdefault("config", {})["installation_location"] = location.name
-                entry["inputs"] = [cls.SOURCE[location] if item == "Building" else item for item in entry["inputs"]]
-        if location is lt.InstallationLocation.HEATED_ZONE:
-            # A file names the components the building reads; a bare item lets it grow the input of each tank's heat.
-            document["components"]["Building"]["inputs"] += list(cls.TANKS)
+                document["components"][tank].setdefault("config", {})["installation_location"] = location.name
+        if building_code is not None:
+            document["components"]["Building"].setdefault("config", {})["building_code"] = building_code
         energy_system = directory / "pinned.energy_system.yaml"
         energy_system.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         parameters = directory / "period.simulation.yaml"
@@ -285,11 +388,68 @@ class PinnedTwin:
         return built.wired.component_of(name)
 
     @staticmethod
-    def balance_entries(results: Path) -> Mapping[str, Dict[str, Any]]:
-        """Return the run's balance report entries by component, after asserting that the whole report closes."""
+    def balance_report(results: Path) -> Dict[str, Any]:
+        """Return the run's balance report, after asserting that the whole report closes and lists nothing unlinked."""
         report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
         assert report["verdict"] == "closes"
-        return {entry["component"]: entry for entry in report["components"]}
+        assert report["unlinked"] == [], report["unlinked"]
+        return report
+
+    @classmethod
+    def balance_entries(cls, results: Path) -> Mapping[str, Dict[str, Any]]:
+        """Return the run's balance report entries by component (:meth:`balance_report`)."""
+        return {entry["component"]: entry for entry in cls.balance_report(results)["components"]}
+
+    @classmethod
+    def check_tank_losses(cls, built: Any, location: lt.InstallationLocation) -> None:
+        """Assert that each tank lost against its place's temperature, on its place's output, and the building got it.
+
+        The buffer at 900 s loses ``UA (T0 - T_surrounding)`` with ``T0`` its start temperature, the hot-water tank
+        ``UA (T̄ - T_surrounding)`` with ``T̄`` its step mean. In the heated zone the building's
+        ``HeatReleasedByDevicesInWatt`` is the sum of both losses in every step; elsewhere it is zero.
+
+        Args:
+            built: The built system after the run.
+            location: Where the tanks stood.
+        """
+        frame = built.simulator.results_data_frame
+        surrounding_in_celsius = {
+            lt.InstallationLocation.HEATED_ZONE: cls.column(frame, "Building", Building.TemperatureIndoorAirAtStartOfStepInCelsius),
+            lt.InstallationLocation.UNHEATED_SPACE: cls.column(frame, "Building", Building.TemperatureUnheatedCellarInCelsius),
+            lt.InstallationLocation.OUTDOORS: cls.column(frame, "Weather", Weather.TemperatureOutside),
+        }[location].to_numpy()
+        filled, idle = (
+            (SimpleHotWaterStorage.HeatToHeatedZoneInWatt, SimpleHotWaterStorage.HeatLossInWatt)
+            if location.releases_into_heated_zone
+            else (SimpleHotWaterStorage.HeatLossInWatt, SimpleHotWaterStorage.HeatToHeatedZoneInWatt)
+        )
+        losses_in_watt = []
+        for tank_name, tank_temperature_output in (
+            ("SimpleHotWaterStorage", SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius),
+            ("DHWStorage", SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius),
+        ):
+            tank = cls.component(built, tank_name)
+            ua_in_watt_per_kelvin = (
+                tank.heat_loss_coefficient_in_watt_per_kelvin
+                if isinstance(tank, SimpleHotWaterStorage)
+                else tank.tank.loss_coefficient_in_watt_per_kelvin
+            )
+            assert cls.column(frame, tank_name, SimpleHotWaterStorage.SurroundingTemperatureInCelsius).to_numpy() == (
+                pytest.approx(surrounding_in_celsius, rel=0.0, abs=0.0)
+            )
+            loss_in_watt = cls.column(frame, tank_name, filled).to_numpy()
+            assert loss_in_watt == pytest.approx(
+                ua_in_watt_per_kelvin * (cls.column(frame, tank_name, tank_temperature_output).to_numpy() - surrounding_in_celsius),
+                rel=1e-9,
+                abs=1e-9,
+            )
+            assert not cls.column(frame, tank_name, idle).to_numpy().any()
+            losses_in_watt.append(loss_in_watt)
+        released_in_watt = cls.column(frame, "Building", Building.HeatReleasedByDevicesInWatt).to_numpy()
+        if location.releases_into_heated_zone:
+            assert released_in_watt == pytest.approx(losses_in_watt[0] + losses_in_watt[1], rel=1e-9, abs=1e-9)
+        else:
+            assert not released_in_watt.any()
 
 
 @pytest.fixture(name="pinned_run", scope="module", params=[*lt.InstallationLocation, None], ids=lambda value: getattr(value, "name", "AUTO"))
@@ -308,24 +468,22 @@ def fixture_pinned_run(
 def test_both_tanks_close_their_balance_in_every_step_at_every_location(
     pinned_run: Tuple[Optional[lt.InstallationLocation], Any, Path],
 ) -> None:
-    """A tank whose loss port did not match its booked loss would fail the balance in the location that differs.
+    """A tank whose ports did not match its booked loss would fail the balance in the location that differs.
 
-    The recorded twin stands on a TABULA row with an unheated cellar, so its tanks stand in an unheated space.
+    The recorded twin stands on a TABULA row with an unheated cellar, so its AUTO tanks stand in an unheated space. The
+    output a location leaves idle books nothing: no link, and nothing unlinked.
     """
-    location, _, results = pinned_run
-    effective = location or lt.InstallationLocation.UNHEATED_SPACE
+    _, _, results = pinned_run
     entries = PinnedTwin.balance_entries(results)
     for tank in PinnedTwin.TANKS:
         entry = entries[tank]
         assert entry["verdict"] == "closes" and entry["failing_steps"] == 0, entry
         ports = {port["output"]: port for port in entry["ports"]}
-        loss = ports[SimpleHotWaterStorage.StandbyHeatLoss]
-        if effective is lt.InstallationLocation.HEATED_ZONE:
-            assert (loss["role"], loss["carrier"]) == ("production", "room_heat")
-            assert (loss["peer_kind"], loss["peer"]) == ("component", "Building")
-        else:
-            assert loss["role"] == "loss"
-            assert loss["peer_kind"] == "boundary"
+        heat_to_zone = ports[SimpleHotWaterStorage.HeatToHeatedZoneInWatt]
+        heat_loss = ports[SimpleHotWaterStorage.HeatLossInWatt]
+        assert (heat_to_zone["role"], heat_to_zone["carrier"]) == ("production", "room_heat")
+        assert (heat_to_zone["peer_kind"], heat_to_zone["peer"]) == ("component", "Building")
+        assert (heat_loss["role"], heat_loss["peer_kind"]) == ("loss", "boundary")
     assert entries["Building"]["verdict"] == "closes" and entries["Building"]["failing_steps"] == 0
 
 
@@ -333,41 +491,29 @@ def test_both_tanks_close_their_balance_in_every_step_at_every_location(
 def test_each_tank_loses_against_the_temperature_of_its_place_and_the_building_books_what_it_releases(
     pinned_run: Tuple[Optional[lt.InstallationLocation], Any, Path],
 ) -> None:
-    """A loss against another temperature than the place's, or a heated-zone loss the building did not take in, fails.
-
-    The buffer at 900 s loses ``UA (T0 - T_surrounding)`` with ``T0`` its start temperature, the hot-water tank
-    ``UA (T̄ - T_surrounding)`` with ``T̄`` its step mean. In the heated zone the building's
-    ``HeatReleasedByDevicesInWatt`` is the sum of both losses in every step; elsewhere it is zero.
+    """A loss against another temperature than the place's, on another output, or a heated-zone loss the building did
+    not take in, fails; the wiring is the recorded file's in every location.
     """
     location, built, _ = pinned_run
-    effective = location or lt.InstallationLocation.UNHEATED_SPACE
-    frame = built.simulator.results_data_frame
-    surrounding_in_celsius = {
-        lt.InstallationLocation.HEATED_ZONE: PinnedTwin.column(frame, "Building", Building.TemperatureIndoorAirAtStartOfStepInCelsius),
-        lt.InstallationLocation.UNHEATED_SPACE: PinnedTwin.column(frame, "Building", Building.TemperatureUnheatedCellarInCelsius),
-        lt.InstallationLocation.OUTDOORS: PinnedTwin.column(frame, "Weather", Weather.TemperatureOutside),
-    }[effective].to_numpy()
-    buffer = PinnedTwin.component(built, "SimpleHotWaterStorage")
-    tank = PinnedTwin.component(built, "DHWStorage")
-    buffer_loss_in_watt = PinnedTwin.column(frame, "SimpleHotWaterStorage", SimpleHotWaterStorage.StandbyHeatLoss).to_numpy()
-    tank_loss_in_watt = PinnedTwin.column(frame, "DHWStorage", SimpleDHWStorage.StandbyHeatLoss).to_numpy()
-    buffer_start_in_celsius = PinnedTwin.column(
-        frame, "SimpleHotWaterStorage", SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius
-    ).to_numpy()
-    tank_mean_in_celsius = PinnedTwin.column(
-        frame, "DHWStorage", SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius
-    ).to_numpy()
-    assert buffer_loss_in_watt == pytest.approx(
-        buffer.heat_loss_coefficient_in_watt_per_kelvin * (buffer_start_in_celsius - surrounding_in_celsius), rel=1e-9, abs=1e-9
+    PinnedTwin.check_tank_losses(built, location or lt.InstallationLocation.UNHEATED_SPACE)
+
+
+@pytest.mark.extendedbase
+def test_one_file_recorded_on_an_unheated_cellar_heats_a_house_without_a_cellar_with_its_tanks(tmp_path: Path) -> None:
+    """The heat-pump twin, recorded on a row with an unheated cellar, run on a row without a cellar and no other edit.
+
+    Owner decision D-h: the tanks follow the building to the heated zone, their losses arrive in the building's
+    ``HeatReleasedByDevicesInWatt`` through the wires the file already has, the balance closes and nothing is unlinked.
+    The first build of PR 2 failed exactly this: the tanks published room heat nobody read.
+    """
+    built, results = PinnedTwin.run(
+        tmp_path, "household_heatpump_building_sizer", None, building_code=PinnedTwin.HEATED_ZONE_ROW
     )
-    assert tank_loss_in_watt == pytest.approx(
-        tank.tank.loss_coefficient_in_watt_per_kelvin * (tank_mean_in_celsius - surrounding_in_celsius), rel=1e-9, abs=1e-9
-    )
-    released_in_watt = PinnedTwin.column(frame, "Building", Building.HeatReleasedByDevicesInWatt).to_numpy()
-    if effective is lt.InstallationLocation.HEATED_ZONE:
-        assert released_in_watt == pytest.approx(buffer_loss_in_watt + tank_loss_in_watt, rel=1e-9, abs=1e-9)
-    else:
-        assert not released_in_watt.any()
+    assert PinnedTwin.component(built, "Building").config.technical_room_location is lt.InstallationLocation.HEATED_ZONE
+    PinnedTwin.check_tank_losses(built, lt.InstallationLocation.HEATED_ZONE)
+    entries = PinnedTwin.balance_entries(results)
+    for name in (*PinnedTwin.TANKS, "Building"):
+        assert entries[name]["verdict"] == "closes" and entries[name]["failing_steps"] == 0, entries[name]
 
 
 @pytest.mark.extendedbase

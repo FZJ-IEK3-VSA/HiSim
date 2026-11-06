@@ -2,7 +2,7 @@
 
 Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft, D12
 to D15 from the comparison with ruff, pylint, ESLint and clippy);
-PR 1 (the mechanism, bead .1), PR 2 (the energy-port family, bead .2) and PR 3 (the fluid-loop family, bead .3) are built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
+PR 1 (the mechanism, bead .1), PR 2 (the energy-port family, bead .2), PR 3 (the fluid-loop family, bead .3) and PR 4 (the after-run and meter families, bead .4) are built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
 PR: #1216 (spec only). Builds on: `roadmap/device_location_spec.md` (D-h: the build rule "room heat needs a
 receiver", PRs #1211 and #1213), `roadmap/complete_energy_sankeys_spec.md` (D1 and Q-B: a component declares its
 ports or is exempt with a reason; Q-H: the meter check is enforced only while nothing is undeclared),

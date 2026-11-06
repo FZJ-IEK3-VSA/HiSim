@@ -158,7 +158,7 @@ class TestExplicitSizes:
         assert caught.value.location == f"components.{PinnedTwin.BATTERY}"
         message = str(caught.value)
         assert f"{field_name} = {value!r} is stated and {left} is left AUTO" in message
-        assert message.endswith("state both or neither.")
+        assert caught.value.problem.endswith("state both or neither.")
 
     def test_without_pins_both_devices_are_sized_by_their_laws(self) -> None:
         """Regression: the recorded twin still sizes the heat pump from the building and the battery from the PV."""

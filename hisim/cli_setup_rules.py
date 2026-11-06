@@ -28,7 +28,7 @@ from hisim.energy_system.loader import EnergySystemReader
 from hisim.setup_rules.inventory import Inventory, RuleRecord
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import RuleClass, SetupRuleRegistry, StageFindings
-from hisim.setup_rules.rule import RuleCodes, RuleStage
+from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRuleViolation
 from hisim.simulationparameters import SimulationParameters
 
 #: The signature every verb of the command line shares: the parsed arguments, the output and the error stream.
@@ -147,8 +147,10 @@ class SetupRuleCommands:
 
         The load stage runs on the file after its imports and groups were expanded, as in a run. The build stage
         runs only when the load stage found no enforced fault, as in a run. It returns one findings
-        record for the rules of the built file, one for the rules of the components as added and one for the rules of
-        the connected components, in that order, each only when the one before found no enforced fault. The
+        record for the rules of the bound file, one for the rules of the configured file, one for the rules of the
+        built file, one for the rules of the components as added and one for the rules of the connected components, in
+        that order, each only when the one before found no enforced fault. The binding and the sizing rules run while
+        the file is built; when they refuse it, their findings are the last record. The
         components are built with one-day simulation parameters whose result directory is a temporary one, removed
         afterwards, so a check leaves nothing behind.
 
@@ -168,11 +170,20 @@ class SetupRuleCommands:
             stages = [self.registry.findings(RuleStage.LOAD, executor.loaded_document(expanded, imports), model.setup_kind)]
             if last_stage == RuleStage.LOAD or stages[0].faults:
                 return stages
-            built = executor.construct()
-            stages.append(self.registry.findings(RuleStage.BUILD, built.built_document(), model.setup_kind))
-            if not stages[-1].faults:
-                EnergySystemExecutor.connect(built)
-                stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.added_system(), model.setup_kind))
+            try:
+                built = executor.construct()
+            except SetupRuleViolation as violation:
+                # The binding and the sizing rules run while the file is built, and refuse it before it is wired.
+                if violation.findings is None:
+                    raise
+                stages.append(violation.findings)
+                return stages
+            for subject in (built.bound_document(), built.configured_document(), built.built_document()):
+                stages.append(self.registry.findings(RuleStage.BUILD, subject, model.setup_kind))
+                if stages[-1].faults:
+                    return stages
+            EnergySystemExecutor.connect(built)
+            stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.added_system(), model.setup_kind))
             if not stages[-1].faults:
                 built.simulator.connect_all_components()
                 stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.built_system(), model.setup_kind))

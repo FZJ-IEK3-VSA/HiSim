@@ -42,7 +42,7 @@ from hisim.energy_system.audit import build_audit, write_audit
 from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
-from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
+from hisim.energy_system.configure import ConfigurationOutcome, ConfiguredSystem, configure_energy_system
 from hisim.energy_system.errors import (
     EnergySystemCatalogueError,
     EnergySystemErrorId,
@@ -59,7 +59,7 @@ from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
-from hisim.setup_rules.subjects import BuiltDocument, LoadedDocument
+from hisim.setup_rules.subjects import BoundDocument, BuiltDocument, ConfiguredDocument, LoadedDocument
 from hisim.setup_rules.wiring import UnconsumedSource
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import (
@@ -222,6 +222,19 @@ class BuiltEnergySystem:
     rerun: bool = False
     imports: ImportRecord = field(default_factory=ImportRecord)
 
+    def bound_document(self) -> BoundDocument:
+        """Return the subject the binding rules of a file read: the expanded file and its entries bound to their classes."""
+        return BoundDocument(model=self.model, bindings=self.bindings, file=self.source_energy_system or None, source_map=self.imports.source_map)
+
+    def configured_document(self) -> ConfiguredDocument:
+        """Return the subject the binding rules of the configured file and the sizing rules read: the configurations and their sizing."""
+        return ConfiguredDocument(
+            model=self.model,
+            outcome=ConfigurationOutcome.of_configured(self.configured),
+            file=self.source_energy_system or None,
+            source_map=self.imports.source_map,
+        )
+
     def built_document(self) -> BuiltDocument:
         """Return the subject the build rules of a file read: the expanded file, its wired components, the path resolver and the file."""
         return BuiltDocument(
@@ -361,10 +374,11 @@ class EnergySystemExecutor:
         """
         expanded, expansion, imports = self.expand()
         SetupRuleRegistry.collect().run(RuleStage.LOAD, self.loaded_document(expanded, imports), self.model.setup_kind)
+        file = self.source_energy_system or None
         try:
-            bindings = validate_classes(expanded)
+            bindings = validate_classes(expanded, file=file, source_map=imports.source_map)
             configured = configure_energy_system(
-                expanded, bindings=bindings, path_resolver=self.path_resolver
+                expanded, bindings=bindings, path_resolver=self.path_resolver, file=file, source_map=imports.source_map
             )
             wired = wire_energy_system(
                 expanded,
@@ -377,13 +391,14 @@ class EnergySystemExecutor:
             )
             expanded = self.with_selected_feeds(expanded, wired)
         except EnergySystemCatalogueError as error:
-            # A refusal of a component the expansion of imports produced names where it came from.
-            imports.source_map.annotate(error)
+            # A refusal of a component the expansion of imports produced names where it came from; the setup rules
+            # name it in each fault of theirs.
+            if not isinstance(error, SetupRuleViolation):
+                imports.source_map.annotate(error)
             raise
         simulator = self.register(expanded, expansion)
-        for warning in configured.warnings:
-            log.warning(warning)
-        # The run record keeps the components nothing reads as warnings; the wiring rule EF-34 logs them.
+        # The run record keeps the facts and the components nothing reads as warnings; the sizing rule EF-4K and the
+        # wiring rule EF-34 log them.
         warnings = configured.warnings + UnconsumedSource.lines(wired)
         return BuiltEnergySystem(
             model=expanded,

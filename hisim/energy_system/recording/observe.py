@@ -23,10 +23,10 @@ it as read-only for the same reason this module does.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from hisim.component import Component
+from hisim.component import Component, PhysicsComponent
 from hisim.dynamic_component import DynamicComponent
 from hisim.energy_system.parity import ResolvedWire, WiringSnapshot
 from hisim.simulationparameters import SimulationParameters
@@ -96,6 +96,13 @@ class ObservedComponent:
 
     The two feed members are empty for every ordinary component and populated for an aggregator,
     which is the only structural distinction the format makes between the two.
+
+    ``transfer_defaults`` is filled only for a physics component that grows inputs (the building, which reads every
+    output releasing heat into its heated zone): per source component, the outputs its ``default_connections_for``
+    reads of it. Such an input carries energy into the component, a transfer the source's ports declare, so the
+    recorder writes those feeds as one bare item naming the source, as it writes a static default connection
+    (owner decision D-h of ``roadmap/device_location_spec.md``). A meter's and an energy manager's feeds are
+    observations, written out in full, and get no entry.
     """
 
     name: str
@@ -106,6 +113,7 @@ class ObservedComponent:
     default_connections: Mapping[str, Tuple[Tuple[str, str], ...]]
     feeds: Tuple[ObservedFeed, ...] = ()
     dispatches: Tuple[ObservedDispatch, ...] = ()
+    transfer_defaults: Mapping[str, Tuple[str, ...]] = field(default_factory=dict)
 
     def feed_labels(self) -> Tuple[str, ...]:
         """The aggregator input port names this component grew, in creation order.
@@ -192,7 +200,7 @@ class SystemObserver:
         wiring = WiringSnapshot.from_components(components)
         consumers = cls._consumers_of(wiring)
         observed = tuple(
-            cls._component(wrapper.my_component, wrapper.connect_automatically, consumers)
+            cls._component(wrapper.my_component, wrapper.connect_automatically, consumers, tuple(components))
             for wrapper in simulator.wrapped_components
         )
         return RecordedSystem(
@@ -231,6 +239,7 @@ class SystemObserver:
         component: Component,
         connect_automatically: bool,
         consumers: Dict[Tuple[str, str], Tuple[str, str]],
+        components: Tuple[Component, ...] = (),
     ) -> ObservedComponent:
         """Reads one component, adding its grown ports when it is an aggregator.
 
@@ -238,6 +247,8 @@ class SystemObserver:
             component: The component to read.
             connect_automatically: The wrapper's flag, recorded verbatim.
             consumers: The reverse index of the wiring, for pairing dispatch outputs.
+            components: Every component of the system, for the transfers a physics component grows inputs for
+                (:attr:`ObservedComponent.transfer_defaults`).
 
         Returns:
             The observation of that component.
@@ -273,7 +284,35 @@ class SystemObserver:
             },
             feeds=feeds,
             dispatches=dispatches,
+            transfer_defaults=cls._transfer_defaults(component, components),
         )
+
+    @staticmethod
+    def _transfer_defaults(component: Component, components: Tuple[Component, ...]) -> Dict[str, Tuple[str, ...]]:
+        """The outputs a physics component that grows inputs reads of each other component by its own declaration.
+
+        For example, a building beside a buffer gets ``{"SimpleHotWaterStorage": ("HeatToHeatedZoneInWatt",)}``.
+        Any other component, an aggregator that observes or a component that grows nothing, gets an empty mapping.
+
+        Args:
+            component: The component being read.
+            components: Every component of the system.
+
+        Returns:
+            Per source component name, the source outputs read, for sources the component reads anything of.
+        """
+        if not (isinstance(component, DynamicComponent) and isinstance(component, PhysicsComponent)):
+            return {}
+        transfers: Dict[str, Tuple[str, ...]] = {}
+        for source in components:
+            if source is component:
+                continue
+            outputs = tuple(
+                connection.source_component_field_name for connection in component.default_connections_for(source)
+            )
+            if outputs:
+                transfers[source.component_name] = outputs
+        return transfers
 
     @classmethod
     def _dispatch(

@@ -254,6 +254,7 @@ components:
     config:
       heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 0.18
     inputs:
+      - Building
       - UTSPConnector
       - MoreAdvancedHeatPumpHPLib
   SimpleHotWaterStorage:
@@ -262,6 +263,7 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
     inputs:
+      - Building
       - HeatDistributionSystem
       - MoreAdvancedHeatPumpHPLib
   HeatDistributionSystem:

@@ -42,7 +42,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": 1.8
+    "value": 2.2
   },
   "BUI1.Air Conditioner.OPEX - CO2 Footprint (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -57,7 +57,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 0.738
+    "value": 0.902
   },
   "BUI1.Air Conditioner.OPEX - Electricity costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -72,7 +72,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 0.5409
+    "value": 0.6611
   },
   "BUI1.Air Conditioner.OPEX - Maintenance costs (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -102,7 +102,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kWh",
-    "value": -53.9
+    "value": -73.8
   },
   "BUI1.Air Conditioner.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -117,7 +117,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "kg",
-    "value": 0.8658538812785388
+    "value": 1.029853881278539
   },
   "BUI1.Air Conditioner.Total Costs (CAPEX for simulated period + OPEX energy and maintenance) (SimpleAirConditioner)": {
     "building": "BUI1",
@@ -132,7 +132,7 @@
     },
     "tag": "Air Conditioner",
     "unit": "EUR",
-    "value": 2.4587082191780825
+    "value": 2.578908219178082
   },
   "BUI1.Battery.Battery charging energy": {
     "building": "BUI1",
@@ -201,7 +201,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.0
+    "value": 0.047300661029270386
   },
   "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (Building)": {
     "building": "BUI1",
@@ -231,7 +231,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 0.0
+    "value": 91.7579538099062
   },
   "BUI1.Building.Maximum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 24.83860803354775
+    "value": 26.379249109767194
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -261,7 +261,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 19.82451380982382
+    "value": 20.82084676098028
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -336,7 +336,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.0
+    "value": 2.212006180135588
   },
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
     "building": "BUI1",
@@ -351,7 +351,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.2526706803986878
+    "value": 0.0
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": -4.6992793922181875
+    "value": -114.77019139614322
   },
   "BUI1.Building.Theoretical heating demand (Building)": {
     "building": "BUI1",
@@ -381,7 +381,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 0.299772314952157
+    "value": 0.0
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -389,7 +389,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 0.52888
+    "value": 28.520455
   },
   "BUI1.Costs.Costs of grid gas for simulated period": {
     "building": "BUI1",
@@ -413,7 +413,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 0.52888
+    "value": 28.520455
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -501,7 +501,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2.54888
+    "value": 30.540454999999998
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 2.54888
+    "value": 30.540454999999998
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -532,7 +532,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kg",
-    "value": 0.7215999999999999
+    "value": 38.91309999999999
   },
   "BUI1.Electricity Meter.Max power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -547,7 +547,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.12887958156737556
+    "value": 14.458529350613517
   },
   "BUI1.Electricity Meter.Max power to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -577,7 +577,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.010480784946554259
+    "value": 0.5649232602691445
   },
   "BUI1.Electricity Meter.Mean power to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -607,7 +607,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.0
+    "value": 0.06708172437062379
   },
   "BUI1.Electricity Meter.Min power to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -637,7 +637,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "Euro",
-    "value": 0.52888
+    "value": 28.520455
   },
   "BUI1.Electricity Meter.Total energy from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -652,7 +652,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 1.7607718710211155
+    "value": 94.90710772521628
   },
   "BUI1.Electricity Meter.Total energy to grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -699,7 +699,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 0.7215999999999999
+    "value": 38.91309999999999
   },
   "BUI1.Emissions.CO2 footprint of grid gas for simulated period": {
     "building": "BUI1",
@@ -723,7 +723,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 0.8515999999999999
+    "value": 39.043099999999995
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -739,7 +739,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 0.8515999999999999
+    "value": 39.043099999999995
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -763,7 +763,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 1.7607718710211155
+    "value": 94.90710772521628
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -851,7 +851,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 1.8
+    "value": 94.9
   },
   "BUI1.General.Total electricity production": {
     "building": "BUI1",
@@ -876,5 +876,50 @@
     "tag": "General",
     "unit": "kWh",
     "value": 0.0
+  },
+  "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total electricity consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "kWh",
+    "value": 92.7160486533634
+  },
+  "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total warm water consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "l",
+    "value": 1875.0
+  },
+  "BUI1.Residents.Residents' total warm water energy consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total warm water energy consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "kWh",
+    "value": 64.79
   }
 }

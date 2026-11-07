@@ -142,8 +142,9 @@ as hplib's COP-1 fit artefact:
   power until step d replaces the capacity surface); (2) the required outlet exceeds the compressor's maximal
   outlet. That limit is the configured maximal supply temperature of hisim-heat-pump-outlet-limit-2vq7 once it
   exists; until then the outlet at which hplib's fitted plane reaches COP 1 at the current source temperature
-  stands in (for the 8 kW Generic air unit about 65 °C at A-7 and 69 °C at A0), the line at which hplib switched
-  to its rod. In both cases the compressor runs at its continuous COP (the law above) and its full capacity, and
+  stands in, the line at which hplib switched to its rod: for the 8 kW Generic air unit 56.7 °C at A-7, 69.0 °C at
+  A0 and 81.4 °C at A7, so a house on 70/55 radiators needs the rod on the coldest days until 2vq7 brings the
+  configured limit. In both cases the compressor runs at its continuous COP (the law above) and its full capacity, and
   the rod adds only the missing heat, at COP 1, up to its rated power: in case (1) the requested heat minus the
   compressor's capacity, in case (2) the heat that lifts the compressor's flow from its maximal outlet to the
   required outlet, `m_flow · c_p · (T_required − T_max)`. What the rod cannot cover is not delivered. Where the

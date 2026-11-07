@@ -421,6 +421,30 @@ class LoopRig:
         return [cls.wired("Flow", "Boiler", "Flow"), cls.wired("Supply", "Boiler", "Supply")]
 
     @classmethod
+    def cooling(cls, return_temperature_in_celsius: float, *, may_cool: bool) -> EnergyBalanceReport:
+        """The boiler and the tank, the tank's return at ``return_temperature_in_celsius`` against the 60 °C supply.
+
+        A return above the supply is a step in which the boiler removes heat from the water. The boiler takes in
+        ``m c (T_sup - T_ret)`` of ambient heat, negative while it cools, and the tank loses as much, so both close in
+        either direction; both ends say ``may_cool`` as given.
+        """
+        heat_in_watt = 0.1 * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * (60.0 - return_temperature_in_celsius)
+        columns: List[LoopRig.Column] = [
+            ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, 0.1),
+            ("Boiler", "Supply", lt.Units.CELSIUS, None, 60.0),
+            ("Boiler", "Heat", lt.Units.WATT, EnergyPort(lt.EnergyRole.CONSUMPTION, cls.AMBIENT), heat_in_watt),
+            ("Tank", "Return", lt.Units.CELSIUS, None, return_temperature_in_celsius),
+            ("Tank", "Loss", lt.Units.WATT, EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER), heat_in_watt),
+        ]
+        supply_end = End(Loops.loop(supplies=True, pumps=True, may_cool=may_cool), cls.SUPPLY_END.names)
+        receiving_end = End(Loops.loop(supplies=False, pumps=False, may_cool=may_cool), cls.RECEIVING_END.names)
+        return cls.report(
+            columns,
+            {"Boiler": [cls.wired("Return", "Tank", "Return")], "Tank": cls.tank_inputs()},
+            {"Boiler": [supply_end], "Tank": [receiving_end]},
+        )
+
+    @classmethod
     def paired(cls) -> EnergyBalanceReport:
         """The boiler and the tank, both declaring their ends of the loop."""
         return cls.report(
@@ -465,23 +489,12 @@ def test_both_ends_of_a_loop_share_one_heat_and_pair_through_the_wiring() -> Non
 def test_a_step_in_which_the_supplier_cools_the_water_is_booked_as_cooling_toward_it() -> None:
     """§3.4: where the supplier's heat is negative, ``COOLING`` goes from the other member to the supplier.
 
-    The boiler sends 50 °C water and gets 60 °C back: it removes 1.045 kWh from the water, which it gives to the
+    The boiler sends 60 °C water and gets 70 °C back: it removes 1.045 kWh from the water, which it gives to the
     ambient, and the tank puts that heat in (a negative loss). The loop is one ``COOLING`` link from the tank to the
-    boiler, and the heating face carries nothing. Stage 1a refuses no cooling step on a loop whose members do not all
-    allow cooling (owner, 2026-10-27: the heating-only check comes with stage 2), so the run closes.
+    boiler, and the heating face carries nothing. Both members say ``may_cool``, so the run closes; on a loop that
+    heats only the same step is the fault ``AR-11`` (``tests/rules/test_results.py``).
     """
-    columns = [
-        ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, 0.1),
-        ("Boiler", "Supply", lt.Units.CELSIUS, None, 50.0),
-        ("Boiler", "Heat", lt.Units.WATT, EnergyPort(lt.EnergyRole.PRODUCTION, LoopRig.AMBIENT), 4180.0),
-        ("Tank", "Return", lt.Units.CELSIUS, None, 60.0),
-        ("Tank", "Loss", lt.Units.WATT, EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER), -4180.0),
-    ]
-    report = LoopRig.report(
-        columns,
-        {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
-        {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END]},
-    )
+    report = LoopRig.cooling(70.0, may_cool=True)
     loop_ports = {
         (series.component, series.port.role, series.port.carrier): series.annual_kilowatt_hours
         for series in report.declared.all_series()
@@ -513,14 +526,90 @@ def test_the_supplier_s_sign_splits_a_loop_into_its_two_directions() -> None:
         (True, lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION),
         (False, lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION),
     ):
-        (heating_port, heating), (cooling_port, cooling) = DeclaredPorts.book_by_the_supplier_s_sign(heat, Loops.CARRIER, supplies=supplies)
+        (heating_port, heating), (cooling_port, cooling) = DeclaredPorts.book_by_the_supplier_s_sign(
+            heat, Loops.CARRIER, supplies=supplies, noise_in_kilowatt_hours=0.001
+        )
         assert heating_port == EnergyPort(heating_role, Loops.CARRIER)
         assert cooling_port == EnergyPort(cooling_role, lt.EnergyBalanceCarrier.COOLING)
         assert heating.tolist() == [2.0, 0.0, 0.0] and cooling.tolist() == [0.0, 1.0, 0.0]
         assert (heating - cooling).tolist() == heat.tolist()
     heating_only = np.array([2.0, 0.0])
-    ((port, series),) = DeclaredPorts.book_by_the_supplier_s_sign(heating_only, Loops.CARRIER, supplies=True)
+    ((port, series),) = DeclaredPorts.book_by_the_supplier_s_sign(heating_only, Loops.CARRIER, supplies=True, noise_in_kilowatt_hours=0.001)
     assert port == EnergyPort(lt.EnergyRole.PRODUCTION, Loops.CARRIER) and series is heating_only
+
+
+def test_a_negative_heat_within_the_noise_stays_on_the_carrier_s_face() -> None:
+    """Catches convergence noise drawn as a cooling flow (hisim-false-cooling-edge-7130): -1e-8 kWh is no cooling step.
+
+    The hot-water loop of the heat-pump twin showed 1.2e-8 kWh of ``COOLING`` in a July week, a supply 4e-8 K below
+    the tank's step mean. Within the noise the step keeps its sign on the loop's carrier, so both ends' balances keep
+    it; at the noise exactly it is still noise, beyond it cooling.
+    """
+    heat = np.array([2.0, -1e-8, -0.001])
+    ((port, series),) = DeclaredPorts.book_by_the_supplier_s_sign(heat, Loops.CARRIER, supplies=False, noise_in_kilowatt_hours=0.001)
+    assert port == EnergyPort(lt.EnergyRole.CONSUMPTION, Loops.CARRIER) and series is heat
+    (_, heating), (cooling_port, cooling) = DeclaredPorts.book_by_the_supplier_s_sign(
+        np.array([2.0, -1e-8, -0.0011]), Loops.CARRIER, supplies=True, noise_in_kilowatt_hours=0.001
+    )
+    assert cooling_port == EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.COOLING)
+    assert heating.tolist() == [2.0, -1e-8, 0.0] and cooling.tolist() == [0.0, 0.0, 0.0011]
+
+
+def test_the_noise_of_a_step_is_one_watt_over_the_step() -> None:
+    """Catches a noise bound that does not scale with the step: 1 W over 900 s, 0.00025 kWh, is noise; 1.01 W is not.
+
+    A heating-only rig whose return is above the supply by 1.01 W books a cooling step and records it at the boiler,
+    one by 0.99 W books the negative heat on the carrier and records nothing.
+    """
+    for excess_in_watt, cools in ((0.99, False), (1.01, True)):
+        report = LoopRig.cooling(60.0 + excess_in_watt / (0.1 * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K), may_cool=False)
+        carriers = {series.port.carrier for series in report.declared.by_component["Boiler"] if series.loop_columns is not None}
+        assert (lt.EnergyBalanceCarrier.COOLING in carriers) is cools
+        assert bool(report.declared.cooling_on_heating_only_loops) is cools
+        assert all(balance.closes for balance in report.balances)
+
+
+def test_cooling_beyond_the_noise_names_the_first_step_the_count_and_the_largest_heat() -> None:
+    """Catches a breach that reports the wrong step, count or power, or one reported for noise alone."""
+    supplier = LoopRig.SUPPLY_END.port_set("Boiler")
+    breach = DeclaredPorts.cooling_beyond_the_noise(
+        np.array([1.0, -0.0001, -0.5, -0.25]), 0.00025, 900.0, supplier=supplier, heating_only_members=("Tank.space_heating",), flow="Flow"
+    )
+    assert breach is not None
+    assert (breach.supplier, breach.loop, breach.flow, breach.first_step, breach.steps) == ("Boiler", "Boiler.space_heating", "Flow", 2, 2)
+    assert breach.largest_heat_removed_in_watt == pytest.approx(2000.0, rel=1e-12)
+    assert breach.describe("2021-01-01T00:30:00") == (
+        "the loop Boiler.space_heating heats only (Tank.space_heating says may_cool=False), and its supplier Boiler "
+        "removed heat from the water in 2 steps, first in step 2 (2021-01-01T00:30:00), up to 2,000 W"
+    )
+    assert DeclaredPorts.cooling_beyond_the_noise(
+        np.array([1.0, -0.00025]), 0.00025, 900.0, supplier=supplier, heating_only_members=("Tank.space_heating",), flow="Flow"
+    ) is None
+
+
+def test_the_heating_only_members_of_a_loop_are_its_ends_that_say_may_cool_false() -> None:
+    """Catches a loop judged by one member only: a loop may cool only if every member allows it (D19)."""
+    columns = LoopColumns(("Boiler", "Flow"), ("Boiler", "Supply"), ("Tank", "Return"))
+    swapped = LoopColumns(("Boiler", "Flow"), ("Tank", "Return"), ("Boiler", "Supply"))
+    cooling_end = Loops.loop(supplies=True, pumps=True, may_cool=True)
+    heating_end = Loops.loop(supplies=False, pumps=False, may_cool=False, name="generator")
+    wiring = SimpleNamespace(
+        ends=[
+            ("Boiler", cp.FluidLoopPortSet("Boiler", cooling_end, {}), columns, "Tank"),
+            ("Tank", cp.FluidLoopPortSet("Tank", heating_end, {}), swapped, "Boiler"),
+        ]
+    )
+    assert columns.key == swapped.key
+    assert DeclaredPorts.heating_only_members(wiring) == {columns.key: ("Tank.generator",)}  # type: ignore[arg-type]
+    wiring.ends[1] = ("Tank", cp.FluidLoopPortSet("Tank", Loops.loop(supplies=False, pumps=False, may_cool=True), {}), swapped, "Boiler")
+    assert not DeclaredPorts.heating_only_members(wiring)  # type: ignore[arg-type]
+
+
+def test_the_step_time_is_the_index_s_stamp_or_none() -> None:
+    """Catches a fault naming the wrong time, or one that fails on a step the index does not have."""
+    declared = DeclaredPorts(index=pd.date_range("2021-01-01", periods=5, freq="900s"))
+    assert declared.step_time(4) == "2021-01-01T01:00:00"
+    assert declared.step_time(5) is None and DeclaredPorts().step_time(0) is None
 
 
 def test_one_flow_read_by_two_ends_fails_the_run() -> None:

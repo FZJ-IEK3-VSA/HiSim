@@ -1,6 +1,6 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 113 that move into the rules package and the 88 that stay where
+The inventory is the one list of the checks, the 114 that move into the rules package and the 88 that stay where
 they are: a parse fault of the reader, a check the reader makes while it builds the model, a device's own physics
 guard, a call of the component API refused when it is made, a recorder check, a CI gate, a policy of the run, and
 one retired check that never fired. Each record names
@@ -1024,6 +1024,17 @@ class Inventory:
             enforcement="L (CI makes it E, §6.9)", checks="a component declares ports or is exempt with a reason",
             lives="hisim/setup_rules/results.py:ComponentDeclared",
             note="the undeclared components are found by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect",
+        ),
+        RuleRecord(
+            rule_id="results.heating_only_loop_never_cools", codes=("AR-11",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN,
+            when="after the run", enforcement="E",
+            checks="no supplier of a fluid loop that may not cool (a member says may_cool=False) removes more than 1 W from its water in a step",
+            lives="hisim/setup_rules/results.py:HeatingOnlyLoopNeverCools",
+            note=(
+                "added after the inventory (bead hisim-false-cooling-edge-7130), the heating-only check of §3.4 and §3.5 of "
+                "roadmap/fluid_loops_spec.md; the steps are found by hisim/postprocessing/energy_balance/ports.py:"
+                "DeclaredPorts.cooling_beyond_the_noise, which books a negative heat within the noise as the loop's heat"
+            ),
         ),
         RuleRecord(
             rule_id="costs.lifecycle_engine", nature=RuleNature.LAW, when="post-processing", enforcement="E / L",

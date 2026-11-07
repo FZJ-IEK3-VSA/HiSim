@@ -96,7 +96,7 @@ def test_every_component_and_every_link_closes_within_the_tolerance(twin: Tuple[
         assert entry["verdict"] == "closes" and entry["failing_steps"] == 0, entry["component"]
         assert abs(entry["residual_kwh"]) <= 0.001 * entry["throughput_kwh"] + 1e-6, entry["component"]
     assert report["links"] and all(link["verdict"] == "closes" for link in report["links"])
-    assert not report["circuit_faults"]
+    assert not report["loop_faults"]
 
 
 @pytest.mark.extendedbase2

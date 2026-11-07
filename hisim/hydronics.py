@@ -20,7 +20,7 @@ step. Nothing is clipped.
 
 The functions do not check that their values are finite. They run on every pass of every time step, and a NaN or
 an infinity passes through their arithmetic into the outputs that publish the result; the simulator's check of
-every result column after the run (:mod:`hisim.postprocessing.finite_results`) then names the column and its first
+every result column after the run (the setup rule ``AR-01``, :mod:`hisim.setup_rules.results`) then names the column and its first
 bad step.
 
 Names keep this module's short unit suffixes: ``_w`` (W), ``_c`` (°C), ``_j`` (J), ``_s`` (s),

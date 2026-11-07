@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -23,16 +24,14 @@ from hisim import loadtypes as lt
 from hisim.components.configuration import PhysicsConfig
 from hisim.config import ComponentID
 from hisim.energy_port import EnergyPort, MeteredExchange
-from hisim.postprocessing.energy_balance import (
-    EnergyBalanceError,
-    EnergyBalanceReport,
-)
+from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessing.energy_balance.check import RoleTotals
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Peer, PeerKind, Wiring
 from hisim.postprocessing.energy_balance.sankey import SankeyDiagram
 from hisim.postprocessing.postprocessing_main import PostProcessor
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.energy_ports import EnergyPortWiringError, InputPortPairs
+from hisim.setup_rules.results import EnergyBalanceError
 from hisim.setup_rules.subjects import BuiltSystem
 from tests import functions_for_testing as fft
 
@@ -127,18 +126,11 @@ def report(
         if component not in names:
             names.append(component)
     names.extend(extra_components)
-    wrapped: List[Any] = [
-        SimpleNamespace(
-            my_component=stand_in(
-                name,
-                (classes or {}).get(name),
-                (inputs or {}).get(name, []),
-                [o for o in outputs if o.component_name == name],
-            )
-        )
+    components: List[Any] = [
+        stand_in(name, (classes or {}).get(name), (inputs or {}).get(name, []), [o for o in outputs if o.component_name == name])
         for name in names
     ]
-    return EnergyBalanceReport(table, outputs, wrapped, seconds_per_timestep)
+    return EnergyBalanceReport(table, outputs, components, seconds_per_timestep)
 
 
 def vessel(generator_watt: float, draw_watt_hour: float, loss_watt: float, stored_watt_hour: float) -> List[Column]:
@@ -492,7 +484,7 @@ def test_a_balance_that_does_not_close_fails_the_run_naming_what_and_where(tmp_p
     """The report is written first when asked; the error names component, carrier, residual and worst step."""
     leaking = report(vessel(4000.0, 300.0, 200.0, 150.0))
     with pytest.raises(EnergyBalanceError) as raised:
-        leaking.conclude(str(tmp_path), with_html=False)
+        PostProcessor.judge_the_results(fft.AfterRunRules.post_processing(str(tmp_path), export=True), fft.AfterRunRules.subject(leaking))
     message = str(raised.value)
     assert "component Tank" in message
     assert "residual 0.5 kWh (50 % of 1 kWh throughput)" in message
@@ -506,8 +498,12 @@ def test_a_balance_that_does_not_close_fails_the_run_naming_what_and_where(tmp_p
 def test_without_a_result_directory_nothing_is_written_and_the_run_still_fails(tmp_path: Path) -> None:
     """The check is independent of the files: no directory, no report, the same error."""
     with pytest.raises(EnergyBalanceError, match="Tank"):
-        report(vessel(4000.0, 300.0, 200.0, 150.0)).conclude(None)
-    assert report(vessel(4000.0, 700.0, 200.0, 250.0)).conclude(None) is None
+        PostProcessor.judge_the_results(
+            fft.AfterRunRules.post_processing(str(tmp_path), export=False), fft.AfterRunRules.subject(report(vessel(4000.0, 300.0, 200.0, 150.0)))
+        )
+    closing = report(vessel(4000.0, 700.0, 200.0, 250.0))
+    fft.AfterRunRules.refuse(closing)
+    assert closing.conclude(None) is None
     assert not list(tmp_path.iterdir())
 
 
@@ -519,7 +515,7 @@ def test_every_failing_component_is_named() -> None:
         ("Pipe", "Out", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.5]),
     ]
     with pytest.raises(EnergyBalanceError) as raised:
-        report(columns).conclude(None)
+        fft.AfterRunRules.refuse(report(columns))
     assert "component Tank" in str(raised.value) and "component Pipe" in str(raised.value)
 
 
@@ -529,12 +525,9 @@ def test_the_post_processor_fails_the_run_whatever_the_options(tmp_path: Path) -
     for options, written in (([], False), ([PostProcessingOptions.EXPORT_ENERGY_BALANCE], True)):
         directory = tmp_path / str(written)
         directory.mkdir()
-        ppdt: Any = SimpleNamespace(
-            post_processing_options=options,
-            simulation_parameters=SimpleNamespace(result_directory=str(directory), seconds_per_timestep=900),
-        )
+        ppdt = fft.AfterRunRules.post_processing(str(directory), export=bool(options))
         with pytest.raises(EnergyBalanceError, match="Tank"):
-            PostProcessor.export_sankeys(ppdt, report(vessel(4000.0, 300.0, 200.0, 150.0)))
+            PostProcessor.judge_the_results(ppdt, fft.AfterRunRules.subject(report(vessel(4000.0, 300.0, 200.0, 150.0))))
         assert (directory / "balance_report.json").exists() is written
 
 
@@ -549,7 +542,7 @@ def test_a_port_that_is_not_finite_fails_the_run_naming_the_port_and_its_first_s
         ("Pipe", "Out", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [1.0, 1.0, 1.0]),
     ]
     with pytest.raises(EnergyBalanceError) as raised:
-        report(columns).conclude(str(tmp_path))
+        PostProcessor.judge_the_results(fft.AfterRunRules.post_processing(str(tmp_path), export=True), fft.AfterRunRules.subject(report(columns)))
     assert "energy port Pipe.In (consumption, space_heating_heat)" in str(raised.value)
     assert "at step 1 (2021-01-01T00:15:00), in 2 steps in all" in str(raised.value)
     assert "Pipe.Out" not in str(raised.value)
@@ -563,6 +556,7 @@ def test_a_component_without_ports_is_undeclared_never_failing(tmp_path: Path) -
         [("Tank", "Temperature", lt.Units.CELSIUS, None, [40.0]), *vessel(4000.0, 700.0, 200.0, 250.0)],
         extra_components=["Weather"],
     )
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -576,6 +570,7 @@ def test_a_component_without_ports_is_undeclared_never_failing(tmp_path: Path) -
 def test_a_run_in_which_nothing_declares_a_port_passes_and_says_so(tmp_path: Path) -> None:
     """No port anywhere: not an error; the report's verdict is nothing_declared."""
     balance_report = report([("Tank", "Temperature", lt.Units.CELSIUS, None, [40.0])], extra_components=["Weather"])
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -715,7 +710,7 @@ def test_a_link_whose_two_sides_disagree_fails_the_run_in_either_direction(
     edge = ("Tank", "unaccounted") if difference > 0 else ("unaccounted", "Tank")
     assert heat[edge] == pytest.approx(abs(difference)), "a difference beyond the tolerance is drawn"
     with pytest.raises(EnergyBalanceError) as raised:
-        balance_report.conclude(None)
+        fft.AfterRunRules.refuse(balance_report)
     assert (
         f"link Tank -> Loop (space_heating_heat): Tank sends 0.7 kWh, Loop receives {received_watt_hour / 1000:g} kWh "
         f"({percent} % of the larger)"
@@ -765,7 +760,7 @@ def test_a_booking_only_the_receiver_declares_fails_the_run_naming_both_the_carr
     (link,) = balance_report.failing_links
     assert (link.sender, link.receiver, link.carrier, link.sent) == ("Tank", "Loop", "space_heating_heat", None)
     with pytest.raises(EnergyBalanceError) as raised:
-        balance_report.conclude(str(tmp_path), with_html=False)
+        PostProcessor.judge_the_results(fft.AfterRunRules.post_processing(str(tmp_path), export=True), fft.AfterRunRules.subject(balance_report))
     assert (
         "link Tank -> Loop (space_heating_heat): Loop books 0.7 kWh of space_heating_heat from Tank, "
         "but Tank declares nothing sent to Loop"
@@ -787,7 +782,7 @@ def test_a_booking_only_the_sender_declares_fails_the_run_naming_both_the_carrie
     assert (link.sender, link.receiver, link.received) == ("Tank", "Loop", None)
     assert link.as_dict()["sent_kwh"] == pytest.approx(0.7)
     with pytest.raises(EnergyBalanceError) as raised:
-        balance_report.conclude(None)
+        fft.AfterRunRules.refuse(balance_report)
     assert (
         "link Tank -> Loop (space_heating_heat): Tank sends 0.7 kWh of space_heating_heat to Loop, "
         "but Loop declares nothing received from Tank"
@@ -807,6 +802,7 @@ def test_a_one_sided_booking_toward_a_component_without_ports_passes(tmp_path: P
         "Building": [wired_input("HeatFromTank", "Tank", "HeatOut")],
     }
     balance_report = report(columns, inputs=inputs, extra_components=["Building"])
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -902,6 +898,7 @@ def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> Non
         "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
     }
     balance_report = report(columns, inputs=inputs, extra_components=["Building"])
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     (entry,) = json.loads(report_path.read_text())["links"]
@@ -1148,11 +1145,13 @@ def test_a_tank_that_stores_less_hydrogen_than_it_is_handed_does_not_close() -> 
 def test_an_exempt_component_or_a_meter_with_an_input_port_is_refused(name: str, kind: type, refusal: str) -> None:
     """A controller or a meter moves no energy of its own, on an input no more than on an output."""
     with pytest.raises(ValueError, match=f"{name} declares the energy port HeatIn, but {refusal}"):
-        report(
-            [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
-            inputs={name: [wired_input("HeatIn", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))]},
-            extra_components=[name],
-            classes={name: kind},
+        fft.AfterRunRules.refuse(
+            report(
+                [("Tank", "HeatOut", lt.Units.KWH, None, [1.0])],
+                inputs={name: [wired_input("HeatIn", "Tank", "HeatOut", EnergyPort(CONSUMPTION, SH))]},
+                extra_components=[name],
+                classes={name: kind},
+            )
         )
 
 
@@ -1160,11 +1159,10 @@ def test_an_exempt_component_or_a_meter_with_an_input_port_is_refused(name: str,
 def test_a_port_of_a_component_that_moves_nothing_is_refused_naming_the_reason() -> None:
     """An exempt component's port names its reason; a meter's says it is a meter; any other passes."""
     meters = {"Meter": frozenset({ELECTRICITY})}
-    with pytest.raises(ValueError, match="EMS declares the energy port Power, but it is exempt .*: it decides"):
-        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("EMS", "Power", {"EMS": "it decides"}, meters)
-    with pytest.raises(ValueError, match="Meter declares the energy port Power, but it is a meter"):
-        DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Meter", "Power", {}, meters)
-    DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing("Tank", "Power", {"EMS": "it decides"}, meters)
+    exempt_fault = DeclaredPorts.node_port_fault("EMS", "Power", {"EMS": "it decides"}, meters) or ""
+    assert re.search("EMS declares the energy port Power, but it is exempt .*: it decides", exempt_fault)
+    assert re.search("Meter declares the energy port Power, but it is a meter", DeclaredPorts.node_port_fault("Meter", "Power", {}, meters) or "")
+    assert DeclaredPorts.node_port_fault("Tank", "Power", {"EMS": "it decides"}, meters) is None
 
 
 # --- the graph model of the complete Sankey (roadmap/complete_energy_sankeys_spec.md §4, owner decision Q-J) ----
@@ -1268,7 +1266,9 @@ def test_grid_import_and_export_are_what_the_meter_publishes_and_the_meter_node_
 @pytest.mark.base
 def test_the_controllers_are_exempt_and_the_meter_is_a_node_never_undeclared(tmp_path: Path) -> None:
     """The energy manager is exempt and never drawn; the meter is drawn, neither exempt nor undeclared."""
-    report_path = house().conclude(str(tmp_path), with_html=False)
+    balance_report = house()
+    fft.AfterRunRules.refuse(balance_report)
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
     assert written["verdict"] == "closes" and written["undeclared"] == []
@@ -1294,7 +1294,7 @@ def test_a_meter_that_publishes_other_than_it_reads_has_an_unaccounted_flow_and_
     assert overall[("grid import", "Meter")] == pytest.approx(1.0)
     assert overall[("Meter", "unaccounted")] == pytest.approx(0.4)
     with pytest.raises(EnergyBalanceError) as raised:
-        balance_report.conclude(None)
+        fft.AfterRunRules.refuse(balance_report)
     assert (
         "meter Meter publishes 1 kWh of electricity imported and 0.6 kWh exported, the ports it reads take 1.2 kWh "
         "and give 1.2 kWh: residual 0.4 kWh; 1 steps beyond tolerance, worst step 0 (2021-01-01T00:00:00)"
@@ -1320,6 +1320,7 @@ def test_a_meter_that_publishes_other_than_it_reads_is_reported_while_a_componen
 ) -> None:
     """With the occupancy undeclared, the meter may read flows no port declares: the gap is reported, not failed."""
     balance_report = house(metered_import_watt=(4000.0, 0.0, 0.0), extra_components=["Occupancy"])
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     (entry,) = json.loads(report_path.read_text())["meters"]
@@ -1374,6 +1375,7 @@ def test_a_bought_carrier_port_no_meter_reads_is_unmetered_reported_then_failing
     """
     balance_report = boiler(metered=False, extra_components=["Occupancy"])
     assert flows(balance_report.sankeys()["overall"])[("natural gas supply", "Boiler")] == pytest.approx(1.0)
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -1401,7 +1403,7 @@ def test_a_bought_carrier_port_no_meter_reads_is_unmetered_reported_then_failing
     ]
 
     with pytest.raises(EnergyBalanceError, match=r"port Boiler.GasIn \(consumption, natural_gas, 1 kWh\) passes no meter"):
-        boiler(metered=False).conclude(None)
+        fft.AfterRunRules.refuse(boiler(metered=False))
 
 
 @pytest.mark.base
@@ -1517,6 +1519,7 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
         extra_components=["Sum"],
         classes={"Sum": Helper},
     )
+    fft.AfterRunRules.refuse(balance_report)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -1537,7 +1540,7 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
 def test_an_exempt_component_or_a_meter_that_declares_a_port_is_refused(name: str, kind: type, refusal: str) -> None:
     """A controller or a meter moves no energy of its own: one that declares an energy port contradicts its kind."""
     with pytest.raises(ValueError, match=f"{name} declares the energy port Power, but {refusal}"):
-        report([(name, "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [1.0])], classes={name: kind})
+        fft.AfterRunRules.refuse(report([(name, "Power", lt.Units.KWH, EnergyPort(CONSUMPTION, ELECTRICITY), [1.0])], classes={name: kind}))
 
 
 @pytest.mark.base

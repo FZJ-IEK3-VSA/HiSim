@@ -12,8 +12,10 @@ before anything reads the table; ``AR-01``'s faults raise ``NonFiniteResultsErro
 on an exempt component or a meter) require the two rules of the table, and ``AR-03`` (the declared ports are finite)
 requires those two, since a balance that left out what it could not read is not the run's. ``AR-04`` to ``AR-06``
 and the meter rules of ``hisim/setup_rules/meters.py`` require ``AR-03``: a balance read from NaN reports nothing
-useful. ``AR-09`` (an unlinked port) and ``AR-10`` (an undeclared component) only log, as the balance report has
-always listed them without failing the run. The codes follow the rows of the inventory. No rule raises: the balance
+useful. ``AR-09`` (an unlinked port) refuses every run but a demo's (the acceptance of the complete Sankeys); ``AR-10``
+(an undeclared component) only logs, as the balance report has always listed it without failing the run, until the
+heat distribution system without a buffer declares its ports (bead hisim-sankey-enforcement-4f03). The codes follow
+the rows of the inventory. No rule raises: the balance
 records what it cannot read, and the rules report it.
 
 The balance is imported where it is read, by the subject's ``read_energy_balance``, so that collecting the rules
@@ -23,11 +25,13 @@ imports no module of the post-processing.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, List, Sequence
 
 import numpy as np
 import pandas as pd
 
+from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.rule import Fault, RuleStage, SetupRule, SetupRuleViolation
 from hisim.setup_rules.subjects import RunResults
 
@@ -449,9 +453,9 @@ class PortLinked(EnergyBalanceRule):
     A port's peer comes from the wiring; a port no meter and no such component reads, whose carrier has no boundary
     default, is unlinked. An idle port, one that moves nothing in the whole run, needs no peer.
 
-    Why: an unlinked port's energy goes nowhere in the Sankey; the run's balance cannot say where it went. The rule
-    only logs, as the balance report has always listed unlinked ports without failing the run; the acceptance of the
-    complete Sankeys (``roadmap/complete_energy_sankeys_spec.md``) makes it refuse.
+    Why: an unlinked port's energy goes nowhere in the Sankey; the run's balance cannot say where it went, so it is a
+    wiring fault (``roadmap/complete_energy_sankeys_spec.md`` §4.3, the acceptance of PR 6). A demo does not run the
+    rule: it may run an occupancy without a building, whose room heat then has no receiver.
 
     Example of a fault: ``the energy port UTSPConnector.HeatingByResidents (production, room_heat, 412 kWh) has no peer:
     no meter and no component that moves energy reads it, and its carrier has no boundary node``.
@@ -463,9 +467,16 @@ class PortLinked(EnergyBalanceRule):
     CODE = "AR-09"
     NAME = "port-linked"
     STAGE = RuleStage.AFTER_RUN
-    ENFORCED = False
+    ENFORCED = True
     # An idle port is told from one that moves energy by its values, which a NaN makes unreadable.
     REQUIRES = frozenset({"AR-03"})
+    WAIVED_FOR = MappingProxyType(
+        {
+            SetupKind.DEMO: (
+                "a demo may run an occupancy without a building; the room heat it does not place is reported as unlinked"
+            )
+        }
+    )
 
     def check(self, subject: RunResults) -> Sequence[Fault]:
         """Return one fault per declared port that moves energy and has no peer."""

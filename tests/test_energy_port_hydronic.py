@@ -294,7 +294,7 @@ def test_a_loop_tagged_by_half_is_refused_when_grouped(quantities: Tuple[LoopQua
                 cp.ComponentOutput("Tank", quantity.value, lt.LoadTypes.ANY, quantity.unit, component_id=ComponentID("Tank"), fluid_loop=tag)
             )
     missing = [quantity.value for quantity in LoopQuantity if quantity not in quantities]
-    with pytest.raises(hydronics.FluidLoopWiringError, match=f"Tank tags the loop 'space_heating' by half: .* lacks {', '.join(missing)};"):
+    with pytest.raises(FluidLoopError, match=f"Tank tags the loop 'space_heating' by half: .* lacks {', '.join(missing)};"):
         cp.FluidLoopPortSet.group("Tank", channels)
 
 

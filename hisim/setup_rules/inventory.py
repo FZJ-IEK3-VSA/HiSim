@@ -639,36 +639,41 @@ class Inventory:
             note=", waived for demo and plant",
         ),
         RuleRecord(
-            rule_id="energy_ports.loop_tagged_whole", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a port set tags all four loop quantities", lives="hisim/component.py:FluidLoopPortSet.group",
+            rule_id="fluid_loops.loop_tagged_whole", codes=("FL-01",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a port set tags all four loop quantities", lives="hisim/setup_rules/fluid_loops.py:LoopTaggedWhole",
+            note=(
+                "the loops tagged by half are found by hisim/component.py:FluidLoopPortSet.half_tagged, which FluidLoopPortSet.group "
+                "refuses again (FluidLoopError) when port sets are asked for outside a build"
+            ),
         ),
         RuleRecord(
-            rule_id="fluid_loops.far_end_tagged", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a tagged flow is read by, or fed from, a tagged channel", lives="hisim/fluid_loops.py:FluidLoopWalk.untagged_far_end_faults",
+            rule_id="fluid_loops.far_end_tagged", codes=("FL-02",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a tagged flow is read by, or fed from, a tagged channel", lives="hisim/setup_rules/fluid_loops.py:FarEndTagged",
         ),
         RuleRecord(
-            rule_id="fluid_loops.flow_read_once", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="one flow out is read by one flow in (a split needs a valve)", lives="FluidLoopWalk.connection_fault",
+            rule_id="fluid_loops.flow_read_once", codes=("FL-03",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="one flow out is read by one flow in (a split needs a valve)", lives="hisim/setup_rules/fluid_loops.py:FlowReadOnce",
         ),
         RuleRecord(
-            rule_id="fluid_loops.closes", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a wired port set's flow out is read and its flow in fed", lives="FluidLoopWalk.connection_fault",
+            rule_id="fluid_loops.closes", codes=("FL-04",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a wired port set's flow out is read and its flow in fed", lives="hisim/setup_rules/fluid_loops.py:LoopCloses",
         ),
         RuleRecord(
-            rule_id="fluid_loops.wired_whole", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="flows and temperatures are connected together, or neither", lives="FluidLoopWalk.connection_fault",
+            rule_id="fluid_loops.wired_whole", codes=("FL-05",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="flows and temperatures are connected together, or neither", lives="hisim/setup_rules/fluid_loops.py:WiredWhole",
         ),
         RuleRecord(
-            rule_id="fluid_loops.temperature_follows_flow", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a member's temperature in reads the member whose flow it reads", lives="FluidLoopWalk.loop_faults",
+            rule_id="fluid_loops.temperature_follows_flow", codes=("FL-06",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="a member's temperature in reads the member whose flow it reads",
+            lives="hisim/setup_rules/fluid_loops.py:TemperatureFollowsFlow",
         ),
         RuleRecord(
-            rule_id="fluid_loops.one_carrier_one_fluid", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="all members state one carrier and one fluid", lives="FluidLoopWalk.loop_faults",
+            rule_id="fluid_loops.one_carrier_one_fluid", codes=("FL-07",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="all members state one carrier and one fluid", lives="hisim/setup_rules/fluid_loops.py:OneCarrierOneFluid",
         ),
         RuleRecord(
-            rule_id="fluid_loops.one_pump_owner", nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="exactly one member pumps", lives="FluidLoopWalk.loop_faults",
+            rule_id="fluid_loops.one_pump_owner", codes=("FL-08",), nature=RuleNature.LAW, target="fluid_loops", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="exactly one member pumps", lives="hisim/setup_rules/fluid_loops.py:OnePumpOwner",
         ),
         RuleRecord(
             rule_id="results.finite", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run, first", enforcement="E",

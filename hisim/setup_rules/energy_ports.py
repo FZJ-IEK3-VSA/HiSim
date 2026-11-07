@@ -8,15 +8,17 @@ rules report what its resolution found. ``EP-04`` and ``EP-05`` are the two rule
 :class:`~hisim.energy_port.EnergyPort`: one receiver per transfer, and the two ports of one wire pair. ``EP-06`` is
 the domain rule that heat released into the heated zone has a receiver, waived for a demo and a plant.
 
-The faults of these rules alone raise ``EnergyPortWiringError``, the error the build raised for them before they
-moved here. The energy balance's wiring is imported when a rule runs, not with the module, so that collecting the
-rules imports no component module.
+Every rule of the family reads the components' port sets, so each requires ``FL-01`` (a loop tagged whole,
+``hisim/setup_rules/fluid_loops.py``) and is skipped when a component tags a loop by half; the loop-wiring rules
+``EP-01`` and ``EP-02`` follow the loops' wiring and require every fluid-loop rule. The faults of these rules alone
+raise ``EnergyPortWiringError``, the error the build raised for them before they moved here. The energy balance's
+wiring is imported when a rule runs, not with the module, so that collecting the rules imports no component module.
 """
 
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, ClassVar, FrozenSet, List, Optional, Sequence
 
 from hisim import loadtypes as lt
 from hisim.setup_rules.kinds import SetupKind
@@ -45,6 +47,11 @@ class EnergyPortRule(SetupRule[BuiltSystem]):
     """
 
     VIOLATION = EnergyPortWiringError
+
+    #: The fluid-loop rules (``hisim/setup_rules/fluid_loops.py``), which the loop-wiring rules require: a loop end's
+    #: other end and the readers of its flow are found along the loop's wiring, and on a wiring that is no loop they
+    #: would report the fluid-loop rules' faults again, as faults of the loop.
+    LOOP_RULES: ClassVar[FrozenSet[str]] = frozenset({"FL-01", "FL-02", "FL-03", "FL-04", "FL-05", "FL-06", "FL-07", "FL-08"})
 
     @staticmethod
     def wiring_of(system: BuiltSystem) -> Wiring:
@@ -103,8 +110,9 @@ class LoopPairing(EnergyPortRule):
     NAME = "loop-pairing"
     STAGE = RuleStage.BUILD
     ENFORCED = True
-    # An end on an exempt component or a meter is not resolved, so its partner's other end would be the wrong one.
-    REQUIRES = frozenset({"EP-03"})
+    # An end on an exempt component or a meter is not resolved, so its partner's other end would be the wrong one; and
+    # an end's other end is found along the loop's wiring, which the fluid-loop rules guard.
+    REQUIRES = frozenset({"EP-03"}) | EnergyPortRule.LOOP_RULES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per loop end that does not pair with its other end."""
@@ -129,8 +137,9 @@ class OneReaderPerFlow(EnergyPortRule):
     NAME = "one-reader-per-flow"
     STAGE = RuleStage.BUILD
     ENFORCED = True
-    # An end on an exempt component or a meter is not resolved and would be missing from the count.
-    REQUIRES = frozenset({"EP-03"})
+    # An end on an exempt component or a meter is not resolved and would be missing from the count; and the readers of
+    # a flow are found along the loop's wiring, which the fluid-loop rules guard.
+    REQUIRES = frozenset({"EP-03"}) | EnergyPortRule.LOOP_RULES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per mass flow that several loop ends read."""
@@ -157,6 +166,8 @@ class NoLoopOnANode(EnergyPortRule):
     NAME = "no-loop-on-a-node"
     STAGE = RuleStage.BUILD
     ENFORCED = True
+    # The wiring groups every component's port sets, which a loop tagged by half cannot be grouped into.
+    REQUIRES = frozenset({"FL-01"})
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per loop end an exempt component or a meter declares."""
@@ -186,6 +197,8 @@ class ReceiverUnambiguous(EnergyPortRule):
     NAME = "receiver-unambiguous"
     STAGE = RuleStage.BUILD
     ENFORCED = True
+    # The wiring groups every component's port sets, which a loop tagged by half cannot be grouped into.
+    REQUIRES = frozenset({"FL-01"})
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per output port whose receiver the wiring cannot tell among several readers."""
@@ -259,6 +272,8 @@ class InputPortPairs(EnergyPortRule):
     NAME = "input-port-pairs"
     STAGE = RuleStage.BUILD
     ENFORCED = True
+    # The wiring groups every component's port sets, which a loop tagged by half cannot be grouped into.
+    REQUIRES = frozenset({"FL-01"})
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per input port that reads an output port it does not pair with."""
@@ -305,8 +320,9 @@ class RoomHeatNeedsReceiver(EnergyPortRule):
     NAME = "room-heat-needs-receiver"
     STAGE = RuleStage.BUILD
     ENFORCED = True
-    # An input port must pair with the output it reads before it counts as that output's receiver.
-    REQUIRES = frozenset({"EP-05"})
+    # An input port must pair with the output it reads before it counts as that output's receiver; and the wiring
+    # groups every component's port sets, which a loop tagged by half cannot be grouped into.
+    REQUIRES = frozenset({"EP-05", "FL-01"})
     WAIVED_FOR = MappingProxyType(
         {
             SetupKind.DEMO: "a demo may run an occupancy without a building; the heat it does not place is reported as unlinked",

@@ -533,7 +533,7 @@ class DeclaredPorts:
         build them.
 
         Raises:
-            FluidLoopWiringError: If the component tags a loop by half.
+            FluidLoopError: If the component tags a loop by half, which the build refuses first (setup rule ``FL-01``).
         """
         declare = getattr(component, "port_sets_in_the_energy_balance", None) or getattr(component, "port_sets", None)
         return tuple(declare()) if callable(declare) else ()
@@ -1088,7 +1088,7 @@ class Wiring:
             The resolved ends with their peers, the open ends and the faults by rule.
 
         Raises:
-            FluidLoopWiringError: If a component tags a loop by half.
+            FluidLoopError: If a component tags a loop by half, which the build refuses first (setup rule ``FL-01``).
         """
         wired = LoopWiring()
         resolved: List[Tuple[str, FluidLoopPortSet, LoopColumns]] = []

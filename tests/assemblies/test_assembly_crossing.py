@@ -652,7 +652,7 @@ def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_
         message = build_refusal(
             site(Real.WEATHER) + imports(Real.PV, f"battery: {{assembly: test/{name}}}"), tmp_path / name, library
         )
-        assert message.startswith("EF-4E") and fragment in message
+        assert "- EF-4E source-shape: EF-4E at components.battery-Battery: " in message and fragment in message
 
 
 @pytest.mark.assemblies

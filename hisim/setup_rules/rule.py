@@ -17,9 +17,12 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
-from typing import ClassVar, Dict, FrozenSet, Generic, Iterable, List, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union, get_args, get_origin
+from typing import TYPE_CHECKING, ClassVar, Dict, FrozenSet, Generic, Iterable, List, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union, get_args, get_origin
 
 from hisim.setup_rules.kinds import SetupKind
+
+if TYPE_CHECKING:
+    from hisim.setup_rules.registry import StageFindings
 
 
 class RuleStage(str, Enum):
@@ -163,7 +166,10 @@ class SetupRuleViolation(ValueError):
     One violation per stage lists all of them, ordered by code, then by component and port, so that one run shows
     every fault instead of one per run. The faults keep their fields, and ``to_dict`` gives them as plain data for a
     JSON report. Existing error classes of the energy-system format and of the energy balance become subclasses
-    when their checks move into the rules package, so an ``except`` of either kind keeps working.
+    when their checks move into the rules package, so an ``except`` of either kind keeps working. ``findings`` holds
+    what the registry found when it raised the violation, the faults that were only logged among them, so that a
+    tool catching the violation of a hook (``hisim setup-rules check``) reports the stage as if it had run it itself;
+    ``None`` for a violation built by hand.
     """
 
     def __init__(self, stage: RuleStage, kind: SetupKind, faults: Sequence[Fault], skipped: Sequence[Skip]) -> None:
@@ -179,6 +185,7 @@ class SetupRuleViolation(ValueError):
         self.kind = kind
         self.faults: Tuple[Fault, ...] = tuple(faults)
         self.skipped: Tuple[Skip, ...] = tuple(skipped)
+        self.findings: Optional[StageFindings] = None
         super().__init__(self.describe(stage, kind, self.faults, self.skipped))
 
     @staticmethod

@@ -106,6 +106,7 @@ for code that prefers the fully-qualified path.
 from hisim.energy_system.errors import (
     EnergySystemBindingError,
     EnergySystemCatalogueError,
+    EnergySystemClassBindingError,
     EnergySystemError,
     EnergySystemErrorId,
     EnergySystemFormatError,
@@ -156,6 +157,7 @@ __all__ = [
     "DroppedInputItem",
     "EnergySystemBindingError",
     "EnergySystemCatalogueError",
+    "EnergySystemClassBindingError",
     "EnergySystemEmitter",
     "EnergySystemError",
     "EnergySystemErrorId",

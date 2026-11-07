@@ -3,7 +3,9 @@
 One frozen object per hook. ``LoadedDocument`` is the energy-system file before any class is imported: as the reader
 built it, or, in a run, with its imports and groups expanded (stage ``LOAD``).
 ``BuiltDocument`` is the expanded file with its constructed, wired components, which the declarative build hands
-over (stage ``BUILD``, declarative mode only). ``AddedSystem`` is the simulator's components as they were added, which
+over (stage ``BUILD``, declarative mode only); before it, ``BoundDocument`` is the expanded file with its entries bound to
+their classes and ``ConfiguredDocument`` the file with its configurations built and sized, which the binding and the
+configuring of a declarative build hand over (stage ``BUILD``). ``AddedSystem`` is the simulator's components as they were added, which
 the run hands over first, before it prepares anything (stage ``BUILD``, both modes). ``BuiltSystem`` is the
 simulator's components with their inputs connected, before the first step (stage ``BUILD``, both modes).
 ``RunResults`` is the result table and the outputs after the run, with the energy balance read from them when a rule
@@ -25,6 +27,8 @@ if TYPE_CHECKING:
 
     from hisim.component import Component, ComponentOutput
     from hisim.energy_system.assemblies.record import SourceMap
+    from hisim.energy_system.bindings import ClassBindings
+    from hisim.energy_system.configure import ConfigurationOutcome
     from hisim.energy_system.model import EnergySystemFile
     from hisim.energy_system.path_resolver import PathResolver
     from hisim.energy_system.wiring import WiredSystem
@@ -70,6 +74,45 @@ class BuiltDocument(RuleSubject):
     model: EnergySystemFile
     wired: WiredSystem
     path_resolver: Optional[PathResolver] = None
+    file: Optional[str] = None
+    source_map: Optional[SourceMap] = None
+
+
+@dataclass(frozen=True)
+class BoundDocument(RuleSubject):
+    """An energy-system file after its imports and groups were expanded, its entries bound to the classes they name.
+
+    The binding of a declarative build hands it over before any configuration is built. ``model`` is the expanded
+    file; ``bindings`` holds, per entry whose class resolved, the component class, the configuration class, its
+    description and the preset or constructor the entry names when the class declares it, and the refusals of the
+    entries whose class did not resolve (``ClassBindings.refusals``); ``file`` is the file's path, ``None`` for a
+    document read from text or a model built in Python; ``source_map`` says which import produced a component, for a
+    message to name it (``None`` for a file without imports).
+    """
+
+    STAGE: ClassVar[RuleStage] = RuleStage.BUILD
+
+    model: EnergySystemFile
+    bindings: ClassBindings
+    file: Optional[str] = None
+    source_map: Optional[SourceMap] = None
+
+
+@dataclass(frozen=True)
+class ConfiguredDocument(RuleSubject):
+    """An energy-system file with its configurations built and its sizing resolved, before any component exists.
+
+    The configuring of a declarative build hands it over once every entry's configuration was built and the sizing
+    kernel ran. ``model`` is the expanded file; ``outcome`` holds the configurations, the refusals of the entries
+    whose configuration could not be built (a value that does not decode, a path variable nobody registered) and
+    what the sizing kernel did: its report, or the failure it raised, or nothing when an entry was refused and the
+    sizing did not run. ``file`` and ``source_map`` are those of :class:`BoundDocument`.
+    """
+
+    STAGE: ClassVar[RuleStage] = RuleStage.BUILD
+
+    model: EnergySystemFile
+    outcome: ConfigurationOutcome
     file: Optional[str] = None
     source_map: Optional[SourceMap] = None
 

@@ -158,3 +158,18 @@ def test_a_rule_of_another_error_that_finds_nothing_does_not_change_the_error() 
 
     with pytest.raises(FamilyViolation):
         registry.run(RuleStage.BUILD, built_system(), SetupKind.RESIDENTIAL)
+
+
+def test_a_violation_holds_the_findings_it_was_raised_from() -> None:
+    """Catches a tool that catches the violation of a hook losing the logged faults or the subject of the stage."""
+    registry = SetupRuleRegistry(
+        [SampleRules.rule("EP-01", "refusing", findings=[Finding("a")]), SampleRules.rule("EP-02", "logging", enforced=False, findings=[Finding("b")])]
+    )
+
+    with pytest.raises(SetupRuleViolation) as refusal:
+        registry.run(RuleStage.BUILD, built_system(), SetupKind.RESIDENTIAL)
+
+    findings = refusal.value.findings
+    assert findings is not None and findings.subject == "BuiltSystem"
+    assert [fault.code for fault in findings.faults] == ["EP-01"] and [fault.code for fault in findings.logged] == ["EP-02"]
+    assert SetupRuleViolation(RuleStage.BUILD, SetupKind.DEMO, [], []).findings is None

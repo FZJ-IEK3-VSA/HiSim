@@ -134,6 +134,8 @@ def test_check_builds_a_clean_file_and_runs_every_build_subject() -> None:
     assert code == ExitCodes.OK
     assert out.splitlines() == [
         "load rules on the LoadedDocument (demo): no fault",
+        "build rules on the BoundDocument (demo): no fault",
+        "build rules on the ConfiguredDocument (demo): no fault",
         "build rules on the BuiltDocument (demo): no fault",
         "build rules on the AddedSystem (demo): no fault",
         "build rules on the BuiltSystem (demo): no fault",

@@ -13,9 +13,11 @@ central table of waivers. ``hisim setup-rules waivers`` prints them all, read fr
 
 The registry (``SetupRuleRegistry``, ``registry.py``) collects every rule of the package's modules, one module per
 rule family. Four hooks call it, once each: the loader on the loaded document, the declarative build on the built
-document, the simulator before the first step on the built system, and the post-processing on the results. The
-registry refuses a setup that declares no kind, runs every applicable rule of the stage, logs the faults of the
-rules that only log, and raises one ``SetupRuleViolation`` with every fault of the enforced rules, in code order,
+document, the simulator before the first step on the built system, and the post-processing on the results. On its
+way to the built document, the declarative build also hands its file, bound to its classes and then configured and
+sized, to the binding and sizing rules (``validate_classes``, ``configure_energy_system``). The registry refuses a
+setup that declares no kind, runs every applicable rule of the stage, logs the faults of the rules that only log,
+and raises one ``SetupRuleViolation`` with every fault of the enforced rules, in code order,
 and every rule it skipped. ``inventory.py`` lists every check HiSim applies, those that live here and those that
 stay elsewhere. The package imports no component and writes no file.
 """

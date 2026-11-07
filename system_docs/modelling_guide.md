@@ -15,7 +15,7 @@ controller (#941).
   circuit carries a mass flow `m` (kg/s), a supply temperature and a return temperature (°C); its heat flow is
   `P = m c (T_sup - T_ret)` in W (`hisim.hydronics.circuit_power_w`), and its heat over a step of `dt` seconds is
   `Q = m c (T_sup - T_ret) dt`, that heat flow times the step
-  (`hisim.postprocessing.energy_balance.ports.CircuitColumns.heat_in_kilowatt_hours_per_step`, in kWh), with
+  (`hisim.postprocessing.energy_balance.ports.LoopColumns.heat_in_kilowatt_hours_per_step`, in kWh), with
   `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K` (a loop's `c` is its fluid's, `hisim.energy_port.LoopFluid`).
   Neither end books a heat of its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two

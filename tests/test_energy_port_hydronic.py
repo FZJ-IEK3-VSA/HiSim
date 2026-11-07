@@ -23,7 +23,7 @@ from hisim import loadtypes as lt
 from hisim.config import ComponentID
 from hisim.energy_port import EnergyPort, FluidLoop, FluidLoopChannel, FluidLoopError, LoopFluid, LoopQuantity
 from hisim.postprocessing.energy_balance import (
-    CircuitColumns,
+    LoopColumns,
     DeclaredPorts,
     EnergyBalanceError,
     EnergyBalanceReport,
@@ -61,7 +61,7 @@ def test_the_heat_is_the_circuit_power_times_the_step_to_the_last_bit() -> None:
     supplies = np.array([35.0, 7.0, 55.0, 40.1, 60.0])
     returns = np.array([30.04, 12.3, 45.0, 40.1, 50.0])
     for seconds_per_timestep in (1.0, 60.0, 900.0, 3600.0):
-        heat = CircuitColumns.heat_in_kilowatt_hours_per_step(
+        heat = LoopColumns.heat_in_kilowatt_hours_per_step(
             mass_flow_in_kg_per_second=flows,
             supply_temperature_in_celsius=supplies,
             return_temperature_in_celsius=returns,
@@ -79,7 +79,7 @@ def test_the_heat_is_the_circuit_power_times_the_step_to_the_last_bit() -> None:
 
 def test_the_heat_takes_its_fluid_s_specific_heat() -> None:
     """A brine loop carries less heat per kelvin than a water loop of the same flow; the fluid's ``c`` decides."""
-    heat = CircuitColumns.heat_in_kilowatt_hours_per_step(
+    heat = LoopColumns.heat_in_kilowatt_hours_per_step(
         mass_flow_in_kg_per_second=np.array([0.5]),
         supply_temperature_in_celsius=np.array([3.0]),
         return_temperature_in_celsius=np.array([0.0]),
@@ -102,7 +102,7 @@ def test_the_heat_refuses_what_the_library_refuses(
 ) -> None:
     """A balance that booked a negative flow or an empty step would hide the caller's error."""
     with pytest.raises(error, match=match):
-        CircuitColumns.heat_in_kilowatt_hours_per_step(
+        LoopColumns.heat_in_kilowatt_hours_per_step(
             mass_flow_in_kg_per_second=np.array(flows),
             supply_temperature_in_celsius=np.array([60.0, 60.0]),
             return_temperature_in_celsius=np.array([50.0, 50.0]),
@@ -315,11 +315,11 @@ class End:
         return cp.FluidLoopPortSet(component_name, self.loop, channels)
 
 
-class CircuitRig:
+class LoopRig:
 
-    """Hand-built runs of one boiler charging one tank through one circuit, and variations that break a rule.
+    """Hand-built runs of one boiler charging one tank through one loop, and variations that break a rule.
 
-    The boiler owns the circuit's flow and supply (``Flow``, ``Supply``) and reads the tank's return (input
+    The boiler owns the loop's flow and supply (``Flow``, ``Supply``) and reads the tank's return (input
     ``Return``); the tank reads the flow and the supply (inputs ``Flow`` and ``Supply``) and publishes the return.
     0.1 kg/s from 60 °C back at 50 °C over 900 s carry 1.045 kWh, which the boiler takes in as 4180 W of ambient
     heat (an unmetered fuel would fail a run without undeclared components) and the tank loses as 4180 W of standby
@@ -332,7 +332,7 @@ class CircuitRig:
     SECONDS_PER_TIMESTEP: int = 900
     #: What the boiler takes in.
     AMBIENT = lt.EnergyBalanceCarrier.AMBIENT_HEAT
-    #: The heat the circuit carries in one step, in kWh.
+    #: The heat the loop carries in one step, in kWh.
     HEAT_IN_KILOWATT_HOUR: float = 0.1 * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 10.0 * 900 / 3.6e6
     #: The boiler's end: it supplies the loop, publishes the flow and the supply and reads the return.
     SUPPLY_END = End(
@@ -355,7 +355,7 @@ class CircuitRig:
     @classmethod
     def report(
         cls,
-        columns: Sequence["CircuitRig.Column"],
+        columns: Sequence["LoopRig.Column"],
         inputs: Dict[str, List[SimpleNamespace]],
         ends: Dict[str, List[End]],
     ) -> EnergyBalanceReport:
@@ -370,7 +370,7 @@ class CircuitRig:
         return EnergyBalanceReport(table, outputs, wrapped, cls.SECONDS_PER_TIMESTEP)
 
     @staticmethod
-    def outputs_of(columns: Sequence["CircuitRig.Column"]) -> List[cp.ComponentOutput]:
+    def outputs_of(columns: Sequence["LoopRig.Column"]) -> List[cp.ComponentOutput]:
         """The outputs of the columns, each of its component, unit and port."""
         return [
             cp.ComponentOutput(
@@ -385,7 +385,7 @@ class CircuitRig:
         inputs: Dict[str, List[SimpleNamespace]],
         ends: Dict[str, List[End]],
     ) -> List[Any]:
-        """One stand-in per component of ``outputs``, in their order, carrying its wiring, outputs and circuit ends."""
+        """One stand-in per component of ``outputs``, in their order, carrying its wiring, outputs and loop ends."""
         names: List[str] = []
         for output in outputs:
             if output.component_name not in names:
@@ -401,8 +401,8 @@ class CircuitRig:
         ]
 
     @classmethod
-    def boiler_columns(cls, flow_in_kg_per_second: float = 0.1) -> List["CircuitRig.Column"]:
-        """The boiler's flow, supply and heat taken in; the heat is what the circuit carries at 0.1 kg/s."""
+    def boiler_columns(cls, flow_in_kg_per_second: float = 0.1) -> List["LoopRig.Column"]:
+        """The boiler's flow, supply and heat taken in; the heat is what the loop carries at 0.1 kg/s."""
         return [
             ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, flow_in_kg_per_second),
             ("Boiler", "Supply", lt.Units.CELSIUS, None, 60.0),
@@ -410,8 +410,8 @@ class CircuitRig:
         ]
 
     @classmethod
-    def tank_columns(cls, name: str = "Tank") -> List["CircuitRig.Column"]:
-        """A tank's return and its standby loss, which is what the circuit brings."""
+    def tank_columns(cls, name: str = "Tank") -> List["LoopRig.Column"]:
+        """A tank's return and its standby loss, which is what the loop brings."""
         return [
             (name, "Return", lt.Units.CELSIUS, None, 50.0),
             (name, "Loss", lt.Units.WATT, EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER), 4180.0),
@@ -424,7 +424,7 @@ class CircuitRig:
 
     @classmethod
     def paired(cls) -> EnergyBalanceReport:
-        """The boiler and the tank, both declaring their ends of the circuit."""
+        """The boiler and the tank, both declaring their ends of the loop."""
         return cls.report(
             cls.boiler_columns() + cls.tank_columns(),
             {"Boiler": [cls.wired("Return", "Tank", "Return")], "Tank": cls.tank_inputs()},
@@ -432,34 +432,34 @@ class CircuitRig:
         )
 
 
-def test_both_ends_of_a_circuit_share_one_heat_and_pair_through_the_wiring() -> None:
+def test_both_ends_of_a_loop_share_one_heat_and_pair_through_the_wiring() -> None:
     """The reader of the flow is the owner's other end and the owner the reader's; one heat, one closing link.
 
     Fails if the two ends derived their heat apart, named no peer, or booked a link that does not close.
     """
-    report = CircuitRig.paired()
+    report = LoopRig.paired()
     (supply,) = report.declared.by_component["Boiler"][1:]
-    (receiver,) = [series for series in report.declared.by_component["Tank"] if series.circuit is not None]
+    (receiver,) = [series for series in report.declared.by_component["Tank"] if series.loop_columns is not None]
     assert supply.kilowatt_hours is receiver.kilowatt_hours
-    assert supply.annual_kilowatt_hours == pytest.approx(CircuitRig.HEAT_IN_KILOWATT_HOUR, rel=1e-12)
+    assert supply.annual_kilowatt_hours == pytest.approx(LoopRig.HEAT_IN_KILOWATT_HOUR, rel=1e-12)
     assert (supply.peer.kind, supply.peer.name) == (PeerKind.COMPONENT, "Tank")
     assert (receiver.peer.kind, receiver.peer.name) == (PeerKind.COMPONENT, "Boiler")
-    assert supply.circuit == receiver.circuit and supply.circuit is not None
-    assert supply.circuit.as_dict() == {
+    assert supply.loop_columns == receiver.loop_columns and supply.loop_columns is not None
+    assert supply.loop_columns.as_dict() == {
         "mass_flow": "Boiler.Flow",
         "supply_temperature": "Boiler.Supply",
         "return_temperature": "Tank.Return",
     }
-    assert not report.declared.circuit_faults and not report.fails
+    assert not report.declared.loop_faults and not report.fails
     (link,) = report.links
     assert (link.sender, link.receiver, link.closes) == ("Boiler", "Tank", True)
     report.conclude()
     entry = report.report()
     tank_ports = [port for item in entry["components"] if item["component"] == "Tank" for port in item["ports"]]
-    assert {"output": "circuit Boiler.Flow", "unit": "kWh"}.items() <= tank_ports[-1].items()
-    # the Sankey draws the circuit once, at the receiver, from the boiler
+    assert {"output": "loop Boiler.Flow", "unit": "kWh"}.items() <= tank_ports[-1].items()
+    # the Sankey draws the loop once, at the receiver, from the boiler
     links = SankeyBuilder(report.declared, report.balances, (), report.links).build()
-    assert [(link.source, link.target) for link in links if link.label.endswith("circuit Boiler.Flow")] == [
+    assert [(link.source, link.target) for link in links if link.label.endswith("loop Boiler.Flow")] == [
         ("Boiler", "Tank")
     ]
 
@@ -468,44 +468,44 @@ def test_a_step_in_which_the_supplier_cools_the_water_is_booked_as_cooling_towar
     """§3.4: where the supplier's heat is negative, ``COOLING`` goes from the other member to the supplier.
 
     The boiler sends 50 °C water and gets 60 °C back: it removes 1.045 kWh from the water, which it gives to the
-    ambient, and the tank puts that heat in (a negative loss). The circuit is one ``COOLING`` link from the tank to the
+    ambient, and the tank puts that heat in (a negative loss). The loop is one ``COOLING`` link from the tank to the
     boiler, and the heating face carries nothing. Stage 1a refuses no cooling step on a loop whose members do not all
     allow cooling (owner, 2026-10-27: the heating-only check comes with stage 2), so the run closes.
     """
     columns = [
         ("Boiler", "Flow", lt.Units.KG_PER_SEC, None, 0.1),
         ("Boiler", "Supply", lt.Units.CELSIUS, None, 50.0),
-        ("Boiler", "Heat", lt.Units.WATT, EnergyPort(lt.EnergyRole.PRODUCTION, CircuitRig.AMBIENT), 4180.0),
+        ("Boiler", "Heat", lt.Units.WATT, EnergyPort(lt.EnergyRole.PRODUCTION, LoopRig.AMBIENT), 4180.0),
         ("Tank", "Return", lt.Units.CELSIUS, None, 60.0),
         ("Tank", "Loss", lt.Units.WATT, EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER), -4180.0),
     ]
-    report = CircuitRig.report(
+    report = LoopRig.report(
         columns,
-        {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()},
-        {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END]},
+        {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
+        {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END]},
     )
-    circuit_ports = {
+    loop_ports = {
         (series.component, series.port.role, series.port.carrier): series.annual_kilowatt_hours
         for series in report.declared.all_series()
-        if series.circuit is not None
+        if series.loop_columns is not None
     }
     cooling = lt.EnergyBalanceCarrier.COOLING
-    assert circuit_ports == pytest.approx(
+    assert loop_ports == pytest.approx(
         {
             ("Boiler", lt.EnergyRole.PRODUCTION, Loops.CARRIER): 0.0,
-            ("Boiler", lt.EnergyRole.CONSUMPTION, cooling): CircuitRig.HEAT_IN_KILOWATT_HOUR,
+            ("Boiler", lt.EnergyRole.CONSUMPTION, cooling): LoopRig.HEAT_IN_KILOWATT_HOUR,
             ("Tank", lt.EnergyRole.CONSUMPTION, Loops.CARRIER): 0.0,
-            ("Tank", lt.EnergyRole.PRODUCTION, cooling): CircuitRig.HEAT_IN_KILOWATT_HOUR,
+            ("Tank", lt.EnergyRole.PRODUCTION, cooling): LoopRig.HEAT_IN_KILOWATT_HOUR,
         },
         rel=1e-12,
     )
     links = {(link.sender, link.receiver, link.carrier): link for link in report.links}
     assert links[("Tank", "Boiler", cooling.value)].closes
-    assert not report.declared.circuit_faults and not report.fails
+    assert not report.declared.loop_faults and not report.fails
     report.conclude()
 
 
-def test_the_supplier_s_sign_splits_a_circuit_into_its_two_directions() -> None:
+def test_the_supplier_s_sign_splits_a_loop_into_its_two_directions() -> None:
     """Each end books heating where the heat is positive and cooling where it is negative; the two sum to the heat.
 
     A heating-only run keeps the one series it always had, so its report does not change.
@@ -527,45 +527,45 @@ def test_the_supplier_s_sign_splits_a_circuit_into_its_two_directions() -> None:
 
 def test_one_flow_read_by_two_ends_fails_the_run() -> None:
     """One reader: a second tank declaring the boiler's flow would book its heat twice; the run fails naming both."""
-    columns = CircuitRig.boiler_columns() + CircuitRig.tank_columns() + CircuitRig.tank_columns("Twin")
+    columns = LoopRig.boiler_columns() + LoopRig.tank_columns() + LoopRig.tank_columns("Twin")
     inputs = {
-        "Boiler": [CircuitRig.wired("Return", "Tank", "Return")],
-        "Tank": CircuitRig.tank_inputs(),
-        "Twin": CircuitRig.tank_inputs(),
+        "Boiler": [LoopRig.wired("Return", "Tank", "Return")],
+        "Tank": LoopRig.tank_inputs(),
+        "Twin": LoopRig.tank_inputs(),
     }
-    ends = {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END], "Twin": [CircuitRig.RECEIVING_END]}
-    report = CircuitRig.report(columns, inputs, ends)
-    faults = report.declared.circuit_faults
+    ends = {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END], "Twin": [LoopRig.RECEIVING_END]}
+    report = LoopRig.report(columns, inputs, ends)
+    faults = report.declared.loop_faults
     assert any("Boiler.Flow is read by 2 components" in fault and "Twin" in fault for fault in faults)
     with pytest.raises(EnergyBalanceError, match="one flow delivers its heat once"):
         report.conclude()
     # the wiring alone shows it: the run is refused before it simulates
-    components = CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends)
+    components = LoopRig.stand_ins(LoopRig.outputs_of(columns), inputs, ends)
     with pytest.raises(EnergyPortWiringError, match="Boiler.Flow is read by 2 components"):
         fft.EnergyPortRules.refuse_a_broken_wiring(components)
 
 
-def test_an_other_end_that_declares_ports_but_not_the_circuit_fails_the_run() -> None:
-    """Both ends or neither: a tank that declares its loss but not its end of the boiler's circuit is a fault."""
-    report = CircuitRig.report(
-        CircuitRig.boiler_columns() + CircuitRig.tank_columns(),
-        {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()},
-        {"Boiler": [CircuitRig.SUPPLY_END]},
+def test_an_other_end_that_declares_ports_but_not_the_loop_fails_the_run() -> None:
+    """Both ends or neither: a tank that declares its loss but not its end of the boiler's loop is a fault."""
+    report = LoopRig.report(
+        LoopRig.boiler_columns() + LoopRig.tank_columns(),
+        {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
+        {"Boiler": [LoopRig.SUPPLY_END]},
     )
-    assert any("its other end, Tank, declares ports and not this circuit" in f for f in report.declared.circuit_faults)
-    with pytest.raises(EnergyBalanceError, match="circuit: Boiler tags its end"):
+    assert any("its other end, Tank, declares ports and not this loop" in f for f in report.declared.loop_faults)
+    with pytest.raises(EnergyBalanceError, match="loop: Boiler tags its end"):
         report.conclude()
 
 
 def test_an_other_end_that_declares_no_ports_is_drawn_as_undeclared() -> None:
-    """A tank that declares nothing is a coverage gap, not a fault: the circuit goes to "undeclared: Tank"."""
-    columns = CircuitRig.boiler_columns() + [("Tank", "Return", lt.Units.CELSIUS, None, 50.0)]
-    report = CircuitRig.report(
+    """A tank that declares nothing is a coverage gap, not a fault: the loop goes to "undeclared: Tank"."""
+    columns = LoopRig.boiler_columns() + [("Tank", "Return", lt.Units.CELSIUS, None, 50.0)]
+    report = LoopRig.report(
         columns,
-        {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()},
-        {"Boiler": [CircuitRig.SUPPLY_END]},
+        {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
+        {"Boiler": [LoopRig.SUPPLY_END]},
     )
-    assert not report.declared.circuit_faults and report.declared.undeclared == ["Tank"]
+    assert not report.declared.loop_faults and report.declared.undeclared == ["Tank"]
     report.conclude()
     links = SankeyBuilder(report.declared, report.balances, (), report.links).build()
     assert ("Boiler", "undeclared: Tank") in {(link.source, link.target) for link in links}
@@ -575,38 +575,38 @@ def test_an_other_end_that_declares_no_ports_is_drawn_as_undeclared() -> None:
 def test_a_loop_with_no_or_two_suppliers_is_refused_at_build(boiler_supplies: bool, tank_supplies: bool, how_many: str) -> None:
     """Rule 4 of §3.3: exactly one member supplies a loop; two receivers or two suppliers would book its heat twice."""
     ends = {
-        "Boiler": [End(Loops.loop(supplies=boiler_supplies, pumps=True), CircuitRig.SUPPLY_END.names)],
-        "Tank": [End(Loops.loop(supplies=tank_supplies, pumps=False), CircuitRig.RECEIVING_END.names)],
+        "Boiler": [End(Loops.loop(supplies=boiler_supplies, pumps=True), LoopRig.SUPPLY_END.names)],
+        "Tank": [End(Loops.loop(supplies=tank_supplies, pumps=False), LoopRig.RECEIVING_END.names)],
     }
-    columns = CircuitRig.boiler_columns() + CircuitRig.tank_columns()
-    inputs = {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}
-    report = CircuitRig.report(columns, inputs, ends)
-    assert any(f"has {how_many} supplier" in fault for fault in report.declared.circuit_faults)
+    columns = LoopRig.boiler_columns() + LoopRig.tank_columns()
+    inputs = {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()}
+    report = LoopRig.report(columns, inputs, ends)
+    assert any(f"has {how_many} supplier" in fault for fault in report.declared.loop_faults)
     with pytest.raises(EnergyPortWiringError, match=f"Boiler.space_heating and Tank.space_heating has {how_many} supplier"):
-        fft.EnergyPortRules.refuse_a_broken_wiring(CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends))
+        fft.EnergyPortRules.refuse_a_broken_wiring(LoopRig.stand_ins(LoopRig.outputs_of(columns), inputs, ends))
 
 
 def test_an_end_whose_flow_input_is_not_connected_is_idle() -> None:
-    """A tank's circuit to a second generator the house does not have moves no water: it is left out, no fault."""
-    report = CircuitRig.report(
-        CircuitRig.tank_columns(),
-        {"Tank": [CircuitRig.wired("Flow", None, None), CircuitRig.wired("Supply", None, None)]},
-        {"Tank": [CircuitRig.RECEIVING_END]},
+    """A tank's loop to a second generator the house does not have moves no water: it is left out, no fault."""
+    report = LoopRig.report(
+        LoopRig.tank_columns(),
+        {"Tank": [LoopRig.wired("Flow", None, None), LoopRig.wired("Supply", None, None)]},
+        {"Tank": [LoopRig.RECEIVING_END]},
     )
-    assert not report.declared.circuit_faults
+    assert not report.declared.loop_faults
     assert [series.port_name for series in report.declared.by_component["Tank"]] == ["Loss"]
 
 
 @pytest.mark.parametrize(("flow_in_kg_per_second", "faults"), [(0.1, 1), (0.0, 0)])
 def test_an_end_that_pumps_water_it_cannot_follow_fails_the_run(flow_in_kg_per_second: float, faults: int) -> None:
-    """A boiler pumping into a circuit whose return it cannot read loses that heat from view; idle, it is left out."""
-    columns = CircuitRig.boiler_columns(flow_in_kg_per_second)
-    report = CircuitRig.report(
-        columns, {"Boiler": [CircuitRig.wired("Return", None, None)]}, {"Boiler": [CircuitRig.SUPPLY_END]}
+    """A boiler pumping into a loop whose return it cannot read loses that heat from view; idle, it is left out."""
+    columns = LoopRig.boiler_columns(flow_in_kg_per_second)
+    report = LoopRig.report(
+        columns, {"Boiler": [LoopRig.wired("Return", None, None)]}, {"Boiler": [LoopRig.SUPPLY_END]}
     )
-    assert len(report.declared.circuit_faults) == faults
+    assert len(report.declared.loop_faults) == faults
     if faults:
-        assert "temperature_in input Return is not connected" in report.declared.circuit_faults[0]
+        assert "temperature_in input Return is not connected" in report.declared.loop_faults[0]
 
 
 def heat_output(component: str, field: str, port: Optional[EnergyPort]) -> cp.ComponentOutput:
@@ -643,10 +643,10 @@ def test_an_output_two_declared_components_read_needs_exactly_one_tagged_reader(
         heat_output("Second", "Loss", EnergyPort(lt.EnergyRole.LOSS, Loops.CARRIER)),
     ]
     inputs = {
-        name: [CircuitRig.wired("HeatIn", "Source", "Heat", RECEIVED_HEAT if name in tagged else None)]
+        name: [LoopRig.wired("HeatIn", "Source", "Heat", RECEIVED_HEAT if name in tagged else None)]
         for name in ("First", "Second")
     }
-    components = CircuitRig.stand_ins(outputs, inputs, {})
+    components = LoopRig.stand_ins(outputs, inputs, {})
     if refusal is None:
         fft.EnergyPortRules.refuse_a_broken_wiring(components)
         return

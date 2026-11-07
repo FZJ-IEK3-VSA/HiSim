@@ -1,7 +1,8 @@
 # Spec: emitters and room temperature — the emitter has a size, the heating curve follows from it, the room gets what the emitter can give, and a generator that cannot reach the emitters' need runs anyway and is flagged
 
 Status: decided (owner, 2026-11-03), amended 2026-11-07 (D3 and D5: the 1.1 margin sits on the new emitters' size as
-well as on the curve), nothing is built. Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
+well as on the curve), nothing is built; blocked (owner, 2026-11-07) until the step-length dependence of case B is
+understood (§7, Appendix A.7). Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
 hisim-renovisor-translator-epc (hisim-renovisor-base-emitters-dwm9, hisim-renovisor-translator-epc.1),
 hisim-component-physics-4g9 (hisim-component-physics-4g9.37, hisim-airing-books-no-heat-uws3,
 hisim-ems-raise-within-step-er89), hisim-heat-pump-model-rework-fpqz (hisim-heat-pump-outlet-limit-2vq7,
@@ -29,8 +30,9 @@ Today the emitters have no size and the heating curve ignores how big they are.
 - **RenoVisor's results are wrong for packages that keep their radiators.** A package that renovates the envelope
   and keeps the old radiators runs them on a 70 °C curve. Measured (Appendix A, heat pump, full year at 900 s): old
   radiators sized for the unrenovated house, with a curve derived from their size, give a SCOP of 3.51–4.40; today's
-  70 °C curve gives 2.19–2.22. Today's results overstate the heat pump's electricity of such packages by 40–55 %. By
-  AGENTS.md that is P1: live results are wrong.
+  70 °C curve gives 2.19–2.22. The derived curve needs 40–55 % less electricity than today's curve: today's results
+  overstate the heat pump's electricity of such packages by 68–120 % (today's electricity ÷ the derived curve's =
+  1.68–2.20, Appendix A.5). By AGENTS.md that is P1: live results are wrong.
 
 ## 2. Decisions
 
@@ -99,6 +101,9 @@ radiators to 57.9 °C on the design day, above the heat pump's rod-only switch o
 installer practice, where the margin sits on the emitter size; the question of 2026-11-03 had mislabelled the curve
 margin as "the usual installer safety factor". Consequence: a new emitter runs at its design point on the design day,
 not 1.4–3.8 K above it; the owner's three variants and their reasons are in §8.
+
+*Correction (2026-11-07):* the boiler settles 0.5–3.4 K under the curve in Appendix A.5 (02.003 gas on r70o −0.5 K;
+02.002 gas on r55 and on r70 −3.4 K), not 1.5–3 K as written above; the reasons for the margin stand.
 
 **D6 — a generator that cannot reach the emitters' need runs anyway, and the result flags it** (owner, 2026-11-03).
 RenoVisor compares packages, so a package with a heat pump on old 70/55 °C radiators is a result, not a refusal.
@@ -263,9 +268,10 @@ either).
 | new low-temperature radiator 55/45 °C, 1.1 L (amended 2026-11-07) | L | 0.91 | 52.3 °C | 55.0 °C |
 | new floor heating 35/28 °C, 1.1 L (amended 2026-11-07) | L | 0.91 | 33.8 °C | 35.0 °C |
 
-The first row is the owner's example: radiators sized for 16 kW, house now 6 kW, about 43.5 °C on the design day
-without the margin; at that supply and full flow the law gives 6,262 W for a 6,000 W need, the 4 % reserve of D5
-(Appendix A.4).
+The first row is the owner's example with the table's inputs, 16,270 W radiators and a 6,030 W house: 43.3 °C on the
+design day without the margin, and at that supply and full flow the law gives 6,296 W for the 6,030 W need.
+`scripts/law_check.py` runs the example rounded to 16 kW radiators and a 6 kW house: 43.51 °C and 6,262 W for a 6,000 W
+need (Appendix A.4). Either pair of inputs gives the 4 % reserve of D5.
 
 *Amendment (owner, 2026-11-07):* the three "L" rows with 73.8, 57.9 and 36.4 °C describe an emitter whose Q_n is written
 as exactly L; since the amendment of D3 the default sizing gives 1.1 L, the last three rows, and a new emitter reaches
@@ -360,7 +366,7 @@ Measured settings (Appendix A.9, A.10, A.11; 646 runs, 9 TABULA houses):
 | integral action | T_i = 1 h, updated once per step from the previous step's converged error, anti-windup (no integration into a saturated valve) | the band's position stops mattering; PI with heat into the air node lands within +0.8 % of ideal delivery (pvpiair: −0.1 to +0.8 %) |
 | step within the iteration | a bracketed secant step on the residual P(u) − u, the bracket starting at [0, 1] | valve-moving forced steps → 0 |
 | hold rule | the opening is held once a pass moves it by less than 1e-4 | outputs repeat exactly, the step converges |
-| runtime | ×1.04–1.11 against ideal delivery | PI, year at 900 s ×1.04, January at 60 s ×1.11 |
+| runtime | ×1.04–1.12 against ideal delivery | PI, year at 900 s ×1.04, January at 60 s ×1.12 (corrected 2026-11-07 from ×1.11; recomputed mean 1.117) |
 
 Prerequisites: hisim-airing-books-no-heat-uws3 (airing resets the air temperature without booking heat; a thermostat
 reading it heats for nothing, up to 15 % of the yearly heat) and hisim-ems-raise-within-step-er89 (the raise switches
@@ -425,7 +431,11 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 - **Energy balance**: the post-run check closes every step at the circuit's ports.
 - **Step length**: the same week at 60, 900 and 3,600 s on `gas_boiler_household` and
   `household_heatpump_building_sizer`: delivered heat and fuel or electricity within 1 % of the 60 s run
-  (`modelling_guide.md` §3).
+  (`modelling_guide.md` §3). Case B (the heat pump on 70/55 °C radiators sized to the unrenovated house, Appendix A.7)
+  is outside that tolerance today: the rod's share of the week's electricity is about 40 % at 60 s and about 60 % at
+  900 s, and the reached supply lies below the curve at 60 s and above it at 900 s. The owner decided (2026-11-07) that
+  this spec is blocked until the step-length dependence of case B is understood; an investigation is running.
+  Investigation: see bead ….
 - **Goldens**: every hydronic twin through the golden gate after the re-bless.
 - **RenoVisor**: `tests/renovisor/` base tests, the `renovisor_probes` job, `verify --out DIR` exits 0, the flag
   probe of §6.
@@ -436,10 +446,13 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
   the standard's own law (pvexp: +7.4 to +14.4 % heat with the P-valve, Appendix A.8).
 - A P or PI room thermostat now: +1.5 to +21 % yearly heat until the airing (uws3) and the raise (er89) are fixed
   (Appendix A.8, `pv`, `pvpi`); later, D8.
-- Floor heat into the mass node, radiator heat split 70/30 between air and surface: +10 to +14 % and +2 to +6 % yearly
-  heat (Appendix A.8, `node%`); not physical in a 5R1C model; D7.
+- Floor heat into the mass node, radiator heat split 70/30 between air and surface: +10 to +14 % and +1 to +10 % yearly
+  heat (Appendix A.8, `node%`: the radiator share is 1.1–10.2 % over the 20 `pv` radiator cases, 1.9–6.4 % on the four
+  with a `pvair` twin; corrected 2026-11-07 from +2 to +6 %); not physical in a 5R1C model; D7.
 - Sizing new emitters to the base-case load: not standard practice (EN 12831 load, EN 442 output); D3.
-- Today's curve at the type's design supply whatever the size: overstates the heat pump's electricity by 40–55 %.
+- Today's curve at the type's design supply whatever the size: overstates the heat pump's electricity by 68–120 %
+  (the derived curve needs 40–55 % less, Appendix A.5; corrected 2026-11-07, the earlier text had the 40–55 % the
+  wrong way round).
 - A 1 K or 1.5 K band: fails or is marginal (Appendix A.9).
 - Refusing a generator that cannot reach the emitters' need: RenoVisor needs the comparison; it runs and is flagged
   (D6).
@@ -540,6 +553,7 @@ hp = the hplib heat pump sized at A−7/W52 (16,270 W → P_th,ref 16,544 W; 11,
 | suffix A | the valve reads the air temperature before the occupants' airing reset (uws3) |
 | pvsurf, pvpisurfA | floor heat into the surface node |
 | pvsb | pv with the bracketed secant step |
+| pvmix, pvmixsb, pvpimixsbA | exploratory: pv with a mixing valve that blends return water into the buffer's water so the emitter's supply is at most the heating curve's set point (`EMITTER_MIX` in `prototype_emitter.patch`, `scripts/run_one.sh`); pvmixsb adds the bracketed secant step; pvpimixsbA is the centred 2 K band with T_i = 1 h, the secant step, the mixing valve and the pre-airing air temperature. They are in `table_all.csv` and `decompose.csv` and left out of the tables below (added 2026-11-07) |
 
 ### A.4 The law and the heat pump's limits (`scripts/law_check.txt`, `scripts/hplib_limits.txt`)
 
@@ -549,8 +563,10 @@ hp = the hplib heat pump sized at A−7/W52 (16,270 W → P_th,ref 16,544 W; 11,
 | low-temperature radiator 55/45 | 6,030 | 29.72 | 1.8e-14 | 3.40 | 1.71 µs |
 | floor heating 35/28 | 4,475 | 11.14 | 7.8e-15 | 2.80 | 1.78 µs |
 
-Example: the derived curve's design-day supply 43.51 °C; the law at the design flow gives 6,262 W for a 6,000 W need
-(4 % reserve).
+Example (`scripts/law_check.py`, the owner's example rounded to 16 kW radiators and a 6 kW house): the derived curve's
+design-day supply 43.51 °C; the law at the design flow gives 6,262 W for a 6,000 W need (4 % reserve). With the table's
+inputs, 16,270 W radiators and the 6,030 W house of 02.002, it is 43.3 °C and 6,296 W for 6,030 W, the same 4 %
+(stated 2026-11-07; §4.3 quotes the table's pair).
 
 hplib, the machine sized at A−7/W52 (16,270 W): rod-only switch (fitted COP ≤ 1) at the outlet 51.5 °C (−10 °C),
 56.8 °C (−7 °C), 62.1 °C (−4 °C), 69.1 °C (0 °C), 72.6 °C (2 °C), 81.4 °C (7 °C); above it the rod gives the full
@@ -594,8 +610,25 @@ reached = the circuit's supply while water flows (pv runs; base for r70); h, K·
 | 06.003 | hp | r70 | 70.00 | 65.71 | 66.33 | 3992.72 | 2214.58 |  |  | 2.20 |  |  |  |  |  |  |
 
 Key results (heat pump): old oversized radiators with the derived curve SCOP 3.51–4.40; new 55/45 radiators
-3.19–3.24; floor heating 35/28 4.44–4.49; today's 70 °C curve 2.19–2.22, so today overstates the electricity by
-40–55 %. Gas with the derived curve: 7–12 % less gas than on the 70 °C curve, through condensing.
+3.19–3.24; floor heating 35/28 4.44–4.49; today's 70 °C curve 2.19–2.22, so the derived curve needs 40–55 % less
+electricity than today's, and today overstates the electricity by 68–120 % (today's `Gen base` ÷ the derived curve's,
+r70 against r70o: 02.002 1.86, 02.003 2.20, 06.002 1.68, 06.003 2.00; corrected 2026-11-07, the earlier text had the
+40–55 % the wrong way round). Gas with the derived curve: 7–12 % less gas than on the 70 °C curve, through condensing.
+
+Reading notes (2026-11-07):
+
+- The "reached" column mixes variants: the r70 rows are from the `base` runs (no `pv` run exists for them), every
+  other row from the `pv` run. The boiler settles 0.5–3.4 K under the curve (02.003 r70o −0.5 K; 02.002 r55 and r70
+  −3.4 K); the heat pump runs 1.4–2.4 K above it.
+- "eff" is the generator's own heat over its energy (boiler efficiency, heat-pump SCOP on `Qgen`), above the delivered
+  heat over the energy because the buffer and the storage lose heat between the generator and the circuit: 02.002 hp
+  r70o 3.93 against `Qdel base` / `Gen base` = 3.64.
+- The heat pump delivers 4–7 % more heat than gas to the same house (`Qdel base`, r70o and r55 rows: 02.002 +4.4 %,
+  02.003 +5.5 %, 06.002 +5.9 %, 06.003 +7.0 %) because the energy manager raises its set point by 2 K on PV surplus.
+- PI against P comfort differs by case: in case A the PI valve often has more hours below 19.5 °C than the P valve
+  (02.002 hp r70o 4.50 → 15.25 h; 02.003 gas r70o 2.75 → 11.50 h), in cases
+  B and C fewer (A.6: 02.001 hp 163.25 → 110.75 h, 02.001 gas 384.75 → 179.25 h, 06.001 hp 62.00 → 41.50 h), except the
+  floor-heating house 12.001 (19.50 → 29.75 h).
 
 ### A.6 Cases B and C: unrenovated houses on 70/55 radiators, and the 2016 house on floor heating, full year at 900 s
 
@@ -637,6 +670,15 @@ colder than with gas (bead 2vq7). The columns "supply<curve−2K h" and "law<dem
 | 06.001 | 900 | base | 65.67 | 68.07 | 68.25 | 73.25 | 1.32 | 60.02 | 0.00 | 20.00 | 20.00 |
 | 06.001 | 900 | pv | 65.67 | 67.97 | 68.25 | 73.25 | 1.32 | 59.53 | 1.75 | 19.25 | 19.68 |
 
+Stated plainly (2026-11-07): this case depends on the step length. The rod's share of the week's electricity is about
+40 % at 60 s (37.05–41.04 %) and about 60 % at 900 s (58.81–60.02 %), and the SCOP 1.39–1.41 against 1.31–1.32. The
+reached supply lies below the curve at 60 s (63.94–64.84 °C against 65.71 °C) and above it at 900 s (67.75–68.07 °C
+against 65.67 °C). The curve's design-day value itself differs between the step lengths, 65.71 °C at 60 s against
+65.67 °C at 900 s, and 06.001 at 60 s reads 65.70 °C in the `pv` run against 65.71 °C in `base`; neither difference is
+explained here. The delivered heat and the electricity of this case are outside the 1 %
+step-length tolerance of §7; the owner decided on 2026-11-07 that the spec is blocked until the cause is understood
+(§7, "Investigation: see bead …").
+
 ### A.8 Yearly heat against ideal delivery, by variant (900 s, % of the ideal-delivery heat)
 
 The decomposition (`decompose.csv`) splits the extra heat into the band (the room's mean air temperature above
@@ -673,8 +715,10 @@ The five `cap` cases (D4):
 | 12.001 | hp | f35 | 5474.73 | −0.26 | −0.26 | −0.00 | −0.00 | −0.00 | −0.01 |
 
 Heat entry (D7), the node share of the extra heat: floor heating into the mass node 9.7–13.6 % (`pv` and `pvpi`,
-f35), into the surface node 6.5–12.1 % (`pvsurf`); radiators 70/30 air/surface 2.0–6.4 % (`pv` against `pvair`);
-everything into the air 0.05–0.6 % (`pvpiair`).
+f35), into the surface node 6.5–12.1 % (`pvsurf`); radiators 70/30 air/surface 1.1–10.2 % over the 20 `pv` radiator
+cases of `decompose.csv` (the largest 06.003 hp r70o 10.2 %, 06.003 hp r55 8.0 %, 02.003 hp r70o 7.7 %; 1.1–6.4 % in
+`pvpi`), 1.9–6.4 % on the four radiator cases that also ran `pvair`, where everything into the air gives 0.05–1.0 %
+(corrected 2026-11-07: the earlier 2.0–6.4 % was those four cases only); everything into the air 0.05–0.6 % (`pvpiair`).
 
 ### A.9 Band study at 60 s (January and October weeks; pvb1 = 1 K, pvb15 = 1.5 K, pvc = 2 K centred, pv = 2 K closing 0.5 K above)
 
@@ -688,6 +732,16 @@ everything into the air 0.05–0.6 % (`pvpiair`).
 | hp | pvb1 | 14 | 6.73 | 18 | 1371 | 402 | 3.78 | 10.82 | 9.92 | 0.21 | 13.55 |
 | hp | pvb15 | 14 | 6.53 | 19 | 259 | 52 | 2.29 | 6.87 | 9.11 | 0.19 | 18.94 |
 | hp | pvc | 14 | 6.43 | 19 | 54 | 25 | 1.52 | 4.82 | 8.13 | 0.17 | 19.50 |
+| gas | pv, paired weeks | 10 | 6.52 | 16 | 0 | 0 | 1.55 | 2.93 | 5.41 | 0.06 | 19.03 |
+| hp | pv, paired weeks | 14 | 6.30 | 19 | 78 | 50 | 1.78 | 5.28 | 7.65 | 0.15 | 18.76 |
+
+The `pv` rows above are not like-for-like with the band rows (noted 2026-11-07): `pv` averages every week of the set
+(heat pump 22: the r70, r70o and f35 weeks of all houses; gas 12, with 06.001), the bands only the weeks that ran them
+(heat pump 14: 02.001 and 06.001 r70, 02.002–06.003 r70o, 12.001 f35; gas 10: 02.001 r70, 02.002–06.003 r70o). The
+two "paired weeks" rows recompute `pv` on exactly the bands' weeks (`table_all.csv`, summary.py's method: medians for
+G50 and G90, means for the rest). The forced steps and the lowest air temperature are the same on both sets; the
+closures per day (heat pump 9.90 → 7.65, gas 4.96 → 5.41) and G50/G90 (heat pump 1.01/3.93 → 1.78/5.28) are not, so
+the band comparison reads from the paired rows.
 
 G50, G90: the loop gain −d(u_P)/d(u) between consecutive passes (percentiles); above 1 the plain iteration would
 oscillate, the secant step is what converges. The energy manager's raise read on every pass against latched, heat-pump
@@ -731,6 +785,7 @@ Passes per step, ideal delivery (base) against the P-valve: gas 60 s 6.42 / 6.48
 | 12.001 | hp | f35 | jan | 60 | 8.12 | 8.00 | 8.00 | 0.98 | 0.99 |
 | 12.001 | hp | f35 | jan | 900 | 0.64 | 0.66 | 0.66 | 1.03 | 1.02 |
 
-Means: January 60 s pv ×1.07 (0.98–1.18), pvpi ×1.11 (0.99–1.18); January 900 s pv ×0.99, pvpi ×1.05; year 900 s pv
+Means: January 60 s pv ×1.07 (0.98–1.18), pvpi ×1.12 (0.99–1.18; recomputed 1.117, corrected 2026-11-07 from ×1.11);
+January 900 s pv ×0.99, pvpi ×1.05; year 900 s pv
 ×1.02 (0.96–1.08), pvpi ×1.04 (1.00–1.08). Mean passes per step in this set: 60 s base 6.85, pv 6.87, pvpi 7.16;
 900 s base 6.02, pv 5.65, pvpi 5.99. The cap (D4) adds no pass and no measurable time.

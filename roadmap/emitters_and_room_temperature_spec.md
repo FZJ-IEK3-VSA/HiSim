@@ -1,9 +1,11 @@
 # Spec: emitters and room temperature — the emitter has a size, the heating curve follows from it, the room gets what the emitter can give, and a generator that cannot reach the emitters' need runs anyway and is flagged
 
-Status: decided (owner, 2026-11-03), nothing is built. Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
+Status: decided (owner, 2026-11-03), amended 2026-11-07 (D3 and D5: the 1.1 margin sits on the new emitters' size as
+well as on the curve), nothing is built. Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
 hisim-renovisor-translator-epc (hisim-renovisor-base-emitters-dwm9, hisim-renovisor-translator-epc.1),
 hisim-component-physics-4g9 (hisim-component-physics-4g9.37, hisim-airing-books-no-heat-uws3,
-hisim-ems-raise-within-step-er89), hisim-heat-pump-model-rework-fpqz (hisim-heat-pump-outlet-limit-2vq7). Builds on:
+hisim-ems-raise-within-step-er89), hisim-heat-pump-model-rework-fpqz (hisim-heat-pump-outlet-limit-2vq7,
+hisim-heat-pump-model-rework-fpqz.2). Builds on:
 `system_docs/component_design_principles.md`, `system_docs/modelling_guide.md`, `roadmap/hydronic_coupling_spec.md`
 (D25), PR #1142 (`ExplicitStateController`), PR #1165 (`cooling_enabled`). Replaces `roadmap/room_thermostat_spec.md`
 of 2026-10-28 (the same file, renamed; §4.7 says what of it still holds). Code is cited against main at d3a1ddc3c.
@@ -37,9 +39,9 @@ Today the emitters have no size and the heating curve ignores how big they are.
 | D0 | Whether the distribution circuit flows is decided by the room thermostat in the heat-distribution L1 controller; the generator decides only how hot | Noah | 2026-10-20 |
 | D1 | The emitter has a rating, the emitter design load, a sized field defaulting to the building's heating load; the design flow follows from it | Noah | 2026-11-03 |
 | D2 | A RenoVisor package without the emitter measure keeps the base-case emitters: the translator writes the base-case heating load as the emitter design load | Noah | 2026-11-03 |
-| D3 | A package with the emitter measure sizes the new emitters to the package's own load at the new type's design point | Noah | 2026-11-03 |
+| D3 | A package with the emitter measure sizes the new emitters to the package's own load at the new type's design point; amended 2026-11-07: at 1.1 × the package's load | Noah | 2026-11-03, 2026-11-07 |
 | D4 | The circuit delivers the building's ideal demand, capped by the EN 442 law at full flow with the actual supply temperature | Noah | 2026-11-03 |
-| D5 | The heating curve is derived from the emitter: the load fraction is scaled by (building heating load / emitter design load) × 1.1 | Noah | 2026-11-03 |
+| D5 | The heating curve is derived from the emitter: the load fraction is scaled by (building heating load / emitter design load) × 1.1; amended 2026-11-07: the same 1.1 also sizes every new emitter, so a new emitter runs at its design point on the design day | Noah | 2026-11-03, 2026-11-07 |
 | D6 | A generator that cannot reach the emitters' need runs anyway, and the result flags it; underheating is a KPI | Noah | 2026-11-03 |
 | D7 | The delivered heat enters the building's air node, for every emitter type | Noah | 2026-11-03 |
 | D8 | The room thermostat (P/PI valve in the heat-distribution controller) is a later step, bead hisim-component-physics-4g9.37 | Noah | 2026-11-03 |
@@ -65,6 +67,17 @@ renovation leaves the radiators oversized, and the derived curve (D5) lowers the
 replacing oversized old radiators with new 55/45 °C radiators sized to the smaller load can need a higher supply
 (55 °C, 57.9 °C with the margin of D5) than keeping the old ones (about 43 °C, 45 °C with the margin).
 
+*Amendment (owner, 2026-11-07):* the new emitters are sized at 1.1 × the package's load, Q_n = 1.1 · L, the 1.1
+being the installer's margin on the emitter size (`EmitterDesign.EMITTER_SIZING_MARGIN`, §4.1). The rule is the
+default of the sized field itself, so it reaches every emitter sized to its house: the translator with the emitter
+measure (the field stays `AUTO`), the sizer twins and every setup that leaves the field `AUTO`. Kept emitters are not
+sized by the rule: the translator writes the base-case heating load as Q_n (D2), unchanged. Reason: with the margin on
+the curve alone (D5 as decided on 2026-11-03) new 55/45 °C radiators sized to the house needed 57.9 °C on the design
+day, above the heat pump's rod-only switch of 56.8 °C at −7 °C (Appendix A.4), so flag (a) of §4.5 would have fired for
+every heat pump on newly sized low-temperature radiators and the heat pump would have run hotter than the emitters were
+designed for; and installer practice puts the margin on the emitter size, not on the curve. Consequence: the example
+above reads 55 °C for the new 55/45 °C radiators against 45 °C for the kept ones.
+
 **D4 — the circuit delivers the building's ideal demand, capped by the EN 442 law at full flow with the actual
 supply temperature; the heat enters the air node as today** (owner, 2026-11-03). Measured: −0.3 to 0 % yearly heat
 against ideal delivery, no runtime cost, 1.7 µs per call of the law (Appendix A.4, A.8). Consequence: a too-small
@@ -76,6 +89,16 @@ about 4 % reserve on the design day (Appendix A.4), the generators run below the
 under it, the heat pump switches on at curve − 5 K), and the curve follows the daily mean while nights are colder.
 Consequence: oversized emitters run cooler; a correctly sized emitter runs 1.4–3.8 K above its design supply on the
 design day (§4.3).
+
+*Amendment (owner, 2026-11-07):* the curve keeps x_e = x · (L / Q_n) · 1.1, and the same 1.1 now also sizes every new
+emitter (D3 amended: Q_n = 1.1 · L). For a new emitter the two cancel on the design day, x_e = x · (1 / 1.1) · 1.1 = x,
+so the curve reaches exactly the type's design supply there: 55 °C for 55/45 °C, 35 °C for floor heating, 70 °C for
+70/55 °C, with 10 % emitter surface in reserve. Kept old radiators (D2) keep the curve part's reserve as decided on
+2026-11-03: 45.1 °C instead of 43.3 °C in the owner's example. Reason: the curve-only margin pushed new 55/45 °C
+radiators to 57.9 °C on the design day, above the heat pump's rod-only switch of 56.8 °C at −7 °C, and contradicted
+installer practice, where the margin sits on the emitter size; the question of 2026-11-03 had mislabelled the curve
+margin as "the usual installer safety factor". Consequence: a new emitter runs at its design point on the design day,
+not 1.4–3.8 K above it; the owner's three variants and their reasons are in §8.
 
 **D6 — a generator that cannot reach the emitters' need runs anyway, and the result flags it** (owner, 2026-11-03).
 RenoVisor compares packages, so a package with a heat pump on old 70/55 °C radiators is a result, not a refusal.
@@ -103,7 +126,13 @@ substitution distorts more: a package with low-temperature radiators would run a
   exponent n (`EmitterDesign.for_type`, `hisim/components/heating_curve.py`): floor heating 35/28 °C, n = 1.1;
   low-temperature radiator 55/45 °C, n = 1.2; radiator 70/55 °C, n = 1.3.
 - **Emitter design load, Q_n** (W): the emitter's rating at its design point. A sized field of
-  `HeatDistributionControllerConfig`, by default the building's heating load.
+  `HeatDistributionControllerConfig`, by default the building's heating load. *Amended 2026-11-07:* by default
+  1.1 × the building's heating load (a new emitter, D3); a kept emitter has the Q_n the translator writes (D2).
+- **Emitter sizing margin** (dimensionless), 1.1, `EmitterDesign.EMITTER_SIZING_MARGIN` (`hisim/components/heating_curve.py`):
+  the installer's margin, on the size of a new emitter (D3, amended 2026-11-07) and on the heating curve (D5).
+- **New emitter**: one sized to its house by the sized field's rule (the field `AUTO`): the translator's with the emitter
+  measure, the sizer twins', every setup's that writes no Q_n. **Kept emitter**: one with a written Q_n, the base-case
+  emitters of D2.
 - **Building heating load, L** (W): the building's heat loss on the design day, the fact `heating_load_in_watt` the
   building sizer contributes.
 - **Design day**: the day at the heating reference temperature T_ref (°C), the outside temperature the emitter is
@@ -148,6 +177,18 @@ emitter_design=...)` in `HeatDistributionControllerInformation`; the contributed
 `heating_load_of_building_in_watt` stays on the controller: it is the building's load L, which the curve and the
 generators size on.
 
+*Amendment (owner, 2026-11-07, D3 amended):* the rule of `emitter_design_load_in_watt` is
+`EmitterDesign.EMITTER_SIZING_MARGIN * Size.HEATING_LOAD_IN_WATT` (a law scaled by a constant, `hisim/config/laws.py`),
+so an emitter left `AUTO` is sized at Q_n = 1.1 · L, as an installer sizes a new emitter. The constant
+`EMITTER_SIZING_MARGIN = 1.1` lives on `EmitterDesign` (`hisim/components/heating_curve.py`), the subcomponent both the
+heat-distribution controller (the design flow) and the heating curve already read; the sizing rule and the curve's scale
+(§4.3) read the same name, and the `#:` comment of the constant cites D3 and D5 with the amendment of 2026-11-07. Which
+emitters the 1.1 sizes: every emitter whose field stays `AUTO` — the translator's with the emitter measure (§4.6), the
+sizer twins' and every energy-system file's or Python setup's that writes no Q_n. Which it does not: a written Q_n is
+taken as it is, so the kept emitters of D2 (the translator writes the base-case heating load) and any setup that states
+its emitters' rating get no margin on the size. `describe` prints the law as `1.1 * heating_load_in_watt`. The heat
+pump and the boiler keep sizing on L, not on Q_n.
+
 The emitter's law constants are built once, in a frozen subcomponent (`component_design_principles.md` C) in the
 heat-distribution module (one user): Q_n, ΔT_lm,n, n, K = Q_n / ΔT_lm,n^n, and m_d. Refused when built: Q_n ≤ 0, a
 design point whose return is not above the room or not below the supply.
@@ -158,8 +199,11 @@ RenoVisor (bead hisim-renovisor-base-emitters-dwm9):
 |---|---|---|---|
 | without the emitter measure | the base-case heating load: the request's house without measures, sized by the same path as the package | the base case's | lower than the type's design supply (D5) |
 | with the emitter measure | nothing: the field stays `AUTO`, the package's own load | the package's | the type's design supply × the margin |
+| with the emitter measure, amended 2026-11-07 | nothing: the field stays `AUTO`, its rule gives 1.1 × the package's own load; the mapping report states the rating and the margin | 1.1 × the package's | the type's design supply exactly |
 
 Example (TABULA 02.002, 6,030 W, radiators sized for 02.001 at 16,270 W): L / Q_n = 0.37, design flow 0.259 kg/s.
+Example with the emitter measure (amended): 02.002 with new 55/45 °C radiators: Q_n = 1.1 · 6,030 W = 6,633 W, design flow
+6,633 / (4180 · 10) = 0.159 kg/s, L / Q_n = 0.91, 55.0 °C on the design day.
 
 ### 4.2 Delivery: the ideal demand capped by the EN 442 law (D4)
 
@@ -196,7 +240,9 @@ heat input. The post-run check closes every step.
 
 `HeatingCurveControllerConfig` gets two sized fields: the building's heating load (`Size.HEATING_LOAD_IN_WATT`, which it
 already reads for the threshold) and the emitter design load (the controller's new fact). The class constant
-`EMITTER_SIZING_MARGIN = 1.1` carries its source: owner decision 2026-11-03, an installer's safety margin.
+`EMITTER_SIZING_MARGIN = 1.1` carries its source: owner decision 2026-11-03, an installer's safety margin. *Amended
+2026-11-07:* the constant is `EmitterDesign.EMITTER_SIZING_MARGIN` (§4.1), one name for the margin on the size and on the
+curve; its source line adds the amendment of 2026-11-07.
 
     x      = (T_room − T_out,day) / (T_room − T_ref)
     x_e    = x · (L / Q_n) · 1.1
@@ -213,10 +259,20 @@ either).
 | radiator 70/55 °C, L | L | 1.00 | 70.0 °C | 73.8 °C |
 | low-temperature radiator 55/45 °C, L | L | 1.00 | 55.0 °C | 57.9 °C |
 | floor heating 35/28 °C, L | L | 1.00 | 35.0 °C | 36.4 °C |
+| new radiator 70/55 °C, 1.1 L (amended 2026-11-07) | L | 0.91 | 66.5 °C | 70.0 °C |
+| new low-temperature radiator 55/45 °C, 1.1 L (amended 2026-11-07) | L | 0.91 | 52.3 °C | 55.0 °C |
+| new floor heating 35/28 °C, 1.1 L (amended 2026-11-07) | L | 0.91 | 33.8 °C | 35.0 °C |
 
 The first row is the owner's example: radiators sized for 16 kW, house now 6 kW, about 43.5 °C on the design day
 without the margin; at that supply and full flow the law gives 6,262 W for a 6,000 W need, the 4 % reserve of D5
 (Appendix A.4).
+
+*Amendment (owner, 2026-11-07):* the three "L" rows with 73.8, 57.9 and 36.4 °C describe an emitter whose Q_n is written
+as exactly L; since the amendment of D3 the default sizing gives 1.1 L, the last three rows, and a new emitter reaches
+its design supply exactly on the design day. The first two rows, the kept old radiators of D2, are unchanged. The
+measurement of Appendix A ran with Q_n = L and no curve margin, x · 1 · 1, which is the same curve as the amended rule's
+x · (1 / 1.1) · 1.1 for a new emitter: its curve temperatures are the amended rule's for new emitters, and the amendment
+only adds 10 % emitter surface at the same supply.
 
 The design-day supply T_dd = T_room + (L / Q_n · 1.1)^(1/n) · (T_sup,d − T_room) is a pure function the translator
 and the flag of §4.5 call; it is the curve at T_out,day = T_ref.
@@ -252,11 +308,20 @@ runs with its rod and is flagged (Appendix A.6: SCOP 2.3–2.4, rod share 16 %, 
 colder than with gas, because the heat-pump model has no space-heating outlet limit and the rod gives the full
 rated power, bead 2vq7).
 
+*Amendment (owner, 2026-11-07), flag (a):* with the new emitters sized at 1.1 L (D3 amended) T_dd is the type's design
+supply: a heat pump on new 55/45 °C radiators has T_dd = 55.0 °C < 56.8 °C and is not flagged, and on new floor heating
+35.0 °C. The flag still fires where it should: a heat pump on kept 70/55 °C radiators of an unrenovated house
+(Q_n = L written by the translator, T_dd = 73.8 °C) and on new 70/55 °C radiators (T_dd = 70.0 °C), both above 56.8 °C.
+Before the amendment, T_dd = 57.9 °C would have flagged every heat pump on newly sized low-temperature radiators.
+
 ### 4.6 RenoVisor (D2, D3, D9)
 
 - The translator computes the base-case heating load (the request's house without measures, through the same
   building sizing as the package) and writes it as `HeatDistributionController.config.emitter_design_load_in_watt`
   when the package has no emitter measure. With the measure it writes nothing; the mapping report says which.
+  *Amended 2026-11-07:* with the measure the field stays `AUTO` and its rule sizes the new emitters at 1.1 × the
+  package's load (§4.1); the mapping report states the rating Q_n it resolved to, the margin 1.1 and its source (D3
+  amended), beside the "base-case load kept" note of the other case.
 - `_flow_temperature` (`hisim/renovisor/translate.py`) writes T_dd of §4.3 as the heat pump's
   `flow_temperature_in_celsius`, instead of the request's old generator's flow temperature.
 - result.json gets the fields of §4.5. The capability probes get the pair "envelope package with and without the
@@ -319,7 +384,9 @@ Replaced parts of the old spec, one line each:
 - **Results.** Every hydronic twin moves: the cap takes −0.3 to 0 % of the yearly heat (Appendix A.8, `cap`), and
   the derived curve with the margin moves every supply set point: an emitter sized to its house runs 1.4–3.8 K above
   its design supply on the design day (§4.3), oversized emitters far below it. 60 s results move too: the law and the
-  curve have no step-length branch. Gas twins: slightly more or less condensing by the curve's move; heat-pump twins:
+  curve have no step-length branch. *Amended 2026-11-07:* with the margin on the size too, an emitter left `AUTO` is
+  sized at 1.1 × its house's load and its curve reaches exactly the type's design supply on the design day, so the sizer
+  twins keep today's design-day supply and gain 10 % emitter surface and design flow (§4.3). Gas twins: slightly more or less condensing by the curve's move; heat-pump twins:
   the SCOP follows the supply.
 - **Public interfaces.** New configuration field `emitter_design_load_in_watt`, new sizing fact, new KPIs (§4.5), new
   result.json fields; `water_mass_flow_rate_in_kg_per_second` keeps its name and is sized from Q_n; the curve's static
@@ -335,7 +402,7 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 
 | PR | Bead | Content | Tests | Results |
 |---|---|---|---|---|
-| 1 | hisim-s9h7 (components, P1) | the emitter design load sized field and its fact (§4.1); the EN 442 capped delivery in `HeatDistribution` (§4.2); the derived heating curve with the 1.1 margin (§4.3); the underheating KPIs and KPIs (b), (c) (§4.5) | an undersized emitter gives a colder room; the oversized case gives the derived supply; the law against a bracketed reference root (error < 1e-12, the dead zone, the return between room and supply, the design point reproduces Q_n); the table-generated tests of the curve's scale | goldens re-blessed once |
+| 1 | hisim-s9h7 (components, P1) | the emitter design load sized field and its fact (§4.1), its rule `EMITTER_SIZING_MARGIN * Size.HEATING_LOAD_IN_WATT` on `EmitterDesign` (amended 2026-11-07); the EN 442 capped delivery in `HeatDistribution` (§4.2); the derived heating curve with the 1.1 margin (§4.3); the underheating KPIs and KPIs (b), (c) (§4.5) | an undersized emitter gives a colder room; the oversized case gives the derived supply; the law against a bracketed reference root (error < 1e-12, the dead zone, the return between room and supply, the design point reproduces Q_n); the table-generated tests of the curve's scale; an emitter left `AUTO` is sized at 1.1 · L and its curve gives exactly the type's design supply on the design day (amended 2026-11-07) | goldens re-blessed once |
 | 2 | hisim-renovisor-base-emitters-dwm9 (renovisor, P1) | the base-case heating load in the translator; `_flow_temperature` writes T_dd; result.json fields, flag (a) and KPI (d); probes and the translation map (§4.6) | the probe pair with and without the emitter measure; the flag set for a heat pump on base-case 70/55 °C radiators in an unrenovated house; T-CAP, the mapping report and the map agree | RenoVisor results change; heads-up |
 | later | hisim-renovisor-translator-epc.1 (P2) | the low-temperature radiator's cost row; the substitution goes (D9) | the blocker test turns into the positive case | |
 | later | hisim-heat-pump-outlet-limit-2vq7 (P2) | a maximal space-heating supply and a rated rod power; flag (a) reads the limit | a heat pump on undersized emitters delivers less and the room falls | |
@@ -346,6 +413,11 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 - **Pure functions, tested alone**: the NTU law (§4.2) against `scipy.optimize.brentq` on a grid of θ, m and n; the
   design flow from Q_n; the curve's supply with the scale (the table of §4.3, including L / Q_n = 1 with the margin);
   T_dd.
+- **The sizing margin (amended 2026-11-07)**: a heat-distribution controller with the field `AUTO` resolves Q_n to
+  1.1 · L (`describe` prints `1.1 * heating_load_in_watt`); its design flow is 1.1 × the flow of Q_n = L; the curve at
+  T_out,day = T_ref gives exactly the type's design supply for each of the three types (55.0 °C for 55/45 °C, 35.0 °C,
+  70.0 °C), and T_dd of a new 55/45 °C radiator stays below hplib's 56.8 °C, so flag (a) is off; a written Q_n = L
+  keeps the 73.8 / 57.9 / 36.4 °C rows.
 - **Component tests**: an emitter half the building's load at the design supply leaves the room below 19.5 °C on the
   design day; an emitter at 2.7 × the load (02.002 on 02.001's radiators) gets 45.1 °C from the curve on the design
   day and holds the room; a supply below the curve − 2 K is counted by KPI (b); KPI (c) counts the steps where the cap
@@ -372,6 +444,14 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 - Refusing a generator that cannot reach the emitters' need: RenoVisor needs the comparison; it runs and is flagged
   (D6).
 - Clamping the heat-pump outlet in this spec: its own bead, 2vq7, with a sourced limit and a rod power.
+- The 1.1 margin on the curve only, variant A, the D5 of 2026-11-03 (owner, 2026-11-07): new 55/45 °C radiators sized
+  to the house need 57.9 °C on the design day, above hplib's rod-only switch of 56.8 °C at −7 °C, so flag (a) fires
+  for every heat pump on newly sized low-temperature radiators and the heat pump runs hotter than the emitters were
+  designed for; and the margin an installer applies sits on the emitter size, not on the curve.
+- The 1.1 margin on the emitter size only, variant B (owner, 2026-11-07): the curve then reaches the design supply
+  with no reserve beyond the law's about 4 % on the design day, while the generators run below the curve and the
+  curve follows the daily mean (D5's reasons), which costs a few cold hours. Chosen: variant C, the margin on the size
+  and on the curve, D3 and D5 as amended.
 
 ## 9. Open questions
 
@@ -383,6 +463,15 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
   under `force_convergence` only (not measured). Recommendation: (b) if a measurement shows it removes the forced
   steps, otherwise (a) for this signal only. A prerequisite of D8, not of PR 1 or 2.
 
+**Known limitation, recorded 2026-11-07 (no decision open here).** The heat pump runs about 2 K above the curve: its
+charge target lies above the supply set point (#1083; measured on new 55/45 °C radiators, Appendix A.5: reached
+53.1–53.9 °C against the curve's 51.7 °C on the run's coldest day, −4.0 °C daily mean). On a day at −7 °C the curve of a
+new 55/45 °C radiator is 55 °C and the heat pump reaches about 57 °C, at hplib's rod-only switch of 56.8 °C; below −7 °C
+the switch falls (51.5 °C at −10 °C, Appendix A.4) while the curve rises (58.2 °C at −10 °C), so the rod takes over on
+the coldest days although flag (a) is off. The 2021 measurement did not reach −7 °C. The cause is hplib's generic fit,
+whose COP is at or below 1 at W55/A−10; bead hisim-heat-pump-outlet-limit-2vq7 (a configured outlet limit and a rod
+power of its own) and the Carnot COP shape of hisim-heat-pump-model-rework-fpqz.2 address it.
+
 ## 10. Beads
 
 | Bead | Content | PR |
@@ -391,6 +480,7 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 | hisim-renovisor-base-emitters-dwm9 (P1, renovisor) | PR 2 of §6: base-case load, T_dd, result fields, flag, probes | – |
 | hisim-renovisor-translator-epc.1 (P2, renovisor) | D9: the low-temperature radiator's cost row, the substitution goes | – |
 | hisim-heat-pump-outlet-limit-2vq7 (P2, components) | the heat pump's maximal space-heating supply and rod power | – |
+| hisim-heat-pump-model-rework-fpqz.2 (P1, components) | the Carnot COP shape; with 2vq7 it answers the limitation of §9 (the rod switch below −7 °C) | – |
 | hisim-component-physics-4g9.37 (P1, components) | the room thermostat (§4.7) | – |
 | hisim-airing-books-no-heat-uws3 (P2, components) | airing booked as a heat flow; prerequisite of 4g9.37 | – |
 | hisim-ems-raise-within-step-er89 (P2, owner-decision) | Q1 of §9; prerequisite of 4g9.37 | – |
@@ -413,7 +503,9 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 - Periods: the first January week and an October week at 60 and 900 s, the full year 2021 at 900 s. The design day
   of the year runs is the coldest daily mean, −4.0 °C; the derived curve's "expected" supply is at T_ref = −7 °C.
 - The prototype's curve had no 1.1 margin (D5 was taken after the measurement): every "curve" and "expected" supply
-  below is without it.
+  below is without it. With the amendment of 2026-11-07 (the margin on the size and on the curve) those supplies are
+  exactly the amended rule's for the emitters sized to their own load (r70, r55, f35: x · (1 / 1.1) · 1.1 = x); the
+  amendment adds 10 % emitter surface at the same supply, which this measurement did not run.
 
 ### A.2 Cases
 

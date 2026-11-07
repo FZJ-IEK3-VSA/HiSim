@@ -27,11 +27,11 @@ from hisim.postprocessing.energy_balance import (
     DeclaredPorts,
     EnergyBalanceError,
     EnergyBalanceReport,
-    EnergyPortWiringError,
     PeerKind,
-    Wiring,
 )
 from hisim.postprocessing.energy_balance.sankey import SankeyBuilder
+from hisim.setup_rules.energy_ports import EnergyPortWiringError
+from tests import functions_for_testing as fft
 
 pytestmark = pytest.mark.base
 
@@ -542,7 +542,7 @@ def test_one_flow_read_by_two_ends_fails_the_run() -> None:
     # the wiring alone shows it: the run is refused before it simulates
     components = CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends)
     with pytest.raises(EnergyPortWiringError, match="Boiler.Flow is read by 2 components"):
-        Wiring.refuse_a_broken_wiring(components)
+        fft.EnergyPortRules.refuse_a_broken_wiring(components)
 
 
 def test_an_other_end_that_declares_ports_but_not_the_circuit_fails_the_run() -> None:
@@ -583,7 +583,7 @@ def test_a_loop_with_no_or_two_suppliers_is_refused_at_build(boiler_supplies: bo
     report = CircuitRig.report(columns, inputs, ends)
     assert any(f"has {how_many} supplier" in fault for fault in report.declared.circuit_faults)
     with pytest.raises(EnergyPortWiringError, match=f"Boiler.space_heating and Tank.space_heating has {how_many} supplier"):
-        Wiring.refuse_a_broken_wiring(CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends))
+        fft.EnergyPortRules.refuse_a_broken_wiring(CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends))
 
 
 def test_an_end_whose_flow_input_is_not_connected_is_idle() -> None:
@@ -648,7 +648,7 @@ def test_an_output_two_declared_components_read_needs_exactly_one_tagged_reader(
     }
     components = CircuitRig.stand_ins(outputs, inputs, {})
     if refusal is None:
-        Wiring.refuse_a_broken_wiring(components)
+        fft.EnergyPortRules.refuse_a_broken_wiring(components)
         return
     with pytest.raises(EnergyPortWiringError, match=r"Source.Heat .* " + refusal):
-        Wiring.refuse_a_broken_wiring(components)
+        fft.EnergyPortRules.refuse_a_broken_wiring(components)

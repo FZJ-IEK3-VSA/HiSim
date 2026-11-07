@@ -1,6 +1,6 @@
 """Helper functions for testing."""
 import dataclasses
-from typing import Any, ClassVar, Optional, Tuple, Type
+from typing import Any, ClassVar, Optional, Sequence, Tuple, Type
 
 import yaml
 
@@ -11,6 +11,10 @@ from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleCodes, RuleStage
+from hisim.setup_rules.subjects import BuiltSystem
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -81,6 +85,31 @@ def round_trip_config_block(config: Any, config_class: Type, component_name: str
     )
     payload[ConfigBlockWriter.IDENTITY_FIELD] = {"name": component_name}
     return config_class.from_dict(payload)
+
+
+class EnergyPortRules:
+    """The energy-port setup rules (``hisim/setup_rules/energy_ports.py``) run on components, as the build runs them.
+
+    A test that wires stand-ins by hand runs only this family, so that the rules of the other families, which may read
+    what a stand-in lacks, stay out of it.
+    """
+
+    #: The family of the rules.
+    FAMILY: ClassVar[str] = "energy_ports"
+
+    @classmethod
+    def refuse_a_broken_wiring(cls, components: Sequence[Any], kind: SetupKind = SetupKind.RESIDENTIAL) -> None:
+        """Run the energy-port rules on components whose inputs are connected, as the simulator does before the first step.
+
+        Args:
+            components: The components, or stand-ins with ``component_name``, ``inputs``, ``outputs`` and ``port_sets``.
+            kind: The kind the system declares.
+
+        Raises:
+            EnergyPortWiringError: Listing every fault the rules found.
+        """
+        rules = [rule for rule in SetupRuleRegistry.discover() if RuleCodes.family_of(rule.__module__) == cls.FAMILY]
+        SetupRuleRegistry(rules).run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), kind)
 
 
 class SetupTestParameters:

@@ -188,7 +188,7 @@ class SetupRuleViolation(ValueError):
         Example::
 
             The build rules refuse this demo setup (2 faults):
-            - EP-01 circuit-pairing: <message>; see: hisim setup-rules show EP-01
+            - EP-01 loop-pairing: <message>; see: hisim setup-rules show EP-01
             - EP-05 input-port-pairs: <message>; see: hisim setup-rules show EP-05
             Not run:
             - EP-06 was not run: it requires EP-05, which found faults or was not run
@@ -397,10 +397,12 @@ class SetupRule(Generic[SubjectT]):
     its faults refuse the run or are only logged. ``REQUIRES`` names the codes of the rules that must have found no
     fault for this rule's result to mean anything; the registry skips the rule, visibly, when one of them did.
     ``WAIVED_FOR`` maps each kind that does not run the rule to the reason, and is empty by default: a rule applies
-    to every kind until it waives one. ``check`` is pure: it returns every fault it finds, raises nothing and keeps
-    no state between calls. Every declaration is checked when the class is created, so a malformed rule fails at
-    import with a ``TypeError`` naming it. A subclass that declares no ``CODE`` is a shared base of a family's rules,
-    not a rule, and is not checked.
+    to every kind until it waives one. ``VIOLATION`` is the error the registry raises when this rule's family alone
+    found the faults of a stage, ``SetupRuleViolation`` by default; a family whose error class existed before it moved
+    here names that class, a subclass of ``SetupRuleViolation``, so an ``except`` of it keeps working. ``check`` is
+    pure: it returns every fault it finds, raises nothing and keeps no state between calls. Every declaration is
+    checked when the class is created, so a malformed rule fails at import with a ``TypeError`` naming it. A subclass
+    that declares no ``CODE`` is a shared base of a family's rules, not a rule, and is not checked.
     """
 
     #: The rule's stable code, ``<PREFIX>-<nn>`` (``RuleCodes``).
@@ -415,6 +417,8 @@ class SetupRule(Generic[SubjectT]):
     REQUIRES: ClassVar[FrozenSet[str]] = frozenset()
     #: The kinds that do not run the rule, each with the reason; read-only.
     WAIVED_FOR: ClassVar[Mapping[SetupKind, str]] = MappingProxyType({})
+    #: The error the registry raises for the faults of this rule, when no rule of another error found any.
+    VIOLATION: ClassVar[Type[SetupRuleViolation]] = SetupRuleViolation
 
     #: The class attributes every rule declares on its own class.
     DECLARATIONS: ClassVar[Tuple[str, ...]] = ("CODE", "NAME", "STAGE", "ENFORCED")
@@ -448,6 +452,9 @@ class SetupRule(Generic[SubjectT]):
             problems.append(f"its ENFORCED {enforced!r} is not a bool")
         problems += RuleCodes.requires_problems(cls.REQUIRES, cls.CODE)
         problems += cls.waiver_problems(cls.WAIVED_FOR)
+        violation: object = cls.VIOLATION
+        if not (isinstance(violation, type) and issubclass(violation, SetupRuleViolation)):
+            problems.append(f"its VIOLATION {violation!r} is not a subclass of SetupRuleViolation")
         problems += RuleDocstring.problems(cls.__doc__)
         subject = cls.subject_type()
         if subject is None:

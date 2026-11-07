@@ -40,7 +40,8 @@ class StageFindings:
     ``subject`` is the class name of the subject the rules read, which tells the two subjects of the ``BUILD``
     stage apart. ``faults`` are the faults of the enforced rules and ``logged`` those of the others, each ordered by code, then
     by component and port; ``skipped`` are the rules that were not run because a rule they require found faults or
-    was itself skipped, in code order.
+    was itself skipped, in code order. ``violation_type`` is the error the faults are raised as
+    (:meth:`SetupRuleRegistry.violation_type`).
     """
 
     stage: RuleStage
@@ -49,10 +50,11 @@ class StageFindings:
     faults: Tuple[Fault, ...]
     logged: Tuple[Fault, ...]
     skipped: Tuple[Skip, ...]
+    violation_type: Type[SetupRuleViolation] = SetupRuleViolation
 
     def violation(self) -> SetupRuleViolation:
-        """Return the violation that lists the refusing faults and the skips of the stage."""
-        return SetupRuleViolation(self.stage, self.kind, self.faults, self.skipped)
+        """Return the violation that lists the refusing faults and the skips of the stage, as its ``violation_type``."""
+        return self.violation_type(self.stage, self.kind, self.faults, self.skipped)
 
     def to_dict(self) -> Dict[str, object]:
         """Return the findings as plain data: the violation's fields, the subject, and the faults that are only logged under ``logged``."""
@@ -215,6 +217,23 @@ class SetupRuleRegistry:
                         heapq.heappush(ready, other)
         return tuple(ordered)
 
+    @staticmethod
+    def violation_type(rules: Sequence[RuleClass]) -> Type[SetupRuleViolation]:
+        """Return the error to raise for the faults of these rules: their common ``VIOLATION``, or the base class.
+
+        Example: faults of the energy-port rules alone raise their ``EnergyPortWiringError``, so an ``except`` of the
+        error the checks raised before they moved keeps working; faults of rules with two different errors, or of no
+        rule, raise ``SetupRuleViolation``, which both errors derive from.
+
+        Args:
+            rules: The enforced rules that found faults.
+
+        Returns:
+            The error class.
+        """
+        types = {rule.VIOLATION for rule in rules}
+        return types.pop() if len(types) == 1 else SetupRuleViolation
+
     def rule(self, code_or_name: str) -> Optional[RuleClass]:
         """Return the rule with this code (``EP-06``) or this name (``room-heat-needs-receiver``), or ``None``."""
         return next((rule for rule in self.rules if code_or_name in (rule.CODE, rule.NAME)), None)
@@ -252,6 +271,7 @@ class SetupRuleRegistry:
         faults: List[Fault] = []
         logged: List[Fault] = []
         skipped: List[Skip] = []
+        refusing: List[RuleClass] = []
         for rule in self.execution_order(applicable):
             blocking = tuple(sorted(code for code in rule.REQUIRES if code in failed))
             if blocking:
@@ -262,6 +282,8 @@ class SetupRuleRegistry:
             if found:
                 failed.add(rule.CODE)
                 (faults if rule.ENFORCED else logged).extend(found)
+                if rule.ENFORCED:
+                    refusing.append(rule)
 
         def order(fault: Fault) -> Tuple[str, str, str]:
             """Sort a fault by its code, then its component and port."""
@@ -274,6 +296,7 @@ class SetupRuleRegistry:
             faults=tuple(sorted(faults, key=order)),
             logged=tuple(sorted(logged, key=order)),
             skipped=tuple(sorted(skipped, key=lambda skip: skip.code)),
+            violation_type=self.violation_type(refusing),
         )
 
     def run(self, stage: RuleStage, subject: RuleSubject, kind: Optional[SetupKind]) -> StageFindings:

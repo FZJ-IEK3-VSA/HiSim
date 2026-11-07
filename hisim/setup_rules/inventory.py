@@ -595,32 +595,47 @@ class Inventory:
             checks="the run has at least one component and one column", lives="Simulator.run_all_timesteps; process_one_timestep",
         ),
         RuleRecord(
-            rule_id="energy_ports.circuit_pairing", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; again after the run",
-            enforcement="E", checks="an end's other end declares the circuit; a circuit has exactly one supplier",
-            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.pairing_fault, Wiring.circuits",
+            rule_id="energy_ports.loop_pairing", codes=("EP-01",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
+            when="build; again after the run", enforcement="E", checks="an end's other end declares the circuit; a circuit has exactly one supplier",
+            lives="hisim/setup_rules/energy_ports.py:LoopPairing",
+            note=(
+                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
+                "which the balance after the run reads again (results.circuit_faults)"
+            ),
         ),
         RuleRecord(
-            rule_id="energy_ports.one_reader_per_flow", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; after the run",
-            enforcement="E", checks="a circuit's mass flow is read by one circuit-declaring component",
-            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.circuits",
+            rule_id="energy_ports.one_reader_per_flow", codes=("EP-02",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
+            when="build; after the run", enforcement="E", checks="a circuit's mass flow is read by one circuit-declaring component",
+            lives="hisim/setup_rules/energy_ports.py:OneReaderPerFlow",
+            note=(
+                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
+                "which the balance after the run reads again (results.circuit_faults)"
+            ),
         ),
         RuleRecord(
-            rule_id="energy_ports.no_circuit_on_a_node", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build; after the run",
-            enforcement="E", checks="an exempt component or a meter declares no circuit end", lives="hisim/postprocessing/energy_balance/ports.py:Wiring.circuits",
+            rule_id="energy_ports.no_loop_on_a_node", codes=("EP-03",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
+            when="build; after the run", enforcement="E", checks="an exempt component or a meter declares no circuit end",
+            lives="hisim/setup_rules/energy_ports.py:NoLoopOnANode",
+            note=(
+                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
+                "which the balance after the run reads again (results.circuit_faults); after the run DeclaredPorts.collect raises a ValueError for it"
+            ),
         ),
         RuleRecord(
-            rule_id="energy_ports.receiver_unambiguous", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="energy_ports.receiver_unambiguous", codes=("EP-04",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build",
+            enforcement="E",
             checks="an output port read through paired inputs by one component; a non-metered PRODUCTION port read by one declared component unless an input is tagged",
-            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.ambiguous_receiver_faults",
+            lives="hisim/setup_rules/energy_ports.py:ReceiverUnambiguous",
         ),
         RuleRecord(
-            rule_id="energy_ports.input_port_pairs", nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="an input port pairs with the output port it reads (same carrier, opposite role)",
-            lives="hisim/postprocessing/energy_balance/ports.py:Wiring.unpaired_input_port_faults",
+            rule_id="energy_ports.input_port_pairs", codes=("EP-05",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="an input port pairs with the output port it reads (same carrier, opposite role)",
+            lives="hisim/setup_rules/energy_ports.py:InputPortPairs",
         ),
         RuleRecord(
-            rule_id="energy_ports.room_heat_needs_receiver", nature=RuleNature.DOMAIN, target="energy_ports", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a PRODUCTION port of ROOM_HEAT is read by a component", lives="PR #1211 (Wiring.refuse_a_broken_wiring, fourth fault list)",
+            rule_id="energy_ports.room_heat_needs_receiver", codes=("EP-06",), nature=RuleNature.DOMAIN, target="energy_ports", stage=RuleStage.BUILD,
+            when="build", enforcement="E", checks="a PRODUCTION port of ROOM_HEAT is read by a component",
+            lives="hisim/setup_rules/energy_ports.py:RoomHeatNeedsReceiver",
             note=", waived for demo and plant",
         ),
         RuleRecord(

@@ -2,7 +2,7 @@
 
 Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft, D12
 to D15 from the comparison with ruff, pylint, ESLint and clippy);
-PR 1 (the mechanism, bead .1) is built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
+PR 1 (the mechanism, bead .1) and PR 2 (the energy-port family, bead .2) are built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
 PR: #1216 (spec only). Builds on: `roadmap/device_location_spec.md` (D-h: the build rule "room heat needs a
 receiver", PRs #1211 and #1213), `roadmap/complete_energy_sankeys_spec.md` (D1 and Q-B: a component declares its
 ports or is exempt with a reason; Q-H: the meter check is enforced only while nothing is undeclared),
@@ -318,7 +318,7 @@ order, allocated by the family's PR and never changed afterwards:
 | Family (module) | Prefix | Day-one allocation |
 |---|---|---|
 | `document`, `bindings`, `sizing`, `wiring`, `assemblies` | `EF-` | the codes the checks carry today (§6.1 to §6.4); a moved warning that has none gets the next free code of its block: `EF-34` unconsumed source, `EF-35` unmetered output of a need, `EF-4K` unconsumed fact |
-| `energy_ports` | `EP-` | `EP-01` circuit-pairing … `EP-05` input-port-pairs, `EP-06` room-heat-needs-receiver (the rows of §6.5 in order) |
+| `energy_ports` | `EP-` | `EP-01` loop-pairing … `EP-05` input-port-pairs, `EP-06` room-heat-needs-receiver (the rows of §6.5 in order) |
 | `fluid_loops` | `FL-` | `FL-01` loop-tagged-whole … `FL-08` one-pump-owner |
 | `components` | `CB-` | `CB-01` one-kind-base … in the order of §6.5 |
 | `results` | `AR-` | `AR-01` finite … in the order of §6.6 |
@@ -714,9 +714,9 @@ run when HiSim is imported, concern the code and not a setup, and stay (L, not m
 | `components.no_physics_cycle` | the L1 device-before-store constraints form no cycle | `hisim/evaluation_order.py:PhysicsOrder.ordered` | first plan | L | D | `components.py` |
 | `components.no_l2_cycle` | L2 controllers read one another in no cycle | `L2Order.ordered` | first plan | L | D | `components.py` |
 | `components.not_empty` | the run has at least one component and one column | `Simulator.run_all_timesteps`; `process_one_timestep` | build / step | E | L | `components.py` |
-| `energy_ports.circuit_pairing` | an end's other end declares the circuit; a circuit has exactly one supplier | `eb/ports.py:Wiring.pairing_fault`, `Wiring.circuits` | build; again after the run | E | L | `energy_ports.py` |
+| `energy_ports.loop_pairing` | an end's other end declares the circuit; a circuit has exactly one supplier | `eb/ports.py:Wiring.pairing_fault`, `Wiring.circuits` | build; again after the run | E | L | `energy_ports.py` |
 | `energy_ports.one_reader_per_flow` | a circuit's mass flow is read by one circuit-declaring component | `eb/ports.py:Wiring.circuits` | build; after the run | E | L | `energy_ports.py` |
-| `energy_ports.no_circuit_on_a_node` | an exempt component or a meter declares no circuit end | `eb/ports.py:Wiring.circuits` | build; after the run | E | L | `energy_ports.py` |
+| `energy_ports.no_loop_on_a_node` | an exempt component or a meter declares no circuit end | `eb/ports.py:Wiring.circuits` | build; after the run | E | L | `energy_ports.py` |
 | `energy_ports.receiver_unambiguous` | an output port read through paired inputs by one component; a non-metered `PRODUCTION` port read by one declared component unless an input is tagged | `eb/ports.py:Wiring.ambiguous_receiver_faults` | build | E | L | `energy_ports.py` |
 | `energy_ports.input_port_pairs` | an input port pairs with the output port it reads (same carrier, opposite role) | `eb/ports.py:Wiring.unpaired_input_port_faults` | build | E | L | `energy_ports.py` |
 | `energy_ports.room_heat_needs_receiver` | a `PRODUCTION` port of `ROOM_HEAT` is read by a component | PR #1211 (`Wiring.refuse_a_broken_wiring`, fourth fault list) | build | E | **D**, waived for `demo` and `plant` | `energy_ports.py` |

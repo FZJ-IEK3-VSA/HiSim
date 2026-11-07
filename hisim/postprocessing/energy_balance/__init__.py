@@ -14,8 +14,8 @@ Coverage: the heat generators, the electricity devices and the occupancy declare
 published exchanges; the water storages and the heat distribution system behind a buffer tag their water circuits
 as fluid loops (:class:`~hisim.energy_port.FluidLoop`) on their channels, as the generators at the other end do (PR
 3 of the spec's §9, hydronic stage E, hisim-hydronics-fxix.6). The building and the rest follow in the other PRs of §9, the distribution system without a
-buffer with hisim-pnw7; until then they are drawn as undeclared nodes. :meth:`ports.Wiring.refuse_a_broken_wiring`
-refuses a wiring that breaks a rule of the ports before the run simulates.
+buffer with hisim-pnw7; until then they are drawn as undeclared nodes. The energy-port rules of
+``hisim/setup_rules/energy_ports.py`` refuse a wiring that breaks a rule of the ports before the run simulates.
 """
 
 from hisim.postprocessing.energy_balance.check import (
@@ -30,7 +30,6 @@ from hisim.postprocessing.energy_balance.meters import MeterBalance, MeterCheck
 from hisim.postprocessing.energy_balance.ports import (
     CircuitColumns,
     DeclaredPorts,
-    EnergyPortWiringError,
     Exemptions,
     Peer,
     PeerKind,
@@ -44,7 +43,6 @@ __all__ = [
     "ComponentBalance",
     "DeclaredPorts",
     "EnergyBalanceError",
-    "EnergyPortWiringError",
     "EnergyBalanceReport",
     "Exemptions",
     "LinkBalance",

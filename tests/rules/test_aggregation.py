@@ -6,10 +6,12 @@ that needs another to have passed is skipped, visibly, when that one found fault
 logs its faults and refuses nothing.
 """
 
+from typing import Type
+
 import pytest
 
 from hisim.setup_rules.kinds import SetupKind
-from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.registry import RuleClass, SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage, SetupRuleViolation, Skip
 from hisim.setup_rules.subjects import BuiltSystem
 from tests.rules.sample_rules import Finding, SampleRules
@@ -109,3 +111,50 @@ def test_every_refusal_message_ends_with_the_pointer_to_its_rule() -> None:
 
     assert all(fault.message.endswith(f"see: hisim setup-rules show {fault.code}") for fault in refusal.value.faults)
     assert all(line.endswith(f"see: hisim setup-rules show {line.split()[1]}") for line in str(refusal.value).splitlines()[1:])
+
+
+class FamilyViolation(SetupRuleViolation):
+    """The error of a sample family whose checks raised it before they moved into the rules package."""
+
+
+class OtherFamilyViolation(SetupRuleViolation):
+    """The error of a second sample family."""
+
+
+def family_rule(code: str, name: str, violation: Type[SetupRuleViolation]) -> RuleClass:
+    """Return a sample rule with one fault that names ``violation`` as its error."""
+    rule = SampleRules.rule(code, name, findings=[Finding(name)])
+    rule.VIOLATION = violation
+    return rule
+
+
+def test_the_faults_of_one_family_raise_its_own_error() -> None:
+    """Catches an ``except EnergyPortWiringError`` that stopped working when the energy-port checks moved into the package."""
+    registry = SetupRuleRegistry([family_rule("EP-01", "first", FamilyViolation), family_rule("EP-02", "second", FamilyViolation)])
+
+    with pytest.raises(FamilyViolation) as refusal:
+        registry.run(RuleStage.BUILD, built_system(), SetupKind.RESIDENTIAL)
+
+    assert [fault.code for fault in refusal.value.faults] == ["EP-01", "EP-02"]
+
+
+def test_the_violation_type_is_the_common_error_of_the_rules_with_faults_else_the_base() -> None:
+    """Catches the error of one family raised for faults of another, which an ``except`` of that family would wrongly catch."""
+    own = family_rule("EP-01", "own", FamilyViolation)
+    other = family_rule("EP-02", "other", OtherFamilyViolation)
+    plain = SampleRules.rule("EP-03", "plain")
+
+    assert SetupRuleRegistry.violation_type([own, own]) is FamilyViolation
+    assert SetupRuleRegistry.violation_type([own, other]) is SetupRuleViolation
+    assert SetupRuleRegistry.violation_type([own, plain]) is SetupRuleViolation
+    assert SetupRuleRegistry.violation_type([]) is SetupRuleViolation
+
+
+def test_a_rule_of_another_error_that_finds_nothing_does_not_change_the_error() -> None:
+    """Catches the error chosen from every rule that ran rather than from the rules that found faults."""
+    quiet = SampleRules.rule("EP-02", "quiet")
+    quiet.VIOLATION = OtherFamilyViolation
+    registry = SetupRuleRegistry([family_rule("EP-01", "loud", FamilyViolation), quiet])
+
+    with pytest.raises(FamilyViolation):
+        registry.run(RuleStage.BUILD, built_system(), SetupKind.RESIDENTIAL)

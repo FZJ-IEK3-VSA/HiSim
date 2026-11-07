@@ -111,8 +111,8 @@ water, ``COOLING`` goes from the other member to the supplier. The rules it appl
   this run and is left out, as a storage's second generator loop without a second generator is. A member that
   pumps water into a loop whose other quantities it cannot read fails the run.
 
-The rules that need no value of the run fail it right after the build, before it simulates
-(:meth:`hisim.postprocessing.energy_balance.ports.Wiring.refuse_a_broken_wiring`), together with two rules of the
+The rules that need no value of the run fail it right after the build, before it simulates (the energy-port rules
+of ``hisim/setup_rules/energy_ports.py``, ``EP-01`` to ``EP-03``), together with two rules of the
 :class:`EnergyPort` wiring: rule (a) of the owner's decision of 2026-10-02, a ``PRODUCTION`` port that is not metered
 and is read by more than one component that declares ports is refused unless exactly one reader tags the reading
 input with a port it pairs with; and an input port must pair with the port of the output it reads, if that output

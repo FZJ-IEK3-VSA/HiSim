@@ -28,10 +28,13 @@ from hisim.postprocessing.energy_balance import (
     EnergyBalanceReport,
 )
 from hisim.postprocessing.energy_balance.check import RoleTotals
-from hisim.postprocessing.energy_balance.ports import DeclaredPorts, EnergyPortWiringError, Peer, PeerKind, Wiring
+from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Peer, PeerKind, Wiring
 from hisim.postprocessing.energy_balance.sankey import SankeyDiagram
 from hisim.postprocessing.postprocessing_main import PostProcessor
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.energy_ports import EnergyPortWiringError, InputPortPairs
+from hisim.setup_rules.subjects import BuiltSystem
+from tests import functions_for_testing as fft
 
 CONSUMPTION, PRODUCTION, LOSS, STORED = lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION, lt.EnergyRole.LOSS, lt.EnergyRole.STORED_CHANGE
 SH = lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
@@ -1078,12 +1081,12 @@ def test_an_input_port_must_pair_with_the_output_port_it_reads(input_port: Energ
         stand_in("Tank", None, [], outputs),
         stand_in("Loop", None, [wired_input("HeatIn", "Tank", "HeatOut", input_port)], []),
     ]
-    assert len(Wiring(components).unpaired_input_port_faults()) == int(refused)
+    assert len(InputPortPairs().check(BuiltSystem(components=tuple(components)))) == int(refused)
     if not refused:
-        Wiring.refuse_a_broken_wiring(components)
+        fft.EnergyPortRules.refuse_a_broken_wiring(components)
         return
     with pytest.raises(EnergyPortWiringError, match=r"the input Loop.HeatIn .* reads the energy port Tank.HeatOut"):
-        Wiring.refuse_a_broken_wiring(components)
+        fft.EnergyPortRules.refuse_a_broken_wiring(components)
 
 
 def electrolyzer_and_tank(stored_kilograms: Sequence[float]) -> EnergyBalanceReport:

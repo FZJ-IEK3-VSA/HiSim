@@ -60,6 +60,7 @@ from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
+from hisim.setup_rules.kinds import SetupKind
 
 #: What a partner serves, as the registry finds it: the form's key, then its values.
 ServedKey = Tuple[Any, ...]
@@ -326,6 +327,7 @@ class TestPartnerRegistry:
         document = {
             "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
             "name": "test_partners",
+            "setup_kind": SetupKind.DEMO.value,
             "components": components,
         }
         text = yaml.safe_dump(document, sort_keys=False)

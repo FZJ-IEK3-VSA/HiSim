@@ -34,6 +34,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.kinds import SetupKind
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
@@ -94,6 +95,7 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_ems",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -758,6 +760,7 @@ def _simulator(result_directory: str) -> sim.Simulator:
         module_filename="household_for_test_grown_ports",
         my_simulation_parameters=simulation_parameters,
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(simulation_parameters)
     return my_sim
 

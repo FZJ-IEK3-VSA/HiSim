@@ -2,6 +2,7 @@
 # Recorded from system_setups/dynamic_components.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: dynamic_components
+setup_kind: demo
 description: Dynamic Components Module.
 components:
   Battery1:

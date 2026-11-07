@@ -40,6 +40,7 @@ from hisim.dynamic_component import DynamicComponent
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -394,6 +395,7 @@ def probe_simulator(tmp_path: Path) -> Simulator:
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     parameters.result_directory = str(tmp_path / "results")
     simulator: Simulator = Simulator(module_directory=str(tmp_path), module_filename="kinds", my_simulation_parameters=parameters)
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     return simulator
 

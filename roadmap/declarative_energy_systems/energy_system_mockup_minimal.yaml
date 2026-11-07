@@ -15,6 +15,7 @@
 # ---------------------------------------------------------------------------
 schema_version: 3
 name: Gas boiler household
+setup_kind: residential
 description: Single-family house with a condensing gas boiler, floor heating and grid electricity.
 
 components:

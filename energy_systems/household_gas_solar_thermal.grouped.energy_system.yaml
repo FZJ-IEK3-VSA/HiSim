@@ -3,6 +3,7 @@
 # Grouped by energy_systems/household_gas_solar_thermal.grouping.yaml from the probe configurations of energy_systems/household_gas_solar_thermal.probes.yaml.
 schema_version: 3
 name: household_gas_solar_thermal
+setup_kind: residential
 description: Household setup with gas boiler and solar thermal system for DHW.
 components:
   Building:

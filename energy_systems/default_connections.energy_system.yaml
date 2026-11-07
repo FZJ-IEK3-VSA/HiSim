@@ -2,6 +2,7 @@
 # Recorded from system_setups/default_connections.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: default_connections
+setup_kind: residential
 description: Default Connections Module.
 components:
   UTSPConnector:

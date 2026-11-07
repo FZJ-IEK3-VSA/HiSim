@@ -28,6 +28,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
 )
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "HiSim Project"
 __copyright__ = "Copyright 2025, the House Infrastructure Project"
@@ -51,6 +52,7 @@ def setup_function(
         - SimpleAirConditionerController (hysteresis on indoor temperature)
         - ElectricityMeter (reads the air conditioner's electricity)
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
     # =================================================================================================================================
     # Set System Parameters from Config
     config_filename = my_sim.my_module_config

@@ -50,7 +50,8 @@ from hisim.energy_system.errors import (
     EnergySystemFormatError,
 )
 from hisim.energy_system.groups import ExpansionRecord, expand_groups
-from hisim.energy_system.loader import parse_energy_system
+from hisim.energy_system.document import RawDocument
+from hisim.energy_system.loader import EnergySystemReader, run_load_rules
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.parameters_format import ParameterFileWriter, ParameterNormalisation
 from hisim.energy_system.path_resolver import PathResolver
@@ -58,6 +59,9 @@ from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import BuiltDocument
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import (
     PartLoadThresholdError,
@@ -219,6 +223,12 @@ class BuiltEnergySystem:
     rerun: bool = False
     imports: ImportRecord = field(default_factory=ImportRecord)
 
+    def built_document(self) -> BuiltDocument:
+        """Return the subject the build rules of a file read: the expanded file, its wired components, the path resolver and the file."""
+        return BuiltDocument(
+            model=self.model, wired=self.wired, path_resolver=self.path_resolver, file=self.source_energy_system or None
+        )
+
 
 class EnergySystemExecutor:
     """Runs the stages of the lifecycle in order and hands back everything they produced.
@@ -282,7 +292,7 @@ class EnergySystemExecutor:
         self.source_lines = source_lines
 
     def build(self) -> BuiltEnergySystem:
-        """Runs every stage from the loaded file to a wired, registered simulator.
+        """Runs every stage from the loaded file to a wired, registered simulator, then the build rules of the file.
 
         Returns:
             The built system, its simulator ready for the run.
@@ -291,6 +301,23 @@ class EnergySystemExecutor:
             EnergySystemError: For any condition of the error catalogue; the file is rejected at
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
+            SetupRuleViolation: Listing every fault of the ``BUILD`` rules that read the built file.
+        """
+        built = self.construct()
+        SetupRuleRegistry.collect().run(RuleStage.BUILD, built.built_document(), built.model.setup_kind)
+        return built
+
+    def construct(self) -> BuiltEnergySystem:
+        """Runs every stage from the loaded file to a wired, registered simulator, without the setup rules of the build.
+
+        :meth:`build` is this followed by the build rules; ``hisim setup-rules check`` calls it to run the rules
+        itself, so that it can report every fault instead of stopping at the first stage that refuses.
+
+        Returns:
+            The built system, its simulator ready for the run.
+
+        Raises:
+            EnergySystemError: For any condition of the error catalogue.
         """
         imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
         expanded, expansion = expand_groups(imported)
@@ -363,13 +390,14 @@ class EnergySystemExecutor:
         is switched off, because every connection this format makes is an item of the file and
         has already been made.
 
-        The run metadata a Python setup has to assemble by hand — the scenario name and the
-        description — the file already carries: its ``name`` becomes the scenario name that
+        The run metadata a Python setup has to assemble by hand — the scenario name, the
+        description and the kind of setup — the file already carries: its ``name`` becomes the scenario name that
         post-processing writes into the pyam "scenario" column, and its ``description`` the
         run's description, which documents the file and, since ``scenario.json`` retired with
         its writer (F-9), reaches no artifact. Before this, a declarative run left both
         empty: only the Python path set them, the twelve building-sizer setups writing the
-        scenario name and :mod:`hisim.hisim_main` the description.
+        scenario name and :mod:`hisim.hisim_main` the description. Its ``setup_kind`` is declared
+        on the simulator, as a Python setup declares its kind.
 
         A grouped file describes more than one system, so its name alone does not identify the
         run: the same file run twice with a different ``variants.<v>.selected`` would otherwise
@@ -394,6 +422,7 @@ class EnergySystemExecutor:
         )
         simulator.scenario_name = self.scenario_name_of(model, expansion)
         simulator.description = model.description or ""
+        simulator.declare_setup_kind(model.setup_kind)
         for _name, component in wired.components:
             simulator.add_component(component, connect_automatically=self.CONNECT_AUTOMATICALLY)
         return simulator
@@ -490,10 +519,13 @@ def build_energy_system(
 
     Raises:
         EnergySystemError: For any condition of the error catalogue.
+        SetupRuleViolation: Listing every fault of the setup rules of the ``LOAD`` or the ``BUILD`` stage.
     """
     path = Path(energy_system_path)
-    model = parse_energy_system(path)
+    document, origin = RawDocument.read(path)
+    model = EnergySystemReader.build(document, origin)
     EnergySystemExecutor.check_metadata(model, str(path), rerun)
+    run_load_rules(model, document, str(path))
     source_lines = (
         LineIndex.from_text(path.read_text(encoding="utf-8"), path.name)
         if model.schema_version == EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION

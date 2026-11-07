@@ -299,13 +299,13 @@ def test_the_source_map_names_the_import_the_instance_and_both_files_lines() -> 
     component = entries[("pv-west-PVSystem", "component")]
     assert (component.import_key, component.instance, component.member) == ("pv", "west", "PVSystem")
     assert [location.text for location in component.chain] == [
-        "house.energy_system.yaml:34",
+        "house.energy_system.yaml:35",
         "mock/labelled_array.assembly.yaml:22",
     ]
     lowered = entries[("pv-west-PVSystem", "inputs[0]")]
     assert lowered.note == "port weather bound to Weather (default)"
     assert lowered.chain[-1].text == "mock/labelled_array.assembly.yaml:31"
-    assert entries[("Monitor", "inputs[0]")].chain[-1].text == "house.energy_system.yaml:24"
+    assert entries[("Monitor", "inputs[0]")].chain[-1].text == "house.energy_system.yaml:25"
     assert ("pv-west-PVSystem", "config.azimuth") in entries
 
 

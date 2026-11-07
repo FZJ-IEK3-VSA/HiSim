@@ -41,6 +41,7 @@ from hisim.economics.facts import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 from tests.fake_component_source import NamedComponentSource
 
 pytestmark = pytest.mark.base
@@ -127,6 +128,7 @@ def _simulator(*options: PostProcessingOptions) -> Simulator:
         module_filename="does_not_need_to_exist.py",
         my_simulation_parameters=parameters,
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     return simulator
 
 

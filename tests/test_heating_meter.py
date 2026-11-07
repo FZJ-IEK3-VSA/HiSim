@@ -25,6 +25,7 @@ from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.setup_rules.kinds import SetupKind
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -80,6 +81,7 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_heating_meter",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Set some parameters
     heating_reference_temperature_in_celsius: float = -7.0

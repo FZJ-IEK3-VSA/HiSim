@@ -16,6 +16,7 @@ from hisim.components import air_conditioner
 from hisim.components import electricity_meter
 from hisim import loadtypes
 from hisim.config import ComponentID, SizingContext
+from hisim.setup_rules.kinds import SetupKind
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"
@@ -66,6 +67,7 @@ def setup_function(
         7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013
 
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # Set general simulation parameters
     year = 2021

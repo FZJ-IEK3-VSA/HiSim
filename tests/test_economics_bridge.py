@@ -67,6 +67,7 @@ from hisim.components import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 from tests.fake_component_source import NamedComponentSource
 from tests.idealized_heater_rig import controller_between, heat_into
 
@@ -90,6 +91,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_economics_bridge",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # The weather config is built first because the PV and building configs copy its identity

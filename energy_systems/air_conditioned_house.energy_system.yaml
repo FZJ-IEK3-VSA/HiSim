@@ -2,6 +2,7 @@
 # Recorded from system_setups/air_conditioned_house.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: air_conditioned_house
+setup_kind: residential
 description: Air-conditioned household.
 components:
   UTSPConnector:

@@ -22,6 +22,7 @@ from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.postprocessing.finite_results import FiniteResultsCheck, NonFiniteResultsError
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -120,6 +121,7 @@ def run_one_day(tmp_path: Path, nan_step: Optional[int]) -> pd.DataFrame:
     simulator = Simulator(
         module_directory=str(tmp_path), module_filename="finite_results", my_simulation_parameters=parameters
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     source = NanSource(parameters, NanSourceConfig(component_id=ComponentID(name="Source"), nan_step=nan_step))
     simulator.add_component(source)

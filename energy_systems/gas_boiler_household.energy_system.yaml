@@ -8,6 +8,7 @@
 #       simulation_parameters/one_day_15min_export.simulation.yaml
 schema_version: 3
 name: Gas boiler household
+setup_kind: residential
 description: Single-family house with a condensing gas boiler, floor heating and grid electricity.
 components:
   weather:

@@ -345,6 +345,7 @@ def _clone_ppdt(
         execution_time_in_s=case.ppdt.execution_time_in_s,
         scenario_name=case.ppdt.scenario_name,
         description=case.ppdt.description,
+        setup_kind=case.ppdt.setup_kind,
         results_monthly=case.ppdt.results_monthly,
         results_hourly=case.ppdt.results_hourly,
         results_cumulative=case.ppdt.results_cumulative,

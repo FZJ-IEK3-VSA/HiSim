@@ -2,6 +2,7 @@
 # Recorded from system_setups/basic_household_only_heating.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: basic_household_only_heating
+setup_kind: residential
 description: Shows a single household with only heating.
 components:
   ModulatingBoilerController:

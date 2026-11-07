@@ -23,6 +23,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulator import SimulationParameters
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 from tests.idealized_heater_rig import controller_between, heat_into
 
 
@@ -47,6 +48,7 @@ def _build_system(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_electricity_meter",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather

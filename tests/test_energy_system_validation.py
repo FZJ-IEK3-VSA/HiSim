@@ -40,6 +40,7 @@ class Systems:
     SKELETON: ClassVar[str] = """
 schema_version: 3
 name: rule under test
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -209,6 +210,7 @@ def test_an_entry_with_no_preset_no_constructor_and_no_config_is_refused() -> No
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -229,6 +231,7 @@ def test_a_nested_group_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components: {}
 groups:
   outer:
@@ -257,6 +260,7 @@ def test_a_component_listed_in_two_groups_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components: {}
 groups:
   pv:
@@ -330,6 +334,7 @@ def test_mixing_an_explicit_wire_and_a_feed_from_one_source_is_refused() -> None
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
@@ -360,6 +365,7 @@ def test_two_wires_into_one_input_are_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -392,6 +398,7 @@ def test_the_same_feed_written_twice_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector

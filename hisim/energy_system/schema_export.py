@@ -48,6 +48,7 @@ from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.schema_classes import ComponentClassScan, JsonTypes
+from hisim.setup_rules.kinds import SetupKind
 
 
 class SchemaBuilder:
@@ -109,7 +110,7 @@ class SchemaBuilder:
             ),
             "type": "object",
             "additionalProperties": False,
-            "required": ["schema_version", "name"],
+            "required": ["schema_version", "name", "setup_kind"],
             "properties": self._top_level(),
             "if": {"required": ["imports"]},
             "then": {"properties": {"schema_version": {"const": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION}}},
@@ -128,6 +129,13 @@ class SchemaBuilder:
                 "description": "The format version: 3 for a flat file, 4 for a file that imports assemblies.",
             },
             "name": {"type": "string", "description": "The name of the energy system."},
+            "setup_kind": {
+                "enum": [kind.value for kind in SetupKind],
+                "description": (
+                    "What the system is: a demo (a demonstration or a test rig), a residential or a commercial "
+                    "building, or a plant (a system without a building). It selects the setup rules the system waives."
+                ),
+            },
             "description": {"type": "string"},
             "components": {"$ref": "#/$defs/components"},
             "imports": {

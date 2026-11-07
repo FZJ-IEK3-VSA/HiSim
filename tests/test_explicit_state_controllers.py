@@ -42,6 +42,7 @@ from hisim.explicit_state_controller import ExplicitStateController
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -487,6 +488,7 @@ def flip_loop(tmp_path: Path) -> Tuple[Simulator, FlipController]:
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     parameters.result_directory = str(tmp_path / "results")
     simulator = Simulator(module_directory=str(tmp_path), module_filename="flip_loop", my_simulation_parameters=parameters)
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     controller = FlipController(parameters, FlipLoopConfig(component_id=ComponentID(name="Controller")))
     plant = EchoPlant(parameters, FlipLoopConfig(component_id=ComponentID(name="Plant")))

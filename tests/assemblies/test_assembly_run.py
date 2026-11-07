@@ -46,7 +46,7 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     assert imports["instances"][3]["quote"]["source"] == "mock"
     source_map = record["metadata"]["source_map"]
     assert source_map["tank-Tank"]["inputs[1]"]["chain"] == [
-        "house.energy_system.yaml:35",
+        "house.energy_system.yaml:36",
         "mock/wired_tank.assembly.yaml:22",
     ]
 
@@ -134,5 +134,5 @@ def test_a_wiring_refusal_of_a_lowered_item_names_where_it_came_from(tmp_path: P
         EnergySystemExecutor(model, parameters, assembly_resolver=library.resolver(), source_lines=lines).build()
     message = str(refusal.value)
     assert message.endswith(
-        "[source: bare-Device (import bare, inline.energy_system.yaml:6 → test/bare.assembly.yaml:5)]"
+        "[source: bare-Device (import bare, inline.energy_system.yaml:7 → test/bare.assembly.yaml:5)]"
     )

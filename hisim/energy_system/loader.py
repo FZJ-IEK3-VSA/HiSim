@@ -30,6 +30,10 @@ from hisim.energy_system.imports_reader import ImportsReader
 from hisim.energy_system.model import EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.validation import validate_structure
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import LoadedDocument
 
 
 class EnergySystemReader:
@@ -133,6 +137,7 @@ class EnergySystemReader:
         return EnergySystemFile(
             schema_version=version,
             name=RawDocument.string(document.get("name"), f"{origin}.name", required=True) or "",
+            setup_kind=cls._setup_kind(document, origin),
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
             components=EntryReader.components(document.get("components"), f"{origin}.components", site=assemblies),
             imports=ImportsReader.imports(document.get("imports"), f"{origin}.imports"),
@@ -141,6 +146,34 @@ class EnergySystemReader:
             metadata=metadata,
             addresses=addresses,
         )
+
+    @classmethod
+    def _setup_kind(cls, document: Mapping[str, Any], origin: str) -> SetupKind:
+        """Reads the kind of setup the document declares, which is mandatory and has no default.
+
+        The kind selects which setup rules the system waives, so a file that leaves it out would run as whatever a
+        default made it; it is refused instead. For example, ``setup_kind: demo`` reads as ``SetupKind.DEMO``, and
+        ``setup_kind: house`` is refused naming the four kinds.
+
+        Returns:
+            The declared kind.
+
+        Raises:
+            EnergySystemFormatError: ``EF-03`` if the key is missing or names no kind.
+        """
+        written = document.get("setup_kind")
+        kinds = [kind.value for kind in SetupKind]
+        if written not in kinds:
+            problem = "declares no setup_kind" if "setup_kind" not in document else f"declares setup_kind {written!r}"
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.TOP_LEVEL_SHAPE,
+                f"{origin}.setup_kind",
+                f"the document {problem}: every energy-system file states what it is.",
+                alternatives=kinds,
+                alternatives_label="setup kinds",
+                offending_value=None if written is None else str(written),
+            )
+        return SetupKind(written)
 
     @classmethod
     def _check_schema_version(cls, document: Mapping[str, Any], origin: str) -> int:
@@ -305,10 +338,10 @@ def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:
     """Loads an energy-system file and checks everything decidable without its classes.
 
     This is the entry point for every reader of the format. It reads the YAML, rejects
-    duplicate and unknown keys, builds the model and runs the structural validator, so a
-    file that comes back has a valid shape, unique names, legal groups and a closed
-    reference graph. It imports no component class, so nothing is said yet about whether a
-    preset, a config field or a port exists.
+    duplicate and unknown keys, builds the model, runs the structural validator and then the
+    setup rules of the ``LOAD`` stage, so a file that comes back has a valid shape, unique
+    names, legal groups and a closed reference graph. It imports no component class, so
+    nothing is said yet about whether a preset, a config field or a port exists.
 
     Args:
         source: A path to a ``.yaml`` or ``.yml`` file, or a string holding the YAML text.
@@ -320,10 +353,31 @@ def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:
     Raises:
         EnergySystemFormatError: On the first problem found, naming the offending element
             and, where a closed set of valid values exists, listing it.
+        SetupRuleViolation: Listing every fault of the ``LOAD`` rules the file's kind runs.
     """
-    model = EnergySystemReader.read(source)
+    document, origin = RawDocument.read(source)
+    model = EnergySystemReader.build(document, origin)
     validate_structure(model)
+    run_load_rules(model, document, None if origin == RawDocument.TEXT_ORIGIN else str(source))
     return model
+
+
+def run_load_rules(model: EnergySystemFile, document: Mapping[str, Any], file: Optional[str]) -> None:
+    """Runs the setup rules of the ``LOAD`` stage on a file the reader built: the loader's hook into the rules.
+
+    Both ways a file reaches HiSim call it once: :func:`load_energy_system`, which tools and the translator use,
+    and the build of a run (:func:`hisim.energy_system.executor.build_energy_system`), which reads the file with
+    the reader alone because the structural validation of a file that imports assemblies waits for the expansion.
+
+    Args:
+        model: The file as the reader built it.
+        document: The top-level mapping the reader built it from.
+        file: The file's path, ``None`` for a document read from text.
+
+    Raises:
+        SetupRuleViolation: Listing every fault of the ``LOAD`` rules the file's kind runs.
+    """
+    SetupRuleRegistry.collect().run(RuleStage.LOAD, LoadedDocument(model=model, document=document, file=file), model.setup_kind)
 
 
 def parse_energy_system(source: Union[str, Path]) -> EnergySystemFile:

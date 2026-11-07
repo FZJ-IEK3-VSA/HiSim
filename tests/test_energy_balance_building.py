@@ -47,12 +47,15 @@ class Expected:
         "july": ("2021-07-27", "2021-08-03"),
     }
 
-    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first four are inputs.
+    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first six are inputs. Both tanks stand
+    #: in the unheated cellar of the twins' TABULA row, so the two ports of their heat into the heated zone book zero.
     PORTS: ClassVar[Dict[str, Tuple[str, str, str, str]]] = {
         "HeatReceivedInWatt": ("consumption", "space_heating_heat", "component", "HeatDistributionSystem"),
         "HeatRemovedByCoolingInWatt": ("production", "cooling", "component", "HeatDistributionSystem"),
         "HeatingByResidents": ("consumption", "room_heat", "component", "UTSPConnector"),
         "HeatingByDevices": ("consumption", "room_heat", "component", "UTSPConnector"),
+        "HeatToHeatedZoneInWattFromSimpleHotWaterStorage": ("consumption", "room_heat", "component", "SimpleHotWaterStorage"),
+        "HeatToHeatedZoneInWattFromDHWStorage": ("consumption", "room_heat", "component", "DHWStorage"),
         "SolarGainThroughWindows": ("consumption", "solar", "boundary", "sun"),
         "VentilationLossInWatt": ("loss", "room_heat", "boundary", "outdoors"),
         "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "outdoors"),
@@ -68,6 +71,8 @@ class Expected:
         ("Building", "SolarGainThroughWindows"),
         ("UTSPConnector", "HeatingByResidents"),
         ("UTSPConnector", "HeatingByDevices"),
+        ("SimpleHotWaterStorage", "HeatToHeatedZoneInWatt"),
+        ("DHWStorage", "HeatToHeatedZoneInWatt"),
     )
     OUTPUTS: ClassVar[Tuple[Tuple[str, str], ...]] = (("HeatDistributionSystem", "HeatDrawnForCoolingInWatt"),)
     LOSSES: ClassVar[Tuple[str, ...]] = (

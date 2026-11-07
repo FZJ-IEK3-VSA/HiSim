@@ -57,10 +57,10 @@ class Expected:
         "HeatToHeatedZoneInWattFromSimpleHotWaterStorage": ("consumption", "room_heat", "component", "SimpleHotWaterStorage"),
         "HeatToHeatedZoneInWattFromDHWStorage": ("consumption", "room_heat", "component", "DHWStorage"),
         "SolarGainThroughWindows": ("consumption", "solar", "boundary", "sun"),
-        "VentilationLossInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "TransmissionLossOpaqueInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "GainsLostThroughWindowsInWatt": ("loss", "room_heat", "boundary", "outdoors"),
+        "VentilationLossInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "TransmissionLossOpaqueInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "GainsLostThroughWindowsInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
         "ThermalMassStoredEnergyIncreaseInWattHour": ("stored_change", "room_heat", "store", "Building · stored"),
     }
 
@@ -92,7 +92,7 @@ class Expected:
         ("solar", "sun", "Building"),
         ("room_heat", "UTSPConnector", "Building"),
         ("room_heat", "Building", "Building · VentilationLossInWatt"),
-        ("room_heat", "Building · VentilationLossInWatt", "outdoors"),
+        ("room_heat", "Building · VentilationLossInWatt", "heat loss to outdoors"),
         ("room_heat", "Building", "Building · TransmissionLossWindowsAndDoorsInWatt"),
         ("room_heat", "Building", "Building · TransmissionLossOpaqueInWatt"),
         ("room_heat", "Building", "Building · GainsLostThroughWindowsInWatt"),

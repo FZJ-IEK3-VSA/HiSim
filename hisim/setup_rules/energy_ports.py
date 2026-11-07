@@ -360,7 +360,7 @@ class RoomHeatNeedsReceiver(EnergyPortRule):
         """Return whether an output port releases heat into the heated zone: ``PRODUCTION`` of ``ROOM_HEAT``, no environment.
 
         Example: the occupancy's ``EnergyPort(PRODUCTION, ROOM_HEAT)`` does; the same port naming the environment
-        ``OUTDOORS`` does not, nor the building's ``EnergyPort(LOSS, ROOM_HEAT)``, nor an output without a port.
+        ``HEAT_LOSS_TO_OUTDOORS`` does not, nor the building's ``EnergyPort(LOSS, ROOM_HEAT)``, nor an output without a port.
 
         Args:
             port: The output's energy port, ``None`` when it declares none.

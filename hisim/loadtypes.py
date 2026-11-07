@@ -410,11 +410,15 @@ class EnvironmentNode(str, enum.Enum):
 
     A ``CONSUMPTION`` port of carrier ``AMBIENT_HEAT`` comes from ``AMBIENT_HEAT_SOURCE`` (the outside air or the
     ground a device takes heat from), a ``PRODUCTION`` port of it goes to ``AMBIENT_HEAT_SINK`` (the outside air a
-    cooling device rejects heat to), one of carrier ``SOLAR`` comes from ``SOLAR`` (the sun), and a ``LOSS`` port goes
-    ``OUTDOORS``, unless the port names its node itself (:meth:`hisim.energy_port.EnergyPort.default_boundary`). The
-    source and the sink of ambient heat are two nodes, so the Sankey draws the one left and the other right (owner
-    decision Q-M of ``roadmap/complete_energy_sankeys_spec.md``). ``HEAT_SOURCE`` is the fixed heat source of a ground
-    collector (``SimpleHeatSource``), which its ports name (Q-O). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
+    cooling device rejects heat to), and a ``CONSUMPTION`` port of carrier ``SOLAR`` comes from ``SOLAR`` (the sun). A
+    ``LOSS`` port of carrier ``SOLAR`` goes to ``UNCONVERTED_SUNLIGHT`` (the sunlight a PV module or a collector takes
+    in and does not convert) and every other ``LOSS`` port to ``HEAT_LOSS_TO_OUTDOORS`` (heat that leaves the house:
+    the envelope's losses, a tank's standby loss in a cellar, a boiler's flue loss), chosen by the carrier (owner
+    decision D-e of ``roadmap/device_location_spec.md``). A port that names its node itself goes there instead
+    (:meth:`hisim.energy_port.EnergyPort.default_boundary`). The source and the sink of ambient heat are two nodes, so
+    the Sankey draws the one left and the other right (owner decision Q-M of
+    ``roadmap/complete_energy_sankeys_spec.md``). ``HEAT_SOURCE`` is the fixed heat source of a ground collector
+    (``SimpleHeatSource``), which its ports name (Q-O). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
     at the taps, ``RESIDENTS`` the residents' body heat, ``DRIVING`` the energy cars use to drive and ``WIND_TURBINE``
@@ -428,7 +432,8 @@ class EnvironmentNode(str, enum.Enum):
     AMBIENT_HEAT_SINK = "ambient heat sink"
     HEAT_SOURCE = "heat source"
     SOLAR = "sun"
-    OUTDOORS = "outdoors"
+    UNCONVERTED_SUNLIGHT = "unconverted sunlight"
+    HEAT_LOSS_TO_OUTDOORS = "heat loss to outdoors"
     GRID_IMPORT = "grid import"
     GRID_EXPORT = "grid export"
     HOT_WATER_USE = "hot water drawn at the taps"

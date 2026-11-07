@@ -98,7 +98,9 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 - **Boundary node**: where energy enters or leaves the system: grid import, grid export, the supply of each bought
   carrier, the ambient heat source and the ambient heat sink (the outside air as a device's source and as its sink,
   Q-M), the heat source of a ground collector (Q-O), sun, the wind turbine a series stands for (Q-Q), the residents'
-  body heat, hot water drawn at the taps, outdoors, driving.
+  body heat, hot water drawn at the taps, driving, and the two sinks of a loss: unconverted sunlight (a `LOSS` of
+  carrier `SOLAR`) and heat loss to outdoors (every other `LOSS`). The two sinks replaced the single sink "outdoors"
+  with decision D-e of `roadmap/device_location_spec.md` (2026-11-04).
 - **Loss node**: one per `LOSS` port, named after its component and port (`Battery · inverter loss`).
 - **Storage node**: one per component with a `STORED_CHANGE` port (`Battery · stored`).
 - **Residual**: `ΣIN − ΣOUT − ΣLOSS − ΣSTORED_CHANGE` of a component over the run, drawn to or from the red
@@ -115,7 +117,7 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 |---|---|---|---|
 | component | every component that declares at least one port | `MoreAdvancedHeatPumpHPLib`, `Building`, `UTSPConnector` | blue |
 | meter | each component that declares a metered exchange (§4.4) | `ElectricityMeter`, `GasMeter` | dark grey |
-| boundary | the environment of a port (§4.3) or of a meter's published exchange (§4.4) | `grid import`, `natural gas supply`, `ambient heat source`, `ambient heat sink`, `sun`, `outdoors` | green |
+| boundary | the environment of a port (§4.3) or of a meter's published exchange (§4.4) | `grid import`, `natural gas supply`, `ambient heat source`, `ambient heat sink`, `sun`, `unconverted sunlight`, `heat loss to outdoors` | green |
 | loss | each `LOSS` port | `SimpleHotWaterStorage · standby loss` | orange |
 | storage change | each `STORED_CHANGE` port | `Battery · stored` | gold |
 | unaccounted | each component residual, each meter residual and each link difference | `unaccounted` | red |
@@ -147,8 +149,9 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
 5. **Boundary edge**: an `IN` port from its environment node (fuel, district heat, ambient heat source, heat source,
    sun, body heat), or an `OUT` port to its environment node (hot water drawn at the taps, ambient heat sink,
    driving).
-6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to `outdoors` only in the
-   aggregate (the renderer may merge loss nodes, D4); the graph keeps one node per loss so that every loss is
+6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to its sink, `unconverted
+   sunlight` for a `SOLAR` loss and `heat loss to outdoors` for every other (D-e of `roadmap/device_location_spec.md`),
+   only in the aggregate (the renderer may merge loss nodes, D4); the graph keeps one node per loss so that every loss is
    readable where it occurs.
 7. **Storage edge**: a `STORED_CHANGE` port between the component and its storage node, component → storage when
    the run's net is positive (it charged), storage → component when negative.
@@ -181,15 +184,15 @@ preferring declared readers. Three changes make D1 and Q-J hold:
 
 | Carrier | Default for `IN` | Default for `OUT` | Default for `LOSS` |
 |---|---|---|---|
-| `ELECTRICITY` | none: unlinked (and unmetered) | none: unlinked (and unmetered) | outdoors |
-| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary (unmetered) | none: an error | outdoors |
-| `DISTRICT_HEAT` | `district heat supply` boundary (unmetered) | none: an error | outdoors |
-| `AMBIENT_HEAT` | `ambient heat source` (Q-M; `ambient heat` until 5a) | `ambient heat sink` (heat rejected by a cooling device, Q-M) | outdoors |
-| `SOLAR` | `sun` (today `solar`) | none: an error | outdoors |
-| heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | outdoors |
-| `VEHICLE_ELECTRICITY` (Q-K) | none: the car's input port names the car battery it reads | none: the car reads it | outdoors |
-| `DRIVING` (Q-L) | none: an error | none: the car's port names `driving` | outdoors |
-| `WIND_ELECTRICITY` (Q-Q) | none: the reader's port names `wind turbine` | none: an error | outdoors |
+| `ELECTRICITY` | none: unlinked (and unmetered) | none: unlinked (and unmetered) | heat loss to outdoors |
+| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary (unmetered) | none: an error | heat loss to outdoors |
+| `DISTRICT_HEAT` | `district heat supply` boundary (unmetered) | none: an error | heat loss to outdoors |
+| `AMBIENT_HEAT` | `ambient heat source` (Q-M; `ambient heat` until 5a) | `ambient heat sink` (heat rejected by a cooling device, Q-M) | heat loss to outdoors |
+| `SOLAR` | `sun` (today `solar`) | none: an error | unconverted sunlight |
+| heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | heat loss to outdoors |
+| `VEHICLE_ELECTRICITY` (Q-K) | none: the car's input port names the car battery it reads | none: the car reads it | heat loss to outdoors |
+| `DRIVING` (Q-L) | none: an error | none: the car's port names `driving` | heat loss to outdoors |
+| `WIND_ELECTRICITY` (Q-Q) | none: the reader's port names `wind turbine` | none: an error | heat loss to outdoors |
 
 So the heat pump's electricity ports drop `peer_output` and link to the electricity meter that reads them;
 the boiler's fuel ports drop `peer_output=EnergyDemandSh` and link to the gas or fuel meter that reads them; the
@@ -205,6 +208,14 @@ ambient-heat `OUT` port, so the Sankey draws the source left and the sink right;
 node the ground collector's ports name. Q-Q: `WIND_TURBINE` ("wind turbine") is the node a reader of a wind turbine's
 series names on its `WIND_ELECTRICITY` port. The `<carrier> supply` nodes are derived from the carrier, not listed;
 so are the `<carrier> export` nodes a meter's export of a bought carrier goes to ("hydrogen export").
+
+The `LOSS` column, revised by decision D-e of `roadmap/device_location_spec.md` (owner, 2026-11-04; bead
+hisim-device-location-820d.4): the single sink `OUTDOORS` ("outdoors") is replaced by two, chosen by the loss's
+carrier alone in `EnergyPort.default_boundary`, with no list of devices. `UNCONVERTED_SUNLIGHT` ("unconverted
+sunlight") takes a `LOSS` of carrier `SOLAR`, the light a PV module or a collector does not convert;
+`HEAT_LOSS_TO_OUTDOORS` ("heat loss to outdoors") takes every other `LOSS`, which ends as heat outside the house: the
+building's envelope losses, the devices' losses, the appliance electricity not released indoors. A port that names
+its environment still goes there. The node names change in `balance_report.json` and the Sankeys; no number does.
 
 New carrier `lt.EnergyBalanceCarrier.ROOM_HEAT` (Q-G): heat released into or lost from the heated zone, the carrier
 of internal gains, of the building's losses and of its thermal mass. Space heating keeps `SPACE_HEATING_HEAT` up to
@@ -306,7 +317,7 @@ circuit are replaced by it (`hydronic_coupling_spec.md` §3.5).
 | SH heat | `IN` circuit from generator | generator's `MassFlowOutputSH`/`WaterOutputMassFlowSh`, generator's supply temperature, buffer's `WaterTemperatureToHeatGenerator` | the generator |
 | SH heat | `IN` secondary circuit | `...SecondaryHeatGenerator` outputs | second generator |
 | SH heat | `OUT` circuit to HDS | HDS's `WaterMassFlowHDS`, buffer's `WaterTemperatureToHeatDistribution`, HDS's `WaterTemperatureOutput` | the HDS |
-| SH heat | `LOSS` | `StandbyHeatLoss` (W) | outdoors (Q-F) |
+| SH heat | `LOSS` | `StandbyHeatLoss` (W) | heat loss to outdoors (Q-F) |
 | SH heat | `STORED_CHANGE` | `ThermalEnergyIncreaseInStorage` (Wh) | its storage node |
 
 **`SimpleDHWStorage` (hot-water tank)**, twins: every household twin.
@@ -315,7 +326,7 @@ circuit are replaced by it (`hydronic_coupling_spec.md` §3.5).
 |---|---|---|---|
 | DHW heat | `IN` circuit(s) | generator's DHW mass flow and supply temperature, tank's `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (and the secondary one) | the generator(s) |
 | DHW heat | `OUT` | `ThermalPowerConsumptionDHW` (W) | `HOT_WATER_USE` boundary |
-| DHW heat | `LOSS` | `StandbyHeatLoss` (W) | outdoors |
+| DHW heat | `LOSS` | `StandbyHeatLoss` (W) | heat loss to outdoors |
 | DHW heat | `STORED_CHANGE` | `ThermalEnergyIncreaseInStorage` (Wh) | storage node |
 
 The tap draw goes to a boundary node, not to the occupancy: the occupancy is a data source, which reads nothing and
@@ -363,7 +374,7 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 |---|---|---|---|
 | `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | the electricity meter, which reads it by its role |
 | `SOLAR` | `IN` | **new** `SolarPowerOnModulesInWatt`: plane-of-array irradiance times module area (Q-D) | sun |
-| `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | outdoors |
+| `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | unconverted sunlight |
 
 The two new outputs need the plane-of-array irradiance in the PV series (`produce_pv_series` in
 `generic_pv_system/calculation.py` returns AC power ratios only), so the PV cache key changes; no KPI moves. If Q-D
@@ -393,7 +404,7 @@ energy: it declares.
 | `ROOM_HEAT` | `IN` | `HeatingByResidents` (W) | `RESIDENTS` boundary |
 | `ROOM_HEAT` | `OUT` | `HeatingByDevices` (W) | the building (reads it) |
 | `ROOM_HEAT` | `OUT` | **new** `BodyHeatToBuildingInWatt`, equal to `HeatingByResidents` (an output carries one port, so the body heat's way out needs its own output) | the building |
-| `ELECTRICITY` | `LOSS` | **new** `ApplianceElectricityNotReleasedIndoorsInWatt` = consumption − device heat gains | outdoors |
+| `ELECTRICITY` | `LOSS` | **new** `ApplianceElectricityNotReleasedIndoorsInWatt` = consumption − device heat gains | heat loss to outdoors |
 
 The LoadProfileGenerator gives device heat gains as a profile of its own, not as the electricity: 2,887 of
 4,659 kWh a year become gains, 1,772 kWh leave with waste water, exhaust air and light (§7); the device gains never
@@ -414,10 +425,10 @@ Crank-Nicolson (`calc_crank_nicolson`): the air and surface nodes have no heat c
 | `COOLING` | `OUT` | **new** `HeatRemovedByCoolingInWatt` = minus the input when `< 0` | air conditioner, cooling HDS |
 | `ROOM_HEAT` | `IN` | `InternalHeatGainsFromOccupancy` (W, residents plus devices; `peer_input=HeatingByDevices`) | the occupancy; the link pairs it with the sum of the occupancy's two `OUT` ports |
 | `SOLAR` | `IN` | `SolarGainThroughWindows` (W) | sun |
-| `ROOM_HEAT` | `LOSS` | **new** `VentilationLossInWatt` = `H_ve (θ_air − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossWindowsAndDoorsInWatt` = `H_tr_w (θ_s − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossOpaqueInWatt` = `H_tr_em (θ_m − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `GainsLostThroughWindowsInWatt` = `H_tr_w / (9.1 A_t) · (0.5 Φ_int + Φ_sol)` | outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `VentilationLossInWatt` = `H_ve (θ_air − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossWindowsAndDoorsInWatt` = `H_tr_w (θ_s − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossOpaqueInWatt` = `H_tr_em (θ_m − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `GainsLostThroughWindowsInWatt` = `H_tr_w / (9.1 A_t) · (0.5 Φ_int + Φ_sol)` | heat loss to outdoors |
 | `ROOM_HEAT` | `STORED_CHANGE` | **new** `ThermalMassStoredEnergyIncreaseInWattHour` = `C_m (θ_m,end − θ_m,start)` of the state | storage node |
 
 Notes:
@@ -544,6 +555,11 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
   loop's three outputs under `loop` (was `circuit`), and its `output` reads `loop <component>.<mass flow>` (was
   `circuit …`), as its node does in the Sankeys; the fault sentences say "loop" where they said "circuit". No number
   changes.
+- D-e of `roadmap/device_location_spec.md` (hisim-device-location-820d.4, §4.3): `lt.EnvironmentNode.OUTDOORS`
+  ("outdoors") is replaced by `UNCONVERTED_SUNLIGHT` ("unconverted sunlight"), the sink of a `SOLAR` loss, and
+  `HEAT_LOSS_TO_OUTDOORS` ("heat loss to outdoors"), the sink of every other loss (`EnergyPort.default_boundary`).
+  The node names in `balance_report.json` and the Sankeys change, no number does; the report schema stays
+  `hisim.energy_balance/5`, since a node's name is data, as with the split of `ambient heat` in PR 5a.
 - New outputs of §5 (named with their units). No output is renamed, except the transformer's under Q-Q.
 
 ### 6.3 What does not change
@@ -594,7 +610,7 @@ condensing gas boiler: 17,182.7, residual 0.0) and 14 components are undeclared.
 | Building | HDS 11,408.2, internal 4,576.3, solar 3,821.6 | – | ventilation 5,662.6, windows and doors 3,315.4, opaque 10,820.7, gains through windows 46.7 | step equation −39.4; persistent −19.7 | with B2 declared and the step's own stored change: yes, 0.0000 W; with the persistent change: no (B1) |
 
 Sources of the connected diagram: sun 3,821.6 (windows; PV's sun input depends on Q-D), PV 26,315.1, ambient heat
-11,650.6, grid import 1,708.8, body heat 1,689.6. Sinks: grid export 18,760.3, outdoors (building 19,845.4, tanks
+11,650.6, grid import 1,708.8, body heat 1,689.6. Sinks: grid export 18,760.3, outdoors (since D-e of `roadmap/device_location_spec.md` "heat loss to outdoors"; building 19,845.4, tanks
 861.3, battery 965.5, appliances not released 1,771.8), hot water drawn 3,037.3.
 
 ### 7.2 `household_gas_building_sizer`

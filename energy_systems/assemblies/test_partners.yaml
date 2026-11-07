@@ -37,7 +37,8 @@ partners:
     # Its `buffer_heat` and `cylinder_heat` ports read the heat a buffer and a hot-water cylinder release into the
     # heated zone, the subject's member or a partner, bound the same way: a tank's HeatToHeatedZoneInWatt needs a
     # reader in every location (D-h of roadmap/device_location_spec.md), and is 0 here, where the house's TABULA row
-    # puts its technical room in an unheated cellar.
+    # puts its technical room in an unheated cellar. Its `battery_heat` port reads the battery's losses released into
+    # the heated zone the same way.
     serves: [{partner: Building}, {fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
              {fact: set_heating_temperature_in_celsius}, {fact: technical_room_location}]
     requires: [Weather, UTSPConnector]
@@ -48,9 +49,10 @@ partners:
         number_of_apartments: 1.0
         enable_opening_windows: true
         weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
-      inputs: [Weather, UTSPConnector, {$port: heating}, {$port: buffer_heat}, {$port: cylinder_heat}]
+      inputs: [Weather, UTSPConnector, {$port: heating}, {$port: battery_heat}, {$port: buffer_heat}, {$port: cylinder_heat}]
       ports:
         heating: {partner: [HeatDistribution, ElectricHeating], optional: true}   # ThermalPowerDelivered
+        battery_heat: {partner: Battery, optional: true}                          # HeatToHeatedZoneInWatt
         buffer_heat: {partner: SimpleHotWaterStorage, optional: true}             # HeatToHeatedZoneInWatt
         cylinder_heat: {partner: SimpleDHWStorage, optional: true}                # HeatToHeatedZoneInWatt
   HeatingCurveController:

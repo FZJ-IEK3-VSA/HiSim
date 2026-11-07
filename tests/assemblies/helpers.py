@@ -77,8 +77,10 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: buffer_heat}, {$port: cylinder_heat}], "
+        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: battery_heat}, {$port: buffer_heat}, "
+        "{$port: cylinder_heat}], "
         "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}, "
+        "battery_heat: {partner: Battery, optional: true}, "
         "buffer_heat: {partner: SimpleHotWaterStorage, optional: true}, "
         "cylinder_heat: {partner: SimpleDHWStorage, optional: true}}}"
     )
@@ -116,6 +118,33 @@ class Real:
     #: The energy manager, and the grid, whose meter reads every electricity port, beside a manager too.
     CONTROL: ClassVar[str] = "control: {assembly: control/ems_self_consumption}"
     GRID: ClassVar[str] = "grid: {assembly: supply/electricity_grid}"
+
+    @staticmethod
+    def building_beside_batteries(*batteries: str) -> str:
+        """A building the given batteries stand beside: it reads the weather, the residents and each battery's heat.
+
+        A battery's ``installation_location`` follows the building's technical room (the fact
+        ``technical_room_location``), so a built system with a battery needs a building, and the building reads the
+        battery's ``HeatToHeatedZoneInWatt`` in every location (D-h of ``roadmap/device_location_spec.md``). A port
+        binds one battery, so the building has one port per battery, ``battery_heat_<n>``. For example,
+        ``Real.building_beside_batteries("battery.garage", "battery.cellar")`` reads both instances of the import
+        ``battery``; ``"battery"`` alone names an import of one instance.
+
+        Args:
+            batteries: The import, or the import and the instance, of each battery, as ``optional-bind:`` names them.
+
+        Returns:
+            The site entry of the building, one line of YAML.
+        """
+        ports = [f"battery_heat_{index}" for index in range(len(batteries))]
+        return (
+            "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
+            "config: {number_of_apartments: 1.0, weather_identity: "
+            "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
+            f"inputs: [Weather, UTSPConnector, {', '.join(f'{{$port: {port}}}' for port in ports)}], "
+            f"ports: {{{', '.join(f'{port}: {{partner: Battery, optional: true}}' for port in ports)}}}, "
+            f"optional-bind: {{{', '.join(f'{port}: {battery}' for port, battery in zip(ports, batteries))}}}}}"
+        )
 
     @classmethod
     def heating_site(cls, *extra: str) -> str:

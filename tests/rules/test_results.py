@@ -265,7 +265,7 @@ class TestColumnsReadable:
 
         assert codes_and_places([fault]) == [("AR-07", "Boiler", "Flow")]
         assert "the loop Boiler.Flow of Boiler: mass_flow_kg_per_s must be >= 0 kg/s, got -0.1 in step 0." in fault.message
-        assert all(series.loop is None for series in balance.declared.all_series())
+        assert all(series.loop_columns is None for series in balance.declared.all_series())
         assert not ColumnsReadable().check(fft.AfterRunRules.subject(LoopRig.paired()))
 
     def test_a_meter_naming_an_output_it_does_not_have_is_a_fault(self) -> None:

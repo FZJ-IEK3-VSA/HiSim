@@ -845,7 +845,7 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
     )
     house = tmp_path / "two_arrays.energy_system.yaml"
     house.write_text(
-        site(Real.WEATHER, Real.OCCUPANCY)
+        site(Real.WEATHER, Real.OCCUPANCY, Real.building_beside_batteries("battery"))
         + imports(arrays, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID),
         encoding="utf-8",
     )
@@ -863,6 +863,8 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
     assert [(item["source"], item["value"], item.get("many")) for item in lookups] == [
         ("pv-east-PVSystem", 5000, True),
         ("pv-west-PVSystem", 3000, True),
+        # where the battery stands: the building's technical room, its TABULA row's unheated cellar
+        ("Building", "UNHEATED_SPACE", None),
     ]
     code = main(
         [

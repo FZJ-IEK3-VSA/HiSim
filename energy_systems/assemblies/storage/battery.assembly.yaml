@@ -3,7 +3,10 @@
 # capacity and inverter power to the class laws, which sum the peak power of every array (D10, D27): the fact port
 # lists them in instance order, a one-element list beside one array (G7). The two sizes are stated together or not at
 # all (D31): the component refuses a capacity without its power and the other way round ("state both or neither", EF-4J),
-# so an import stating one is refused here already (EF-77), and the harness always samples them as a pair.
+# so an import stating one is refused here already (EF-77), and the harness always samples them as a pair. Where it
+# stands follows the building's technical room (its installation_location stays AUTO, roadmap/device_location_spec.md),
+# so its losses go into the heated zone or out of the house; the building reads its HeatToHeatedZoneInWatt by a port
+# of its own in every location.
 
 schema_version: 4
 kind: assembly
@@ -59,6 +62,10 @@ tests:
     - {output: Battery.InverterLossInWatt, unit: WATT, min: 0, max: 20000}
     - {output: Battery.CellLossInWatt, unit: WATT, min: 0, max: 20000}
       # each loss is a part of the power passing it, at most the box's 15 kW inverter; neither runs negative
+    - {output: Battery.HeatLossInWatt, unit: WATT, min: 0, max: 20000}
+    - {output: Battery.HeatToHeatedZoneInWatt, unit: WATT, min: 0, max: 20000}
+      # the sum of the two losses on the output of where the battery stands, the other 0: in the test house its
+      # unheated cellar, so the loss leaves the house
   monotone:
     - {parameter: capacity_in_kwh, kpi: Battery charging energy, direction: increasing}
       # a larger battery absorbs at least as much surplus in a day; a derived KPI (no member, spec §9.4)

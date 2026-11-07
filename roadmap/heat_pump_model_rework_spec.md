@@ -1,7 +1,7 @@
 # Spec: the heat pump model gets a Carnot-efficiency COP, a part-load penalty, defrosting and a sourced capacity law
 
-Status: draft for review. Decisions (1) to (7) taken by the owner on 2026-10-21, decision (8) on 2026-11-07 (§2);
-questions for review in §8.
+Status: decided; implementation per step. Decisions (1) to (7) taken by the owner on 2026-10-21, decisions (8) to
+(17) on 2026-11-07 (§2); §8 keeps the review questions with their answers, none is open.
 Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (P1); children .1 research (closed), .2 COP layer,
 .3 defrost, .4 part load and cycling, .5 capacity law, .6 outdoor humidity, hisim-heat-pump-backup-rod-a121 the
 backup heating rod (decision 8). Evidence: hisim-x2mu (closed).
@@ -63,6 +63,15 @@ step-(a) PR.
 | 6 | 2026-10-21 | **Hot water: no separate model;** the same curve at the hot-water outlet. EN 16147 serves as a check. | The pooled air curve at A7 and the EN 16147 reference outlet is -4 % from the certified hot-water COP (median of 456 units). A separate model would need data a request cannot state. |
 | 7 | 2026-10-21 | **Capacity:** replace hplib's inverted capacity surface (+49 % at the bivalent point) in the last step. | The capacity decides when the backup heater runs and how often the unit cycles; it needs EN 14511 capacity tables, a separate data job. |
 | 8 | 2026-11-07 | **The backup heating rod stays, as a real backup inside the heat-pump component.** Real units ship with an electric heating rod for the coldest days, so the component keeps one: its own rated electrical power (a sized field, default in §3.1), its own electricity output with its own energy port, its heat into the same circuit as the compressor's. It runs only where the compressor falls short, when the requested heat exceeds the compressor's thermal capacity at the current temperatures or the required outlet exceeds the compressor's maximal outlet, and adds only the missing heat at COP 1, up to its rated power. hplib's COP-1 switch goes, as decision 2 implies. Amends the rod paragraph of §3.1 and Q4; bead hisim-heat-pump-backup-rod-a121. | The 2026-10-21 reading dropped the rod with hplib's switch ("the rod no longer appears in the model's answer"); the owner had understood that as removing hplib's fit artefact, not the backup element every real unit has. Without a backup, a heat pump at its limit (undersized, a day colder than the design point, an outlet above its maximum) delivers less than the demand with nothing to cover it, and the rod's electricity, which decides the SPF of such a unit (hisim-heat-pump-outlet-limit-2vq7: 16 % of a year's space-heating electricity on 70/55 radiators), is missing from the balance. |
+| 9 | 2026-11-07 | **Minimum-lift guard (Q1): a lift floor of 12 K for both source types.** Brine then extrapolates below its smallest certified lift (24 K, B0/W24) on rare mild days; the spec says so. | 12 K is the smallest certified lift of the air set (A12/W24); holding the lift keeps the COP at the edge of the data instead of growing without bound. A brine unit sees lifts below 24 K only on rare mild days with a low outlet, where little heat is made. |
+| 10 | 2026-11-07 | **Water/water units (Q2) use brine's parameters** (η 0.568, d 4.50 K), flagged as an assumption in the docs. | No Keymark data; a liquid source behaves like brine. Refusing water/water would block a request that states one. |
+| 11 | 2026-11-07 | **Named hplib models (Q3): the Carnot law replaces every model's COP;** a named model's datasheet SCOPs calibrate it. | One law for every machine keeps the calibration and the rating consistent; the datasheet SCOPs carry what the named model knows. |
+| 12 | 2026-11-07 | **Capacity at hplib's former rod switch (Q4): superseded by decision 8.** The compressor's capacity at the switch stays `P_el,fit` as the interim until step d's capacity law; the backup rod covers the rest, up to its rated power. | With the backup rod the shortfall above the switch is covered instead of lost, so the low interim value only moves heat from the compressor to the rod until step d replaces the capacity surface. |
+| 13 | 2026-11-07 | **Uncalibrated default (Q5): the pooled Keymark unit** (air W35 4.46 / W55 3.32); the heat-pump goldens are re-blessed. | A machine without a stated SCOP should be the population's unit, not hplib's Generic plane the law replaces. |
+| 14 | 2026-11-07 | **Defrost modes (Q6): the 900 s mode within 1 % of the 60 s mode in yearly heat-pump electricity,** checked in step c's PR. | 1 % is the step-length tolerance the other models hold (emitter spec §7); a larger band would let the step length decide the result. |
+| 15 | 2026-11-07 | **Start-up loss (Q7): `t_start_loss` derived from the EN 14825 Cdh test cycles.** | Consistent with the rating method: the same cycles that give Cdh inside `StandardizedSeasonalCop` give the loss per start outside it. |
+| 16 | 2026-11-07 | **Brine (Q8): keep the pooled brine fit now, re-judge after step b's cycling term.** | The brine error moves little (10.0 → 9.6 %), and its mild-bin errors are cycling errors that step b's Cdh addresses; judging before that would mix the two. |
+| 17 | 2026-11-07 | **Cooling in step d (Q9): a Carnot-efficiency EER fitted to the Keymark cooling data.** | hplib's EER plane goes with hplib; the same law shape with its own fit keeps cooling in the model without a second model family. |
 
 ## 3. Design per step
 
@@ -82,19 +91,21 @@ as class constants with their source (no configuration fields, since no request 
 |---|---|---|---|
 | air (hplib groups 1, 4) | 0.451 | 4.45 | pooled least squares over the ten EN 14825 / EN 14511 points of 1,743 Keymark units |
 | brine (groups 2, 5) | 0.568 | 4.50 | the same over 176 units, brine at 0 °C |
-| water (groups 3, 6) | brine's | brine's | no Keymark data; liquid source like brine (question Q2) |
+| water (groups 3, 6) | brine's | brine's | no Keymark data; liquid source like brine (decision 10, flagged as an assumption in the docs) |
 
 **Minimum-lift guard.** The law grows without bound as the lift shrinks (it turns negative where the source is
 warmer than the outlet, e.g. A30/W25). The lift in the denominator is held at no less than `lift_floor` = 12 K, the
 smallest lift any certified point has (A12/W24). Below that the law is not evidenced; holding the lift keeps the
-COP at its value at the edge of the data (air: 8.15 at W24 uncalibrated) instead of extrapolating. Choice and
-alternatives in Q1.
+COP at its value at the edge of the data (air: 8.15 at W24 uncalibrated) instead of extrapolating. Decided for both
+source types (decision 9); brine has no certified point below a 24 K lift (B0/W24), so between 12 K and 24 K the
+brine law extrapolates, which happens on rare mild days with a low outlet.
 
 **Calibration.** `ScopCalibration` and `StandardizedSeasonalCop` are unchanged in method; they rate the machine
 with the new COP. With a stated SCOP pair the calibrated machine still rates exactly at the stated SCOPs. Without a
 stated SCOP the machine is the pooled Keymark unit: EN 14825 rates it at W35 4.46 / W55 3.32 (air; Keymark median
 4.60 / 3.39) and 4.74 / 3.94 (brine; median 5.20 / 3.90). hplib's Generic plane rated 4.74 / 3.40 and 4.85 / 4.02.
-The law replaces the COP of every hplib model, also a named manufacturer model (Q3).
+The law replaces the COP of every hplib model, also a named manufacturer model, whose datasheet SCOPs calibrate it
+(decision 11).
 
 **Thermal power and flow.** hplib still gives the thermal power, the mass flow and the outlet; the electrical power
 becomes `P_el = P_th / cop`. hplib's own COP plane only shapes its capacity (`P_th = P_el,fit · COP_fit`).
@@ -146,7 +157,7 @@ as hplib's COP-1 fit artefact:
   59-60 % at 900 s (case B, January week) came from hplib's whole-step switch at a fixed return, which the new
   trigger replaces; the step's verification measures case B at 60, 300, 900 and 3600 s (§5).
 * **hplib's switch.** hplib's COP-1 switch and its compressor-plus-rod branch go (the Carnot COP stays above 1 at
-  every realistic lift, decision 2); the capacity continues as the compressor's at the switch, `P_el,fit` (Q4),
+  every realistic lift, decision 2); the capacity continues as the compressor's at the switch, `P_el,fit` (decision 12),
   and the rod covers the shortfall above it. The straddle handling (#930, #1097, hisim-g0dp) and hisim-z0v4 stay
   moot as stated above. #1113 (child .2, open) keeps its Carnot COP and, instead of removing the rod, adds the
   backup rod: the sized field, the rod output and its port, the two triggers, the per-step share and the tests of
@@ -169,7 +180,8 @@ point; the result cache stays.
   inverter, brine/water on/off. RenoVisor states nothing about it and takes the default.
 * A start-up loss per start: each start books an extra electrical energy `E_start = P_el,nominal · t_start_loss`
   (an equivalent time of full-power electricity for the pressure build-up and the cold heat exchanger), taken in
-  the first step of a run so the energy balance closes. `t_start_loss` is sourced in the step's PR (Q7).
+  the first step of a run so the energy balance closes. `t_start_loss` is derived from the EN 14825 Cdh test cycles
+  (decision 15); the derivation is in the step's PR.
 * Verified against the certified A12 points (§5).
 
 ### 3.3 Step (c): humidity and defrost (children .6 and .3)
@@ -192,8 +204,8 @@ point; the result cache stays.
   heat delivered is reduced by the share `f`, and the defrost heat `f`-weighted is drawn from the circuit, without
   EnergyPlus's constant 0.917 derate. One scale parameter on `f`, fitted to the same targets.
 * **Targets for both modes:** COP at A2 / 84 % relative humidity about ×0.90 of the defrost-free COP; defrost heat
-  4-7 % of the seasonal heat on a German TRY (prototype on TRY: +5 to +8 % seasonal electricity). The two modes
-  agree over a year within a band to be set in the PR (Q6).
+  4-7 % of the seasonal heat on a German TRY (prototype on TRY: +5 to +8 % seasonal electricity). The 900 s mode
+  agrees with the 60 s mode within 1 % of the heat pump's yearly electricity, checked in step c's PR (decision 14).
 * Certified COPs and the SCOP rating stay defrost-free (decision 3), so the calibration does not change.
 * Brine and water sources: no defrost.
 
@@ -204,7 +216,7 @@ point; the result cache stays.
   air-to-water records. Sizing stays: the machine is sized to the building's heating load at the design point.
 * The minimum output (modulation floor) becomes a share of the rated capacity.
 * hplib, its parameter tables and the result cache are removed; `CalculationRequest` and the 0.1 K grid with
-  them. Cooling needs an EER law in the same step (Q9).
+  them. Cooling gets a Carnot-efficiency EER fitted to the Keymark cooling data in the same step (decision 17).
 * Verified: capacity at the bivalent point vs certificates median within ±10 % (today +49 %).
 
 ## 4. Literature
@@ -250,13 +262,14 @@ Key references (the full 2020-2026 review of 41 entries with DOIs is in the rese
 | b | Keymark A12/W24 and A12/W30 points with the rating's Cdh, by machine type | brine A12/W30 error from +15 % towards 0; air not worse |
 | b | Starts × start-up loss in a full year, energy balance closes | reported |
 | c | Humidity per weather source (test per source) | present, plausible range |
-| c | Defrost: A2/84 % multiplier; seasonal defrost heat share on TRY; 60 s vs 900 s annual electricity; the buffer's energy balance with the defrost draw | ×0.90 ± 0.02; 4-7 %; agree within the band of Q6; balance closes |
+| c | Defrost: A2/84 % multiplier; seasonal defrost heat share on TRY; 60 s vs 900 s annual electricity; the buffer's energy balance with the defrost draw | ×0.90 ± 0.02; 4-7 %; the 900 s mode within 1 % of the 60 s mode in yearly heat-pump electricity (decision 14); balance closes |
 | d | Capacity at the bivalent point vs certificates; run time; no hplib import left | median within ±10 %; not slower |
 
 ## 6. What moves
 
 * **Goldens.** Every golden of a setup with `MoreAdvancedHeatPumpHPLib` moves at steps a, b (start-up loss), c
-  and d. The coordinator blesses them per step; the PR lists which.
+  and d. The coordinator blesses them per step; the PR lists which. At step a they move with the uncalibrated
+  default, the pooled Keymark unit (decision 13).
 * **RenoVisor.** Every heat-pump calculation's electricity, SPF and costs move at steps a, c and d (b mostly for
   brine). Each such PR carries a heads-up note for the frontend (renovisorissues). The stated SCOP pair still
   rates exactly; the range of SCOP pairs the calibration can reach changes with the new shape, so a pair refused
@@ -278,25 +291,36 @@ calibration (hisim-f79l, waits on the frontend); wiring a brine machine for Reno
 
 ## 8. Questions for review
 
+Every question was answered by the owner on 2026-11-07 (decisions 9 to 17 of §2); no question is open. The
+questions stay here with their answers, so a reader of an earlier draft finds what became of each.
+
 * **Q1 — Minimum-lift guard.** Proposed: a lift floor of 12 K (the smallest certified lift, A12/W24), for both
   source types. Alternatives: a COP cap (e.g. 8 for air) or no guard above a 1 K floor. Brine has no certified
   point below a 24 K lift (B0/W24); is 12 K acceptable there?
+  *Decided (decision 9):* 12 K for both; brine extrapolates between 12 K and 24 K on rare mild days, stated in §3.1.
 * **Q2 — Water/water units** (hplib group 3) have no Keymark data. Proposed: brine's parameters. Alternative:
   refuse water/water with a stated SCOP until data exists.
+  *Decided (decision 10):* brine's parameters (η 0.568, d 4.50 K), flagged as an assumption in the docs.
 * **Q3 — Named hplib models.** The law replaces the COP of every hplib model, a named manufacturer model too; its
   datasheet SCOPs then calibrate the pooled law. Acceptable, or keep hplib's own plane for named models?
-* **Q4 — Capacity where hplib's plane switched to its rod** (step a only, until step d). The rod half is decided
-  (decision 8, 2026-11-07): the backup rod covers the shortfall above the switch, up to its rated power, so the
-  house no longer loses the difference. The compressor's capacity at the switch stays `P_el,fit` as the interim,
-  continuous but low (about 4.8 kW of 8 kW at A0/W69), and the rod adds the rest. Open is only the interim value
-  itself: acceptable until step d's capacity law?
+  *Decided (decision 11):* the law replaces every model's COP; the datasheet SCOPs calibrate it.
+* **Q4 — Capacity where hplib's plane switched to its rod** (step a only, until step d): the compressor's capacity
+  at the switch, `P_el,fit`, continuous but low (about 4.8 kW of 8 kW at A0/W69). Acceptable as an interim?
+  *Superseded (decisions 8 and 12):* the backup rod covers the shortfall above the switch, up to its rated power,
+  so the house no longer loses the difference; `P_el,fit` stays the compressor's interim capacity until step d.
 * **Q5 — Uncalibrated default.** Without a stated SCOP every machine becomes the pooled Keymark unit (air W35 4.46 /
   W55 3.32) instead of hplib's Generic plane (4.74 / 3.40). Goldens move with it. Agreed?
+  *Decided (decision 13):* the pooled Keymark unit; the heat-pump goldens are re-blessed.
 * **Q6 — Defrost targets and the 60 s / 900 s band.** A2 ×0.90 and a 4-7 % defrost heat share are the targets;
   what annual difference between the two modes is acceptable (proposed: 1 % of the heat pump's electricity)?
+  *Decided (decision 14):* the 900 s mode within 1 % of the 60 s mode in yearly heat-pump electricity, checked in
+  step c's PR.
 * **Q7 — Start-up loss.** Which source for `t_start_loss` (EN 14825 Cdh test cycles, field data, AixLib)? Order of
   magnitude 1-2 min of full electrical power per start.
+  *Decided (decision 15):* derived from the EN 14825 Cdh test cycles, consistent with the rating method.
 * **Q8 — Brine.** The pooled brine fit gains little (10.0 → 9.6 %) and its hot-water COP is +13 % against EN 16147
   (29 units). Keep the pooled brine fit, or wait for step b's Cdh before judging?
+  *Decided (decision 16):* keep the pooled brine fit now; re-judge after step b's cycling term.
 * **Q9 — Cooling in step d.** hplib's EER plane goes with hplib. A Carnot-efficiency EER fitted to Keymark cooling
   data, or keep cooling out of the model until needed?
+  *Decided (decision 17):* a Carnot-efficiency EER fitted to the Keymark cooling data, in step d.

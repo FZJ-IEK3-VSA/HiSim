@@ -10,7 +10,7 @@ totals, so the component's step is a chain of pure functions over them. Nothing 
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, NamedTuple, Optional
 
 from hisim.components.more_advanced_heat_pump.backup_rod import (
     RodAssistedHeating,
@@ -95,6 +95,21 @@ class HplibResult:
             cop=between(lower.cop, upper.cop),
             eer=between(lower.eer, upper.eer),
         )
+
+
+class SpaceHeatingPowerRange(NamedTuple):
+    """The space-heating electricity the hplib heat pump's compressor would draw at full load and at its minimum load, in W.
+
+    The heat pump publishes both once per step, from the step's start temperatures, for its space-heating controller
+    and the energy manager. Both are the compressor's: the backup heating rod is not part of them. For example, a
+    compressor that gives 6,000 W of heat at a COP of 4 with a 1,800 W minimum thermal power has a range of 1,500 W at
+    full load and 450 W at minimum load.
+    """
+
+    #: The compressor's electricity at full load, in W.
+    full_load_electrical_power_in_watt: float
+    #: The compressor's electricity at the minimum thermal power, in W; at most the full-load electricity.
+    minimum_load_electrical_power_in_watt: float
 
 
 @dataclass(frozen=True)

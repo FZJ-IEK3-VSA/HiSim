@@ -1,9 +1,11 @@
-"""The heat pump evaluates hplib at the return itself where its grid interpolation would straddle the heating-rod switch.
+"""hplib's heating-rod switch: the grid interpolation's guard, and the machine that no longer has the rod.
 
 hplib runs its heating rod alone once its fitted coefficient of performance falls to 1, and its thermal power jumps
-there. The heat pump caches hplib on a 0.1 K grid of the return temperature and interpolates between grid points; across
-the switch that interpolation turned the jump into a ramp of about 25 kW/K, which with the hot-water tank's step mean
-formed a loop contracting by only about 0.9 per pass.
+there. The heat pump caches its machine on a 0.1 K grid of the return temperature and interpolates between grid points;
+across hplib's switch that interpolation turned the jump into a ramp of about 25 kW/K, which with the hot-water tank's
+step mean formed a loop contracting by only about 0.9 per pass. Where two grid points straddle a switch, the heat pump
+evaluates the machine at the return itself. Since the Carnot-efficiency COP replaced hplib's COP plane
+(:class:`CarnotCopHeatPump`), the machine runs its compressor past hplib's switch and its thermal power has no jump.
 """
 
 from typing import Optional, Tuple
@@ -89,15 +91,13 @@ def air_water_heat_pump(
 ) -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib:
     """Build an 8 kW air-water heat pump with hot-water preparation, at 60 s steps, with an optional stated SCOP.
 
-    At 0 °C outside its hplib model switches to the heating rod alone between a return of 64.0 and 64.1 °C: 4.8 kW
-    at a COP of 1.0033 below, the rod's 8.1 kW above. A stated SCOP calibrates the compressor's results
-    (:class:`ScopCalibration`), not the rod's. The generic fit's own W55 SCOP is about 3.4, so a stated W55 of 3.0
-    scales the compressor's COP by about 0.88: next to the switch to about 0.88, below 1, although hplib itself still
-    runs the compressor there.
+    At 0 °C outside hplib's own planes switch to the heating rod alone between a return of 64.0 and 64.1 °C: 4.8 kW
+    at a COP of 1.0033 below, the rod's 8.1 kW above. The machine keeps the compressor on both sides.
+    A stated SCOP calibrates the compressor's results (:class:`ScopCalibration`).
 
     Args:
-        scop_w35: The stated SCOP at W35 (EN 14825), dimensionless; None leaves hplib's generic fit.
-        scop_w55: The stated SCOP at W55 (EN 14825), dimensionless; None leaves hplib's generic fit.
+        scop_w35: The stated SCOP at W35 (EN 14825), dimensionless; None leaves the Carnot-efficiency COP.
+        scop_w55: The stated SCOP at W55 (EN 14825), dimensionless; None leaves the Carnot-efficiency COP.
 
     Returns:
         The heat pump.
@@ -116,14 +116,14 @@ def air_water_heat_pump(
 def answers_at(
     heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib, return_temperature_in_celsius: float
 ) -> Tuple[HplibResult, HplibResult]:
-    """Return the heat pump's answer at a hot-water return at 0 °C outside, and hplib's own answer there.
+    """Return the heat pump's answer at a hot-water return at 0 °C outside, and the machine's own answer there.
 
     Args:
         heat_pump: The heat pump.
         return_temperature_in_celsius: The return temperature, in °C.
 
     Returns:
-        The heat pump's answer and hplib's answer computed at the return itself.
+        The heat pump's answer and the machine's answer computed at the return itself.
     """
     answer = heat_pump.get_cached_results_or_run_hplib_simulation(
         source_temperature_in_celsius=0.0,
@@ -143,39 +143,27 @@ def answers_at(
     return answer, exact
 
 
-class TestAcrossTheSwitchBetweenGridPoints:
-    """Between two grid points on either side of the switch every machine answers hplib's own result at the return."""
+@pytest.mark.parametrize("return_temperature_in_celsius", [64.01, 64.05, 64.09])
+def test_across_hplibs_switch_the_compressor_runs_on_without_a_jump(return_temperature_in_celsius: float) -> None:
+    """Catches the rod coming back: its 8.1 kW at a COP of 1 would jump above the compressor's 4.8 kW.
 
-    #: The stated SCOPs at W35 and W55 the machine is built with, dimensionless: none, both with a W55 factor below 1,
-    #: W55 alone below the generic fit's, and both with a W55 factor above 1 (the table of hisim-g0dp).
-    STATED_SCOPS = [(None, None), (4.0, 3.0), (None, 3.0), (4.5, 3.5)]
-
-    @pytest.mark.parametrize(("scop_w35", "scop_w55"), STATED_SCOPS)
-    @pytest.mark.parametrize("return_temperature_in_celsius", [64.01, 64.05, 64.09])
-    def test_the_answer_is_hplibs_own(
-        self, return_temperature_in_celsius: float, scop_w35: Optional[float], scop_w55: Optional[float]
-    ) -> None:
-        """Catches an interpolation across the switch: its power would lie between the compressor's and the rod's.
-
-        With a stated W55 SCOP below the generic fit's the calibrated compressor's COP next to the switch is below 1;
-        the switch must still be found, on hplib's own verdict (hisim-g0dp).
-        """
-        answer, exact = answers_at(air_water_heat_pump(scop_w35, scop_w55), return_temperature_in_celsius)
-        assert answer == exact
-        assert answer.thermal_power_in_watt < 5000.0 or answer.thermal_power_in_watt == pytest.approx(8135.03, abs=0.01)
-
-    @pytest.mark.parametrize(("scop_w35", "scop_w55"), STATED_SCOPS)
-    def test_a_stated_scop_keeps_the_rods_power(
-        self, scop_w35: Optional[float], scop_w55: Optional[float]
-    ) -> None:
-        """Catches the ramp of hisim-g0dp: with a W55 SCOP of 3.0 a return of 64.05 °C gave 6467.1 W, not 8135.0 W.
-
-        At 64.05 °C hplib runs the heating rod alone, whose power the calibration does not scale, so every machine
-        answers hplib's 8135.0 W.
-        """
-        answer, _ = answers_at(air_water_heat_pump(scop_w35, scop_w55), 64.05)
-        assert answer.thermal_power_in_watt == pytest.approx(8135.0, abs=0.1)
-        assert answer.heating_rod_alone
+    Between the grid points at 64.0 and 64.1 °C the answer is the interpolation (no straddle), and its thermal power,
+    the compressor's 4.8 kW, lies within 0.5 % of the machine's exact answer: the compressor's power is continuous at
+    hplib's switch but has a kink there (4799 W at 64.0 °C, 4787 W at 64.05 °C, 4790 W at 64.1 °C). Its COP is the
+    Carnot law's 2.10.
+    """
+    heat_pump = air_water_heat_pump()
+    answer, exact = answers_at(heat_pump, return_temperature_in_celsius)
+    lower, _ = answers_at(heat_pump, 64.0)
+    upper, _ = answers_at(heat_pump, 64.1)
+    assert not HplibResult.straddle_the_heating_rod_switch(lower=lower, upper=upper)
+    assert answer == HplibResult.interpolated(
+        lower=lower, upper=upper, share_of_upper=answer_share(return_temperature_in_celsius)
+    )
+    assert answer.thermal_power_in_watt == pytest.approx(exact.thermal_power_in_watt, rel=5e-3)
+    assert abs(upper.thermal_power_in_watt - lower.thermal_power_in_watt) < 50.0
+    assert answer.thermal_power_in_watt == pytest.approx(4795.0, abs=10.0)
+    assert answer.cop == pytest.approx(2.10, abs=0.01)
 
 
 def test_away_from_the_switch_the_answer_is_still_interpolated() -> None:

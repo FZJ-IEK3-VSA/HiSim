@@ -105,6 +105,9 @@ class AdapterContractScan:
         # whole configuration, so both sizable fields need a value.
         "BatteryConfig.custom_battery_capacity_generic_in_kilowatt_hour": 22.27,
         "BatteryConfig.custom_pv_inverter_power_generic_in_watt": 11136.14,
+        # Where the battery stands: the technical room of a house with an unheated cellar. The extractor does not
+        # read it, but the sweep resolves the whole configuration.
+        "BatteryConfig.installation_location": InstallationLocation.UNHEATED_SPACE,
         # The carrier a gas meter copies from the boiler beside it. The extractor does not read
         # it, but the sweep resolves the whole configuration, so the field needs a value.
         "GasMeterConfig.gas_loadtype": LoadTypes.GAS,

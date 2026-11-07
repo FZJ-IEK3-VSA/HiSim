@@ -50,7 +50,8 @@ class Household:
     factories, so that the test depends on nothing the component sweep has yet to deliver. The
     aggregator's participants are written out in full — production, uncontrolled consumption and
     the controlled battery — because a controlled participant cannot be a bare item: the class's
-    default feeds carry no dispatch target, and the storage channel requires one.
+    default feeds carry no dispatch target, and the storage channel requires one. The household has no building whose
+    technical room the battery could follow, so the battery is pinned outdoors.
     """
 
     #: The battery's controlled feed as it must be written: the dispatch block names the input.
@@ -147,6 +148,7 @@ components:
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
       lifetime_in_cycles: 5000.0
+      installation_location: OUTDOORS
 {battery_inputs}  ems:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption
@@ -319,7 +321,10 @@ class SignalCollisions:
         return Battery(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
             config=BatteryConfig.preset_sized_to_pv(name).resolve(
-                SizingContext(pv_peak_power_in_watt=(cls.PV_PEAK_POWER_IN_WATT,))
+                SizingContext(
+                    pv_peak_power_in_watt=(cls.PV_PEAK_POWER_IN_WATT,),
+                    technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+                )
             ),
         )
 

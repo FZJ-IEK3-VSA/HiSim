@@ -328,7 +328,9 @@ class TestRoomHeatNeedsReceiver:
         """Catches the rule missing the real occupancy's ports when a file is built, or refusing the demo it waives.
 
         The twin of ``system_setups/dynamic_components.py`` runs residents, PV, batteries and fuel cells without a
-        building; declared ``residential``, its residents' two room-heat outputs are refused.
+        building; declared ``residential``, its residents' two room-heat outputs and each battery's heat into the heated
+        zone are refused. The batteries stand outdoors, but the rule is structural: the output declares the port in
+        every location, so nothing reads it.
         """
         twin = Path(__file__).resolve().parents[2] / "energy_systems" / "dynamic_components.energy_system.yaml"
         text = twin.read_text(encoding="utf-8")
@@ -339,7 +341,12 @@ class TestRoomHeatNeedsReceiver:
         findings = SetupRuleCommands(SetupRuleRegistry.collect()).findings_of(declared, RuleStage.BUILD)[-1]
 
         assert findings.subject == "BuiltSystem"
-        expected = [("EP-06", "UTSPConnector", output) for output in sorted(Rig.OCCUPANCY_OUTPUTS)] if refused else []
+        expected = (
+            [("EP-06", battery, "HeatToHeatedZoneInWatt") for battery in ("Battery1", "Battery2")]
+            + [("EP-06", "UTSPConnector", output) for output in sorted(Rig.OCCUPANCY_OUTPUTS)]
+            if refused
+            else []
+        )
         assert codes_and_places(findings.faults) == expected
 
     def test_it_waits_for_the_input_ports_to_pair(self) -> None:

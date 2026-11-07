@@ -253,7 +253,7 @@ class LoopColumns:
         negative = mass_flow < 0.0
         if negative.any():
             first = int(np.argmax(negative))
-            return hydronics.NegativeMassFlowError(f"mass_flow_kg_per_s must be >= 0 kg/s, got {mass_flow[first]!r} in step {first}.")
+            return hydronics.NegativeMassFlowError(f"mass_flow_kg_per_s must be >= 0 kg/s, got {float(mass_flow[first])!r} in step {first}.")
         return None
 
     @property

@@ -9,7 +9,7 @@ rules report what its resolution found. ``EP-04`` and ``EP-05`` are the two rule
 the domain rule that heat released into the heated zone has a receiver, waived for a demo and a plant.
 
 Every rule of the family reads the components' port sets, so each requires ``FL-01`` (a loop tagged whole,
-``hisim/setup_rules/fluid_loops.py``) and is skipped when a component tags a loop by half; the loop rules
+``hisim/setup_rules/fluid_loops.py``) and is skipped when a component tags a loop by half; the loop-wiring rules
 ``EP-01`` and ``EP-02`` follow the loops' wiring and require every fluid-loop rule. Every rule reads the wiring and
 requires the connection rules ``CB-04`` to ``CB-06`` (``ConnectionRules``, ``hisim/setup_rules/components.py``), so a
 broken connection is refused alone. The faults of these rules alone

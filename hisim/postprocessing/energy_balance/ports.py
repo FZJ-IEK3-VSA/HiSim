@@ -784,8 +784,8 @@ class DeclaredPorts:
         """Every port without a peer that moves energy: its wiring names no meter or component moving energy, its carrier no default.
 
         An idle port (:attr:`PortSeries.is_idle`) is not listed: it moves nothing that needs a peer, for example a
-        distribution system's cooling direction in a house that never cools, while no input reads it. Reported, not
-        yet a failure; the acceptance PR of the complete Sankey spec makes it one (§4.3).
+        distribution system's cooling direction in a house that never cools, while no input reads it. The setup rule
+        ``AR-09`` (``hisim/setup_rules/results.py``) fails every run but a demo's that lists one (§4.3).
         """
         return [
             series for series in self.all_series() if series.peer.kind == PeerKind.UNLINKED and not series.is_idle

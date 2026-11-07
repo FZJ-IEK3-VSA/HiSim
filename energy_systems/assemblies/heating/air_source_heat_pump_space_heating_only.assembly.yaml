@@ -88,6 +88,7 @@ tests:
     - {output: HeatPump.ElectricalInputPowerSH, unit: WATT, min: 0, max: 20000}               # 40 kW at a COP >= 2
     - {output: HeatPump.ElectricalInputPowerForCooling, unit: WATT, min: 0, max: 20000}       # zero: heating only
     - {output: HeatPump.ElectricalInputPowerBrinePump, unit: WATT, min: 0, max: 1000}         # zero for an air source
+    - {output: HeatPump.ElectricalInputPowerHeatingRod, unit: WATT, min: 0, max: 9000}        # at most its 9 kW rating
     - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: -5000, max: 40000}

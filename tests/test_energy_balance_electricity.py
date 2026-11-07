@@ -63,6 +63,7 @@ class Expected:
         ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerDHW"),
         ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerForCooling"),
         ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerBrinePump"),
+        ("MoreAdvancedHeatPumpHPLib", "ElectricalInputPowerHeatingRod"),
     }
 
     #: Links of the connected diagram as (carrier, source, target), in both households.

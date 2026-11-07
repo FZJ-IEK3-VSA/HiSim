@@ -77,6 +77,7 @@ def test_heat_pump_hplib_new() -> None:
         heating_reference_temperature_in_celsius=t_in,
         flow_temperature_in_celsius=t_out,
         set_thermal_output_power_in_watt=p_th_set,
+        heating_rod_rated_electrical_power_in_watt=min(p_th_set, 9000.0),
         cycling_mode=True,
         minimum_idle_time_in_seconds=600,
         minimum_running_time_in_seconds=600,

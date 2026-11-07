@@ -1,8 +1,9 @@
-"""The hplib heat pump's model parts: the COP law, the adapter to hplib, the SCOP calibration, and one step's values.
+"""The hplib heat pump's model parts: the COP law, the adapter to hplib, the backup rod, the SCOP calibration, one step.
 
 ``MoreAdvancedHeatPumpHPLib`` in ``hisim/components/more_advanced_heat_pump_hplib.py`` is the component; this module
 holds what it computes with and that needs no component: the Carnot-efficiency COP law (:class:`CarnotEfficiencyCop`)
-and the machine that combines it with hplib's thermal power (:class:`CarnotCopHeatPump`), hplib's result as a typed
+and the machine that combines it with hplib's thermal power (:class:`CarnotCopHeatPump`), the backup heating rod that
+covers the compressor's shortfall (:class:`BackupHeatingRod`, :class:`RodAssistedHeating`), hplib's result as a typed
 value (:class:`HplibResult`) and its cache key (:class:`CalculationRequest`), the EN 14825 rating and the calibration
 to a datasheet SCOP (:class:`StandardizedSeasonalCop`, :class:`ScopCalibration`), and the frozen values one step of the
 heat pump passes between its pure functions (:class:`HeatPumpOperation` and its companions).
@@ -15,6 +16,7 @@ from typing import Any, Callable, ClassVar, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
+from hisim import hydronics
 from hisim.subcomponents.base import Subcomponent
 
 
@@ -143,8 +145,8 @@ class CarnotEfficiencyCop:
         return cls.SOURCE_TYPE_OF_HPLIB_GROUP[group]
 
 
-class CarnotCopHeatPump:
-    """An hplib heat pump whose COP of heating is the Carnot-efficiency law and that has no heating rod.
+class CarnotCopHeatPump(Subcomponent):
+    """An hplib heat pump's compressor whose COP of heating is the Carnot-efficiency law, without hplib's heating rod.
 
     hplib gives a heat pump's thermal power, outlet and mass flow from fitted planes; this machine keeps those and
     replaces hplib's COP plane by :class:`CarnotEfficiencyCop` (step (a) of the heat pump rework, spec
@@ -155,12 +157,14 @@ class CarnotCopHeatPump:
       minimal thermal power where hplib's regulated compressor can reach it (hplib's own rule).
     * The COP is the Carnot-efficiency law at the source and hplib's outlet, and the electrical power is the thermal
       power over it; the mass flow carries the thermal power over hplib's lift, as hplib computes it.
-    * hplib's heating rod is gone. hplib runs its rod alone where its own COP plane falls to 1 (for an 8 kW Generic
-      air/water machine at about A-7/W65 and A0/W69, booking its 8.1 kW reference power at COP 1), and adds the rod to
-      the compressor where the compressor alone cannot reach the minimal power. Here the first is the compressor at
-      hplib's switch, ``P_el,fit`` (continuous there, so the 3.3 kW jump of hplib's switch is gone), and the second
-      the compressor at its maximum, ``P_el,ref * COP_fit``. The Carnot COP stays above 1 at every realistic lift
-      (air at A-15/W75: 1.66), so no rod is needed; a back-up heater is a component of its own.
+    * hplib's heating rod is gone from the machine's answer. hplib runs its rod alone where its own COP plane falls to
+      1 (for an 8 kW Generic air/water machine at A-7/W56.7 and A0/W69.0, booking its 8.1 kW reference power at COP
+      1), and adds the rod to the compressor where the compressor alone cannot reach the minimal power. Here the first
+      is the compressor at hplib's switch, ``P_el,fit`` (continuous there, so the 3.3 kW jump of hplib's switch is
+      gone; decision 12 of the spec), and the second the compressor at its maximum, ``P_el,ref * COP_fit``. The
+      outlet of hplib's switch stays as the compressor's maximal outlet
+      (:meth:`maximal_outlet_temperature_in_celsius`), above which the heat pump's backup heating rod
+      (:class:`BackupHeatingRod`, decision 8) adds the heat the compressor cannot.
     * Cooling (mode 2) is hplib's own answer.
 
     Attributes:
@@ -177,6 +181,10 @@ class CarnotCopHeatPump:
 
     #: The outdoor temperature hplib evaluates that floor at (air: as the source, brine: as the ambient), in °C.
     HPLIB_ELECTRICAL_FLOOR_OUTDOOR_TEMPERATURE_IN_CELSIUS: ClassVar[float] = -7.0
+
+    #: The coefficient of performance of hplib's own COP plane at and below which hplib runs its heating rod alone,
+    #: dimensionless: hplib then books its reference thermal power as both heat and electricity.
+    HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
 
     def __init__(self, hplib_heat_pump: Any) -> None:
         """Wrap an ``hplib.HeatPump``; its group picks the source type of the COP law."""
@@ -255,6 +263,40 @@ class CarnotCopHeatPump:
             floor_in_watt = plane(source_temperature_in_celsius, ambient_in_celsius)
         return max(electrical_power_in_watt, self.HPLIB_ELECTRICAL_FLOOR_SHARE * floor_in_watt)
 
+    def maximal_outlet_temperature_in_celsius(
+        self, source_temperature_in_celsius: float, ambient_temperature_in_celsius: float
+    ) -> float:
+        """Return the highest outlet the compressor reaches at a source temperature, in °C: hplib's COP-1 line.
+
+        hplib's COP plane ``p1 T_in + p2 T_out + p3 + p4 T_amb`` (the ambient equal to the source for an air machine)
+        falls with the outlet; where it reaches :attr:`HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP`, hplib switched to its
+        heating rod alone. That outlet stands in for the compressor's maximal outlet until the configured maximal
+        supply temperature of bead hisim-heat-pump-outlet-limit-2vq7 replaces it (spec
+        ``roadmap/heat_pump_model_rework_spec.md``, §3.1, decision 8). For example, the 8 kW Generic air/water machine
+        reaches 56.7 °C at -7 °C outside, 69.0 °C at 0 °C and 81.4 °C at 7 °C; the Generic brine/water machine about
+        72.3 °C at a 0 °C brine. A plane that does not fall with the outlet has no such line, and the limit is
+        infinite.
+
+        Args:
+            source_temperature_in_celsius: The source temperature, in °C.
+            ambient_temperature_in_celsius: The outdoor temperature, in °C; an air machine reads the source instead.
+
+        Returns:
+            The compressor's maximal outlet temperature, in °C.
+        """
+        heat_pump = self.hplib_heat_pump
+        group = int(heat_pump.group_id)
+        ambient_in_celsius = source_temperature_in_celsius if group in (1, 4) else ambient_temperature_in_celsius
+        outlet_slope_per_kelvin = float(heat_pump.p2_cop)
+        if outlet_slope_per_kelvin >= 0.0:
+            return math.inf
+        return (
+            self.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP
+            - float(heat_pump.p1_cop) * source_temperature_in_celsius
+            - float(heat_pump.p3_cop)
+            - float(heat_pump.p4_cop) * ambient_in_celsius
+        ) / outlet_slope_per_kelvin
+
     def simulate(
         self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int = 1, p_th_min: float = 0.0
     ) -> Dict[str, Any]:
@@ -282,7 +324,7 @@ class CarnotCopHeatPump:
             return results
         outlet_in_celsius = float(results["T_out"])
         hplib_cop = float(results["COP"])
-        if hplib_cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
+        if hplib_cop <= self.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP:
             # Where hplib runs its rod alone, the compressor continues as at hplib's switch, its plane's COP at 1.
             compressor_cop = 1.0
             thermal_power_in_watt = self.fitted_electrical_power_in_watt(t_in_primary, outlet_in_celsius, t_amb)
@@ -298,6 +340,208 @@ class CarnotCopHeatPump:
         results["P_el"] = thermal_power_in_watt / cop
         results["m_dot"] = abs(thermal_power_in_watt / (self.delta_t * float(self.hplib_heat_pump.cp)))
         return results
+
+
+@dataclass(frozen=True)
+class RodAssistedHeating:
+    """One heating circuit's step shared between the compressor and the backup heating rod.
+
+    The compressor delivers what it can at its COP, the rod adds the missing heat at a COP of 1, and the circuit's water
+    carries both. The flow and outlet are what the circuit publishes: the averaged flow (the full-load flow times the
+    part-load ratio) at the outlet that flow reaches with the delivered heat. For example, a whole step of 0.4 kg/s from
+    60 °C to 65 °C whose compressor stops at 62 °C delivers 3344 W from the compressor and 5016 W from the rod, at
+    0.4 kg/s and 65 °C. A step that runs nothing has no flow, no heat and no electricity, its outlet is its return and
+    its COP 0.
+    """
+
+    #: The heat the compressor delivers, in W.
+    compressor_thermal_power_in_watt: float
+    #: The electricity the compressor draws for it, in W.
+    compressor_electrical_power_in_watt: float
+    #: The electricity the backup heating rod draws, in W; it is also the rod's heat (COP 1).
+    heating_rod_electrical_power_in_watt: float
+    #: The fraction of the step the compressor runs at its full output, from 0 to 1: the brine pump runs with it.
+    compressor_running_share: float
+    #: The circuit's averaged mass flow, in kg/s.
+    mass_flow_in_kg_per_second: float
+    #: The circuit's outlet temperature, in °C.
+    outlet_temperature_in_celsius: float
+
+    @property
+    def thermal_power_in_watt(self) -> float:
+        """Return the heat the circuit's water carries, the compressor's and the rod's, in W."""
+        return self.compressor_thermal_power_in_watt + self.heating_rod_electrical_power_in_watt
+
+    @property
+    def electrical_power_in_watt(self) -> float:
+        """Return the electricity of the compressor and the rod, in W."""
+        return self.compressor_electrical_power_in_watt + self.heating_rod_electrical_power_in_watt
+
+    @property
+    def cop(self) -> float:
+        """Return the circuit's coefficient of performance with the rod, heat over electricity; 0 without electricity.
+
+        For example, 3344 W from the compressor at a COP of 2.5 and 5016 W from the rod give 8360 W for 6353.6 W, a COP
+        of 1.32.
+        """
+        electrical_power_in_watt = self.electrical_power_in_watt
+        if electrical_power_in_watt <= 0.0:
+            return 0.0
+        return self.thermal_power_in_watt / electrical_power_in_watt
+
+
+@dataclass(frozen=True)
+class BackupHeatingRod(Subcomponent):
+    """The electric backup heating rod inside the heat pump: it adds the heat the compressor cannot, at a COP of 1.
+
+    Real air/water and brine/water units ship with an electric heating element for the coldest days (decision 8 of
+    ``roadmap/heat_pump_model_rework_spec.md``). The rod heats the same water as the compressor and runs only where the
+    compressor falls short, in one of two cases:
+
+    1. the heat requested in the step exceeds the compressor's thermal capacity at the current source and outlet
+       temperature (hplib's thermal power until step d of the spec replaces the capacity surface);
+    2. the required outlet exceeds the compressor's maximal outlet
+       (:meth:`CarnotCopHeatPump.maximal_outlet_temperature_in_celsius`): the compressor lifts the circuit's flow to
+       its maximal outlet, and the rod lifts it on to the required outlet, ``m c (T_required - T_max)``.
+
+    The decision is one of energy over the whole step (:meth:`heating`): the compressor runs at its full output for as
+    much of the step as the request needs, and the rod covers only what the compressor cannot deliver in the whole step,
+    ``E_rod = min(Q_requested - Q_compressor,max, P_rod * dt)``. What the rod cannot cover either is not delivered. Where
+    the compressor copes, the rod does not run. Its electricity is the heat pump's output ``ElectricalInputPowerHeatingRod``
+    with its own energy port; the rod is no part of the EN 14825 rating or the SCOP calibration.
+
+    Source of the default rating (:attr:`DEFAULT_LARGEST_RATED_ELECTRICAL_POWER_IN_WATT`, spec §3.1): the residential
+    indoor units of the main manufacturers carry one element class of 6 or 9 kW, switchable in 3 kW stages by the
+    installer (Vaillant uniTOWER plus / VWZ MEH 97: 9 kW; Viessmann Vitocal 250-A: 9 kW in 3/6/9 kW stages; Daikin
+    Altherma 3: 3, 6 or 9 kW; Bosch Compress 7000i AW: 9 kW; Stiebel Eltron HPA-O and WPL: 8.8 kW), and the installer's
+    stage setting keeps the rod below the compressor's rated heat; the heat pump's sizing law takes the smaller of the
+    two.
+
+    Attributes:
+        rated_electrical_power_in_watt: The rod's rated electrical power, in W, 0 or more; 0 is a heat pump without one.
+    """
+
+    rated_electrical_power_in_watt: float
+
+    #: The rod's rated electrical power where the heat pump's rated thermal power is larger, in W: the 9 kW element
+    #: class of the residential indoor units (see the class docstring).
+    DEFAULT_LARGEST_RATED_ELECTRICAL_POWER_IN_WATT: ClassVar[float] = 9000.0
+
+    def __post_init__(self) -> None:
+        """Refuse a rated power that is negative or not finite, which would book negative or infinite electricity.
+
+        Raises:
+            ValueError: If the rated power is negative, infinite or not a number.
+        """
+        if not math.isfinite(self.rated_electrical_power_in_watt) or self.rated_electrical_power_in_watt < 0.0:
+            raise ValueError(
+                "The backup heating rod's rated electrical power must be a finite number of watts, 0 or more, got "
+                f"{self.rated_electrical_power_in_watt}."
+            )
+
+    def heating(
+        self,
+        *,
+        part_load_ratio: float,
+        mass_flow_in_kg_per_second: float,
+        return_temperature_in_celsius: float,
+        required_outlet_temperature_in_celsius: float,
+        compressor_thermal_capacity_in_watt: float,
+        compressor_maximal_outlet_temperature_in_celsius: float,
+        compressor_cop: float,
+    ) -> RodAssistedHeating:
+        """Return a heating circuit's step shared between the compressor and the rod.
+
+        All powers are averages over the step. The request is the part-load ratio's share of the full-load heat at the
+        required outlet, ``P_req = r m c (T_required - T_return)``. The compressor's most over the whole step is the
+        smaller of its capacity and what its flow carries up to its maximal outlet, ``P_cmax = min(P_cap, m c
+        (min(T_max, T_required) - T_return))``, at least 0. The compressor delivers ``min(P_req, P_cmax)`` and runs that
+        share of the step at full output; the rod adds ``min(P_req - P_compressor, P_rod)``. The circuit publishes the
+        averaged flow ``r m`` at the required outlet, or, where the rod cannot cover the rest, at the lower outlet that
+        flow reaches with the delivered heat.
+
+        For example, 0.4 kg/s from a 60 °C return to a 65 °C required outlet (8360 W), a compressor of 8 kW capacity
+        whose maximal outlet is 62 °C at a COP of 2.5, and a 9 kW rod: at ratio 1 the compressor delivers 3344 W for
+        1337.6 W and the rod 5016 W; at ratio 0.4 the request of 3344 W is what the compressor delivers over the whole
+        step at its smaller lift, so the rod stays off, at 0.16 kg/s and 65 °C. With a 2 kW rod at ratio 1 the circuit
+        gets 5344 W and an outlet of 63.2 °C.
+
+        Args:
+            part_load_ratio: The fraction of the step the request asks for at full load, from 0 to 1.
+            mass_flow_in_kg_per_second: The circuit's flow at full load, in kg/s.
+            return_temperature_in_celsius: The circuit's return temperature, in °C.
+            required_outlet_temperature_in_celsius: The outlet the step asks for, in °C.
+            compressor_thermal_capacity_in_watt: The compressor's thermal capacity at the step's temperatures, in W.
+            compressor_maximal_outlet_temperature_in_celsius: The compressor's maximal outlet, in °C.
+            compressor_cop: The compressor's COP at its own outlet, the lower of the required and the maximal outlet,
+                dimensionless; above 0 wherever the compressor delivers heat.
+
+        Returns:
+            The step's heat, electricity, flow and outlet.
+
+        Raises:
+            ValueError: If the compressor delivers heat at a COP of 0 or less, which would book infinite or negative
+                electricity.
+        """
+        heat_per_kelvin_in_watt_per_kelvin = mass_flow_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+        full_load_heat_in_watt = heat_per_kelvin_in_watt_per_kelvin * max(
+            required_outlet_temperature_in_celsius - return_temperature_in_celsius, 0.0
+        )
+        requested_heat_in_watt = part_load_ratio * full_load_heat_in_watt
+        mass_flow_averaged_in_kg_per_second = part_load_ratio * mass_flow_in_kg_per_second
+        if requested_heat_in_watt <= 0.0:
+            # Nothing requested: the step runs nothing (ratio 0), or its water passes at no lift.
+            return RodAssistedHeating(
+                compressor_thermal_power_in_watt=0.0,
+                compressor_electrical_power_in_watt=0.0,
+                heating_rod_electrical_power_in_watt=0.0,
+                compressor_running_share=0.0,
+                mass_flow_in_kg_per_second=mass_flow_averaged_in_kg_per_second,
+                outlet_temperature_in_celsius=return_temperature_in_celsius,
+            )
+        compressor_maximal_heat_in_watt = max(
+            min(
+                compressor_thermal_capacity_in_watt,
+                heat_per_kelvin_in_watt_per_kelvin
+                * (
+                    min(compressor_maximal_outlet_temperature_in_celsius, required_outlet_temperature_in_celsius)
+                    - return_temperature_in_celsius
+                ),
+            ),
+            0.0,
+        )
+        compressor_heat_in_watt = min(requested_heat_in_watt, compressor_maximal_heat_in_watt)
+        rod_heat_in_watt = min(requested_heat_in_watt - compressor_heat_in_watt, self.rated_electrical_power_in_watt)
+        if compressor_heat_in_watt + rod_heat_in_watt < requested_heat_in_watt:
+            outlet_in_celsius = return_temperature_in_celsius + (compressor_heat_in_watt + rod_heat_in_watt) / (
+                mass_flow_averaged_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+            )
+        else:
+            outlet_in_celsius = required_outlet_temperature_in_celsius
+        # The heat the published flow carries, so the booked heat is exactly the flow's; the compressor books the rest.
+        carried_heat_in_watt = hydronics.circuit_power_w(
+            mass_flow_kg_per_s=mass_flow_averaged_in_kg_per_second,
+            t_supply_c=outlet_in_celsius,
+            t_return_c=return_temperature_in_celsius,
+        )
+        compressor_heat_in_watt = max(carried_heat_in_watt - rod_heat_in_watt, 0.0)
+        if compressor_heat_in_watt > 0.0 and not compressor_cop > 0.0:
+            raise ValueError(
+                f"A running compressor needs a coefficient of performance above 0 to book its electricity, got "
+                f"{compressor_cop} for {compressor_heat_in_watt} W of heat."
+            )
+        return RodAssistedHeating(
+            compressor_thermal_power_in_watt=compressor_heat_in_watt,
+            compressor_electrical_power_in_watt=compressor_heat_in_watt / compressor_cop if compressor_heat_in_watt else 0.0,
+            heating_rod_electrical_power_in_watt=rod_heat_in_watt,
+            compressor_running_share=(
+                min(compressor_heat_in_watt / compressor_maximal_heat_in_watt, 1.0)
+                if compressor_maximal_heat_in_watt > 0.0
+                else 0.0
+            ),
+            mass_flow_in_kg_per_second=mass_flow_averaged_in_kg_per_second,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+        )
 
 
 class StandardizedSeasonalCop(Subcomponent):
@@ -438,7 +682,7 @@ class StandardizedSeasonalCop(Subcomponent):
         for outdoor, hours in cls.BINS:
             demand = design_load * cls.part_load(outdoor)
             output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
+            by_heat_pump = min(demand, output) if cop > CarnotCopHeatPump.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
             heat += hours * demand
             electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
         return heat / electricity
@@ -718,21 +962,6 @@ class ScopCalibration(Subcomponent):
 
 
 @dataclass(frozen=True)
-class HeatingCircuitPowers:
-    """The thermal and electrical power a running heating circuit of the hplib heat pump books for one step.
-
-    Both are derived from the same water flow: the thermal power is the heat the circuit's water carries, the
-    electrical power that heat over the step's coefficient of performance. A value object, so the two powers
-    cannot be swapped by position.
-    """
-
-    #: The heat the circuit's water carries, in W.
-    thermal_power_in_watt: float
-    #: The electricity the compressor draws for that heat, in W.
-    electrical_power_in_watt: float
-
-
-@dataclass(frozen=True)
 class HplibResult:
 
     """The machine's answer at one operating point, the numbers the heat pump computes with.
@@ -755,24 +984,17 @@ class HplibResult:
     cop: float
     #: The energy efficiency ratio of cooling, dimensionless (``EER``).
     eer: float
-    #: Whether hplib itself runs its heating rod alone at this operating point: its own, uncalibrated coefficient of
-    #: performance of heating is at most :attr:`HEATING_ROD_ALONE_MAXIMAL_COP`. A stated SCOP's calibration scales the
-    #: compressor's COP (:class:`ScopCalibration`), so the calibrated :attr:`cop` can fall below 1 while hplib still
-    #: runs the compressor; this flag keeps hplib's verdict. Always False for cooling.
-    heating_rod_alone: bool
 
     @staticmethod
-    def from_hplib(results: Mapping[str, Any], *, heating_rod_alone: bool) -> "HplibResult":
-        """Return the fields of an hplib result dictionary, as floats, with hplib's verdict on its heating rod.
+    def from_hplib(results: Mapping[str, Any]) -> "HplibResult":
+        """Return the fields of a machine's result dictionary, as floats.
 
-        For example, a calibrated compressor result next to the switch has a COP of 0.88 and
-        ``heating_rod_alone=False``, because hplib's own COP there is 1.0033. The flag is not read from ``results``,
-        because those may be calibrated (:meth:`runs_the_heating_rod_alone` reads hplib's own result).
+        For example, ``{"T_out": 35.0, "m_dot": 0.38, "P_th": 7900.0, "P_el": 1880.0, "COP": 4.2, "EER": 0.0}`` gives a
+        result with an outlet of 35 °C and a COP of 4.2.
 
         Args:
-            results: hplib's result, calibrated or not, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``,
+            results: The machine's result, calibrated or not, with the keys ``T_out``, ``m_dot``, ``P_th``, ``P_el``,
                 ``COP`` and ``EER``.
-            heating_rod_alone: Whether hplib itself runs its heating rod alone at this operating point.
 
         Returns:
             The typed result.
@@ -784,61 +1006,15 @@ class HplibResult:
             electrical_power_in_watt=float(results["P_el"]),
             cop=float(results["COP"]),
             eer=float(results["EER"]),
-            heating_rod_alone=heating_rod_alone,
         )
-
-    @staticmethod
-    def runs_the_heating_rod_alone(hplib_results: Mapping[str, Any], mode: int) -> bool:
-        """Return whether hplib runs its heating rod alone, read from its own, uncalibrated result.
-
-        hplib heats with its rod alone where its fitted coefficient of performance is at most 1; it then reports a COP
-        of exactly 1. For example, hplib's result at a COP of 1.0 in heating mode gives True, one at 1.0033 False.
-        Cooling (mode 2) has no heating rod and gives False.
-
-        Args:
-            hplib_results: hplib's own result, before any calibration, with the key ``COP``.
-            mode: hplib's mode, 1 heating, 2 cooling.
-
-        Returns:
-            Whether hplib's heating rod alone delivers the heat.
-        """
-        return mode == 1 and float(hplib_results["COP"]) <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
-
-    #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
-    #: books its reference thermal power as both heat and electricity. :class:`CarnotCopHeatPump` reads hplib's
-    #: own COP against it and replaces such an answer by the compressor's.
-    HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
-
-    @staticmethod
-    def straddle_the_heating_rod_switch(*, lower: "HplibResult", upper: "HplibResult") -> bool:
-        """Return whether hplib runs its heating rod alone at exactly one of two neighbouring operating points.
-
-        hplib switches from its compressor to its heating rod alone where its fitted coefficient of performance falls
-        to 1, and its thermal power jumps there: for example, for one machine, from 5.0 kW (compressor at a COP of
-        1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
-        turns that jump into a ramp of about 25 kW/K over 0.1 K.
-
-        Since the Carnot-efficiency COP (:class:`CarnotCopHeatPump`) replaced hplib's COP plane, the heat pump's
-        answers have no heating rod and no jump: their COP stays above 1 at every realistic lift, so this check
-        finds no switch there. It remains as the guard of the interpolation should a result at a COP of 1 or less
-        reach it.
-
-        Args:
-            lower: hplib's result at the lower grid point.
-            upper: hplib's result at the upper grid point.
-
-        Returns:
-            Whether one result is the heating rod's and the other is not.
-        """
-        return lower.heating_rod_alone != upper.heating_rod_alone
 
     @staticmethod
     def interpolated(*, lower: "HplibResult", upper: "HplibResult", share_of_upper: float) -> "HplibResult":
         """Return the linear interpolation between hplib's results at two neighbouring return temperatures.
 
-        Every numeric field is ``lower + share_of_upper (upper - lower)``; :attr:`heating_rod_alone` is the lower
-        point's, because two points interpolated lie on one side of the switch and share it. For example, a return of
-        47.04 °C on the 0.1 K grid takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C.
+        Every field is ``lower + share_of_upper (upper - lower)``. For example, a return of 47.04 °C on the 0.1 K grid
+        takes 60 % of the result at 47.0 °C and 40 % of the one at 47.1 °C. The machine's answers are continuous in the
+        return (hplib's jump to its heating rod is gone, :class:`CarnotCopHeatPump`), so every return is interpolated.
 
         Args:
             lower: The result at the lower grid point.
@@ -862,7 +1038,6 @@ class HplibResult:
             electrical_power_in_watt=between(lower.electrical_power_in_watt, upper.electrical_power_in_watt),
             cop=between(lower.cop, upper.cop),
             eer=between(lower.eer, upper.eer),
-            heating_rod_alone=lower.heating_rod_alone,
         )
 
 
@@ -948,7 +1123,9 @@ class HeatPumpOperation:
 
     Each mode fills it through one factory (:meth:`space_heating`, :meth:`hot_water`, :meth:`cooling`,
     :meth:`idle`); the circuit that does not run has no flow and its outlet is its return. The totals are
-    properties, summed in one order, so every output derives from the same numbers.
+    properties, summed in one order, so every output derives from the same numbers. A heating circuit's heat is the
+    compressor's and the backup heating rod's (:class:`RodAssistedHeating`); its electricity for space heating or hot
+    water is the compressor's, and the rod's electricity is its own field.
     """
 
     #: The heat the space-heating circuit carries, in W; negative while cooling.
@@ -963,7 +1140,10 @@ class HeatPumpOperation:
     electrical_power_cooling_in_watt: float
     #: The brine or well pump's electricity, in W.
     electrical_power_brine_pump_in_watt: float
-    #: The coefficient of performance, dimensionless; 0 while not heating.
+    #: The backup heating rod's electricity, in W, in space heating or hot water; also its heat.
+    electrical_power_heating_rod_in_watt: float
+    #: The coefficient of performance of heating, the circuit's heat over the compressor's and the rod's
+    #: electricity, dimensionless; 0 while not heating.
     cop: float
     #: The energy efficiency ratio of cooling, dimensionless.
     eer: float
@@ -983,12 +1163,13 @@ class HeatPumpOperation:
 
     @property
     def total_electrical_power_in_watt(self) -> float:
-        """Return the electricity of the compressor in every mode and of the brine pump, in W."""
+        """Return the electricity of the compressor in every mode, of the backup heating rod and of the brine pump, in W."""
         return (
             self.electrical_power_hot_water_in_watt
             + self.electrical_power_space_heating_in_watt
             + self.electrical_power_cooling_in_watt
             + self.electrical_power_brine_pump_in_watt
+            + self.electrical_power_heating_rod_in_watt
         )
 
     @property
@@ -1000,26 +1181,27 @@ class HeatPumpOperation:
     def space_heating(
         conditions: HeatPumpStepConditions,
         *,
-        powers: "HeatingCircuitPowers",
+        heating: RodAssistedHeating,
         electrical_power_brine_pump_in_watt: float,
-        cop: float,
         eer: float,
-        outlet_temperature_in_celsius: float,
-        mass_flow_in_kg_per_second: float,
     ) -> "HeatPumpOperation":
-        """Return a step that heats the building; the hot-water circuit idles at its return."""
+        """Return a step that heats the building; the hot-water circuit idles at its return.
+
+        The brine pump runs the compressor's share of the step, so it draws that share of its power.
+        """
         return HeatPumpOperation(
-            thermal_power_space_heating_in_watt=powers.thermal_power_in_watt,
+            thermal_power_space_heating_in_watt=heating.thermal_power_in_watt,
             thermal_power_hot_water_in_watt=0.0,
-            electrical_power_space_heating_in_watt=powers.electrical_power_in_watt,
+            electrical_power_space_heating_in_watt=heating.compressor_electrical_power_in_watt,
             electrical_power_hot_water_in_watt=0.0,
             electrical_power_cooling_in_watt=0.0,
-            electrical_power_brine_pump_in_watt=electrical_power_brine_pump_in_watt,
-            cop=cop,
+            electrical_power_brine_pump_in_watt=heating.compressor_running_share * electrical_power_brine_pump_in_watt,
+            electrical_power_heating_rod_in_watt=heating.heating_rod_electrical_power_in_watt,
+            cop=heating.cop,
             eer=eer,
-            outlet_temperature_space_heating_in_celsius=outlet_temperature_in_celsius,
+            outlet_temperature_space_heating_in_celsius=heating.outlet_temperature_in_celsius,
             outlet_temperature_hot_water_in_celsius=conditions.hot_water_return_temperature_in_celsius,
-            mass_flow_space_heating_in_kg_per_second=mass_flow_in_kg_per_second,
+            mass_flow_space_heating_in_kg_per_second=heating.mass_flow_in_kg_per_second,
             mass_flow_hot_water_in_kg_per_second=0.0,
         )
 
@@ -1027,27 +1209,28 @@ class HeatPumpOperation:
     def hot_water(
         conditions: HeatPumpStepConditions,
         *,
-        powers: "HeatingCircuitPowers",
+        heating: RodAssistedHeating,
         electrical_power_brine_pump_in_watt: float,
-        cop: float,
         eer: float,
-        outlet_temperature_in_celsius: float,
-        mass_flow_in_kg_per_second: float,
     ) -> "HeatPumpOperation":
-        """Return a step that heats the hot water; the space-heating circuit idles at its return."""
+        """Return a step that heats the hot water; the space-heating circuit idles at its return.
+
+        The brine pump runs the compressor's share of the step, so it draws that share of its power.
+        """
         return HeatPumpOperation(
             thermal_power_space_heating_in_watt=0.0,
-            thermal_power_hot_water_in_watt=powers.thermal_power_in_watt,
+            thermal_power_hot_water_in_watt=heating.thermal_power_in_watt,
             electrical_power_space_heating_in_watt=0.0,
-            electrical_power_hot_water_in_watt=powers.electrical_power_in_watt,
+            electrical_power_hot_water_in_watt=heating.compressor_electrical_power_in_watt,
             electrical_power_cooling_in_watt=0.0,
-            electrical_power_brine_pump_in_watt=electrical_power_brine_pump_in_watt,
-            cop=cop,
+            electrical_power_brine_pump_in_watt=heating.compressor_running_share * electrical_power_brine_pump_in_watt,
+            electrical_power_heating_rod_in_watt=heating.heating_rod_electrical_power_in_watt,
+            cop=heating.cop,
             eer=eer,
             outlet_temperature_space_heating_in_celsius=conditions.space_heating_return_temperature_in_celsius,
-            outlet_temperature_hot_water_in_celsius=outlet_temperature_in_celsius,
+            outlet_temperature_hot_water_in_celsius=heating.outlet_temperature_in_celsius,
             mass_flow_space_heating_in_kg_per_second=0.0,
-            mass_flow_hot_water_in_kg_per_second=mass_flow_in_kg_per_second,
+            mass_flow_hot_water_in_kg_per_second=heating.mass_flow_in_kg_per_second,
         )
 
     @staticmethod
@@ -1070,6 +1253,7 @@ class HeatPumpOperation:
             electrical_power_hot_water_in_watt=0.0,
             electrical_power_cooling_in_watt=electrical_power_cooling_in_watt,
             electrical_power_brine_pump_in_watt=electrical_power_brine_pump_in_watt,
+            electrical_power_heating_rod_in_watt=0.0,
             cop=cop,
             eer=eer,
             outlet_temperature_space_heating_in_celsius=outlet_temperature_in_celsius,
@@ -1091,6 +1275,7 @@ class HeatPumpOperation:
             electrical_power_hot_water_in_watt=0.0,
             electrical_power_cooling_in_watt=0.0,
             electrical_power_brine_pump_in_watt=0.0,
+            electrical_power_heating_rod_in_watt=0.0,
             cop=0.0,
             eer=0.0,
             outlet_temperature_space_heating_in_celsius=conditions.space_heating_return_temperature_in_celsius,

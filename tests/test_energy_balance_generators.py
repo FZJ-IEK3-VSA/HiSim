@@ -180,6 +180,7 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ElectricalInputPowerDHW": ("consumption", "electricity"),
             "ElectricalInputPowerForCooling": ("consumption", "electricity"),
             "ElectricalInputPowerBrinePump": ("consumption", "electricity"),
+            "ElectricalInputPowerHeatingRod": ("consumption", "electricity"),
             "ThermalPowerInputFromEnvironment": ("consumption", "ambient_heat"),
             "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputSH": ("production", "space_heating_heat"),
             "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW": ("production", "domestic_hot_water_heat"),

@@ -166,6 +166,7 @@ def test_house(
     # The preset sizes both fields from the building; this setup states the machine instead,
     # because the buffer volume asserted below is the one an 8 kW machine gets.
     my_heatpump_config.set_thermal_output_power_in_watt = 8000.0
+    my_heatpump_config.heating_rod_rated_electrical_power_in_watt = 8000.0
     my_heatpump_config.heating_reference_temperature_in_celsius = -7.0
     my_heatpump_config.with_domestic_hot_water_preparation = True
 

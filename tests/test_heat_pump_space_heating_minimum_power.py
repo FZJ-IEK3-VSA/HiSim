@@ -66,6 +66,7 @@ def heat_pump_with_hot_water(position: PositionHotWaterStorageInSystemSetup) -> 
     """
     config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_rod_rated_electrical_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = True
     config.minimum_thermal_output_power_in_watt = 1800.0
@@ -104,7 +105,7 @@ def test_space_heating_after_hot_water_asks_hplib_with_the_configured_minimum(
     conditions = mild_day_conditions()
 
     heat_pump.hot_water(conditions, running_for_an_hour())
-    heat_pump.space_heating(conditions, running_for_an_hour())
+    heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
     heat_pump.hot_water(conditions, running_for_an_hour())
 
     recorded = heat_pump.minimal_thermal_powers_in_watt
@@ -125,9 +126,9 @@ def test_fixed_flow_space_heating_after_hot_water_delivers_the_configured_minimu
         1 - np.exp(-3600 / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
     )
 
-    before_hot_water = heat_pump.space_heating(conditions, running_for_an_hour())
+    before_hot_water = heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
     heat_pump.hot_water(conditions, running_for_an_hour())
-    after_hot_water = heat_pump.space_heating(conditions, running_for_an_hour())
+    after_hot_water = heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
 
     assert before_hot_water.thermal_power_space_heating_in_watt == pytest.approx(expected_thermal_power_in_watt)
     assert after_hot_water.thermal_power_space_heating_in_watt == pytest.approx(expected_thermal_power_in_watt)

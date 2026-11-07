@@ -23,7 +23,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
     PositionHotWaterStorageInSystemSetup,
 )
-from hisim.components.more_advanced_heat_pump_hplib_model import HeatPumpOperation
+from hisim.components.more_advanced_heat_pump_hplib_model import BackupHeatingRod, HeatPumpOperation, HeatPumpStepConditions
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import StartOfStepPartLoadRule
 from hisim.simulationparameters import SimulationParameters
@@ -33,45 +33,56 @@ from tests.test_heat_pump_flow_booking import SingleStep
 pytestmark = pytest.mark.base
 
 
-def full_load_space_heating() -> HeatPumpOperation:
-    """A full-load space-heating step: 0.4 kg/s from 30 to 35 °C at a COP of 4, with a 100 W brine pump."""
-    return HeatPumpOperation(
-        thermal_power_space_heating_in_watt=0.4 * 4180.0 * 5.0,
-        thermal_power_hot_water_in_watt=0.0,
-        electrical_power_space_heating_in_watt=0.4 * 4180.0 * 5.0 / 4.0,
-        electrical_power_hot_water_in_watt=0.0,
-        electrical_power_cooling_in_watt=0.0,
-        electrical_power_brine_pump_in_watt=100.0,
-        cop=4.0,
-        eer=0.0,
-        outlet_temperature_space_heating_in_celsius=35.0,
-        outlet_temperature_hot_water_in_celsius=45.0,
-        mass_flow_space_heating_in_kg_per_second=0.4,
-        mass_flow_hot_water_in_kg_per_second=0.0,
+def space_heating_at(part_load_ratio: float) -> HeatPumpOperation:
+    """A space-heating step of 0.4 kg/s from 30 to 35 °C at a COP of 4, a 100 W brine pump, at a part-load ratio.
+
+    The compressor's capacity (9 kW) and maximal outlet (60 °C) leave the backup rod nothing to do.
+
+    Args:
+        part_load_ratio: The fraction of the step the request asks for at full load.
+
+    Returns:
+        The step.
+    """
+    heating = BackupHeatingRod(rated_electrical_power_in_watt=9000.0).heating(
+        part_load_ratio=part_load_ratio,
+        mass_flow_in_kg_per_second=0.4,
+        return_temperature_in_celsius=30.0,
+        required_outlet_temperature_in_celsius=35.0,
+        compressor_thermal_capacity_in_watt=9000.0,
+        compressor_maximal_outlet_temperature_in_celsius=60.0,
+        compressor_cop=4.0,
     )
+    conditions = HeatPumpStepConditions(
+        source_temperature_in_celsius=2.0,
+        ambient_temperature_in_celsius=2.0,
+        space_heating_return_temperature_in_celsius=30.0,
+        hot_water_return_temperature_in_celsius=45.0,
+        space_heating_set_temperature_in_celsius=None,
+        hot_water_supply_set_temperature_in_celsius=None,
+    )
+    return HeatPumpOperation.space_heating(conditions, heating=heating, electrical_power_brine_pump_in_watt=100.0, eer=0.0)
 
 
 def test_a_part_loaded_step_carries_the_averaged_flow_at_the_full_load_outlet() -> None:
     """At a ratio of 0.25: 0.1 kg/s at 35 °C, 2090 W of heat, 522.5 W of electricity and 25 W for the brine pump."""
-    step = MoreAdvancedHeatPumpHPLib.part_loaded_space_heating(
-        full_load_space_heating(), part_load_ratio=0.25, return_temperature_in_celsius=30.0
-    )
+    step = space_heating_at(0.25)
     assert step.mass_flow_space_heating_in_kg_per_second == pytest.approx(0.1)
     assert step.outlet_temperature_space_heating_in_celsius == 35.0
     assert step.thermal_power_space_heating_in_watt == pytest.approx(2090.0)
     assert step.electrical_power_space_heating_in_watt == pytest.approx(522.5)
     assert step.electrical_power_brine_pump_in_watt == pytest.approx(25.0)
+    assert step.electrical_power_heating_rod_in_watt == 0.0
 
 
-def test_a_whole_step_is_unchanged_and_a_ratio_of_zero_books_nothing() -> None:
-    """Ratio 1 returns the full-load step itself; ratio 0 has no flow, heat or electricity, outlet = return, COP 0."""
-    full_load = full_load_space_heating()
-    assert MoreAdvancedHeatPumpHPLib.part_loaded_space_heating(
-        full_load, part_load_ratio=1.0, return_temperature_in_celsius=30.0
-    ) is full_load
-    nothing = MoreAdvancedHeatPumpHPLib.part_loaded_space_heating(
-        full_load, part_load_ratio=0.0, return_temperature_in_celsius=30.0
-    )
+def test_a_whole_step_runs_the_full_flow_and_a_ratio_of_zero_books_nothing() -> None:
+    """Ratio 1: 0.4 kg/s at 35 °C, 8360 W at a COP of 4; ratio 0: no flow, heat or electricity, outlet = return, COP 0."""
+    whole = space_heating_at(1.0)
+    assert whole.mass_flow_space_heating_in_kg_per_second == 0.4
+    assert whole.thermal_power_space_heating_in_watt == pytest.approx(8360.0)
+    assert whole.cop == pytest.approx(4.0)
+    assert whole.electrical_power_brine_pump_in_watt == pytest.approx(100.0)
+    nothing = space_heating_at(0.0)
     assert nothing.mass_flow_space_heating_in_kg_per_second == 0.0
     assert nothing.thermal_power_space_heating_in_watt == 0.0
     assert nothing.total_electrical_power_in_watt == 0.0

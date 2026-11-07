@@ -32,6 +32,7 @@ def _eight_kilowatt_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
     """
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("MoreAdvancedHeatPumpHPLib")
     config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_rod_rated_electrical_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     return config
 
@@ -49,6 +50,7 @@ def test_a_thermal_power_that_is_not_finite_or_below_1_watt_is_refused_when_the_
     """
     config = _eight_kilowatt_heat_pump_config()
     config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    config.heating_rod_rated_electrical_power_in_watt = min(thermal_power_in_watt, 9000.0)
     with pytest.raises(
         ValueError,
         match=rf"MoreAdvancedHeatPumpHPLib: the heat pump's set_thermal_output_power_in_watt must be a finite power "
@@ -69,6 +71,7 @@ def test_a_thermal_power_that_is_not_finite_or_below_1_watt_is_refused_before_th
     """
     config = _eight_kilowatt_heat_pump_config()
     config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    config.heating_rod_rated_electrical_power_in_watt = min(thermal_power_in_watt, 9000.0)
     with pytest.raises(ValueError, match="must be a finite power of at least 1 W"):
         MoreAdvancedHeatPumpHPLibConfig.sizing_facts(config, SizingContext())
 
@@ -82,6 +85,7 @@ def test_a_heat_pump_is_built_at_its_stated_power(thermal_power_in_watt: float, 
     """
     config = _eight_kilowatt_heat_pump_config()
     config.set_thermal_output_power_in_watt = thermal_power_in_watt
+    config.heating_rod_rated_electrical_power_in_watt = min(thermal_power_in_watt, 9000.0)
     heat_pump = MoreAdvancedHeatPumpHPLib(
         config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
     )
@@ -166,6 +170,7 @@ def test_heat_pump_hplib_new() -> None:
         heating_reference_temperature_in_celsius=t_in,
         flow_temperature_in_celsius=t_out,
         set_thermal_output_power_in_watt=p_th_set,
+        heating_rod_rated_electrical_power_in_watt=min(p_th_set, 9000.0),
         cycling_mode=True,
         minimum_idle_time_in_seconds=600,
         minimum_running_time_in_seconds=600,

@@ -107,6 +107,7 @@ class FlagPortAgreement:
         (MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW): HEAT_PUMP_MODE_REASON,
         (MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling): HEAT_PUMP_MODE_REASON,
         (MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump): HEAT_PUMP_MODE_REASON,
+        (MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod): HEAT_PUMP_MODE_REASON,
         (MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal): (
             "a flag and no port: the sum of the heat pump's electricity per mode, which the KPIs count; a port here "
             "would book that electricity twice in the heat pump's balance."

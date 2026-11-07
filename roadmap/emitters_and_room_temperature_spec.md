@@ -2,8 +2,8 @@
 
 Status: decided (owner, 2026-11-03), amended 2026-11-07 (D3 and D5: the 1.1 margin sits on the new emitters' size as
 well as on the curve; D10: Q1 of §9 decided, the energy manager's raise is decided with information about its own
-effect), nothing is built; blocked (owner, 2026-11-07) until the step-length dependence of case B is
-understood (§7, Appendix A.7). Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
+effect), nothing is built. The step-length dependence of case B (§7, Appendix A.7) is understood and does not
+block this spec (owner, 2026-11-07). Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
 hisim-renovisor-translator-epc (hisim-renovisor-base-emitters-dwm9, hisim-renovisor-translator-epc.1),
 hisim-component-physics-4g9 (hisim-component-physics-4g9.37, hisim-airing-books-no-heat-uws3,
 hisim-ems-raise-within-step-er89), hisim-heat-pump-model-rework-fpqz (hisim-heat-pump-outlet-limit-2vq7,
@@ -482,9 +482,12 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
   `household_heatpump_building_sizer`: delivered heat and fuel or electricity within 1 % of the 60 s run
   (`modelling_guide.md` §3). Case B (the heat pump on 70/55 °C radiators sized to the unrenovated house, Appendix A.7)
   is outside that tolerance today: the rod's share of the week's electricity is about 40 % at 60 s and about 60 % at
-  900 s, and the reached supply lies below the curve at 60 s and above it at 900 s. The owner decided (2026-11-07) that
-  this spec is blocked until the step-length dependence of case B is understood; an investigation is running.
-  Investigation: see bead hisim-rod-share-step-length-67f0.
+  900 s, and the reached supply lies below the curve at 60 s and above it at 900 s. The cause lies outside this spec:
+  above 600 s the heat pump charges toward a target 2.5 K above the set point (fxix.27, on main today), so at 900 s it
+  heats from water that is too hot for it and its outlet limit passes the heat to the rod. Which charge target replaces
+  the +2.5 K (it, or the midpoint rule) is decided after #1113 lands, on a fresh measurement (owner, 2026-11-07), and
+  does not block this spec. Until then, results at steps above 600 s carry the effect. Investigation: see bead
+  hisim-rod-share-step-length-67f0.
 - **Goldens**: every hydronic twin through the golden gate after the re-bless.
 - **RenoVisor**: `tests/renovisor/` base tests, the `renovisor_probes` job, `verify --out DIR` exits 0, the flag
   probe of §6.
@@ -742,8 +745,9 @@ reached supply lies below the curve at 60 s (63.94–64.84 °C against 65.71 °C
 against 65.67 °C). The curve's design-day value itself differs between the step lengths, 65.71 °C at 60 s against
 65.67 °C at 900 s, and 06.001 at 60 s reads 65.70 °C in the `pv` run against 65.71 °C in `base`; neither difference is
 explained here. The delivered heat and the electricity of this case are outside the 1 %
-step-length tolerance of §7; the owner decided on 2026-11-07 that the spec is blocked until the cause is understood
-(§7, "Investigation: see bead hisim-rod-share-step-length-67f0").
+step-length tolerance of §7. The cause is the +2.5 K charge target above 600 s, not this spec; the owner decided on
+2026-11-07 that the target's replacement is chosen after #1113 and that the spec is not blocked (§7, bead
+hisim-rod-share-step-length-67f0).
 
 ### A.8 Yearly heat against ideal delivery, by variant (900 s, % of the ideal-delivery heat)
 

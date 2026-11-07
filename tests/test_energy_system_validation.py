@@ -22,8 +22,8 @@ from hisim.energy_system import (
     EnergySystemFormatError,
     load_energy_system,
     parse_energy_system,
-    validate_structure,
 )
+from hisim.energy_system.loader import run_load_rules
 from tests.test_energy_system_loader import Mockups
 
 
@@ -71,9 +71,9 @@ def test_the_mockups_satisfy_every_structural_rule(name: str) -> None:
     """Catches a structural rule that is stricter than the format the mockups describe.
 
     The mockups are normative, so a rule they fail is a bug in the rule and not in them;
-    running the validator separately from the loader keeps that distinction visible.
+    running the structural rules separately from the loader keeps that distinction visible.
     """
-    validate_structure(parse_energy_system(Mockups.path(name)))
+    run_load_rules(parse_energy_system(Mockups.path(name)), {}, None)
 
 
 @pytest.mark.base
@@ -384,7 +384,7 @@ components:
 """
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(text)
-    assert caught.value.error_id is EnergySystemErrorId.DUPLICATE_WIRE
+    assert caught.value.error_id is EnergySystemErrorId.WRITTEN_DUPLICATE_WIRE
     assert "TemperatureInputPrimary" in str(caught.value)
 
 
@@ -416,7 +416,7 @@ components:
 """
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(text)
-    assert caught.value.error_id is EnergySystemErrorId.DUPLICATE_FEED
+    assert caught.value.error_id is EnergySystemErrorId.WRITTEN_DUPLICATE_FEED
     assert "occupancy.ElectricityOutput" in str(caught.value)
 
 

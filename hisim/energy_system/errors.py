@@ -27,16 +27,24 @@ Four concrete classes derive from it, one per lifecycle stage that can reject a 
 caller tell "this file is wrong" from "these classes are not ready yet" without reading the
 message. The last is raised by the wiring rules of the setup rules from the :class:`WiringRefusal`
 records the wiring writes, every fault of a build at once.
+The structural rules of a file (``hisim/setup_rules/document.py``) report every fault of a
+document at once as :class:`EnergySystemStructureError`, a format error that is also a setup-rule
+violation.
 """
 
 from __future__ import annotations
 
 import difflib
 import enum
+import re
 from dataclasses import dataclass, field
-from typing import ClassVar, Iterable, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, ClassVar, Iterable, Optional, Pattern, Sequence, Tuple
 
 from hisim.setup_rules.rule import SetupRuleViolation
+
+if TYPE_CHECKING:
+    from hisim.setup_rules.kinds import SetupKind
+    from hisim.setup_rules.rule import Fault, RuleStage, Skip
 
 
 @enum.unique
@@ -54,7 +62,10 @@ class EnergySystemErrorId(enum.Enum):
     Three bands run past ten members and continue with letters rather than renumbering the
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
     a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
-    tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
+    tag name no enum knows and two participants claiming one control signal, ``EF-2C``/``EF-2D``
+    refuse a feed or a wire written twice in one consumer's input list, which the structural rules
+    find in the document before any class is imported (``EF-25``/``EF-26`` refuse what the wiring
+    plans twice, the expansion of bare items included), and ``EF-4A`` …
     ``EF-4H`` wrap the eight failure modes of the sizing
     kernel one-to-one, ``EF-4J`` its refusal of a group of fields its class sizes together stated
     only in part (a battery's capacity without its inverter power), with ``EF-4X`` for a kernel
@@ -126,6 +137,8 @@ class EnergySystemErrorId(enum.Enum):
     DISPATCH_RULE_VIOLATED = "EF-29"
     UNKNOWN_TAG = "EF-2A"
     AMBIGUOUS_DISPATCH_SIGNAL = "EF-2B"
+    WRITTEN_DUPLICATE_FEED = "EF-2C"
+    WRITTEN_DUPLICATE_WIRE = "EF-2D"
     PORT_TYPE_MISMATCH = "EF-30"
     UNCONNECTED_MANDATORY_INPUT = "EF-31"
     PORT_NAME_COLLISION = "EF-32"
@@ -373,6 +386,64 @@ class EnergySystemFormatError(EnergySystemCatalogueError):
     exporter or a batch-authoring tool can provoke and present exactly this class without
     ever pulling in HiSim's component tree.
     """
+
+
+class EnergySystemStructureError(EnergySystemFormatError, SetupRuleViolation):
+    """Every fault the structural rules of an energy-system file found, raised together.
+
+    The structural rules (``hisim/setup_rules/document.py``) check what is decidable from the document without its
+    classes: unique names, group and variant membership, a closed reference graph, a stated configuration origin,
+    consistent input lists, no absolute path. Each fault's message is the catalogue message ``EF-nn at <location>:
+    <problem>`` the structural validator raised before the rules moved, followed by the pointer to the rule; the
+    registry of the setup rules raises them together as this error. It is a format error, so an ``except
+    EnergySystemFormatError`` keeps catching it, and a setup-rule violation, and with it a ``ValueError``.
+
+    ``error_id``, ``location`` and ``problem`` are those of the first fault, the faults being ordered by code, so a
+    caller that reads them as from a single format error keeps working. Example: a file whose only fault is an input
+    from an undeclared component gives ``error_id`` ``EnergySystemErrorId.UNKNOWN_SOURCE`` and ``location``
+    ``components.boiler.inputs[0]``. ``alternatives`` is empty: the list of valid values is part of the message.
+    """
+
+    #: The catalogue message a fault opens with: its identifier, its location and its problem, then the pointer.
+    CATALOGUE_MESSAGE: ClassVar[Pattern[str]] = re.compile(r"^(EF-[0-9A-Z]{2}) at (.*?): (.*?)(?:; see: hisim setup-rules show \S+)?$", re.DOTALL)
+
+    # The catalogue's constructor builds one message from one fault; the violation's builds the list of every fault.
+    def __init__(  # pylint: disable=super-init-not-called
+        self, stage: RuleStage, kind: SetupKind, faults: Sequence[Fault], skipped: Sequence[Skip]
+    ) -> None:
+        """Hold the faults and skips of the stage, and take the identifier, location and problem of the first fault.
+
+        Args:
+            stage: The stage whose rules found the faults.
+            kind: The kind the file declares.
+            faults: Every fault of the structural rules, ordered by code.
+            skipped: Every rule the registry skipped.
+        """
+        SetupRuleViolation.__init__(self, stage, kind, faults, skipped)
+        self.error_id, self.location, self.problem = self.catalogue_parts(faults[0].message)
+        self.alternatives = ()
+
+    @classmethod
+    def catalogue_parts(cls, message: str) -> Tuple[EnergySystemErrorId, str, str]:
+        """Return the identifier, the location and the problem of a catalogue message, without the pointer to the rule.
+
+        Example: ``"EF-20 at components.boiler.inputs[0]: 'boiler' declares an input from 'weathr' ...; see: hisim
+        setup-rules show EF-20"`` gives ``(EnergySystemErrorId.UNKNOWN_SOURCE, "components.boiler.inputs[0]", "'boiler'
+        declares an input from 'weathr' ...")``.
+
+        Args:
+            message: The message of a fault of a structural rule.
+
+        Returns:
+            The identifier, the location and the problem.
+
+        Raises:
+            ValueError: If the message is not a catalogue message.
+        """
+        match = cls.CATALOGUE_MESSAGE.match(message)
+        if match is None:
+            raise ValueError(f"not a message of the energy-system catalogue: {message!r}")
+        return EnergySystemErrorId(match.group(1)), match.group(2), match.group(3)
 
 
 class EnergySystemBindingError(EnergySystemCatalogueError):

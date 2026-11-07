@@ -35,7 +35,7 @@ from hisim.dynamic_component import DynamicComponentConnection
 from hisim.energy_system.assemblies.selection import Observer, SelectionPlan
 from hisim.energy_system.assemblies.twins import COMPOSED_TWINS, rename_reference
 from hisim.energy_system.channels import FeedRequest
-from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordError
+from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordError, EnergySystemWiringError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
@@ -117,9 +117,11 @@ def build(text: str, directory: Path) -> EnergySystemFile:
 
 
 def refusal(text: str, directory: Path) -> str:
-    """The message a build refuses an inline file with."""
+    """The message a build refuses an inline file with: a catalogue error's, or the wiring rules' faults, one per line."""
     with pytest.raises(EnergySystemError) as raised:
         build_text(text, directory)
+    if isinstance(raised.value, EnergySystemWiringError):
+        return "\n".join(fault.message for fault in raised.value.faults)
     return str(raised.value)
 
 

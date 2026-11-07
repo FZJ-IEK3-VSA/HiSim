@@ -44,10 +44,9 @@ The stages that need the component classes live in their own modules and are del
       sizing kernel and translating its refusals.
     - :mod:`hisim.energy_system.configure` — building every configuration and resolving the
       sizing of the whole system.
-    - :mod:`hisim.energy_system.wiring` — constructing the components and planning every
-      connection the file's ``inputs`` items describe.
-    - :mod:`hisim.energy_system.wiring_checks` — one planned connection, the checks a whole
-      plan must pass and the step that applies it.
+    - :mod:`hisim.energy_system.wiring` — constructing the components, planning every
+      connection the file's ``inputs`` items describe and applying the plan once the wiring
+      rules of the setup rules (``hisim/setup_rules/wiring.py``) found nothing in it.
     - :mod:`hisim.energy_system.feed_resolution` — turning an aggregator's feeds into the ports
       it grows and the wires that fill them.
     - :mod:`hisim.energy_system.aggregator_ports` — the uniqueness, freedom and existence rules

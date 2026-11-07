@@ -308,97 +308,109 @@ class Inventory:
             lives="hisim/energy_system/groups.py:GroupExpander._dangling_scalar_error; hisim/energy_system/assemblies/addresses.py:_rewrite_sizing",
         ),
         RuleRecord(
-            rule_id="wiring.output_exists", codes=("EF-21",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a wire, feed or consuming output names an existing output; a written wire never names a derived one; default feeds are unambiguous",
-            lives=(
-                "hisim/energy_system/wiring_checks.py:WiringChecker._check_ports_exist, _check_written_wires_avoid_derived_ports; "
-                "hisim/energy_system/feed_resolution.py; hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created"
+            rule_id="wiring.output_exists", codes=("EF-21",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a wire, feed or consuming output names an existing output; a written wire never names a derived one; default feeds are unambiguous",
+            lives="hisim/setup_rules/wiring.py:OutputExists",
+            note=(
+                "the refusals are recorded by hisim/energy_system/feed_resolution.py:DynamicConnectionResolver._resolve_feed and "
+                "hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created"
             ),
         ),
         RuleRecord(
-            rule_id="wiring.input_exists", codes=("EF-22",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the same for inputs",
-            lives=(
-                "hisim/energy_system/wiring_checks.py:WiringChecker._check_ports_exist, _check_written_wires_avoid_derived_ports; "
-                "hisim/energy_system/feed_resolution.py; hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created"
+            rule_id="wiring.input_exists", codes=("EF-22",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="the same for inputs", lives="hisim/setup_rules/wiring.py:InputExists",
+            note="the refusals are recorded by hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_ports_were_created",
+        ),
+        RuleRecord(
+            rule_id="wiring.defaults_declared", codes=("EF-23",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a bare defaults item has default connections declared for the source class", lives="hisim/setup_rules/wiring.py:DefaultsDeclared",
+            note="the refusals are recorded by hisim/energy_system/wiring.py:WiringPlanner._expand_default_item",
+        ),
+        RuleRecord(
+            rule_id="wiring.no_input_fed_twice", codes=("EF-26",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="after default expansion, one input has one wire", lives="hisim/setup_rules/wiring.py:NoInputFedTwice",
+        ),
+        RuleRecord(
+            rule_id="wiring.feed_unique", codes=("EF-25",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="one participant output enters an aggregator once", lives="hisim/setup_rules/wiring.py:FeedUnique",
+            note="the refusals are recorded by hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_participant_ports_are_unique",
+        ),
+        RuleRecord(
+            rule_id="wiring.target_is_an_aggregator", codes=("EF-27",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="feeds go to a component with dynamic channels", lives="hisim/setup_rules/wiring.py:TargetIsAnAggregator",
+            note="the refusals are recorded by hisim/energy_system/feed_resolution.py:DynamicConnectionResolver.resolve_target",
+        ),
+        RuleRecord(
+            rule_id="wiring.channel_matches", codes=("EF-28",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a feed's tags match exactly one channel", lives="hisim/setup_rules/wiring.py:ChannelMatches",
+            note="the refusals are recorded by hisim/energy_system/channel_matching.py:ChannelMatcher.match",
+        ),
+        RuleRecord(
+            rule_id="wiring.dispatch_rule", codes=("EF-29",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a dispatch block where and only where the channel dispatches; no rank on a forbidding channel; allowed dispatch tags",
+            lives="hisim/setup_rules/wiring.py:DispatchRuleHolds",
+            note="the refusals are recorded by hisim/energy_system/channel_matching.py:ChannelMatcher._check_dispatch_rule, _check_dispatch_tags",
+        ),
+        RuleRecord(
+            rule_id="wiring.known_tag", codes=("EF-2A",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a component-type or flow tag is a known enum member", lives="hisim/setup_rules/wiring.py:KnownTag",
+            note=(
+                "the refusals are recorded by hisim/energy_system/channels.py:TagDecoder.component_type, flow_tags; refused as EnergySystemWiringError, where"
+                " EnergySystemBindingError was raised before"
             ),
         ),
         RuleRecord(
-            rule_id="wiring.defaults_declared", codes=("EF-23",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a bare defaults item has default connections declared for the source class",
-            lives="hisim/energy_system/wiring.py:WiringPlanner._expand_default_item",
+            rule_id="wiring.dispatch_signal_unique", codes=("EF-2B",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="two feeds do not claim one control signal", lives="hisim/setup_rules/wiring.py:DispatchSignalUnique",
+            note="the refusals are recorded by hisim/energy_system/dispatch_signals.py:DispatchSignalPlanner.check",
         ),
         RuleRecord(
-            rule_id="wiring.no_input_fed_twice", codes=("EF-26",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="after default expansion, one input has one wire", lives="hisim/energy_system/wiring_checks.py:WiringChecker._check_no_input_is_fed_twice",
-        ),
-        RuleRecord(
-            rule_id="wiring.feed_unique", codes=("EF-25",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="one participant output enters an aggregator once",
-            lives="hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_participant_ports_are_unique",
-        ),
-        RuleRecord(
-            rule_id="wiring.target_is_an_aggregator", codes=("EF-27",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="feeds go to a component with dynamic channels", lives="hisim/energy_system/feed_resolution.py:DynamicConnectionResolver._require_channels",
-        ),
-        RuleRecord(
-            rule_id="wiring.channel_matches", codes=("EF-28",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a feed's tags match exactly one channel", lives="hisim/energy_system/channel_matching.py:ChannelMatcher.match",
-        ),
-        RuleRecord(
-            rule_id="wiring.dispatch_rule", codes=("EF-29",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a dispatch block where and only where the channel dispatches; no rank on a forbidding channel; allowed dispatch tags",
-            lives="hisim/energy_system/channel_matching.py:ChannelMatcher._check_dispatch_rule, _check_dispatch_tags",
-        ),
-        RuleRecord(
-            rule_id="wiring.known_tag", codes=("EF-2A",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a component-type or flow tag is a known enum member", lives="hisim/energy_system/channels.py:TagDecoder.component_type, flow_tags",
-        ),
-        RuleRecord(
-            rule_id="wiring.dispatch_signal_unique", codes=("EF-2B",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="two feeds do not claim one control signal", lives="hisim/energy_system/dispatch_signals.py:DispatchSignalPlanner._refuse_if_claimed",
-        ),
-        RuleRecord(
-            rule_id="wiring.port_types_agree", codes=("EF-30",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="load type and unit agree across a wire or feed (ANY matches)",
-            lives=(
-                "hisim/energy_system/wiring_checks.py:WiringChecker._check_port_types_agree; hisim/energy_system/channel_matching.py:ChannelMatcher._check_port_types"
+            rule_id="wiring.port_types_agree", codes=("EF-30",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="load type and unit agree across a wire or feed (ANY matches)", lives="hisim/setup_rules/wiring.py:PortTypesAgree",
+            note=(
+                "the refusals are recorded by hisim/energy_system/channel_matching.py:ChannelMatcher._check_port_types and, for an aggregator's own refusal, "
+                "DynamicConnectionResolver.resolve_target"
             ),
         ),
         RuleRecord(
-            rule_id="wiring.mandatory_input_connected", codes=("EF-31",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            rule_id="wiring.mandatory_input_fed", codes=("EF-31",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
             enforcement="E (L when allowed)", checks="a mandatory input is fed; allow_unconnected_mandatory only logs",
-            lives="hisim/energy_system/wiring_checks.py:WiringChecker._check_mandatory_inputs_are_connected",
-            note="the inputs that make a device need a building are listed in §6.8",
+            lives="hisim/setup_rules/wiring.py:MandatoryInputFed",
+            note="the inputs that make a device need a building are listed in §6.8; an allowed open input is logged by hisim/energy_system/wiring.py:WiredSystem.apply",
         ),
         RuleRecord(
-            rule_id="wiring.port_name_free", codes=("EF-32",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="feed resolution creates no port name that exists", lives="hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_port_names_are_free",
+            rule_id="wiring.port_name_free", codes=("EF-32",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="feed resolution creates no port name that exists", lives="hisim/setup_rules/wiring.py:PortNameFree",
+            note="the refusals are recorded by hisim/energy_system/aggregator_ports.py:AggregatorPortChecker.check_port_names_are_free",
         ),
         RuleRecord(
-            rule_id="wiring.constructed", codes=("EF-33",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a component constructor did not raise", lives="hisim/energy_system/wiring.py:ComponentBuilder._construct",
+            rule_id="wiring.constructed", codes=("EF-33",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a component constructor did not raise", lives="hisim/setup_rules/wiring.py:Constructed",
+            note="the refusals are recorded by hisim/energy_system/wiring.py:ComponentBuilder._construct; the refusal is raised from the constructor's exception",
         ),
         RuleRecord(
-            rule_id="wiring.consuming_output_carrier", codes=("EF-7M",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a consuming output's energy port carries the need's carrier", lives="hisim/energy_system/wiring_checks.py:check_consuming_outputs",
+            rule_id="wiring.consuming_output_carrier", codes=("EF-7M",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="a consuming output's energy port carries the need's carrier", lives="hisim/setup_rules/wiring.py:ConsumingOutputCarrier",
         ),
         RuleRecord(
-            rule_id="wiring.meter_feed_count", codes=("EF-7N",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the meter's class declares exactly one feed per consuming output", lives="hisim/energy_system/wiring_checks.py:meter_feed_of",
+            rule_id="wiring.meter_feed_count", codes=("EF-7N",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="the meter's class declares exactly one feed per consuming output", lives="hisim/setup_rules/wiring.py:MeterFeedCount",
+            note="the feed a consuming output lands as is read by hisim/energy_system/feed_resolution.py:DynamicConnectionResolver.declared_feeds_for",
         ),
         RuleRecord(
-            rule_id="wiring.no_double_count", codes=("EF-7T",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="an aggregator does not read another aggregator's output while both observe one flow",
-            lives="hisim/energy_system/wiring_checks.py:check_double_count",
+            rule_id="wiring.no_double_count", codes=("EF-7T",), nature=RuleNature.LAW, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="E", checks="an aggregator does not read another aggregator's output while both observe one flow",
+            lives="hisim/setup_rules/wiring.py:NoDoubleCount",
         ),
         RuleRecord(
-            rule_id="wiring.unconsumed_source", nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="L",
-            checks="a component feeds nobody", lives="hisim/energy_system/wiring_checks.py:unconsumed_sources",
+            rule_id="wiring.unconsumed_source", codes=("EF-34",), nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="L", checks="a component feeds nobody", lives="hisim/setup_rules/wiring.py:UnconsumedSource",
+            note="the run record keeps the lines as warnings (hisim/energy_system/executor.py:EnergySystemExecutor.construct)",
         ),
         RuleRecord(
-            rule_id="wiring.unmetered_output_of_a_need", nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build", enforcement="L",
-            checks="a metered consumer's other outputs of the same carrier are named in the need", lives="hisim/energy_system/wiring_checks.py:unmetered_outputs",
+            rule_id="wiring.unmetered_output_of_a_need", codes=("EF-35",), nature=RuleNature.DOMAIN, target="wiring", stage=RuleStage.BUILD, when="build",
+            enforcement="L", checks="a metered consumer's other outputs of the same carrier are named in the need",
+            lives="hisim/setup_rules/wiring.py:UnmeteredOutputOfANeed",
         ),
         RuleRecord(
             rule_id="reader.ef_70", codes=("EF-70",), nature=RuleNature.PARSE, when="load / build", enforcement="E",

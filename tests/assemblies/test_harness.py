@@ -1108,7 +1108,7 @@ def test_a_member_refusing_its_configuration_is_handled_and_any_other_error_fail
     refusing_heater(monkeypatch, 1000.0, ValueError)
     crashed = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "crashed", "h s0")
     assert crashed.refusal is None
-    with pytest.raises(AssemblyCheckFailure, match="^h s0 run the isolation run: EnergySystemWiringError: EF-33"):
+    with pytest.raises(AssemblyCheckFailure, match=r"(?s)^h s0 run the isolation run: EnergySystemWiringError: The build rules refuse .*- EF-33 constructed: EF-33"):
         checks.check_run(crashed)
     with pytest.raises(AssemblyCheckFailure, match="^h s0 finite every result column: the run did not finish"):
         checks.check_finite(crashed)

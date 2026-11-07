@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from hisim.component import Component, ComponentOutput
+    from hisim.energy_system.assemblies.record import SourceMap
     from hisim.energy_system.model import EnergySystemFile
     from hisim.energy_system.path_resolver import PathResolver
     from hisim.energy_system.wiring import WiredSystem
@@ -49,9 +50,11 @@ class LoadedDocument(RuleSubject):
 class BuiltDocument(RuleSubject):
     """An energy-system file after its imports and groups were expanded and its components built and wired.
 
-    ``model`` is the expanded file, ``wired`` holds the constructed components and the connections the file made,
-    ``path_resolver`` turns the file's ``${name}`` references into paths (``None`` for the machine's default), and
-    ``file`` is the file's path, ``None`` for a document read from text.
+    ``model`` is the expanded file, ``wired`` holds the constructed components, the connections the file asks for
+    (made only once the rules found nothing) and what the wiring could not do, ``path_resolver`` turns the file's
+    ``${name}`` references into paths (``None`` for the machine's default), ``file`` is the file's path, ``None`` for
+    a document read from text, and ``source_map`` says which import produced a component, for a message to name it
+    (``None`` for a file without imports).
     """
 
     STAGE: ClassVar[RuleStage] = RuleStage.BUILD
@@ -60,6 +63,7 @@ class BuiltDocument(RuleSubject):
     wired: WiredSystem
     path_resolver: Optional[PathResolver] = None
     file: Optional[str] = None
+    source_map: Optional[SourceMap] = None
 
 
 @dataclass(frozen=True)

@@ -14,10 +14,16 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
+      - UTSPConnector
       - input: HeatRemovedByCoolingInWatt
         from: SimpleAirConditioner.HeatDrawnForCoolingInWatt
       - input: ThermalPowerDelivered
         from: SimpleAirConditioner.ThermalPowerDelivered
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+    config:
+      data_acquisition_mode: USE_LOCAL_LPG
   Weather:
     class: hisim.components.weather.Weather
     config:
@@ -43,6 +49,10 @@ components:
     preset: standard
     inputs:
       - from: SimpleAirConditioner.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999

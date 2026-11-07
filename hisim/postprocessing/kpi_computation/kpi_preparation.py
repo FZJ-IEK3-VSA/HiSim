@@ -747,8 +747,8 @@ class KpiPreparation:
         ratio = denominator / numerator * 100 [%].
 
         Every caller divides by a total consumption, and a system can legitimately consume nothing:
-        the simple air-conditioner household has no occupancy and no generation at all, so it
-        reported a total of zero and the division ended the KPI run with ZeroDivisionError. The ratio
+        a house without residents or generation whose air conditioner stays off on a winter day
+        reports a total of zero, and the division ended the KPI run with ZeroDivisionError. The ratio
         there is not zero, it is undefined -- there is nothing for the numerator to be a proportion
         of -- and the entry is emitted with no value, which is what this module already does for a
         self-consumption rate when there is no production

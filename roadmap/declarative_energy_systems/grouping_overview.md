@@ -692,21 +692,21 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `simple_air_conditioner_household_building_sizer`
 
-Recorded from `system_setups/simple_air_conditioner_household_building_sizer.py`, described in the grouped file as "Simple air-conditioner household building-sizer system setup." 5 components are shared by every configuration, and the grouped file declares no variant group. One of the shared components is an override, which means the grouped file states the baseline's value for it and a consumer sets that value to something else.
+Recorded from `system_setups/simple_air_conditioner_household_building_sizer.py`, described in the grouped file as "Simple air-conditioner household building-sizer system setup." 6 components are shared by every configuration, and the grouped file declares no variant group. One of the shared components is an override, which means the grouped file states the baseline's value for it and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["simple_air_conditioner_household_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>Weather<br/>SimpleAirConditioner<br/>SimpleAirConditionerController<br/>ElectricityMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>SimpleAirConditioner<br/>SimpleAirConditionerController<br/>ElectricityMeter"]
     knobs["knobs, stated at the baseline value (1)<br/>Building"]
 
     setup --> fixed
     setup --> knobs
 ```
 
-The first two boxes together are the grouped file's shared `components:` section — five components, of which the one knobs are the ones whose committed value a consumer replaces — and the setup has no variant group, so that is every component it has.
+The first two boxes together are the grouped file's shared `components:` section — six components, of which the one knobs are the ones whose committed value a consumer replaces — and the setup has no variant group, so that is every component it has.
 
 ### Assignments
 
@@ -720,7 +720,7 @@ Ordering rule: variant assignments first, then overrides. Within the variant ass
 
 | Probe column | What it varies | Gist |
 | --- | --- | --- |
-| `baseline` | class defaults | The class defaults, recorded with no module configuration at all, which is what makes this column's flat file the committed twin: the 1958-1968 single-family house, its weather, and the air conditioner and controller that both stand at their own class defaults. |
+| `baseline` | class defaults | The class defaults, recorded with no module configuration at all, which is what makes this column's flat file the committed twin: the 1958-1968 single-family house, its weather, the archetype's residents, and the air conditioner and controller that both stand at their own class defaults. |
 | `nineties_building` | `archetype_config_.building_code = DE.N.SFH.09.Gen.ReEx.001.002` | A 1995-2001 single-family house instead of a 1958-1968 one: the same TABULA archetype, one construction-year band later. |
 
 The `What it varies` column is the probe's `module_config` overlay, one `field = value` per line; the baseline column has no overlay at all, which is what "class defaults" means. The `Gist` column is the first sentence of the probe's description; the full description stays in the probe list. Columns are in the order the probe list declares them.

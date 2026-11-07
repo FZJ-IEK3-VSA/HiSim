@@ -4,7 +4,7 @@ The balance is computed in every simulation (owner, 2026-10-02: always fail hard
 judge it before anything else of the post-processing runs (``hisim/setup_rules/results.py`` and
 ``hisim/setup_rules/meters.py``): they fail the run with :class:`~hisim.setup_rules.results.EnergyBalanceError` when a
 declared port is NaN or infinite, when a component's balance does not close, when the two sides of a transfer
-disagree beyond the tolerance, when only one of two declared components books a transfer between them, when a water
+disagree beyond the tolerance, when only one of two declared components books a transfer between them, when a fluid
 loop breaks the rules of :mod:`hisim.energy_port` (two components declaring an end on one flow, an end without its
 match, a loop pumping water the balance cannot see; :attr:`~.ports.DeclaredPorts.loop_breaches`), or, in a run
 without undeclared components, when a meter publishes other than it reads or a metered port passes no meter

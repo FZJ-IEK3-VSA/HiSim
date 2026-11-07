@@ -611,7 +611,7 @@ class DeclaredPorts:
         :attr:`loop_breaches`, and so does an end that pumps water into a loop it cannot follow: one whose own flow
         is not 0 in some step while one of the quantities it reads is not connected. An open end that moves no water is
         left out without a fault: a buffer's loop to a second generator the house does not have, a boiler's
-        hot-fluid loop in a house without a tank. An end naming an output the run does not have, and a loop whose
+        hot-water loop in a house without a tank. An end naming an output the run does not have, and a loop whose
         flow is negative in some step or whose step is not positive (:meth:`LoopColumns.refusal`, recorded once per
         loop), are left out and recorded in :attr:`column_faults`.
         """

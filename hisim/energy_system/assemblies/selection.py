@@ -29,15 +29,19 @@ tie; the remedy is to pin the weight on a written feed. A ranked feed's dispatch
 ``controllable: {target_input: …}`` becomes ``dispatch.target_input``, anything else an empty
 dispatch. A ``target_input`` output is ranked by exactly one controller (none only with ``optional:
 true``); a ``via`` output whose need is bound to a controller is ranked by that one (``EF-7U``).
+
+The plan records each refusal as a :class:`~hisim.energy_system.errors.WiringRefusal` and goes on with the
+next observer, so that a build shows every observer it cannot select for; the wiring hands the refusals
+to the assembly rules (``hisim/setup_rules/assemblies.py``), which refuse them with the wiring's.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, NoReturn, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from hisim.energy_system.channels import FeedRequest
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, EnergySystemRecordError
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordError, WiringRefusal
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DispatchSpec
@@ -121,49 +125,52 @@ class SelectionPlan:
         return bool(self.observers or self.controllables or self.landings)
 
     @staticmethod
-    def error(error_id: EnergySystemErrorId, component: str, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
+    def refusal(error_id: EnergySystemErrorId, component: str, problem: str) -> WiringRefusal:
         """One refusal, located at the observer, so the source map names where it came from."""
-        return EnergySystemAssemblyError(error_id, f"components.{component}", problem, **kwargs)
+        return WiringRefusal(error_id, f"components.{component}", problem)
 
-    def __call__(self, components: Mapping[str, Any]) -> Dict[str, List[AggregatorFeed]]:
+    def __call__(self, components: Mapping[str, Any]) -> Tuple[Dict[str, List[AggregatorFeed]], Tuple[WiringRefusal, ...]]:
         """Selects, ranks and checks every observer's feeds among the constructed components.
 
         An observer's candidates are the outputs in each constructed component's ``outputs`` that the
         observer's class declares a dynamic default connection from. They are read when this runs, after
         construction and before wiring: an output a component adds later, such as an aggregator's dispatch
-        output created while its feeds are resolved, is no candidate.
+        output created while its feeds are resolved, is no candidate. Every observer is selected for; one that
+        cannot observe, or whose selection is refused, is recorded. The controllable outputs are checked only when
+        no observer was refused, since a refused observer ranks nothing and every output it would rank would read as
+        actuated by no controller.
 
         Args:
             components: Every constructed component by its name in the file, in file order.
 
         Returns:
             Each observer's feeds, in candidate order, then each meter's landed feeds, in the order
-            the carrier needs named their outputs.
-
-        Raises:
-            EnergySystemAssemblyError: ``EF-7S`` for an observer that cannot observe or a selector
-                matching nothing, ``EF-7V`` for a derived weight that ties with another component
-                type's, ``EF-7U`` for a controllable output actuated by none or two.
+            the carrier needs named their outputs; and what was refused: ``EF-7S`` for an observer that cannot
+            observe or a selector matching nothing, ``EF-7V`` for a derived weight that ties with another component
+            type's, ``EF-7U`` for a controllable output actuated by none or two.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
         selected: Dict[str, List[AggregatorFeed]] = {}
+        refusals: List[WiringRefusal] = []
         for observer in self.observers:
-            observer.feeds = selected[observer.component] = self._select(observer, components)
+            observer.feeds = selected[observer.component] = self._select(observer, components, refusals)
             for feed in observer.feeds:
                 if feed.weight != FeedRequest.MONITORED_ONLY_WEIGHT:
                     rankers.setdefault((feed.source, feed.output or ""), []).append(observer.component)
-        for item in self.controllables:
+        for item in self.controllables if not refusals else ():
             ranked_by = rankers.get((item.component, item.output), [])
             missing = item.target_input is not None and not ranked_by and not item.optional
             wrong = item.via_partner is not None and ranked_by != [item.via_partner]
             if len(ranked_by) > 1 or missing or wrong:
-                raise self.error(
-                    EnergySystemErrorId.ACTUATION,
-                    item.component,
-                    f"the controllable output {item.component}.{item.output} ({item.label}) is ranked by "
-                    f"{', '.join(ranked_by) or 'no controller'}"
-                    + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
-                    + "; a controllable output is actuated by exactly the one controller it binds (D21).",
+                refusals.append(
+                    self.refusal(
+                        EnergySystemErrorId.ACTUATION,
+                        item.component,
+                        f"the controllable output {item.component}.{item.output} ({item.label}) is ranked by "
+                        f"{', '.join(ranked_by) or 'no controller'}"
+                        + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
+                        + "; a controllable output is actuated by exactly the one controller it binds (D21).",
+                    )
                 )
         for landing in self.landings:
             assert landing.meter is not None
@@ -178,7 +185,7 @@ class SelectionPlan:
             selected[request.consumer] = list(selected.get(request.consumer, [])) + [
                 self.written(request, request.weight)
             ]
-        return selected
+        return selected, tuple(refusals)
 
     @staticmethod
     def written(request: FeedRequest, weight: int, dispatch: Optional[DispatchSpec] = None) -> AggregatorFeed:
@@ -206,18 +213,32 @@ class SelectionPlan:
             dispatch=dispatch,
         )
 
-    def _select(self, observer: Observer, components: Mapping[str, Any]) -> List[AggregatorFeed]:
-        """One observer's feeds: its candidates, filtered by its selection, ranked."""
+    def _select(self, observer: Observer, components: Mapping[str, Any], refusals: List[WiringRefusal]) -> List[AggregatorFeed]:
+        """One observer's feeds: its candidates, filtered by its selection, ranked; none when it is refused.
+
+        Args:
+            observer: The observer.
+            components: Every constructed component by its name in the file.
+            refusals: Where a refusal of the observer is recorded: ``EF-7S`` for an observer whose class declares no
+                feeds, a selector that matches nothing (every such selector) or an empty selection, ``EF-7V`` from
+                :meth:`_rank`.
+
+        Returns:
+            The feeds; empty when the observer is refused.
+        """
         target = components[observer.component]
         declared = getattr(target, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None) or {}
         declares = getattr(target, "declares_default_connections", None)
         if not (declares() if callable(declares) else any(declared.values())):
-            raise self.error(
-                EnergySystemErrorId.OBSERVER_SELECTION,
-                observer.component,
-                f"'{observer.component}' ({type(target).__name__}) observes, but its class declares no dynamic "
-                "default connections, so it has nothing to select from.",
+            refusals.append(
+                self.refusal(
+                    EnergySystemErrorId.OBSERVER_SELECTION,
+                    observer.component,
+                    f"'{observer.component}' ({type(target).__name__}) observes, but its class declares no dynamic "
+                    "default connections, so it has nothing to select from.",
+                )
             )
+            return []
         outputs = {name: {output.field_name for output in component.outputs} for name, component in components.items()}
         candidates = [
             DynamicConnectionResolver.feed_from_declaration(declaration, observer.component, name)
@@ -234,33 +255,40 @@ class SelectionPlan:
 
         chosen = candidates
         if observer.selection.selectors is not None:
-            for selector in observer.selection.selectors:
-                if not any(matches(selector, feed) for feed in candidates):
-                    raise self.error(
+            unmatched = [selector for selector in observer.selection.selectors if not any(matches(selector, feed) for feed in candidates)]
+            for selector in unmatched:
+                refusals.append(
+                    self.refusal(
                         EnergySystemErrorId.OBSERVER_SELECTION,
                         observer.component,
                         f"the selector {selector.text()} of '{observer.component}' matches no output its class "
                         f"declares a feed from; candidates: {listed}.",
                     )
+                )
+            if unmatched:
+                return []
             chosen = [feed for feed in candidates if any(matches(item, feed) for item in observer.selection.selectors)]
         if not chosen:
-            raise self.error(
-                EnergySystemErrorId.OBSERVER_SELECTION,
-                observer.component,
-                f"'{observer.component}' observes nothing: no present component has an output its class declares a "
-                "feed from.",
+            refusals.append(
+                self.refusal(
+                    EnergySystemErrorId.OBSERVER_SELECTION,
+                    observer.component,
+                    f"'{observer.component}' observes nothing: no present component has an output its class declares a "
+                    "feed from.",
+                )
             )
-        return self._rank(observer, chosen, declared)
+            return []
+        return self._rank(observer, chosen, declared, refusals)
 
-    def _rank(self, observer: Observer, chosen: List[FeedRequest], declared: Mapping[str, Any]) -> List[AggregatorFeed]:
+    def _rank(
+        self, observer: Observer, chosen: List[FeedRequest], declared: Mapping[str, Any], refusals: List[WiringRefusal]
+    ) -> List[AggregatorFeed]:
         """The chosen feeds as the observer's feeds: each ranked one at its participant's weight, with its dispatch.
 
         The k-th further participant (source component) of one component type is ranked at
-        ``default + k``; a feed without a component type counts under its source alone.
-
-        Raises:
-            EnergySystemAssemblyError: ``EF-7V`` for a derived weight that reaches another component
-                type's base weight or the monitored-only weight.
+        ``default + k``; a feed without a component type counts under its source alone. A derived weight that
+        reaches another component type's base weight or the monitored-only weight is recorded in ``refusals``
+        (``EF-7V``, :meth:`collision`), every such feed.
         """
         measured = FeedRequest.MONITORED_ONLY_WEIGHT
         #: Each weight the class declares a ranked feed at, to the component types declared at it.
@@ -285,7 +313,7 @@ class SelectionPlan:
                 weight += offset
                 others = [item for item in bases.get(weight, []) if item != component_type]
                 if (offset and others) or weight >= measured:
-                    self._refuse_collision(observer, feed, offset, weight, others, chosen)
+                    refusals.append(self.collision(observer, feed, offset, weight, others, chosen))
                 target_input = next(
                     (
                         item.target_input
@@ -298,16 +326,32 @@ class SelectionPlan:
             feeds.append(self.written(feed, weight, dispatch))
         return feeds
 
-    def _refuse_collision(
-        self,
+    @staticmethod
+    def collision(
         observer: Observer,
         feed: FeedRequest,
         offset: int,
         weight: int,
         others: List[str],
         chosen: List[FeedRequest],
-    ) -> NoReturn:
-        """Refuses a derived weight that ties with another component type's base weight (``EF-7V``, D27)."""
+    ) -> WiringRefusal:
+        """The refusal of a derived weight that ties with another component type's base weight (``EF-7V``, D27).
+
+        Example: an energy manager ranking a second battery at 6 + 1 = 7, the base weight its class declares for
+        heat pumps, names the heat pumps present and tells the author to pin the battery's weight on a written feed.
+
+        Args:
+            observer: The observer that ranks the feed.
+            feed: The feed whose derived weight collides.
+            offset: The feed's participant index among those of its component type.
+            weight: The derived weight.
+            others: The other component types the class declares a feed at that weight for; empty for a weight at
+                or above the monitored-only weight.
+            chosen: Every feed the observer chose, to name the participants of the other types.
+
+        Returns:
+            The refusal.
+        """
         kind = feed.component_type.name if feed.component_type is not None else feed.source
         if others:
             present = [
@@ -319,7 +363,7 @@ class SelectionPlan:
             )
         else:
             reached = f"at or above the monitored-only weight {FeedRequest.MONITORED_ONLY_WEIGHT}, which is no rank"
-        raise self.error(
+        return SelectionPlan.refusal(
             EnergySystemErrorId.WEIGHT_COLLISION,
             observer.component,
             f"'{observer.component}' would rank {feed.source}.{feed.output}, participant {offset + 1} of {kind}, at "

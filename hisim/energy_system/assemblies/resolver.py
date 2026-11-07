@@ -5,7 +5,10 @@ that path into one file along a search path: the repository's ``energy_systems/a
 then every directory the environment variable ``HISIM_ASSEMBLY_PATH`` names (``os.pathsep``
 separated). A path found in two places is refused rather than shadowed: which of two files ran must
 never depend on the order of a variable. Every resolved assembly carries the sha256 of its file's
-bytes, which the import record keeps (§9.1, D4).
+bytes, which the import record keeps (§9.1, D4). The expansion of imports looks each assembly up with
+:meth:`AssemblyResolver.find`, which records a path found nowhere or twice for the assembly rules
+(``hisim/setup_rules/assemblies.py``, ``EF-71``, ``EF-72``); a tool that looks up one assembly calls
+:meth:`AssemblyResolver.resolve`, which raises it.
 """
 
 from __future__ import annotations
@@ -14,11 +17,11 @@ import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Dict, List, Sequence, Tuple
+from typing import ClassVar, Dict, List, Sequence, Tuple, Union
 
 from hisim.energy_system.assemblies.model import AssemblyFile
 from hisim.energy_system.assemblies.reader import AssemblyReader
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, ImportRefusal
 from hisim.energy_system.source_lines import LineIndex
 
 
@@ -84,7 +87,10 @@ class AssemblyResolver:
         return cls(directories)
 
     def resolve(self, library_path: str, location: str) -> ResolvedAssembly:
-        """Finds, hashes and reads one assembly.
+        """Finds, hashes and reads one assembly, and raises what :meth:`find` would record.
+
+        Example: ``resolve("pv/array", "describe")`` returns the repository's ``pv/array``; ``resolve("pv/aray",
+        "describe")`` raises ``EF-71``, suggesting ``pv/array``.
 
         Args:
             library_path: ``<family>/<name>`` as an import writes it.
@@ -98,11 +104,35 @@ class AssemblyResolver:
                 for one found in two directories.
             EnergySystemFormatError: For a file that is not a well-formed assembly.
         """
+        found = self.find(library_path, location)
+        if isinstance(found, ImportRefusal):
+            raise found.error(EnergySystemAssemblyError)
+        return found
+
+    def find(self, library_path: str, location: str) -> Union[ResolvedAssembly, ImportRefusal]:
+        """Finds, hashes and reads one assembly, or returns why it cannot, without raising it.
+
+        The expansion of imports looks up every import's assembly before the assembly rules judge the lookups, so
+        a file whose imports name two missing assemblies shows both. Example: ``find("test/bse", "imports.tank")``
+        in a library holding ``test/base`` returns the ``EF-71`` refusal whose message suggests ``test/base``.
+
+        Args:
+            library_path: ``<family>/<name>`` as an import writes it.
+            location: Where the import is written, for the message.
+
+        Returns:
+            The resolved assembly, or the refusal: ``EF-71`` for a malformed path or one found nowhere, ``EF-72``
+            for one found in two directories.
+
+        Raises:
+            EnergySystemFormatError: For a file that is not a well-formed assembly, which its reader refuses at its
+                first problem.
+        """
         cached = self._cache.get(library_path)
         if cached is not None:
             return cached
         if not AssemblyFile.LIBRARY_PATH_PATTERN.match(library_path):
-            raise EnergySystemAssemblyError(
+            return ImportRefusal(
                 EnergySystemErrorId.ASSEMBLY_NOT_FOUND,
                 location,
                 f"'{library_path}' is not an assembly path; an assembly is named '<family>/<name>', identifiers "
@@ -114,7 +144,7 @@ class AssemblyResolver:
             if (directory / f"{library_path}{AssemblyReader.SUFFIX}").is_file()
         ]
         if not candidates:
-            raise EnergySystemAssemblyError(
+            return ImportRefusal(
                 EnergySystemErrorId.ASSEMBLY_NOT_FOUND,
                 location,
                 f"the assembly '{library_path}' is in none of the library directories "
@@ -125,7 +155,7 @@ class AssemblyResolver:
                 remedy=f"Add its directory to {self.ENVIRONMENT_VARIABLE}, or correct the path.",
             )
         if len(candidates) > 1:
-            raise EnergySystemAssemblyError(
+            return ImportRefusal(
                 EnergySystemErrorId.ASSEMBLY_FOUND_TWICE,
                 location,
                 f"the assembly '{library_path}' is found in two places, {candidates[0]} and {candidates[1]}; "

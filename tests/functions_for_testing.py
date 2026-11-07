@@ -23,7 +23,7 @@ from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import SetupRuleRegistry, StageFindings
-from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
+from hisim.setup_rules.rule import RuleCodes, RuleStage, RuleSubject, SetupRule
 from hisim.setup_rules.subjects import BoundDocument, BuiltDocument, BuiltSystem, ConfiguredDocument, LoadedDocument, RunResults
 from hisim.simulationparameters import SimulationParameters
 
@@ -209,6 +209,22 @@ class DocumentRules(FamilyRules):
         """Run the structural rules alone on a document written as YAML text, and return what they found without raising."""
         subject = cls.subject(text, rerun)
         return cls.registry().findings(RuleStage.LOAD, subject, subject.model.setup_kind)
+
+
+class AssemblyRules(FamilyRules):
+    """The assembly setup rules (``hisim/setup_rules/assemblies.py``) run on what an expansion recorded; their faults raise ``EnergySystemImportsError``."""
+
+    FAMILY: ClassVar[str] = "assemblies"
+
+    @staticmethod
+    def model(name: str = "imports under test") -> EnergySystemFile:
+        """An energy-system file of this name, a demo, that holds nothing else: the file a subject of recorded refusals belongs to."""
+        return EnergySystemFile.model_construct(name=name, components={}, imports={}, setup_kind=SetupKind.DEMO)
+
+    @classmethod
+    def findings(cls, subject: RuleSubject) -> StageFindings:
+        """Run the assembly rules alone on a subject of the stage ``BUILD`` and return what they found without raising."""
+        return cls.registry().findings(RuleStage.BUILD, subject, SetupKind.DEMO)
 
 
 class BindingRules(FamilyRules):

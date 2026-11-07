@@ -2,6 +2,9 @@
 
 One frozen object per hook. ``LoadedDocument`` is the energy-system file before any class is imported: as the reader
 built it, or, in a run, with its imports and groups expanded (stage ``LOAD``).
+``ImportedAssemblies`` and ``ExpandedImports`` are a file's imports as their expansion met them, the assemblies it
+found and then what it could not select, bind or order (stage ``BUILD``, declarative mode only; the expansion runs
+before the file is checked as ``LoadedDocument``, since a file names its imported members only once they are expanded).
 ``BuiltDocument`` is the expanded file with its constructed, wired components, which the declarative build hands
 over (stage ``BUILD``, declarative mode only); before it, ``BoundDocument`` is the expanded file with its entries bound to
 their classes and ``ConfiguredDocument`` the file with its configurations built and sized, which the binding and the
@@ -27,8 +30,10 @@ if TYPE_CHECKING:
 
     from hisim.component import Component, ComponentOutput
     from hisim.energy_system.assemblies.record import SourceMap
+    from hisim.energy_system.assemblies.resolver import ResolvedAssembly
     from hisim.energy_system.bindings import ClassBindings
     from hisim.energy_system.configure import ConfigurationOutcome
+    from hisim.energy_system.errors import ImportRefusal
     from hisim.energy_system.model import EnergySystemFile
     from hisim.energy_system.path_resolver import PathResolver
     from hisim.energy_system.wiring import WiredSystem
@@ -56,6 +61,44 @@ class LoadedDocument(RuleSubject):
     file: Optional[str] = None
     source_map: Optional[SourceMap] = None
     rerun: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class ImportedAssemblies(RuleSubject):
+    """The assemblies an energy-system file imports, as the expansion of its imports found them, before it selects anything.
+
+    ``model`` is the file as read, its ``imports`` block unexpanded. ``assemblies`` maps each import key to the
+    assembly it names, for every import whose assembly was found once; ``refusals`` holds what the lookup of the
+    others recorded (an assembly found nowhere, or in two library directories). ``file`` is the file's path,
+    ``None`` for a file read from text. The library check reads the assemblies; nothing is selected or bound before
+    the rules of this subject found nothing.
+    """
+
+    STAGE: ClassVar[RuleStage] = RuleStage.BUILD
+
+    model: EnergySystemFile
+    assemblies: Mapping[str, ResolvedAssembly]
+    refusals: Tuple[ImportRefusal, ...] = ()
+    file: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ExpandedImports(RuleSubject):
+    """An energy-system file's imports after the expansion selected their parameters, bound their ports and ordered them.
+
+    ``model`` is the file as read; ``refusals`` holds what the expansion could not do: a parameter or a constraint an
+    import breaks, a port it cannot bind, an evaluation order that names one number twice, a record whose components
+    left the sequence its import record states. The expansion stops at the first of its stages that recorded a
+    refusal, since the next would read what the refusal left undecided, so the refusals are those of one stage.
+    ``file`` is the file's path, ``None`` for a file read from text. A file without imports is this subject too, with
+    the one check a re-run record of an expansion gets: its sequence.
+    """
+
+    STAGE: ClassVar[RuleStage] = RuleStage.BUILD
+
+    model: EnergySystemFile
+    refusals: Tuple[ImportRefusal, ...] = ()
+    file: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 # The L2 energy manager maximising PV self-consumption (D11, D21). It observes the electricity outputs its class
 # declares dynamic default connections from and ranks what its class ranks, at the class's own weights (residents 1,
-# space heating 2, hot water 3, solar thermal 4, battery 6); it actuates only L1 set-point modifiers and a battery's
-# LoadingPowerInput. It outputs the observed flows' sum, TotalElectricityToOrFromGrid, for its own decisions; the
+# space heating 2, hot water 3, solar thermal 4, battery 6); it actuates only L1 set-point modifiers, the heat pump's
+# PV-mode power target (read by the heat pump's space-heating controller) and a battery's LoadingPowerInput. It outputs the observed flows' sum, TotalElectricityToOrFromGrid, for its own decisions; the
 # grid's meter reads the devices' electricity ports itself and never that sum (a meter reads physics ports only), and a
 # meter observing that sum and a flow this manager observes is refused.
 
@@ -55,6 +55,8 @@ tests:
     - {output: EMS.DomesticHotWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}   # 0 or the offset
     - {output: EMS.SpaceHeatingWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}  # 0 or the offset
     - {output: EMS.ElectricityToBuildingFromDistrictEMSOutput, unit: WATT, min: -50000, max: 50000}   # zero outside a district
+    - {output: EMS.HeatPumpElectricalPowerTargetInWatt, unit: WATT, min: 0, max: 20000}
+      # the heat pump's power target in PV mode, 0 outside it and without a space-heating heat pump; at most its full load
   monotone:
     - {parameter: building_offset_in_kelvin, kpi: Self-consumption of electricity, direction: increasing}
       # a larger raise on surplus shifts at least as much heating into the surplus hours (a derived KPI)

@@ -31,9 +31,10 @@ class HeatingCircuitPowers:
 @dataclass(frozen=True)
 class HplibResult:
 
-    """hplib's answer at one operating point, the numbers the heat pump computes with.
+    """The machine's answer at one operating point, the numbers the heat pump computes with.
 
-    An adapter between hplib's result dictionary and the heat pump: the heat pump reads typed fields instead of
+    An adapter between the result dictionary of :class:`CarnotCopHeatPump` (hplib's keys: hplib's thermal power,
+    outlet and flow, the Carnot-efficiency COP) and the heat pump: the heat pump reads typed fields instead of
     dictionary keys, and the interpolation between two cached grid points is one pure function
     (:meth:`interpolated`).
     """
@@ -42,9 +43,9 @@ class HplibResult:
     outlet_temperature_in_celsius: float
     #: The secondary side's mass flow, in kg/s (hplib's ``m_dot``).
     mass_flow_in_kg_per_second: float
-    #: hplib's own thermal power, in W (``P_th``).
+    #: The machine's thermal power, hplib's compressor capacity, in W (``P_th``).
     thermal_power_in_watt: float
-    #: hplib's own electrical power, in W (``P_el``).
+    #: The machine's electrical power, the thermal power over the COP, in W (``P_el``).
     electrical_power_in_watt: float
     #: The coefficient of performance, dimensionless (``COP``).
     cop: float
@@ -100,7 +101,8 @@ class HplibResult:
         return mode == 1 and float(hplib_results["COP"]) <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
 
     #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
-    #: books its reference thermal power as both heat and electricity.
+    #: books its reference thermal power as both heat and electricity. :class:`CarnotCopHeatPump` reads hplib's
+    #: own COP against it and replaces such an answer by the compressor's.
     HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
 
     @staticmethod
@@ -112,10 +114,10 @@ class HplibResult:
         1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
         turns that jump into a ramp of about 25 kW/K over 0.1 K.
 
-        The check compares hplib's own verdicts (:attr:`heating_rod_alone`), not the COPs: a stated SCOP below
-        hplib's fit calibrates the compressor's COP next to the switch below 1 (1.0033 x 0.876 = 0.879), and a
-        comparison of the calibrated COPs would count both points as the rod's and interpolate across the jump
-        (hisim-g0dp).
+        Since the Carnot-efficiency COP (:class:`CarnotCopHeatPump`) replaced hplib's COP plane, the heat pump's
+        answers have no heating rod and no jump: their COP stays above 1 at every realistic lift, so this check
+        finds no switch there. It remains as the guard of the interpolation should a result at a COP of 1 or less
+        reach it.
 
         Args:
             lower: hplib's result at the lower grid point.

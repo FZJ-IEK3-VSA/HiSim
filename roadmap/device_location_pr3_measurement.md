@@ -25,7 +25,7 @@ merged into the spec's §7 when the branches reach main, and these files are the
   twin has no cooling device, so the cooling column is the building's theoretical cooling demand. The battery's heat
   into the heated zone is its `HeatToHeatedZoneInWatt` port total of `balance_report.json`, the energy the building's
   dynamic input `HeatToHeatedZoneInWattFromBattery` books.
-- The energy balance closed in every run: 8 of 8 declared components close, no circuit fault, the meter publishes what
+- The energy balance closed in every run: 8 of 8 declared components close, no loop fault, the meter publishes what
   it reads, no port unmetered or unlinked. Links: 6 of 6 in both `AUTO` runs (the building's three inputs of the
   battery's and the tanks' heat are idle and book nothing), 7 of 7 with the battery in the heated zone, 9 of 9 with
   everything there.

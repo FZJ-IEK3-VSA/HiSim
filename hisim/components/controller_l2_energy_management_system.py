@@ -10,7 +10,7 @@ import dataclasses
 from dataclasses import dataclass, field
 
 from types import MappingProxyType
-from typing import Any, ClassVar, Dict, List, Mapping, Tuple, Optional, cast
+from typing import Any, ClassVar, Dict, List, Mapping, NamedTuple, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -91,9 +91,11 @@ class EMSState:
     """The energy manager's state from one time step to the next: whether it raised the set temperatures.
 
     The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
-    storage while generated electricity is left over after the battery has charged. Close to zero surplus it keeps the
-    decision of the step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision
-    is the one value the manager carries from step to step.
+    storage while generated electricity is left over after the battery has charged. With a space-heating heat pump
+    the raise is PV mode (:meth:`L2GenericEnergyManagementSystem.runs_pv_mode`), which switches on and off at two
+    thresholds; without one, close to zero surplus the raise keeps the decision of the step before
+    (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`). Either way that decision is the one value the
+    manager carries from step to step.
 
     The manager keeps two of them. ``previous_state`` is the start of the step: a pass reads only it, and no pass
     changes it. ``state`` is the end of the step: every unforced pass overwrites it with its decision, a forced pass
@@ -132,8 +134,43 @@ class SurplusAfterParticipants:
     #: The balance with every participant's realized power, the battery's included; the manager publishes it.
     grid_balance_in_watt: float
     #: The balance with each battery counted only as a sink: it takes from a surplus what its charging limits for the
-    #: step allow, and it covers no deficit. The manager decides the set-temperature raise on it.
+    #: step allow, and it covers no deficit. Without a space-heating heat pump the manager decides the raise on it.
     surplus_after_battery_in_watt: float
+    #: The raise's budget: the surplus after the battery, with the heat pump's own need in place of its draw
+    #: (:meth:`L2GenericEnergyManagementSystem.raise_budget_after_participant_in_watt`). With a space-heating heat
+    #: pump the manager decides PV mode on it; without one it is not read.
+    raise_budget_in_watt: float
+
+
+class RaiseDecision(NamedTuple):
+    """The energy manager's raise decision of one pass: whether it raises, and the heat pump's power target, in W."""
+
+    #: Whether the set temperatures are raised (PV mode, with a space-heating heat pump).
+    set_temperatures_are_raised: bool
+    #: The space-heating heat pump's electrical power target, in W; 0 outside PV mode and without such a heat pump.
+    power_target_in_watt: float
+
+
+@dataclass(frozen=True)
+class HeatPumpInformationInputs:
+    """The inputs that tell the energy manager what its space-heating heat pump can draw and would draw on its own.
+
+    The heat pump publishes its full-load and minimum-load space-heating electricity, its space-heating controller
+    the own need's electricity, and its hot-water controller, where the heat pump makes hot water, whether its charge
+    is its own need. The manager finds them on its channels at the first step
+    (:meth:`L2GenericEnergyManagementSystem.pair_heat_pump_information_inputs`).
+    """
+
+    #: The heat pump's space-heating electricity at full load, in W.
+    full_load_electrical_power_in_watt: ComponentInput
+    #: The heat pump's space-heating electricity at its minimum load, in W.
+    minimum_load_electrical_power_in_watt: ComponentInput
+    #: The space-heating electricity the controller would run without the raise, in W.
+    own_need_electrical_power_in_watt: ComponentInput
+    #: 1 while the hot-water charge is the hot-water controller's own need; None without a hot-water participant.
+    hot_water_charge_is_own_need: Optional[ComponentInput]
+    #: The heat pump's hot-water draw, the ranked hot-water participant's input; None without one.
+    hot_water_draw_in_watt: Optional[ComponentInput]
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2ControllerComponent):
@@ -196,6 +233,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
     #: goes to or comes from the grid whichever decision is kept, at most 88 Wh in a year at any step length.
     SURPLUS_HYSTERESIS_BAND_IN_WATT: ClassVar[float] = 0.01
 
+    #: The margin of PV mode's two thresholds around the budget the heat pump's minimum load needs, in W
+    #: (:meth:`runs_pv_mode`). Owner decision of 2026-11-07 (hisim-ems-raise-within-step-er89), from the measurement of
+    #: that day: PV mode switches on at the minimum load's extra draw plus 100 W and off below it minus 100 W.
+    PV_MODE_MARGIN_IN_WATT: ClassVar[float] = 100.0
+
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
     ElectricityToBuildingFromDistrict = "ElectricityToBuildingFromDistrict"
@@ -213,6 +255,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         "SpaceHeatingWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
+    #: The electrical power target for the space-heating heat pump in PV mode, 0 outside it; read by its controller.
+    HeatPumpElectricalPowerTargetInWatt = "HeatPumpElectricalPowerTargetInWatt"
 
     PeakShavingStatus = "PeakShavingStatus"
 
@@ -234,6 +278,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
     #: Stable key of the channel carrying the smallest power a battery charges with.
     STORAGE_MINIMUM_CHARGING_POWER_CHANNEL = "storage_minimum_charging_power"
+
+    #: Stable key of the channel carrying the space-heating heat pump's electricity at full load.
+    HEAT_PUMP_FULL_LOAD_CHANNEL = "heat_pump_full_load_electricity"
+
+    #: Stable key of the channel carrying the space-heating heat pump's electricity at its minimum load.
+    HEAT_PUMP_MINIMUM_LOAD_CHANNEL = "heat_pump_minimum_load_electricity"
+
+    #: Stable key of the channel carrying the space-heating electricity the heat pump's controller would run without
+    #: the raise.
+    HEAT_PUMP_OWN_NEED_CHANNEL = "heat_pump_own_need_electricity"
+
+    #: Stable key of the channel carrying whether the heat pump's hot-water charge is its controller's own need.
+    HOT_WATER_OWN_CHARGE_CHANNEL = "hot_water_own_need_charge"
 
     #: The flows this energy management system understands. Until this declaration the accepted
     #: tags existed only implicitly, inside the hard-coded tag queries of the ranking code, which
@@ -302,6 +359,35 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             unit=lt.Units.WATT,
             dispatch=DispatchRule.FORBIDDEN,
         ),
+        # What the space-heating heat pump can draw and would draw on its own: measured signals, no participants.
+        DynamicConnectionChannel(
+            key=HEAT_PUMP_FULL_LOAD_CHANNEL,
+            tags=frozenset({lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.FULL_LOAD_ELECTRICITY}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=HEAT_PUMP_MINIMUM_LOAD_CHANNEL,
+            tags=frozenset({lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.MINIMUM_LOAD_ELECTRICITY}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=HEAT_PUMP_OWN_NEED_CHANNEL,
+            tags=frozenset({lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.OWN_NEED_ELECTRICITY}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=HOT_WATER_OWN_CHARGE_CHANNEL,
+            tags=frozenset({lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.OWN_NEED_CHARGE}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.BINARY,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
     )
 
     @utils.measure_execution_time
@@ -331,6 +417,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         self.previous_state = EMSState()
         #: Each battery's charging-limit inputs, by the name of the battery component; paired at the first step.
         self.battery_charging_limit_inputs: Dict[str, BatteryChargingLimitInputs] = {}
+        #: The space-heating heat pump's information inputs, paired at the first step; None without such a heat pump,
+        #: and the raise is then decided on the surplus after the battery alone.
+        self.heat_pump_information: Optional[HeatPumpInformationInputs] = None
 
         self.component_types_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -430,6 +519,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
+        self.heat_pump_electrical_power_target: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatPumpElectricalPowerTargetInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The electrical power the space-heating heat pump is to draw in PV mode, in W, 0 outside it: the "
+                "heat pump's own need plus the raise's budget, kept between its minimum-load and full-load "
+                "electricity (pv_mode_power_target_in_watt). The heat pump's space-heating controller turns it into "
+                "a part-load ratio. A signal, not a draw."
+            ),
+        )
+
         # Describing the connections creates no port. Each of these methods returns the feeds one
         # participant class would bring and, where the controller steers that participant, the
         # target output it would need; both are grown later, by
@@ -439,6 +541,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_heat_pump_controller_space_heating())
+        self.add_dynamic_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
@@ -561,7 +665,76 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
                 ),
             )
         )
+        # What the heat pump can draw for space heating, measured only: PV mode's thresholds and target read them.
+        for field_name, information_tag in (
+            (MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt, lt.InandOutputType.FULL_LOAD_ELECTRICITY),
+            (
+                MoreAdvancedHeatPumpHPLib.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt,
+                lt.InandOutputType.MINIMUM_LOAD_ELECTRICITY,
+            ),
+        ):
+            dynamic_connections.append(
+                dynamic_component.DynamicComponentConnection(
+                    source_component_class=MoreAdvancedHeatPumpHPLib,
+                    source_class_name=more_advanced_heat_pump_class_name,
+                    source_component_field_name=field_name,
+                    source_load_type=lt.LoadTypes.ELECTRICITY,
+                    source_unit=lt.Units.WATT,
+                    source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, information_tag],
+                    source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+                )
+            )
         return dynamic_connections
+
+    def get_default_connections_from_heat_pump_controller_space_heating(self) -> List[dynamic_component.DynamicComponentConnection]:
+        """Return the connection of the own need's electricity from the heat pump's space-heating controller.
+
+        Measured only: the raise's budget counts the own need in place of the heat pump's draw
+        (:meth:`raise_budget_after_participant_in_watt`).
+
+        Returns:
+            The one connection of ``OwnNeedElectricalPowerInWatt``.
+        """
+        from hisim.components.more_advanced_heat_pump.controller_space_heating import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+        )
+
+        return [
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+                source_class_name=MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_classname(),
+                source_component_field_name=MoreAdvancedHeatPumpHPLibControllerSpaceHeating.OwnNeedElectricalPowerInWatt,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.OWN_NEED_ELECTRICITY],
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+            )
+        ]
+
+    def get_default_connections_from_heat_pump_controller_dhw(self) -> List[dynamic_component.DynamicComponentConnection]:
+        """Return the connection of whether the hot-water charge is the own need, from the heat pump's hot-water controller.
+
+        Measured only: while the charge is the own need, the heat pump's hot-water draw is the own need
+        (:meth:`heat_pump_own_need_in_watt`).
+
+        Returns:
+            The one connection of ``ChargesWithoutRaise``.
+        """
+        from hisim.components.more_advanced_heat_pump.controller_dhw import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLibControllerDHW,
+        )
+
+        return [
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLibControllerDHW,
+                source_class_name=MoreAdvancedHeatPumpHPLibControllerDHW.get_classname(),
+                source_component_field_name=MoreAdvancedHeatPumpHPLibControllerDHW.ChargesWithoutRaise,
+                source_load_type=lt.LoadTypes.ANY,
+                source_unit=lt.Units.BINARY,
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.OWN_NEED_CHARGE],
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+            )
+        ]
 
     def get_default_connections_from_electric_heater(
         self,
@@ -874,9 +1047,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
     def raises_set_temperatures(*, surplus_after_battery_in_watt: float, raised_in_previous_step: bool) -> bool:
         """Return whether the energy manager raises the set temperatures, from the surplus and its previous decision.
 
-        The surplus after the battery is the electricity left over once every participant has taken its share, a
-        battery counted only as a sink: it takes from a surplus what its charging limits for the step allow,
-        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means generated electricity (PV in
+        This is the decision without a space-heating heat pump, whose own need the manager could not tell from the
+        raise's effect; with one the raise is PV mode (:meth:`runs_pv_mode`). The surplus after the battery is the
+        electricity left over once every participant has taken its share, a battery counted only as a sink: it takes
+        from a surplus what its charging limits for the step allow, and it covers no deficit
+        (:meth:`battery_charging_share_in_watt`). Positive means generated electricity (PV in
         the household twins) would go to the grid. So only generated electricity keeps a raise: when keeping it needs
         the battery to discharge, the surplus is negative and the raise ends.
 
@@ -941,6 +1116,270 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             return 0.0
         share_in_watt = min(surplus_in_watt, maximum_charging_power_in_watt)
         return share_in_watt if share_in_watt > minimum_charging_power_in_watt else 0.0
+
+    @staticmethod
+    def raise_budget_after_participant_in_watt(
+        *,
+        budget_in_watt: float,
+        component_type: lt.ComponentType,
+        realized_change_in_watt: float,
+        heat_pump_own_need_in_watt: float,
+    ) -> float:
+        """Return the raise's budget after one ranked participant that is not a battery, in W.
+
+        The budget is the surplus after the battery with the space-heating heat pump's own need in place of its draw:
+        what the raise may use once the heat pump's own need and the battery are served (battery first, owner decision
+        of 2026-11-07). It follows the surplus through the ranking:
+
+        | participant | budget after it |
+        |---|---|
+        | the space-heating heat pump | the budget less the heat pump's own need |
+        | the heat pump's hot water | the budget, unchanged: its own part is in the own need |
+        | any other | the budget plus its realized change (negative for a consumer) |
+
+        A battery takes its charging share of the budget (:meth:`battery_charging_share_in_watt`). For example, a budget
+        of 3,000 W before a heat pump that draws 2,500 W in PV mode with an own need of 500 W leaves 2,500 W; the
+        surplus itself is left at 500 W.
+
+        Why the own need: the heat pump's draw includes what the raise makes it draw, so a budget with the draw in it
+        falls when the raise comes on and rises when it goes off, and a decision on it flips between the passes of a
+        step. The own need does not contain the raise.
+
+        Args:
+            budget_in_watt: The budget before the participant, in W.
+            component_type: The participant's component type.
+            realized_change_in_watt: The change of the surplus this participant's realized power makes, in W.
+            heat_pump_own_need_in_watt: The heat pump's own need (:meth:`heat_pump_own_need_in_watt`), in W.
+
+        Returns:
+            The budget after the participant, in W.
+        """
+        if component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+            return budget_in_watt - heat_pump_own_need_in_watt
+        if component_type == lt.ComponentType.HEAT_PUMP_DHW:
+            return budget_in_watt
+        return budget_in_watt + realized_change_in_watt
+
+    @staticmethod
+    def heat_pump_own_need_in_watt(
+        *, space_heating_own_need_in_watt: float, hot_water_draw_in_watt: float, hot_water_charge_is_own_need: bool
+    ) -> float:
+        """Return the electricity the heat pump draws without the raise, its own need, in W.
+
+        While the hot-water charge is the hot-water controller's own need, the heat pump draws for it and space heating
+        waits, so the own need is the hot-water draw. Otherwise it is the space-heating controller's own need; a charge
+        only the raise starts is not own need. For example, a hot-water draw of 2,000 W and a space-heating own need of
+        800 W give 2,000 W on an own charge and 800 W on a charge the raise started.
+
+        Args:
+            space_heating_own_need_in_watt: The space-heating electricity the controller would run without the raise,
+                in W.
+            hot_water_draw_in_watt: The heat pump's hot-water draw in this pass, in W.
+            hot_water_charge_is_own_need: Whether the hot-water controller would run its charge without the raise.
+
+        Returns:
+            The own need, in W, zero or positive.
+
+        Raises:
+            ValueError: If one of the two powers is negative.
+        """
+        if space_heating_own_need_in_watt < 0.0 or hot_water_draw_in_watt < 0.0:
+            raise ValueError(
+                "The heat pump's own need and hot-water draw must not be negative, got "
+                f"{space_heating_own_need_in_watt} W and {hot_water_draw_in_watt} W."
+            )
+        return hot_water_draw_in_watt if hot_water_charge_is_own_need else space_heating_own_need_in_watt
+
+    @staticmethod
+    def runs_pv_mode(
+        *,
+        raise_budget_in_watt: float,
+        own_need_in_watt: float,
+        minimum_load_electrical_power_in_watt: float,
+        pv_mode_in_previous_step: bool,
+    ) -> bool:
+        """Return whether the energy manager runs PV mode, the raise of the set temperatures, from its budget.
+
+        PV mode needs the heat pump to run at least at its minimum load. Beyond its own need, that takes
+        ``extra = max(minimum load - own need, 0)``. PV mode switches on when the budget reaches ``extra`` plus
+        :attr:`PV_MODE_MARGIN_IN_WATT` and stays on while it is at least ``extra`` minus the margin, but never on less
+        than :attr:`SURPLUS_HYSTERESIS_BAND_IN_WATT`, so PV mode never runs on grid electricity or on the battery. The
+        memory is the previous step's decision. For example, with a 600 W minimum load and no own need, PV mode
+        switches on at a budget of 700 W and off below 500 W; with an own need of 800 W, on at 100 W and off below
+        0.01 W.
+
+        Why the budget, not the surplus: the budget does not contain the raise's own extra draw
+        (:meth:`raise_budget_after_participant_in_watt`), so within a step the decision does not move with its own
+        effect; the band keeps it from switching on every crossing between steps.
+
+        Args:
+            raise_budget_in_watt: The raise's budget, in W.
+            own_need_in_watt: The heat pump's own need, in W (:meth:`heat_pump_own_need_in_watt`).
+            minimum_load_electrical_power_in_watt: The heat pump's electricity at its minimum load, in W.
+            pv_mode_in_previous_step: Whether PV mode was on in the previous step.
+
+        Returns:
+            Whether PV mode is on in this pass.
+        """
+        extra_in_watt = max(minimum_load_electrical_power_in_watt - own_need_in_watt, 0.0)
+        margin_in_watt: float = L2GenericEnergyManagementSystem.PV_MODE_MARGIN_IN_WATT
+        threshold_in_watt = extra_in_watt + margin_in_watt
+        if pv_mode_in_previous_step:
+            least_in_watt: float = L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
+            threshold_in_watt = max(extra_in_watt - margin_in_watt, least_in_watt)
+        return bool(raise_budget_in_watt >= threshold_in_watt)
+
+    @staticmethod
+    def pv_mode_power_target_in_watt(
+        *,
+        own_need_in_watt: float,
+        raise_budget_in_watt: float,
+        minimum_load_electrical_power_in_watt: float,
+        full_load_electrical_power_in_watt: float,
+    ) -> float:
+        """Return the space-heating heat pump's electrical power target in PV mode, in W.
+
+        The heat pump is to draw its own need plus the raise's budget, but at least its minimum load and at most its
+        full load. For example, an own need of 300 W, a budget of 900 W, a 450 W minimum and 1,500 W at full load
+        give 1,200 W; a budget of 2,000 W gives 1,500 W; no own need and a budget of 300 W give 450 W.
+
+        Args:
+            own_need_in_watt: The heat pump's own need, in W.
+            raise_budget_in_watt: The raise's budget, in W.
+            minimum_load_electrical_power_in_watt: The heat pump's electricity at its minimum load, in W.
+            full_load_electrical_power_in_watt: The heat pump's electricity at full load, in W.
+
+        Returns:
+            The target, in W, between the minimum and the full load.
+
+        Raises:
+            ValueError: If the minimum load is negative or above the full load.
+        """
+        if not 0.0 <= minimum_load_electrical_power_in_watt <= full_load_electrical_power_in_watt:
+            raise ValueError(
+                "The heat pump's minimum-load electricity must lie between 0 W and its full-load electricity, got "
+                f"{minimum_load_electrical_power_in_watt} W and {full_load_electrical_power_in_watt} W."
+            )
+        return min(max(own_need_in_watt + raise_budget_in_watt, minimum_load_electrical_power_in_watt), full_load_electrical_power_in_watt)
+
+    def pair_heat_pump_information_inputs(
+        self, inputs_sorted: List[ComponentInput], component_types_sorted: List[lt.ComponentType]
+    ) -> Optional[HeatPumpInformationInputs]:
+        """Return the space-heating heat pump's information inputs, or None when no such heat pump is ranked.
+
+        A ranked space-heating heat pump (``HEAT_PUMP_BUILDING``) needs its full-load and minimum-load electricity and
+        its controller's own need, one input each; a ranked hot-water heat pump beside it needs the hot-water
+        controller's own-charge signal. The manager then decides the raise as PV mode (:meth:`runs_pv_mode`).
+
+        Args:
+            inputs_sorted: The participants' inputs, ranked.
+            component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
+
+        Returns:
+            The information inputs, or None without a ranked space-heating heat pump.
+
+        Raises:
+            ValueError: If more than one space-heating or hot-water heat pump is ranked, if an information input of a
+                ranked heat pump is missing or wired twice, or if an own-charge signal comes without a hot-water heat
+                pump.
+        """
+        ranked = {
+            component_type: [item for item, item_type in zip(inputs_sorted, component_types_sorted) if item_type == component_type]
+            for component_type in (lt.ComponentType.HEAT_PUMP_BUILDING, lt.ComponentType.HEAT_PUMP_DHW)
+        }
+        space_heating = ranked[lt.ComponentType.HEAT_PUMP_BUILDING]
+        hot_water = ranked[lt.ComponentType.HEAT_PUMP_DHW]
+        own_charge = self.get_channel_inputs(self.HOT_WATER_OWN_CHARGE_CHANNEL)
+        if not space_heating:
+            return None
+        found = {
+            key: self.get_channel_inputs(key)
+            for key in (self.HEAT_PUMP_FULL_LOAD_CHANNEL, self.HEAT_PUMP_MINIMUM_LOAD_CHANNEL, self.HEAT_PUMP_OWN_NEED_CHANNEL)
+        }
+        expected_own_charge_count = 1 if hot_water else 0
+        missing = [key for key, items in found.items() if len(items) != 1]
+        if len(space_heating) > 1 or len(hot_water) > 1 or missing or len(own_charge) != expected_own_charge_count:
+            raise ValueError(
+                f"{self.component_name}: PV mode needs one ranked space-heating heat pump ({len(space_heating)} found), "
+                f"at most one hot-water heat pump ({len(hot_water)} found), exactly one input on each of the channels "
+                f"{list(found)} (missing or doubled: {missing}) and {expected_own_charge_count} on "
+                f"'{self.HOT_WATER_OWN_CHARGE_CHANNEL}' ({len(own_charge)} found). Wire the heat pump's "
+                "ElectricalPowerAtFullLoadSpaceHeatingInWatt and ElectricalPowerAtMinimumLoadSpaceHeatingInWatt, its "
+                "space-heating controller's OwnNeedElectricalPowerInWatt and, with hot water, its hot-water controller's "
+                "ChargesWithoutRaise to the energy manager: it decides the raise from them."
+            )
+        return HeatPumpInformationInputs(
+            full_load_electrical_power_in_watt=found[self.HEAT_PUMP_FULL_LOAD_CHANNEL][0],
+            minimum_load_electrical_power_in_watt=found[self.HEAT_PUMP_MINIMUM_LOAD_CHANNEL][0],
+            own_need_electrical_power_in_watt=found[self.HEAT_PUMP_OWN_NEED_CHANNEL][0],
+            hot_water_charge_is_own_need=own_charge[0] if own_charge else None,
+            hot_water_draw_in_watt=hot_water[0] if hot_water else None,
+        )
+
+    def read_heat_pump_own_need_in_watt(self, stsv: cp.SingleTimeStepValues) -> float:
+        """Return the heat pump's own need as read in this pass, in W; 0 without a space-heating heat pump.
+
+        Args:
+            stsv: The step's values.
+
+        Returns:
+            The own need (:meth:`heat_pump_own_need_in_watt`), in W.
+        """
+        information = self.heat_pump_information
+        if information is None:
+            return 0.0
+        hot_water_draw_in_watt = 0.0
+        hot_water_charge_is_own_need = False
+        if information.hot_water_draw_in_watt is not None and information.hot_water_charge_is_own_need is not None:
+            hot_water_draw_in_watt = stsv.get_input_value(information.hot_water_draw_in_watt)
+            hot_water_charge_is_own_need = stsv.get_input_value(information.hot_water_charge_is_own_need) > 0.5
+        return self.heat_pump_own_need_in_watt(
+            space_heating_own_need_in_watt=stsv.get_input_value(information.own_need_electrical_power_in_watt),
+            hot_water_draw_in_watt=hot_water_draw_in_watt,
+            hot_water_charge_is_own_need=hot_water_charge_is_own_need,
+        )
+
+    def decide_raise(
+        self, stsv: cp.SingleTimeStepValues, surplus_after_participants: SurplusAfterParticipants, own_need_in_watt: float
+    ) -> RaiseDecision:
+        """Return the raise decision of an unforced pass, and the heat pump's power target.
+
+        With a space-heating heat pump the raise is PV mode, decided on the raise's budget (:meth:`runs_pv_mode`), and
+        the target is :meth:`pv_mode_power_target_in_watt` while it is on. Without one the raise is decided on the
+        surplus after the battery (:meth:`raises_set_temperatures`), and there is no target.
+
+        Args:
+            stsv: The step's values, to read the heat pump's loads from.
+            surplus_after_participants: What is left of the surplus after the ranked participants.
+            own_need_in_watt: The heat pump's own need, in W.
+
+        Returns:
+            The decision and the target.
+        """
+        raised_in_previous_step = self.previous_state.set_temperatures_are_raised
+        information = self.heat_pump_information
+        if information is None:
+            raised = self.raises_set_temperatures(
+                surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
+                raised_in_previous_step=raised_in_previous_step,
+            )
+            return RaiseDecision(set_temperatures_are_raised=raised, power_target_in_watt=0.0)
+        minimum_load_in_watt = stsv.get_input_value(information.minimum_load_electrical_power_in_watt)
+        pv_mode = self.runs_pv_mode(
+            raise_budget_in_watt=surplus_after_participants.raise_budget_in_watt,
+            own_need_in_watt=own_need_in_watt,
+            minimum_load_electrical_power_in_watt=minimum_load_in_watt,
+            pv_mode_in_previous_step=raised_in_previous_step,
+        )
+        if not pv_mode:
+            return RaiseDecision(set_temperatures_are_raised=False, power_target_in_watt=0.0)
+        target_in_watt = self.pv_mode_power_target_in_watt(
+            own_need_in_watt=own_need_in_watt,
+            raise_budget_in_watt=surplus_after_participants.raise_budget_in_watt,
+            minimum_load_electrical_power_in_watt=minimum_load_in_watt,
+            full_load_electrical_power_in_watt=stsv.get_input_value(information.full_load_electrical_power_in_watt),
+        )
+        return RaiseDecision(set_temperatures_are_raised=True, power_target_in_watt=target_in_watt)
 
     def pair_battery_charging_limit_inputs(
         self, inputs_sorted: List[ComponentInput], component_types_sorted: List[lt.ComponentType]
@@ -1046,12 +1485,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
+        heat_pump_own_need_in_watt: float = 0.0,
     ) -> SurplusAfterParticipants:
         """Hand the surplus to the participants by rank, send each its signal and return what is left.
 
         Every participant takes its share in the order of its weight (:meth:`control_electricity_component_iterative`).
         Beside the grid balance, which books every participant's realized power, the surplus the raise is decided on
-        counts each battery by the share its charging limits allow (:meth:`battery_charging_share_in_watt`).
+        counts each battery by the share its charging limits allow (:meth:`battery_charging_share_in_watt`), and the
+        raise's budget counts the space-heating heat pump by its own need as well
+        (:meth:`raise_budget_after_participant_in_watt`).
 
         Args:
             available_surplus_electricity_in_watt: The production minus the uncontrolled consumption, in W.
@@ -1059,9 +1501,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             inputs_sorted: The participants' inputs, ranked.
             component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
             outputs_sorted: The participants' signal outputs, in the order of ``inputs_sorted``.
+            heat_pump_own_need_in_watt: The heat pump's own need (:meth:`heat_pump_own_need_in_watt`), in W; 0
+                without a space-heating heat pump.
 
         Returns:
-            The grid balance and the surplus after the battery.
+            The grid balance, the surplus after the battery and the raise's budget.
 
         Raises:
             ValueError: If there are fewer outputs or component types than inputs.
@@ -1077,6 +1521,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             )
 
         surplus_after_battery_in_watt = available_surplus_electricity_in_watt
+        raise_budget_in_watt = available_surplus_electricity_in_watt
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
             single_output_sorted = outputs_sorted[index]
@@ -1091,19 +1536,32 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             )
             if single_component_type_sorted == lt.ComponentType.BATTERY:
                 limit_inputs = self.battery_charging_limit_inputs[cast(str, single_input_sorted.src_object_name)]
+                maximum_charging_power_in_watt = stsv.get_input_value(limit_inputs.maximum_charging_power_in_watt)
+                minimum_charging_power_in_watt = stsv.get_input_value(limit_inputs.minimum_charging_power_in_watt)
                 surplus_after_battery_in_watt -= self.battery_charging_share_in_watt(
                     surplus_in_watt=surplus_after_battery_in_watt,
-                    maximum_charging_power_in_watt=stsv.get_input_value(limit_inputs.maximum_charging_power_in_watt),
-                    minimum_charging_power_in_watt=stsv.get_input_value(limit_inputs.minimum_charging_power_in_watt),
+                    maximum_charging_power_in_watt=maximum_charging_power_in_watt,
+                    minimum_charging_power_in_watt=minimum_charging_power_in_watt,
+                )
+                raise_budget_in_watt -= self.battery_charging_share_in_watt(
+                    surplus_in_watt=raise_budget_in_watt,
+                    maximum_charging_power_in_watt=maximum_charging_power_in_watt,
+                    minimum_charging_power_in_watt=minimum_charging_power_in_watt,
                 )
             else:
-                surplus_after_battery_in_watt += (
-                    available_surplus_electricity_in_watt - surplus_before_participant_in_watt
+                realized_change_in_watt = available_surplus_electricity_in_watt - surplus_before_participant_in_watt
+                surplus_after_battery_in_watt += realized_change_in_watt
+                raise_budget_in_watt = self.raise_budget_after_participant_in_watt(
+                    budget_in_watt=raise_budget_in_watt,
+                    component_type=single_component_type_sorted,
+                    realized_change_in_watt=realized_change_in_watt,
+                    heat_pump_own_need_in_watt=heat_pump_own_need_in_watt,
                 )
 
         return SurplusAfterParticipants(
             grid_balance_in_watt=available_surplus_electricity_in_watt,
             surplus_after_battery_in_watt=surplus_after_battery_in_watt,
+            raise_budget_in_watt=raise_budget_in_watt,
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -1111,9 +1569,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
 
         Every pass distributes the surplus from the realized values: the offers to the battery and the car, the grid
         balance, the total consumption, the district pass-through and the consumers' grid shares. The set-temperature
-        raise, the manager's one on/off decision, is taken only in an unforced pass: under ``force_convergence`` its
-        three modifiers keep the values of the last unforced pass, and the end-of-step state keeps that pass's
-        decision (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first
+        raise, the manager's one on/off decision, is taken only in an unforced pass (:meth:`decide_raise`): under
+        ``force_convergence`` its three modifiers and the heat pump's power target keep the values of the last unforced
+        pass, and the end-of-step state keeps that pass's decision (:class:`EMSState`). For example, if the last unforced pass raises with 300 W of surplus and the first
         forced pass sees -2,000 W because the raised heat pump draws more, the modifiers stay raised while the grid
         balance shows the -2,000 W and the battery is offered the surplus of this pass.
 
@@ -1141,6 +1599,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             self.battery_charging_limit_inputs = self.pair_battery_charging_limit_inputs(
                 self.inputs_sorted, self.component_types_sorted
             )
+            self.heat_pump_information = self.pair_heat_pump_information_inputs(
+                self.inputs_sorted, self.component_types_sorted
+            )
 
         district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
 
@@ -1162,26 +1623,26 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
         # Consumption of Electricity negative sign
         available_surplus_electricity_in_watt = production_in_watt - consumption_uncontrolled_in_watt
         if self.strategy == "optimize_own_consumption":
+            own_need_in_watt = self.read_heat_pump_own_need_in_watt(stsv)
             surplus_after_participants = self.distribute_available_surplus_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
+                heat_pump_own_need_in_watt=own_need_in_watt,
             )
             available_surplus_electricity_in_watt = surplus_after_participants.grid_balance_in_watt
             if not force_convergence:
-                set_temperatures_are_raised = self.raises_set_temperatures(
-                    surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
-                    raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
-                )
-                self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
+                decision = self.decide_raise(stsv, surplus_after_participants, own_need_in_watt)
+                self.state = EMSState(set_temperatures_are_raised=decision.set_temperatures_are_raised)
                 self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
-                    set_temperatures_are_raised=set_temperatures_are_raised,
+                    set_temperatures_are_raised=decision.set_temperatures_are_raised,
                     stsv=stsv,
                     inputs_sorted=self.inputs_sorted,
                     component_types_sorted=self.component_types_sorted,
                 )
+                stsv.set_output_value(self.heat_pump_electrical_power_target, decision.power_target_in_watt)
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(

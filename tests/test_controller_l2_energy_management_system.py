@@ -702,6 +702,95 @@ def _wire_measured_participant(
     return participant_output
 
 
+def _wire_measured_signal(
+    manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+    source_name: str,
+    field_name: str,
+    tags: List[lt.ComponentType | lt.InandOutputType],
+) -> cp.ComponentOutput:
+    """Feeds the manager a signal it only measures, at the monitored-only weight, as the default connections do.
+
+    Args:
+        manager: The manager to feed.
+        source_name: The name of the component that publishes the signal.
+        field_name: The signal's output name.
+        tags: The input's tags, the component type first.
+
+    Returns:
+        The source's output the manager's input is connected to.
+    """
+    load_type = lt.LoadTypes.ANY if lt.InandOutputType.OWN_NEED_CHARGE in tags else lt.LoadTypes.ELECTRICITY
+    unit = lt.Units.BINARY if lt.InandOutputType.OWN_NEED_CHARGE in tags else lt.Units.WATT
+    signal_output = cp.ComponentOutput(
+        source_name,
+        field_name,
+        load_type,
+        unit,
+        output_description="a signal the manager measures",
+        component_id=ComponentID(name=source_name),
+    )
+    manager.add_component_input_and_connect(
+        source_object_name=source_name,
+        source_component_output=field_name,
+        source_load_type=load_type,
+        source_unit=unit,
+        source_tags=list(tags),
+        source_weight=999,
+    )
+    manager.inputs[-1].source_output = signal_output
+    return signal_output
+
+
+@dataclass
+class HeatPumpInformationOutputs:
+    """The outputs that tell a test manager what its space-heating heat pump can draw and would draw on its own."""
+
+    full_load: cp.ComponentOutput
+    minimum_load: cp.ComponentOutput
+    own_need: cp.ComponentOutput
+    hot_water_own_charge: Optional[cp.ComponentOutput]
+
+    def all(self) -> List[cp.ComponentOutput]:
+        """Return the outputs that exist, in a fixed order."""
+        candidates = [self.full_load, self.minimum_load, self.own_need, self.hot_water_own_charge]
+        return [output for output in candidates if output is not None]
+
+
+def _wire_heat_pump_information(
+    manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem, with_hot_water: bool = True
+) -> HeatPumpInformationOutputs:
+    """Feeds the manager the heat pump's full and minimum load, the own need and, with hot water, the own-charge signal.
+
+    Args:
+        manager: The manager to feed.
+        with_hot_water: Whether the heat pump makes hot water, so its hot-water controller's signal is wired too.
+
+    Returns:
+        The outputs the manager's inputs are connected to.
+    """
+    space_heating = lt.ComponentType.HEAT_PUMP_BUILDING
+    hot_water_own_charge = None
+    if with_hot_water:
+        hot_water_own_charge = _wire_measured_signal(
+            manager,
+            "HotWaterController",
+            "ChargesWithoutRaise",
+            [lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.OWN_NEED_CHARGE],
+        )
+    return HeatPumpInformationOutputs(
+        full_load=_wire_measured_signal(
+            manager, "HeatPump", "FullLoad", [space_heating, lt.InandOutputType.FULL_LOAD_ELECTRICITY]
+        ),
+        minimum_load=_wire_measured_signal(
+            manager, "HeatPump", "MinimumLoad", [space_heating, lt.InandOutputType.MINIMUM_LOAD_ELECTRICITY]
+        ),
+        own_need=_wire_measured_signal(
+            manager, "SpaceHeatingController", "OwnNeed", [space_heating, lt.InandOutputType.OWN_NEED_ELECTRICITY]
+        ),
+        hot_water_own_charge=hot_water_own_charge,
+    )
+
+
 @pytest.mark.base
 def test_a_grid_share_kpi_names_no_participant_it_cannot_find() -> None:
     """Catches a dispatch KPI reported for a participant nothing identifies.
@@ -882,7 +971,9 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
         output.field_name for output in without_dhw.outputs if "ElectricityToOrFromGridOf" in output.field_name
     ] == ["ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2"]
     assert [entry.source_component_field_name for entry in without_dhw.my_component_inputs] == [
-        "ElectricalInputPowerSH"
+        "ElectricalInputPowerSH",
+        "ElectricalPowerAtFullLoadSpaceHeatingInWatt",
+        "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt",
     ]
 
     with_dhw = _energy_manager()
@@ -893,6 +984,8 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
     assert [entry.source_component_field_name for entry in with_dhw.my_component_inputs] == [
         "ElectricalInputPowerSH",
         "ElectricalInputPowerDHW",
+        "ElectricalPowerAtFullLoadSpaceHeatingInWatt",
+        "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt",
     ]
     assert [
         output.field_name for output in with_dhw.outputs if "ElectricityToOrFromGridOf" in output.field_name
@@ -1311,7 +1404,9 @@ class TestHoldUnderForcedConvergence:
 
     The house has PV, a space-heating heat pump at weight 2, a hot-water heat pump at weight 3, a car at weight 5 and
     a battery at weight 6. An unforced pass with a surplus raises the set temperatures; a forced pass after it sees
-    a deficit, because the participants draw more.
+    a deficit, because the participants draw more. The heat pump publishes a full load of 3,000 W and a minimum load
+    of 1,500 W, and its hot-water charge is its own need, so its own need is the hot-water draw of 1,000 W and PV
+    mode needs 500 W more: it switches on at a budget of 600 W and stays on down to 400 W.
     """
 
     #: The PV production of the unforced pass, in W: 3,000 W left after the two heat pumps' 1,000 W each.
@@ -1393,12 +1488,16 @@ class TestHoldUnderForcedConvergence:
         )
         car_draw, car_offer = self.steered_participant(manager, "Car", lt.ComponentType.CAR_BATTERY, 5)
         TestSurplusHysteresis.wire_battery(manager, outputs)
-        all_outputs = [*outputs.all(), space_heating_draw, car_draw, *manager.outputs]
+        information = _wire_heat_pump_information(manager)
+        all_outputs = [*outputs.all(), space_heating_draw, car_draw, *information.all(), *manager.outputs]
         for index, output in enumerate(all_outputs):
             output.global_index = index
         stsv = cp.SingleTimeStepValues(len(all_outputs))
         stsv.set_output_value(outputs.heat_pump, 1000.0)
         stsv.set_output_value(space_heating_draw, 1000.0)
+        stsv.set_output_value(information.full_load, 3000.0)
+        stsv.set_output_value(information.minimum_load, 1500.0)
+        stsv.set_output_value(cast(cp.ComponentOutput, information.hot_water_own_charge), 1.0)
         stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_maximum_charging_power), 1500.0)
         stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_minimum_charging_power), 200.0)
         signals = {output.field_name: output for output in manager.outputs}
@@ -1421,8 +1520,9 @@ class TestHoldUnderForcedConvergence:
         """Run an unforced pass with a surplus and then a forced pass with a deficit.
 
         The unforced pass leaves 3,000 W after the heat pumps: the car, drawing nothing, is offered 3,000 W, the
-        battery 3,000 W, and its share of 1,500 W leaves 1,500 W, so the set temperatures are raised. In the forced
-        pass the PV produces 500 W, the car draws 1,000 W and the battery discharges 200 W.
+        battery 3,000 W, and its share of 1,500 W leaves 1,500 W. The raise's budget, with the own need of 1,000 W in
+        place of the two draws, is 2,500 W, so PV mode raises the set temperatures. In the forced pass the PV produces
+        500 W, the car draws 1,000 W and the battery discharges 200 W.
 
         Returns:
             The house after the forced pass.
@@ -1468,6 +1568,16 @@ class TestHoldUnderForcedConvergence:
         assert house.value(house.battery_offer) == pytest.approx(-2500.0)
 
     @pytest.mark.base
+    def test_a_forced_pass_keeps_the_power_target(self) -> None:
+        """Catches a power target re-decided under forced convergence, which would let the heat pump's ratio move.
+
+        The unforced pass sends the heat pump its own need of 1,000 W plus the budget of 2,500 W, at most its full load
+        of 3,000 W; the forced pass, whose deficit would end PV mode, keeps it.
+        """
+        house = self.raised_then_forced_into_a_deficit()
+        assert house.value(house.manager.heat_pump_electrical_power_target) == pytest.approx(3000.0)
+
+    @pytest.mark.base
     def test_a_forced_pass_books_the_realized_values(self) -> None:
         """Catches the bookkeeping frozen with the decisions, which would put a wrong balance into the KPIs.
 
@@ -1488,7 +1598,9 @@ class TestHoldUnderForcedConvergence:
         """Catches a saved state that differs from the decision the held outputs show.
 
         The step started without a raise, its last unforced pass raised, and the forced pass held the raise. The
-        saved state is the raise, so a pass of the next step with a surplus inside the hysteresis band keeps it.
+        saved state is the raise, so a pass of the next step with a budget inside PV mode's band keeps it: 3,000 W of
+        PV less the own need of 1,000 W and the battery's 1,500 W leave 500 W, between the 400 W PV mode stays on at
+        and the 600 W it switches on at.
         """
         house = self.raised_then_forced_into_a_deficit()
         manager = house.manager
@@ -1496,10 +1608,236 @@ class TestHoldUnderForcedConvergence:
 
         held_decision = controller_l2_energy_management_system.EMSState(set_temperatures_are_raised=True)
         assert manager.previous_state == held_decision
-        house.one_pass(pv_production_in_watt=2000.0, car_draw_in_watt=0.0, battery_power_in_watt=0.0, forced=False)
+        house.one_pass(pv_production_in_watt=3000.0, car_draw_in_watt=0.0, battery_power_in_watt=0.0, forced=False)
         assert house.value(manager.domestic_hot_water_storage_temperature_modifier) == (
             manager.domestic_hot_water_storage_temperature_offset_value
         )
+
+
+class TestPvMode:
+    """The raise as PV mode: decided on a budget with the heat pump's own need in place of its draw, with a target."""
+
+    MANAGER = controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+
+    #: The budget through the ranking: participant, budget before in W, realized change in W, own need in W, after.
+    BUDGETS = [
+        (lt.ComponentType.HEAT_PUMP_BUILDING, 3000.0, -2500.0, 500.0, 2500.0),
+        (lt.ComponentType.HEAT_PUMP_BUILDING, 300.0, -2500.0, 500.0, -200.0),
+        (lt.ComponentType.HEAT_PUMP_DHW, 2500.0, -2000.0, 500.0, 2500.0),
+        (lt.ComponentType.RESIDENTS, 2500.0, -700.0, 500.0, 1800.0),
+        (lt.ComponentType.SOLAR_THERMAL_SYSTEM, 1800.0, -50.0, 500.0, 1750.0),
+        (lt.ComponentType.CHP, 0.0, 1000.0, 500.0, 1000.0),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("component_type", "budget_in_watt", "change_in_watt", "own_in_watt", "expected_in_watt"), BUDGETS)
+    def test_every_budget_row(
+        self, component_type: lt.ComponentType, budget_in_watt: float, change_in_watt: float, own_in_watt: float, expected_in_watt: float
+    ) -> None:
+        """Catches the heat pump's draw, which contains the raise's extra draw, counted in the budget the raise is decided on.
+
+        The space-heating heat pump takes its own need, its hot water nothing (that is in the own need), every other
+        participant its realized change.
+        """
+        assert self.MANAGER.raise_budget_after_participant_in_watt(
+            budget_in_watt=budget_in_watt,
+            component_type=component_type,
+            realized_change_in_watt=change_in_watt,
+            heat_pump_own_need_in_watt=own_in_watt,
+        ) == pytest.approx(expected_in_watt)
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("space_heating_in_watt", "hot_water_in_watt", "own_charge", "expected_in_watt"),
+        [(800.0, 2000.0, True, 2000.0), (800.0, 2000.0, False, 800.0), (0.0, 0.0, False, 0.0), (0.0, 1500.0, True, 1500.0)],
+    )
+    def test_the_own_need_is_the_hot_water_draw_only_on_an_own_charge(
+        self, space_heating_in_watt: float, hot_water_in_watt: float, own_charge: bool, expected_in_watt: float
+    ) -> None:
+        """Catches a hot-water charge that only the raise started counted as own need, which ends the raise it caused.
+
+        On a charge the hot-water controller would run on its own the heat pump draws for it and space heating waits;
+        otherwise the own need is the space-heating controller's.
+        """
+        assert self.MANAGER.heat_pump_own_need_in_watt(
+            space_heating_own_need_in_watt=space_heating_in_watt,
+            hot_water_draw_in_watt=hot_water_in_watt,
+            hot_water_charge_is_own_need=own_charge,
+        ) == expected_in_watt
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("space_heating_in_watt", "hot_water_in_watt"), [(-1.0, 0.0), (0.0, -1.0)])
+    def test_a_negative_own_need_or_draw_is_refused(self, space_heating_in_watt: float, hot_water_in_watt: float) -> None:
+        """Catches a negative own need that would inflate the budget without a word."""
+        with pytest.raises(ValueError, match="must not be negative"):
+            self.MANAGER.heat_pump_own_need_in_watt(
+                space_heating_own_need_in_watt=space_heating_in_watt,
+                hot_water_draw_in_watt=hot_water_in_watt,
+                hot_water_charge_is_own_need=False,
+            )
+
+    #: PV mode's transitions: budget in W, own need in W, minimum load in W, previous step's decision, the decision.
+    TRANSITIONS = [
+        (700.0, 0.0, 600.0, False, True),
+        (699.9, 0.0, 600.0, False, False),
+        (650.0, 0.0, 600.0, True, True),
+        (500.0, 0.0, 600.0, True, True),
+        (499.9, 0.0, 600.0, True, False),
+        (650.0, 300.0, 600.0, False, True),
+        (350.0, 300.0, 600.0, False, False),
+        (200.0, 300.0, 600.0, True, True),
+        (150.0, 300.0, 600.0, True, False),
+        (100.0, 800.0, 600.0, False, True),
+        (99.0, 800.0, 600.0, False, False),
+        (0.01, 800.0, 600.0, True, True),
+        (0.005, 800.0, 600.0, True, False),
+        (-50.0, 800.0, 600.0, True, False),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("budget_in_watt", "own_in_watt", "minimum_in_watt", "previous", "expected"), TRANSITIONS)
+    def test_every_transition_of_pv_mode(
+        self, budget_in_watt: float, own_in_watt: float, minimum_in_watt: float, previous: bool, expected: bool
+    ) -> None:
+        """Catches a threshold off its edge, a band that is not held from the previous step, or PV mode on grid power.
+
+        On at the minimum load's extra draw plus 100 W, edge included; kept down to that minus 100 W, edge included;
+        never kept on a budget below 0.01 W.
+        """
+        assert self.MANAGER.runs_pv_mode(
+            raise_budget_in_watt=budget_in_watt,
+            own_need_in_watt=own_in_watt,
+            minimum_load_electrical_power_in_watt=minimum_in_watt,
+            pv_mode_in_previous_step=previous,
+        ) is expected
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("own_in_watt", "budget_in_watt", "minimum_in_watt", "full_in_watt", "expected_in_watt"),
+        [
+            (300.0, 900.0, 450.0, 1500.0, 1200.0),
+            (300.0, 2000.0, 450.0, 1500.0, 1500.0),
+            (0.0, 300.0, 450.0, 1500.0, 450.0),
+            (0.0, 1500.0, 1500.0, 1500.0, 1500.0),
+        ],
+    )
+    def test_every_power_target(
+        self, own_in_watt: float, budget_in_watt: float, minimum_in_watt: float, full_in_watt: float, expected_in_watt: float
+    ) -> None:
+        """Catches a target outside the heat pump's range, or one that leaves the own need out of what it may draw."""
+        assert self.MANAGER.pv_mode_power_target_in_watt(
+            own_need_in_watt=own_in_watt,
+            raise_budget_in_watt=budget_in_watt,
+            minimum_load_electrical_power_in_watt=minimum_in_watt,
+            full_load_electrical_power_in_watt=full_in_watt,
+        ) == pytest.approx(expected_in_watt)
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("minimum_in_watt", "full_in_watt"), [(1600.0, 1500.0), (-1.0, 1500.0)])
+    def test_an_impossible_load_range_is_refused(self, minimum_in_watt: float, full_in_watt: float) -> None:
+        """Catches a minimum above the full load, which would clamp the target to a power the heat pump cannot draw."""
+        with pytest.raises(ValueError, match="minimum-load electricity"):
+            self.MANAGER.pv_mode_power_target_in_watt(
+                own_need_in_watt=0.0,
+                raise_budget_in_watt=1000.0,
+                minimum_load_electrical_power_in_watt=minimum_in_watt,
+                full_load_electrical_power_in_watt=full_in_watt,
+            )
+
+    @staticmethod
+    def house(
+        participant: lt.ComponentType, *, informed: bool
+    ) -> Tuple[controller_l2_energy_management_system.L2GenericEnergyManagementSystem, cp.ComponentOutput, cp.ComponentOutput, cp.SingleTimeStepValues]:
+        """A manager fed by PV and one heat-pump participant at its default weight, and step values for it.
+
+        With ``informed``, the heat pump's full load (1,500 W), minimum load (450 W) and own need (0 W) are wired too.
+
+        Returns:
+            The manager, the PV output, the heat pump's draw output and the step values.
+        """
+        manager = _energy_manager()
+        pv = _wire_measured_signal(manager, "PV", "ElectricityOutput", [lt.ComponentType.PV, lt.InandOutputType.ELECTRICITY_PRODUCTION])
+        weight = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS[participant]
+        draw = _wire_measured_participant(manager, "HeatPump", participant, weight)
+        manager.add_component_output(
+            source_output_name="SignalToHeatPump_",
+            source_tags=[participant, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_weight=weight,
+            output_description="The manager's signal to the heat pump.",
+        )
+        outputs = [pv, draw]
+        information = _wire_heat_pump_information(manager, with_hot_water=False) if informed else None
+        if information is not None:
+            outputs += information.all()
+        all_outputs = [*outputs, *manager.outputs]
+        for index, output in enumerate(all_outputs):
+            output.global_index = index
+        stsv = cp.SingleTimeStepValues(len(all_outputs))
+        if information is not None:
+            stsv.set_output_value(information.full_load, 1500.0)
+            stsv.set_output_value(information.minimum_load, 450.0)
+        manager.i_save_state()
+        return manager, pv, draw, stsv
+
+    @staticmethod
+    def decisions_of_passes(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        draw: cp.ComponentOutput,
+        stsv: cp.SingleTimeStepValues,
+        draw_when_raised_in_watt: float,
+    ) -> List[bool]:
+        """Run six passes of one step in which the heat pump answers each raise decision, and return the decisions.
+
+        The heat pump draws nothing without the raise and ``draw_when_raised_in_watt`` with it, as it would once its
+        controller acts on the raised set points.
+        """
+        decisions = []
+        for _ in range(6):
+            manager.i_restore_state()
+            manager.i_simulate(0, stsv, False)
+            raised = manager.state.set_temperatures_are_raised
+            decisions.append(raised)
+            stsv.set_output_value(draw, draw_when_raised_in_watt if raised else 0.0)
+        return decisions
+
+    @pytest.mark.base
+    def test_the_raise_does_not_switch_within_a_step_on_a_surplus_near_the_heat_pump_s_draw(self) -> None:
+        """Catches a raise decided on a figure its own effect moves, which flips it between the passes of a step.
+
+        1,000 W of PV and a heat pump that draws 1,500 W once raised. Decided on the surplus after the battery (here a
+        hot-water heat pump, the case without a space-heating heat pump), the raise comes on with 1,000 W left, the
+        heat pump's draw leaves -500 W, the raise goes off, and so on. Decided as PV mode, on the budget with the own
+        need (0 W) in place of the draw, it stays on through every pass, and the target, 1,000 W, holds.
+        """
+        plain, plain_pv, plain_draw, plain_stsv = self.house(lt.ComponentType.HEAT_PUMP_DHW, informed=False)
+        plain_stsv.set_output_value(plain_pv, 1000.0)
+        assert self.decisions_of_passes(plain, plain_draw, plain_stsv, 1500.0) == [True, False, True, False, True, False]
+
+        manager, pv, draw, stsv = self.house(lt.ComponentType.HEAT_PUMP_BUILDING, informed=True)
+        stsv.set_output_value(pv, 1000.0)
+        assert self.decisions_of_passes(manager, draw, stsv, 1500.0) == [True] * 6
+        assert stsv.values[manager.heat_pump_electrical_power_target.global_index] == pytest.approx(1000.0)
+
+    @pytest.mark.base
+    def test_without_a_raise_the_target_is_zero(self) -> None:
+        """Catches a target sent outside PV mode, which would make the controller modulate on no surplus.
+
+        400 W of PV lie below the 450 W minimum load plus the 100 W margin.
+        """
+        manager, pv, draw, stsv = self.house(lt.ComponentType.HEAT_PUMP_BUILDING, informed=True)
+        stsv.set_output_value(pv, 400.0)
+        assert self.decisions_of_passes(manager, draw, stsv, 450.0) == [False] * 6
+        assert stsv.values[manager.heat_pump_electrical_power_target.global_index] == 0.0
+
+    @pytest.mark.base
+    def test_a_space_heating_heat_pump_without_its_information_is_refused(self) -> None:
+        """Catches a space-heating heat pump whose loads and own need nobody wired, which would leave PV mode blind."""
+        manager, pv, _, stsv = self.house(lt.ComponentType.HEAT_PUMP_BUILDING, informed=False)
+        stsv.set_output_value(pv, 1000.0)
+        with pytest.raises(ValueError, match="PV mode needs"):
+            manager.i_simulate(0, stsv, False)
 
 
 @pytest.mark.base

@@ -1,8 +1,10 @@
 # Spec: the heat pump model gets a Carnot-efficiency COP, a part-load penalty, defrosting and a sourced capacity law
 
-Status: draft for review. Decisions (1) to (7) taken by the owner on 2026-10-21 (§2); questions for review in §8.
+Status: draft for review. Decisions (1) to (7) taken by the owner on 2026-10-21, decision (8) on 2026-11-07 (§2);
+questions for review in §8.
 Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (P1); children .1 research (closed), .2 COP layer,
-.3 defrost, .4 part load and cycling, .5 capacity law, .6 outdoor humidity. Evidence: hisim-x2mu (closed).
+.3 defrost, .4 part load and cycling, .5 capacity law, .6 outdoor humidity, hisim-heat-pump-backup-rod-a121 the
+backup heating rod (decision 8). Evidence: hisim-x2mu (closed).
 
 The model in question is `MoreAdvancedHeatPumpHPLib` (`hisim/components/more_advanced_heat_pump_hplib.py`, model
 parts in `more_advanced_heat_pump_hplib_model.py`). It calls hplib (https://github.com/FZJ-IEK3-VSA/hplib) for the
@@ -60,6 +62,7 @@ step-(a) PR.
 | 5 | 2026-10-21 | **Cycling:** no degradation coefficient on simulated steps (HiSim cycles explicitly: minimum running and idle times, part-load ratio); the EN 14825 Cdh (0.9, or 1.0 for an inverter) only inside `StandardizedSeasonalCop` below the minimum output; an explicit start-up loss per start. Default machine type: air/water = inverter, brine/water = on/off; configurable. | A Cd on top of explicit cycling counts the loss twice. Inside the rating the bin method needs Cdh to reproduce what the datasheet rated, so the calibration factor stops absorbing cycling losses. The start-up loss is the physical cost HiSim's own cycles must carry. |
 | 6 | 2026-10-21 | **Hot water: no separate model;** the same curve at the hot-water outlet. EN 16147 serves as a check. | The pooled air curve at A7 and the EN 16147 reference outlet is -4 % from the certified hot-water COP (median of 456 units). A separate model would need data a request cannot state. |
 | 7 | 2026-10-21 | **Capacity:** replace hplib's inverted capacity surface (+49 % at the bivalent point) in the last step. | The capacity decides when the backup heater runs and how often the unit cycles; it needs EN 14511 capacity tables, a separate data job. |
+| 8 | 2026-11-07 | **The backup heating rod stays, as a real backup inside the heat-pump component.** Real units ship with an electric heating rod for the coldest days, so the component keeps one: its own rated electrical power (a sized field, default in §3.1), its own electricity output with its own energy port, its heat into the same circuit as the compressor's. It runs only where the compressor falls short, when the requested heat exceeds the compressor's thermal capacity at the current temperatures or the required outlet exceeds the compressor's maximal outlet, and adds only the missing heat at COP 1, up to its rated power. hplib's COP-1 switch goes, as decision 2 implies. Amends the rod paragraph of §3.1 and Q4; bead hisim-heat-pump-backup-rod-a121. | The 2026-10-21 reading dropped the rod with hplib's switch ("the rod no longer appears in the model's answer"); the owner had understood that as removing hplib's fit artefact, not the backup element every real unit has. Without a backup, a heat pump at its limit (undersized, a day colder than the design point, an outlet above its maximum) delivers less than the demand with nothing to cover it, and the rod's electricity, which decides the SPF of such a unit (hisim-heat-pump-outlet-limit-2vq7: 16 % of a year's space-heating electricity on 70/55 radiators), is missing from the balance. |
 
 ## 3. Design per step
 
@@ -106,6 +109,48 @@ A backup heater, where a system has one, is a separate component. Consequences: 
 rod switch (#930; its fix #1097, hisim-g0dp) no longer meets a jump, and hisim-z0v4 (calibrated compressor below
 COP 1 next to the switch) is moot. Both stay consistent: whichever of #1097 and step (a) merges second removes or
 keeps the straddle path as dead-but-harmless.
+
+*Amendment (owner, 2026-11-07, decision 8):* the paragraph above stays as the record of the 2026-10-21 reading; what
+is built is this. The model keeps a backup heating rod, as a real unit ships with one, but as a real backup and not
+as hplib's COP-1 fit artefact:
+
+* **Where.** The rod is part of the heat-pump component. Its rated electrical power is a configuration field
+  `heating_rod_rated_electrical_power_in_watt`, a `sized_field`; the default rule gives 9 kW, reduced to the
+  machine's rated thermal power at the design point where that is smaller. Source: the residential indoor units of
+  the main manufacturers carry one element class, 6 or 9 kW, switchable in 3 kW stages by the installer (Vaillant
+  uniTOWER plus / VWZ MEH 97: 9 kW; Viessmann Vitocal 250-A: 9 kW in 3/6/9 kW stages; Daikin Altherma 3: 3, 6 or
+  9 kW; Bosch Compress 7000i AW indoor unit: 9 kW; Stiebel Eltron HPA-O and WPL: 8.8 kW), independent of the
+  outdoor unit's size, and the installer's stage setting keeps the rod below the compressor's rated heat. This is an
+  assumption to verify against the datasheets in the step PR. The field is in `describe`; a preset or a request may
+  state it. The rod's electricity is its own output, `ElectricalInputPowerHeatingRod` (W), with its own energy port
+  (consumption of electricity), and is also counted in `ElectricalInputPowerTotalHeatpump`, which the meter reads;
+  its heat goes into the same flow as the compressor's (the space-heating or the hot-water outlet), so the heat
+  ports do not change. The balance and the KPIs thereby see the rod's electricity apart from the compressor's.
+* **When.** Only where the compressor falls short, in one of two cases: (1) the heat the controller asks for in the
+  step exceeds the compressor's thermal capacity at the current source and outlet temperature (hplib's thermal
+  power until step d replaces the capacity surface); (2) the required outlet exceeds the compressor's maximal
+  outlet. That limit is the configured maximal supply temperature of hisim-heat-pump-outlet-limit-2vq7 once it
+  exists; until then the outlet at which hplib's fitted plane reaches COP 1 at the current source temperature
+  stands in (for the 8 kW Generic air unit about 65 °C at A-7 and 69 °C at A0), the line at which hplib switched
+  to its rod. In both cases the compressor runs at its continuous COP (the law above) and its full capacity, and
+  the rod adds only the missing heat, at COP 1, up to its rated power: in case (1) the requested heat minus the
+  compressor's capacity, in case (2) the heat that lifts the compressor's flow from its maximal outlet to the
+  required outlet, `m_flow · c_p · (T_required − T_max)`. What the rod cannot cover is not delivered. Where the
+  compressor copes, the rod does not run at all: no rod on a mild day, and no rod inside the rating (the bins of
+  `StandardizedSeasonalCop` are covered by the compressor; the rod is not part of the calibration).
+* **Per step.** The rod decision is an energy decision per step, requested heat against the compressor's capacity
+  over the step, not a fixed return temperature as hplib's switch was. Above 600 s, where the heating side runs
+  the compressor for a part of the step (the start-of-step part-load rule), the rod covers only the missing share
+  of the step as well: `E_rod = min(Q_requested − Q_compressor,max, P_rod · Δt)`, never the whole step because the
+  return crossed a line. This is the fix of hisim-rod-share-step-length-67f0: its 37-41 % rod share at 60 s against
+  59-60 % at 900 s (case B, January week) came from hplib's whole-step switch at a fixed return, which the new
+  trigger replaces; the step's verification measures case B at 60, 300, 900 and 3600 s (§5).
+* **hplib's switch.** hplib's COP-1 switch and its compressor-plus-rod branch go (the Carnot COP stays above 1 at
+  every realistic lift, decision 2); the capacity continues as the compressor's at the switch, `P_el,fit` (Q4),
+  and the rod covers the shortfall above it. The straddle handling (#930, #1097, hisim-g0dp) and hisim-z0v4 stay
+  moot as stated above. #1113 (child .2, open) keeps its Carnot COP and, instead of removing the rod, adds the
+  backup rod: the sized field, the rod output and its port, the two triggers, the per-step share and the tests of
+  §5; bead hisim-heat-pump-backup-rod-a121 holds the work.
 
 **Cooling** (mode 2) stays hplib's EER.
 
@@ -200,6 +245,8 @@ Key references (the full 2020-2026 review of 41 entries with DOIs is in the rese
 | a | The implemented law, calibrated per unit, against the Keymark population (same ten points as hisim-x2mu) | mean abs. error air ≈ 7.7 %, brine ≈ 9.6 %; A-7/W52 median within ±15 % |
 | a | Unit tests: the curve at the Keymark points, exact rating at stated SCOPs (air and brine, several pairs), the lift guard, a calibrated generic air unit at A-7/W52 vs a certificate (fails on main at about -33 %) | pass |
 | a | Full year 2021, `household_heatpump_building_sizer` at 60 s and 900 s, solar variant at 900 s: space-heating and hot-water electricity, SPF, cycles, before/after | reported in the PR |
+| a | The backup rod (decision 8), unit tests: the rod runs only on a shortfall (requested heat above the compressor's capacity, or the required outlet above the compressor's maximal outlet); it adds only the missing heat at COP 1, up to its rated power; its electricity is on its own output and port and in the total; a mild day runs no rod; the outlet-limit trigger fires at the interim limit and, once hisim-heat-pump-outlet-limit-2vq7 exists, at the configured limit | pass |
+| a | Case B of hisim-rod-share-step-length-67f0 (heat pump on 70/55 radiators, January week) at 60, 300, 900 and 3600 s: rod share, reached supply, delivered heat, electricity; the energy balance with the rod's port | rod share agrees across step lengths within the 1 % step-length tolerance of the emitter spec's §7; balance closes |
 | b | Keymark A12/W24 and A12/W30 points with the rating's Cdh, by machine type | brine A12/W30 error from +15 % towards 0; air not worse |
 | b | Starts × start-up loss in a full year, energy balance closes | reported |
 | c | Humidity per weather source (test per source) | present, plausible range |
@@ -213,7 +260,13 @@ Key references (the full 2020-2026 review of 41 entries with DOIs is in the rese
 * **RenoVisor.** Every heat-pump calculation's electricity, SPF and costs move at steps a, c and d (b mostly for
   brine). Each such PR carries a heads-up note for the frontend (renovisorissues). The stated SCOP pair still
   rates exactly; the range of SCOP pairs the calibration can reach changes with the new shape, so a pair refused
-  today may be accepted and the other way round (reported in step a).
+  today may be accepted and the other way round (reported in step a). A calculation whose compressor falls short
+  (an undersized unit, an outlet above the compressor's maximum, a day colder than the design point) shows the
+  backup rod's electricity and its share of the heat in the result from step a on (decision 8); the heads-up note
+  of step a says so.
+* **Energy balance and KPIs.** The rod's electricity is its own output with its own energy port, so the balance
+  check sees it apart from the compressor's; the total electricity the meter reads includes it. A KPI reports the
+  rod's electricity in kWh per year and its share of the heat pump's heat in percent.
 * **Report lines.** The SCOP calibration factors in the component report change (they now scale the Carnot law).
 * **Legacy cost and CO2 KPIs** are placeholders and are not checked.
 
@@ -232,8 +285,11 @@ calibration (hisim-f79l, waits on the frontend); wiring a brine machine for Reno
   refuse water/water with a stated SCOP until data exists.
 * **Q3 — Named hplib models.** The law replaces the COP of every hplib model, a named manufacturer model too; its
   datasheet SCOPs then calibrate the pooled law. Acceptable, or keep hplib's own plane for named models?
-* **Q4 — Capacity where hplib's plane switches to its rod** (step a only, until step d): the compressor's capacity
-  at the switch, `P_el,fit`. It is continuous but low (about 4.8 kW of 8 kW at A0/W69). Acceptable as an interim?
+* **Q4 — Capacity where hplib's plane switched to its rod** (step a only, until step d). The rod half is decided
+  (decision 8, 2026-11-07): the backup rod covers the shortfall above the switch, up to its rated power, so the
+  house no longer loses the difference. The compressor's capacity at the switch stays `P_el,fit` as the interim,
+  continuous but low (about 4.8 kW of 8 kW at A0/W69), and the rod adds the rest. Open is only the interim value
+  itself: acceptable until step d's capacity law?
 * **Q5 — Uncalibrated default.** Without a stated SCOP every machine becomes the pooled Keymark unit (air W35 4.46 /
   W55 3.32) instead of hplib's Generic plane (4.74 / 3.40). Goldens move with it. Agreed?
 * **Q6 — Defrost targets and the 60 s / 900 s band.** A2 ×0.90 and a 4-7 % defrost heat share are the targets;

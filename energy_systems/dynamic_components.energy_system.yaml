@@ -11,6 +11,7 @@ components:
     config:
       custom_pv_inverter_power_generic_in_watt: 5.0
       custom_battery_capacity_generic_in_kilowatt_hour: 10.0
+      installation_location: OUTDOORS
   Battery2:
     class: hisim.components.advanced_battery_bslib.Battery
     preset: sized_to_pv
@@ -18,6 +19,7 @@ components:
       source_weight: 2
       custom_pv_inverter_power_generic_in_watt: 2.5
       custom_battery_capacity_generic_in_kilowatt_hour: 5.0
+      installation_location: OUTDOORS
   CHP1:
     class: hisim.components.advanced_fuel_cell.CHP
     preset: hydrogen

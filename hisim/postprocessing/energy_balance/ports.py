@@ -403,7 +403,7 @@ class CoolingOnAHeatingOnlyLoop:
         """Return the sentence the setup rule reports, naming the loop, its supplier, the steps and the heat.
 
         For example, ``the loop HeatPump.dhw heats only (DHWStorage.generator says may_cool=False), and its supplier
-        HeatPump removed heat from the water in 3 steps, first in step 1234 (2021-01-13 20:30:00), up to 209 W``.
+        HeatPump removed heat from the water in 3 steps, first in step 1234 (2021-01-13T20:30:00), up to 209 W``.
 
         Args:
             first_time: The time of the first step, as the result table names it.

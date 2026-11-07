@@ -75,7 +75,8 @@ class AssemblyDescription:
             print(f"  bounds    {subject}{unit}: {band(bounds.min, bounds.max)}", file=out)
         for monotone in tests.monotone:
             subject = f"{monotone.kpi} of {monotone.member or 'the building (derived)'}"
-            print(f"  monotone  {monotone.parameter} rises: {subject} {monotone.direction.value}", file=out)
+            condition = f" (applies when {cls._conditions(monotone.applies_when)})" if monotone.applies_when else ""
+            print(f"  monotone  {monotone.parameter} rises: {subject} {monotone.direction.value}{condition}", file=out)
         for expect in tests.expect:
             subject = f"{expect.kpi} of {expect.member or 'the building (derived)'}"
             print(f"  expect    at the defaults: {subject} {band(expect.min, expect.max)}", file=out)

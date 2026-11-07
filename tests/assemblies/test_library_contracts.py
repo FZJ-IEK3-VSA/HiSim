@@ -24,7 +24,8 @@ only the runs of the samples it was given.
 A sample a member's component refuses at construction (``ConfigurationRefusedError``, such as a heat
 pump's W55 SCOP above its W35 SCOP) is handled, not failed: its tests are skipped, naming the
 refusal. A monotone sweep drops the refused points and is skipped when fewer than two remain.
-Hypercube samples are not redrawn.
+Hypercube samples are not redrawn. A monotone entry's sweep from a base that does not meet its
+``applies_when`` is skipped too, naming the unmet condition.
 """
 
 from __future__ import annotations
@@ -315,5 +316,5 @@ def test_monotone(sweep: Sweep, request: pytest.FixtureRequest, tmp_path: Path) 
 
     try:
         checks.evaluate_monotone(run_point, ParameterSpace(assembly.model), sweep.base, sweep.declaration)
-    except checks.SampleRefused as refusal:
-        pytest.skip(str(refusal))
+    except (checks.SampleRefused, checks.MonotoneNotApplicable) as reason:
+        pytest.skip(str(reason))

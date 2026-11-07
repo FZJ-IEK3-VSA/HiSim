@@ -1028,6 +1028,16 @@
             "decreasing",
             "constant"
           ]
+        },
+        "applies_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
         }
       }
     },

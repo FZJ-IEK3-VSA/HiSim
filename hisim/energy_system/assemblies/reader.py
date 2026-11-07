@@ -284,7 +284,9 @@ class AssemblyReader:
         monotone: List[MonotoneDeclaration] = []
         for index, item in enumerate(entries["monotone"]):
             where = f"{location}.monotone[{index}]"
-            ImportsReader.check_keys(item, where, ("parameter", "kpi", "member", "direction"), "a monotone entry")
+            ImportsReader.check_keys(
+                item, where, ("parameter", "kpi", "member", "direction", "applies_when"), "a monotone entry"
+            )
             try:
                 direction = MonotoneDirection(item.get("direction"))
             except ValueError as error:
@@ -294,7 +296,10 @@ class AssemblyReader:
                     allowed=[member.value for member in MonotoneDirection],
                 ) from error
             strings = cls._strings(item, where, "parameter", "kpi", "member", required=("parameter", "kpi"))
-            monotone.append(MonotoneDeclaration.model_validate({"direction": direction, **strings}))
+            applies_when = ImportsReader.conditions(item.get("applies_when") or {}, f"{where}.applies_when")
+            monotone.append(
+                MonotoneDeclaration.model_validate({"direction": direction, "applies_when": applies_when, **strings})
+            )
         expect: List[ExpectDeclaration] = []
         for index, item in enumerate(entries["expect"]):
             where = f"{location}.expect[{index}]"

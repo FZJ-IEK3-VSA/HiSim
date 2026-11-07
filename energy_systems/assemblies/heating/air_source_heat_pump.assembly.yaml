@@ -170,9 +170,17 @@ tests:
     - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}    # zero here
   monotone:
     - {parameter: scop_en14825_w35, kpi: Total electrical input energy of SH heat pump, member: HeatPump,
-       direction: decreasing}                               # a better datasheet SCOP draws less for the same heat
+       direction: decreasing, applies_when: {scop_en14825_w55: [none]}}
+      # a better datasheet SCOP draws less for the same heat, where it is the only rating: with both stated the
+      # calibration factor is linear in the outlet between 28.9 and 40.7 °C, and raising W35 at a fixed W55 lowers the
+      # W55 factor, so above a pivot near 38.5-39 °C the factor no longer rises; the test day charges at 38.4-39.1 °C
+      # (#1083), where a W35 sweep moved the SH electricity by -0.4 to -9 % and at h014 not monotonically (+0.22 %)
     - {parameter: buffer_volume_in_liter, kpi: Standby heat loss of Hot water storage, member: Buffer,
        direction: increasing}                               # a larger vessel has more surface
+    - {parameter: scop_en14825_w55, kpi: Total electrical input energy of SH heat pump, member: HeatPump,
+       direction: decreasing, applies_when: {scop_en14825_w35: [none]}}
+      # the mirror: the W55 rating alone scales the COP at every outlet; with W35 held the W55 sweep has its own
+      # pivot near 30.5-31 °C, below which a small machine falling behind its load charges (31.5 °C measured)
   expect:
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.4, max: 4.3}
       # 3.84 measured at the defaults on the test day (1 January, Aachen)

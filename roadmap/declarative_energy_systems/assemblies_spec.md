@@ -829,7 +829,8 @@ tests:
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 1.5, max: 7}
   monotone:                                 # one parameter rises, all else at the sample; the KPI moves one way
     - {parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}
-    - {parameter: scop_en14825_w35, kpi: Electricity consumption, member: HeatPump, direction: decreasing}
+    - {parameter: scop_en14825_w35, kpi: Electricity consumption, member: HeatPump, direction: decreasing,
+       applies_when: {scop_en14825_w55: [none]}}  # only from the bases that meet the condition
   expect:                                   # the result at the defaults on the test weather lies in a band
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.3, max: 4.6}
 ```
@@ -844,7 +845,14 @@ tests:
   equidistant steps (an `int` parameter takes the nearest integer of each, so up to four distinct values); bases
   reaching the same points are one sweep;
   `direction` is `increasing`, `decreasing` or `constant`, within the gate's numeric tolerance. It is the cheap test
-  that catches wrong-sign physics.
+  that catches wrong-sign physics. An optional `applies_when` restricts the entry to the bases whose parameters meet a
+  conjunctive `{parameter: [values]}` condition, spelled like a port's `required_when`; a value is one of the
+  parameter's closed set or `none`/`AUTO`, and the condition names neither the swept parameter nor an undeclared one
+  (the library check refuses both, and a value the parameter never takes). A base that does not meet it runs no
+  sweep and is reported as skipped with the unmet condition, never passed (owner, 2026-11-07). It is for a claim the
+  physics makes only in part of the box: the heat pumps' W35 SCOP sweep holds where W55 is unstated, because with
+  both ratings stated the calibrated COP near the W55 line's outlet temperatures does not move with W35 (the factor
+  rises with W35 only below an outlet of about 38.5-39 °C, where the test day charges since #1083).
 - `expect` pins the results at the defaults to a band (v1; per preset in the design, D26), like the goldens do
   exactly; a band is wider than a golden and states the modeller's plausibility judgement.
 - **Required (D24):** every parameter has a `default`; every numeric parameter has a `range`; every energy-carrying or

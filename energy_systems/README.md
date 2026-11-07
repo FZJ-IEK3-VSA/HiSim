@@ -517,7 +517,10 @@ exempt), and every applicable `bounds` entry and, at the defaults, every `expect
 bounded column that is not numeric or not finite fails. Every `monotone` entry sweeps its parameter
 across its range in four equidistant steps from the samples that admit a sweep, one sweep per distinct
 point set, within the golden gate's tolerance; an int parameter takes the nearest integer of each step,
-so its sweep yields up to four distinct values across the range. A failure is named by assembly,
+so its sweep yields up to four distinct values across the range. An entry with `applies_when` (a
+conjunctive `{parameter: [values]}`, like a port's `required_when`; `none` and `AUTO` name an unstated
+parameter) sweeps only from the bases that meet it; from any other base its test is skipped, naming the
+unmet condition: the heat pumps sweep the W35 SCOP with `applies_when: {scop_en14825_w55: [none]}`. A failure is named by assembly,
 sample, check and subject:
 `pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [-100, 33000]: …`. A run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
 parameters while its sample's checks run, and is deleted with the run once they are done.

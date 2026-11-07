@@ -331,7 +331,7 @@ class TestPortLinked:
         """Catches energy drawn to nowhere, and a fault for a port its carrier's boundary node takes."""
         unread = EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY)
         (fault,) = PortLinked().check(fft.AfterRunRules.subject(report([("Pump", "Power", lt.Units.KWH, unread, [0.1])])))
-        outdoors = EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.OUTDOORS)
+        outdoors = EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS)
 
         assert codes_and_places([fault]) == [("AR-09", "Pump", "Power")]
         assert "the energy port Pump.Power (consumption, electricity, 0.1 kWh) has no peer" in fault.message

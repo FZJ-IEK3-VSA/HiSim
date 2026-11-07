@@ -1,8 +1,8 @@
 """The energy-port rules: what the wiring of a built system must obey for every declared energy port to find its other end.
 
 The rules read the components of a run with their inputs connected (``BuiltSystem``) and need no value of the run,
-so the build refuses a breach before the first step. Three of them are the circuit rules of
-:mod:`hisim.energy_port` (``EP-01`` to ``EP-03``): the circuit ends of a run are resolved by the energy balance's
+so the build refuses a breach before the first step. Three of them are the fluid-loop rules of
+:mod:`hisim.energy_port` (``EP-01`` to ``EP-03``): the loop ends of a run are resolved by the energy balance's
 :class:`~hisim.postprocessing.energy_balance.ports.Wiring`, which the balance after the run reads again, so those
 rules report what its resolution found. ``EP-04`` and ``EP-05`` are the two rules of the wiring of an
 :class:`~hisim.energy_port.EnergyPort`: one receiver per transfer, and the two ports of one wire pair. ``EP-06`` is
@@ -25,7 +25,7 @@ from hisim.setup_rules.subjects import BuiltSystem
 
 if TYPE_CHECKING:
     from hisim.energy_port import EnergyPort
-    from hisim.postprocessing.energy_balance.ports import CircuitFault, Wiring
+    from hisim.postprocessing.energy_balance.ports import LoopFault, Wiring
 
 
 class EnergyPortWiringError(SetupRuleViolation):
@@ -66,29 +66,29 @@ class EnergyPortRule(SetupRule[BuiltSystem]):
         return Wiring(system.components, exempt, metered_carriers)
 
     @classmethod
-    def faults_of(cls, found: Sequence[CircuitFault]) -> List[Fault]:
-        """Return the circuit faults the wiring found as faults of this rule, located at their component and output.
+    def faults_of(cls, found: Sequence[LoopFault]) -> List[Fault]:
+        """Return the loop faults the wiring found as faults of this rule, located at their component and output.
 
         Args:
-            found: The circuit faults of one rule, from :class:`~hisim.postprocessing.energy_balance.ports.CircuitWiring`.
+            found: The loop faults of one rule, from :class:`~hisim.postprocessing.energy_balance.ports.CircuitWiring`.
 
         Returns:
-            One fault per circuit fault, in the same order.
+            One fault per loop fault, in the same order.
         """
-        return [cls.fault(circuit_fault.message, component=circuit_fault.component, port=circuit_fault.port) for circuit_fault in found]
+        return [cls.fault(loop_fault.message, component=loop_fault.component, port=loop_fault.port) for loop_fault in found]
 
 
-class CircuitPairing(EnergyPortRule):
-    """What it checks: every circuit end's other end tags the same circuit, and exactly one of the two supplies it.
+class LoopPairing(EnergyPortRule):
+    """What it checks: every loop end's other end tags the same loop, and exactly one of the two supplies it.
 
-    A circuit end is a component's port set of one fluid loop, its channels tagged with that loop. Its other end is
+    A loop end is a component's port set of one fluid loop, its channels tagged with that loop. Its other end is
     the component that reads its mass flow, or whose flow it reads. When that component declares energy ports, it
     must tag a loop on the same three outputs (mass flow, supply and return temperature), and of the two ends exactly
-    one states ``supplies=True``. An other end that declares no ports at all is no fault: the circuit is drawn to it
+    one states ``supplies=True``. An other end that declares no ports at all is no fault: the loop is drawn to it
     as undeclared.
 
-    Why: both ends book the one heat series the circuit carries, by the supplier's sign. An end whose partner books
-    nothing, or a circuit of two receivers or two suppliers, books the heat once or twice with the wrong sign, and
+    Why: both ends book the one heat series the loop carries, by the supplier's sign. An end whose partner books
+    nothing, or a loop of two receivers or two suppliers, books the heat once or twice with the wrong sign, and
     the balance of both components cannot close.
 
     Example of a fault: ``Boiler tags its end (loop 'space_heating') of the circuit {...}, but its other end, Tank,
@@ -100,28 +100,28 @@ class CircuitPairing(EnergyPortRule):
     """
 
     CODE = "EP-01"
-    NAME = "circuit-pairing"
+    NAME = "loop-pairing"
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # An end on an exempt component or a meter is not resolved, so its partner's other end would be the wrong one.
     REQUIRES = frozenset({"EP-03"})
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
-        """Return one fault per circuit end that does not pair with its other end."""
+        """Return one fault per loop end that does not pair with its other end."""
         return self.faults_of(self.wiring_of(subject).circuits(subject.components).pairing_faults)
 
 
 class OneReaderPerFlow(EnergyPortRule):
-    """What it checks: a circuit's mass flow is read by at most one component, besides its owner, that declares a circuit on it.
+    """What it checks: a loop's mass flow is read by at most one component, besides its owner, that tags a loop on it.
 
-    Why: the heat of a circuit is derived once from its mass flow and its two temperatures. Two circuit ends on one
+    Why: the heat of a loop is derived once from its mass flow and its two temperatures. Two loop ends on one
     flow would each book that heat, so the water's heat would be delivered twice. A split of one flow into two
-    branches is a valve component with one circuit per branch.
+    branches is a valve component with one loop per branch.
 
     Example of a fault: ``the mass flow Boiler.Flow is read by 2 components that declare a circuit on it (Tank, Twin):
     one flow delivers its heat once, a split needs a valve with one circuit per branch``.
 
-    How to fix: let one of the readers tag the circuit and leave the other's inputs untagged, or put a valve between
+    How to fix: let one of the readers tag the loop and leave the other's inputs untagged, or put a valve between
     the flow and the two readers.
     """
 
@@ -133,17 +133,17 @@ class OneReaderPerFlow(EnergyPortRule):
     REQUIRES = frozenset({"EP-03"})
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
-        """Return one fault per mass flow that several circuit ends read."""
+        """Return one fault per mass flow that several loop ends read."""
         return self.faults_of(self.wiring_of(subject).circuits(subject.components).shared_flow_faults)
 
 
-class NoCircuitOnANode(EnergyPortRule):
-    """What it checks: no component that is exempt from the energy balance, and no meter, declares a circuit end.
+class NoLoopOnANode(EnergyPortRule):
+    """What it checks: no component that is exempt from the energy balance, and no meter, declares a loop end.
 
     A component is exempt when it moves no energy, a controller that only decides; a meter is a node that counts
     what passes it. Neither has water of its own to move.
 
-    Why: the balance never takes an exempt component or a meter as the peer of a port, so a circuit end on one has
+    Why: the balance never takes an exempt component or a meter as the peer of a port, so a loop end on one has
     no other end to pair with, and the heat it would carry vanishes from the balance.
 
     Example of a fault: ``EnergyManager declares the fluid loop 'space_heating', but it is exempt from the energy
@@ -154,12 +154,12 @@ class NoCircuitOnANode(EnergyPortRule):
     """
 
     CODE = "EP-03"
-    NAME = "no-circuit-on-a-node"
+    NAME = "no-loop-on-a-node"
     STAGE = RuleStage.BUILD
     ENFORCED = True
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
-        """Return one fault per circuit end an exempt component or a meter declares."""
+        """Return one fault per loop end an exempt component or a meter declares."""
         return self.faults_of(self.wiring_of(subject).circuits(subject.components).node_end_faults)
 
 

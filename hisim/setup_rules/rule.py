@@ -188,7 +188,7 @@ class SetupRuleViolation(ValueError):
         Example::
 
             The build rules refuse this demo setup (2 faults):
-            - EP-01 circuit-pairing: <message>; see: hisim setup-rules show EP-01
+            - EP-01 loop-pairing: <message>; see: hisim setup-rules show EP-01
             - EP-05 input-port-pairs: <message>; see: hisim setup-rules show EP-05
             Not run:
             - EP-06 was not run: it requires EP-05, which found faults or was not run

@@ -18,13 +18,13 @@ from hisim import loadtypes as lt
 from hisim.cli_setup_rules import SetupRuleCommands
 from hisim.config import ComponentID
 from hisim.energy_port import EnergyPort
-from hisim.postprocessing.energy_balance.ports import CircuitFault
+from hisim.postprocessing.energy_balance.ports import LoopFault
 from hisim.setup_rules.energy_ports import (
-    CircuitPairing,
     EnergyPortRule,
     EnergyPortWiringError,
     InputPortPairs,
-    NoCircuitOnANode,
+    LoopPairing,
+    NoLoopOnANode,
     OneReaderPerFlow,
     ReceiverUnambiguous,
     RoomHeatNeedsReceiver,
@@ -59,15 +59,15 @@ class Rig:
         return BuiltSystem(components=tuple(components))
 
     @classmethod
-    def circuit(cls, inputs: Dict[str, List[SimpleNamespace]], ends: Dict[str, List[End]], twin: bool = False) -> BuiltSystem:
-        """A boiler and a tank (and a second tank with ``twin``) with the given inputs and circuit ends."""
+    def loop_system(cls, inputs: Dict[str, List[SimpleNamespace]], ends: Dict[str, List[End]], twin: bool = False) -> BuiltSystem:
+        """A boiler and a tank (and a second tank with ``twin``) with the given inputs and loop ends."""
         columns = CircuitRig.boiler_columns() + CircuitRig.tank_columns() + (CircuitRig.tank_columns("Twin") if twin else [])
         return cls.system(CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends))
 
     @classmethod
-    def paired_circuit(cls) -> BuiltSystem:
-        """The boiler and the tank, both declaring their ends of the circuit."""
-        return cls.circuit(
+    def paired_loop(cls) -> BuiltSystem:
+        """The boiler and the tank, both declaring their ends of the loop."""
+        return cls.loop_system(
             {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()},
             {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END]},
         )
@@ -141,7 +141,7 @@ def codes_and_places(faults: Sequence[Any]) -> List[Tuple[str, Optional[str], Op
 
 
 class TestTheFamily:
-    """What every rule of the family shares: the wiring it reads, how a circuit fault becomes its fault, the error."""
+    """What every rule of the family shares: the wiring it reads, how a loop fault becomes its fault, the error."""
 
     def test_the_wiring_of_a_system_classifies_its_exempt_components(self) -> None:
         """Catches a rule reading a wiring that would name a controller as the receiver of a port."""
@@ -150,9 +150,9 @@ class TestTheFamily:
         assert set(wiring.exempt) == {"Controller"} and not wiring.moves_energy("Controller")
         assert wiring.readers[("UTSPConnector", "HeatingByResidents")] == ["Controller"]
 
-    def test_a_circuit_fault_becomes_a_fault_of_the_rule_at_its_component_and_output(self) -> None:
-        """Catches a circuit fault that loses its location or its pointer to the rule on the way into a refusal."""
-        (fault,) = OneReaderPerFlow.faults_of([CircuitFault("Boiler", "the flow is read twice", "Flow")])
+    def test_a_loop_fault_becomes_a_fault_of_the_rule_at_its_component_and_output(self) -> None:
+        """Catches a loop fault that loses its location or its pointer to the rule on the way into a refusal."""
+        (fault,) = OneReaderPerFlow.faults_of([LoopFault("Boiler", "the flow is read twice", "Flow")])
 
         assert (fault.code, fault.component, fault.port) == ("EP-02", "Boiler", "Flow")
         assert fault.message == "the flow is read twice; see: hisim setup-rules show EP-02"
@@ -163,66 +163,66 @@ class TestTheFamily:
             fft.EnergyPortRules.refuse_a_broken_wiring(Rig.one_wire(EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING)).components)
 
 
-class TestCircuitPairing:
-    """``EP-01``: the other end tags the same circuit, and exactly one of the two supplies it."""
+class TestLoopPairing:
+    """``EP-01``: the other end tags the same loop, and exactly one of the two supplies it."""
 
-    def test_an_other_end_that_declares_ports_but_not_the_circuit_is_a_fault_at_the_end(self) -> None:
-        """Catches a boiler booking the circuit's heat while the tank it charges books none of it."""
-        system = Rig.circuit({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, {"Boiler": [CircuitRig.SUPPLY_END]})
+    def test_an_other_end_that_declares_ports_but_not_the_loop_is_a_fault_at_the_end(self) -> None:
+        """Catches a boiler booking the loop's heat while the tank it charges books none of it."""
+        system = Rig.loop_system({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, {"Boiler": [CircuitRig.SUPPLY_END]})
 
-        (fault,) = CircuitPairing().check(system)
+        (fault,) = LoopPairing().check(system)
 
         assert (fault.component, fault.port) == ("Boiler", None)
         assert "its other end, Tank, declares ports and not this circuit" in fault.message
 
-    def test_two_suppliers_are_a_fault_and_a_paired_circuit_none(self) -> None:
-        """Catches a circuit whose heat both ends book as delivered, and a rule that refuses a correct pair."""
+    def test_two_suppliers_are_a_fault_and_a_paired_loop_none(self) -> None:
+        """Catches a loop whose heat both ends book as delivered, and a rule that refuses a correct pair."""
         ends = {
             "Boiler": [End(Loops.loop(supplies=True, pumps=True), CircuitRig.SUPPLY_END.names)],
             "Tank": [End(Loops.loop(supplies=True, pumps=False), CircuitRig.RECEIVING_END.names)],
         }
-        system = Rig.circuit({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, ends)
+        system = Rig.loop_system({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, ends)
 
-        assert any("has two suppliers" in fault.message for fault in CircuitPairing().check(system))
-        assert not CircuitPairing().check(Rig.paired_circuit())
+        assert any("has two suppliers" in fault.message for fault in LoopPairing().check(system))
+        assert not LoopPairing().check(Rig.paired_loop())
 
 
 class TestOneReaderPerFlow:
-    """``EP-02``: one circuit end besides the owner per mass flow."""
+    """``EP-02``: one loop end besides the owner per mass flow."""
 
     def test_a_flow_two_ends_read_is_a_fault_at_the_flow_and_one_end_none(self) -> None:
         """Catches the heat of one flow delivered twice, and a rule that refuses the one reader it allows."""
         inputs = {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs(), "Twin": CircuitRig.tank_inputs()}
         ends = {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END], "Twin": [CircuitRig.RECEIVING_END]}
 
-        (fault,) = OneReaderPerFlow().check(Rig.circuit(inputs, ends, twin=True))
+        (fault,) = OneReaderPerFlow().check(Rig.loop_system(inputs, ends, twin=True))
 
         assert (fault.component, fault.port) == ("Boiler", "Flow")
         assert "the mass flow Boiler.Flow is read by 2 components that declare a circuit on it (Tank, Twin)" in fault.message
-        assert not OneReaderPerFlow().check(Rig.paired_circuit())
+        assert not OneReaderPerFlow().check(Rig.paired_loop())
 
 
-class TestNoCircuitOnANode:
-    """``EP-03``: neither an exempt component nor a meter declares a circuit end."""
+class TestNoLoopOnANode:
+    """``EP-03``: neither an exempt component nor a meter declares a loop end."""
 
     @staticmethod
     def controller_with_a_loop() -> BuiltSystem:
-        """The paired circuit, except that the tank is an exempt controller declaring the receiving end."""
-        components: List[Any] = list(Rig.paired_circuit().components)
+        """The paired loop, except that the tank is an exempt controller declaring the receiving end."""
+        components: List[Any] = list(Rig.paired_loop().components)
         components[1] = ExemptController(components[1])
         return Rig.system(components)
 
-    def test_a_circuit_end_on_an_exempt_component_is_a_fault_and_one_on_a_device_none(self) -> None:
-        """Catches a circuit end that no balance can pair, its heat vanishing, and a refusal of an ordinary device's end."""
-        (fault,) = NoCircuitOnANode().check(self.controller_with_a_loop())
+    def test_a_loop_end_on_an_exempt_component_is_a_fault_and_one_on_a_device_none(self) -> None:
+        """Catches a loop end that no balance can pair, its heat vanishing, and a refusal of an ordinary device's end."""
+        (fault,) = NoLoopOnANode().check(self.controller_with_a_loop())
 
         assert (fault.code, fault.component) == ("EP-03", "Tank")
         assert "Tank declares the fluid loop 'space_heating', but it is exempt from the energy balance or a meter" in fault.message
-        assert not NoCircuitOnANode().check(Rig.paired_circuit())
+        assert not NoLoopOnANode().check(Rig.paired_loop())
 
-    def test_the_circuit_rules_wait_for_it(self) -> None:
-        """Catches pairing faults reported against a circuit whose end on a controller was never resolved."""
-        registry = SetupRuleRegistry([CircuitPairing, OneReaderPerFlow, NoCircuitOnANode])
+    def test_the_loop_rules_wait_for_it(self) -> None:
+        """Catches pairing faults reported against a loop whose end on a controller was never resolved."""
+        registry = SetupRuleRegistry([LoopPairing, OneReaderPerFlow, NoLoopOnANode])
 
         findings = registry.findings(RuleStage.BUILD, self.controller_with_a_loop(), SetupKind.RESIDENTIAL)
 

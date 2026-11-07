@@ -756,11 +756,11 @@ class DeclaredPorts:
 
 
 @dataclass(frozen=True)
-class CircuitFault:
-    """One breach of a circuit rule the wiring shows: the sentence, and the component (and output) it is found at.
+class LoopFault:
+    """One breach of a fluid-loop rule the wiring shows: the sentence, and the component (and output) it is found at.
 
-    For example, ``CircuitFault("Boiler", "the mass flow Boiler.Flow is read by 2 components ...", "Flow")`` is a flow
-    two circuit ends read. ``port`` is the output the fault is found at, ``None`` when the fault is about a port set.
+    For example, ``LoopFault("Boiler", "the mass flow Boiler.Flow is read by 2 components ...", "Flow")`` is a flow
+    two port sets of one loop read. ``port`` is the output the fault is found at, ``None`` when the fault is about a port set.
     """
 
     component: str
@@ -787,9 +787,9 @@ class CircuitWiring:
 
     ends: List[Tuple[str, FluidLoopPortSet, CircuitColumns, Optional[str]]] = field(default_factory=list)
     open_ends: List[Tuple[str, FluidLoopPortSet, LoopQuantity]] = field(default_factory=list)
-    pairing_faults: List[CircuitFault] = field(default_factory=list)
-    shared_flow_faults: List[CircuitFault] = field(default_factory=list)
-    node_end_faults: List[CircuitFault] = field(default_factory=list)
+    pairing_faults: List[LoopFault] = field(default_factory=list)
+    shared_flow_faults: List[LoopFault] = field(default_factory=list)
+    node_end_faults: List[LoopFault] = field(default_factory=list)
 
     @property
     def faults(self) -> List[str]:
@@ -1097,7 +1097,7 @@ class Wiring:
             for port_set in DeclaredPorts.port_sets_of(component):
                 if not self.moves_energy(name):
                     wired.node_end_faults.append(
-                        CircuitFault(
+                        LoopFault(
                             name,
                             f"{name} declares the fluid loop {port_set.loop.name!r}, but it is exempt from the energy "
                             "balance or a meter: it moves no water of its own.",
@@ -1117,14 +1117,14 @@ class Wiring:
             wired.ends.append((name, end, columns, peer_name))
             fault = self.pairing_fault(name, end, columns, peer_name, ends_at)
             if fault is not None:
-                wired.pairing_faults.append(CircuitFault(name, fault))
+                wired.pairing_faults.append(LoopFault(name, fault))
         declaring: Dict[Tuple[str, str], List[str]] = {}
         for name, _, columns in resolved:
             readers = declaring.setdefault(columns.mass_flow, [])
             if columns.mass_flow[0] != name and name not in readers:
                 readers.append(name)
         wired.shared_flow_faults.extend(
-            CircuitFault(
+            LoopFault(
                 flow[0],
                 f"the mass flow {'.'.join(flow)} is read by {len(names)} components that declare a circuit on it "
                 f"({', '.join(names)}): one flow delivers its heat once, a split needs a valve with one circuit per branch",

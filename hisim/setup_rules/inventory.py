@@ -595,9 +595,9 @@ class Inventory:
             checks="the run has at least one component and one column", lives="Simulator.run_all_timesteps; process_one_timestep",
         ),
         RuleRecord(
-            rule_id="energy_ports.circuit_pairing", codes=("EP-01",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
+            rule_id="energy_ports.loop_pairing", codes=("EP-01",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
             when="build; again after the run", enforcement="E", checks="an end's other end declares the circuit; a circuit has exactly one supplier",
-            lives="hisim/setup_rules/energy_ports.py:CircuitPairing",
+            lives="hisim/setup_rules/energy_ports.py:LoopPairing",
             note=(
                 "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
                 "which the balance after the run reads again (results.circuit_faults)"
@@ -613,9 +613,9 @@ class Inventory:
             ),
         ),
         RuleRecord(
-            rule_id="energy_ports.no_circuit_on_a_node", codes=("EP-03",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
+            rule_id="energy_ports.no_loop_on_a_node", codes=("EP-03",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
             when="build; after the run", enforcement="E", checks="an exempt component or a meter declares no circuit end",
-            lives="hisim/setup_rules/energy_ports.py:NoCircuitOnANode",
+            lives="hisim/setup_rules/energy_ports.py:NoLoopOnANode",
             note=(
                 "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
                 "which the balance after the run reads again (results.circuit_faults); after the run DeclaredPorts.collect raises a ValueError for it"

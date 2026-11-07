@@ -186,10 +186,10 @@ class TestTheFamily:
         skipped = {skip.code for skip in refused.value.skipped}
         assert {"EP-01", "EP-02", "EP-03", "EP-04", "EP-05", "EP-06", "FL-02", "FL-08"} <= skipped
 
-    def test_the_circuit_rules_wait_for_every_loop_rule(self) -> None:
-        """Catches a circuit rule reporting a broken loop again, as a circuit whose other end does not pair.
+    def test_the_loop_wiring_rules_wait_for_every_fluid_loop_rule(self) -> None:
+        """Catches a loop-wiring rule reporting a broken loop again, as a loop whose other end does not pair.
 
-        A loop with two pump owners is the fluid-loop rules' fault; the circuit rules, which find a circuit's other end
+        A loop with two pump owners is the fluid-loop rules' fault; the loop-wiring rules, which find a loop end's other end
         along the same wiring, are not run, so the refusal stays the family's own error.
         """
         assert EnergyPortRule.LOOP_RULES == frozenset(rule.CODE for rule in fft.FluidLoopRules.registry().rules)

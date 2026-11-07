@@ -93,7 +93,7 @@ class FamilyRules:
     A test that wires stand-ins by hand runs only one family, so that the rules of the other families, which may read
     what a stand-in lacks, stay out of it. A registry needs every code a rule requires, so a rule the family requires
     from another family is taken as met: a sample rule with its code that finds nothing stands in for it. For example,
-    the circuit rules require the fluid-loop rules, which cannot walk a hand-built circuit whose channels carry no loop
+    the loop-wiring rules require the fluid-loop rules, which cannot walk a hand-built loop whose channels carry no loop
     tags; the energy-port tests judge the energy ports, not the loops.
     """
 

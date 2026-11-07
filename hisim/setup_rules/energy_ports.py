@@ -9,7 +9,7 @@ rules report what its resolution found. ``EP-04`` and ``EP-05`` are the two rule
 the domain rule that heat released into the heated zone has a receiver, waived for a demo and a plant.
 
 Every rule of the family reads the components' port sets, so each requires ``FL-01`` (a loop tagged whole,
-``hisim/setup_rules/fluid_loops.py``) and is skipped when a component tags a loop by half; the circuit rules
+``hisim/setup_rules/fluid_loops.py``) and is skipped when a component tags a loop by half; the loop-wiring rules
 ``EP-01`` and ``EP-02`` follow the loops' wiring and require every fluid-loop rule. The faults of these rules alone
 raise ``EnergyPortWiringError``, the error the build raised for them before they moved here. The energy balance's
 wiring is imported when a rule runs, not with the module, so that collecting the rules imports no component module.
@@ -48,9 +48,9 @@ class EnergyPortRule(SetupRule[BuiltSystem]):
 
     VIOLATION = EnergyPortWiringError
 
-    #: The fluid-loop rules (``hisim/setup_rules/fluid_loops.py``), which the circuit rules require: a circuit end's
+    #: The fluid-loop rules (``hisim/setup_rules/fluid_loops.py``), which the loop-wiring rules require: a loop end's
     #: other end and the readers of its flow are found along the loop's wiring, and on a wiring that is no loop they
-    #: would report the fluid-loop rules' faults again, as faults of the circuit.
+    #: would report the fluid-loop rules' faults again, as faults of the loop.
     LOOP_RULES: ClassVar[FrozenSet[str]] = frozenset({"FL-01", "FL-02", "FL-03", "FL-04", "FL-05", "FL-06", "FL-07", "FL-08"})
 
     @staticmethod

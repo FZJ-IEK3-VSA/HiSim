@@ -39,6 +39,7 @@ class MeteredHouse:
         MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
         MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling,
         MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump,
+        MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod,
         MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
     )
 
@@ -61,6 +62,7 @@ class MeteredHouse:
         self.simulator.set_simulation_parameters(parameters)
         heat_pump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         heat_pump_config.set_thermal_output_power_in_watt = 8000.0
+        heat_pump_config.heating_rod_rated_electrical_power_in_watt = 8000.0
         heat_pump_config.heating_reference_temperature_in_celsius = -7.0
         heat_pump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
         self.heat_pump = MoreAdvancedHeatPumpHPLib(
@@ -125,10 +127,10 @@ PRODUCTION = lt.InandOutputType.ELECTRICITY_PRODUCTION
 
 @pytest.mark.base
 def test_a_consumer_the_energy_manager_does_not_read_is_billed(tmp_path: Path) -> None:
-    """The heat pump's cooling and brine pump, which no energy manager reads, are billed as consumption.
+    """The heat pump's cooling, brine pump and backup heating rod, which no energy manager reads, are billed.
 
     Catches the meter reading only the outputs its class lists by name (the heat pump's space heating and hot water),
-    which left the cooling and brine-pump electricity out of every bill.
+    which left the cooling, brine-pump and rod electricity out of every bill.
     """
     house = MeteredHouse(tmp_path)
     house.wire()
@@ -139,11 +141,12 @@ def test_a_consumer_the_energy_manager_does_not_read_is_billed(tmp_path: Path) -
             ("HeatPump", "ElectricalInputPowerSH"): 2000.0,
             ("HeatPump", "ElectricalInputPowerForCooling"): 700.0,
             ("HeatPump", "ElectricalInputPowerBrinePump"): 100.0,
+            ("HeatPump", "ElectricalInputPowerHeatingRod"): 3000.0,
             ("HeatPump", "ElectricalInputPowerDHW"): 200.0,
         }
     )
-    assert published["ElectricityConsumptionInWatt"] == pytest.approx(3000.0)
-    assert published["ElectricityFromGridInWatt"] == pytest.approx(3000.0)
+    assert published["ElectricityConsumptionInWatt"] == pytest.approx(6000.0)
+    assert published["ElectricityFromGridInWatt"] == pytest.approx(6000.0)
     assert published["ElectricityToGridInWatt"] == 0.0
 
 
@@ -173,7 +176,7 @@ def test_a_heat_pump_without_hot_water_gives_the_meter_no_hot_water_feed(tmp_pat
     house = MeteredHouse(tmp_path, with_domestic_hot_water_preparation=False)
     house.wire()
     heat_pump_reads = sorted(output for source, output, _ in house.reads() if source == "HeatPump")
-    assert heat_pump_reads == sorted(MeteredHouse.HEAT_PUMP_PORTS[:3])
+    assert heat_pump_reads == sorted(MeteredHouse.HEAT_PUMP_PORTS[:4])
 
 
 @pytest.mark.base

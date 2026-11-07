@@ -8,12 +8,11 @@ hplib's thermal power, outlet and mass flow and replaces hplib's COP plane by th
 (:mod:`hisim.components.more_advanced_heat_pump.seasonal_cop`) read it as they read hplib.
 """
 
+import math
 from enum import Enum, unique
 from typing import Any, ClassVar, Dict, Tuple
 
-from hisim.components.more_advanced_heat_pump.hplib_operation import (
-    HplibResult,
-)
+from hisim.subcomponents.base import Subcomponent
 
 
 @unique
@@ -133,8 +132,8 @@ class CarnotEfficiencyCop:
         return cls.SOURCE_TYPE_OF_HPLIB_GROUP[group]
 
 
-class CarnotCopHeatPump:
-    """An hplib heat pump whose COP of heating is the Carnot-efficiency law and that has no heating rod.
+class CarnotCopHeatPump(Subcomponent):
+    """An hplib heat pump's compressor whose COP of heating is the Carnot-efficiency law, without hplib's heating rod.
 
     hplib gives a heat pump's thermal power, outlet and mass flow from fitted planes; this machine keeps those and
     replaces hplib's COP plane by :class:`CarnotEfficiencyCop` (step (a) of the heat pump rework, spec
@@ -145,12 +144,14 @@ class CarnotCopHeatPump:
       minimal thermal power where hplib's regulated compressor can reach it (hplib's own rule).
     * The COP is the Carnot-efficiency law at the source and hplib's outlet, and the electrical power is the thermal
       power over it; the mass flow carries the thermal power over hplib's lift, as hplib computes it.
-    * hplib's heating rod is gone. hplib runs its rod alone where its own COP plane falls to 1 (for an 8 kW Generic
-      air/water machine at about A-7/W65 and A0/W69, booking its 8.1 kW reference power at COP 1), and adds the rod to
-      the compressor where the compressor alone cannot reach the minimal power. Here the first is the compressor at
-      hplib's switch, ``P_el,fit`` (continuous there, so the 3.3 kW jump of hplib's switch is gone), and the second
-      the compressor at its maximum, ``P_el,ref * COP_fit``. The Carnot COP stays above 1 at every realistic lift
-      (air at A-15/W75: 1.66), so no rod is needed; a back-up heater is a component of its own.
+    * hplib's heating rod is gone from the machine's answer. hplib runs its rod alone where its own COP plane falls to
+      1 (for an 8 kW Generic air/water machine at A-7/W56.7 and A0/W69.0, booking its 8.1 kW reference power at COP
+      1), and adds the rod to the compressor where the compressor alone cannot reach the minimal power. Here the first
+      is the compressor at hplib's switch, ``P_el,fit`` (continuous there, so the 3.3 kW jump of hplib's switch is
+      gone; decision 12 of the spec), and the second the compressor at its maximum, ``P_el,ref * COP_fit``. The
+      outlet of hplib's switch stays as the compressor's maximal outlet
+      (:meth:`maximal_outlet_temperature_in_celsius`), above which the heat pump's backup heating rod
+      (:class:`BackupHeatingRod`, decision 8) adds the heat the compressor cannot.
     * Cooling (mode 2) is hplib's own answer.
 
     Attributes:
@@ -167,6 +168,10 @@ class CarnotCopHeatPump:
 
     #: The outdoor temperature hplib evaluates that floor at (air: as the source, brine: as the ambient), in °C.
     HPLIB_ELECTRICAL_FLOOR_OUTDOOR_TEMPERATURE_IN_CELSIUS: ClassVar[float] = -7.0
+
+    #: The coefficient of performance of hplib's own COP plane at and below which hplib runs its heating rod alone,
+    #: dimensionless: hplib then books its reference thermal power as both heat and electricity.
+    HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
 
     def __init__(self, hplib_heat_pump: Any) -> None:
         """Wrap an ``hplib.HeatPump``; its group picks the source type of the COP law."""
@@ -245,6 +250,40 @@ class CarnotCopHeatPump:
             floor_in_watt = plane(source_temperature_in_celsius, ambient_in_celsius)
         return max(electrical_power_in_watt, self.HPLIB_ELECTRICAL_FLOOR_SHARE * floor_in_watt)
 
+    def maximal_outlet_temperature_in_celsius(
+        self, source_temperature_in_celsius: float, ambient_temperature_in_celsius: float
+    ) -> float:
+        """Return the highest outlet the compressor reaches at a source temperature, in °C: hplib's COP-1 line.
+
+        hplib's COP plane ``p1 T_in + p2 T_out + p3 + p4 T_amb`` (the ambient equal to the source for an air machine)
+        falls with the outlet; where it reaches :attr:`HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP`, hplib switched to its
+        heating rod alone. That outlet stands in for the compressor's maximal outlet until the configured maximal
+        supply temperature of bead hisim-heat-pump-outlet-limit-2vq7 replaces it (spec
+        ``roadmap/heat_pump_model_rework_spec.md``, §3.1, decision 8). For example, the 8 kW Generic air/water machine
+        reaches 56.7 °C at -7 °C outside, 69.0 °C at 0 °C and 81.4 °C at 7 °C; the Generic brine/water machine about
+        72.3 °C at a 0 °C brine. A plane that does not fall with the outlet has no such line, and the limit is
+        infinite.
+
+        Args:
+            source_temperature_in_celsius: The source temperature, in °C.
+            ambient_temperature_in_celsius: The outdoor temperature, in °C; an air machine reads the source instead.
+
+        Returns:
+            The compressor's maximal outlet temperature, in °C.
+        """
+        heat_pump = self.hplib_heat_pump
+        group = int(heat_pump.group_id)
+        ambient_in_celsius = source_temperature_in_celsius if group in (1, 4) else ambient_temperature_in_celsius
+        outlet_slope_per_kelvin = float(heat_pump.p2_cop)
+        if outlet_slope_per_kelvin >= 0.0:
+            return math.inf
+        return (
+            self.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP
+            - float(heat_pump.p1_cop) * source_temperature_in_celsius
+            - float(heat_pump.p3_cop)
+            - float(heat_pump.p4_cop) * ambient_in_celsius
+        ) / outlet_slope_per_kelvin
+
     def simulate(
         self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int = 1, p_th_min: float = 0.0
     ) -> Dict[str, Any]:
@@ -272,7 +311,7 @@ class CarnotCopHeatPump:
             return results
         outlet_in_celsius = float(results["T_out"])
         hplib_cop = float(results["COP"])
-        if hplib_cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
+        if hplib_cop <= self.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP:
             # Where hplib runs its rod alone, the compressor continues as at hplib's switch, its plane's COP at 1.
             compressor_cop = 1.0
             thermal_power_in_watt = self.fitted_electrical_power_in_watt(t_in_primary, outlet_in_celsius, t_amb)

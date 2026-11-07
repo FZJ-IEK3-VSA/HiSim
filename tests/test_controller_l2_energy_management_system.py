@@ -744,6 +744,7 @@ def _heat_pump(
     # No building in this test, so the two fields the preset leaves to the building's facts are
     # stated here: an 8 kW machine rated at the German design outside temperature.
     config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_rod_rated_electrical_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
     heat_pump: MoreAdvancedHeatPumpHPLib = (
@@ -832,6 +833,7 @@ def test_a_meter_connected_automatically_beside_the_manager_reads_the_devices_no
     assert sorted(heat_pump_reads) == [
         "ElectricalInputPowerBrinePump",
         "ElectricalInputPowerForCooling",
+        "ElectricalInputPowerHeatingRod",
         "ElectricalInputPowerSH",
     ]
 

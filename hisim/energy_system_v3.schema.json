@@ -5045,6 +5045,16 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "heating_rod_rated_electrical_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },

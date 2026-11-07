@@ -103,6 +103,10 @@ components:
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED

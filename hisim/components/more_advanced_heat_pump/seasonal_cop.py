@@ -14,8 +14,8 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Tuple
 import numpy as np
 
 from hisim.subcomponents.base import Subcomponent
-from hisim.components.more_advanced_heat_pump.hplib_operation import (
-    HplibResult,
+from hisim.components.more_advanced_heat_pump.carnot_cop import (
+    CarnotCopHeatPump,
 )
 
 
@@ -165,7 +165,7 @@ class StandardizedSeasonalCop(Subcomponent):
         for outdoor, hours in cls.BINS:
             demand = design_load * cls.part_load(outdoor)
             output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
+            by_heat_pump = min(demand, output) if cop > CarnotCopHeatPump.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
             heat += hours * demand
             electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
         return heat / electricity

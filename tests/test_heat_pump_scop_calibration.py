@@ -182,6 +182,7 @@ class TestTheComponent:
         """An 8 kW air/water machine with the given SCOP fields."""
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 8000.0
+        config.heating_rod_rated_electrical_power_in_watt = 8000.0
         config.heating_reference_temperature_in_celsius = -7.0
         for name, value in fields.items():
             setattr(config, name, value)

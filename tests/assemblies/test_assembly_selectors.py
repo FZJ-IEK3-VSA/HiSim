@@ -518,8 +518,9 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
     observers = record["metadata"]["imports"]["observers"]
     assert [(item["observer"], item["selection"], len(item["feeds"])) for item in observers] == [
         ("control-EMS", "declared", len(written)),
-        # residents, PV, the heat pump's four electricity ports and the battery's two
-        ("grid-ElectricityMeter", "declared", 8),
+        # residents, PV, the heat pump's five electricity ports (its backup heating rod's among them) and the
+        # battery's two
+        ("grid-ElectricityMeter", "declared", 9),
     ]
 
     second = tmp_path / "second"

@@ -36,7 +36,15 @@ from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.energy_port import EnergyPort
 from hisim.economics.uncertainty import UncertainValue
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType, EnergyBalanceCarrier, EnergyRole
+from hisim.loadtypes import (
+    LoadTypes,
+    Units,
+    InandOutputType,
+    ComponentType,
+    EnergyBalanceCarrier,
+    EnergyRole,
+    InstallationLocation,
+)
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
@@ -57,6 +65,10 @@ class BatteryConfig(ConfigBase):
     power, so a battery beside one array — every recorded twin — is sized as before. An author who
     knows the device pins the two fields instead, always both: a battery that states one of them and
     leaves the other ``AUTO`` is refused at sizing (:data:`SIZED_TOGETHER`).
+
+    Where the battery stands is sizable too: ``installation_location`` follows the building's technical room unless a
+    file pins it, for example ``OUTDOORS`` for a battery in the garage. It decides where the battery's losses go, into
+    the building's heated zone or out of the house (``roadmap/device_location_spec.md``, D-d and D-h).
     """
 
     MAIN_CLASS = "hisim.components.advanced_battery_bslib.Battery"
@@ -115,6 +127,13 @@ class BatteryConfig(ConfigBase):
     custom_battery_capacity_generic_in_kilowatt_hour: Sizable[float] = sized_field(
         rule=CAPACITY_LAW, unit=Units.KWH, metadata={"capacity": True}
     )
+    #: Where the battery stands: in the heated zone, in an unheated space or outdoors. Sizable: left ``AUTO`` it follows
+    #: the building's technical room, the fact ``technical_room_location``; a file pins it for a battery that stands
+    #: elsewhere, ``OUTDOORS`` for one in the garage. It decides only where the battery's losses go: bslib's losses do
+    #: not depend on the temperature of the surroundings.
+    installation_location: Sizable[InstallationLocation] = sized_field(
+        rule=Size.TECHNICAL_ROOM_LOCATION, value_type=InstallationLocation
+    )
 
     @preset
     @classmethod
@@ -127,13 +146,14 @@ class BatteryConfig(ConfigBase):
         ``custom_battery_capacity_generic_in_kilowatt_hour`` and
         ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that :data:`CAPACITY_LAW`
         and :data:`INVERTER_POWER_LAW` derive them from the summed peak power of the arrays, and an
-        author who knows the device pins the two fields instead.
+        author who knows the device pins the two fields instead. Nor does it fix where the battery stands:
+        ``installation_location`` stays ``AUTO`` and follows the building's technical room.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
 
         Returns:
-            BatteryConfig: The preset configuration, with both power numbers unsized.
+            BatteryConfig: The preset configuration, with both power numbers and the location unsized.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -257,6 +277,14 @@ class Battery(PhysicsComponent):
 
     Components to connect to:
     (1) Energy Management System
+
+    The battery's losses, its inverter's and its cells', go where it stands (owner decision D-h of
+    ``roadmap/device_location_spec.md``): it publishes their sum on one of two fixed outputs,
+    :attr:`HeatToHeatedZoneInWatt`, room heat the building takes in as an internal gain (``PRODUCTION`` of
+    ``ROOM_HEAT``), when it stands in the heated zone, and :attr:`HeatLossInWatt`, a ``LOSS`` of electricity that leaves
+    the house, when it stands in an unheated space or outdoors; the other is 0 in every step. Its
+    :attr:`InverterLossInWatt` and :attr:`CellLossInWatt` keep telling which loss is which, without a port. The battery
+    reads no temperature: bslib's losses do not depend on it.
     """
 
     # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
@@ -290,6 +318,12 @@ class Battery(PhysicsComponent):
     #: The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the step's
     #: duration.
     CellLossInWatt = "CellLossInWatt"
+    #: The heat the battery releases into the building's heated zone, in W: the sum of its inverter's and its cells'
+    #: loss when it stands in the heated zone, 0 elsewhere.
+    HeatToHeatedZoneInWatt = "HeatToHeatedZoneInWatt"
+    #: The heat the battery loses out of the house, in W: the sum of its inverter's and its cells' loss when it stands
+    #: in an unheated space or outdoors, 0 in the heated zone.
+    HeatLossInWatt = "HeatLossInWatt"
 
     def __init__(
         self,
@@ -322,6 +356,8 @@ class Battery(PhysicsComponent):
         self.source_weight = self.battery_config.source_weight
 
         self.system_id = self.battery_config.system_id
+        #: Where the battery stands, which decides where its losses go.
+        self.installation_location: InstallationLocation = concrete(self.battery_config.installation_location)
 
         (
             self.custom_battery_capacity_generic_in_kilowatt_hour,
@@ -430,7 +466,8 @@ class Battery(PhysicsComponent):
         )
         # bslib is a black box that publishes three numbers: the AC power, the DC power and the state of charge.
         # The two losses are their differences, so the energy balance checks that the published flows agree with
-        # each other (complete Sankey spec, §5.3), not bslib's physics.
+        # each other (complete Sankey spec, §5.3), not bslib's physics. The two loss outputs tell which loss is which
+        # and carry no port; the two released-heat outputs below carry their sum to where the battery stands.
         self.inverter_loss_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.InverterLossInWatt,
@@ -439,9 +476,9 @@ class Battery(PhysicsComponent):
             output_description=(
                 "The inverter's loss over the step, in W: the AC power minus the DC power. While the battery charges "
                 "the inverter takes more AC than it gives the cells, while it discharges it gives less AC than it "
-                "takes from them."
+                f"takes from them. Its energy leaves the battery through {self.HeatToHeatedZoneInWatt} or "
+                f"{self.HeatLossInWatt}, which carry the sum of both losses."
             ),
-            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.cell_loss_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -450,7 +487,35 @@ class Battery(PhysicsComponent):
             unit=Units.WATT,
             output_description=(
                 "The cells' loss over the step, in W: the DC power minus the stored energy's increase divided by the "
-                "step's duration."
+                f"step's duration. Its energy leaves the battery through {self.HeatToHeatedZoneInWatt} or "
+                f"{self.HeatLossInWatt}, which carry the sum of both losses."
+            ),
+        )
+        losses = (
+            f"The battery's losses, in W: its {self.InverterLossInWatt} plus its {self.CellLossInWatt}, which end as heat "
+            "where it stands."
+        )
+        self.heat_to_heated_zone_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatToHeatedZoneInWatt,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description=(
+                f"{losses} It carries the number when the battery stands in the heated zone, where the heat enters the "
+                "building as an internal gain (PRODUCTION of ROOM_HEAT, read by the building), and is 0 in every step "
+                "elsewhere."
+            ),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
+        )
+        self.heat_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatLossInWatt,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description=(
+                f"{losses} It carries the number when the battery stands in an unheated space or outdoors, where the "
+                "heat leaves the house (a LOSS of electricity: the building counts an unheated space as outside its "
+                "envelope, and nothing brings the heat back), and is 0 in every step in the heated zone."
             ),
             energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
@@ -536,6 +601,11 @@ class Battery(PhysicsComponent):
         )
         stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
         stsv.set_output_value(self.cell_loss_channel, cell_loss_in_watt)
+        heat_to_heated_zone_in_watt, heat_loss_in_watt = self.released_heat_in_watt(
+            self.installation_location, inverter_loss_in_watt + cell_loss_in_watt
+        )
+        stsv.set_output_value(self.heat_to_heated_zone_channel, heat_to_heated_zone_in_watt)
+        stsv.set_output_value(self.heat_loss_channel, heat_loss_in_watt)
         stsv.set_output_value(self.charging_power_channel, charging_power_in_watt)
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
@@ -576,6 +646,29 @@ class Battery(PhysicsComponent):
             stored_energy_increase_in_watt_hour * cls.SECONDS_PER_HOUR / seconds_per_timestep
         )
         return ac_power_in_watt - dc_power_in_watt, dc_power_in_watt - stored_energy_increase_in_watt
+
+    @staticmethod
+    def released_heat_in_watt(
+        installation_location: InstallationLocation, losses_in_watt: float
+    ) -> Tuple[float, float]:
+        """Return the battery's two released-heat outputs of one step: into the heated zone, and out of the house, in W.
+
+        The location fills one of them with the battery's losses and leaves the other 0
+        (:attr:`hisim.loadtypes.InstallationLocation.releases_into_heated_zone`). For example, 80 W of losses give
+        ``(80.0, 0.0)`` in the heated zone and ``(0.0, 80.0)`` in an unheated space or outdoors. Two fixed outputs,
+        rather than one whose port follows the location, keep the battery's wiring the same in every house (owner
+        decision D-h of ``roadmap/device_location_spec.md``).
+
+        Args:
+            installation_location: Where the battery stands.
+            losses_in_watt: The sum of the inverter's and the cells' loss of the step, in W.
+
+        Returns:
+            The values of :attr:`HeatToHeatedZoneInWatt` and :attr:`HeatLossInWatt`, in W.
+        """
+        if installation_location.releases_into_heated_zone:
+            return losses_in_watt, 0.0
+        return 0.0, losses_in_watt
 
     @staticmethod
     def refuse_an_impossible_size(config: BatteryConfig) -> Tuple[float, float]:

@@ -96,7 +96,10 @@ def test_the_house_battery_starts_half_charged() -> None:
     """The house battery starts at a state of charge of 0.5, not recharge-blocked, and its state has no default."""
     assert advanced_battery_bslib.Battery.INITIAL_STATE_OF_CHARGE == 0.5
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=(StartValues.PV_PEAK_POWER_IN_WATT,))
+        SizingContext(
+            pv_peak_power_in_watt=(StartValues.PV_PEAK_POWER_IN_WATT,),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
     battery = advanced_battery_bslib.Battery(my_simulation_parameters=StartValues.parameters(), config=config)
     assert battery.state.state_of_charge == 0.5

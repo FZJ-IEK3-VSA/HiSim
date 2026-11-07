@@ -42,6 +42,8 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
     inputs:
+      - Building
+      - Weather
       - HeatDistributionSystem
       - CondensingGasBoiler
   CondensingGasBoiler:
@@ -59,6 +61,7 @@ components:
       - Weather
       - HeatDistributionSystem
       - UTSPConnector
+      - SimpleHotWaterStorage
   Weather:
     class: hisim.components.weather.Weather
     preset: aachen

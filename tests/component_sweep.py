@@ -54,8 +54,9 @@ class ComponentSweep:
     """Every component class of ``hisim.components``, and an instance of each per configuration it ships."""
 
     #: The facts the presets' sizing laws read: a single-family house with one apartment, three residents, a
-    #: 7.8 kW heating load at a design outside temperature of -7 °C, radiators and a gas boiler of 3 to 12 kW. The
-    #: numbers only have to let every law resolve; which channels a class declares does not depend on them.
+    #: 7.8 kW heating load at a design outside temperature of -7 °C, radiators, a gas boiler of 3 to 12 kW and its
+    #: technical room in an unheated cellar. The numbers only have to let every law resolve; which channels a class
+    #: declares does not depend on them.
     REFERENCE_HOUSE: ClassVar[SizingContext] = SizingContext(
         heating_load_in_watt=7780.75,
         heating_reference_temperature_in_celsius=-7.0,
@@ -76,6 +77,7 @@ class ComponentSweep:
         fuel_density_in_kg_per_m3=None,
         weather_identity="component-sweep-weather",
         occupancy_identity="component-sweep-occupancy",
+        technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
     )
 
     #: Facts that differ from :attr:`REFERENCE_HOUSE` for one configuration class. The fuel meter counts a fuel

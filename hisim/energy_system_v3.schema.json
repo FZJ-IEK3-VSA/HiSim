@@ -5410,6 +5410,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -5417,7 +5431,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "number_of_apartments"
+                    "number_of_apartments",
+                    "technical_room_location"
                   ]
                 }
               }
@@ -5530,6 +5545,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -5537,7 +5566,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "maximal_thermal_power_in_watt"
+                    "maximal_thermal_power_in_watt",
+                    "technical_room_location"
                   ]
                 }
               }

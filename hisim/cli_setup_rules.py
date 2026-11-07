@@ -30,7 +30,7 @@ from hisim.setup_rules.inventory import Inventory, RuleRecord
 from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.registry import RuleClass, SetupRuleRegistry, StageFindings
 from hisim.setup_rules.rule import RuleCodes, RuleStage
-from hisim.setup_rules.subjects import BuiltSystem, LoadedDocument
+from hisim.setup_rules.subjects import LoadedDocument
 from hisim.simulationparameters import SimulationParameters
 
 #: The signature every verb of the command line shares: the parsed arguments, the output and the error stream.
@@ -148,7 +148,8 @@ class SetupRuleCommands:
         """Run the rules of every stage up to ``last_stage`` on a file and return what each found.
 
         The build stage runs only when the load stage found no enforced fault, as in a run. It returns one findings
-        record for the rules of the built file and one for the rules of the connected components, in that order. The
+        record for the rules of the built file, one for the rules of the components as added and one for the rules of
+        the connected components, in that order, each only when the one before found no enforced fault. The
         components are built with one-day simulation parameters whose result directory is a temporary one, removed
         afterwards, so a check leaves nothing behind.
 
@@ -171,9 +172,10 @@ class SetupRuleCommands:
             built = executor.construct()
             stages.append(self.registry.findings(RuleStage.BUILD, built.built_document(), model.setup_kind))
             if not stages[-1].faults:
+                stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.added_system(), model.setup_kind))
+            if not stages[-1].faults:
                 built.simulator.connect_all_components()
-                components = tuple(wrapped.my_component for wrapped in built.simulator.wrapped_components)
-                stages.append(self.registry.findings(RuleStage.BUILD, BuiltSystem(components=components), model.setup_kind))
+                stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.built_system(), model.setup_kind))
         return stages
 
     @staticmethod

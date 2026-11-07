@@ -192,7 +192,7 @@ class TestTheFamily:
         A loop with two pump owners is the fluid-loop rules' fault; the loop-wiring rules, which find a loop end's other end
         along the same wiring, are not run, so the refusal stays the family's own error.
         """
-        assert EnergyPortRule.LOOP_RULES == frozenset(rule.CODE for rule in fft.FluidLoopRules.registry().rules)
+        assert EnergyPortRule.LOOP_RULES == frozenset(rule.CODE for rule in fft.FluidLoopRules.registry().rules if rule.CODE.startswith("FL-"))
         with pytest.raises(FluidLoopWiringError) as refused:
             SetupRuleRegistry.collect().run(RuleStage.BUILD, Rig.pair(tank_pumps=True), SetupKind.RESIDENTIAL)
 

@@ -41,9 +41,15 @@ def test_the_ids_are_unique_and_the_moving_records_name_a_family_and_a_stage() -
 
 
 def test_the_inventory_holds_every_row_of_its_design_record() -> None:
-    """Catches records lost or duplicated when a family pull request edits the list: 199 checks, 128 of which move."""
-    assert len(Inventory.RECORDS) == 199
-    assert sum(record.moves for record in Inventory.RECORDS) == 128
+    """Catches records lost or duplicated when a family pull request edits the list: 200 checks, 123 of which move.
+
+    The design record listed 199 and 128. PR 5 split the cost declarations into two rules with two errors
+    (``components.cost_relevance_declared`` and ``components.priced_has_cost_facts``), kept five checks of the
+    component API at the call that would leave a broken component, and retired ``components.has_outputs``, which
+    never fired.
+    """
+    assert len(Inventory.RECORDS) == 200
+    assert sum(record.moves for record in Inventory.RECORDS) == 123
 
 
 def test_a_record_is_found_by_its_id() -> None:

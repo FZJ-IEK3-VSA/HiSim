@@ -4,7 +4,9 @@ Beads hisim-energy-sankeys-9uoo.5 and .8.
 
 Complete Sankey spec, §5.3 and §4.4 (``roadmap/complete_energy_sankeys_spec.md``, owner decision Q-J). The PV system
 takes the sun on its modules and gives its AC power to the electricity meter, the rest is unconverted sunlight (Q-D); the
-battery charges from the meter and discharges to it, loses in its inverter and in its cells, and stores the change;
+battery charges from the meter and discharges to it, loses in its inverter and in its cells, and stores the change
+(its two losses leave it together on the released-heat output of where it stands, device-location spec D-h: in these
+twins its unheated cellar, so out of the house);
 the occupancy takes the appliances' electricity from the meter and the residents' body heat from the residents,
 releases the device heat gains and the body heat into the building, and loses the electricity the device heat gains
 do not account for. In both households the meter reads every device's electricity port directly, by its role
@@ -45,8 +47,8 @@ class Expected:
             "ChargingPower": ("consumption", "electricity"),
             "DischargingPower": ("production", "electricity"),
             "StoredEnergyIncreaseInWattHour": ("stored_change", "electricity"),
-            "InverterLossInWatt": ("loss", "electricity"),
-            "CellLossInWatt": ("loss", "electricity"),
+            "HeatToHeatedZoneInWatt": ("production", "room_heat"),
+            "HeatLossInWatt": ("loss", "electricity"),
         },
         "UTSPConnector": {
             "ElectricalPowerConsumption": ("consumption", "electricity"),
@@ -75,8 +77,8 @@ class Expected:
         ("solar", "PVSystem · ModuleAndInverterLossInWatt", "unconverted sunlight"),
         ("electricity", "ElectricityMeter", "Battery"),
         ("electricity", "Battery", "ElectricityMeter"),
-        ("electricity", "Battery", "Battery · InverterLossInWatt"),
-        ("electricity", "Battery", "Battery · CellLossInWatt"),
+        ("electricity", "Battery", "Battery · HeatLossInWatt"),
+        ("electricity", "Battery · HeatLossInWatt", "heat loss to outdoors"),
         ("electricity", "ElectricityMeter", "UTSPConnector"),
         ("room_heat", "residents' body heat", "UTSPConnector"),
         ("room_heat", "UTSPConnector", "Building"),
@@ -128,7 +130,8 @@ def test_the_flows_of_the_electricity_devices_are_physical(twin: Tuple[str, Path
     pv = balance_entry(results, "PVSystem")["carriers"]
     assert 4.0 < pv["solar"]["consumption_kwh"] / pv["electricity"]["production_kwh"] < 8.0
     battery = {port["output"]: port["total_kwh"] for port in balance_entry(results, "Battery")["ports"]}
-    assert battery["InverterLossInWatt"] > 0.0 and battery["CellLossInWatt"] > 0.0
+    # in the unheated cellar of the twins' TABULA row the losses leave the house, and the heated zone gets none
+    assert battery["HeatLossInWatt"] > 0.0 and battery["HeatToHeatedZoneInWatt"] == 0.0
     assert battery["ChargingPower"] > battery["DischargingPower"] > 0.0
     occupancy = {port["output"]: port["total_kwh"] for port in balance_entry(results, "UTSPConnector")["ports"]}
     assert occupancy["BodyHeatToBuildingInWatt"] == pytest.approx(occupancy["HeatingByResidents"], rel=1e-12)

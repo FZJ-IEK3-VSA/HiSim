@@ -338,6 +338,7 @@ class PilotWireFormat:
             "roof_area_in_m2",
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
+            "technical_room_location",
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
         "MoreAdvancedHeatPumpHPLibConfig": ("maximal_thermal_power_in_watt",),

@@ -46,6 +46,7 @@ from hisim.config.names import NameSyntax
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only, never imported at runtime
     from hisim.component import Component, ComponentOutput
+    from hisim.energy_port import EnergyPort
 
 
 class ChannelDeclarationError(Exception):
@@ -176,6 +177,12 @@ class DynamicConnectionChannel:
     unit: lt.Units
     dispatch: DispatchRule
     dispatch_tags: FrozenSet[lt.InandOutputType] = field(default_factory=frozenset)
+    #: The energy port every input this channel grows carries, or None for a channel whose inputs book nothing. A
+    #: physics component that receives energy from its participants states it here, so that both ways of growing an
+    #: input, the imperative add-API and a declarative file's feeds, give the input the same port. For example, the
+    #: building's channel of the heat devices release into its heated zone carries
+    #: ``EnergyPort(CONSUMPTION, ROOM_HEAT)``. A meter's channels carry none: a meter reads, it moves no energy.
+    energy_port: Optional["EnergyPort"] = None
 
     def __post_init__(self) -> None:
         """Freezes the tag collections and rejects a declaration that cannot mean anything.

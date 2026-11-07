@@ -1080,6 +1080,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "technical_room_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },

@@ -28,7 +28,7 @@ from hisim.postprocessing.energy_balance.check import (
 from hisim.postprocessing.energy_balance.export import EnergyBalanceReport
 from hisim.postprocessing.energy_balance.meters import MeterBalance, MeterCheck
 from hisim.postprocessing.energy_balance.ports import (
-    CircuitColumns,
+    LoopColumns,
     DeclaredPorts,
     Exemptions,
     Peer,
@@ -39,7 +39,7 @@ from hisim.postprocessing.energy_balance.ports import (
 
 __all__ = [
     "BalanceCheck",
-    "CircuitColumns",
+    "LoopColumns",
     "ComponentBalance",
     "DeclaredPorts",
     "EnergyBalanceError",

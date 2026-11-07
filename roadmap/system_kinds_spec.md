@@ -260,7 +260,7 @@ hisim/setup_rules/
   energy_ports.py    the fault lists of Wiring.refuse_a_broken_wiring and room_heat_needs_receiver
   fluid_loops.py     the refusals of FluidLoopWalk.find_loops
   components.py      the simulator's build rules: one kind base, duplicate names, cost declarations
-  results.py         after the run: finite results, the component and link balance, the circuit faults
+  results.py         after the run: finite results, the component and link balance, the loop faults
   meters.py          after the run: the meter balance, the unmetered ports
 ```
 
@@ -714,9 +714,9 @@ run when HiSim is imported, concern the code and not a setup, and stay (L, not m
 | `components.no_physics_cycle` | the L1 device-before-store constraints form no cycle | `hisim/evaluation_order.py:PhysicsOrder.ordered` | first plan | L | D | `components.py` |
 | `components.no_l2_cycle` | L2 controllers read one another in no cycle | `L2Order.ordered` | first plan | L | D | `components.py` |
 | `components.not_empty` | the run has at least one component and one column | `Simulator.run_all_timesteps`; `process_one_timestep` | build / step | E | L | `components.py` |
-| `energy_ports.loop_pairing` | an end's other end declares the circuit; a circuit has exactly one supplier | `eb/ports.py:Wiring.pairing_fault`, `Wiring.circuits` | build; again after the run | E | L | `energy_ports.py` |
-| `energy_ports.one_reader_per_flow` | a circuit's mass flow is read by one circuit-declaring component | `eb/ports.py:Wiring.circuits` | build; after the run | E | L | `energy_ports.py` |
-| `energy_ports.no_loop_on_a_node` | an exempt component or a meter declares no circuit end | `eb/ports.py:Wiring.circuits` | build; after the run | E | L | `energy_ports.py` |
+| `energy_ports.loop_pairing` | an end's other end declares the loop; a loop has exactly one supplier | `eb/ports.py:Wiring.pairing_fault`, `Wiring.loops` | build; again after the run | E | L | `energy_ports.py` |
+| `energy_ports.one_reader_per_flow` | a loop's mass flow is read by one loop-declaring component | `eb/ports.py:Wiring.loops` | build; after the run | E | L | `energy_ports.py` |
+| `energy_ports.no_loop_on_a_node` | an exempt component or a meter declares no loop end | `eb/ports.py:Wiring.loops` | build; after the run | E | L | `energy_ports.py` |
 | `energy_ports.receiver_unambiguous` | an output port read through paired inputs by one component; a non-metered `PRODUCTION` port read by one declared component unless an input is tagged | `eb/ports.py:Wiring.ambiguous_receiver_faults` | build | E | L | `energy_ports.py` |
 | `energy_ports.input_port_pairs` | an input port pairs with the output port it reads (same carrier, opposite role) | `eb/ports.py:Wiring.unpaired_input_port_faults` | build | E | L | `energy_ports.py` |
 | `energy_ports.room_heat_needs_receiver` | a `PRODUCTION` port of `ROOM_HEAT` is read by a component | PR #1211 (`Wiring.refuse_a_broken_wiring`, fourth fault list) | build | E | **D**, waived for `demo` and `plant` | `energy_ports.py` |
@@ -746,8 +746,8 @@ by the declaration; it is noted for the commercial use, not scoped.
 | `results.port_finite` | a declared port is finite in every step | `eb/check.py:BalanceCheck.nonfinite` | after the run | E | L | `results.py` (one rule with `results.finite`) |
 | `results.component_balance_closes` | per component, consumption − production − loss − stored change ≤ 0.1 % of throughput over the run and per step (`Tolerance`) | `eb/check.py:BalanceCheck.balance`, `run` | after the run | E | L | `results.py` |
 | `results.link_closes` | every `PRODUCTION`→`CONSUMPTION` transfer between declared components is booked by both sides within 0.1 % | `eb/check.py:BalanceCheck.links`; `eb/ports.py:DeclaredPorts.declared_links` | after the run | E | L | `results.py` |
-| `results.circuit_faults` | the circuit rules of §6.5 on the run's columns, plus: an open end pumps no water | `eb/ports.py:DeclaredPorts.circuit_faults`, `add_circuits` | after the run | E | L | `results.py` |
-| `results.circuit_columns` | a circuit's mass flow is never negative, the timestep positive; the columns a port, circuit or exchange names exist | `eb/ports.py:CircuitColumns.heat_in_kilowatt_hours_per_step`, `DeclaredPorts.add_input_ports`, `read_meters` | after the run | E | L | `results.py` |
+| `results.loop_faults` | the loop rules of §6.5 on the run's columns, plus: an open end pumps no water | `eb/ports.py:DeclaredPorts.loop_faults`, `add_loops` | after the run | E | L | `results.py` |
+| `results.loop_columns` | a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist | `eb/ports.py:LoopColumns.heat_in_kilowatt_hours_per_step`, `DeclaredPorts.add_input_ports`, `read_meters` | after the run | E | L | `results.py` |
 | `results.no_port_on_a_node` | an exempt component or a meter declares no port | `eb/ports.py:DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing` | after the run | E | L | `results.py` |
 | `meters.meter_balance` | per meter and carrier, import − export equals the ports it reads, within tolerance; enforced only while nothing is undeclared (Q-H) | `eb/meters.py:MeterBalance.of`, `MeterCheck.failing` | after the run | E (conditional) | L | `meters.py` |
 | `meters.metered_port_has_a_meter` | a metered port's peer is a meter or a component; enforced only while nothing is undeclared | `eb/ports.py:DeclaredPorts.unmetered`; `eb/meters.py:MeterCheck.failing_unmetered` | after the run | E (conditional) | **D**, waived for `demo` | `meters.py` |
@@ -821,7 +821,7 @@ LPG and car profile resolution; the meters' carriers; the `NaN` fall-through bra
 | no per-step finite checks | no `isfinite` in hot paths | `tests/test_no_per_step_finite_checks.py` | L |
 | explicit-state controllers | no hidden state; the committed state reproduces the outputs | `tests/test_explicit_state_controllers.py` | L |
 | fluid-loop fleet | every recorded file builds and gets its loop ids | `tests/test_fluid_loops.py` | L |
-| DHW and buffer twins | every file with a tank closes it; both circuit ends agree; the forced-step share is bounded | `tests/test_dhw_chain_twins.py`, `test_space_heating_buffer_twins.py`, `test_part_load_twins.py` | B (files with a tank) |
+| DHW and buffer twins | every file with a tank closes it; both loop ends agree; the forced-step share is bounded | `tests/test_dhw_chain_twins.py`, `test_space_heating_buffer_twins.py`, `test_part_load_twins.py` | B (files with a tank) |
 | sizing scalability | components scale ×5 with the floor area | `tests/test_sizing_energy_systems.py` | R |
 | assembly library | EF-75 on every library file | `tests/assemblies/test_assembly_library.py` | L |
 | assembly contracts: run, balance, finite, bounds, expect, monotone, member contract | per sample | `tests/assemblies/test_library_contracts.py`; `es/assemblies/testing/checks.py` | L |
@@ -906,7 +906,7 @@ carries #1211; the families follow in the order of their coupling; PR 10 is the 
 | 1 | `hisim/setup_rules/`: `SetupRule` (`CODE`, `NAME`, `STAGE`, `ENFORCED`, `REQUIRES`, `WAIVED_FOR`, the docstring template, the `__init_subclass__` checks of D3, D13), `Fault` with the fields of D15, `Skip`, `RuleStage`, `SetupRuleViolation` (every fault and skip per stage, `to_dict()`), `SetupRuleRegistry.collect` (the `REQUIRES` graph checked), `run` (code order, skips), `RETIRED_CODES` (empty), the `hisim setup-rules` commands `list`, `waivers`, `show`, `check --format json`, `Inventory.RECORDS` (every rule id of §6 with its family, stage, nature and where it lives today), the subjects; `SetupKind`, the `setup_kind` key (model, reader, emitter, schema, executor), `Simulator.declare_setup_kind`, the registry's refusal of an undeclared kind, the recorder, every setup's declaration, every twin re-recorded, the fixtures and the harness declaring; the generic tests of §9; the four hooks calling an (empty) registry | nothing | none |
 | 2 | `energy_ports.py`: the three fault lists of `Wiring.refuse_a_broken_wiring` and `energy_ports.room_heat_needs_receiver` with its `demo` and `plant` waivers; #1211 rebased onto PR 1 and reduced to the device side | `eb/ports.py:Wiring.*_faults` | none (the rule refuses nothing that runs today once the demos and the plant are declared) |
 | 3 | `fluid_loops.py`: the refusals of `FluidLoopWalk.find_loops`; the walk keeps discovering loop ids | `hisim/fluid_loops.py` (part) | none |
-| 4 | `results.py`, `meters.py`: the finite check, the balance, the links, the circuit faults, the meter balance, the unmetered ports (Q-H kept; the `demo` waiver of `meters.metered_port_has_a_meter`), the log-only `port_linked` and `component_declared` | `hisim/postprocessing/finite_results.py`; `eb/check.py`, `eb/meters.py` (the judging halves) | none |
+| 4 | `results.py`, `meters.py`: the finite check, the balance, the links, the loop faults, the meter balance, the unmetered ports (Q-H kept; the `demo` waiver of `meters.metered_port_has_a_meter`), the log-only `port_linked` and `component_declared` | `hisim/postprocessing/finite_results.py`; `eb/check.py`, `eb/meters.py` (the judging halves) | none |
 | 5 | `components.py`: the simulator's build rules, `check_cost_declarations`, the evaluation-order cycles | `hisim/simulator.py`, `component_wrapper.py`, `dynamic_component.py` (the checks) | none |
 | 6 | `wiring.py`: the declarative wiring rules | `es/wiring_checks.py` whole; the checks of `es/aggregator_ports.py`, `channel_matching.py`, `dispatch_signals.py`, `feed_resolution.py` | none |
 | 7 | `document.py`: the structural rules | `es/validation.py` whole; the checks of `names.py`, `entries.py`, `loader.py` | none |

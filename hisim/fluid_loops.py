@@ -25,7 +25,7 @@ every wiring that is no loop:
 
 A loop's id is ``<pump owner's component name>.<its loop name>``, for example ``hds.distribution``; it is unique in a
 run, since component names are unique and a component pumps each of its loops at most once. The number of suppliers
-(exactly one per loop) is checked with the energy ports (:meth:`hisim.postprocessing.energy_balance.ports.Wiring.circuits`).
+(exactly one per loop) is checked with the energy ports (:meth:`hisim.postprocessing.energy_balance.ports.Wiring.loops`).
 """
 
 from dataclasses import dataclass

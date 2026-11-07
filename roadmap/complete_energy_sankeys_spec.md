@@ -539,6 +539,11 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
   `ProvidedLoadInWatt` (W); the electrolyzer's hydrogen, oxygen and water flows are in kg/s, its
   `HydrogenProductionInWatt` is removed; the `GasMeter` gains the channel `production_mass_flow` and the output
   `GasToGridInWattHour`, which its `MeteredExchange` names as its export. The schemas list the new carrier.
+- The fluid-loop names (owner, 2026-11-07, `roadmap/fluid_loops_spec.md` stage 1a's table): `balance_report.json`
+  gets schema `hisim.energy_balance/5`. The list `circuit_faults` is `loop_faults`; a loop end's port entry lists the
+  loop's three outputs under `loop` (was `circuit`), and its `output` reads `loop <component>.<mass flow>` (was
+  `circuit …`), as its node does in the Sankeys; the fault sentences say "loop" where they said "circuit". No number
+  changes.
 - New outputs of §5 (named with their units). No output is renamed, except the transformer's under Q-Q.
 
 ### 6.3 What does not change

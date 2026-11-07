@@ -596,29 +596,29 @@ class Inventory:
         ),
         RuleRecord(
             rule_id="energy_ports.loop_pairing", codes=("EP-01",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
-            when="build; again after the run", enforcement="E", checks="an end's other end declares the circuit; a circuit has exactly one supplier",
+            when="build; again after the run", enforcement="E", checks="an end's other end declares the loop; a loop has exactly one supplier",
             lives="hisim/setup_rules/energy_ports.py:LoopPairing",
             note=(
-                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
-                "which the balance after the run reads again (results.circuit_faults)"
+                "the loop ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.loops, "
+                "which the balance after the run reads again (results.loop_faults)"
             ),
         ),
         RuleRecord(
             rule_id="energy_ports.one_reader_per_flow", codes=("EP-02",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
-            when="build; after the run", enforcement="E", checks="a circuit's mass flow is read by one circuit-declaring component",
+            when="build; after the run", enforcement="E", checks="a loop's mass flow is read by one loop-declaring component",
             lives="hisim/setup_rules/energy_ports.py:OneReaderPerFlow",
             note=(
-                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
-                "which the balance after the run reads again (results.circuit_faults)"
+                "the loop ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.loops, "
+                "which the balance after the run reads again (results.loop_faults)"
             ),
         ),
         RuleRecord(
             rule_id="energy_ports.no_loop_on_a_node", codes=("EP-03",), nature=RuleNature.LAW, target="energy_ports", stage=RuleStage.BUILD,
-            when="build; after the run", enforcement="E", checks="an exempt component or a meter declares no circuit end",
+            when="build; after the run", enforcement="E", checks="an exempt component or a meter declares no loop end",
             lives="hisim/setup_rules/energy_ports.py:NoLoopOnANode",
             note=(
-                "the circuit ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.circuits, "
-                "which the balance after the run reads again (results.circuit_faults); after the run DeclaredPorts.collect raises a ValueError for it"
+                "the loop ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.loops, "
+                "which the balance after the run reads again (results.loop_faults); after the run DeclaredPorts.collect raises a ValueError for it"
             ),
         ),
         RuleRecord(
@@ -695,14 +695,14 @@ class Inventory:
             lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.links; hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.declared_links",
         ),
         RuleRecord(
-            rule_id="results.circuit_faults", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="the circuit rules of §6.5 on the run's columns, plus: an open end pumps no water",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.circuit_faults, add_circuits",
+            rule_id="results.loop_faults", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="the loop rules of §6.5 on the run's columns, plus: an open end pumps no water",
+            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.loop_faults, add_loops",
         ),
         RuleRecord(
-            rule_id="results.circuit_columns", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="a circuit's mass flow is never negative, the timestep positive; the columns a port, circuit or exchange names exist",
-            lives="hisim/postprocessing/energy_balance/ports.py:CircuitColumns.heat_in_kilowatt_hours_per_step, DeclaredPorts.add_input_ports, read_meters",
+            rule_id="results.loop_columns", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            checks="a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist",
+            lives="hisim/postprocessing/energy_balance/ports.py:LoopColumns.heat_in_kilowatt_hours_per_step, DeclaredPorts.add_input_ports, read_meters",
         ),
         RuleRecord(
             rule_id="results.no_port_on_a_node", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
@@ -1010,7 +1010,7 @@ class Inventory:
         ),
         RuleRecord(
             rule_id="gate.dhw_and_buffer_twins", nature=RuleNature.GATE, when="CI", enforcement="E",
-            checks="every file with a tank closes it; both circuit ends agree; the forced-step share is bounded",
+            checks="every file with a tank closes it; both loop ends agree; the forced-step share is bounded",
             lives="tests/test_dhw_chain_twins.py, test_space_heating_buffer_twins.py, test_part_load_twins.py", note="B (files with a tank)",
         ),
         RuleRecord(

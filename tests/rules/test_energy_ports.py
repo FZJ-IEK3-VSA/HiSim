@@ -34,7 +34,7 @@ from hisim.setup_rules.registry import SetupRuleRegistry
 from hisim.setup_rules.rule import RuleStage, Skip
 from hisim.setup_rules.subjects import BuiltSystem
 from tests import functions_for_testing as fft
-from tests.test_energy_port_hydronic import CircuitRig, End, Loops
+from tests.test_energy_port_hydronic import LoopRig, End, Loops
 
 pytestmark = pytest.mark.base
 
@@ -61,28 +61,28 @@ class Rig:
     @classmethod
     def loop_system(cls, inputs: Dict[str, List[SimpleNamespace]], ends: Dict[str, List[End]], twin: bool = False) -> BuiltSystem:
         """A boiler and a tank (and a second tank with ``twin``) with the given inputs and loop ends."""
-        columns = CircuitRig.boiler_columns() + CircuitRig.tank_columns() + (CircuitRig.tank_columns("Twin") if twin else [])
-        return cls.system(CircuitRig.stand_ins(CircuitRig.outputs_of(columns), inputs, ends))
+        columns = LoopRig.boiler_columns() + LoopRig.tank_columns() + (LoopRig.tank_columns("Twin") if twin else [])
+        return cls.system(LoopRig.stand_ins(LoopRig.outputs_of(columns), inputs, ends))
 
     @classmethod
     def paired_loop(cls) -> BuiltSystem:
         """The boiler and the tank, both declaring their ends of the loop."""
         return cls.loop_system(
-            {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()},
-            {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END]},
+            {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()},
+            {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END]},
         )
 
     @classmethod
     def two_readers(cls, tagged: Tuple[str, ...]) -> BuiltSystem:
         """A source's space heating read by two components that declare ports; the ``tagged`` ones tag the reading input."""
         received = EnergyPort(lt.EnergyRole.CONSUMPTION, SPACE_HEATING)
-        components = CircuitRig.stand_ins(
+        components = LoopRig.stand_ins(
             [
                 cls.output("Source", "Heat", EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING)),
                 cls.output("First", "Loss", EnergyPort(lt.EnergyRole.LOSS, SPACE_HEATING)),
                 cls.output("Second", "Loss", EnergyPort(lt.EnergyRole.LOSS, SPACE_HEATING)),
             ],
-            {name: [CircuitRig.wired("HeatIn", "Source", "Heat", received if name in tagged else None)] for name in ("First", "Second")},
+            {name: [LoopRig.wired("HeatIn", "Source", "Heat", received if name in tagged else None)] for name in ("First", "Second")},
             {},
         )
         return cls.system(components)
@@ -90,9 +90,9 @@ class Rig:
     @classmethod
     def one_wire(cls, input_port: EnergyPort) -> BuiltSystem:
         """A tank's space-heating output read by a loop through an input carrying ``input_port``."""
-        components = CircuitRig.stand_ins(
+        components = LoopRig.stand_ins(
             [cls.output("Tank", "HeatOut", EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING)), cls.output("Loop", "Loss", None)],
-            {"Loop": [CircuitRig.wired("HeatIn", "Tank", "HeatOut", input_port)]},
+            {"Loop": [LoopRig.wired("HeatIn", "Tank", "HeatOut", input_port)]},
             {},
         )
         return cls.system(components)
@@ -107,12 +107,12 @@ class Rig:
         """
         produced = EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=environment)
         outputs = [cls.output("UTSPConnector", field, produced) for field in cls.OCCUPANCY_OUTPUTS]
-        components: List[Any] = CircuitRig.stand_ins(outputs, {}, {})
+        components: List[Any] = LoopRig.stand_ins(outputs, {}, {})
         if reader is not None:
             received = EnergyPort(lt.EnergyRole.CONSUMPTION, ROOM_HEAT)
             reading: Any = SimpleNamespace(
                 component_name=reader,
-                inputs=[CircuitRig.wired(field, "UTSPConnector", field, None if reader == "Controller" else received) for field in cls.OCCUPANCY_OUTPUTS],
+                inputs=[LoopRig.wired(field, "UTSPConnector", field, None if reader == "Controller" else received) for field in cls.OCCUPANCY_OUTPUTS],
                 outputs=[cls.output(reader, "Loss", EnergyPort(lt.EnergyRole.LOSS, ROOM_HEAT))] if reader != "Controller" else [],
                 port_sets=tuple,
             )
@@ -168,20 +168,20 @@ class TestLoopPairing:
 
     def test_an_other_end_that_declares_ports_but_not_the_loop_is_a_fault_at_the_end(self) -> None:
         """Catches a boiler booking the loop's heat while the tank it charges books none of it."""
-        system = Rig.loop_system({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, {"Boiler": [CircuitRig.SUPPLY_END]})
+        system = Rig.loop_system({"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()}, {"Boiler": [LoopRig.SUPPLY_END]})
 
         (fault,) = LoopPairing().check(system)
 
         assert (fault.component, fault.port) == ("Boiler", None)
-        assert "its other end, Tank, declares ports and not this circuit" in fault.message
+        assert "its other end, Tank, declares ports and not this loop" in fault.message
 
     def test_two_suppliers_are_a_fault_and_a_paired_loop_none(self) -> None:
         """Catches a loop whose heat both ends book as delivered, and a rule that refuses a correct pair."""
         ends = {
-            "Boiler": [End(Loops.loop(supplies=True, pumps=True), CircuitRig.SUPPLY_END.names)],
-            "Tank": [End(Loops.loop(supplies=True, pumps=False), CircuitRig.RECEIVING_END.names)],
+            "Boiler": [End(Loops.loop(supplies=True, pumps=True), LoopRig.SUPPLY_END.names)],
+            "Tank": [End(Loops.loop(supplies=True, pumps=False), LoopRig.RECEIVING_END.names)],
         }
-        system = Rig.loop_system({"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs()}, ends)
+        system = Rig.loop_system({"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs()}, ends)
 
         assert any("has two suppliers" in fault.message for fault in LoopPairing().check(system))
         assert not LoopPairing().check(Rig.paired_loop())
@@ -192,13 +192,13 @@ class TestOneReaderPerFlow:
 
     def test_a_flow_two_ends_read_is_a_fault_at_the_flow_and_one_end_none(self) -> None:
         """Catches the heat of one flow delivered twice, and a rule that refuses the one reader it allows."""
-        inputs = {"Boiler": [CircuitRig.wired("Return", "Tank", "Return")], "Tank": CircuitRig.tank_inputs(), "Twin": CircuitRig.tank_inputs()}
-        ends = {"Boiler": [CircuitRig.SUPPLY_END], "Tank": [CircuitRig.RECEIVING_END], "Twin": [CircuitRig.RECEIVING_END]}
+        inputs = {"Boiler": [LoopRig.wired("Return", "Tank", "Return")], "Tank": LoopRig.tank_inputs(), "Twin": LoopRig.tank_inputs()}
+        ends = {"Boiler": [LoopRig.SUPPLY_END], "Tank": [LoopRig.RECEIVING_END], "Twin": [LoopRig.RECEIVING_END]}
 
         (fault,) = OneReaderPerFlow().check(Rig.loop_system(inputs, ends, twin=True))
 
         assert (fault.component, fault.port) == ("Boiler", "Flow")
-        assert "the mass flow Boiler.Flow is read by 2 components that declare a circuit on it (Tank, Twin)" in fault.message
+        assert "the mass flow Boiler.Flow is read by 2 components that declare a loop on it (Tank, Twin)" in fault.message
         assert not OneReaderPerFlow().check(Rig.paired_loop())
 
 

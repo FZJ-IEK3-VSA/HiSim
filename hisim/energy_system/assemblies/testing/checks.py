@@ -30,6 +30,11 @@ it raises :class:`SampleRefused` instead of a failure; pytest reports the test a
 refusal. A monotone sweep drops the points a member refuses and checks the rest; when fewer than two
 remain, the sweep raises :class:`SampleRefused` as well. Any other error of a run stays a failure.
 
+**A base a monotone entry does not apply to.** A ``monotone`` entry with ``applies_when`` is checked
+only from the bases that meet its condition; from any other base :func:`evaluate_monotone` raises
+:class:`MonotoneNotApplicable` before it runs a point, and pytest reports the test as skipped with the
+unmet condition, so the base is visibly not checked rather than silently passed.
+
 **Tolerance of monotone.** Two neighbouring values of a sweep are equal when they differ by at most
 the golden gate's relative tolerance times the largest magnitude of the series, plus
 :data:`MONOTONE_ABS_FLOOR`; scaling by the series keeps a KPI that is nominally zero at one point
@@ -78,6 +83,15 @@ class SampleRefused(Exception):
     Example: ``air_source_heat_pump sample h007 refused by a member: HeatPump: the W55 SCOP 4.1 is
     above the W35 SCOP 3.2; …``. It is no ``AssertionError``, so a caller cannot mistake it for a
     failed check; the contract tests turn it into a skip that names the refusal.
+    """
+
+
+class MonotoneNotApplicable(Exception):
+    """A base sample that does not meet a monotone entry's ``applies_when``: the sweep is not run.
+
+    Example: ``heating/air_source_heat_pump sweep of scop_en14825_w35 from h014 does not apply:
+    scop_en14825_w55 is 3.49, and the entry applies only at none``. Like :class:`SampleRefused` it is no
+    ``AssertionError``; the contract tests turn it into a skip that names the unmet condition.
     """
 
 
@@ -298,7 +312,8 @@ def evaluate_monotone(
 
     A point a member refuses at construction (:attr:`IsolationRun.refusal`) is dropped, and the
     remaining points are compared. Example: the sweep of a heat pump's W35 SCOP from a base with
-    W55 at 4.5 drops the points with W35 below 4.5.
+    W55 at 4.5 drops the points with W35 below 4.5. A base that does not meet the entry's
+    ``applies_when`` runs no point.
 
     Returns:
         The swept parameter's values at the dropped points, rising; empty when none was refused.
@@ -306,6 +321,7 @@ def evaluate_monotone(
     Raises:
         SamplerError: When the base admits no sweep of the parameter (the caller chose the base).
         SampleRefused: When refusals leave fewer than two points: the sweep is skipped.
+        MonotoneNotApplicable: When the base does not meet the entry's ``applies_when``: the sweep is skipped.
         AssemblyCheckFailure: When a point's KPI cannot be read, or the series moves the wrong way.
     """
     parameter = declaration.parameter
@@ -313,6 +329,9 @@ def evaluate_monotone(
     if points is None:
         raise SamplerError(f"the sample {base.sample_id} of '{space.model.name}' admits no sweep of '{parameter}'.")
     label = f"{space.model.name} sweep of {parameter} from {base.sample_id}"
+    unmet = declaration.unmet_condition(base.values, space.declarations)
+    if unmet is not None:
+        raise MonotoneNotApplicable(f"{label} does not apply: {unmet}")
     subject = f"{declaration.kpi} of {declaration.member or 'the system'}"
     series: List[Tuple[Any, float]] = []
     dropped: List[Any] = []

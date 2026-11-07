@@ -27,7 +27,7 @@ import yaml
 
 from hisim import loadtypes as lt
 from hisim.config import ConfigurationRefusedError
-from hisim.energy_system.assemblies.model import MonotoneDirection
+from hisim.energy_system.assemblies.model import MonotoneDeclaration, MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing import checks
@@ -1160,6 +1160,87 @@ def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monk
     ):
         checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0])
     assert not list(tmp_path.glob("*")), "every sweep point's run is released, refused or not"
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("applies_when", "values", "unmet"),
+    [
+        ({}, {"control": "standard"}, None),
+        ({"control": ("standard", "eco")}, {"control": "eco"}, None),
+        ({"control": ("eco",)}, {"control": "standard"}, "control is standard, and the entry applies only at eco"),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": None}, None),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": 2000.0}, "power_in_watt is 2000.0, and the entry applies only at none"),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": "AUTO"}, "power_in_watt is AUTO, and the entry applies only at none"),
+        (
+            {"control": ("standard",), "with_thermostat": (False,)},
+            {"control": "standard", "with_thermostat": True},
+            "with_thermostat is True, and the entry applies only at False",
+        ),
+    ],
+)
+def test_a_monotone_condition_holds_on_the_values_its_parameters_take(
+    applies_when: Dict[str, Tuple[Any, ...]], values: Dict[str, Any], unmet: Optional[str]
+) -> None:
+    """Catches ``applies_when`` comparing written spellings with resolved values, or ignoring one of its conditions.
+
+    ``none`` is the spelling of a parameter without a value (``None``), so it matches ``None`` and neither a number
+    nor ``AUTO``; every condition of the mapping must hold, and an empty mapping holds everywhere.
+    """
+    _assembly, space = mock("mock/variant_heater")
+    declaration = MonotoneDeclaration(
+        parameter="set_temperature_in_celsius",
+        kpi="Heater energy",
+        member="Heater",
+        direction=MonotoneDirection.INCREASING,
+        applies_when=applies_when,
+    )
+    assert declaration.unmet_condition(values, space.declarations) == unmet
+
+
+@pytest.mark.assemblies
+def test_a_monotone_entry_is_skipped_visibly_from_a_base_its_condition_excludes() -> None:
+    """Catches a sweep running (or passing silently) from a base that does not meet the entry's ``applies_when``.
+
+    From the defaults (``control: standard``) an entry that applies only at ``eco`` raises
+    ``MonotoneNotApplicable`` naming the unmet condition, before any point runs; one that applies at ``standard``
+    goes on to run its first point.
+    """
+    _assembly, space = mock("mock/variant_heater")
+    (defaults, *_) = deterministic_samples(space)
+    started: List[int] = []
+
+    class PointRan(Exception):
+        """Raised by the stand-in run factory, so the test sees that the sweep began to run its points."""
+
+    def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:
+        """Records the point and stops the sweep there."""
+        del values, label  # the stand-in only records that a point was asked for
+        started.append(index)
+        raise PointRan()
+
+    def entry(control: str) -> MonotoneDeclaration:
+        """The power sweep of the heater, applying only at one thermostat preset."""
+        return MonotoneDeclaration(
+            parameter="power_in_watt",
+            kpi="Heater energy",
+            member="Heater",
+            direction=MonotoneDirection.INCREASING,
+            applies_when={"control": (control,)},
+        )
+
+    with pytest.raises(
+        checks.MonotoneNotApplicable,
+        match=re.escape(
+            "mock/variant_heater sweep of power_in_watt from s000 does not apply: control is standard, and the entry "
+            "applies only at eco"
+        ),
+    ):
+        checks.evaluate_monotone(run_point, space, defaults, entry("eco"))
+    assert not started and not isinstance(checks.MonotoneNotApplicable(""), AssertionError)
+    with pytest.raises(PointRan):
+        checks.evaluate_monotone(run_point, space, defaults, entry("standard"))
+    assert started == [0]
 
 
 @pytest.mark.assemblies

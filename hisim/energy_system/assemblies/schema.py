@@ -229,6 +229,11 @@ class AssemblySchemaBuilder:
                     "kpi": {"type": "string"},
                     "member": {"$ref": "#/$defs/name"},
                     "direction": {"enum": [direction.value for direction in MonotoneDirection]},
+                    "applies_when": {
+                        "type": "object",
+                        "propertyNames": {"$ref": "#/$defs/name"},
+                        "additionalProperties": {"type": "array", "minItems": 1},
+                    },
                 },
             },
             "expect": {

@@ -22,7 +22,13 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, 
 
 from hisim import loadtypes as lt
 from hisim.config.sizing import declared_field_unit
-from hisim.energy_system.assemblies.model import AssemblyFile, ConstraintKind, MemberTemplate, ParameterType
+from hisim.energy_system.assemblies.model import (
+    AssemblyFile,
+    ConstraintKind,
+    MemberTemplate,
+    MonotoneDeclaration,
+    ParameterType,
+)
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
@@ -467,6 +473,33 @@ class LibraryChecker:
         port, _, key = target.partition(".")
         return value in getattr(self.model.ports[port], key)[parameter]
 
+    def _monotone_condition(self, path: Tuple[Any, ...], monotone: MonotoneDeclaration) -> None:
+        """A monotone entry's ``applies_when`` names declared parameters other than the swept one, at values they take.
+
+        A listed value is one of the parameter's closed set (an enum's ``values``, a boolean), or ``none``
+        or ``AUTO``, the unstated spellings any parameter may hold. The swept parameter cannot be a
+        condition: the sweep moves it, so the condition would hold at some points and not at others.
+        """
+        for parameter, values in monotone.applies_when.items():
+            where = path + ("applies_when",)
+            declaration = self.model.parameters.get(parameter)
+            if declaration is None:
+                self.add(where, f"the monotone entry's applies_when names '{parameter}', which is no parameter.")
+                continue
+            if parameter == monotone.parameter:
+                self.add(
+                    where,
+                    f"the monotone entry's applies_when names '{parameter}', the parameter it sweeps; a condition is "
+                    "on the parameters the sweep holds fixed.",
+                )
+            for value in values:
+                if value not in ("none", ParameterChecks.AUTO_SPELLING) and not declaration.admits(value):
+                    self.add(
+                        where,
+                        f"the monotone entry's applies_when lists {parameter}={value!r}, which is neither one of its "
+                        f"allowed values nor none or {ParameterChecks.AUTO_SPELLING}.",
+                    )
+
     def _tests(self) -> None:
         """The test contract (§9.4, D24): present, names that resolve, units of ``lt.Units``, a monotone entry."""
         tests = self.model.tests
@@ -495,6 +528,7 @@ class LibraryChecker:
                 self.add(path, f"the monotone entry moves '{monotone.parameter}', which is no numeric parameter.")
             if monotone.member is not None and monotone.member not in members:
                 self.add(path, f"the monotone entry names the member '{monotone.member}', which does not exist.")
+            self._monotone_condition(path, monotone)
         for index, expect in enumerate(tests.expect):
             if expect.member is not None and expect.member not in members:
                 self.add(

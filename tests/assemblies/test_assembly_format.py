@@ -98,6 +98,22 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
 
 
 @pytest.mark.assemblies
+def test_a_monotone_condition_is_read_and_a_malformed_one_is_refused() -> None:
+    """Catches ``applies_when`` of a monotone entry being dropped, or a value that is no list being accepted.
+
+    The condition is read like a port's ``required_when``: a parameter to a non-empty list of values, kept as
+    written; the schema an editor validates against admits the same shape.
+    """
+    entry = "{parameter: a, kpi: k, direction: decreasing, applies_when: {b: [none]}}"
+    text = MINIMAL.replace("monotone: []}", f"monotone: [{entry}]}}")
+    model, _lines = AssemblyReader.read_text(text, "test/minimal.assembly.yaml")
+    jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+    assert model.tests is not None and dict(model.tests.monotone[0].applies_when) == {"b": ("none",)}
+    with pytest.raises(EnergySystemFormatError, match="a non-empty list of values"):
+        read_assembly(text.replace("applies_when: {b: [none]}", "applies_when: {b: none}"))
+
+
+@pytest.mark.assemblies
 def test_a_constraint_is_read_with_its_kind() -> None:
     """Catches the constraint list losing its kinds: both are read, in written order, each with its parameters."""
     text = MINIMAL + "constraints: [{all_or_none_of: [a, b]}, {exactly_one_of: [c, d]}]\n"

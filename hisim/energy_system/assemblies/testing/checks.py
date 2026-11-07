@@ -65,8 +65,8 @@ from hisim.energy_system.assemblies.model import (
 )
 from hisim.energy_system.assemblies.testing.isolation import SUBJECT, IsolationRun, IsolationRunError
 from hisim.energy_system.assemblies.testing.samples import ParameterSpace, Sample, SamplerError, sweep
-from hisim.postprocessing.energy_balance.check import EnergyBalanceError
 from hisim.postprocessing.kpi_computation.tolerances import REL_TOL
+from hisim.setup_rules.results import EnergyBalanceError
 
 #: The absolute floor of a monotone comparison: far below any KPI an assembly declares, far above
 #: the float noise of a sum over a day of steps.

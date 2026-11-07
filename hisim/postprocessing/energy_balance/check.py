@@ -1,4 +1,4 @@
-"""Checks whether each component's energy balance closes (hisim-energy-sankeys-9uoo.2).
+"""Computes whether each component's energy balance closes (hisim-energy-sankeys-9uoo.2).
 
 Per component and timestep, vectorised over the run:
 ``residual = sum(CONSUMPTION) - sum(PRODUCTION) - sum(LOSS) - sum(STORED_CHANGE)`` over all its declared ports. The balance is
@@ -11,14 +11,15 @@ component's throughput over the run, and every step's residual at most
 (``CONSUMPTION``, energy taken from its store, and any port running backwards) and what leaves it; the run's is the sum
 over its steps.
 
-Beside the balances, two more things are checked (owner, 2026-10-02: always fail hard): every declared port is
-finite in every step, and every transfer between two declared components
-(:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``PRODUCTION`` port and its
-receiver's ``CONSUMPTION`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
-two. A transfer only one of two declared components books fails; one toward a component that declares no ports at
-all, a meter, a boundary node or nobody does not. The check runs in every simulation; whatever does not hold fails
-the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes. The meters, what they
-publish against what they read, are :mod:`.meters`'s.
+Beside the balances, two more things are computed (owner, 2026-10-02: always fail hard): every declared port that
+is not finite in some step, and every transfer between two declared components
+(:meth:`~.ports.DeclaredPorts.declared_links`) with whether it is booked by both sides -- a sender's ``PRODUCTION`` port
+and its receiver's ``CONSUMPTION`` port -- and the two totals agree within the run's tolerance, relative to the larger
+of the two. A transfer only one of two declared components books does not close; one toward a component that
+declares no ports at all, a meter, a boundary node or nobody is no link. The setup rules after the run
+(``hisim/setup_rules/results.py``: ``AR-03`` to ``AR-05``) judge what this computes, in every simulation, and fail the
+run with :class:`~hisim.setup_rules.results.EnergyBalanceError`. A run in which no component declares a port passes.
+The meters, what they publish against what they read, are :mod:`.meters`'s.
 """
 
 from __future__ import annotations
@@ -30,10 +31,6 @@ import numpy as np
 
 from hisim import loadtypes as lt
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts, PortSeries
-
-
-class EnergyBalanceError(ValueError):
-    """A run whose declared energy flows do not hold: a balance or a link that does not close, or a port not finite."""
 
 
 @dataclass(frozen=True)

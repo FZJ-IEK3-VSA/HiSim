@@ -618,7 +618,7 @@ class Inventory:
             lives="hisim/setup_rules/energy_ports.py:NoLoopOnANode",
             note=(
                 "the loop ends are resolved by hisim/postprocessing/energy_balance/ports.py:Wiring.loops, "
-                "which the balance after the run reads again (results.loop_faults); after the run DeclaredPorts.collect raises a ValueError for it"
+                "which the balance after the run reads again (results.loop_faults, which refuses an end on a node after the run as well)"
             ),
         ),
         RuleRecord(
@@ -676,64 +676,94 @@ class Inventory:
             enforcement="E", checks="exactly one member pumps", lives="hisim/setup_rules/fluid_loops.py:OnePumpOwner",
         ),
         RuleRecord(
-            rule_id="results.finite", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run, first", enforcement="E",
-            checks="no result column holds NaN or inf unless its output declares may_be_non_finite; one column per output",
-            lives="hisim/postprocessing/finite_results.py:FiniteResultsCheck.require_finite",
+            rule_id="results.finite", codes=("AR-01",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run, first",
+            enforcement="E", checks="no result column holds NaN or inf unless its output declares may_be_non_finite; one column per output",
+            lives="hisim/setup_rules/results.py:Finite",
         ),
         RuleRecord(
-            rule_id="results.all_rows", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="the table has one row per timestep", lives="Simulator.prepare_post_processing",
+            rule_id="results.all_rows", codes=("AR-02",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="the table has one row per timestep", lives="hisim/setup_rules/results.py:AllRows",
+            note="moved from hisim/simulator.py:Simulator.prepare_post_processing, which now indexes whatever rows it has",
         ),
         RuleRecord(
-            rule_id="results.port_finite", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="a declared port is finite in every step", lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.nonfinite",
-            note="one rule with results.finite",
+            rule_id="results.port_finite", codes=("AR-03",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="a declared port is finite in every step", lives="hisim/setup_rules/results.py:PortFinite",
+            note=(
+                "a rule of its own beside results.finite, requiring it: a port of an output that declares may_be_non_finite is checked only "
+                "here, and its fault raises EnergyBalanceError as before"
+            ),
         ),
         RuleRecord(
-            rule_id="results.component_balance_closes", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
+            rule_id="results.component_balance_closes", codes=("AR-04",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN,
+            when="after the run", enforcement="E",
             checks="per component, consumption − production − loss − stored change ≤ 0.1 % of throughput over the run and per step (Tolerance)",
-            lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.balance, run",
+            lives="hisim/setup_rules/results.py:ComponentBalanceCloses",
+            note="the balance is computed by hisim/postprocessing/energy_balance/check.py:BalanceCheck.balance, run",
         ),
         RuleRecord(
-            rule_id="results.link_closes", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="every PRODUCTION→CONSUMPTION transfer between declared components is booked by both sides within 0.1 %",
-            lives="hisim/postprocessing/energy_balance/check.py:BalanceCheck.links; hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.declared_links",
+            rule_id="results.link_closes", codes=("AR-05",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="every PRODUCTION→CONSUMPTION transfer between declared components is booked by both sides within 0.1 %",
+            lives="hisim/setup_rules/results.py:LinkCloses",
+            note=(
+                "the links are computed by hisim/postprocessing/energy_balance/check.py:BalanceCheck.links; "
+                "hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.declared_links"
+            ),
         ),
         RuleRecord(
-            rule_id="results.loop_faults", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="the loop rules of §6.5 on the run's columns, plus: an open end pumps no water",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.loop_faults, add_loops",
+            rule_id="results.loop_faults", codes=("AR-06",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="the loop rules of §6.5 on the run's columns, plus: an open end pumps no water",
+            lives="hisim/setup_rules/results.py:LoopFaults",
+            note=(
+                "the breaches are found by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.add_loops, Wiring.loops; "
+                "an end on an exempt component or a meter is one of them since this rule moved, no ValueError"
+            ),
         ),
         RuleRecord(
-            rule_id="results.loop_columns", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
-            checks="a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist",
-            lives="hisim/postprocessing/energy_balance/ports.py:LoopColumns.heat_in_kilowatt_hours_per_step, DeclaredPorts.add_input_ports, read_meters",
+            rule_id="results.loop_columns", codes=("AR-07",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E", checks="a loop's mass flow is never negative, the timestep positive; the columns a port, loop or exchange names exist",
+            lives="hisim/setup_rules/results.py:ColumnsReadable",
+            note=(
+                "the faults are recorded by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect, add_input_ports, add_loops "
+                "(LoopColumns.refusal), read_meters, which raised a ValueError for each before"
+            ),
         ),
         RuleRecord(
             rule_id="results.no_port_on_a_node", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E",
             checks="an exempt component or a meter declares no port",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.refuse_a_port_of_a_node_that_moves_nothing",
+            codes=("AR-08",), lives="hisim/setup_rules/results.py:NoPortOnANode",
+            note="the faults are recorded by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.node_port_fault, which raised a ValueError before",
         ),
         RuleRecord(
-            rule_id="meters.meter_balance", nature=RuleNature.LAW, target="meters", stage=RuleStage.AFTER_RUN, when="after the run", enforcement="E (conditional)",
+            rule_id="meters.meter_balance", codes=("MT-01",), nature=RuleNature.LAW, target="meters", stage=RuleStage.AFTER_RUN, when="after the run",
+            enforcement="E (conditional)",
             checks="per meter and carrier, import − export equals the ports it reads, within tolerance; enforced only while nothing is undeclared (Q-H)",
-            lives="hisim/postprocessing/energy_balance/meters.py:MeterBalance.of, MeterCheck.failing",
+            lives="hisim/setup_rules/meters.py:MeterBalanceAgrees",
+            note="the meter balance and its Q-H switch are computed by hisim/postprocessing/energy_balance/meters.py:MeterBalance.of, MeterCheck.failing",
         ),
         RuleRecord(
-            rule_id="meters.metered_port_has_a_meter", nature=RuleNature.DOMAIN, target="meters", stage=RuleStage.AFTER_RUN, when="after the run",
-            enforcement="E (conditional)", checks="a metered port's peer is a meter or a component; enforced only while nothing is undeclared",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unmetered; hisim/postprocessing/energy_balance/meters.py:MeterCheck.failing_unmetered",
-            note=", waived for demo",
+            rule_id="meters.metered_port_has_a_meter", codes=("MT-02",), nature=RuleNature.DOMAIN, target="meters", stage=RuleStage.AFTER_RUN,
+            when="after the run", enforcement="E (conditional)",
+            checks="a metered port's peer is a meter or a component; enforced only while nothing is undeclared",
+            lives="hisim/setup_rules/meters.py:MeteredPortHasAMeter",
+            note=(
+                ", waived for demo; the unmetered ports and their Q-H switch are computed by hisim/postprocessing/energy_balance/ports.py:"
+                "DeclaredPorts.unmetered and hisim/postprocessing/energy_balance/meters.py:MeterCheck.failing_unmetered"
+            ),
         ),
         RuleRecord(
-            rule_id="results.port_linked", nature=RuleNature.DOMAIN, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            rule_id="results.port_linked", codes=("AR-09",), nature=RuleNature.DOMAIN, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
             enforcement="L (the acceptance PR makes it E)", checks="a non-idle port has a peer",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unlinked", note=", waived for demo",
+            lives="hisim/setup_rules/results.py:PortLinked",
+            note=(
+                "the spec's row names a demo waiver, its sections 4.2 and 4.6 none (a demo's unlinked heat is reported); "
+                "waived for no kind; the unlinked ports are computed by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unlinked"
+            ),
         ),
         RuleRecord(
-            rule_id="results.component_declared", nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
+            rule_id="results.component_declared", codes=("AR-10",), nature=RuleNature.LAW, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
             enforcement="L (CI makes it E, §6.9)", checks="a component declares ports or is exempt with a reason",
-            lives="hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect",
+            lives="hisim/setup_rules/results.py:ComponentDeclared",
+            note="the undeclared components are found by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.collect",
         ),
         RuleRecord(
             rule_id="costs.lifecycle_engine", nature=RuleNature.LAW, when="post-processing", enforcement="E / L",

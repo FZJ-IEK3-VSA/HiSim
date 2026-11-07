@@ -1,7 +1,7 @@
 """The check after the time loop that every result column holds only finite values.
 
 The components do not check on every pass that what they compute is finite; the post-processing checks the whole
-result table once (:mod:`hisim.postprocessing.finite_results`). These tests run a one-day hourly simulation with one
+result table once (the setup rule ``AR-01``, :class:`hisim.setup_rules.results.Finite`). These tests run a one-day hourly simulation with one
 stub component, ``NanSource``, that publishes ``100 + timestep`` and, when asked, NaN at one known step. A second
 output, declared ``may_be_non_finite``, is NaN in every step and must never fail the run.
 """
@@ -19,10 +19,12 @@ from dataclasses_json import dataclass_json
 from hisim import loadtypes as lt
 from hisim.component import ComponentOutput, PhysicsComponent, SingleTimeStepValues
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
-from hisim.postprocessing.finite_results import FiniteResultsCheck, NonFiniteResultsError
+from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.results import Finite, NonFiniteResultsError
+from hisim.setup_rules.subjects import RunResults
 
 pytestmark = pytest.mark.base
 
@@ -139,7 +141,7 @@ class TestTheRunFailsAfterTheLoopOnANonFiniteColumn:
             run_one_day(tmp_path, nan_step=5)
 
         message = str(raised.value)
-        assert "in 1 columns" in message
+        assert len(raised.value.faults) == 1
         assert "Source # Value [°C]: NaN or infinite from step 5 (2021-01-01 05:00:00), in 1 of 24 steps" in message
         assert "Undefined" not in message
 
@@ -164,12 +166,17 @@ class TestTheColumnsAreFoundOverTheWholeTable:
             for index in range(count)
         ]
 
+    @staticmethod
+    def no_balance() -> EnergyBalanceReport:
+        """Stands for the run's energy balance, which the finite-results rule never reads."""
+        raise AssertionError("the finite-results rule reads no energy balance")
+
     def test_infinities_are_found_with_their_first_step_and_count(self) -> None:
         """Catches a check that only looks for NaN, or one that reports the last bad step instead of the first."""
         index = pd.date_range("2021-01-01", periods=4, freq="900s")
         results = pd.DataFrame({"a": [1.0, math.inf, 3.0, -math.inf], "b": [1.0, 2.0, 3.0, 4.0]}, index=index)
 
-        found = FiniteResultsCheck.non_finite_columns(results, self.outputs(2))
+        found = Finite.non_finite_columns(results, self.outputs(2))
 
         assert [(column.output.field_name, column.first_step, column.steps) for column in found] == [("Column0", 1, 2)]
         assert found[0].first_time == "2021-01-01 00:15:00"
@@ -178,4 +185,5 @@ class TestTheColumnsAreFoundOverTheWholeTable:
         """Catches a check that takes a column's overflowing sum for a non-finite value."""
         results = pd.DataFrame({"a": [1e308, 1e308, 1e308]}, index=pd.date_range("2021-01-01", periods=3, freq="h"))
 
-        FiniteResultsCheck.require_finite(results, self.outputs(1))
+        subject = RunResults(results=results, outputs=tuple(self.outputs(1)), components=(), timesteps=3, read_energy_balance=self.no_balance)
+        assert not Finite().check(subject)

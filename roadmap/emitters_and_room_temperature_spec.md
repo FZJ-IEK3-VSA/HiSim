@@ -435,7 +435,7 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
   is outside that tolerance today: the rod's share of the week's electricity is about 40 % at 60 s and about 60 % at
   900 s, and the reached supply lies below the curve at 60 s and above it at 900 s. The owner decided (2026-11-07) that
   this spec is blocked until the step-length dependence of case B is understood; an investigation is running.
-  Investigation: see bead ….
+  Investigation: see bead hisim-rod-share-step-length-67f0.
 - **Goldens**: every hydronic twin through the golden gate after the re-bless.
 - **RenoVisor**: `tests/renovisor/` base tests, the `renovisor_probes` job, `verify --out DIR` exits 0, the flag
   probe of §6.
@@ -677,7 +677,7 @@ against 65.67 °C). The curve's design-day value itself differs between the step
 65.67 °C at 900 s, and 06.001 at 60 s reads 65.70 °C in the `pv` run against 65.71 °C in `base`; neither difference is
 explained here. The delivered heat and the electricity of this case are outside the 1 %
 step-length tolerance of §7; the owner decided on 2026-11-07 that the spec is blocked until the cause is understood
-(§7, "Investigation: see bead …").
+(§7, "Investigation: see bead hisim-rod-share-step-length-67f0").
 
 ### A.8 Yearly heat against ideal delivery, by variant (900 s, % of the ideal-delivery heat)
 

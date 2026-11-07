@@ -2,19 +2,20 @@
 
 One frozen object per hook. ``LoadedDocument`` is the energy-system file as the reader built it (stage ``LOAD``).
 ``BuiltDocument`` is the expanded file with its constructed, wired components, which the declarative build hands
-over (stage ``BUILD``, declarative mode only). ``BuiltSystem`` is the simulator's components with their inputs
-connected, before the first step (stage ``BUILD``, both modes). ``RunResults`` is the result table and the outputs
-after the run, with the energy balance read from them when a rule first asks for it (stage ``AFTER_RUN``). A rule
-reads its subject and nothing else: no component module, no ``SimRepository``. The types of the energy-system format,
-of the simulator and of the energy balance are imported for type checking only, so importing the rules package
-imports none of them.
+over (stage ``BUILD``, declarative mode only). ``AddedSystem`` is the simulator's components as they were added, which
+the run hands over first, before it prepares anything (stage ``BUILD``, both modes). ``BuiltSystem`` is the
+simulator's components with their inputs connected, before the first step (stage ``BUILD``, both modes).
+``RunResults`` is the result table and the outputs after the run, with the energy balance read from them when a rule
+first asks for it (stage ``AFTER_RUN``). A rule reads its subject and nothing else: no component module, no
+``SimRepository``. The types of the energy-system format, of the simulator and of the energy balance are imported for
+type checking only, so importing the rules package imports none of them.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Callable, ClassVar, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, ClassVar, FrozenSet, Mapping, Optional, Tuple
 
 from hisim.setup_rules.rule import RuleStage, RuleSubject
 
@@ -62,15 +63,40 @@ class BuiltDocument(RuleSubject):
 
 
 @dataclass(frozen=True)
-class BuiltSystem(RuleSubject):
-    """The components of one run with their inputs connected, before the first step, in either mode.
+class AddedSystem(RuleSubject):
+    """The components of one run as they were added to the simulator, before the run prepares or connects them.
 
-    ``components`` are in the order they were added to the simulator, which is the order of the result columns.
+    The run hands it over first thing, so that a defect visible in the list of components alone (a class without a
+    kind, a name used twice, a lifecycle-cost run with a class no cost model describes) refuses the run before it
+    prepares a result directory or a component. ``components`` are in the order they were added; ``outputs`` are the
+    outputs registered so far, in the order of the result columns (a dynamic component grows more while it is
+    connected); ``post_processing_options`` are the options the run's parameters request, members of
+    ``PostProcessingOptions`` as ``SimulationParameters`` holds them, for example ``COMPUTE_LIFECYCLE_COSTS``.
     """
 
     STAGE: ClassVar[RuleStage] = RuleStage.BUILD
 
     components: Tuple[Component, ...]
+    outputs: Tuple[ComponentOutput, ...]
+    post_processing_options: Tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class BuiltSystem(RuleSubject):
+    """The components of one run with their inputs connected, before the first step, in either mode.
+
+    ``components`` are in the order they were added to the simulator, which is the order of the result columns.
+    ``outputs`` are the registered outputs, every result column in order, including those a dynamic component grew
+    while it was connected; empty when the caller hands over only components (a test of one rule family).
+    ``connects_automatically`` holds the names of the components that were added with ``connect_automatically=True``,
+    whose default connections the run applied.
+    """
+
+    STAGE: ClassVar[RuleStage] = RuleStage.BUILD
+
+    components: Tuple[Component, ...]
+    outputs: Tuple[ComponentOutput, ...] = ()
+    connects_automatically: FrozenSet[str] = frozenset()
 
 
 @dataclass(frozen=True)

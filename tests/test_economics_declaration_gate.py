@@ -4,9 +4,10 @@ Every `Component` subclass must declare `cost_relevance`, because the cost adapt
 declaration and infers nothing: a class that declares none is `UNDECLARED`, becomes an
 `UnresolvedSubject` in the postprocessing bridge and aborts the evaluation under decision D7. That
 abort is correct but arrives late — after a full simulation — so roadmap/cost_spec.md §9.2 asks for the
-same refusal "at simulation start, not end". `Simulator.check_cost_declarations` is that refusal,
-and this file pins both halves of its contract: it fires when lifecycle costs were requested, and
-it stays out of the way when they were not.
+same refusal "at simulation start, not end". The setup rules `CB-08` and `CB-09`
+(`hisim/setup_rules/components.py`), which a run checks first thing, are that refusal, and this
+file pins both halves of its contract: it fires when lifecycle costs were requested, and it stays
+out of the way when they were not.
 
 **Two failure paths, deliberately both alive.** The pre-run check is a convenience, not the
 enforcement: it can only see the components a run registered, so it is the bridge's D7 path that
@@ -33,15 +34,19 @@ from hisim.components.generic_pv_system import PVSystem
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim.components.tariff_provider import TariffProvider
 from hisim.economics.bridge import build_evaluation_inputs
-from hisim.economics.facts import (
-    CostRelevance,
+from hisim.economics.facts import CostRelevance
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.components import (
+    CostRelevanceDeclared,
+    PricedHasCostFacts,
     UndeclaredCostRelevanceError,
     UnpriceableComponentError,
 )
-from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
-from hisim.setup_rules.kinds import SetupKind
+from tests import functions_for_testing as fft
 from tests.fake_component_source import NamedComponentSource
 
 pytestmark = pytest.mark.base
@@ -92,6 +97,16 @@ def _register(simulator: Simulator, component: Any) -> None:
         component: The component object the wrapper should carry.
     """
     simulator.wrapped_components.append(cast(ComponentWrapper, _Wrapper(component)))
+
+
+def _check_cost_declarations(simulator: Simulator) -> None:
+    """Runs the two cost-declaration rules, `CB-08` and `CB-09`, on the components the simulator holds, as a run does first.
+
+    Only those two: the stand-ins here carry no kind and no output, which the other rules of the components as added
+    refuse in a run.
+    """
+    registry = fft.ComponentRules.registry([CostRelevanceDeclared, PricedHasCostFacts])
+    registry.run(RuleStage.BUILD, simulator.added_system(), SetupKind.DEMO)
 
 
 class _SimulationParameters:
@@ -151,7 +166,7 @@ def _uninitialized(component_class: Any) -> Any:
 
 
 class TestPreRunCheckRefusesAnUndeclaredFleet:
-    """`check_cost_declarations` when lifecycle costs were requested."""
+    """The cost-declaration rules when lifecycle costs were requested."""
 
     @pytest.mark.parametrize(
         "option",
@@ -168,13 +183,13 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
         _register(simulator, UndeclaredDevice())
 
         with pytest.raises(UndeclaredCostRelevanceError) as raised:
-            simulator.check_cost_declarations()
+            _check_cost_declarations(simulator)
         message = str(raised.value)
         assert "UndeclaredDevice" in message  # which class ...
         assert __name__ in message  # ... and which module it lives in
         assert "cost_relevance" in message  # what is missing ...
         assert "PRICED" in message and "METER" in message and "FREE_OF_COST" in message
-        assert raised.value.component_classes == (UndeclaredDevice,)
+        assert message.count("UndeclaredDevice (module") == 1
 
     def test_it_is_a_value_error_so_the_documented_refusal_type_still_holds(self):
         """`run_all_timesteps` documents `ValueError`; the new refusal must not escape that."""
@@ -182,7 +197,7 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
         _register(simulator, UndeclaredDevice())
 
         with pytest.raises(ValueError):
-            simulator.check_cost_declarations()
+            _check_cost_declarations(simulator)
 
     def test_a_fully_declared_fleet_passes(self):
         """Real shipped components, declared in their own class bodies, raise nothing.
@@ -194,7 +209,7 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
         for component_class in (Battery, ElectricityMeter, TariffProvider, SumBuilderForTwoInputs):
             _register(simulator, _uninitialized(component_class))
 
-        simulator.check_cost_declarations()  # must not raise
+        _check_cost_declarations(simulator)  # must not raise
 
     def test_each_offending_class_is_reported_once(self):
         """Ten instances of one undeclared class are one defect, not ten bullets."""
@@ -203,8 +218,8 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
             _register(simulator, UndeclaredDevice())
 
         with pytest.raises(UndeclaredCostRelevanceError) as raised:
-            simulator.check_cost_declarations()
-        assert raised.value.component_classes == (UndeclaredDevice,)
+            _check_cost_declarations(simulator)
+        assert str(raised.value).count("UndeclaredDevice (module") == 1
 
 
 class PricedWithoutFacts(NamedComponentSource):
@@ -229,7 +244,7 @@ class PricedWithoutFacts(NamedComponentSource):
 
 
 class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
-    """`check_cost_declarations` on the §9.1 half: PRICED with no hook and no adapter entry."""
+    """The cost-declaration rules on the §9.1 half (`CB-09`): PRICED with no hook and no adapter entry."""
 
     @pytest.mark.parametrize(
         "option",
@@ -246,7 +261,7 @@ class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
         _register(simulator, PricedWithoutFacts())
 
         with pytest.raises(UnpriceableComponentError) as raised:
-            simulator.check_cost_declarations()
+            _check_cost_declarations(simulator)
 
         assert "PricedWithoutFacts" in str(raised.value)
         assert "get_cost_facts" in str(raised.value)
@@ -258,7 +273,7 @@ class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
         _register(simulator, PricedWithoutFacts())
 
         with pytest.raises(ValueError):
-            simulator.check_cost_declarations()
+            _check_cost_declarations(simulator)
 
     def test_a_priced_component_with_a_hook_passes(self):
         """A class implementing `get_cost_facts` itself is describable, and must not be refused.
@@ -271,14 +286,14 @@ class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
         _register(simulator, _uninitialized(PVSystem))
         _register(simulator, _uninitialized(Battery))
 
-        simulator.check_cost_declarations()
+        _check_cost_declarations(simulator)
 
     def test_a_priced_component_with_only_an_adapter_entry_passes(self):
         """The table half of the precedence: no hook, but the adapter knows the class name."""
         simulator = _simulator(PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS)
         _register(simulator, _uninitialized(Battery))
 
-        simulator.check_cost_declarations()
+        _check_cost_declarations(simulator)
 
     def test_undeclared_is_reported_before_unpriceable(self):
         """Two different defects, two different fixes — and the undeclared one is reported first.
@@ -292,14 +307,14 @@ class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
         _register(simulator, PricedWithoutFacts())
 
         with pytest.raises(UndeclaredCostRelevanceError):
-            simulator.check_cost_declarations()
+            _check_cost_declarations(simulator)
 
     def test_without_the_option_an_unpriceable_component_is_fine(self):
         """A run that never asks what anything costs may hold any component at all."""
         simulator = _simulator(PostProcessingOptions.PLOT_LINE)
         _register(simulator, PricedWithoutFacts())
 
-        simulator.check_cost_declarations()
+        _check_cost_declarations(simulator)
 
 
 class TestPreRunCheckStaysOutOfTheWayOtherwise:
@@ -310,14 +325,14 @@ class TestPreRunCheckStaysOutOfTheWayOtherwise:
         simulator = _simulator()
         _register(simulator, UndeclaredDevice())
 
-        simulator.check_cost_declarations()  # must not raise
+        _check_cost_declarations(simulator)  # must not raise
 
     def test_an_unrelated_option_does_not_trigger_it(self):
         """Requesting KPIs or CSVs is not requesting lifecycle costs."""
         simulator = _simulator(PostProcessingOptions.COMPUTE_KPIS, PostProcessingOptions.EXPORT_TO_CSV)
         _register(simulator, UndeclaredDevice())
 
-        simulator.check_cost_declarations()  # must not raise
+        _check_cost_declarations(simulator)  # must not raise
 
 
 class TestTheCheckRunsBeforeTheTimestepLoop:
@@ -340,8 +355,9 @@ class TestTheCheckRunsBeforeTheTimestepLoop:
         monkeypatch.setattr(Simulator, "prepare_simulation_directory", explode)
         monkeypatch.setattr(Simulator, "process_one_timestep", explode)
 
-        with pytest.raises(UndeclaredCostRelevanceError):
+        with pytest.raises(SetupRuleViolation) as raised:
             simulator.run_all_timesteps()
+        assert "CB-08" in [fault.code for fault in raised.value.faults]
 
 
 class TestBridgeStillFailsOnUndeclaredComponents:

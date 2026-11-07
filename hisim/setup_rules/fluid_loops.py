@@ -10,15 +10,18 @@ energy-port rule, groups the channels into port sets and so requires it. ``FL-02
 wiring, ``FL-06`` to ``FL-08`` each closed loop the walk finds. A port set with none of its four channels connected is
 idle and breaks no rule, like the hot-water side of a boiler in a house without a tank.
 
-The faults of these rules alone raise ``FluidLoopWiringError``, the error the loop walk raised for them before they
-moved here. The walk and the loop quantities are imported when a rule runs, not with the module, so that collecting
-the rules imports no component module (``hisim/energy_port.py`` imports the components' configuration).
+Every rule but ``FL-01`` follows the wiring and requires the connection rules ``CB-04`` to ``CB-06``
+(``ConnectionRules``, ``hisim/setup_rules/components.py``), so a broken connection is refused alone. The faults of
+these rules alone raise ``FluidLoopWiringError``, the error the loop walk raised for them before they moved here. The
+walk and the loop quantities are imported when a rule runs, not with the module, so that collecting the rules imports
+no component module (``hisim/energy_port.py`` imports the components' configuration).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, Dict, List, Optional, Sequence, Tuple, Type
 
+from hisim.setup_rules.components import ConnectionRules
 from hisim.setup_rules.rule import Fault, RuleStage, SetupRule, SetupRuleViolation
 from hisim.setup_rules.subjects import BuiltSystem
 
@@ -176,7 +179,8 @@ class FarEndTagged(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per untagged reader of a tagged flow out and per untagged source of a tagged flow in."""
@@ -232,7 +236,8 @@ class FlowReadOnce(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per flow out that the flow in of more than one port set reads, at that flow out."""
@@ -276,7 +281,8 @@ class LoopCloses(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per partly connected port set whose flow out or flow in is open, at its component."""
@@ -320,7 +326,8 @@ class WiredWhole(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per port set whose flows are connected and a temperature is not, at its component."""
@@ -360,7 +367,8 @@ class TemperatureFollowsFlow(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per member of a closed loop whose temperature in reads another output, at that input."""
@@ -406,7 +414,8 @@ class OneCarrierOneFluid(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     #: The statements of a ``FluidLoop`` every member of one loop agrees on, in the order the faults name them.
     AGREED: ClassVar[Tuple[str, ...]] = ("carrier", "fluid")
@@ -449,7 +458,8 @@ class OnePumpOwner(FluidLoopRule):
     STAGE = RuleStage.BUILD
     ENFORCED = True
     # The walk groups every component's port sets, which a loop tagged by half cannot be grouped into.
-    REQUIRES = frozenset({"FL-01"})
+    # The walk follows the wiring, which a broken connection (ConnectionRules) would mislead.
+    REQUIRES = frozenset({"FL-01"}) | ConnectionRules.CODES
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per closed loop with no or more than one pumping member, at the loop's first member."""

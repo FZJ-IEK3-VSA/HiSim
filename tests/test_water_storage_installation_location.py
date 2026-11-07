@@ -323,8 +323,9 @@ def test_an_auto_location_follows_the_technical_room_and_a_pinned_one_stays(pres
 class PinnedTwin:
     """A building-sizer twin run for three January days at 900 s as recorded, with only one setting changed.
 
-    Either both tanks are pinned to one location, or the building's TABULA row is replaced by a heated-zone row. Nothing
-    else of the file changes: its wiring is the same for every house and every location (D-h).
+    Either the located devices of :attr:`PINNED`, both tanks, are pinned to one location, or the building's TABULA row is
+    replaced by a heated-zone row. Nothing else of the file changes: its wiring is the same for every house and every
+    location (D-h). A subclass pins other devices or runs other days by overriding the class attributes.
     """
 
     #: The period: three January days, cold enough for the cellar to sit well below the house.
@@ -332,6 +333,8 @@ class PinnedTwin:
     END: ClassVar[str] = "2021-01-13"
     #: The tanks of every building-sizer twin.
     TANKS: ClassVar[Tuple[str, str]] = ("SimpleHotWaterStorage", "DHWStorage")
+    #: The components :meth:`run` pins to the location it is given.
+    PINNED: ClassVar[Tuple[str, ...]] = TANKS
     #: A single-family house of 2002 to 2009 without a cellar (cellar code ``-``), whose technical room is in the
     #: heated zone; the twins stand on ``DE.N.SFH.09.Gen.ReEx.001.002``, a house with an unheated cellar.
     HEATED_ZONE_ROW: ClassVar[str] = "DE.N.SFH.11.Gen.ReEx.001.002"
@@ -344,12 +347,12 @@ class PinnedTwin:
         location: Optional[lt.InstallationLocation],
         building_code: Optional[str] = None,
     ) -> Tuple[Any, Path]:
-        """Run the twin with both tanks at ``location`` (``None``: as recorded), or on another building row.
+        """Run the twin with the devices of :attr:`PINNED` at ``location`` (``None``: as recorded), or on another row.
 
         Args:
             directory: Where the files and results go.
             twin: The twin's stem.
-            location: Where both tanks stand, or ``None`` to leave the recorded ``AUTO``.
+            location: Where the devices of :attr:`PINNED` stand, or ``None`` to leave the recorded ``AUTO``.
             building_code: The TABULA row to put the building on, or ``None`` for the recorded one.
 
         Returns:
@@ -361,8 +364,8 @@ class PinnedTwin:
         text = (root / "energy_systems" / f"{twin}.energy_system.yaml").read_text(encoding="utf-8")
         document = yaml.safe_load(text.replace("USE_LOCAL_LPG", "USE_PREDEFINED_PROFILE"))
         if location is not None:
-            for tank in cls.TANKS:
-                document["components"][tank].setdefault("config", {})["installation_location"] = location.name
+            for pinned in cls.PINNED:
+                document["components"][pinned].setdefault("config", {})["installation_location"] = location.name
         if building_code is not None:
             document["components"]["Building"].setdefault("config", {})["building_code"] = building_code
         energy_system = directory / "pinned.energy_system.yaml"
@@ -412,7 +415,8 @@ class PinnedTwin:
 
         The buffer at 900 s loses ``UA (T0 - T_surrounding)`` with ``T0`` its start temperature, the hot-water tank
         ``UA (T̄ - T_surrounding)`` with ``T̄`` its step mean. In the heated zone the building's
-        ``HeatReleasedByDevicesInWatt`` is the sum of both losses in every step; elsewhere it is zero.
+        ``HeatReleasedByDevicesInWatt`` less what the other located devices (the battery) release there is the sum of
+        both losses in every step; elsewhere it is that of the other devices alone.
 
         Args:
             built: The built system after the run.
@@ -452,8 +456,14 @@ class PinnedTwin:
             assert not cls.column(frame, tank_name, idle).to_numpy().any()
             losses_in_watt.append(loss_in_watt)
         released_in_watt = cls.column(frame, "Building", Building.HeatReleasedByDevicesInWatt).to_numpy()
+        for name in frame.columns:
+            device = str(name).split(" - ", 1)[0]
+            if str(name).startswith(f"{device} - {SimpleHotWaterStorage.HeatToHeatedZoneInWatt} [") and device not in cls.TANKS:
+                released_in_watt = released_in_watt - frame[name].to_numpy()
         if location.releases_into_heated_zone:
-            assert released_in_watt == pytest.approx(losses_in_watt[0] + losses_in_watt[1], rel=1e-9, abs=1e-9)
+            # A battery in the heated zone settles with the building to the simulator's convergence tolerance only
+            # (its set point depends on the heat pump, the heat pump on the building), a few microwatts.
+            assert released_in_watt == pytest.approx(losses_in_watt[0] + losses_in_watt[1], rel=1e-9, abs=1e-5)
         else:
             assert not released_in_watt.any()
 

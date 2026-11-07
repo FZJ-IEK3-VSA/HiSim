@@ -22,7 +22,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.validation import validate_all, validate_cost_database
-from hisim.loadtypes import ComponentType, LoadTypes, Units
+from hisim.loadtypes import ComponentType, InstallationLocation, LoadTypes, Units
 
 pytestmark = pytest.mark.base
 
@@ -39,7 +39,7 @@ ADOPTED_COMPONENTS = [
     ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "preset_rooftop", "config", ("PVSystem",),
      {"roof_area_in_m2": 168.9, "weather_identity": "Aachen"}),
     ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "preset_sized_to_pv", "battery_config",
-     ("Battery",), {"pv_peak_power_in_watt": (10000.0,)}),
+     ("Battery",), {"pv_peak_power_in_watt": (10000.0,), "technical_room_location": InstallationLocation.UNHEATED_SPACE}),
     ("hisim.components.electricity_meter", "ElectricityMeter", "ElectricityMeterConfig",
      "preset_standard", "config", ("ElectricityMeter",), {}),
 ]

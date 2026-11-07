@@ -38,6 +38,7 @@ def test_advanced_battery_bslib() -> None:
     subsidy_as_percentage_of_investment_costs = 0.0
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
+        installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,
@@ -126,6 +127,7 @@ def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles() -> None
     subsidy_as_percentage_of_investment_costs = 0.0
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
+        installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,
@@ -193,7 +195,10 @@ def test_the_sized_to_pv_preset_sizes_both_power_numbers_from_the_pv_peak_power(
     an 11 136.14 W inverter, which is the pair every recorded twin of those setups carries.
     """
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,))
+        SizingContext(
+            pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     assert config.custom_battery_capacity_generic_in_kilowatt_hour == 22.27
@@ -212,7 +217,10 @@ def test_the_inverter_law_reads_the_fact_and_not_the_rounded_capacity() -> None:
     into a sibling read fails here with the reason spelled out.
     """
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,))
+        SizingContext(
+            pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     from_the_stored_capacity = round(
@@ -228,8 +236,8 @@ def test_the_sized_to_pv_preset_pins_the_device_and_leaves_the_size_open() -> No
 
     What the preset states is the bslib system it is, its place in the energy management
     hierarchy, its empty starting charge and its cycle life; what it deliberately does not
-    state is how big it is. The two power numbers stay unresolved until a sizing context
-    supplies the array's peak power, and the capex fields stay ``None`` so post-processing
+    state is how big it is and where it stands. The two power numbers stay unresolved until a sizing context
+    supplies the array's peak power, the location until it supplies the building's technical room, and the capex fields stay ``None`` so post-processing
     looks the device up in the cost database.
     """
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery")
@@ -248,6 +256,7 @@ def test_the_sized_to_pv_preset_pins_the_device_and_leaves_the_size_open() -> No
     assert set(auto_fields(config)) == {
         "custom_battery_capacity_generic_in_kilowatt_hour",
         "custom_pv_inverter_power_generic_in_watt",
+        "installation_location",
     }
 
 
@@ -346,6 +355,7 @@ class TestTheChargingLimits:
     def test_a_dc_coupled_bslib_system_is_refused_when_the_battery_is_built(self) -> None:
         """S3 gives NaN charging powers; the battery refuses it at construction, naming the system and the field."""
         config = advanced_battery_bslib.BatteryConfig(
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
             component_id=ComponentID(name="Battery"),
             system_id="S3",
             custom_pv_inverter_power_generic_in_watt=5000.0,
@@ -376,6 +386,7 @@ class TestTheChargingLimits:
         A size stated in the configuration replaces the sizing law, so the battery checks it when it is built.
         """
         config = advanced_battery_bslib.BatteryConfig(
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
             component_id=ComponentID(name="Battery"),
             custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
             custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
@@ -400,6 +411,7 @@ class TestTheChargingLimits:
         0.001 kWh with 0.001 W lies just above the bound of 0, so a bound moved above it fails here.
         """
         config = advanced_battery_bslib.BatteryConfig(
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
             component_id=ComponentID(name="Battery"),
             custom_pv_inverter_power_generic_in_watt=inverter_power_in_watt,
             custom_battery_capacity_generic_in_kilowatt_hour=capacity_in_kilowatt_hour,
@@ -484,6 +496,7 @@ def battery_with_set_point_input() -> Tuple[advanced_battery_bslib.Battery, cp.C
     """
     parameters = SimulationParameters.one_day_only(2021, 60)
     config = advanced_battery_bslib.BatteryConfig(
+        installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         component_id=ComponentID(name="Battery"),
         custom_pv_inverter_power_generic_in_watt=5000.0,
         custom_battery_capacity_generic_in_kilowatt_hour=10.0,

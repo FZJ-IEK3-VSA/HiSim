@@ -85,6 +85,7 @@ from hisim.components.more_advanced_heat_pump.hplib_operation import (
     HeatPumpOperation,
     HeatPumpEnergyTotals,
     CalculationRequest,
+    SpaceHeatingPowerRange,
 )
 from hisim.components.more_advanced_heat_pump.carnot_cop import (
     CarnotEfficiencyCop,
@@ -337,6 +338,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     space heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum
     running time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are
     the same.
+
+    Every step the heat pump also publishes what its compressor would draw for space heating at full load and at its
+    minimum thermal power, at the space-heating buffer's start-of-step temperature
+    (:meth:`space_heating_power_range_in_watt`): signals for its space-heating controller and the energy manager's PV
+    mode, which do not move within a step. The backup heating rod is not part of them.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -358,11 +364,24 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: The requested part-load ratio: the fraction of the step the space-heating controller commands a space-heating
     #: charge to run.
     RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
+    #: The space-heating buffer's temperature at the start of the step, a committed value no pass of the step moves.
+    #: The heat pump publishes its space-heating electricity at full and at minimum load at it.
+    SpaceHeatingStorageTemperatureAtStartOfStepInCelsius = "SpaceHeatingStorageTemperatureAtStartOfStepInCelsius"
 
     # Outputs
     #: The actual part-load ratio: the fraction of the step the space-heating charge ran, reported back to the
     #: space-heating controller.
     ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
+    #: The compressor's space-heating electricity at full load, from the step's start temperatures, in W.
+    ElectricalPowerAtFullLoadSpaceHeatingInWatt = "ElectricalPowerAtFullLoadSpaceHeatingInWatt"
+    #: The compressor's space-heating electricity at its minimum thermal power, from the step's start temperatures,
+    #: in W.
+    ElectricalPowerAtMinimumLoadSpaceHeatingInWatt = "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt"
+
+    #: The key under which hplib's answers for the published space-heating power range are cached. It is a key of its
+    #: own, apart from the space-heating step's ``heating_building``, because the range is always taken at the nominal
+    #: lift, while the fixed-flow modes call hplib for the same circuit at other lifts and the cache key has no lift.
+    POWER_RANGE_OPERATION_MODE: ClassVar[str] = "space_heating_power_range"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -440,6 +459,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
         # caching for HPLib simulation
         self.calculation_cache: Dict[str, HplibResult] = {}
+        #: The last space-heating power range computed, with the source, ambient and start-of-step store temperatures
+        #: in °C it was computed at. A cache of a pure computation: the temperatures stay the same through the passes
+        #: of a step, so hplib is asked once per step (:meth:`space_heating_power_range_in_watt`).
+        self.space_heating_power_range_memo: Optional[Tuple[Tuple[float, float, float], SpaceHeatingPowerRange]] = None
 
         self.model = config.model
 
@@ -592,6 +615,41 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             actual_ratio_output_name=self.ActualPartLoadRatioSh,
             device_description="the heat pump's space-heating charge",
             mandatory=False,
+        )
+
+        # What the compressor can draw for space heating in this step, signals for its controller and the energy
+        # manager. No energy port: they say what the machine would draw, not what it draws.
+        self.space_heating_storage_start_temperature_channel: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.SpaceHeatingStorageTemperatureAtStartOfStepInCelsius,
+            load_type=LoadTypes.TEMPERATURE,
+            unit=Units.CELSIUS,
+            mandatory=False,
+        )
+        self.electrical_power_at_full_load_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The space-heating electricity the heat pump's compressor would draw at full load in this step, in W, "
+                "zero or positive: the compressor's share of a whole space-heating step at hplib's operating point at "
+                "the nominal lift, at the step's source and ambient temperatures and the space-heating buffer's "
+                "start-of-step temperature, so no pass of the step moves it. The backup heating rod is not part of it. "
+                "A signal for the space-heating controller and the energy manager, not a draw."
+            ),
+        )
+        self.electrical_power_at_minimum_load_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The space-heating electricity the heat pump's compressor would draw at its minimum thermal power "
+                "(minimum_thermal_output_power_in_watt) in this step, in W, zero or positive: that power over the "
+                "compressor's full-load COP, at the temperatures of ElectricalPowerAtFullLoadSpaceHeatingInWatt. The "
+                "backup heating rod is not part of it. A signal for the energy manager, not a draw."
+            ),
         )
 
         self.t_in_primary: ComponentInput = self.add_input(
@@ -1184,6 +1242,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 simple_water_storage.SimpleHotWaterStorage.WaterMassFlowRateToHeatGenerator,
             )
         )
+        # the buffer's committed start temperature, at which the machine publishes its space-heating power range
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.SpaceHeatingStorageTemperatureAtStartOfStepInCelsius,
+                hws_classname,
+                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureAtStartOfStepInCelsius,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_dhw_storage(
@@ -1568,6 +1634,11 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             ValueError: If the cycling mode lacks its minimum times or the signal is no known mode.
         """
         conditions = self.step_conditions(stsv)
+        power_range = self.space_heating_power_range_in_watt(stsv, conditions)
+        stsv.set_output_value(self.electrical_power_at_full_load_channel, power_range.full_load_electrical_power_in_watt)
+        stsv.set_output_value(
+            self.electrical_power_at_minimum_load_channel, power_range.minimum_load_electrical_power_in_watt
+        )
         timers = HeatPumpRunTimers(
             time_on_heating_in_seconds=self.state.time_on_heating,
             time_on_cooling_in_seconds=self.state.time_on_cooling,
@@ -1623,6 +1694,107 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 ),
             ),
         )
+
+    def space_heating_power_range_in_watt(
+        self, stsv: SingleTimeStepValues, conditions: "HeatPumpStepConditions"
+    ) -> SpaceHeatingPowerRange:
+        """Return the compressor's space-heating electricity at full and at minimum load at the step's start temperatures, in W.
+
+        The full load is a whole space-heating step at hplib's operating point at the nominal lift (5 K), at the step's
+        source and ambient temperatures and with the space-heating buffer's start-of-step temperature as the return,
+        shared between the compressor and the backup rod as the heat pump shares a full-load step
+        (:meth:`rod_assisted_heating`); the range takes the compressor's share only: its heat over its Carnot-efficiency
+        COP. The minimum load is the configured minimum thermal power at the same COP
+        (:meth:`minimum_load_electrical_power_in_watt`). Without a buffer wired to
+        ``SpaceHeatingStorageTemperatureAtStartOfStepInCelsius`` the return the heat pump reads in this pass stands in
+        for the start temperature.
+
+        Why the compressor only: the controller turns the energy manager's power target into a part-load ratio with
+        the full load, and the compressor's electricity is what scales with that ratio; the rod runs only where the
+        compressor falls short and draws its own electricity on its own port (``ElectricalInputPowerHeatingRod``),
+        which the energy manager's heat-pump channels do not count either. Why the start temperatures: the energy
+        manager decides on these values and the space-heating controller turns its power target into a ratio with
+        them. Taken at the temperatures of each pass, they would move with the heat pump's own run within the step,
+        and the decisions with them. Since none of the three temperatures moves within a step, hplib is asked once
+        per step and the later passes take the memo (:attr:`space_heating_power_range_memo`).
+
+        Args:
+            stsv: The step's values, to read the buffer's start temperature from.
+            conditions: The temperatures the heat pump reads in this step.
+
+        Returns:
+            The compressor's full-load and minimum-load space-heating electricity, in W.
+        """
+        if self.space_heating_storage_start_temperature_channel.source_output is not None:
+            start_temperature_in_celsius = stsv.get_input_value(self.space_heating_storage_start_temperature_channel)
+        else:
+            start_temperature_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        key = (conditions.source_temperature_in_celsius, conditions.ambient_temperature_in_celsius, start_temperature_in_celsius)
+        memo = self.space_heating_power_range_memo
+        if memo is not None and memo[0] == key:
+            return memo[1]
+        # hplib reads the lift from its own object; the step's operation sets it again before its own call
+        lift_of_the_step_in_kelvin = self.heatpump.delta_t
+        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
+        results = self.hplib_result(
+            conditions,
+            return_temperature_in_celsius=start_temperature_in_celsius,
+            mode=1,
+            operation_mode=self.POWER_RANGE_OPERATION_MODE,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
+        )
+        self.heatpump.delta_t = lift_of_the_step_in_kelvin
+        full_load = self.rod_assisted_heating(
+            conditions,
+            results,
+            part_load_ratio=1.0,
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+            return_temperature_in_celsius=start_temperature_in_celsius,
+            required_outlet_temperature_in_celsius=results.outlet_temperature_in_celsius,
+        )
+        power_range = SpaceHeatingPowerRange(
+            full_load_electrical_power_in_watt=full_load.compressor_electrical_power_in_watt,
+            minimum_load_electrical_power_in_watt=self.minimum_load_electrical_power_in_watt(
+                full_load_electrical_power_in_watt=full_load.compressor_electrical_power_in_watt,
+                full_load_thermal_power_in_watt=full_load.compressor_thermal_power_in_watt,
+                minimum_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
+            ),
+        )
+        self.space_heating_power_range_memo = (key, power_range)
+        return power_range
+
+    @staticmethod
+    def minimum_load_electrical_power_in_watt(
+        *, full_load_electrical_power_in_watt: float, full_load_thermal_power_in_watt: float, minimum_thermal_power_in_watt: float
+    ) -> float:
+        """Return the electricity a compressor draws at its minimum thermal power, at its full-load COP, in W.
+
+        The heat pump modulates by running a fraction of the step at full load (:meth:`BackupHeatingRod.heating`), so
+        its minimum load is the minimum thermal power over the full-load COP: the full-load electricity times the share
+        of the minimum in the full-load heat, at most 1. For example, 6,000 W of heat for 1,500 W of electricity and a
+        minimum of 1,800 W give 450 W; a minimum of 8,000 W, above the full load, gives the full 1,500 W. A machine
+        that gives no heat at full load has no smaller load either, and its full-load electricity is returned.
+
+        Args:
+            full_load_electrical_power_in_watt: The compressor's electricity at full load, in W, zero or positive.
+            full_load_thermal_power_in_watt: The compressor's heat at full load, in W.
+            minimum_thermal_power_in_watt: The configured minimum thermal power, in W, zero or positive.
+
+        Returns:
+            The electricity at the minimum load, in W, between 0 and the full-load electricity.
+
+        Raises:
+            ValueError: If the full-load electricity or the minimum thermal power is negative.
+        """
+        if full_load_electrical_power_in_watt < 0.0 or minimum_thermal_power_in_watt < 0.0:
+            raise ValueError(
+                "The heat pump's full-load electricity and minimum thermal power must not be negative, got "
+                f"{full_load_electrical_power_in_watt} W and {minimum_thermal_power_in_watt} W."
+            )
+        if full_load_thermal_power_in_watt <= 0.0:
+            return full_load_electrical_power_in_watt
+        share_of_full_load = min(1.0, minimum_thermal_power_in_watt / full_load_thermal_power_in_watt)
+        return share_of_full_load * full_load_electrical_power_in_watt
 
     def space_heating_actual_ratio(
         self, stsv: SingleTimeStepValues, *, on_off: float, on_off_space_heating: float

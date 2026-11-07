@@ -38,7 +38,7 @@ from hisim.config import (
 )
 from hisim.components import weather, simple_water_storage, heating_curve
 from hisim.explicit_state_controller import ExplicitStateController
-from hisim.part_load import StartOfStepPartLoadControl
+from hisim.part_load import PartLoadRule, StartOfStepPartLoadControl
 from hisim.components.heating_curve import HeatDistributionSystemType
 from hisim.loadtypes import (
     OutputAggregation,
@@ -152,6 +152,11 @@ class HeatPumpSpaceHeatingControllerState(NamedTuple):
     on below a 37.5 °C target and asks for two thirds of a 900 s step holds ``mode=HeatPumpSpaceHeatingMode.HEATING``,
     ``requested_part_load_ratio_sh=0.67`` and ``target_temperature_sh_in_celsius=37.5``. It is a NamedTuple, so a pass
     builds a new state instead of changing the old one.
+
+    Beside the decision it acts on, the controller keeps the decision it would take without the energy manager's
+    raise, its own need: the mode of the same hysteresis at the unraised switch points, and the ratio that would end
+    the buffer at the unraised target. The energy manager reads the own need's electricity to tell its raise's extra
+    draw from what the heat pump draws anyway.
     """
 
     #: Heating, cooling or off: the hysteresis decision, which the next step starts from.
@@ -160,6 +165,15 @@ class HeatPumpSpaceHeatingControllerState(NamedTuple):
     requested_part_load_ratio_sh: float
     #: The buffer temperature the space-heating charge aims at, in °C.
     target_temperature_sh_in_celsius: float
+    #: The hysteresis decision at the switch points without the energy manager's raise, which the next step starts
+    #: from.
+    mode_without_raise: HeatPumpSpaceHeatingMode
+    #: The ratio that would end the buffer at the target without the raise, from this pass's readings, from 0 to 1;
+    #: the next step's own need is taken from it (1 at and below the part-load threshold).
+    part_load_ratio_without_raise_sh: float
+    #: The space-heating electricity of the own need in this step, in W: the ratio without the raise, from the state
+    #: at the step's start, times the heat pump's full-load electricity.
+    own_need_electrical_power_in_watt: float
 
 
 class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
@@ -206,6 +220,17 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     pass (:meth:`publish_forced`), which is also the state the step commits. So a forced step whose last unforced pass
     switched heating off commits off, the mode the heat pump ran, not the mode the step started in
     (hisim-component-physics-4g9.28).
+
+    PV mode: the energy manager raises the set temperatures on a PV surplus and sends an electrical power target
+    (``ElectricalPowerTargetFromEnergyManagerInWatt``, 0 outside PV mode). While the target is above 0 and the raised
+    controller heats, the requested ratio is :meth:`pv_mode_part_load_ratio`: at least the own need's ratio, and the
+    target's share of the heat pump's full-load electricity up to the ratio that ends the buffer at its raised target.
+    So the heat pump covers its own need, adds what the surplus allows, and stops at the buffer's raised limit. The
+    full-load electricity, and with it the target and the own need, are the compressor's: the backup heating rod inside
+    the heat pump runs only where the compressor falls short and is not steered by the target. The
+    controller publishes the own need's electricity (``OwnNeedElectricalPowerInWatt``): what it would run without the
+    raise, from the state at the step's start (:class:`HeatPumpSpaceHeatingControllerState`), so the energy manager
+    can decide the raise without its own effect in the figure it decides on.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -227,6 +252,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     SimpleHotWaterStorageTemperatureModifier = "SimpleHotWaterStorageTemperatureModifier"
+    #: The energy manager's electrical power target for the heat pump in PV mode, 0 outside it.
+    ElectricalPowerTargetFromEnergyManagerInWatt = "ElectricalPowerTargetFromEnergyManagerInWatt"
+    #: The heat pump compressor's space-heating electricity at full load, from the step's start temperatures.
+    ElectricalPowerAtFullLoadSpaceHeatingInWatt = "ElectricalPowerAtFullLoadSpaceHeatingInWatt"
 
     # Outputs
     State_SH = "State_SH"
@@ -234,6 +263,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     RequestedPartLoadRatioSh = "RequestedPartLoadRatioSh"
     #: The buffer temperature the space-heating charge aims at.
     TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
+    #: The space-heating electricity the controller would run the heat pump at without the energy manager's raise.
+    OwnNeedElectricalPowerInWatt = "OwnNeedElectricalPowerInWatt"
 
     #: The share of the band's upper offset that the space-heating target lies above the supply temperature,
     #: dimensionless (:meth:`space_heating_target_temperature_in_celsius`). Owner decision of 2026-10-19
@@ -328,6 +359,36 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             target_output_name=self.TargetTemperatureShInCelsius,
         )
 
+        # PV mode: the energy manager's target, and the heat pump's full load the target and the own need are
+        # measured against. Signals, no energy ports.
+        self.electrical_power_target_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricalPowerTargetFromEnergyManagerInWatt,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            mandatory=False,
+        )
+        self.electrical_power_at_full_load_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            mandatory=True,
+        )
+        self.own_need_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.OwnNeedElectricalPowerInWatt,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            output_description=(
+                "The space-heating electricity the controller would run the heat pump at in this step without the "
+                "energy manager's raise, in W, zero or positive: the heat pump's full-load electricity times the ratio "
+                "of the controller's own hysteresis at the unraised switch points, taken from the state at the step's "
+                "start (above the part-load threshold the ratio that ends the buffer at the unraised target). A signal "
+                "for the energy manager, not a draw."
+            ),
+        )
+
         self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -405,10 +466,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
 
     @staticmethod
     def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
-        """Return the connection of the actual ratio the heat pump's space-heating charge ran, from the heat pump.
+        """Return the connections of the actual ratio the space-heating charge ran and of the full-load electricity.
 
         Returns:
-            The one connection of ``ActualPartLoadRatioSh``.
+            The connections of ``ActualPartLoadRatioSh`` and ``ElectricalPowerAtFullLoadSpaceHeatingInWatt``.
         """
         # The heat pump's module imports this controller for its own default connections, so this import waits for the call.
         from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
@@ -420,7 +481,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ActualPartLoadRatioSh,
                 MoreAdvancedHeatPumpHPLib.get_classname(),
                 MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioSh,
-            )
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
+            ),
         ]
 
     def get_default_connections_from_energy_management_system(
@@ -438,6 +504,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SimpleHotWaterStorageTemperatureModifier,
                 ems_classname,
                 component_class.SpaceHeatingWaterStorageTemperatureModifier,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ElectricalPowerTargetFromEnergyManagerInWatt,
+                ems_classname,
+                component_class.HeatPumpElectricalPowerTargetInWatt,
             )
         )
         return connections
@@ -485,13 +558,21 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         )
 
     def initial_state(self) -> HeatPumpSpaceHeatingControllerState:
-        """Return the state before the first step: off, no part-load ratio and no target.
+        """Return the state before the first step: off with and without the raise, no part-load ratio and no target.
+
+        The ratio without the raise starts at 1, the whole step, so a first step whose own hysteresis heats reports
+        the heat pump's full load as its own need until the controller has read the buffer once.
 
         Returns:
             The initial state.
         """
         return HeatPumpSpaceHeatingControllerState(
-            mode=HeatPumpSpaceHeatingMode.OFF, requested_part_load_ratio_sh=0.0, target_temperature_sh_in_celsius=0.0
+            mode=HeatPumpSpaceHeatingMode.OFF,
+            requested_part_load_ratio_sh=0.0,
+            target_temperature_sh_in_celsius=0.0,
+            mode_without_raise=HeatPumpSpaceHeatingMode.OFF,
+            part_load_ratio_without_raise_sh=1.0,
+            own_need_electrical_power_in_watt=0.0,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -509,13 +590,17 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     def decide(
         self, *, timestep: int, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState
     ) -> HeatPumpSpaceHeatingControllerState:
-        """Decide heating, cooling or off on the buffer's start temperature, and the requested space-heating ratio.
+        """Decide heating, cooling or off on the buffer's start temperature, the requested ratio and the own need.
 
         For example, a controller that is off, with the buffer at 29 °C below the 30 °C switch-on point of a 35 °C
         supply temperature, returns heating with the ratio that ends the buffer at its 37.5 °C target. Control mode 1
         switches between heating and off (:meth:`conditions_on_off`), mode 2 also cools
-        (:meth:`conditions_heating_cooling_off`). The decision is returned as a new state and published by
-        :meth:`publish`; a forced pass publishes the state of the last unforced pass (:meth:`publish_forced`).
+        (:meth:`conditions_heating_cooling_off`). The same law decides a second time at the switch points without the
+        energy manager's raise, from the mode without the raise the step started with: the own need. Its ratio is the
+        ratio without the raise of the state at the step's start, so the own need does not move within the step. In
+        PV mode the requested ratio is :meth:`pv_mode_part_load_ratio`. The decision is returned as a new state and
+        published by :meth:`publish`; a forced pass publishes the state of the last unforced pass
+        (:meth:`publish_forced`).
 
         Args:
             timestep: The step.
@@ -531,22 +616,95 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
         heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.supply_temperature_set_channel)
         storage_temperature_modifier = stsv.get_input_value(self.simple_hot_water_storage_temperature_modifier_channel)
+        mode = self.mode_after_decision(
+            state.mode, stsv=stsv, water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+            set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier=storage_temperature_modifier,
+        )
+        mode_without_raise = self.mode_after_decision(
+            state.mode_without_raise, stsv=stsv, water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+            set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier=0.0,
+        )
+        target_temperature_in_celsius = self.space_heating_target_temperature_in_celsius(
+            supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
+            upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
+        )
+        requested_part_load_ratio = self.space_heating_part_load.next_requested_raising_ratio(
+            stsv, device_runs=mode == HeatPumpSpaceHeatingMode.HEATING, target_temperature_in_celsius=target_temperature_in_celsius
+        )
+        # only heating is the own need the energy manager weighs: it ranks the space-heating electricity, not cooling
+        own_part_load_ratio = (
+            state.part_load_ratio_without_raise_sh if mode_without_raise == HeatPumpSpaceHeatingMode.HEATING else 0.0
+        )
+        full_load_electrical_power_in_watt = stsv.get_input_value(self.electrical_power_at_full_load_channel)
+        if mode == HeatPumpSpaceHeatingMode.HEATING:
+            requested_part_load_ratio = self.pv_mode_part_load_ratio(
+                own_part_load_ratio=own_part_load_ratio,
+                electrical_power_target_in_watt=stsv.get_input_value(self.electrical_power_target_channel),
+                full_load_electrical_power_in_watt=full_load_electrical_power_in_watt,
+                raised_part_load_ratio=requested_part_load_ratio,
+            )
+        target_without_raise_in_celsius = self.space_heating_target_temperature_in_celsius(
+            supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier_in_kelvin=0.0,
+            upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
+        )
+        return HeatPumpSpaceHeatingControllerState(
+            mode=mode,
+            requested_part_load_ratio_sh=requested_part_load_ratio,
+            target_temperature_sh_in_celsius=target_temperature_in_celsius,
+            mode_without_raise=mode_without_raise,
+            part_load_ratio_without_raise_sh=self.space_heating_part_load.next_requested_raising_ratio(
+                stsv, device_runs=True, target_temperature_in_celsius=target_without_raise_in_celsius
+            ),
+            own_need_electrical_power_in_watt=own_part_load_ratio * full_load_electrical_power_in_watt,
+        )
+
+    def mode_after_decision(
+        self,
+        mode: HeatPumpSpaceHeatingMode,
+        *,
+        stsv: SingleTimeStepValues,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+        storage_temperature_modifier: float,
+    ) -> HeatPumpSpaceHeatingMode:
+        """Return the mode after one decision of the configured control law, at switch points raised by the modifier.
+
+        Control mode 1 is :meth:`conditions_on_off`, control mode 2 :meth:`conditions_heating_cooling_off`, with the
+        heating season and, for mode 2, the cooling condition read from ``stsv``. The controller calls it twice per
+        pass: with the energy manager's raise, for the decision it acts on, and with no raise, for its own need. For
+        example, heating at 39 °C with a 35 °C flow temperature and 5 K offsets stays heating without a raise.
+
+        Args:
+            mode: The mode at the start of the step.
+            stsv: The step's values, to read the heating season and the daily outside temperature from.
+            water_temperature_input_in_celsius: The buffer's start-of-step temperature, in °C.
+            set_heating_flow_temperature_in_celsius: The flow temperature the circuit asks for, in °C.
+            storage_temperature_modifier: The raise of the switch points, in K; 0 for the own need.
+
+        Returns:
+            The mode after the decision.
+
+        Raises:
+            ValueError: If the configured control mode is neither 1 nor 2.
+        """
         # the heat pump heats only in the heating season the heating curve publishes
         summer_heating_mode = "on" if stsv.get_input_value(self.heating_season_channel) > 0.5 else "off"
-
-        # mode 1 is on/off controller
         if self.mode == 1:
-            mode = self.conditions_on_off(
-                state.mode,
+            return self.conditions_on_off(
+                mode,
                 water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                set_heating_flow_temperature_in_celsius=set_heating_flow_temperature_in_celsius,
                 summer_heating_mode=summer_heating_mode,
                 storage_temperature_modifier=storage_temperature_modifier,
                 upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
                 lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
             )
         # mode 2 is the regulated controller (heating, cooling, off); build() admits it only for floor heating
-        elif self.mode == 2:
+        if self.mode == 2:
             # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
             summer_cooling_mode = self.summer_cooling_condition(
                 daily_average_outside_temperature_in_celsius=stsv.get_input_value(
@@ -554,36 +712,68 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
                 ),
                 set_cooling_threshold_temperature_in_celsius=self.heatpump_controller_config.set_cooling_threshold_outside_temperature_in_celsius,
             )
-            mode = self.conditions_heating_cooling_off(
-                state.mode,
+            return self.conditions_heating_cooling_off(
+                mode,
                 water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                set_heating_flow_temperature_in_celsius=set_heating_flow_temperature_in_celsius,
                 summer_heating_mode=summer_heating_mode,
                 summer_cooling_mode=summer_cooling_mode,
                 storage_temperature_modifier=storage_temperature_modifier,
                 upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
                 lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
             )
-        else:
-            raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
+        raise ValueError(f"The space-heating controller's mode must be 1 or 2, got {self.mode!r}.")
 
-        target_temperature_in_celsius = self.space_heating_target_temperature_in_celsius(
-            supply_temperature_set_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-            storage_temperature_modifier_in_kelvin=storage_temperature_modifier,
-            upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
-        )
-        return HeatPumpSpaceHeatingControllerState(
-            mode=mode,
-            requested_part_load_ratio_sh=self.space_heating_part_load.next_requested_raising_ratio(
-                stsv,
-                device_runs=mode == HeatPumpSpaceHeatingMode.HEATING,
-                target_temperature_in_celsius=target_temperature_in_celsius,
-            ),
-            target_temperature_sh_in_celsius=target_temperature_in_celsius,
-        )
+    @staticmethod
+    def pv_mode_part_load_ratio(
+        *,
+        own_part_load_ratio: float,
+        electrical_power_target_in_watt: float,
+        full_load_electrical_power_in_watt: float,
+        raised_part_load_ratio: float,
+    ) -> float:
+        """Return the requested space-heating ratio in PV mode, from the energy manager's power target.
+
+        PV mode is on while the energy manager sends a target above 0. The heat pump then runs at least its own need's
+        ratio, and the target's share of its full-load electricity as far as the ratio that ends the buffer at its
+        raised target allows: ``max(own, min(target / full load, raised))``. Outside PV mode (a target of 0) the
+        ratio the controller decided stays as it is. For example, an own ratio of 0.2, a 900 W target, 1,500 W at full
+        load and a raised ratio of 1 give 0.6; with a raised ratio of 0.4, because the buffer is near its raised
+        limit, 0.4; with an own ratio of 0.7, 0.7.
+
+        Why the raised ratio caps the target: the raise of the buffer is the store the surplus goes into, and once
+        the buffer reaches its raised limit, PV mode has nothing left to fill.
+
+        Args:
+            own_part_load_ratio: The ratio of the own need, without the raise, from 0 to 1.
+            electrical_power_target_in_watt: The energy manager's target, in W, 0 outside PV mode.
+            full_load_electrical_power_in_watt: The heat pump's space-heating electricity at full load, in W.
+            raised_part_load_ratio: The ratio that ends the buffer at its raised target, from 0 to 1 (1 at and below
+                the part-load threshold).
+
+        Returns:
+            The requested ratio, from 0 to 1.
+
+        Raises:
+            ValueError: If a ratio lies outside [0, 1], the target is negative, or a target above 0 meets a full load
+                of 0 W or less, which no ratio can follow.
+        """
+        PartLoadRule.validated_ratio(own_part_load_ratio, "The own need's part-load ratio")
+        PartLoadRule.validated_ratio(raised_part_load_ratio, "The raised part-load ratio")
+        if electrical_power_target_in_watt < 0.0:
+            raise ValueError(f"The energy manager's power target must not be negative, got {electrical_power_target_in_watt} W.")
+        if electrical_power_target_in_watt == 0.0:
+            return raised_part_load_ratio
+        if full_load_electrical_power_in_watt <= 0.0:
+            raise ValueError(
+                f"A power target of {electrical_power_target_in_watt} W needs a full-load electricity above 0 W to turn "
+                f"into a ratio, got {full_load_electrical_power_in_watt} W."
+            )
+        target_ratio = electrical_power_target_in_watt / full_load_electrical_power_in_watt
+        return max(own_part_load_ratio, min(target_ratio, raised_part_load_ratio))
 
     def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
-        """Write the outputs that belong to ``state``: the mode as ``State_SH``, the requested ratio and its target.
+        """Write the outputs that belong to ``state``: the mode, the requested ratio, its target and the own need.
 
         Args:
             stsv: The step's values, to write the outputs to.
@@ -593,6 +783,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         stsv.set_output_value(self.space_heating_part_load.requested_ratio_channel, state.requested_part_load_ratio_sh)
         if self.space_heating_part_load.target_channel is not None:
             stsv.set_output_value(self.space_heating_part_load.target_channel, state.target_temperature_sh_in_celsius)
+        stsv.set_output_value(self.own_need_channel, state.own_need_electrical_power_in_watt)
 
     def publish_forced(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
         """Write the outputs of a forced pass: those of ``state``, except the requested ratio above the threshold.

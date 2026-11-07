@@ -12,7 +12,8 @@ before anything reads the table; ``AR-01``'s faults raise ``NonFiniteResultsErro
 on an exempt component or a meter) require the two rules of the table, and ``AR-03`` (the declared ports are finite)
 requires those two, since a balance that left out what it could not read is not the run's. ``AR-04`` to ``AR-06``
 and the meter rules of ``hisim/setup_rules/meters.py`` require ``AR-03``: a balance read from NaN reports nothing
-useful. ``AR-09`` (an unlinked port) and ``AR-10`` (an undeclared component) only log, as the balance report has
+useful. ``AR-11`` (no supplier of a loop that may not cool removes heat from its water) requires ``AR-03`` too.
+``AR-09`` (an unlinked port) and ``AR-10`` (an undeclared component) only log, as the balance report has
 always listed them without failing the run. The codes follow the rows of the inventory. No rule raises: the balance
 records what it cannot read, and the rules report it.
 
@@ -517,4 +518,41 @@ class ComponentDeclared(EnergyBalanceRule):
                 component=name,
             )
             for name in declared.undeclared
+        ]
+
+
+class HeatingOnlyLoopNeverCools(EnergyBalanceRule):
+    """What it checks: no supplier of a fluid loop that may not cool removes heat from the loop's water beyond the noise.
+
+    A loop may cool only if every member's ``FluidLoop`` says ``may_cool`` (D19 of ``roadmap/fluid_loops_spec.md``): a
+    boiler, a district-heating substation, a hot-water tank and a distribution system without ``cooling_enabled`` say
+    ``False``. The balance derives each loop's heat from its supplier's columns, ``m c (T_sup - T_ret)``; a negative
+    heat of at most 1 W is the noise of the convergence and is booked as the loop's heat, never as cooling
+    (``DeclaredPorts.COOLING_NOISE_IN_WATT``). A step beyond it on a loop that may not cool is a fault.
+
+    Why: the step books cooling the loop cannot deliver. A hot-water tank does not cool its heat pump, and a
+    distribution system that cannot cool does not take room heat to the generator; the run's heat and cooling flows,
+    and every Sankey and KPI built on them, would be wrong.
+
+    Example of a fault: ``the loop HeatPump.dhw heats only (DHWStorage.generator says may_cool=False), and its supplier
+    HeatPump removed heat from the water in 3 steps, first in step 1234 (2021-01-13T20:30:00), up to 209 W``.
+
+    How to fix: find why the supplier sends water colder than what comes back while it runs: a supply temperature
+    computed from a stale return, a generator in cooling mode wired to an emitter that cannot cool (switch the
+    emitter's cooling on, or the generator's off). A loop meant to cool says ``may_cool=True`` on every member.
+    """
+
+    CODE = "AR-11"
+    NAME = "heating-only-loop-never-cools"
+    STAGE = RuleStage.AFTER_RUN
+    ENFORCED = True
+    # A loop's heat read from a column that is NaN is NaN, and no comparison with the noise holds.
+    REQUIRES = frozenset({"AR-03"})
+
+    def check(self, subject: RunResults) -> Sequence[Fault]:
+        """Return one fault per heating-only loop whose supplier removed heat beyond the noise, at the supplier's flow."""
+        balance = subject.energy_balance
+        return [
+            self.fault(loop.describe(balance.step_time(loop.first_step)), component=loop.supplier, port=loop.flow)
+            for loop in balance.declared.cooling_on_heating_only_loops
         ]

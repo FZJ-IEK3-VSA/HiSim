@@ -41,7 +41,7 @@ def test_the_ids_are_unique_and_the_moving_records_name_a_family_and_a_stage() -
 
 
 def test_the_inventory_holds_every_row_of_its_design_record() -> None:
-    """Catches records lost or duplicated when a family pull request edits the list: 201 checks, 113 of which move.
+    """Catches records lost or duplicated when a family pull request edits the list: 202 checks, 114 of which move.
 
     The design record listed 199 and 128. PR 5 split the cost declarations into two rules with two errors
     (``components.cost_relevance_declared`` and ``components.priced_has_cost_facts``), kept five checks of the
@@ -51,10 +51,11 @@ def test_the_inventory_holds_every_row_of_its_design_record() -> None:
     makes while it builds the model in the reader. PR 8 kept ``sizing.sizing_source_enabled`` (``EF-42``) with the
     expansion of groups and imports. PR 9 merged the record of the unit problems of the library check
     (``assemblies.parameter_unit``, ``EF-78`` and ``EF-79``) into the library check's (``assemblies.library_valid``),
-    whose fault lists them as it always did.
+    whose fault lists them as it always did. The heating-only check of the fluid loops came as a new rule after the
+    run (``results.heating_only_loop_never_cools``, ``AR-11``, bead hisim-false-cooling-edge-7130).
     """
-    assert len(Inventory.RECORDS) == 201
-    assert sum(record.moves for record in Inventory.RECORDS) == 113
+    assert len(Inventory.RECORDS) == 202
+    assert sum(record.moves for record in Inventory.RECORDS) == 114
 
 
 def test_a_record_is_found_by_its_id() -> None:

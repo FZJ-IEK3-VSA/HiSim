@@ -259,7 +259,7 @@ class TestReceiverUnambiguous:
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", production) is not None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", None) is None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY)) is None
-        outdoors = EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING, environment=lt.EnvironmentNode.OUTDOORS)
+        outdoors = EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS)
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", outdoors) is None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", EnergyPort(lt.EnergyRole.CONSUMPTION, SPACE_HEATING)) is None
 
@@ -321,7 +321,7 @@ class TestRoomHeatNeedsReceiver:
 
     def test_a_port_that_names_its_environment_is_not_affected(self) -> None:
         """Catches the rule refusing heat whose boundary node takes it."""
-        assert not RoomHeatNeedsReceiver().check(Rig.occupancy(environment=lt.EnvironmentNode.OUTDOORS))
+        assert not RoomHeatNeedsReceiver().check(Rig.occupancy(environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS))
 
     @pytest.mark.parametrize(("kind", "refused"), [("demo", False), ("residential", True)])
     def test_the_demo_twin_without_a_building_passes_as_a_demo_only(self, tmp_path: Path, kind: str, refused: bool) -> None:
@@ -350,7 +350,7 @@ class TestRoomHeatNeedsReceiver:
         ("port", "releases"),
         [
             (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT), True),
-            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=lt.EnvironmentNode.OUTDOORS), False),
+            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS), False),
             (EnergyPort(lt.EnergyRole.LOSS, ROOM_HEAT), False),
             (EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING), False),
             (None, False),

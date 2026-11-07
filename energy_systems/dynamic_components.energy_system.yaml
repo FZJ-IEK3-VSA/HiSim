@@ -114,10 +114,12 @@ components:
           - ELECTRICITY_PRODUCTION
         weight: 999
       - from: CHP1.ElectricityOutput
+        component_type: FUEL_CELL
         tags:
           - ELECTRICITY_PRODUCTION
         weight: 999
       - from: CHP2.ElectricityOutput
+        component_type: FUEL_CELL
         tags:
           - ELECTRICITY_PRODUCTION
         weight: 999

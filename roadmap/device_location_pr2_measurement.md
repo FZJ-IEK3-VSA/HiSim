@@ -23,7 +23,7 @@ that place. To be merged into the spec's §7 when the branch reaches main; this 
   (space heating plus hot water). The battery is untouched by PR 2 (PR 3). The twins have no cooling device, so the
   cooling column is the building's theoretical cooling demand, and the overheating column is the KPI
   "Degree-hours of building indoor air temperature above 26.0 Celsius", in °C·h, not hours.
-- The energy balance closed in every run: every declared component closes, every link closes, no circuit fault, no
+- The energy balance closed in every run: every declared component closes, every link closes, no loop fault, no
   unlinked port (the heat-pump heated-zone run: 8 of 8 links, the two tank-to-building links included; the gas
   heated-zone run: 7 of 7).
 

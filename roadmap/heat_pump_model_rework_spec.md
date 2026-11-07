@@ -153,9 +153,13 @@ as hplib's COP-1 fit artefact:
   over the step, not a fixed return temperature as hplib's switch was. Above 600 s, where the heating side runs
   the compressor for a part of the step (the start-of-step part-load rule), the rod covers only the missing share
   of the step as well: `E_rod = min(Q_requested − Q_compressor,max, P_rod · Δt)`, never the whole step because the
-  return crossed a line. This is the fix of hisim-rod-share-step-length-67f0: its 37-41 % rod share at 60 s against
-  59-60 % at 900 s (case B, January week) came from hplib's whole-step switch at a fixed return, which the new
-  trigger replaces; the step's verification measures case B at 60, 300, 900 and 3600 s (§5).
+  return crossed a line. This removes one cause of hisim-rod-share-step-length-67f0 (case B, January week: 37-41 % rod
+  share at 60 s against 59-60 % at 900 s), hplib's whole-step switch at a fixed return. The investigation of
+  2026-11-07 found the larger cause outside the heat pump: above 600 s the heat pump charges toward a target 2.5 K
+  above the set point (fxix.27), so at 900 s it heats from water too hot for it and its outlet limit passes the heat
+  to the rod (+6-8 % electricity). Which charge target replaces the +2.5 K (it, the midpoint rule or another) is
+  decided after #1113 lands, on a fresh measurement (owner, 2026-11-07); the step's verification measures case B at
+  60, 300, 900 and 3600 s with today's target and reports the share of the gap left to it (§5).
 * **hplib's switch.** hplib's COP-1 switch and its compressor-plus-rod branch go (the Carnot COP stays above 1 at
   every realistic lift, decision 2); the capacity continues as the compressor's at the switch, `P_el,fit` (decision 12),
   and the rod covers the shortfall above it. The straddle handling (#930, #1097, hisim-g0dp) and hisim-z0v4 stay
@@ -258,7 +262,7 @@ Key references (the full 2020-2026 review of 41 entries with DOIs is in the rese
 | a | Unit tests: the curve at the Keymark points, exact rating at stated SCOPs (air and brine, several pairs), the lift guard, a calibrated generic air unit at A-7/W52 vs a certificate (fails on main at about -33 %) | pass |
 | a | Full year 2021, `household_heatpump_building_sizer` at 60 s and 900 s, solar variant at 900 s: space-heating and hot-water electricity, SPF, cycles, before/after | reported in the PR |
 | a | The backup rod (decision 8), unit tests: the rod runs only on a shortfall (requested heat above the compressor's capacity, or the required outlet above the compressor's maximal outlet); it adds only the missing heat at COP 1, up to its rated power; its electricity is on its own output and port and in the total; a mild day runs no rod; the outlet-limit trigger fires at the interim limit and, once hisim-heat-pump-outlet-limit-2vq7 exists, at the configured limit | pass |
-| a | Case B of hisim-rod-share-step-length-67f0 (heat pump on 70/55 radiators, January week) at 60, 300, 900 and 3600 s: rod share, reached supply, delivered heat, electricity; the energy balance with the rod's port | rod share agrees across step lengths within the 1 % step-length tolerance of the emitter spec's §7; balance closes |
+| a | Case B of hisim-rod-share-step-length-67f0 (heat pump on 70/55 radiators, January week) at 60, 300, 900 and 3600 s: rod share, reached supply, delivered heat, electricity; the energy balance with the rod's port | reported, with the gap left to the charge target, which is decided after #1113; balance closes |
 | b | Keymark A12/W24 and A12/W30 points with the rating's Cdh, by machine type | brine A12/W30 error from +15 % towards 0; air not worse |
 | b | Starts × start-up loss in a full year, energy balance closes | reported |
 | c | Humidity per weather source (test per source) | present, plausible range |

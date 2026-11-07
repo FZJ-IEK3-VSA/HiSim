@@ -70,7 +70,7 @@ class EnergyPortRule(SetupRule[BuiltSystem]):
         """Return the loop faults the wiring found as faults of this rule, located at their component and output.
 
         Args:
-            found: The loop faults of one rule, from :class:`~hisim.postprocessing.energy_balance.ports.CircuitWiring`.
+            found: The loop faults of one rule, from :class:`~hisim.postprocessing.energy_balance.ports.LoopWiring`.
 
         Returns:
             One fault per loop fault, in the same order.
@@ -91,8 +91,8 @@ class LoopPairing(EnergyPortRule):
     nothing, or a loop of two receivers or two suppliers, books the heat once or twice with the wrong sign, and
     the balance of both components cannot close.
 
-    Example of a fault: ``Boiler tags its end (loop 'space_heating') of the circuit {...}, but its other end, Tank,
-    declares ports and not this circuit``; ``the circuit {...} between Boiler.space_heating and Tank.space_heating has
+    Example of a fault: ``Boiler tags its end (loop 'space_heating') of the loop {...}, but its other end, Tank,
+    declares ports and not this loop``; ``the loop {...} between Boiler.space_heating and Tank.space_heating has
     two suppliers: exactly one member of a loop supplies it (supplies=True)``.
 
     How to fix: tag the other end's channels with a loop on the same outputs, and set ``supplies=True`` on the
@@ -108,7 +108,7 @@ class LoopPairing(EnergyPortRule):
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per loop end that does not pair with its other end."""
-        return self.faults_of(self.wiring_of(subject).circuits(subject.components).pairing_faults)
+        return self.faults_of(self.wiring_of(subject).loops(subject.components).pairing_faults)
 
 
 class OneReaderPerFlow(EnergyPortRule):
@@ -118,8 +118,8 @@ class OneReaderPerFlow(EnergyPortRule):
     flow would each book that heat, so the water's heat would be delivered twice. A split of one flow into two
     branches is a valve component with one loop per branch.
 
-    Example of a fault: ``the mass flow Boiler.Flow is read by 2 components that declare a circuit on it (Tank, Twin):
-    one flow delivers its heat once, a split needs a valve with one circuit per branch``.
+    Example of a fault: ``the mass flow Boiler.Flow is read by 2 components that declare a loop on it (Tank, Twin):
+    one flow delivers its heat once, a split needs a valve with one loop per branch``.
 
     How to fix: let one of the readers tag the loop and leave the other's inputs untagged, or put a valve between
     the flow and the two readers.
@@ -134,7 +134,7 @@ class OneReaderPerFlow(EnergyPortRule):
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per mass flow that several loop ends read."""
-        return self.faults_of(self.wiring_of(subject).circuits(subject.components).shared_flow_faults)
+        return self.faults_of(self.wiring_of(subject).loops(subject.components).shared_flow_faults)
 
 
 class NoLoopOnANode(EnergyPortRule):
@@ -160,7 +160,7 @@ class NoLoopOnANode(EnergyPortRule):
 
     def check(self, subject: BuiltSystem) -> Sequence[Fault]:
         """Return one fault per loop end an exempt component or a meter declares."""
-        return self.faults_of(self.wiring_of(subject).circuits(subject.components).node_end_faults)
+        return self.faults_of(self.wiring_of(subject).loops(subject.components).node_end_faults)
 
 
 class ReceiverUnambiguous(EnergyPortRule):

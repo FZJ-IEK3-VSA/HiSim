@@ -1254,7 +1254,7 @@ def test_grid_import_and_export_are_what_the_meter_publishes_and_the_meter_node_
     assert kinds["Meter"] == "meter" and kinds["grid import"] == "boundary"
 
     written = json.loads(balance_report.write(str(tmp_path), with_html=False).read_text())
-    assert written["schema"] == "hisim.energy_balance/4" and "buses" not in written
+    assert written["schema"] == "hisim.energy_balance/5" and "buses" not in written
     (entry,) = written["meters"]
     assert entry["meter"] == "Meter" and entry["carrier"] == "electricity"
     assert entry["published_import_kwh"] == pytest.approx(0.6) and entry["published_export_kwh"] == pytest.approx(0.6)

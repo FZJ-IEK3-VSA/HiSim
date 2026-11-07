@@ -10,7 +10,7 @@ takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives
 and what it loses; the Sankey links its fuel and electricity to the meter that reads them, which the carrier's supply
 node or the grid feeds (owner decision Q-J; never to a controller, which is exempt), and the generator to its
 storages, its loss nodes and the environment. The heat a generator gives to a storage or a distribution system is
-the heat of its water circuit, a fluid loop both members tag on their channels (hydronic stage E,
+the heat of its fluid loop, which both members tag on their channels (hydronic stage E,
 hisim-hydronics-fxix.6): the buffer and the hot-water tank are declared nodes, and the distribution system without a
 buffer (district heating) is undeclared until hisim-pnw7.
 """
@@ -161,15 +161,15 @@ def sankey_links(results: Path) -> Set[Tuple[str, str, str]]:
     return links
 
 
-#: Per fast setup: the generator and its ports as ``output -> (role, carrier)``; a circuit is named by its mass flow.
+#: Per fast setup: the generator and its ports as ``output -> (role, carrier)``; a loop is named by its mass flow.
 FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
     "household_gas_building_sizer": (
         "CondensingGasBoiler",
         {
             "EnergyDemandSh": ("consumption", "natural_gas"),
             "EnergyDemandDhw": ("consumption", "natural_gas"),
-            "circuit CondensingGasBoiler.WaterOutputMassFlowSh": ("production", "space_heating_heat"),
-            "circuit CondensingGasBoiler.WaterOutputMassFlowDhw": ("production", "domestic_hot_water_heat"),
+            "loop CondensingGasBoiler.WaterOutputMassFlowSh": ("production", "space_heating_heat"),
+            "loop CondensingGasBoiler.WaterOutputMassFlowDhw": ("production", "domestic_hot_water_heat"),
             "CombustionHeatLoss": ("loss", "natural_gas"),
         },
     ),
@@ -181,8 +181,8 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ElectricalInputPowerForCooling": ("consumption", "electricity"),
             "ElectricalInputPowerBrinePump": ("consumption", "electricity"),
             "ThermalPowerInputFromEnvironment": ("consumption", "ambient_heat"),
-            "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputSH": ("production", "space_heating_heat"),
-            "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW": ("production", "domestic_hot_water_heat"),
+            "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputSH": ("production", "space_heating_heat"),
+            "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW": ("production", "domestic_hot_water_heat"),
         },
     ),
     # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum. The
@@ -192,8 +192,8 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
         {
             "ThermalOutputShEnergy": ("consumption", "district_heat"),
             "ThermalOutputDhwEnergy": ("consumption", "district_heat"),
-            "circuit HeatDistributionSystem.WaterMassFlowHDS": ("production", "space_heating_heat"),
-            "circuit DistrictHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
+            "loop HeatDistributionSystem.WaterMassFlowHDS": ("production", "space_heating_heat"),
+            "loop DistrictHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
         },
     ),
     "household_electric_heating_building_sizer": (
@@ -202,7 +202,7 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ElectricOutputShPower": ("consumption", "electricity"),
             "ElectricOutputDhwPower": ("consumption", "electricity"),
             "ThermalOutputShPower": ("production", "space_heating_heat"),
-            "circuit ElectricHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
+            "loop ElectricHeating.WaterOutputDhwMassFlowRate": ("production", "domestic_hot_water_heat"),
         },
     ),
 }
@@ -247,7 +247,7 @@ def test_every_fuel_has_its_balance_carrier_and_the_table_is_read_only() -> None
 def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path) -> None:
     """The run passes; the generator closes, takes and gives its carriers, and is linked.
 
-    It closes to a millionth of what it takes in: its heat is its circuits' heat, derived from the converged flow
+    It closes to a millionth of what it takes in: its heat is its loops' heat, derived from the converged flow
     and temperatures both ends read, while the generator booked its fuel or electricity on its last pass, which may
     have read a return temperature the other end moved by less than the simulator's convergence tolerance.
     """
@@ -312,5 +312,5 @@ def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> 
     boiler = balance_entry(results, "CondensingGasBoiler")
     gas = boiler["carriers"]["natural_gas"]
     assert 0.02 * gas["consumption_kwh"] < gas["loss_kwh"] < 0.13 * gas["consumption_kwh"]
-    # the heat out is its circuits' heat from the converged values, within the convergence tolerance of its booking
+    # the heat out is its loops' heat from the converged values, within the convergence tolerance of its booking
     assert boiler["production_kwh"] == pytest.approx(gas["consumption_kwh"] - gas["loss_kwh"], rel=1e-9)

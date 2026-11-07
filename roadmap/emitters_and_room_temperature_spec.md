@@ -1,7 +1,8 @@
 # Spec: emitters and room temperature — the emitter has a size, the heating curve follows from it, the room gets what the emitter can give, and a generator that cannot reach the emitters' need runs anyway and is flagged
 
 Status: decided (owner, 2026-11-03), amended 2026-11-07 (D3 and D5: the 1.1 margin sits on the new emitters' size as
-well as on the curve), nothing is built; blocked (owner, 2026-11-07) until the step-length dependence of case B is
+well as on the curve; D10: Q1 of §9 decided, the energy manager's raise is decided with information about its own
+effect), nothing is built; blocked (owner, 2026-11-07) until the step-length dependence of case B is
 understood (§7, Appendix A.7). Owner: Noah. Epics: hisim-hydronics-fxix (bead hisim-s9h7),
 hisim-renovisor-translator-epc (hisim-renovisor-base-emitters-dwm9, hisim-renovisor-translator-epc.1),
 hisim-component-physics-4g9 (hisim-component-physics-4g9.37, hisim-airing-books-no-heat-uws3,
@@ -48,6 +49,7 @@ Today the emitters have no size and the heating curve ignores how big they are.
 | D7 | The delivered heat enters the building's air node, for every emitter type | Noah | 2026-11-03 |
 | D8 | The room thermostat (P/PI valve in the heat-distribution controller) is a later step, bead hisim-component-physics-4g9.37 | Noah | 2026-11-03 |
 | D9 | The low-temperature radiator gets its cost row and the translator's substitution by floor heating goes, after the sizing | Noah | 2026-11-03 |
+| D10 | The energy manager decides its set-point raise with information about its own effect (Q1, option e): the budget is the surplus after the battery with the heat pump's own need, taken from the step's start, in place of its actual draw; PV mode switches on with hysteresis and sends an electrical power target the space-heating controller combines with its own ratio; no latch; the minimum run and idle times stay in the heat pump | Noah | 2026-11-07 |
 
 **D0 — whether the distribution circuit flows is decided by the room thermostat in the heat-distribution L1
 controller; the generator decides only how hot** (owner, 2026-10-20, bead hisim-pnw7). A prototype that let the boiler
@@ -122,6 +124,51 @@ hisim-ems-raise-within-step-er89.
 dropped, after the sizing** (owner, 2026-11-03, bead hisim-renovisor-translator-epc.1, P2). With emitter sizing the
 substitution distorts more: a package with low-temperature radiators would run at floor heating's 35 °C instead of
 55 °C.
+
+**D10 — the energy manager decides its set-point raise with information about its own effect: the budget is the
+surplus after the battery with the heat pump's own need in place of its actual draw, the own need is taken from the
+step's start, "PV mode" switches on with hysteresis and sends an electrical power target, and the heat pump's L1
+space-heating controller combines that target with its own ratio; no latch; the heat pump's minimum run and idle times
+stay in the heat pump** (owner, 2026-11-07, Q1 of §9, bead hisim-ems-raise-within-step-er89). Cause, stated plainly:
+the energy manager raised the set point on any positive surplus after the battery, but the raise makes the heat pump
+draw more; when the surplus is smaller than that extra draw, the decision undoes its own condition within the step, a
+limit cycle. Measured (the er89 measurement of 2026-11-07, `/home/noah/hisim/agent-tmp/er89-measure/README.md` and
+`README_de.md`, not committed; three house-years at 900 s, the heat-pump sizer twin with PV, battery and the P-valve
+prototype): today 952 valve-moving forced steps, 2,383 real switching cycles and 38 kWh of grid electricity bought
+during the raise. The rule:
+
+1. **Budget.** The budget in W is the surplus after the battery, with the heat pump's own need in W (its electricity
+   without the raise) in place of its actual draw. Battery first, the owner's intention: the priority chain
+   `DEFAULT_WEIGHTS` / `control_electricity_component_iterative` stays as it is, the heat pump's own heating demand at
+   rank 2 is served before the battery, and the raise is extra consumption that gets only what is left after the
+   battery.
+2. **Own need from the step's start.** The space-heating controller runs its own on/off logic with the unraised switch
+   points on the step's start state and, above 600 s, the part-load ratio to the unraised target; the hot-water
+   controller reports whether its charge would run without the raise. Taken from the step's start, the own need does
+   not depend on the raise.
+3. **Enable and target.** The energy manager enables PV mode when the budget in W ≥ the heat pump's minimum electrical
+   power in W + a margin of 100 W, with hysteresis across steps (its previous step's decision as memory), and sends an
+   electrical power target in W = the budget, clamped to [P_min, P_max]. The heat pump's L1 space-heating controller
+   runs the heat pump at ratio = max(its own ratio, min(target / full-load electrical power, the ratio to the raised
+   buffer limit)).
+4. **The heat pump's powers.** The heat pump publishes its electrical power in W at full load and at minimum load,
+   from the step's start temperatures, so both are constant within the step.
+5. **No latch, no early publication.** A latch would freeze the iteration. The energy manager (L2) runs before the L1
+   controller in a pass, so its first pass sees the previous step's own need and the second pass corrects it; the
+   correction converges because the own need no longer depends on the raise.
+6. **Minimum run and idle times stay in the heat pump**, as in real devices (compressor protection): a PV run cut short
+   continues on grid electricity until its minimum run time ends, and the results show that honestly. The owner's
+   principle: model real systems, not theoretical optimal operation.
+
+Measured (round 2, the "e, own need frozen" row, no latch, the same three house-years): valve-moving forced steps
+952 → 83 (64 of them unrelated to the raise), real switching cycles 2,383 → 52, grid electricity during the raise
+38 → 2.7 kWh, PV self-consumption 39.54 → 39.27 %, heat-pump starts 1,745 → 1,316, hours below 19.5 °C 34.5 → 31.3;
+modulation against plain on/off differs by ≤ 20 kWh of self-consumption (the storage, not the power, limits the raise).
+What it cannot fix: about 7,800 forced steps in the three year runs that are unrelated to the raise (the valve, the
+hydronics); they need their own work. Consequences: the prerequisite of D8 that Q1 held is decided (§4.7); the
+implementation is one PR with all three steps, independent of PR 1 and 2 of this spec and built on main (§6); the
+rejected options (a) to (d) and the controller-side run times are in §8; bead hisim-ems-raise-within-step-er89 is
+retyped from a question to the feature (§10).
 
 ## 3. Terms
 
@@ -369,8 +416,9 @@ Measured settings (Appendix A.9, A.10, A.11; 646 runs, 9 TABULA houses):
 | runtime | ×1.04–1.12 against ideal delivery | PI, year at 900 s ×1.04, January at 60 s ×1.12 (corrected 2026-11-07 from ×1.11; recomputed mean 1.117) |
 
 Prerequisites: hisim-airing-books-no-heat-uws3 (airing resets the air temperature without booking heat; a thermostat
-reading it heats for nothing, up to 15 % of the yearly heat) and hisim-ems-raise-within-step-er89 (the raise switches
-within a step; an open owner decision, §9).
+reading it heats for nothing, up to 15 % of the yearly heat) and hisim-ems-raise-within-step-er89 (the raise switched
+within a step; decided 2026-11-07, D10: the energy manager decides it with information about its own effect, one PR
+of §6).
 
 Replaced parts of the old spec, one line each:
 
@@ -410,6 +458,7 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
 |---|---|---|---|---|
 | 1 | hisim-s9h7 (components, P1) | the emitter design load sized field and its fact (§4.1), its rule `EMITTER_SIZING_MARGIN * Size.HEATING_LOAD_IN_WATT` on `EmitterDesign` (amended 2026-11-07); the EN 442 capped delivery in `HeatDistribution` (§4.2); the derived heating curve with the 1.1 margin (§4.3); the underheating KPIs and KPIs (b), (c) (§4.5) | an undersized emitter gives a colder room; the oversized case gives the derived supply; the law against a bracketed reference root (error < 1e-12, the dead zone, the return between room and supply, the design point reproduces Q_n); the table-generated tests of the curve's scale; an emitter left `AUTO` is sized at 1.1 · L and its curve gives exactly the type's design supply on the design day (amended 2026-11-07) | goldens re-blessed once |
 | 2 | hisim-renovisor-base-emitters-dwm9 (renovisor, P1) | the base-case heating load in the translator; `_flow_temperature` writes T_dd; result.json fields, flag (a) and KPI (d); probes and the translation map (§4.6) | the probe pair with and without the emitter measure; the flag set for a heat pump on base-case 70/55 °C radiators in an unrenovated house; T-CAP, the mapping report and the map agree | RenoVisor results change; heads-up |
+| independent | hisim-ems-raise-within-step-er89 (components, P2) | D10 in one PR, all three steps (owner decision), independent of PR 1 and 2, built on main: the heat pump publishes its electrical power in W at full and at minimum load from the step's start temperatures; the space-heating controller publishes its own need in W and the hot-water controller whether its charge would run without the raise; the energy manager's budget, the PV-mode enable with the 100 W margin and hysteresis, and the electrical power target; the L1 space-heating controller combines the target with its own ratio | a surplus smaller than the raise's extra draw gives one converged decision (the limit cycle is gone); the own need is the same with and without the raise; PV mode stays off below P_min + 100 W and holds with hysteresis across steps; the target is clamped to [P_min, P_max] and the ratio to the raised buffer limit; a PV run cut short continues until the heat pump's minimum run time ends | the heat-pump twins with PV and the energy manager move; goldens re-blessed |
 | later | hisim-renovisor-translator-epc.1 (P2) | the low-temperature radiator's cost row; the substitution goes (D9) | the blocker test turns into the positive case | |
 | later | hisim-heat-pump-outlet-limit-2vq7 (P2) | a maximal space-heating supply and a rated rod power; flag (a) reads the limit | a heat pump on undersized emitters delivers less and the room falls | |
 | later | hisim-component-physics-4g9.37 (P1) | the room thermostat (§4.7), after uws3 and er89 | | every hydronic twin moves again |
@@ -465,16 +514,33 @@ Pull requests on main, in this order, one bead each (AGENTS.md):
   with no reserve beyond the law's about 4 % on the design day, while the generators run below the curve and the
   curve follows the daily mean (D5's reasons), which costs a few cold hours. Chosen: variant C, the margin on the size
   and on the curve, D3 and D5 as amended.
+- Q1 (a), latching the raise at the step's first pass (owner, 2026-11-07): it freezes the iteration and hides the
+  energy manager's switching from the valve, but not the switching itself (4,601 switching steps in the three
+  house-years against today's 4,589) or its grid purchases (35.7 kWh against 38.4 kWh); D10.
+- Q1 (b), hysteresis bands on the surplus (owner, 2026-11-07): a fixed band cannot match the heat pump's extra draw,
+  so the limit cycle is only made short, not impossible; 242 valve-moving forced steps at best (2 kW band) over the
+  three house-years, and the band keeps the raise on while it draws up to 1 kW from the grid; D10.
+- Q1 (c), today's rule, the raise held under forcing only (owner, 2026-11-07): it is the limit cycle itself, 952
+  valve-moving forced steps and 2,383 real switching cycles; D10.
+- Q1 (d), on/off with the full-load threshold (owner, 2026-11-07): it works (93 valve-moving forced steps, about
+  200 kWh less self-consumption over the three house-years because it waits for full-load surplus), but modulation is
+  how real devices are controlled (SG-Ready, EEBUS); the owner chose (e); D10.
+- Moving the heat pump's minimum run and idle times into the controller (owner, 2026-11-07): rejected; they stay in
+  the heat pump as in real devices, and a PV run cut short continues on grid electricity until its minimum run time
+  ends; D10, point 6.
 
 ## 9. Open questions
 
-- **Q1. How the energy manager's set-point raise stops switching within a step** (bead
-  hisim-ems-raise-within-step-er89, `owner-decision`, P2). The raise depends on the heat pump's electricity, which
-  depends on the valve it moves. Options: (a) latch the raise at the step's first pass (measured: 709 → 83
-  valve-moving forced steps, lowest air 16.61 → 18.76 °C; contradicts the decision of 2026-10-10 in 4g9.38 for this
-  one signal); (b) hysteresis on the surplus, keeping same-iteration coupling (not measured); (c) hold the raise
-  under `force_convergence` only (not measured). Recommendation: (b) if a measurement shows it removes the forced
-  steps, otherwise (a) for this signal only. A prerequisite of D8, not of PR 1 or 2.
+- **Q1. How the energy manager's set-point raise stops switching within a step** — *decided (owner, 2026-11-07):
+  D10, option (e), the energy manager decides the raise with information about its own effect; the rejected options
+  (a) to (d) are in §8, the implementation is the er89 row of §6, and bead hisim-ems-raise-within-step-er89 is the
+  feature.* The question as posed (bead hisim-ems-raise-within-step-er89, P2): the raise depends on the heat pump's
+  electricity, which depends on the valve it moves. Options: (a) latch the raise at the step's first pass (measured:
+  709 → 83 valve-moving forced steps, lowest air 16.61 → 18.76 °C; contradicts the decision of 2026-10-10 in 4g9.38
+  for this one signal); (b) hysteresis on the surplus, keeping same-iteration coupling (measured 2026-11-07: 952 → 242
+  at best); (c) hold the raise under `force_convergence` only (today's behaviour); (d) and (e), the raise decided with
+  information about its own effect, on/off at the full-load threshold or modulating (measured 2026-11-07, round 2).
+  A prerequisite of D8, not of PR 1 or 2.
 
 **Known limitation, recorded 2026-11-07 (no decision open here).** The heat pump runs about 2 K above the curve: its
 charge target lies above the supply set point (#1083; measured on new 55/45 °C radiators, Appendix A.5: reached
@@ -496,7 +562,7 @@ power of its own) and the Carnot COP shape of hisim-heat-pump-model-rework-fpqz.
 | hisim-heat-pump-model-rework-fpqz.2 (P1, components) | the Carnot COP shape; with 2vq7 it answers the limitation of §9 (the rod switch below −7 °C) | – |
 | hisim-component-physics-4g9.37 (P1, components) | the room thermostat (§4.7) | – |
 | hisim-airing-books-no-heat-uws3 (P2, components) | airing booked as a heat flow; prerequisite of 4g9.37 | – |
-| hisim-ems-raise-within-step-er89 (P2, owner-decision) | Q1 of §9; prerequisite of 4g9.37 | – |
+| hisim-ems-raise-within-step-er89 (P2, components) | D10, the er89 row of §6: the raise decided with information about its own effect (Q1 of §9, decided); prerequisite of 4g9.37 | – |
 | hisim-floor-heating-60s-underheats-so91 (P3, components) | the floor-heating house underheats at 60 s with ideal delivery (Appendix A.9) | – |
 | hisim-pnw7 (P3) | the generator's cue without a buffer; takes the old spec's Q7 | – |
 

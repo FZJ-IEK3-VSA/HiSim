@@ -1,4 +1,4 @@
-"""Case 600 runs end to end: two passes, the outputs on disk, the air held between the set points."""
+"""Case 600 runs end to end: two passes, the outputs on disk, the air held between the set points; a pass declares its kind."""
 
 import json
 import pathlib
@@ -7,9 +7,23 @@ from typing import Dict
 import pandas as pd
 import pytest
 
+from hisim.setup_rules.kinds import SetupKind
+from hisim.simulationparameters import SimulationParameters
 from hisim.verification import metrics, runner, system_builder
 from hisim.verification.schema import Case
 from hisim.verification.suite import Suite
+
+
+@pytest.mark.base
+def test_a_pass_declares_the_demo_kind(cases: Dict[str, Case], tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The simulator of a pass is a test rig to the setup rules (gap analysis §17)."""
+    monkeypatch.setenv("HISIM_WRITE_GUARD", "collect")
+    parameters = SimulationParameters.full_year(year=system_builder.DEFAULT_YEAR, seconds_per_timestep=3600)
+    parameters.result_directory = str(tmp_path)
+
+    assembled = runner.Assembled(system_builder.build(cases["600"]), parameters, initial_temperature_in_celsius=20.0)
+
+    assert assembled.simulator.setup_kind is SetupKind.DEMO
 
 
 @pytest.mark.verification

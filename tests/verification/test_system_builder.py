@@ -5,6 +5,7 @@ from typing import Dict
 
 import pytest
 
+from hisim import loadtypes as lt
 from hisim.components.building import BuildingInformation, ValueOrigin
 from hisim.verification import system_builder
 from hisim.verification.schema import Case
@@ -26,6 +27,11 @@ def test_the_building_of_case_600_takes_nothing_from_the_carrier_row(built_600: 
     assert {quantity for quantity, origin in origins.items() if origin.source == ValueOrigin.TABULA_ROW} == set()
     assert origins["windows"].source == ValueOrigin.CONFIGURED
     assert origins["thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin"].source == ValueOrigin.CONFIGURED
+
+
+def test_the_technical_room_is_set_rather_than_sized_from_the_carrier_row(built_600: system_builder.BuiltCase) -> None:
+    """The location main sizes from the row's cellar code is set, so the row does not decide it (gap analysis §17)."""
+    assert built_600.building.technical_room_location is lt.InstallationLocation.HEATED_ZONE
 
 
 def test_the_building_carries_the_case_values(built_600: system_builder.BuiltCase) -> None:

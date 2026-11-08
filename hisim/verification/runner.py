@@ -24,6 +24,7 @@ from hisim.components.building import Building
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.night_setback_controller import NightSetbackController
 from hisim.hisim_commit import HiSimCommit
+from hisim.setup_rules.kinds import SetupKind
 from hisim.simulationparameters import SimulationParameters
 from hisim.verification import aggregate, metrics
 from hisim.verification.suite import RequestedOutputs
@@ -35,6 +36,10 @@ OPERATIVE_SURFACE_WEIGHT: float = 0.7
 
 #: The passes of a run: the second starts from the mass temperature the first ends with.
 PASSES: int = 2
+
+#: The kind every pass declares: a test rig, whose numbers are no statement about a house. It waives the
+#: setup rules AR-09, EP-06 and MT-02; the balance rules AR-04 and AR-05 still apply (gap analysis §17).
+SETUP_KIND: SetupKind = SetupKind.DEMO
 
 #: Instance names of the components, which the result columns are found by.
 WEATHER_NAME = "Weather"
@@ -104,6 +109,7 @@ class Assembled:
             module_filename=f"verification_case{built.case.case_id.lower()}",
             my_simulation_parameters=parameters,
         )
+        self.simulator.declare_setup_kind(SETUP_KIND)
         self.simulator.set_simulation_parameters(parameters)
         building_config = dataclasses.replace(built.building, initial_internal_temperature_in_celsius=initial_temperature_in_celsius)
         self.weather = weather.Weather(config=built.weather, my_simulation_parameters=parameters)

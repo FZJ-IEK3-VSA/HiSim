@@ -862,3 +862,33 @@ findings:
   the step 2b branch; its diff is the ten fields, all null.
 
 The other failures of `pytest -m base` on this Windows machine fail on main alike.
+
+## 17. Merge of main (2026-11-08)
+
+`origin/main` (36 commits, up to #1211) was merged into the branches of the verification. On the
+step 2b branch two import lines of the building package conflicted; both sides are kept. Two
+changes on main stop every run of the suite:
+
+- #1221: every setup declares its kind, and the kind selects the setup rules a run waives. The
+  runner declares `demo`, in the words of `SetupKind` "a demonstration or a test rig", as main's
+  test of the building's heating demand does. `demo` waives AR-09, EP-06 and MT-02. Declared
+  `residential`, case 600 breaks two of them and case 600FF one: the building's `HeatingByDevices`
+  port, which the constant internal gain feeds from a CSV file, has no peer (AR-09), and the
+  heater's electricity has neither a peer nor a meter (AR-09, MT-02). The verification reports
+  neither flow, and `residential` describes a house with residents. The balance rules AR-04 and
+  AR-05 still apply.
+- #1211: `BuildingConfig.technical_room_location` is sized from the cellar code of the TABULA row
+  unless it is set. The system builder takes nothing from the carrier row (D16), so it sets the
+  field to `HEATED_ZONE`. On main no component but the building reads it, and no component of a
+  case is placed by it, so it acts on nothing.
+
+The whole suite then ran at all three time steps: every case summary is identical to the run of
+§16. In every pass the declared components and the links between them close, and the ports the
+energy balance reports as unlinked or unmetered are the ones named above.
+
+### 17.1 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D26 | The setup kind of the verification runs (main #1221) | `demo` | `demo`; 2026-11-08 | hisim-x6c7.9 |
+| D27 | The technical room of a case's building (main #1211) | `HEATED_ZONE`, set in the system builder | `HEATED_ZONE`; 2026-11-08 | hisim-x6c7.8 |

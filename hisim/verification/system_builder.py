@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
+from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components.building import BuildingConfig, BuildingInformation, ConfiguredWindow, ValueOrigin
 from hisim.components.night_setback_controller import NightSetbackConfig
@@ -26,6 +27,11 @@ from hisim.verification.schema import Case
 
 #: The TABULA row every case names so that ``BuildingConfig`` has one; nothing of it is used.
 CARRIER_BUILDING_CODE: str = "DE.N.SFH.05.Gen.ReEx.001.002"
+
+#: Where the building's technical room is. Left unset, the field is sized from the carrier row's cellar
+#: code; no component of a case is placed by it, so it acts on nothing, and setting it keeps the row
+#: out (gap analysis §17).
+TECHNICAL_ROOM_LOCATION: lt.InstallationLocation = lt.InstallationLocation.HEATED_ZONE
 
 #: The set points a free-float case carries in its configuration, where the fields are mandatory;
 #: no heater is connected, so they act on nothing.
@@ -187,6 +193,7 @@ def building_config(case: Case, derived: Dict[str, Any], weather: WeatherConfig,
     return BuildingConfig(
         component_id=ComponentID(name=name),
         building_code=CARRIER_BUILDING_CODE,
+        technical_room_location=TECHNICAL_ROOM_LOCATION,
         initial_internal_temperature_in_celsius=heating,
         absolute_conditioned_floor_area_in_m2=case.floor_area_in_m2,
         number_of_apartments=1.0,

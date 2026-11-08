@@ -301,8 +301,9 @@ class AutoConnectPossible(SetupRule[BuiltSystem]):
     """What it checks: a component added with ``connect_automatically=True`` declares default connections, and one from a component of the run.
 
     A plain component declares its default connections by source class (``add_default_connections``); a dynamic
-    component declares them by class too, or by the ports a source declares (``DynamicComponent.default_connections_for``,
-    the electricity meter), and never reads itself.
+    component may declare those too and, besides, dynamic ones by class or by the ports a source declares
+    (``DynamicComponent.default_connections_for``: the electricity meter, the building's room-heat inputs), and never
+    reads itself. A match of either kind connects it.
 
     Why: asking for automatic connection states that the component reads something of the run; when nothing in the
     run matches, its inputs stay unconnected, and a component that should be wired is silently not.
@@ -327,12 +328,11 @@ class AutoConnectPossible(SetupRule[BuiltSystem]):
         for target in subject.components:
             if target.component_name not in subject.connects_automatically:
                 continue
+            declares = bool(target.default_connections)
+            matches = any(source.get_classname() in target.default_connections for source in subject.components)
             if isinstance(target, DynamicComponent):
-                declares = target.declares_default_connections()
-                matches = any(source is not target and target.default_connections_for(source) for source in subject.components)
-            else:
-                declares = bool(target.default_connections)
-                matches = any(source.get_classname() in target.default_connections for source in subject.components)
+                declares = declares or target.declares_default_connections()
+                matches = matches or any(source is not target and target.default_connections_for(source) for source in subject.components)
             if not declares:
                 faults.append(
                     self.fault(

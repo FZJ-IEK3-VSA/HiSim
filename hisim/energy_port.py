@@ -115,8 +115,10 @@ The rules that need no value of the run fail it right after the build, before it
 of ``hisim/setup_rules/energy_ports.py``, ``EP-01`` to ``EP-03``), together with two rules of the
 :class:`EnergyPort` wiring: rule (a) of the owner's decision of 2026-10-02, a ``PRODUCTION`` port that is not metered
 and is read by more than one component that declares ports is refused unless exactly one reader tags the reading
-input with a port it pairs with; and an input port must pair with the port of the output it reads, if that output
-declares one.
+input with a port it pairs with; an input port must pair with the port of the output it reads, if that output
+declares one; and an output releasing heat into the heated zone (:attr:`EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE`)
+needs a component that reads it, since that heat has no boundary node to go to (owner decision D-h of
+``roadmap/device_location_spec.md``; the rule ``EP-06``, which a demo and a plant waive).
 
 :class:`EnergyPort` stays for everything a loop does not carry: fuel, electricity, ambient heat and solar, and heat
 that leaves a component other than on a loop (a tank's tap, a distribution system's heat to the building).
@@ -172,6 +174,13 @@ class EnergyPort:
     )
     #: Joules per kilowatt hour.
     JOULES_PER_KILOWATT_HOUR: ClassVar[float] = 3.6e6
+    #: The port of heat released into the building's heated zone, ``PRODUCTION`` of ``ROOM_HEAT``: the occupants' and
+    #: their appliances' heat, and the heat a device standing in the heated zone releases there (a tank's standby
+    #: loss), on the device's output ``HeatToHeatedZoneInWatt``. The building reads every output declaring it as an
+    #: internal gain, and the build refuses one that nothing reads
+    #: (:meth:`hisim.postprocessing.energy_balance.ports.Wiring.unread_room_heat_faults`). Assigned below the class,
+    #: since a class cannot build an instance of itself in its own body.
+    HEAT_RELEASED_INTO_THE_HEATED_ZONE: ClassVar["EnergyPort"]
 
     def __post_init__(self) -> None:
         """Refuse a port whose role or carrier is not one of the enums, or that skips a meter.
@@ -424,6 +433,9 @@ class EnergyPort:
             "environment": None if self.environment is None else self.environment.value,
             "negated": self.negated,
         }
+
+
+EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE = EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT)
 
 
 @dataclass(frozen=True)

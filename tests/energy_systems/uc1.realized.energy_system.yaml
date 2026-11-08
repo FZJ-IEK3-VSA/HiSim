@@ -72,6 +72,7 @@ components:
       subsidy_as_percentage_of_investment_costs: null
       heating_reference_temperature_in_celsius: -7.0 # sized from weather.heating_reference_temperature_in_celsius=-7.0
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center # sized from weather.weather_identity=Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      technical_room_location: UNHEATED_SPACE # sized from self.building_code=DE.N.SFH.05.Gen.ReEx.001.002
     inputs:
       - weather
       - occupancy

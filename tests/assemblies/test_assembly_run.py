@@ -132,7 +132,7 @@ def test_a_wiring_refusal_of_a_lowered_item_names_where_it_came_from(tmp_path: P
     parameters.result_directory = str(tmp_path / "results")
     with pytest.raises(EnergySystemWiringError, match="EF-23") as refusal:
         EnergySystemExecutor(model, parameters, assembly_resolver=library.resolver(), source_lines=lines).build()
-    message = str(refusal.value)
+    message = refusal.value.faults[0].message
     assert message.endswith(
-        "[source: bare-Device (import bare, inline.energy_system.yaml:7 → test/bare.assembly.yaml:5)]"
+        "[source: bare-Device (import bare, inline.energy_system.yaml:7 → test/bare.assembly.yaml:5)]; see: hisim setup-rules show EF-23"
     )

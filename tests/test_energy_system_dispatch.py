@@ -40,6 +40,7 @@ from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import build_energy_system, run_energy_system
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.simulationparameters import SimulationParameters
+from tests.functions_for_testing import WiringRules
 
 
 class Household:
@@ -380,6 +381,7 @@ def test_two_participants_may_not_claim_one_control_signal() -> None:
         resolver.resolve_target(
             "ems", [SignalCollisions.feed("battery"), SignalCollisions.feed("battery2")]
         )
+        WiringRules.refuse(resolver.refusals)
 
     assert caught.value.error_id.value == "EF-2B"
     assert "ELECTRICITY_TARGET" in str(caught.value)
@@ -411,6 +413,7 @@ def test_a_signal_the_aggregator_already_publishes_is_refused() -> None:
 
     with pytest.raises(EnergySystemWiringError) as caught:
         resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
+        WiringRules.refuse(resolver.refusals)
 
     assert caught.value.error_id.value == "EF-2B"
     assert "SignalOfSomebodyElse" in str(caught.value)
@@ -445,6 +448,7 @@ def test_a_published_superset_of_a_claim_is_refused_instead_of_shadowed() -> Non
 
     with pytest.raises(EnergySystemWiringError) as caught:
         resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
+        WiringRules.refuse(resolver.refusals)
 
     assert caught.value.error_id.value == "EF-2B"
     assert "SupersetSignal" in str(caught.value)

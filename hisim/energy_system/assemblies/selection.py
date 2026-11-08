@@ -41,7 +41,6 @@ from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemEr
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DispatchSpec
-from hisim.energy_system.wiring_checks import check_consuming_outputs
 
 
 @dataclass
@@ -145,9 +144,6 @@ class SelectionPlan:
             EnergySystemAssemblyError: ``EF-7S`` for an observer that cannot observe or a selector
                 matching nothing, ``EF-7V`` for a derived weight that ties with another component
                 type's, ``EF-7U`` for a controllable output actuated by none or two.
-            EnergySystemWiringError: ``EF-21``, ``EF-7M`` or ``EF-7N`` for a consuming output that its
-                consumer does not have, that carries another carrier, or that its meter declares no feed or more
-                than one feed for.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
         selected: Dict[str, List[AggregatorFeed]] = {}
@@ -169,10 +165,16 @@ class SelectionPlan:
                     + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
                     + "; a controllable output is actuated by exactly the one controller it binds (D21).",
                 )
-        landed = check_consuming_outputs(components, self.landings)
         for landing in self.landings:
             assert landing.meter is not None
-            request = landed[(landing.meter, landing.consumer, landing.output)]
+            declared = DynamicConnectionResolver.declared_feeds_for(
+                components[landing.meter], components[landing.consumer], landing.output
+            )
+            # An output its meter declares no feed or several feeds for lands nowhere; the wiring rule EF-7N refuses it,
+            # as the rules EF-21 and EF-7M refuse an output its consumer lacks or that carries another carrier.
+            if len(declared) != 1:
+                continue
+            request = DynamicConnectionResolver.feed_from_declaration(declared[0], landing.meter, landing.consumer)
             selected[request.consumer] = list(selected.get(request.consumer, [])) + [
                 self.written(request, request.weight)
             ]

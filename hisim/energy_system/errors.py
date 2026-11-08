@@ -25,14 +25,18 @@ Four concrete classes derive from it, one per lifecycle stage that can reject a 
 :class:`EnergySystemSizingError` for what only the sizing kernel can, and
 :class:`EnergySystemWiringError` for what only the built components can. The split lets a
 caller tell "this file is wrong" from "these classes are not ready yet" without reading the
-message.
+message. The last is raised by the wiring rules of the setup rules from the :class:`WiringRefusal`
+records the wiring writes, every fault of a build at once.
 """
 
 from __future__ import annotations
 
 import difflib
 import enum
-from typing import ClassVar, Iterable, Optional, Sequence
+from dataclasses import dataclass, field
+from typing import ClassVar, Iterable, Optional, Sequence, Tuple
+
+from hisim.setup_rules.rule import SetupRuleViolation
 
 
 @enum.unique
@@ -126,6 +130,8 @@ class EnergySystemErrorId(enum.Enum):
     UNCONNECTED_MANDATORY_INPUT = "EF-31"
     PORT_NAME_COLLISION = "EF-32"
     COMPONENT_CONSTRUCTION_FAILED = "EF-33"
+    UNCONSUMED_SOURCE = "EF-34"
+    UNMETERED_OUTPUT = "EF-35"
     UNKNOWN_SIZING_SOURCE = "EF-40"
     SIZING_FACT_MISMATCH = "EF-41"
     DISABLED_SIZING_SOURCE = "EF-42"
@@ -385,7 +391,7 @@ class EnergySystemBindingError(EnergySystemCatalogueError):
     """
 
 
-class EnergySystemWiringError(EnergySystemCatalogueError):
+class EnergySystemWiringError(EnergySystemError, SetupRuleViolation):
     """A file's connections could not be made between the components it describes.
 
     Everything here needs the built components rather than only their classes, because HiSim
@@ -396,10 +402,70 @@ class EnergySystemWiringError(EnergySystemCatalogueError):
     fed twice and whether a mandatory input is left open.
 
     A file raising this class is well formed, names classes that exist and configures them
-    correctly — the system it describes simply cannot be wired as written, so the message names
+    correctly — the system it describes simply cannot be wired as written, so each message names
     both ends of the offending connection and, where the set is closed, the ports or channels
     that were available instead.
+
+    The checks are the wiring rules of the setup rules (``hisim/setup_rules/wiring.py``): the
+    wiring records what it cannot do as :class:`WiringRefusal` records and the registry of the
+    setup rules raises this error with every fault of the stage at once, each one the catalogue
+    message ``EF-nn at <location>: <problem>`` it always was, followed by the pointer to the rule.
+    Unlike the other classes of this module it is therefore also a :class:`SetupRuleViolation`,
+    and with it a ``ValueError``.
     """
+
+    @property
+    def error_id(self) -> EnergySystemErrorId:
+        """The catalogue identifier of the first fault, the faults being ordered by code.
+
+        Example: a build whose only fault is an input fed twice gives ``EnergySystemErrorId.DUPLICATE_WIRE``
+        (``EF-26``); one with an open mandatory input and a wire of the wrong unit gives ``EF-30``.
+
+        Raises:
+            ValueError: If no fault carries a catalogue identifier.
+        """
+        codes = {member.value: member for member in EnergySystemErrorId}
+        for fault in self.faults:
+            if fault.code in codes:
+                return codes[fault.code]
+        raise ValueError("this wiring error lists no fault of the energy-system catalogue")
+
+
+@dataclass(frozen=True)
+class WiringRefusal:
+    """One connection the wiring of a file could not make, recorded where it was found instead of raised.
+
+    The wiring of a file — building the components, expanding bare items, decoding and resolving
+    feeds — goes on past a connection it cannot make, so that a build reports every fault at once;
+    what it could not do it records here, and the wiring rules of the setup rules
+    (``hisim/setup_rules/wiring.py``) refuse it. The fields are the parts of a catalogue message,
+    as :class:`EnergySystemCatalogueError` takes them, and :attr:`message` assembles the message
+    the error raised before the checks moved. Example: ``WiringRefusal(EnergySystemErrorId.NOT_AN_AGGREGATOR,
+    "components.building.inputs", "'building' (...) is not an aggregator ...")``. ``cause`` holds the
+    exception a component's constructor raised, for ``EF-33``.
+    """
+
+    error_id: EnergySystemErrorId
+    location: str
+    problem: str
+    alternatives: Tuple[str, ...] = ()
+    alternatives_label: str = "values"
+    offending_value: Optional[str] = None
+    remedy: Optional[str] = None
+    cause: Optional[BaseException] = field(default=None, compare=False)
+
+    @property
+    def message(self) -> str:
+        """The catalogue message of the refusal, ``EF-nn at <location>: <problem>`` and the valid alternatives."""
+        return EnergySystemCatalogueError.build_message(
+            self.error_id,
+            self.location,
+            self.problem,
+            alternatives=self.alternatives,
+            alternatives_label=self.alternatives_label,
+            offending_value=self.offending_value,
+            remedy=self.remedy,
+        )
 
 
 class EnergySystemSizingError(EnergySystemCatalogueError):

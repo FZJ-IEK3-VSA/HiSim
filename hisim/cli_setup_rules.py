@@ -172,6 +172,7 @@ class SetupRuleCommands:
             built = executor.construct()
             stages.append(self.registry.findings(RuleStage.BUILD, built.built_document(), model.setup_kind))
             if not stages[-1].faults:
+                EnergySystemExecutor.connect(built)
                 stages.append(self.registry.findings(RuleStage.BUILD, built.simulator.added_system(), model.setup_kind))
             if not stages[-1].faults:
                 built.simulator.connect_all_components()

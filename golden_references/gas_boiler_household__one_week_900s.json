@@ -96,7 +96,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 85.77953549782428
+    "value": 85.77953549782478
   },
   "BUI1.Building.Maximum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 19.23893512174173
+    "value": 19.238935121741722
   },
   "BUI1.Building.Rooftop area (building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 6.923893246058281
+    "value": 6.923893246058246
   },
   "BUI1.Building.Theoretical cooling demand (building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 548.9588069176267
+    "value": 548.9588069176262
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -412,7 +412,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 2.7181816515985546
+    "value": 2.718181651598557
   },
   "BUI1.Electricity Meter.Max power to grid (meter)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.3484063089485681
+    "value": 0.3484063089485711
   },
   "BUI1.Electricity Meter.Mean power to grid (meter)": {
     "building": "BUI1",
@@ -472,7 +472,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.08575743829510199
+    "value": 0.08575743829510504
   },
   "BUI1.Electricity Meter.Min power to grid (meter)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 58.53225990335944
+    "value": 58.53225990335995
   },
   "BUI1.Electricity Meter.Total energy to grid (meter)": {
     "building": "BUI1",
@@ -1115,7 +1115,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 2.8916055004694377
+    "value": 2.891605500469435
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1175,7 +1175,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 548.2622825954077
+    "value": 548.2622825954072
   },
   "BUI1.Residents.Residents' total electricity consumption (occupancy)": {
     "building": "BUI1",
@@ -1190,7 +1190,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 58.53225990335944
+    "value": 58.53225990335995
   },
   "BUI1.Residents.Residents' total warm water consumption (occupancy)": {
     "building": "BUI1",

@@ -337,7 +337,7 @@
     },
     "tag": "Electrolyzer",
     "unit": "kg",
-    "value": 1896.2029610695577
+    "value": 1896.202961069558
   },
   "BUI1.Electrolyzer.Operating time (Electrolyzer)": {
     "building": "BUI1",

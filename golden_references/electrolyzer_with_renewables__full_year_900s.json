@@ -322,7 +322,7 @@
     },
     "tag": "Electrolyzer",
     "unit": "kWh",
-    "value": 5272971.759719816
+    "value": 5272971.759719817
   },
   "BUI1.Electrolyzer.Hydrogen produced (Electrolyzer)": {
     "building": "BUI1",

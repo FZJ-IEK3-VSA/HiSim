@@ -96,7 +96,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 4149.37876999055
+    "value": 4149.378769990575
   },
   "BUI1.Building.Maximum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -412,7 +412,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 10.229281267586135
+    "value": 10.229281267586137
   },
   "BUI1.Electricity Meter.Max power to grid (meter)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.33929720413615866
+    "value": 0.33929720413616166
   },
   "BUI1.Electricity Meter.Mean power to grid (meter)": {
     "building": "BUI1",
@@ -472,7 +472,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.06571333596173401
+    "value": 0.06571333596173876
   },
   "BUI1.Electricity Meter.Min power to grid (meter)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 2972.24350823275
+    "value": 2972.243508232776
   },
   "BUI1.Electricity Meter.Total energy to grid (meter)": {
     "building": "BUI1",
@@ -1040,7 +1040,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 35.343759504431276
+    "value": 35.34375950443128
   },
   "BUI1.Heat Distribution System.Max return temperature of heat distribution system (hds)": {
     "building": "BUI1",
@@ -1190,7 +1190,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 2972.24350823275
+    "value": 2972.2435082327765
   },
   "BUI1.Residents.Residents' total warm water consumption (occupancy)": {
     "building": "BUI1",

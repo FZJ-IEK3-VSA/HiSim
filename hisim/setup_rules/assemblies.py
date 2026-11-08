@@ -703,8 +703,7 @@ class LibraryValid(LookupRule):
     ENFORCED = True
 
     def check(self, subject: ImportedAssemblies) -> Sequence[Fault]:
-        """Return a fault per imported assembly with a problem, each assembly checked once, at the first import of
-        it."""
+        """Return a fault per imported assembly with a problem, each assembly checked once, at the first import of it."""
         faults: List[Fault] = []
         checked: Set[str] = set()
         for key, assembly in subject.assemblies.items():
@@ -738,9 +737,11 @@ class LibraryValid(LookupRule):
 
 
 class ParameterValid(ImportRule):
-    """What it checks: every parameter an import writes is one its assembly declares, with a value of the declared
-    type, among the allowed values and in range; every variant selector resolves to a value an option covers; every
-    member's preset parameter resolves to a name and its display template renders.
+    """What it checks: every parameter an import writes fits its assembly's declaration, and every selector and preset resolves.
+
+    Every parameter an import writes is one its assembly declares, with a value of the declared type, among the allowed
+    values and in range; every variant selector resolves to a value an option covers; every member's preset parameter
+    resolves to a name and its display template renders.
 
     Why: nothing is converted or defaulted beyond the declarations: a value that does not fit would reach a config
     field as something its law never saw, and a selector no option covers leaves the import without members.
@@ -759,8 +760,9 @@ class ParameterValid(ImportRule):
 
 
 class ConstraintHolds(ImportRule):
-    """What it checks: the resolved parameters of every import satisfy its assembly's constraints: exactly one member
-    of an ``exactly_one_of`` stated, and an ``all_or_none_of`` stated whole or not at all.
+    """What it checks: the resolved parameters of every import satisfy its assembly's constraints.
+
+    Exactly one member of an ``exactly_one_of`` is stated, and an ``all_or_none_of`` is stated whole or not at all.
 
     Why: a constraint names parameters that only make sense together, a size given one way or another; two stated
     members of an ``exactly_one_of`` would size one device twice, and a partly stated ``all_or_none_of`` would leave
@@ -781,8 +783,10 @@ class ConstraintHolds(ImportRule):
 
 
 class PortHasAPartner(ImportRule):
-    """What it checks: every required port finds a partner in the file: a need a component of its partner class, a
-    circuit end the other end of its circuit, a fact need a provider, a many-fact need at least one provider.
+    """What it checks: every required port finds a partner in the file.
+
+    A need finds a component of its partner class, a circuit end the other end of its circuit, a fact need a provider,
+    a many-fact need at least one provider.
 
     Why: the format never adds a partner: a required port without one would leave a member's input open, or a
     sizing law without the fact it reads.
@@ -803,8 +807,7 @@ class PortHasAPartner(ImportRule):
 
 
 class PortUnambiguous(ImportRule):
-    """What it checks: a required port with several candidates in scope, or a verb whose target holds several, carries
-    a verb that names one.
+    """What it checks: a required port with several candidates in scope, or a verb whose target holds several, carries a verb that names one.
 
     Why: the default rule binds the one candidate in scope; picking one of several would bind by position, and adding
     a component would silently rebind another import.
@@ -844,8 +847,9 @@ class RequiredPortNotDeclined(ImportRule):
 
 
 class BoundPartnerExists(ImportRule):
-    """What it checks: a verb's target is an import or component the file declares, present (a ``bind:`` target not
-    left out by a group or a variant), with the instance and the port it names.
+    """What it checks: a verb's target is an import or component the file declares, present, with the instance and the port it names.
+
+    Present means a ``bind:`` target not left out by a group or a variant.
 
     Why: a verb that names nothing, or a partner the selected world leaves out, binds the port to nothing; only
     ``optional-bind:`` may leave a port unbound when its partner is absent.
@@ -887,8 +891,7 @@ class OptionalPortDecided(ImportRule):
 
 
 class VerbOnAnActivePort(ImportRule):
-    """What it checks: no verb is written for a port its import's parameters switch off (``active_when``,
-    ``required_when``).
+    """What it checks: no verb is written for a port its import's parameters switch off (``active_when``, ``required_when``).
 
     Why: a verb on an inactive port binds nothing; it is left over from other parameters, and reading the file one
     would believe the port bound.
@@ -908,8 +911,7 @@ class VerbOnAnActivePort(ImportRule):
 
 
 class KnownPort(ImportRule):
-    """What it checks: every verb names a port of its import or site entry that a verb binds: a need, a circuit end or
-    a fact need of one provider.
+    """What it checks: every verb names a port of its import or site entry that a verb binds: a need, a circuit end or a fact need of one provider.
 
     Why: a carrier need and a many-fact need bind every provider in scope, and a provided port binds nothing; a verb
     naming one of them, or no port at all, is a typo or a misunderstanding that would otherwise be ignored.
@@ -929,8 +931,7 @@ class KnownPort(ImportRule):
 
 
 class BoundOutputIsRead(ImportRule):
-    """What it checks: a need bound to a provided output of another import, ``<import>.<port>``, reads that output
-    through its ``wires:``.
+    """What it checks: a need bound to a provided output of another import, ``<import>.<port>``, reads that output through its ``wires:``.
 
     Why: binding a need to one output promises a wire from it; a need whose wires read other outputs would connect
     the partner's default outputs instead, and the provided output would be read by nobody.
@@ -951,10 +952,11 @@ class BoundOutputIsRead(ImportRule):
 
 
 class PortContract(ImportRule):
-    """What it checks: every port fits the members it lowers into and the partner it binds: its partner is of its
-    class, its members are present with these parameters and carry its placeholders, a fact lands once per member, a
-    fuel provision meters at one placeholder, an observer has members and an import's ``observes:`` replaces exactly
-    one observer port; a site entry's placeholders name its own needs, circuit ends and fuel provisions.
+    """What it checks: every port fits the members it lowers into and the partner it binds.
+
+    Its partner is of its class, its members are present with these parameters and carry its placeholders, a fact lands
+    once per member, a fuel provision meters at one placeholder, an observer has members and an import's ``observes:``
+    replaces exactly one observer port; a site entry's placeholders name its own needs, circuit ends and fuel provisions.
 
     Why: a port is lowered to ordinary items at its members' placeholders; a port with nowhere to land, or a partner
     of another class, would expand into a file that connects nothing, or connects the wrong thing.
@@ -973,8 +975,7 @@ class PortContract(ImportRule):
 
 
 class CircuitEndsMatch(ImportRule):
-    """What it checks: both ends of a circuit binding name one circuit, and an end joined by the other end's verb
-    carries no verb that disagrees.
+    """What it checks: both ends of a circuit binding name one circuit, and an end joined by the other end's verb carries no verb that disagrees.
 
     Why: a circuit is a medium shared by its two ends; binding an end of one circuit to an end of another would join
     two media, and two disagreeing verbs leave unclear which end decided.
@@ -995,8 +996,7 @@ class CircuitEndsMatch(ImportRule):
 
 
 class OneProviderPerCarrier(ImportRule):
-    """What it checks: every carrier a port provides has exactly one provider, a fuel's provider has a bound consumer,
-    and a required carrier need finds a provider.
+    """What it checks: every carrier a port provides has exactly one provider, a fuel's provider has a bound consumer, and a required carrier need finds a provider.
 
     Why: one site has one supply per carrier, which the meters and the energy balance assume; a provider without a
     consumer is an idle connection, and a required need without a provider would leave its consuming outputs
@@ -1017,8 +1017,10 @@ class OneProviderPerCarrier(ImportRule):
 
 
 class OrderValid(ImportRule):
-    """What it checks: an evaluation ``order:`` names each number once among the site entries and imports, and a
-    re-run record's components stand in the sequence its import record states.
+    """What it checks: an evaluation ``order:`` names each number once, and a re-run record keeps its components' sequence.
+
+    Each number appears once among the site entries and imports, and a re-run record's components stand in the sequence
+    its import record states.
 
     Why: the order decides the sequence the simulator adds the components in, and with it the result columns; two
     blocks with one number would be ordered by accident, and a record whose components moved would re-run in another
@@ -1037,9 +1039,9 @@ class OrderValid(ImportRule):
 
 
 class ObserverSelection(SelectionRule):
-    """What it checks: every observer -- a meter or a controller whose class declares dynamic default connections --
-    selects at least one feed, and every selector of its ``observes:`` matches an output its class declares a feed
-    from.
+    """What it checks: every observer selects at least one feed, and every selector of its ``observes:`` matches an output its class declares a feed from.
+
+    An observer is a meter or a controller whose class declares dynamic default connections.
 
     Why: an observer that observes nothing measures or controls nothing, and a selector that matches nothing is a
     typo or names a device the file lacks; either would run without the observation the file asks for.
@@ -1058,9 +1060,10 @@ class ObserverSelection(SelectionRule):
 
 
 class ActuationSelection(SelectionRule):
-    """What it checks: every controllable output is ranked by exactly the controller it binds: a ``target_input``
-    output by one controller (none only when ``optional: true``), a ``via`` output by the partner its need is bound
-    to.
+    """What it checks: every controllable output is ranked by exactly the controller it binds.
+
+    A ``target_input`` output is ranked by one controller (none only when ``optional: true``), a ``via`` output by the
+    partner its need is bound to.
 
     Why: a controllable output is actuated by one controller; two would fight over it, none would leave it at its
     own default, and a controller other than the bound one would actuate a device that reads another's signal.
@@ -1082,8 +1085,9 @@ class ActuationSelection(SelectionRule):
 
 
 class WeightFree(SelectionRule):
-    """What it checks: a weight an observer derives for a further participant of one component type (``default + k``)
-    reaches neither another type's base weight nor the monitored-only weight.
+    """What it checks: a weight an observer derives for a further participant reaches neither another type's base weight nor the monitored-only weight.
+
+    The derived weight is the one for a further participant of one component type, ``default + k``.
 
     Why: the weights rank the participants of a controller; a derived weight equal to another type's base weight
     would tie the two, and one at the monitored-only weight would rank a participant as only measured.

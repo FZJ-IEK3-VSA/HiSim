@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 3.2135825615156577
+    "value": 0.26278890549306994
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -651,6 +651,21 @@
     "unit": "-",
     "value": 4.0
   },
+  "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_9 (L2EMSElectricityController)": {
+    "building": "BUI1",
+    "name": "Priority for Input_Battery_AcBatteryPowerUsed_9",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "L2EMSElectricityController",
+      "name": "L2EMSElectricityController",
+      "path": []
+    },
+    "tag": "Energy Management System",
+    "unit": "-",
+    "value": 4.0
+  },
   "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5 (L2EMSElectricityController)": {
     "building": "BUI1",
     "name": "Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5",
@@ -684,6 +699,21 @@
   "BUI1.Energy Management System.Priority for Input_SolarThermalSystem_ElectricityConsumptionOutput_6 (L2EMSElectricityController)": {
     "building": "BUI1",
     "name": "Priority for Input_SolarThermalSystem_ElectricityConsumptionOutput_6",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "L2EMSElectricityController",
+      "name": "L2EMSElectricityController",
+      "path": []
+    },
+    "tag": "Energy Management System",
+    "unit": "-",
+    "value": 3.0
+  },
+  "BUI1.Energy Management System.Priority for Input_SolarThermalSystem_ElectricityConsumptionOutput_8 (L2EMSElectricityController)": {
+    "building": "BUI1",
+    "name": "Priority for Input_SolarThermalSystem_ElectricityConsumptionOutput_8",
     "source": {
       "assembly": null,
       "import": null,

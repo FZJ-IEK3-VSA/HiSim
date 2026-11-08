@@ -53,8 +53,10 @@ class StageFindings:
     violation_type: Type[SetupRuleViolation] = SetupRuleViolation
 
     def violation(self) -> SetupRuleViolation:
-        """Return the violation that lists the refusing faults and the skips of the stage, as its ``violation_type``."""
-        return self.violation_type(self.stage, self.kind, self.faults, self.skipped)
+        """Return the violation that lists the refusing faults and the skips of the stage, as its ``violation_type``, holding these findings."""
+        violation = self.violation_type(self.stage, self.kind, self.faults, self.skipped)
+        violation.findings = self
+        return violation
 
     def to_dict(self) -> Dict[str, object]:
         """Return the findings as plain data: the violation's fields, the subject, and the faults that are only logged under ``logged``."""

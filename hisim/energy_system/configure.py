@@ -25,17 +25,23 @@ reads it. The two paths are therefore exclusive rather than sequential.
 What follows is one call into the sizing kernel for the whole system. The file's
 ``sizing_sources`` blocks are handed over as the kernel's per-consumer mapping — a plain
 translation, since the format was designed to carry exactly what the kernel asks for — and the
-kernel's eight failure modes come back wrapped with the entry and the file location that
-caused them, its own message kept verbatim because it already names the candidates and prints
-the block an author can paste. A provider nobody read is not a failure but a warning: it is
-legal, occasionally intended, and always worth saying out loud.
+kernel's failure modes come back as the sizing rules of the setup rules
+(:mod:`hisim.setup_rules.sizing`) classify them, located at the entry that caused them, its own
+message kept verbatim because it already names the candidates and prints the block an author can
+paste. A provider nobody read is not a failure but a warning: it is legal, occasionally intended,
+and always worth saying out loud.
+
+An entry whose value does not decode or whose path names an unregistered variable does not stop
+the stage: its error is recorded (:class:`EntryRefusal`), the other entries are built, and the
+binding rules (:mod:`hisim.setup_rules.bindings`) refuse every recorded entry at once; the sizing
+kernel then does not run, since it sizes the whole system or nothing.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 from hisim.config import ComponentID
 from hisim.config.presets import ConfigBuilder, replace_config
@@ -43,15 +49,18 @@ from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.codec import ConfigValueCodec
-from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemCatalogueError, EnergySystemErrorId
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathFieldCodec, PathResolver
-from hisim.energy_system.sizing_bridge import (
-    resolve_sizing,
-    sizing_sources_bridge,
-    unconsumed_warnings,
-)
+from hisim.energy_system.sizing_bridge import SizingOutcome, resolve_sizing, sizing_sources_bridge
 from hisim.setup_rules.document import NoAbsolutePath
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
+from hisim.setup_rules.sizing import UnconsumedFact
+from hisim.setup_rules.subjects import ConfiguredDocument
+
+if TYPE_CHECKING:
+    from hisim.energy_system.assemblies.record import SourceMap
 
 
 @dataclass(frozen=True)
@@ -111,6 +120,126 @@ class ConfiguredSystem:
             if component_name == name:
                 return config
         raise KeyError(name)
+
+
+@dataclass(frozen=True)
+class EntryRefusal:
+    """One entry whose configuration could not be built: its name and the catalogue error building it raised.
+
+    Example: ``EntryRefusal("boiler", EnergySystemBindingError(EF-1A, "components.boiler.config.seasonal_efficiency",
+    ...))`` for a boiler whose ``seasonal_efficiency`` is written ``very high``. The binding rules ``EF-1A`` and
+    ``EF-04`` refuse the recorded errors, with the message each raised.
+    """
+
+    name: str
+    error: EnergySystemCatalogueError
+
+
+@dataclass(frozen=True)
+class ConfigurationOutcome:
+    """What configuring a file did: every entry's configuration, the entries that could not be built, and the sizing.
+
+    ``names`` and ``origins`` hold, in file order, each entry that was built: its name and its configuration as its
+    preset or constructor produced it. ``refusals`` holds the entries that could not be built, in file order.
+    ``sizing`` is what the sizing kernel did over the built configurations, their overrides and paths applied, or
+    ``None`` when an entry was refused and the kernel did not run. The binding rules of the configured file and the
+    sizing rules judge it; :meth:`configured` turns an outcome they accepted into the system the next stage builds
+    from.
+    """
+
+    bindings: ClassBindings
+    names: Tuple[str, ...]
+    origins: Tuple[Any, ...]
+    refusals: Tuple[EntryRefusal, ...]
+    sizing: Optional[SizingOutcome]
+
+    #: The catalogue conditions building one entry's configuration records instead of raising: a value that does not
+    #: decode (``EF-1A``) and a path variable nobody registered (``EF-04``).
+    RECORDED: ClassVar[FrozenSet[EnergySystemErrorId]] = frozenset(
+        {EnergySystemErrorId.UNDECODABLE_VALUE, EnergySystemErrorId.UNRESOLVABLE_PATH_VARIABLE}
+    )
+
+    @classmethod
+    def attempt(cls, model: EnergySystemFile, bindings: ClassBindings, resolver: PathResolver) -> ConfigurationOutcome:
+        """Builds every entry's configuration, recording the entries that cannot be built, and sizes them when all were built.
+
+        Example: a file whose boiler writes ``seasonal_efficiency: very high`` and whose storage writes
+        ``${nowhere}/profile.csv`` gives two refusals and no sizing; a file whose entries all build gives the sizing
+        kernel's outcome, its failure included.
+
+        Args:
+            model: The energy system, after group expansion and validation.
+            bindings: The class bindings of its entries.
+            resolver: The registry expanding ``${var}`` path references.
+
+        Returns:
+            The outcome.
+
+        Raises:
+            EnergySystemCatalogueError: For a condition of the catalogue other than ``EF-1A`` and ``EF-04``.
+        """
+        names: List[str] = []
+        origins: List[Any] = []
+        configs: List[Any] = []
+        refusals: List[EntryRefusal] = []
+        for binding in bindings:
+            try:
+                origin, config = EntryConfigurator(binding, resolver, model.addresses.get(binding.name)).build()
+            except EnergySystemCatalogueError as error:
+                if error.error_id not in cls.RECORDED:
+                    raise
+                refusals.append(EntryRefusal(binding.name, error))
+                continue
+            names.append(binding.name)
+            origins.append(origin)
+            configs.append(config)
+        sizing = None if refusals else resolve_sizing(configs, sizing_sources_bridge(model), names)
+        return cls(bindings=bindings, names=tuple(names), origins=tuple(origins), refusals=tuple(refusals), sizing=sizing)
+
+    @classmethod
+    def of_configured(cls, configured: ConfiguredSystem) -> ConfigurationOutcome:
+        """Returns the outcome a configured system was made from, as the rules saw it, for a tool that runs them again.
+
+        Example: ``hisim setup-rules check`` hands the outcome of a built file to the binding and sizing rules once more,
+        to report what they log (the facts nobody reads) beside the other stages.
+
+        Args:
+            configured: A configured system, its entries all built and sized.
+
+        Returns:
+            The outcome: no refusal, and the sizing that resolved the configurations.
+        """
+        names = tuple(name for name, _ in configured.configs)
+        sizing = SizingOutcome(configs=tuple(config for _, config in configured.configs), report=configured.report, names=names)
+        return cls(
+            bindings=configured.bindings,
+            names=names,
+            origins=tuple(origin for _, origin in configured.origins),
+            refusals=(),
+            sizing=sizing,
+        )
+
+    def cause(self) -> Optional[BaseException]:
+        """The exception behind the first fault, for a refusal to be raised from: the first entry's error, else the kernel's failure."""
+        if self.refusals:
+            return self.refusals[0].error
+        return self.sizing.failure if self.sizing is not None else None
+
+    def configured(self) -> ConfiguredSystem:
+        """Returns the configured system of an outcome whose entries were all built and sized.
+
+        Raises:
+            ValueError: If an entry was refused or the sizing failed, which the rules refuse first.
+        """
+        if self.sizing is None or self.sizing.failure is not None:
+            raise ValueError("this configuration was refused by the setup rules; it holds no sized system")
+        return ConfiguredSystem(
+            configs=tuple(zip(self.names, self.sizing.configs)),
+            report=self.sizing.report,
+            warnings=UnconsumedFact.lines(self.sizing.report),
+            bindings=self.bindings,
+            origins=tuple(zip(self.names, self.origins)),
+        )
 
 
 class EntryConfigurator:
@@ -445,13 +574,16 @@ def configure_energy_system(
     *,
     bindings: Optional[ClassBindings] = None,
     path_resolver: Optional[PathResolver] = None,
+    file: Optional[str] = None,
+    source_map: Optional[SourceMap] = None,
 ) -> ConfiguredSystem:
     """Builds and sizes every configuration of an energy-system file.
 
     The fifth and sixth stages of the lifecycle in one call, because they are one unit from
     outside: the configurations are only meaningful once they are sized, and the sizing can
-    only run once they all exist. On return every configuration is complete, the report says
-    where each computed number came from, and the warnings list the providers nobody read.
+    only run once they all exist. The binding rules of the configured file and the sizing rules
+    of the setup rules judge the result. On return every configuration is complete, the report
+    says where each computed number came from, and the warnings list the providers nobody read.
 
     The sizing kernel is called with no seed context at all. Every fact this system uses comes
     from a component of this system, which is the property that makes a file self-contained:
@@ -464,32 +596,31 @@ def configure_energy_system(
             computed here otherwise.
         path_resolver: The registry expanding ``${var}`` path references; the default registry
             for this machine when omitted.
+        file: The file's path, for the faults to name; ``None`` for a model built in Python.
+        source_map: Which import produced a component, for a fault to name it; ``None`` for a
+            file without imports.
 
     Returns:
         The configured system: configurations in file order, the sizing report and the
         warnings.
 
     Raises:
-        EnergySystemBindingError: For an entry whose configuration cannot be built.
-        EnergySystemSizingError: ``EF-4A`` … ``EF-4H`` for the kernel's eight failure modes and
-            ``EF-4J`` for a group of fields sized together stated only in part, each keeping the
-            kernel's own message and naming the file location that caused it.
+        EnergySystemClassBindingError: Listing every entry whose configuration cannot be built: a
+            value that does not fit its field (``EF-1A``), a path variable nobody registered (``EF-04``).
+        EnergySystemSizingError: ``EF-4A`` … ``EF-4H`` for the kernel's eight failure modes,
+            ``EF-4J`` for a group of fields sized together stated only in part and ``EF-4X`` for a
+            failure that matches none, keeping the kernel's own message and naming the file
+            location that caused it; raised from the kernel's exception.
     """
-    resolved_bindings = bindings if bindings is not None else validate_classes(model)
+    resolved_bindings = bindings if bindings is not None else validate_classes(model, file=file, source_map=source_map)
     resolver = path_resolver if path_resolver is not None else PathResolver.default()
-    names: List[str] = []
-    configs: List[Any] = []
-    origins: List[Any] = []
-    for binding in resolved_bindings:
-        origin, config = EntryConfigurator(binding, resolver, model.addresses.get(binding.name)).build()
-        names.append(binding.name)
-        origins.append(origin)
-        configs.append(config)
-    sized = resolve_sizing(configs, sizing_sources_bridge(model), names)
-    return ConfiguredSystem(
-        configs=tuple(zip(names, sized[0])),
-        report=sized[1],
-        warnings=unconsumed_warnings(sized[1]),
-        bindings=resolved_bindings,
-        origins=tuple(zip(names, origins)),
-    )
+    outcome = ConfigurationOutcome.attempt(model, resolved_bindings, resolver)
+    subject = ConfiguredDocument(model=model, outcome=outcome, file=file, source_map=source_map)
+    try:
+        SetupRuleRegistry.collect().run(RuleStage.BUILD, subject, model.setup_kind)
+    except SetupRuleViolation as violation:
+        cause = outcome.cause()
+        if cause is None:
+            raise
+        raise violation from cause
+    return outcome.configured()

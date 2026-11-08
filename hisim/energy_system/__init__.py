@@ -4,8 +4,8 @@ An energy-system file is a YAML document that describes one simulated household 
 components, how each is configured, where each takes its inputs from and, where that is
 ambiguous, where each takes its sizing facts from — without a line of Python. This package
 owns that format: the in-memory model of a file, the reader that produces it, the writer
-that puts it back on disk in one canonical style, and the validator that decides whether a
-file makes sense. Later stages of the same package turn a valid file into a running
+that puts it back on disk in one canonical style, and the loading that runs the structural
+rules (``hisim/setup_rules/document.py``) deciding whether a file makes sense. Later stages of the same package turn a valid file into a running
 simulation and record what that run actually realized.
 
 The modules, in dependency order:
@@ -24,10 +24,10 @@ The modules, in dependency order:
       block wherever it is written: at the top level, in a group or in a variant option.
     - :mod:`hisim.energy_system.groups` — the two switches: what a switched-off group and an
       unselected variant option remove from a file, and the record of what they removed.
-    - :mod:`hisim.energy_system.validation` — the class-independent rules: names, groups,
-      a closed reference graph, configuration origin, input consistency, portable paths.
     - :mod:`hisim.energy_system.loader` — the public read and write entry points that put
-      the four together.
+      them together, and run the class-independent rules of the setup rules
+      (:mod:`hisim.setup_rules.document`): names, groups, a closed reference graph,
+      configuration origin, input consistency, portable paths.
     - :mod:`hisim.energy_system.path_resolver` — the ``${var}`` registry that keeps the
       filesystem locations in a file portable between machines.
 
@@ -44,10 +44,9 @@ The stages that need the component classes live in their own modules and are del
       sizing kernel and translating its refusals.
     - :mod:`hisim.energy_system.configure` — building every configuration and resolving the
       sizing of the whole system.
-    - :mod:`hisim.energy_system.wiring` — constructing the components and planning every
-      connection the file's ``inputs`` items describe.
-    - :mod:`hisim.energy_system.wiring_checks` — one planned connection, the checks a whole
-      plan must pass and the step that applies it.
+    - :mod:`hisim.energy_system.wiring` — constructing the components, planning every
+      connection the file's ``inputs`` items describe and applying the plan once the wiring
+      rules of the setup rules (``hisim/setup_rules/wiring.py``) found nothing in it.
     - :mod:`hisim.energy_system.feed_resolution` — turning an aggregator's feeds into the ports
       it grows and the wires that fill them.
     - :mod:`hisim.energy_system.aggregator_ports` — the uniqueness, freedom and existence rules
@@ -107,6 +106,7 @@ for code that prefers the fully-qualified path.
 from hisim.energy_system.errors import (
     EnergySystemBindingError,
     EnergySystemCatalogueError,
+    EnergySystemClassBindingError,
     EnergySystemError,
     EnergySystemErrorId,
     EnergySystemFormatError,
@@ -146,7 +146,6 @@ from hisim.energy_system.loader import (
     load_energy_system,
     parse_energy_system,
 )
-from hisim.energy_system.validation import StructuralValidator, validate_structure
 from hisim.energy_system.path_resolver import PathFieldCodec, PathResolver, PathVariable
 
 __all__ = [
@@ -158,6 +157,7 @@ __all__ = [
     "DroppedInputItem",
     "EnergySystemBindingError",
     "EnergySystemCatalogueError",
+    "EnergySystemClassBindingError",
     "EnergySystemEmitter",
     "EnergySystemError",
     "EnergySystemErrorId",
@@ -179,7 +179,6 @@ __all__ = [
     "PathVariable",
     "ShrunkSizingList",
     "SourceReference",
-    "StructuralValidator",
     "Variant",
     "VariantOption",
     "VariantSelection",
@@ -188,5 +187,4 @@ __all__ = [
     "expand_groups",
     "load_energy_system",
     "parse_energy_system",
-    "validate_structure",
 ]

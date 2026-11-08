@@ -18,6 +18,7 @@ import pytest
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -57,6 +58,7 @@ def _simulator(directory: str, module_filename: str) -> Simulator:
         module_filename=module_filename,
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600),
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     return simulator
 
 
@@ -99,6 +101,7 @@ class TestResultDirectorySelection:
             module_filename="household_gas_building_sizer",
             my_simulation_parameters=parameters,
         )
+        simulator.declare_setup_kind(SetupKind.DEMO)
         simulator.prepare_simulation_directory()
 
         assert simulator.simulation_parameters.result_directory == str(tmp_path / "explicit")

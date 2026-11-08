@@ -205,9 +205,9 @@ class ArcheTypeConfig:
         The names in ``lpg_households`` are attribute names of the Load Profile Generator's
         ``Households`` registry; the occupancy component needs the ``JsonReference`` objects behind
         them. A single configured name resolves to one reference, several names resolve to a list of
-        references that the occupancy component stacks into one building. The eleven building-sizer
-        setups call this instead of resolving the names themselves, so an unknown name is refused
-        the same way everywhere: the loop in those setups used to skip a name the registry did not
+        references that the occupancy component stacks into one building. Every building-sizer
+        setup calls this instead of resolving the names itself, so an unknown name is refused the
+        same way everywhere: the loop the setups used to carry skipped a name the registry did not
         know without any diagnostic, which quietly built a household with fewer occupants than the
         configuration asked for.
 

@@ -16,7 +16,9 @@
   (`/home/noah/hisim/agent-tmp/circuits/report.md`); the boiler investigation hisim-boiler-flow-mismatch-4awa
   (`/home/noah/hisim/agent-tmp/4awa/report.md`).
 - **Line numbers** refer to main at 635404f30 unless a branch or commit is named. "Circuit" appears below only in the
-  names of existing code (`circuit_power_w`, `CircuitColumns`, `resolve_circuit`) and in decisions quoted verbatim.
+  names of code as it was then (`circuit_power_w`, which keeps its name; `CircuitColumns` and `resolve_circuit`, renamed
+  `LoopColumns` and `resolve_loop` with the rest of the balance's circuit names on 2026-11-07, stage 1a's table) and in
+  decisions quoted verbatim.
 
 ## 1. Problem
 
@@ -712,10 +714,10 @@ The PR is #1109 itself, rebased onto stage 0. Its declaration layer goes and its
 | `HydronicPort` (three names, role, carrier) and `CircuitEnd` (which names are inputs), `energy_port.py:361-558` | go. The names are the channels themselves; "which are inputs" is the channel kind; the role is `supplies` on the `FluidLoop` and the direction of each step is the supplier's sign (§3.4); the carrier and the fluid are on the `FluidLoop`. |
 | `Component.add_hydronic_port` (`component.py:498-559`), `hydronic_ports`, `CIRCUIT_LEG_UNITS`, `HydronicPortError` | go. `add_input`/`add_output` take `fluid_loop=`; `Component.port_sets()` groups the tagged channels; `FluidLoopError` at the declaration. |
 | `HydronicPort.heat_in_kilowatt_hour` and `heat_in_kilowatt_hours_per_step`, the one rule `m c (T_sup − T_ret) dt` | stay, as functions of `hisim/hydronics.py` beside `circuit_power_w`, which gains the loop fluid's `c`; applied per member to its own four columns, `m_out c (T_out − T_in)`. |
-| `DeclaredPorts.circuit_ends_of`, `Wiring.resolve_circuit`, `CircuitColumns` (three columns per circuit) | stay in substance, adapted and renamed to loops: an end is a port set, its columns are its four (`flow_in` and `temperature_in` followed through the wire to the previous member's outputs). |
-| `Wiring.circuit_peer`, `circuits`, `pairing_fault`: the ends paired through the flow wire; one reader; both ends or neither | stay, generalised to the loop walk of §3.3: the peer of a member is the next member on the walk; "both ends" becomes "every member tagged"; "one reader" is rule 2. |
+| `DeclaredPorts.circuit_ends_of`, `Wiring.resolve_circuit`, `CircuitColumns` (three columns per circuit) | stay in substance, adapted and renamed to loops: an end is a port set, its columns are its four (`flow_in` and `temperature_in` followed through the wire to the previous member's outputs). `circuit_ends_of` became `DeclaredPorts.port_sets_of` in the rework; the other two were renamed on 2026-11-07 (owner): `Wiring.resolve_loop`, `LoopColumns`, still three columns. |
+| `Wiring.circuit_peer`, `circuits`, `pairing_fault`: the ends paired through the flow wire; one reader; both ends or neither | stay, generalised to the loop walk of §3.3: the peer of a member is the next member on the walk; "both ends" becomes "every member tagged"; "one reader" is rule 2. Renamed on 2026-11-07 (owner): `Wiring.loop_peer`, `Wiring.loops` returning a `LoopWiring`, `pairing_fault` unchanged; the build refuses their faults as the setup rules `EP-01` loop-pairing, `EP-02` one-reader-per-flow and `EP-03` no-loop-on-a-node, each a `LoopFault`. |
 | `refuse_a_broken_wiring` at `simulator.py:819`, `EnergyPortWiringError` | stay; `FluidLoopWiringError` is raised beside, for rule 4 and the agreement of carrier and fluid. |
-| `DeclaredPorts.add_circuits`: the heat per circuit from the result columns; an open end that pumps into an unconnected circuit is a fault | stays, per member and port set. |
+| `DeclaredPorts.add_circuits`: the heat per circuit from the result columns; an open end that pumps into an unconnected circuit is a fault | stays, per member and port set. Renamed on 2026-11-07 (owner): `DeclaredPorts.add_loops`, its faults `DeclaredPorts.loop_faults` (`loop_faults` in `balance_report.json`, schema `hisim.energy_balance/5`). |
 | the components' circuits: the buffer's three, the tank's two coils with their own returns (#1119), the HDS's one behind a buffer, the generators' | stay, as `FluidLoop`s and tags; the fourth channel comes in 1b. |
 | the HDS's exemption without a buffer (`declares_energy_ports`) | stays until stage 3. |
 | the tests `tests/test_energy_port_hydronic.py`, `test_energy_balance_storages.py`, `test_energy_balance_generators.py`, the golden matrix | stay; those that build a `HydronicPort` or call `add_hydronic_port` are rewritten against the tags, the balance assertions unchanged. |

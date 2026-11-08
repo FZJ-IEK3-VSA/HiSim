@@ -31,7 +31,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
-from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units
+from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, InandOutputType, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
@@ -218,6 +218,8 @@ class SimpleAirConditioner(cp.PhysicsComponent):
             LoadTypes.ELECTRICITY,
             Units.WATT,
             output_description="Electrical power consumption.",
+            # the electricity meter bills it, so the KPIs count it as the household's consumption as well
+            postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.electrical_energy_consumption_channel: cp.ComponentOutput = self.add_output(

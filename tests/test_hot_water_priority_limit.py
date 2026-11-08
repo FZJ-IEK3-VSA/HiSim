@@ -12,7 +12,7 @@ import pytest
 
 from hisim.components.dual_circuit_system import HeatingMode, HotWaterPriorityLimit, HotWaterPriorityTimer
 from hisim.components.generic_boiler import GenericBoilerController, GenericBoilerControllerConfig
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
     HeatPumpDhwState,
     MoreAdvancedHeatPumpHPLibControllerDHW,
     MoreAdvancedHeatPumpHPLibControllerDHWConfig,

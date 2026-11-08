@@ -1,22 +1,22 @@
-"""The water storages and the heat distribution system declare their circuits and close (hydronic stage E).
+"""The water storages and the heat distribution system declare their loops and close (hydronic stage E).
 
 Beads hisim-hydronics-fxix.6 and hisim-energy-sankeys-9uoo.3.
 
 Complete Sankey spec, §5.1 (``roadmap/complete_energy_sankeys_spec.md``). Every water circuit is a fluid loop that
 both of its members tag on their channels, and the balance derives its heat once from the mass flow and the two
-temperatures both members read, ``m c (T_sup - T_ret) dt``: the generator's circuit into the buffer and into the hot-water tank, the
-buffer's circuit to the heat distribution system. The buffer (``SimpleHotWaterStorage``) takes its generators'
-circuits in, gives the distribution circuit out, loses its standby heat outdoors (owner decision Q-F) and stores the
-change of its heat; the tank (``SimpleDHWStorage``) takes its charging circuits in, gives the hot water drawn at the
+temperatures both members read, ``m c (T_sup - T_ret) dt``: the generator's loop into the buffer and into the hot-water tank, the
+buffer's loop to the heat distribution system. The buffer (``SimpleHotWaterStorage``) takes its generators'
+loops in, gives the distribution loop out, loses its standby heat outdoors (owner decision Q-F) and stores the
+change of its heat; the tank (``SimpleDHWStorage``) takes its charging loops in, gives the hot water drawn at the
 taps to that boundary node, loses its standby heat outdoors and stores the change; the distribution system
-(``HeatDistribution``) takes the buffer's circuit in and gives its heat to the building, space-heating heat up to the
+(``HeatDistribution``) takes the buffer's loop in and gives its heat to the building, space-heating heat up to the
 building's input, which the building books as received (PR 4 of the spec).
 
 The second January week at 900 s of the gas, heat-pump, gas-and-solar and heat-pump-and-solar households, each run
 once per module: the run finishing proves every declared balance closes in every step (the check fails the run
 otherwise); the tests read its report and its Sankey graph. The chains without a buffer are run too: district
 heating and ``gas_boiler_household``, whose distribution system publishes its heat one step late and, in the boiler
-house, runs a flow of its own beside the boiler's on the same circuit. There it declares no ports yet (beads
+house, runs a flow of its own beside the boiler's on the same loop. There it declares no ports yet (beads
 hisim-pnw7 and hisim-boiler-circuit-flow-gap-g2mx) and is drawn as undeclared; the tank of the district-heating
 house closes all the same.
 """
@@ -49,21 +49,21 @@ class Expected:
     }
 
     #: The space-heating circuit of each generator, named by its mass flow.
-    SPACE_HEATING_CIRCUIT: ClassVar[Dict[str, str]] = {
-        "CondensingGasBoiler": "circuit CondensingGasBoiler.WaterOutputMassFlowSh",
-        "MoreAdvancedHeatPumpHPLib": "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputSH",
+    SPACE_HEATING_LOOP: ClassVar[Dict[str, str]] = {
+        "CondensingGasBoiler": "loop CondensingGasBoiler.WaterOutputMassFlowSh",
+        "MoreAdvancedHeatPumpHPLib": "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputSH",
     }
 
     #: The hot-water circuit of each generator, named by its mass flow.
-    HOT_WATER_CIRCUIT: ClassVar[Dict[str, str]] = {
-        "CondensingGasBoiler": "circuit CondensingGasBoiler.WaterOutputMassFlowDhw",
-        "MoreAdvancedHeatPumpHPLib": "circuit MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW",
-        "SolarThermalSystem": "circuit SolarThermalSystem.WaterMassFlowOutput",
-        "DistrictHeating": "circuit DistrictHeating.WaterOutputDhwMassFlowRate",
+    HOT_WATER_LOOP: ClassVar[Dict[str, str]] = {
+        "CondensingGasBoiler": "loop CondensingGasBoiler.WaterOutputMassFlowDhw",
+        "MoreAdvancedHeatPumpHPLib": "loop MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW",
+        "SolarThermalSystem": "loop SolarThermalSystem.WaterMassFlowOutput",
+        "DistrictHeating": "loop DistrictHeating.WaterOutputDhwMassFlowRate",
     }
 
-    #: The distribution circuit, named by its mass flow, which the distribution system pumps.
-    DISTRIBUTION_CIRCUIT: ClassVar[str] = "circuit HeatDistributionSystem.WaterMassFlowHDS"
+    #: The distribution loop, named by its mass flow, which the distribution system pumps.
+    DISTRIBUTION_LOOP: ClassVar[str] = "loop HeatDistributionSystem.WaterMassFlowHDS"
 
     #: The households without a buffer, whose distribution system declares no ports yet.
     WITHOUT_BUFFER: ClassVar[Tuple[str, ...]] = ("household_district_heating_building_sizer", "gas_boiler_household")
@@ -93,34 +93,34 @@ def closes_in_every_step(entry: Dict[str, Any]) -> None:
 
 
 @pytest.mark.extendedbase2
-def test_the_buffer_declares_its_circuits_loss_and_stored_heat_and_closes(twin: Tuple[str, Path]) -> None:
-    """The generator's circuit in, the distribution circuit out, the standby loss and the stored change (§5.1)."""
+def test_the_buffer_declares_its_loops_loss_and_stored_heat_and_closes(twin: Tuple[str, Path]) -> None:
+    """The generator's loop in, the distribution loop out, the standby loss and the stored change (§5.1)."""
     setup, results = twin
     generator, _ = Expected.TWINS[setup]
     entry = balance_entry(results, "SimpleHotWaterStorage")
     closes_in_every_step(entry)
     assert port_roles(entry) == {
-        Expected.SPACE_HEATING_CIRCUIT[generator]: ("consumption", "space_heating_heat"),
-        Expected.DISTRIBUTION_CIRCUIT: ("production", "space_heating_heat"),
+        Expected.SPACE_HEATING_LOOP[generator]: ("consumption", "space_heating_heat"),
+        Expected.DISTRIBUTION_LOOP: ("production", "space_heating_heat"),
         "StandbyHeatLoss": ("loss", "space_heating_heat"),
         "ThermalEnergyIncreaseInStorage": ("stored_change", "space_heating_heat"),
     }
     peers = {port["output"]: (port["peer_kind"], port["peer"]) for port in entry["ports"]}
-    assert peers[Expected.SPACE_HEATING_CIRCUIT[generator]] == ("component", generator)
-    assert peers[Expected.DISTRIBUTION_CIRCUIT] == ("component", "HeatDistributionSystem")
+    assert peers[Expected.SPACE_HEATING_LOOP[generator]] == ("component", generator)
+    assert peers[Expected.DISTRIBUTION_LOOP] == ("component", "HeatDistributionSystem")
     assert peers["StandbyHeatLoss"] == ("boundary", "outdoors")
     # a week in January: the generator charges, the distribution draws, the buffer loses
     assert entry["consumption_kwh"] > 10.0 and entry["production_kwh"] > 10.0 and entry["loss_kwh"] > 0.0
 
 
 @pytest.mark.extendedbase2
-def test_the_hot_water_tank_declares_its_circuits_taps_loss_and_stored_heat_and_closes(twin: Tuple[str, Path]) -> None:
-    """Every charging circuit in, the hot water drawn at the taps out to its boundary node, loss and stored change."""
+def test_the_hot_water_tank_declares_its_loops_taps_loss_and_stored_heat_and_closes(twin: Tuple[str, Path]) -> None:
+    """Every charging loop in, the hot water drawn at the taps out to its boundary node, loss and stored change."""
     setup, results = twin
     _, charging = Expected.TWINS[setup]
     entry = balance_entry(results, "DHWStorage")
     closes_in_every_step(entry)
-    expected = {Expected.HOT_WATER_CIRCUIT[generator]: ("consumption", "domestic_hot_water_heat") for generator in charging}
+    expected = {Expected.HOT_WATER_LOOP[generator]: ("consumption", "domestic_hot_water_heat") for generator in charging}
     expected.update(
         {
             "ThermalPowerConsumptionDHW": ("production", "domestic_hot_water_heat"),
@@ -132,13 +132,13 @@ def test_the_hot_water_tank_declares_its_circuits_taps_loss_and_stored_heat_and_
     peers = {port["output"]: (port["peer_kind"], port["peer"]) for port in entry["ports"]}
     assert peers["ThermalPowerConsumptionDHW"] == ("boundary", "hot water drawn at the taps")
     for generator in charging:
-        assert peers[Expected.HOT_WATER_CIRCUIT[generator]] == ("component", generator)
+        assert peers[Expected.HOT_WATER_LOOP[generator]] == ("component", generator)
     assert entry["production_kwh"] > 1.0
 
 
 @pytest.mark.extendedbase2
-def test_the_distribution_system_takes_the_buffer_s_circuit_and_heats_the_building(twin: Tuple[str, Path]) -> None:
-    """Behind a buffer the distribution system books this step's circuit and gives all of it to the building.
+def test_the_distribution_system_takes_the_buffer_s_loop_and_heats_the_building(twin: Tuple[str, Path]) -> None:
+    """Behind a buffer the distribution system books this step's loop and gives all of it to the building.
 
     Its signed heat is booked in its two directions: heating out to the building, and the heat its cooling mode takes
     from the building in.
@@ -147,14 +147,14 @@ def test_the_distribution_system_takes_the_buffer_s_circuit_and_heats_the_buildi
     entry = balance_entry(results, "HeatDistributionSystem")
     closes_in_every_step(entry)
     assert port_roles(entry) == {
-        Expected.DISTRIBUTION_CIRCUIT: ("consumption", "space_heating_heat"),
+        Expected.DISTRIBUTION_LOOP: ("consumption", "space_heating_heat"),
         "HeatDeliveredInWatt": ("production", "space_heating_heat"),
         "HeatDrawnForCoolingInWatt": ("consumption", "cooling"),
     }
     peers = {port["output"]: (port["peer_kind"], port["peer"]) for port in entry["ports"]}
     # the building reads both directions through its input ports HeatReceivedInWatt and HeatRemovedByCoolingInWatt
     assert peers == {
-        Expected.DISTRIBUTION_CIRCUIT: ("component", "SimpleHotWaterStorage"),
+        Expected.DISTRIBUTION_LOOP: ("component", "SimpleHotWaterStorage"),
         "HeatDeliveredInWatt": ("component", "Building"),
         "HeatDrawnForCoolingInWatt": ("component", "Building"),
     }
@@ -162,19 +162,19 @@ def test_the_distribution_system_takes_the_buffer_s_circuit_and_heats_the_buildi
 
 
 @pytest.mark.extendedbase2
-def test_every_circuit_is_one_link_whose_ends_book_the_same_heat(twin: Tuple[str, Path]) -> None:
-    """Both ends of a circuit derive its heat from the same three outputs: sent equals received to the last bit."""
+def test_every_loop_is_one_link_whose_ends_book_the_same_heat(twin: Tuple[str, Path]) -> None:
+    """Both ends of a loop derive its heat from the same three outputs: sent equals received to the last bit."""
     setup, results = twin
     generator, charging = Expected.TWINS[setup]
     links = {(link["sender"], link["receiver"], link["carrier"]): link for link in report_of(results)["links"]}
-    circuits: List[Tuple[str, str, str]] = [
+    loops: List[Tuple[str, str, str]] = [
         (generator, "SimpleHotWaterStorage", "space_heating_heat"),
         ("SimpleHotWaterStorage", "HeatDistributionSystem", "space_heating_heat"),
     ] + [(name, "DHWStorage", "domestic_hot_water_heat") for name in charging]
-    for key in circuits:
+    for key in loops:
         link = links[key]
         assert link["verdict"] == "closes" and link["sent_kwh"] == link["received_kwh"], link
-    assert not report_of(results)["circuit_faults"]
+    assert not report_of(results)["loop_faults"]
 
 
 @pytest.mark.extendedbase2
@@ -212,7 +212,7 @@ def test_without_a_buffer_the_distribution_system_is_undeclared_and_the_tank_clo
     """The district-heating and the boiler house run; their distribution system is drawn as undeclared.
 
     Without a buffer the distribution system publishes the previous step's heat (hisim-pnw7), and in
-    ``gas_boiler_household`` the boiler books a flow of its own on the circuit the distribution system pumps
+    ``gas_boiler_household`` the boiler books a flow of its own on the loop the distribution system pumps
     (hisim-boiler-circuit-flow-gap-g2mx), so its balance would not close; it declares no ports until they land. The
     generator's space-heating circuit ends at it as an undeclared node, and a tank, where there is one, closes.
     """
@@ -220,7 +220,7 @@ def test_without_a_buffer_the_distribution_system_is_undeclared_and_the_tank_clo
     report = report_of(results)
     distribution = "hds" if setup == "gas_boiler_household" else "HeatDistributionSystem"
     assert distribution in {item["component"] for item in report["undeclared"]}
-    assert not report["circuit_faults"]
+    assert not report["loop_faults"]
     generator = "boiler" if setup == "gas_boiler_household" else "DistrictHeating"
     links = overall_links(results)
     assert ("space_heating_heat", generator, f"undeclared: {distribution}") in links

@@ -76,6 +76,9 @@ rules:
         # caller names (recording, schema export, the RenoVisor map, capability document, contract
         # refresh and verification report, the profiler, the code overview).
         - /hisim/cli_grouping.py
+        # `hisim setup-rules check` builds a file in a temporary result directory without simulating
+        # it and writes its findings as JSON to the stream it is given (stdout).
+        - /hisim/cli_setup_rules.py
         - /hisim/energy_system/recording/
         - /hisim/energy_system/schema_export.py
         - /hisim/energy_system/assemblies/schema.py

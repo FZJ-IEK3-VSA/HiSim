@@ -23,13 +23,19 @@ import yaml
 from hisim import component as cp
 from hisim import hydronics
 from hisim import loadtypes as lt
-from hisim.components.more_advanced_heat_pump_hplib_model import HplibResult
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.backup_rod import (
+    BackupHeatingRod,
+    RodAssistedHeating,
+)
+from hisim.components.more_advanced_heat_pump.hplib_operation import HplibResult
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
     HeatPumpDhwState,
-    MoreAdvancedHeatPumpHPLib,
-    MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibControllerDHW,
     MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,
     PositionHotWaterStorageInSystemSetup,
 )
@@ -133,7 +139,7 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
 
     The flow's heat is ``m c (T_out - T_in)`` from the heat pump's own mass-flow, outlet and return outputs, in the
     order :func:`hisim.hydronics.circuit_power_w` evaluates it. On every heating step (a flow and a COP above 0) the
-    electricity is that heat over the COP. On every cooling step (a negative booked heat) the electricity for
+    electricity of the compressor and the backup heating rod is that heat over the COP. On every cooling step (a negative booked heat) the electricity for
     cooling is the heat drawn over hplib's EER, ``ElectricalInputPowerForCooling = -P_th / EER``. On a step without
     flow the booked heat and the electricity are zero.
 
@@ -147,6 +153,9 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
     eer = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.EER], dtype=float)
     electrical_power_for_cooling_in_watt = np.asarray(
         outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling], dtype=float
+    )
+    electrical_power_heating_rod_in_watt = np.asarray(
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod], dtype=float
     )
     running_steps: Dict[str, int] = {}
     for circuit, (mass_flow, t_out, t_in, thermal, electrical) in HeatPumpTwins.CIRCUITS.items():
@@ -163,7 +172,7 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
         heating = running & (cop > 0.0)
         cooling = booked_power_in_watt < 0.0
         np.testing.assert_allclose(
-            consumed_electrical_power_in_watt[heating],
+            consumed_electrical_power_in_watt[heating] + electrical_power_heating_rod_in_watt[heating],
             booked_power_in_watt[heating] / cop[heating],
             rtol=1e-12,
             err_msg=circuit,
@@ -222,6 +231,7 @@ class SingleStep:
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
+        config.heating_rod_rated_electrical_power_in_watt = 9000.0
         config.heating_reference_temperature_in_celsius = -7.0
         config.flow_temperature_in_celsius = 52.0
         config.cycling_mode = cycling_mode
@@ -301,18 +311,34 @@ def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out:
     )
 
 
+def compressor_only_heating(cop: float) -> RodAssistedHeating:
+    """A whole step of 0.4 kg/s from a return of 30.04 °C to 35.0 °C that the compressor delivers alone, at a COP.
+
+    Args:
+        cop: The compressor's coefficient of performance, dimensionless.
+
+    Returns:
+        The step.
+    """
+    return BackupHeatingRod(rated_electrical_power_in_watt=9000.0).heating(
+        part_load_ratio=1.0,
+        mass_flow_in_kg_per_second=0.4,
+        return_temperature_in_celsius=30.04,
+        required_outlet_temperature_in_celsius=35.0,
+        compressor_thermal_capacity_in_watt=10000.0,
+        compressor_maximal_outlet_temperature_in_celsius=60.0,
+        compressor_cop=cop,
+    )
+
+
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
     """A flow of 0.4 kg/s from a return of 30.04 °C to 35.0 °C books 0.4 * 4180 * 4.96 = 8293.12 W, over the COP."""
-    powers = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
-        mass_flow_in_kg_per_second=0.4,
-        outlet_temperature_in_celsius=35.0,
-        return_temperature_in_celsius=30.04,
-        cop=3.5,
-    )
-    assert powers.thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
-    assert powers.thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
-    assert powers.electrical_power_in_watt == powers.thermal_power_in_watt / 3.5
+    heating = compressor_only_heating(3.5)
+    assert heating.thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
+    assert heating.thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
+    assert heating.electrical_power_in_watt == heating.thermal_power_in_watt / 3.5
+    assert heating.heating_rod_electrical_power_in_watt == 0.0
 
 
 @pytest.mark.base
@@ -320,12 +346,7 @@ def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> N
 def test_a_heating_circuit_without_a_positive_cop_is_refused(cop: float) -> None:
     """A COP of 0 or less would book infinite or negative electricity; the booking must refuse it by name."""
     with pytest.raises(ValueError, match="coefficient of performance above 0"):
-        MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
-            mass_flow_in_kg_per_second=0.4,
-            outlet_temperature_in_celsius=35.0,
-            return_temperature_in_celsius=30.0,
-            cop=cop,
-        )
+        compressor_only_heating(cop)
 
 
 @pytest.mark.base
@@ -478,6 +499,7 @@ def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
     """Catches a negative nominal flow that would only fail at the first fixed-flow step, without naming the field."""
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.massflow_nominal_secondary_side_in_kg_per_s = mass_flow_in_kg_per_s
     config.position_hot_water_storage_in_system = position
@@ -498,6 +520,7 @@ def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_
     """Catches a negative minimum time that would mean no minimum in cycling mode without a word."""
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     setattr(config, field_name, seconds)
     with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
@@ -766,9 +789,9 @@ def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
         fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage], start_temperature_in_celsius
     )
     stsv.set_output_value(fakes[MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier], raise_in_kelvin)
-    controller.state_dhw = HeatPumpDhwState.ON
+    controller.state_at_step_start = controller.state_at_step_start._replace(charge=HeatPumpDhwState.ON)
     controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert controller.state_dhw == expected_state
+    assert controller.state_of_last_free_pass.charge == expected_state
     assert stsv.values[controller.state_dhw_channel.global_index] == expected_state.value
     assert (
         stsv.values[controller.supply_temperature_set_for_dhw_in_celsius_channel.global_index]
@@ -777,20 +800,46 @@ def test_the_hot_water_charge_ends_two_kelvin_below_the_set_temperature(
 
 
 @pytest.mark.base
-def test_a_zero_tank_temperature_on_the_first_pass_keeps_the_last_reading() -> None:
-    """A 0 °C reading, the zeroed value of a pass before the tank ran, must not start a charge.
+def test_a_charge_one_pass_asks_for_does_not_last_into_the_next_pass_of_the_step() -> None:
+    """Catches a pass that decides from the pass before it instead of from the start of the step (4g9.24).
 
-    The controller keeps the temperature it read last instead; without that, a controller simulated before the tank
-    would switch on at every step's first pass and, since it keeps its decision between passes, charge all day.
+    The first pass of a run reads the tank's zeroed output, 0 °C, and asks for a charge; the next pass reads the
+    tank's 50 °C, inside the 40/60 °C band, and must keep the state the step started from, off. Before, the controller
+    decided from the pass before, so the charge latched for the step and, with the pass memory, for the day.
     """
     controller, stsv, fakes = dhw_controller_with_fake_inputs()
     storage_fake = fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage]
-    stsv.set_output_value(storage_fake, 50.0)
-    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
     stsv.set_output_value(storage_fake, 0.0)
     controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert controller.state_dhw == HeatPumpDhwState.OFF
-    assert controller.water_temperature_input_from_dhw_storage_in_celsius == 50.0
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.ON.value
+    stsv.set_output_value(storage_fake, 50.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    assert controller.state_of_last_free_pass.charge == HeatPumpDhwState.OFF
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.OFF.value
+
+
+@pytest.mark.base
+def test_a_raise_that_comes_and_goes_within_a_step_decides_each_pass_from_the_start_of_the_step() -> None:
+    """Catches a surplus charge that one raised pass latches for the rest of the step (4g9.24).
+
+    A tank at 50 °C, inside the band and off at the start of the step: a pass with the energy manager's 10 K raise asks
+    for a charge, a later pass without the raise keeps the start of the step's off. A forced pass then holds the last
+    unforced pass, which is what the step commits.
+    """
+    controller, stsv, fakes = dhw_controller_with_fake_inputs()
+    stsv.set_output_value(fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage], 50.0)
+    raise_fake = fakes[MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier]
+    charges = []
+    for raise_in_kelvin in (10.0, 0.0):
+        stsv.set_output_value(raise_fake, raise_in_kelvin)
+        controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+        charges.append(controller.state_of_last_free_pass.charge)
+    assert charges == [HeatPumpDhwState.ON, HeatPumpDhwState.OFF]
+    stsv.set_output_value(raise_fake, 10.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=True)
+    assert stsv.values[controller.state_dhw_channel.global_index] == HeatPumpDhwState.OFF.value
+    controller.i_save_state()
+    assert controller.state_at_step_start.charge == HeatPumpDhwState.OFF
 
 
 @pytest.mark.base
@@ -802,6 +851,7 @@ def test_passive_cooling_books_the_heat_its_flow_draws_and_only_the_brine_pump_s
     """
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.flow_temperature_in_celsius = 35.0
     config.cycling_mode = False

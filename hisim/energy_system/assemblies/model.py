@@ -203,7 +203,15 @@ class BoundsDeclaration(BaseModel):
 
 
 class MonotoneDeclaration(BaseModel):
-    """``tests.monotone``: one parameter rises, a KPI of a member (or a derived KPI) moves one way."""
+    """``tests.monotone``: one parameter rises, a KPI of a member (or a derived KPI) moves one way.
+
+    ``applies_when`` restricts the entry to the base samples whose parameters meet a conjunctive
+    ``{parameter: [values]}`` condition, written like a port's ``required_when``; ``none`` and ``AUTO``
+    name a parameter left unstated or to its sizing law. Example: the sweep of a heat pump's W35 SCOP
+    with ``applies_when: {scop_en14825_w55: [none]}`` runs only from the bases that state no W55 SCOP,
+    because with a W55 rating held fixed the calibrated COP near the W55 line's outlet temperatures
+    does not move with the W35 rating. An empty mapping applies the entry to every base.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -211,6 +219,29 @@ class MonotoneDeclaration(BaseModel):
     kpi: str
     member: Optional[str] = None
     direction: MonotoneDirection
+    applies_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
+
+    def unmet_condition(self, values: Mapping[str, Any], parameters: Mapping[str, ParameterDeclaration]) -> Optional[str]:
+        """Return the first ``applies_when`` condition a parameter set does not meet, as text, or ``None``.
+
+        Each listed value is read as its parameter's type writes it (:meth:`ParameterType.written`), so
+        ``none`` matches a parameter whose value is ``None``. Example: with ``{scop_en14825_w55: [none]}``
+        and W55 at 3.49 the text is ``scop_en14825_w55 is 3.49, and the entry applies only at none``.
+
+        Args:
+            values: The resolved parameter set of a base sample.
+            parameters: The assembly's parameter declarations; the library check holds every name to one.
+
+        Returns:
+            The unmet condition, or ``None`` when every condition holds (always for an empty mapping).
+        """
+        for name, allowed in self.applies_when.items():
+            written = [parameters[name].type.written(value) for value in allowed]
+            value = values.get(name)
+            if value not in written:
+                listed = ", ".join(str(item) for item in allowed)
+                return f"{name} is {'none' if value is None else value}, and the entry applies only at {listed}"
+        return None
 
 
 class ExpectDeclaration(BaseModel):

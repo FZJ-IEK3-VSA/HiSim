@@ -142,7 +142,7 @@ class SimulationParameters:
                 boiler's hot-water charge and its space-heating charge
                 (:class:`~hisim.components.generic_boiler.GenericBoilerController`), the heat pump's space-heating
                 charge (``MoreAdvancedHeatPumpHPLibControllerSpaceHeating`` in
-                :mod:`hisim.components.more_advanced_heat_pump_hplib`),
+                :mod:`hisim.components.more_advanced_heat_pump.controller_space_heating`),
                 the heat distribution system's circuit
                 (:class:`~hisim.components.heat_distribution_system.HeatDistributionController`) and the solar
                 collector's pump (:class:`~hisim.components.solar_thermal_system.SolarThermalSystemController`);

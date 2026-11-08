@@ -19,7 +19,10 @@ published port answering a claim is no longer an arrangement to accommodate but 
 report: whoever grew it did so outside the format, and the run would carry two ports for one
 signal.
 
-Both refusals are this module. A published port counts as answering a claim when its weight is the
+Both refusals are this module, recorded as :class:`~hisim.energy_system.errors.WiringRefusal` records
+in the caller's list rather than raised, so that every claim of a file is judged at once; the wiring
+rule ``EF-2B`` of the setup rules (``hisim/setup_rules/wiring.py:DispatchSignalUnique``) refuses them.
+A published port counts as answering a claim when its weight is the
 claim's and its tags contain the claim's set, which is precisely the runtime lookup's own rule —
 so the question "would the aggregator find two answers?" is asked here in exactly the terms it will
 be asked at run time.
@@ -28,9 +31,9 @@ be asked at run time.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemErrorId, WiringRefusal
 from hisim.energy_system.resolution import ResolvedDynamicConnection
 
 #: The planner is the module's one shared surface; the signal records are its private vocabulary.
@@ -100,32 +103,35 @@ class DispatchSignalPlanner:
             self._published_signal(entry) for entry in target.my_component_outputs
         ]
 
-    def check(self, resolved: Sequence[ResolvedDynamicConnection]) -> None:
-        """Refuses any dispatch block of one aggregator whose signal is not its alone.
+    def check(self, resolved: Sequence[ResolvedDynamicConnection], refusals: List[WiringRefusal]) -> None:
+        """Records every dispatch block of one aggregator whose signal is not its alone.
+
+        Example: two batteries ranked at one weight on an energy management system claim one signal; the second
+        claim is recorded as an ``EF-2B`` refusal naming the port the first claimed.
 
         Args:
             resolved: The aggregator's resolved connections, already sorted, so that the batch is
                 walked in the same deterministic order its ports are created in.
-
-        Raises:
-            EnergySystemWiringError: ``EF-2B`` when a dispatch block claims a signal another feed
-                of the same aggregator already claims, or one an existing port already answers.
+            refusals: Where a claim is recorded (``EF-2B``) that another feed of the same aggregator already
+                claims, or that an existing port already answers.
         """
         claimed: Dict[SignalKey, str] = {}
         for connection in resolved:
             if connection.dispatch is None:
                 continue
             key = self.signal_key(connection.dispatch.tags, connection.weight)
-            self._refuse_if_claimed(connection, key, claimed)
-            self._refuse_if_published(connection, key)
+            occupied = self._claimed_refusal(connection, key, claimed)
+            if occupied is not None:
+                refusals.append(occupied)
+            refusals.extend(self._published_refusals(connection, key))
             dispatch_port = connection.dispatch_output_name
             # The property answers None only for a connection without a dispatch block, and
             # those were filtered out above; the assertion narrows the Optional for the checker.
             assert dispatch_port is not None  # nosec B101 - unreachable by the filter above
-            claimed[key] = dispatch_port
+            claimed.setdefault(key, dispatch_port)
 
-    def _refuse_if_published(self, connection: ResolvedDynamicConnection, key: SignalKey) -> None:
-        """Refuses a claim the aggregator already publishes a port for.
+    def _published_refusals(self, connection: ResolvedDynamicConnection, key: SignalKey) -> List[WiringRefusal]:
+        """Returns a refusal for every port the aggregator already publishes that answers a claim.
 
         Nothing an energy-system file builds publishes a control output before resolution, so a
         port answering a claim was grown outside the format — by a constructor, or by the
@@ -136,13 +142,11 @@ class DispatchSignalPlanner:
             connection: The dispatching connection being planned.
             key: The signal it claims.
 
-        Raises:
-            EnergySystemWiringError: ``EF-2B`` naming the published port and both tag sets.
+        Returns:
+            One ``EF-2B`` refusal per published port answering the claim, naming the port and both tag sets.
         """
-        for signal in self.published:
-            if not signal.answers(key):
-                continue
-            raise EnergySystemWiringError(
+        return [
+            WiringRefusal(
                 EnergySystemErrorId.AMBIGUOUS_DISPATCH_SIGNAL,
                 f"components.{self.target_name}.inputs",
                 f"the dispatch block of {connection.describe()} claims the control signal "
@@ -156,6 +160,9 @@ class DispatchSignalPlanner:
                     "publishes and let the feed grow the one it describes."
                 ),
             )
+            for signal in self.published
+            if signal.answers(key)
+        ]
 
     @classmethod
     def signal_key(cls, tags: Iterable[Any], weight: int) -> SignalKey:
@@ -189,23 +196,23 @@ class DispatchSignalPlanner:
             key=cls.signal_key(entry.source_tags, int(entry.source_weight)),
         )
 
-    def _refuse_if_claimed(
+    def _claimed_refusal(
         self, connection: ResolvedDynamicConnection, key: SignalKey, claimed: Dict[SignalKey, str]
-    ) -> None:
-        """Refuses a signal an earlier feed of the same aggregator has already claimed.
+    ) -> Optional[WiringRefusal]:
+        """Returns the refusal of a signal an earlier feed of the same aggregator has already claimed.
 
         Args:
             connection: The dispatching connection being planned.
             key: The signal it claims.
             claimed: What the earlier connections of this batch claimed, port name per signal.
 
-        Raises:
-            EnergySystemWiringError: ``EF-2B`` when the signal is already claimed.
+        Returns:
+            ``EF-2B`` naming the port that claimed the signal first, or ``None`` when the signal is free.
         """
         occupant = claimed.get(key)
         if occupant is None:
-            return
-        raise EnergySystemWiringError(
+            return None
+        return WiringRefusal(
             EnergySystemErrorId.AMBIGUOUS_DISPATCH_SIGNAL,
             f"components.{self.target_name}.inputs",
             f"the dispatch block of {connection.describe()} claims the control signal tagged "

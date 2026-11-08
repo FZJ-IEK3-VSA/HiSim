@@ -6,6 +6,7 @@ Therefore some functions must be adjusted which are tested here before.
 import numpy as np
 from pytest import mark
 from hisim.components import building
+from hisim.config import SizingContext
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
@@ -56,6 +57,8 @@ def test_building_thermal_conductance_calculation() -> None:
     # The design outside temperature is the weather's (D-21) and there is no weather here either,
     # so the number the building has always been computed against is stated on the config.
     my_residence_config.heating_reference_temperature_in_celsius = -7.0
+    # The technical room's location follows from the TABULA row; resolving sizes it, the only field left AUTO.
+    my_residence_config = my_residence_config.resolve(SizingContext())
     my_residence = building.Building(
         config=my_residence_config, my_simulation_parameters=my_simulation_parameters
     )

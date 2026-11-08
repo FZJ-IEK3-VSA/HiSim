@@ -3,7 +3,8 @@ from __future__ import annotations
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from types import MappingProxyType
+from typing import ClassVar, Dict, Mapping, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -32,16 +33,18 @@ from hisim.economics.facts import CostRelevance
 @dataclass_json
 @dataclass
 class TransformerConfig(ConfigBase):
-    """Configuration of a transformer and rectifier: how much it passes on, and what it is rated for.
+    """Configuration of a transformer and rectifier: how much it passes on, what it is rated for, and what it receives.
 
     The unit converts an electrical input and loses a fixed share of it on the way::
 
         TransformerConfig.preset_standard("TransformerAndRectifier")
 
     builds the 95 %-efficient megawatt-class unit the electrolyzer setup feeds, and a differently
-    rated unit overrides ``rated_power_in_kilowatt`` on top of it. The two figures answer two
-    separate questions: the efficiency is what the simulation multiplies by, the rating is what
-    the investment cost is scaled by.
+    rated unit overrides ``rated_power_in_kilowatt`` on top of it. The efficiency is what the
+    simulation multiplies by; the rating caps what the unit delivers and is what the investment
+    cost is scaled by. ``received_carrier`` states where the electricity on its input comes from:
+    ``ELECTRICITY`` that a meter counts, or ``WIND_ELECTRICITY``, the output of a wind turbine the
+    run does not model, read from a series.
 
     The five cost fields are read as a set: postprocessing looks the figures up from the device
     database for the simulated year and country and scales them by ``rated_power_in_kilowatt``
@@ -50,16 +53,34 @@ class TransformerConfig(ConfigBase):
 
     MAIN_CLASS = "hisim.components.transformer_rectifier.Transformer"
 
+    #: The boundary node of each carrier the unit may receive, ``None`` for a carrier whose port finds its peer
+    #: through the wiring (read-only). Electricity on the input is metered: the electricity meter reads the port
+    #: that books it. The electricity of a wind turbine the run does not model enters at the ``wind turbine`` node,
+    #: as the sun enters a PV system (owner decision of 2026-10-28 on bead hisim-component-physics-4g9.69).
+    BOUNDARY_OF_RECEIVED_CARRIER: ClassVar[Mapping[lt.EnergyBalanceCarrier, Optional[lt.EnvironmentNode]]] = (
+        MappingProxyType(
+            {
+                lt.EnergyBalanceCarrier.ELECTRICITY: None,
+                lt.EnergyBalanceCarrier.WIND_ELECTRICITY: lt.EnvironmentNode.WIND_TURBINE,
+            }
+        )
+    )
+
     component_id: ComponentID
     #: Share of the input the unit passes on, as a dimensionless fraction in (0, 1] -- 0.95 for
     #: 95 %, never a percentage. It multiplies the input power directly, which is why
     #: :meth:`__post_init__` refuses anything outside that range.
     efficiency: float = 0.95
-    #: Nameplate throughput of the unit in kW. It does not enter the simulation --
-    #: :meth:`Transformer.i_simulate` converts whatever it is fed -- and exists because a
-    #: transformer and rectifier are priced per kilowatt of rating: it is the only sizing figure
-    #: :meth:`Transformer.get_cost_capex` can scale by.
+    #: Nameplate throughput of the unit in kW: the most it delivers. Input beyond what the unit
+    #: can carry at this rating, ``rated_power_in_kilowatt / efficiency``, is not taken
+    #: (:meth:`Transformer.i_simulate`). A transformer and rectifier are also priced per kilowatt of
+    #: rating, so it is the sizing figure :meth:`Transformer.get_cost_capex` scales by.
     rated_power_in_kilowatt: float = 1000.0
+    #: The carrier of what the unit receives on its input, a key of
+    #: :attr:`BOUNDARY_OF_RECEIVED_CARRIER`: ``ELECTRICITY`` (a meter counts it) or
+    #: ``WIND_ELECTRICITY`` (a wind turbine's output read from a series, from the ``wind turbine``
+    #: boundary node).
+    received_carrier: lt.EnergyBalanceCarrier = lt.EnergyBalanceCarrier.ELECTRICITY
     #: CO2 emitted producing the device, in kg, or ``None`` for the database lookup.
     device_co2_footprint_in_kg: Optional[float] = None
     #: Purchase cost of the device in EUR, or ``None`` for the database lookup.
@@ -74,19 +95,28 @@ class TransformerConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     def __post_init__(self) -> None:
-        """Refuses an efficiency outside the fraction range (0, 1] and a non-positive rating.
+        """Refuses an efficiency outside the fraction range (0, 1], a non-positive rating and a carrier it cannot receive.
 
         A percentage (``95``) would silently scale the output a hundredfold, a negative value
         would invert it, and a zero would make the conversion-loss indicator a division by zero —
         all three run happily as simulations and only surface as wrong numbers in a report, so
         the configuration is where they stop. A rating of zero or less is refused for the same
-        reason one step later: the capex is the rating times a price per kilowatt, so an unrated
-        unit would be reported as costing nothing, which reads exactly like a device that is free.
+        reason one step later: the unit would deliver nothing, and the capex is the rating times a
+        price per kilowatt, so an unrated unit would be reported as costing nothing. A received
+        carrier other than electricity or a wind turbine's electricity has no port the unit could
+        book it on.
 
         Raises:
-            ValueError: For an efficiency that is not in (0, 1], or a rated power that is not
-                strictly positive.
+            ValueError: For an efficiency that is not in (0, 1], a rated power that is not
+                strictly positive, or a received carrier that is no key of
+                :attr:`BOUNDARY_OF_RECEIVED_CARRIER`.
         """
+        self.received_carrier = lt.EnergyBalanceCarrier(self.received_carrier)
+        if self.received_carrier not in self.BOUNDARY_OF_RECEIVED_CARRIER:
+            raise ValueError(
+                f"A transformer receives {' or '.join(c.value for c in self.BOUNDARY_OF_RECEIVED_CARRIER)}, "
+                f"not {self.received_carrier.value}."
+            )
         if not 0.0 < self.efficiency <= 1.0:
             raise ValueError(
                 f"The transformer efficiency must be a fraction in (0, 1], not {self.efficiency}. "
@@ -95,7 +125,7 @@ class TransformerConfig(ConfigBase):
         if self.rated_power_in_kilowatt <= 0.0:
             raise ValueError(
                 f"The transformer rated power must be strictly positive, not {self.rated_power_in_kilowatt} kW. "
-                "It is what the investment cost is scaled by, so an unrated unit would be costed as free."
+                "It caps what the unit delivers and is what the investment cost is scaled by."
             )
 
     @preset
@@ -118,21 +148,21 @@ class TransformerConfig(ConfigBase):
 
 
 class Transformer(StatelessComponent, PhysicsComponent):
-    """A transformer and rectifier: it passes on a fixed share of the electricity it receives and loses the rest.
+    """A transformer and rectifier: it passes on a fixed share of what it receives, up to its rating, and loses the rest.
 
-    The single input (``TransformerInput``) is scaled by
-    :attr:`TransformerConfig.efficiency` (a dimensionless fraction in [0, 1])
-    to produce the single output (``TransformerOutput``). Both the input and
-    output are declared with :attr:`lt.LoadTypes.ELECTRICITY` and
-    :attr:`lt.Units.KILOWATT`, so the transformer carries an implicit unit
-    contract: a caller must feed ``electricity_input`` in kW and read
-    ``electricity_output`` in kW.
+    It reads the power offered on its input (``TransformerInput``, in kW) and takes as much of it as it can carry:
+    it delivers ``min(input * efficiency, rating)`` and receives ``delivered / efficiency``
+    (:attr:`TransformerConfig.efficiency`, :attr:`TransformerConfig.rated_power_in_kilowatt`). The input beyond that is
+    not taken: ``CurtailedInputInWatt``. For example, a 1,000 kW unit at 95 % offered 5,000 kW delivers 1,000 kW,
+    receives 1,052.6 kW, loses 52.6 kW and leaves 3,947.4 kW curtailed; offered 500 kW, it delivers 475 kW and
+    curtails nothing.
 
-    Its energy ports: the electricity it receives is ``ElectricityReceivedInKilowatt`` (``CONSUMPTION``), the
-    electricity it delivers ``TransformerOutput`` (``PRODUCTION``) and the difference ``ConversionLossInKilowatt``
-    (``LOSS``), all of carrier electricity. The received electricity is an output of its own because a metered
-    carrier is booked on an output, never on the input that reads it. For example, 1000 kW received at 95 % are
-    950 kW delivered and 50 kW lost.
+    Its energy ports, all in W: the electricity it delivers ``ElectricityDeliveredInWatt`` (``PRODUCTION`` of
+    electricity, which the electricity meter reads), what it receives ``ElectricityReceivedInWatt`` (``CONSUMPTION``
+    of :attr:`TransformerConfig.received_carrier`) and the difference ``ConversionLossInWatt`` (``LOSS`` of
+    electricity). Received electricity is booked on an output of its own because a metered carrier is booked on an
+    output, never on the input that reads it; a wind turbine's electricity comes from the ``wind turbine`` boundary
+    node. The curtailed input is never generated (the turbine sheds it), so it carries no port.
 
     Parameters
     ----------
@@ -141,8 +171,8 @@ class Transformer(StatelessComponent, PhysicsComponent):
 
     config : TransformerConfig
         The :py:class:`TransformerConfig` object that holds the transformer
-        configuration (building name, component name, and conversion
-        ``efficiency`` expressed as a fraction in [0, 1]).
+        configuration (component name, conversion ``efficiency`` as a fraction in (0, 1],
+        rating and the carrier it receives).
 
     my_display_config : DisplayConfig, optional
         A :py:class:`~hisim.config.DisplayConfig` object that controls
@@ -153,12 +183,27 @@ class Transformer(StatelessComponent, PhysicsComponent):
 
     cost_relevance = CostRelevance.PRICED
 
+    #: Watts per kilowatt: the input is offered in kW, every output is published in W.
+    WATTS_PER_KILOWATT: ClassVar[float] = 1000.0
+
     TransformerInput: str = "Input1"
-    TransformerOutput: str = "MyTransformerOutput"
-    #: The electricity the unit receives, in kW: its input, published as the output its energy port is booked on.
-    ElectricityReceivedInKilowatt: str = "ElectricityReceivedInKilowatt"
-    #: The electricity the unit loses in the step, in kW: what it receives minus what it delivers.
-    ConversionLossInKilowatt: str = "ConversionLossInKilowatt"
+    #: The electricity the unit delivers, in W.
+    ElectricityDeliveredInWatt: str = "ElectricityDeliveredInWatt"
+    #: What the unit receives on its input, in W: what it can carry of what is offered.
+    ElectricityReceivedInWatt: str = "ElectricityReceivedInWatt"
+    #: The electricity the unit loses in the step, in W: what it receives minus what it delivers.
+    ConversionLossInWatt: str = "ConversionLossInWatt"
+    #: The input the unit cannot carry at its rating, in W: what is offered minus what it receives.
+    CurtailedInputInWatt: str = "CurtailedInputInWatt"
+
+    #: The name of the KPI each integrated power output reports, keyed by the output's name (read-only).
+    ENERGY_KPIS: ClassVar[Mapping[str, str]] = MappingProxyType(
+        {
+            ElectricityDeliveredInWatt: "Electrical energy delivered",
+            ConversionLossInWatt: "Conversion losses",
+            CurtailedInputInWatt: "Curtailed input energy",
+        }
+    )
 
     def __init__(
         self,
@@ -189,112 +234,121 @@ class Transformer(StatelessComponent, PhysicsComponent):
 
         self.electricity_output: ComponentOutput = self.add_output(
             self.component_name,
-            Transformer.TransformerOutput,
+            Transformer.ElectricityDeliveredInWatt,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
+            lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-            output_description="The electricity the unit delivers, in kW, >= 0: its input times its efficiency.",
+            output_description=(
+                "The electricity the unit delivers, in W, >= 0: what it receives times its efficiency, at most its rating."
+            ),
             energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
         # no consumption flag: the KPIs would count the electricity the unit receives as the household's own
         # consumption, beside the delivered electricity they count as production
         self.electricity_received_channel: ComponentOutput = self.add_output(
             self.component_name,
-            Transformer.ElectricityReceivedInKilowatt,
+            Transformer.ElectricityReceivedInWatt,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            output_description="The electricity the unit receives on its input, in kW, >= 0.",
-            energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
+            lt.Units.WATT,
+            output_description=(
+                "What the unit receives on its input, in W, >= 0: what is offered, at most what it can carry at its "
+                "rating."
+            ),
+            energy_port=EnergyPort(
+                lt.EnergyRole.CONSUMPTION,
+                config.received_carrier,
+                environment=TransformerConfig.BOUNDARY_OF_RECEIVED_CARRIER[config.received_carrier],
+            ),
         )
         self.conversion_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
-            Transformer.ConversionLossInKilowatt,
+            Transformer.ConversionLossInWatt,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
+            lt.Units.WATT,
             output_description=(
-                "The electricity the unit loses in the step, in kW, >= 0: what it receives minus what it delivers."
+                "The electricity the unit loses in the step, in W, >= 0: what it receives minus what it delivers."
             ),
             energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
+        self.curtailed_input_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            Transformer.CurtailedInputInWatt,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            output_description=(
+                "The power offered on the input that the unit cannot carry at its rating, in W, >= 0: never "
+                "generated, so no energy port books it."
+            ),
+        )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Scale the electricity input by the configured efficiency to produce output.
+        """Take what the unit can carry of the offered input, deliver it times the efficiency, and publish the rest.
 
-        Reads the input power value (``electricity_input``) from ``stsv``, multiplies it by
-        :attr:`TransformerConfig.efficiency`, and writes the result to ``electricity_output``. It also publishes
-        the input itself and the difference of the two, the conversion loss, for its energy ports.
+        The unit delivers ``min(offered * efficiency, rating)`` and receives ``delivered / efficiency``; the loss is
+        the difference of the two and the curtailed input what is offered beyond what it receives. For example, at
+        95 % and 1,000 kW, an offer of 2,000 kW gives 1,000 kW delivered, 1,052.6 kW received, 52.6 kW lost and
+        947.4 kW curtailed.
 
         Args:
             timestep: The current simulation timestep index.
             stsv: The single-timestep values container holding inputs and outputs.
             force_convergence: Whether to force convergence (unused in this component).
         """
-        input_power_in_kilowatt = stsv.get_input_value(self.electricity_input)
+        offered_in_watt = float(stsv.get_input_value(self.electricity_input)) * self.WATTS_PER_KILOWATT
         efficiency = self.transformerconfig.efficiency
+        rating_in_watt = self.transformerconfig.rated_power_in_kilowatt * self.WATTS_PER_KILOWATT
 
-        output_power_in_kilowatt = float(input_power_in_kilowatt * efficiency)
-        stsv.set_output_value(self.electricity_output, output_power_in_kilowatt)
-        stsv.set_output_value(self.electricity_received_channel, float(input_power_in_kilowatt))
-        stsv.set_output_value(self.conversion_loss_channel, float(input_power_in_kilowatt) - output_power_in_kilowatt)
+        received_in_watt = min(offered_in_watt, rating_in_watt / efficiency)
+        delivered_in_watt = received_in_watt * efficiency
+        stsv.set_output_value(self.electricity_output, delivered_in_watt)
+        stsv.set_output_value(self.electricity_received_channel, received_in_watt)
+        stsv.set_output_value(self.conversion_loss_channel, received_in_watt - delivered_in_watt)
+        stsv.set_output_value(self.curtailed_input_channel, offered_in_watt - received_in_watt)
 
-    def delivered_and_lost_energy_in_kilowatt_hour(
+    def energies_in_kilowatt_hour(
         self,
         all_outputs: list,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
-        """Integrate the delivered electrical energy over the run and derive the conversion losses.
+    ) -> Dict[str, float]:
+        """Integrate the delivered, lost and curtailed power over the run.
 
-        The energy the unit delivered is the integral of its single output power column. The
-        losses are not observable as a column of their own -- the unit has one input and one
-        output port -- but the output is by construction the input scaled by the configured
-        efficiency, so the loss follows exactly: ``delivered * (1/efficiency - 1)``. Both the
-        KPI entries and the operating costs are these two numbers, which is why they are computed
-        once here instead of twice with two chances to disagree.
+        Each output of :attr:`ENERGY_KPIS` is a power column in W; its energy is the sum of the column times the step.
+        The KPI entries and the operating costs both read these numbers, so they are computed once here.
 
         Args:
-            all_outputs: every output column of the run, searched for this component's output
-                by name.
+            all_outputs: every output column of the run, searched for this component's outputs by name.
             postprocessing_results: the per-timestep values of those columns.
 
         Returns:
-            Tuple[float, float]: the delivered energy and the conversion losses, both in kWh,
-            each rounded to three decimals.
+            Dict[str, float]: the energy of each output of :attr:`ENERGY_KPIS`, in kWh, rounded to three decimals.
 
         Raises:
-            ValueError: if the output column is missing, empty or carries NaN — a value pandas
-                would otherwise drop silently from the sum — so the two figures are either
-                computed from complete values or refused, never reported wrongly in silence.
+            ValueError: if one of the columns is missing, empty or carries NaN — a value pandas would otherwise drop
+                silently from the sum — so the figures are either computed from complete values or refused, never
+                reported wrongly in silence.
         """
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        delivered_in_kilowatt_hour = None
+        energies: Dict[str, float] = {}
         for index, output in enumerate(all_outputs):
-            if output.component_name != self.component_name:
+            if output.component_name != self.component_name or output.field_name not in self.ENERGY_KPIS:
                 continue
-            if output.field_name == Transformer.TransformerOutput and output.unit == lt.Units.KILOWATT:
-                column = postprocessing_results.iloc[:, index]
-                if column.empty or bool(column.isna().any()):
-                    raise ValueError(
-                        f"The transformer output column of {self.component_name} is "
-                        f"{'empty' if column.empty else 'carrying NaN'}; its KPIs would be "
-                        "silently wrong rather than absent, so they are refused instead."
-                    )
-                # The output is in kilowatt and the shared conversion speaks watt, so the column
-                # is scaled up rather than the conversion restated inline.
-                delivered_in_kilowatt_hour = round(
-                    KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        column * 1000.0, seconds_per_timestep
-                    ),
-                    3,
+            column = postprocessing_results.iloc[:, index]
+            if column.empty or bool(column.isna().any()):
+                raise ValueError(
+                    f"The transformer output column {output.field_name} of {self.component_name} is "
+                    f"{'empty' if column.empty else 'carrying NaN'}; its KPIs would be "
+                    "silently wrong rather than absent, so they are refused instead."
                 )
-        if delivered_in_kilowatt_hour is None:
-            raise ValueError(
-                f"The transformer output column was not found for {self.component_name}; its KPIs "
-                "cannot be reported as absent silently."
+            energies[output.field_name] = round(
+                KpiHelperClass.compute_total_energy_from_power_timeseries(column, seconds_per_timestep), 3
             )
-        losses_in_kilowatt_hour = round(
-            delivered_in_kilowatt_hour * (1.0 / self.transformerconfig.efficiency - 1.0), 3
-        )
-        return delivered_in_kilowatt_hour, losses_in_kilowatt_hour
+        missing = sorted(set(self.ENERGY_KPIS) - set(energies))
+        if missing:
+            raise ValueError(
+                f"The transformer output columns {', '.join(missing)} were not found for {self.component_name}; its "
+                "KPIs cannot be reported as absent silently."
+            )
+        return energies
 
     def get_component_kpi_entries(
         self,
@@ -303,9 +357,9 @@ class Transformer(StatelessComponent, PhysicsComponent):
     ) -> list[KpiEntry]:
         """Calculates KPIs for the transformer/rectifier and returns all KPI entries as a list.
 
-        Two indicators describe what the unit did over the simulated period: the electrical
-        energy it delivered and the conversion losses, both from
-        :meth:`delivered_and_lost_energy_in_kilowatt_hour`.
+        Three indicators describe what the unit did over the simulated period: the electrical energy it delivered,
+        its conversion losses and the input energy it could not carry at its rating, all from
+        :meth:`energies_in_kilowatt_hour`.
 
         Args:
             all_outputs: every output column of the run, searched for this component's outputs
@@ -313,31 +367,21 @@ class Transformer(StatelessComponent, PhysicsComponent):
             postprocessing_results: the per-timestep values of those columns.
 
         Returns:
-            list[KpiEntry]: the two entries, tagged as Transformer.
+            list[KpiEntry]: the three entries, tagged as Transformer.
 
         Raises:
-            ValueError: if the output column is missing, empty or carries NaN — a value pandas
-                would otherwise drop silently from the sum — so the KPIs are either computed from
-                complete values or refused, never reported wrongly in silence.
+            ValueError: if a column is missing, empty or carries NaN, via :meth:`energies_in_kilowatt_hour`.
         """
-        delivered_in_kilowatt_hour, losses_in_kilowatt_hour = self.delivered_and_lost_energy_in_kilowatt_hour(
-            all_outputs, postprocessing_results
-        )
+        energies = self.energies_in_kilowatt_hour(all_outputs, postprocessing_results)
         return [
             KpiEntry(
-                name="Electrical energy delivered",
+                name=name,
                 unit="kWh",
-                value=delivered_in_kilowatt_hour,
+                value=energies[field_name],
                 tag=KpiTagEnumClass.TRANSFORMER,
                 description=self.component_name,
-            ),
-            KpiEntry(
-                name="Conversion losses",
-                unit="kWh",
-                value=losses_in_kilowatt_hour,
-                tag=KpiTagEnumClass.TRANSFORMER,
-                description=self.component_name,
-            ),
+            )
+            for field_name, name in self.ENERGY_KPIS.items()
         ]
 
     @staticmethod
@@ -396,12 +440,12 @@ class Transformer(StatelessComponent, PhysicsComponent):
             maintenance cost for the simulated period, tagged as Transformer.
 
         Raises:
-            ValueError: if the output column is missing, empty or carries NaN, via
-                :meth:`delivered_and_lost_energy_in_kilowatt_hour`.
+            ValueError: if an output column is missing, empty or carries NaN, via
+                :meth:`energies_in_kilowatt_hour`.
         """
-        _, losses_in_kilowatt_hour = self.delivered_and_lost_energy_in_kilowatt_hour(
-            all_outputs, postprocessing_results
-        )
+        losses_in_kilowatt_hour = self.energies_in_kilowatt_hour(all_outputs, postprocessing_results)[
+            self.ConversionLossInWatt
+        ]
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )

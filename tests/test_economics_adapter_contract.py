@@ -133,6 +133,8 @@ class AdapterContractScan:
         # temperature it does not read, but the sweep resolves the whole configuration.
         "MoreAdvancedHeatPumpHPLibConfig.set_thermal_output_power_in_watt": 7780.75,
         "MoreAdvancedHeatPumpHPLibConfig.heating_reference_temperature_in_celsius": -7.0,
+        # The backup heating rod's rating (#1113): the rated thermal power above, capped at 9 kW.
+        "MoreAdvancedHeatPumpHPLibConfig.heating_rod_rated_electrical_power_in_watt": 7780.75,
         # The two heat generators the copy law sizes to the archetype's heating load exactly.
         # The extractor reads both as the kilowatts it prices.
         "ElectricHeatingConfig.maximum_electric_power_w": 7780.75,

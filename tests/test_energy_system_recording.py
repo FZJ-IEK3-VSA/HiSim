@@ -77,6 +77,8 @@ from hisim.energy_system.recording.parameters import ParameterNormalisation
 from hisim.energy_system.recording.session import RecordedFileWriter, RecordingSession
 from hisim.energy_system.resolution import ResolvedDynamicConnection
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import SetupRuleViolation
 
 
 class Fixtures:
@@ -222,6 +224,7 @@ class Synthetic:
             components=(producer, consumer),
             wiring=snapshot,
             simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            setup_kind=SetupKind.DEMO,
         )
 
     @classmethod
@@ -281,6 +284,7 @@ class Synthetic:
             components=(producer, aggregator),
             wiring=snapshot,
             simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            setup_kind=SetupKind.DEMO,
         )
 
     @classmethod
@@ -736,6 +740,39 @@ def test_a_recording_refuses_to_overwrite_a_file_it_did_not_write(tmp_path: Path
         encoding="utf-8",
     )
     session.refuse_to_overwrite_a_hand_authored_file()
+
+
+@pytest.mark.base
+def test_a_system_the_build_rules_refuse_is_never_recorded(tmp_path: Path) -> None:
+    """Catches the recorder writing a twin of a system that a run refuses before its first step.
+
+    The setup connects an input of load type electricity to an output of load type heating; the connection itself
+    judges nothing, so the recorder runs the build rules a run runs (``CB-04`` here) and writes no file.
+    """
+    setup = tmp_path / "broken_connection.py"
+    setup.write_text(
+        "from hisim import loadtypes as lt\n"
+        "from hisim.setup_rules.kinds import SetupKind\n"
+        "from tests.test_component_kinds import DeviceProbe, KindProbe\n\n\n"
+        "def setup_function(my_sim, my_simulation_parameters=None):\n"
+        "    my_sim.declare_setup_kind(SetupKind.DEMO)\n"
+        "    my_sim.set_simulation_parameters(my_simulation_parameters)\n"
+        "    source = DeviceProbe(my_simulation_parameters, 'Source', [])\n"
+        "    source.value_output.load_type = lt.LoadTypes.HEATING\n"
+        "    reader = DeviceProbe(my_simulation_parameters, 'Reader', [])\n"
+        "    reader.add_input(reader.component_name, 'In', lt.LoadTypes.ELECTRICITY, lt.Units.ANY, True)\n"
+        "    reader.connect_input('In', 'Source', KindProbe.Value)\n"
+        "    my_sim.add_component(source)\n"
+        "    my_sim.add_component(reader)\n",
+        encoding="utf-8",
+    )
+    session = RecordingSession(setup, tmp_path / "out")
+
+    with pytest.raises(SetupRuleViolation) as refusal:
+        session.record(Fixtures.parameters(tmp_path / "results"))
+
+    assert [fault.code for fault in refusal.value.faults] == ["CB-04"]
+    assert not session.path.exists()
 
 
 @pytest.mark.base

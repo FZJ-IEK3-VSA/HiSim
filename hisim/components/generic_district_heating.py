@@ -103,6 +103,10 @@ class DistrictHeatingConfig(ConfigBase):
     #: Whether the connection also prepares domestic hot water, in which case it declares the DHW
     #: inputs and outputs and prioritises that demand over space heating.
     with_domestic_hot_water_preparation: bool = False
+    #: Whether the substation pumps its space-heating loop (D16 of ``roadmap/fluid_loops_spec.md``). False, the
+    #: default and the only value it supports yet: the substation has no space-heating pump and heats the flow the
+    #: heat distribution system pumps, passing it on. True is refused until a pump model for that side exists.
+    pumps_space_heating_loop: bool = False
     #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
     #: postprocessing look the connection up in the cost database instead.
     device_co2_footprint_in_kg: Optional[float] = None
@@ -238,6 +242,8 @@ class DistrictHeating(PhysicsComponent):
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
+    #: The hot-water loop's flow returning to the substation, in kg/s: its own flow, passed back by the tank.
+    WaterInputMassFlowRateReturningDhw = "WaterInputMassFlowRateReturningDhw"
 
     # Output
     WaterOutputShTemperature = "WaterOutputShTemperature"
@@ -281,14 +287,22 @@ class DistrictHeating(PhysicsComponent):
         self.hot_water_pump: FixedLiftPump = FixedLiftPump(target_lift_in_kelvin=self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN)
         # The substation's two water loops (complete Sankey spec §5.1): the heat it gives is what they carry. It
         # supplies both and cools neither. It pumps its hot-water loop; its space-heating loop runs on the
-        # distribution system's flow, which stage 1b of the hydraulic circuits spec states. A substation without
-        # hot-water preparation tags no channel with the hot-water loop.
+        # distribution system's flow, as its configuration states (pumps_space_heating_loop, D16 of
+        # roadmap/fluid_loops_spec.md). A substation without hot-water preparation tags no channel with the hot-water
+        # loop.
+        if self.config.pumps_space_heating_loop:
+            raise ValueError(
+                f"{self.component_name}: pumps_space_heating_loop is true, but the district-heating substation has no "
+                "space-heating pump: it heats the flow the heat distribution system pumps. Leave it false and let the "
+                "heat distribution system pump the loop (pumps_the_distribution_loop)."
+            )
         self.space_heating_loop = FluidLoop(
             "space_heating",
             carrier=EnergyBalanceCarrier.SPACE_HEATING_HEAT,
             fluid=LoopFluid.WATER,
             supplies=True,
             may_cool=False,
+            pumps=self.config.pumps_space_heating_loop,
         )
         self.hot_water_loop = FluidLoop(
             "dhw",
@@ -355,6 +369,14 @@ class DistrictHeating(PhysicsComponent):
                 True,
                 fluid_loop=self.hot_water_loop.temperature_in,
             )
+            self.water_input_mass_flow_dhw_channel: ComponentInput = self.add_input(
+                self.component_name,
+                DistrictHeating.WaterInputMassFlowRateReturningDhw,
+                LoadTypes.WARM_WATER,
+                Units.KG_PER_SEC,
+                False,
+                fluid_loop=self.hot_water_loop.flow_in,
+            )
 
         # Outputs Space Heating
         self.water_mass_flow_sh_output_channel: ComponentOutput = self.add_output(
@@ -362,7 +384,11 @@ class DistrictHeating(PhysicsComponent):
             DistrictHeating.WaterOutputShMassFlowRate,
             LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
-            output_description="Water mass flow rate for space heating.",
+            output_description=(
+                "Water mass flow rate for space heating, kg/s: the flow the heat distribution system pumps, which the "
+                "substation heats and passes on while its space-heating circuit runs, 0 while it idles."
+            ),
+            fluid_loop=self.space_heating_loop.flow_out,
         )
         self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -502,15 +528,17 @@ class DistrictHeating(PhysicsComponent):
     def get_default_connections_from_simple_dhw_storage(
         self,
     ) -> List[ComponentConnection]:
-        """Return the default connection from the hot-water tank: the tank's step mean, the hot-water circuit's return.
+        """Return the default connections from the hot-water tank: the hot-water circuit's return and its flow back.
 
-        The substation pumps the hot-water circuit itself and books its heat from its own flow, so it reads only the
-        temperature the tank sends back, not a flow of the tank. For example, a tank whose step mean is 50 °C sends
-        50 °C back to the substation, which heats that water to its hot-water supply temperature.
+        The substation pumps the hot-water circuit itself and books its heat from its own flow; it reads the
+        temperature the tank sends back and, as the loop's fourth wire, its own flow passed back by the tank's primary
+        coil, which it does not compute with. For example, a tank whose step mean is 50 °C sends 50 °C back to the
+        substation, which heats that water to its hot-water supply temperature.
 
         Returns:
-            The one connection from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
-            ``WaterInputTemperatureDhw``.
+            The connections from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
+            ``WaterInputTemperatureDhw`` and from ``SimpleDHWStorage.WaterMassFlowRateToHeatGenerator`` to
+            ``WaterInputMassFlowRateReturningDhw``.
         """
 
         component_class = SimpleDHWStorage
@@ -521,6 +549,13 @@ class DistrictHeating(PhysicsComponent):
                 DistrictHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                DistrictHeating.WaterInputMassFlowRateReturningDhw,
+                hws_classname,
+                component_class.WaterMassFlowRateToHeatGenerator,
             )
         )
         return connections

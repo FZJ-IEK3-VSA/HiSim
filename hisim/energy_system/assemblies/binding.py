@@ -35,20 +35,23 @@ not read, ``EF-7J`` a partner or a port that does not fit, ``EF-7K`` a circuit e
 circuit, ``EF-7L`` a carrier without exactly one provider, or a fuel provider without a consumer.
 Each names the owner and the port; the refusals that decide among candidates (``EF-7A``, ``EF-7B``,
 ``EF-7C``, ``EF-7E``, an absent ``bind:`` partner) also list the candidates and end in a paste-ready
-verb line.
+verb line. The binder records each refusal (:attr:`PortBinder.refusals`) and goes on with the next
+port, so a file shows every port it cannot bind at once; the assembly rules
+(``hisim/setup_rules/assemblies.py``) refuse them. A refusal ends the decision of its port: the helpers
+that decide one port raise :class:`PortRefused`, which :meth:`PortBinder.bind` records.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, TypeVar
 
 from hisim.config.contributions import declared_facts_of
 from hisim.energy_system.assemblies.addresses import Unit
 from hisim.energy_system.assemblies.record import ImportRecord, PortRecord
 from hisim.energy_system.assemblies.selection import Controllable, Observer
 from hisim.energy_system.classes import ClassBinder
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemErrorId, ImportRefusal
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
 from hisim.energy_system.model import AnyInputItem, ConsumingOutput, DefaultInputs, ExplicitWire, SourceReference
 
@@ -66,6 +69,8 @@ class Owner:
         ports: Its ports.
         states: Each port's state for its parameters.
         observes: The import's ``observes:``, replacing its observer port's default.
+        key_path: Where it is written in the energy-system file: ``("components", "Building")``,
+            ``("imports", "pv", "instances", "east")``.
     """
 
     reference: str
@@ -76,6 +81,29 @@ class Owner:
     ports: Mapping[str, Port]
     states: Mapping[str, PortState]
     observes: Optional[Selection] = None
+    key_path: Tuple[Any, ...] = ()
+
+
+#: What one attempt to decide or plan a port returns.
+DecidedT = TypeVar("DecidedT")
+
+
+class PortRefused(Exception):
+    """Ends the decision of one port that cannot be bound, carrying the refusal :meth:`PortBinder.bind` records.
+
+    The helpers that decide a port nest deeply (a verb's partner is resolved, then lowered at every member), and
+    every one of them can find the port unbindable; raising this from where it is found and catching it once per
+    port is what lets the binder record the refusal and go on with the next port. It never leaves the binder.
+    """
+
+    def __init__(self, refusal: ImportRefusal) -> None:
+        """Carry one refusal.
+
+        Args:
+            refusal: What the port cannot be bound for.
+        """
+        super().__init__(refusal.message)
+        self.refusal = refusal
 
 
 @dataclass(frozen=True)
@@ -133,12 +161,20 @@ class PortBinder:
         self.providers: Dict[str, List[Tuple[Owner, Port]]] = {}
         self.consumers: Dict[Tuple[str, str], List[str]] = {}
         self._facts: Dict[str, Tuple[str, ...]] = {}
+        #: What the binding refused, in the order it was found; the assembly rules refuse it.
+        self.refusals: List[ImportRefusal] = []
 
     def bind(self) -> Dict[str, List[PortRecord]]:
         """Decides every port of every owner, lowers it, and plans the observers and controllables.
 
+        Every port is decided, and a port that cannot be bound is recorded in :attr:`refusals` and gets the record
+        ``refused``. The bound consumers of each carrier's provider and the controllable outputs are checked and
+        planned only when no port was refused: both read every port's decision, and a refused carrier need would
+        leave its provider without the consumer it names.
+
         Returns:
-            Owner reference (``Building``, ``heating``, ``pv.east``) to its ports' records.
+            Owner reference (``Building``, ``heating``, ``pv.east``) to its ports' records; meaningless when
+            :attr:`refusals` holds a refusal.
         """
         for owner in self.owners:
             for name, port in owner.ports.items():
@@ -146,39 +182,51 @@ class PortBinder:
                     self.providers.setdefault(port.carrier or "", []).append((owner, port))
         for carrier, providers in self.providers.items():
             if len(providers) > 1:
-                raise self.error(
-                    EnergySystemErrorId.CARRIER_PROVIDER,
-                    providers[1][0],
-                    f"{carrier} has {len(providers)} providers, "
-                    + ", ".join(f"{owner.reference}.{port.name}" for owner, port in providers)
-                    + "; a system has exactly one provider per carrier.",
+                self.refusals.append(
+                    self.error(
+                        EnergySystemErrorId.CARRIER_PROVIDER,
+                        providers[1][0],
+                        f"{carrier} has {len(providers)} providers, "
+                        + ", ".join(f"{owner.reference}.{port.name}" for owner, port in providers)
+                        + "; a system has exactly one provider per carrier.",
+                    ).refusal
                 )
         records: Dict[str, List[PortRecord]] = {}
         for owner in self.owners:
             for written in owner.verbs.ports():
                 item = owner.ports.get(written)
                 if item is None or item.kind not in self.VERB_KINDS or item.is_provision or item.many:
-                    raise self.error(
-                        EnergySystemErrorId.UNKNOWN_PORT,
-                        owner,
-                        f"a verb names the port '{written}', which "
-                        + (f"is a {item.kind.value} port" if item is not None else f"is no port of {owner.label}")
-                        + "; a verb binds a need, a circuit end or a fact need of one provider (a carrier need and a "
-                        "many fact need bind every provider in scope).",
-                        alternatives=[name for name, other in owner.ports.items() if other.kind in self.VERB_KINDS],
-                        alternatives_label="ports a verb binds",
-                        offending_value=written,
+                    self.refusals.append(
+                        self.error(
+                            EnergySystemErrorId.UNKNOWN_PORT,
+                            owner,
+                            f"a verb names the port '{written}', which "
+                            + (f"is a {item.kind.value} port" if item is not None else f"is no port of {owner.label}")
+                            + "; a verb binds a need, a circuit end or a fact need of one provider (a carrier need and a "
+                            "many fact need bind every provider in scope).",
+                            alternatives=[name for name, other in owner.ports.items() if other.kind in self.VERB_KINDS],
+                            alternatives_label="ports a verb binds",
+                            offending_value=written,
+                        ).refusal
                     )
-            records[owner.reference] = [self.decide(owner, name, port) for name, port in owner.ports.items()]
+            records[owner.reference] = [
+                self.attempt(lambda owner=owner, name=name, port=port: self.decide(owner, name, port))
+                or PortRecord(name, owner.states[name].value, "refused")
+                for name, port in owner.ports.items()
+            ]
+        if self.refusals:
+            return records
         for carrier, providers in self.providers.items():
             owner, port = providers[0]
             consumers = self.consumers.get((owner.reference, port.name), [])
             if not consumers and carrier != "electricity":
-                raise self.error(
-                    EnergySystemErrorId.CARRIER_PROVIDER,
-                    owner,
-                    f"the provider of {carrier} '{port.name}' has no bound consumer; an idle connection is refused "
-                    "(§5.2).",
+                self.refusals.append(
+                    self.error(
+                        EnergySystemErrorId.CARRIER_PROVIDER,
+                        owner,
+                        f"the provider of {carrier} '{port.name}' has no bound consumer; an idle connection is refused "
+                        "(§5.2).",
+                    ).refusal
                 )
             records[owner.reference] = [
                 replace(item, partner=", ".join(consumers)) if item.port == port.name else item
@@ -187,10 +235,49 @@ class PortBinder:
         self._plan_controllables(records)
         return records
 
+    def attempt(self, decide: Callable[[], DecidedT]) -> Optional[DecidedT]:
+        """Runs one decision; a port it refuses is recorded in :attr:`refusals`, and ``None`` is returned for it.
+
+        Example: ``self.attempt(lambda: self.decide(owner, "warm_water", port))`` returns the port's record, or, for a
+        port with two candidates and no verb, records the ``EF-7B`` refusal and returns ``None``.
+
+        Args:
+            decide: The decision of one port.
+
+        Returns:
+            What the decision returned, or ``None`` when it refused the port.
+        """
+        try:
+            return decide()
+        except PortRefused as refused:
+            self.refusals.append(refused.refusal)
+            return None
+
     @staticmethod
-    def error(error_id: EnergySystemErrorId, owner: Owner, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
-        """One refusal of the binding, located at the owner."""
-        return EnergySystemAssemblyError(error_id, owner.label, problem, **kwargs)
+    def error(
+        error_id: EnergySystemErrorId,
+        owner: Owner,
+        problem: str,
+        *,
+        alternatives: Sequence[str] = (),
+        alternatives_label: str = "values",
+        offending_value: Optional[str] = None,
+        remedy: Optional[str] = None,
+    ) -> PortRefused:
+        """One refusal of the binding, located at the owner: its label in the message, its key path and reference as the fault's place."""
+        return PortRefused(
+            ImportRefusal(
+                error_id,
+                owner.label,
+                problem,
+                alternatives=tuple(alternatives),
+                alternatives_label=alternatives_label,
+                offending_value=offending_value,
+                remedy=remedy,
+                key_path=owner.key_path,
+                owner=owner.reference,
+            )
+        )
 
     # ----------------------------------------------------------------------------------- deciding
 
@@ -366,7 +453,7 @@ class PortBinder:
         """Refuses a verb whose partner reference has a head the file does not declare.
 
         Raises:
-            EnergySystemAssemblyError: ``EF-7D`` naming the head and the imports and components declared.
+            PortRefused: ``EF-7D`` naming the head and the imports and components declared.
         """
         head = target.split(".")[0]
         if head not in self.declared:
@@ -393,7 +480,7 @@ class PortBinder:
             ``(candidate, "")``, or ``(None, why it is absent)``.
 
         Raises:
-            EnergySystemAssemblyError: ``EF-7D`` for an instance or port the head does not have,
+            PortRefused: ``EF-7D`` for an instance or port the head does not have,
                 ``EF-7B`` for several fitting candidates, ``EF-7J`` for none, ``EF-7K`` for a circuit
                 end of another circuit, ``EF-7H`` for a provided output the need's wires do not read.
         """
@@ -702,19 +789,25 @@ class PortBinder:
         return PortRecord(port.name, "observer", "selected by the wiring", "", ", ".join(unit.name for unit in members))
 
     def _plan_controllables(self, records: Mapping[str, Sequence[PortRecord]]) -> None:
-        """Hands every active controllable output to the selection plan, a ``via`` with its need's partner."""
+        """Hands every active controllable output to the selection plan, a ``via`` with its need's partner.
+
+        A controllable output whose member the parameters leave out is recorded in :attr:`refusals` (``EF-7J``).
+        """
         for owner in self.owners:
             for name, port in owner.ports.items():
                 if not port.controllable or owner.states[name] == PortState.INACTIVE:
                     continue
                 unit = owner.units.get(port.output_member)
                 if unit is None:
-                    raise self.error(
-                        EnergySystemErrorId.PORT_CONTRACT,
-                        owner,
-                        f"the controllable output '{name}' names '{port.output_member}', which is not present with "
-                        "these parameters; switch the port off with active_when.",
+                    self.refusals.append(
+                        self.error(
+                            EnergySystemErrorId.PORT_CONTRACT,
+                            owner,
+                            f"the controllable output '{name}' names '{port.output_member}', which is not present with "
+                            "these parameters; switch the port off with active_when.",
+                        ).refusal
                     )
+                    continue
                 via = port.controllable.get("via")
                 need = next((item for item in records[owner.reference] if item.port == via), None)
                 self.record.selection.controllables.append(

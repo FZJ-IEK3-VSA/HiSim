@@ -23,6 +23,7 @@
 
 schema_version: 4
 name: household_heatpump_building_sizer
+setup_kind: residential
 description: Basic household new system setup.
 
 components:

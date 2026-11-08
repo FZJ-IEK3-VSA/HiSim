@@ -16,15 +16,27 @@ from hisim.components import (
     building,
     electricity_meter,
     heating_meter,
-    more_advanced_heat_pump_hplib,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
+)
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.setup_rules.kinds import SetupKind
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -80,6 +92,7 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_heating_meter",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Set some parameters
     heating_reference_temperature_in_celsius: float = -7.0
@@ -158,12 +171,13 @@ def test_house(
 
     # Build the heat pump's config first: the buffer storage below is sized from the heat
     # pump's rated thermal output, not from the building's heating load.
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     )
     # The preset sizes both fields from the building; this setup states the machine instead,
     # because the buffer volume asserted below is the one an 8 kW machine gets.
     my_heatpump_config.set_thermal_output_power_in_watt = 8000.0
+    my_heatpump_config.heating_rod_rated_electrical_power_in_watt = 8000.0
     my_heatpump_config.heating_reference_temperature_in_celsius = -7.0
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -188,7 +202,7 @@ def test_house(
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
@@ -201,24 +215,24 @@ def test_house(
     )
 
     my_heatpump_controller_space_heating = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
         )
     )
 
     # Build Heat Pump Controller for dhw
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
             "HeatPumpControllerDHW"
         )
     )
 
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+    my_heatpump_controller_dhw = MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

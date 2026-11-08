@@ -14,17 +14,51 @@ from typing import ClassVar, List, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
+from hisim import loadtypes as lt
 from hisim.config import (
     ComponentID,
     ConfigBase,
     FactContribution,
+    OwnFields,
     Sizable,
     Size,
     SizingContext,
+    SizingLaw,
     constructor,
+    law,
     preset,
     sized_field,
 )
+
+
+def _technical_room_location_of_the_tabula_row(ctx: SizingContext, own: OwnFields) -> lt.InstallationLocation:
+    """Derive where the building's technical room is from the cellar code of its TABULA row.
+
+    The law behind the ``technical_room_location`` field of :class:`BuildingConfig`: it reads the row the sibling
+    field ``building_code`` names, takes its cellar code (``Code_CellarCond``) and maps it by
+    :attr:`BuildingInformation.TECHNICAL_ROOM_LOCATION_BY_CELLAR_CONDITION`. For example, the row
+    ``DE.N.SFH.09.Gen.ReEx.001.002`` (cellar code ``N``, an unheated cellar) gives an unheated space, and
+    ``DE.N.SFH.11.Gen.ReEx.001.002`` (``-``, no cellar) the heated zone. The house's own row is the one source HiSim
+    has about where its technical room is; a construction year would only guess it.
+
+    Args:
+        ctx: The sizing facts of the surrounding system; unused, the row is the building's own.
+        own: The sibling fields of the configuration being resolved, for ``building_code``.
+
+    Returns:
+        The heated zone or an unheated space.
+
+    Raises:
+        ValueError: If no TABULA row has the building code, or its cellar code is unknown.
+    """
+    del ctx
+    # Imported here because information.py imports this module; the call is long after both are loaded.
+    from hisim.components.building.information import (  # pylint: disable=import-outside-toplevel
+        BuildingInformation,
+    )
+
+    cellar_code = BuildingInformation.cellar_code_of(own.value_of("building_code"))
+    return BuildingInformation.technical_room_location_of_cellar_code(cellar_code)
 
 
 @dataclass_json
@@ -79,14 +113,27 @@ class BuildingConfig(ConfigBase):
     The named default variant is :meth:`preset_german_single_family_home`, and any other
     building comes from :meth:`for_tabula_code`. The building is the *source* of the sizing
     facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and therefore
-    has no sizable field of its own apart from the two the weather provides — the identity of the
-    weather it is computed with and the outside design temperature it is computed against: its
-    presets are plain concrete archetypes, and a setup that deviates from one — a different TABULA
-    code, an explicit envelope U-value, a measured maximum thermal demand — takes the preset and
-    assigns the field.
+    has few sizable fields of its own: the two the weather provides — the identity of the
+    weather it is computed with and the outside design temperature it is computed against — and
+    the technical room's location, which its own TABULA row decides. Its presets are plain concrete
+    archetypes, and a setup that deviates from one — a different TABULA code, an explicit envelope
+    U-value, a measured maximum thermal demand — takes the preset and assigns the field.
     """
 
     MAIN_CLASS = "hisim.components.building.building.Building"
+
+    #: Sizing law of the technical room's location: :func:`_technical_room_location_of_the_tabula_row`, the cellar
+    #: code of the row the sibling ``building_code`` names, mapped to the heated zone or an unheated space. Named as
+    #: a ClassVar so that the field declaration reads as one line.
+    TECHNICAL_ROOM_LOCATION_LAW: ClassVar[SizingLaw] = law(
+        _technical_room_location_of_the_tabula_row,
+        reads=(),
+        fields=("building_code",),
+        description=(
+            'the cellar code (Code_CellarCond) of the TABULA row Self("building_code") names: N (an unheated cellar)'
+            " gives unheated_space, C, P, -, NI and 0 give heated_zone"
+        ),
+    )
 
     component_id: ComponentID
     #: TABULA/EPISCOPE code selecting the archetype, e.g. "DE.N.SFH.05.Gen.ReEx.001.002".
@@ -164,6 +211,32 @@ class BuildingConfig(ConfigBase):
     #: but it is sizing wire format, spelled out in every recorded twin and in the schema.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
+    #: Where the building's technical room is, the heated zone or an unheated space: the place where every device
+    #: stands unless its own configuration names another one. Left ``AUTO`` by every preset, it is derived from the
+    #: cellar code of the TABULA row (:data:`TECHNICAL_ROOM_LOCATION_LAW`); a file pins it for a house whose row says
+    #: otherwise. It cannot be outdoors: a technical room is under the house's roof.
+    technical_room_location: Sizable[lt.InstallationLocation] = sized_field(
+        rule=TECHNICAL_ROOM_LOCATION_LAW,
+        value_type=lt.InstallationLocation,
+        note="the TABULA row's cellar code: an unheated cellar gives an unheated space, every other code the heated zone",
+    )
+
+    def __post_init__(self) -> None:
+        """Refuse a technical room outdoors.
+
+        A technical room is under the house's roof, in the heated zone or in an unheated space; a device that stands
+        outdoors says so in its own configuration.
+
+        Raises:
+            ValueError: If ``technical_room_location`` is ``OUTDOORS``.
+        """
+        if self.technical_room_location is lt.InstallationLocation.OUTDOORS:
+            raise ValueError(
+                f"The building {self.component_id.name!r} has technical_room_location 'outdoors', but a technical room "
+                "is under the house's roof: pin 'heated_zone' or 'unheated_space', or name 'outdoors' on the device "
+                "that stands outside."
+            )
+
     @staticmethod
     def sizing_facts(config: "BuildingConfig", ctx: SizingContext) -> dict:
         """Contributes the building-scope facts every other component sizes against.
@@ -182,7 +255,7 @@ class BuildingConfig(ConfigBase):
             ctx: the sizing context; unused, the building is the root of the fact graph.
 
         Returns:
-            dict: the six facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            dict: the seven facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
         # Imported here because information.py imports this module; the call is long after both
@@ -199,10 +272,11 @@ class BuildingConfig(ConfigBase):
             "roof_area_in_m2": information.roof_area_in_m2,
             "set_heating_temperature_in_celsius": config.set_heating_temperature_in_celsius,
             "set_cooling_temperature_in_celsius": config.set_cooling_temperature_in_celsius,
+            "technical_room_location": config.technical_room_location,
         }
 
     #: Sizing facts this config contributes to the scenario-wide fact pool: the building is the
-    #: root of the fact graph, and these six are what everything else sizes against.
+    #: root of the fact graph, and these seven are what everything else sizes against.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=(
@@ -212,6 +286,7 @@ class BuildingConfig(ConfigBase):
                 "roof_area_in_m2",
                 "set_heating_temperature_in_celsius",
                 "set_cooling_temperature_in_celsius",
+                "technical_room_location",
             ),
             compute=sizing_facts,
         ),

@@ -101,6 +101,12 @@ class SimpleHeatSourceConfig(ConfigBase):
     #: Whether a non-zero massflow input is a mere on signal, the circuit then running at
     #: :attr:`massflow_nominal_in_kg_per_s` rather than at the value handed in.
     use_external_massflow_as_signal_input_for_nominal_massflow: bool = False
+    #: Whether the source pumps its brine loop (D16 of ``roadmap/fluid_loops_spec.md``): True, the default, makes it
+    #: the loop's pump owner, False a member that passes the flow it reads on. It states the loop's declaration only:
+    #: the source's flow is the one it reads at ``MassFlow`` (or its nominal flow, above) either way, until the first
+    #: system that closes a brine loop settles who moves the brine. A source that runs its nominal flow and does not
+    #: pump is refused.
+    pumps_the_brine_loop: bool = True
     #: CO2 footprint of investment in kg. Todo: check value
     device_co2_footprint_in_kg: float = 100
     #: cost for investment in Euro. Value from
@@ -334,13 +340,19 @@ class SimpleHeatSource(cp.PhysicsComponent):
         self.previous_state: SimpleHeatSourceState = SimpleHeatSourceState()
 
         # The brine loop to the heat pump: the source supplies it and may take heat back from it (a heat pump that
-        # cools into the ground). Until stage 1b of the fluid loops spec a port set has one flow, the one it publishes.
+        # cools into the ground); whether it pumps it is its configuration's pumps_the_brine_loop.
+        if self.config.use_external_massflow_as_signal_input_for_nominal_massflow and not self.config.pumps_the_brine_loop:
+            raise ValueError(
+                f"{self.component_name}: use_external_massflow_as_signal_input_for_nominal_massflow runs the source's "
+                "own nominal flow, which only a source that pumps its brine loop can do; pumps_the_brine_loop is false."
+            )
         self.brine_loop = FluidLoop(
             "brine",
             carrier=lt.EnergyBalanceCarrier.AMBIENT_HEAT,
             fluid=LoopFluid.BRINE,
             supplies=True,
             may_cool=True,
+            pumps=self.config.pumps_the_brine_loop,
         )
 
         # Inputs
@@ -358,6 +370,7 @@ class SimpleHeatSource(cp.PhysicsComponent):
             load_type=lt.LoadTypes.WARM_WATER,
             unit=Units.KG_PER_SEC,
             mandatory=False,
+            fluid_loop=self.brine_loop.flow_in,
         )
 
         self.temperature_input_channel: ComponentInput = self.add_input(

@@ -33,7 +33,7 @@ from hisim.calculation_scope import CalculationScope
 from hisim.components.building.building import Building
 from hisim.components.generic_boiler import GenericBoiler
 from hisim.components.heat_distribution_system import HeatDistribution
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
+from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLib
 from hisim.components.simple_water_storage import SimpleHotWaterStorage
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
 

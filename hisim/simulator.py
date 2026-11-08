@@ -7,92 +7,28 @@ import datetime
 import enum
 import math
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, FrozenSet, List, Optional, Sequence, Tuple, Type, Union
 import time
 import numpy as np
 import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.energy_balance.ports import Wiring
 from hisim.component_wrapper import ComponentWrapper
 from hisim.evaluation_order import EvaluationOrder, L2Order, PhysicsOrder
 from hisim import sim_repository
 import hisim.component as cp
 import hisim.dynamic_component as dcp
 from hisim import log
-from hisim.economics.facts import (
-    CostRelevance,
-    UndeclaredCostRelevanceError,
-    UnpriceableComponentError,
-)
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import OutputAggregation
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.write_guard import CalculationDirectories
-
-
-def _has_cost_facts_source(component_class: type) -> bool:
-    """Whether anything can produce `ComponentCostFacts` for this class (roadmap/cost_spec.md §9.1).
-
-    Mirrors the precedence `adapter.extract_cost_facts` applies at postprocessing time, so the
-    pre-run refusal and the D7 abort can never disagree about which classes have a facts source:
-    a class that implements `get_cost_facts` itself wins, and the compatibility table is consulted
-    only when it has not.
-
-    "Implements it itself" is "the attribute is not the one `Component` defines" rather than a
-    lookup in the class body, so a component that inherits a working hook from a component base
-    class of its own counts as having one — which it does, at run time, since that is the method
-    the adapter will call. The lookup goes through `getattr` with a default for the same reason the
-    adapter's does: a class carrying no such attribute at all is a class with no hook, not a crash.
-
-    The adapter is imported here rather than at module level: `hisim.economics.adapter` reaches
-    into the KPI structures and the load types, and the simulator is imported by everything, so
-    the dependency stays where the one function that needs it can see it.
-
-    Args:
-        component_class: The registered component's class.
-
-    Returns:
-        True when the class implements the hook or the adapter table knows its name.
-    """
-    from hisim.economics.adapter import FactsExtractors  # noqa: E402  (see the docstring)
-
-    hook = getattr(component_class, "get_cost_facts", None)
-    if hook is not None and hook is not cp.Component.get_cost_facts:
-        return True
-    return component_class.__name__ in FactsExtractors.BY_CLASS_NAME
-
-
-def cost_declaration_refusal(component_class: type) -> Optional[Type[ValueError]]:
-    """Which refusal `Simulator.check_cost_declarations` holds against one class, if any (§9.1/§9.2).
-
-    The one statement of the pre-run rule, so that the check and anything that asks the same
-    question ahead of a run -- a test over the classes a recorded energy system wires, say -- cannot
-    disagree about which classes a lifecycle-cost run refuses. A class is refused when it declares
-    no `cost_relevance` and therefore keeps the `UNDECLARED` base-class default, or when it declares
-    `PRICED` while nothing can produce its cost facts (`_has_cost_facts_source`). Whether those facts
-    can then be priced against a country's cost database is not part of the rule: that needs the
-    database, and stays with the D7 check in postprocessing.
-
-    The lookup goes through `getattr` with the `UNDECLARED` default, as
-    `adapter.effective_cost_relevance` does: a class that does not carry the attribute at all is
-    undeclared, not a crash.
-
-    Args:
-        component_class: A component's class.
-
-    Returns:
-        `UndeclaredCostRelevanceError` for an undeclared class, `UnpriceableComponentError` for a
-        `PRICED` class with no facts source, and None for a class the check lets through.
-    """
-    relevance = getattr(component_class, "cost_relevance", CostRelevance.UNDECLARED)
-    if relevance is CostRelevance.UNDECLARED:
-        return UndeclaredCostRelevanceError
-    if relevance is CostRelevance.PRICED and not _has_cost_facts_source(component_class):
-        return UnpriceableComponentError
-    return None
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import AddedSystem, BuiltSystem
 
 
 class ProgressEvent(enum.Enum):
@@ -244,6 +180,10 @@ class Simulator:
         #: documents the system. Nothing in post-processing has read it since ``scenario.json``
         #: retired with its writer (F-9, 2026-09-18); it is carried, not consumed.
         self.description: str = ""
+        #: What the simulated system is (:meth:`declare_setup_kind`): a demo, a residential or a commercial building,
+        #: or a plant. ``None`` until the setup declares it, and a run that never declares it is refused before its
+        #: first step: the kind selects the setup rules the system waives, and no default stands in for it.
+        self.setup_kind: Optional[SetupKind] = None
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
@@ -254,6 +194,28 @@ class Simulator:
         self._progress_callbacks: List[ProgressCallback] = []
         #: The wrapped components in the order a pass evaluates them (:meth:`evaluation_plan`).
         self._evaluation_plan: Optional[List[ComponentWrapper]] = None
+
+    def declare_setup_kind(self, setup_kind: SetupKind) -> None:
+        """Declare what the simulated system is; every setup does this once, as the first line of its setup function.
+
+        Example: ``my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)``. A declarative run declares the kind its file
+        states. The kind decides which setup rules the run waives (``hisim setup-rules waivers``); nothing checks
+        that it fits the system.
+
+        Args:
+            setup_kind: The kind of the system.
+
+        Raises:
+            TypeError: If the argument is not a ``SetupKind``.
+            ValueError: If the setup already declared another kind: a setup has exactly one.
+        """
+        if not isinstance(setup_kind, SetupKind):
+            raise TypeError(f"declare_setup_kind takes a SetupKind, not {setup_kind!r}")
+        if self.setup_kind is not None and self.setup_kind != setup_kind:
+            raise ValueError(
+                f"this setup declared the kind {self.setup_kind.value} already and now declares {setup_kind.value}: a setup has one kind"
+            )
+        self.setup_kind = setup_kind
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -355,21 +317,20 @@ class Simulator:
     ) -> None:
         """Adds a component to the simulator and registers its outputs.
 
+        A class without one kind base class and a name added twice are refused when the run starts, with every
+        other fault of the components as added (the setup rules ``CB-01`` and ``CB-02``,
+        ``hisim/setup_rules/components.py``), not here at the first one.
+
         Args:
             component: The component instance to add.
             is_cachable: Whether the component's results can be cached.
             connect_automatically: Whether to attempt automatic default connections.
 
         Raises:
-            ValueError: If simulation parameters are not initialized or a duplicate
-                component name is added.
-            ComponentKindNotDeclaredError: If the component's class inherits no kind base class, or more than one
-                (:meth:`hisim.component.ComponentKinds.of`).
+            ValueError: If simulation parameters are not initialized.
         """
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
-        # Refused here rather than at the first step, so a class without a kind fails while the system is built.
-        cp.ComponentKinds.of(type(component))
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
@@ -382,8 +343,6 @@ class Simulator:
         self.wrapped_components.append(wrap)
         # A plan computed before this component was added would leave it out of every pass.
         self._evaluation_plan = None
-        if component.component_name in self.config_dictionary:
-            raise ValueError(f"duplicate component name : {component.component_name}")
         self.config_dictionary[component.component_name] = component.config
 
     @utils.measure_execution_time
@@ -441,7 +400,7 @@ class Simulator:
         order. It is cloned before the first write and is never changed here.
 
         Raises:
-            ValueError: If no output is defined, or if the step has not converged after more than
+            ValueError: If the step has not converged after more than
                 ``maximum_passes_per_timestep`` passes (:meth:`maximum_passes_for_step_length`). The message names
                 the step, the step length, the limit and every output that still changed on the last pass.
         """
@@ -452,10 +411,6 @@ class Simulator:
             wrapped_component.save_state()
 
         continue_calculation = True
-
-        # Verifies data existence
-        if (len(self.all_outputs)) == 0:
-            raise ValueError("Not a single column was defined.")
 
         # Creates List with values
         stsv = previous_stsv.clone()
@@ -534,14 +489,13 @@ class Simulator:
             The positions into ``kinds`` in evaluation order, the physics positions whose constraints form a cycle
             and the L2 positions that read one another in a cycle, both of which keep the order they were added in.
 
+        Every kind must be one of :attr:`EVALUATION_ORDER_OF_KINDS`; a run refuses a component of another kind before
+        its first step (the setup rule ``CB-11``, ``hisim/setup_rules/components.py``).
+
         Raises:
-            ValueError: If a kind is not one of :attr:`EVALUATION_ORDER_OF_KINDS`, or ``kinds`` and ``sources``
-                differ in length.
+            ValueError: If ``kinds`` and ``sources`` differ in length.
         """
         rank_of_kind = {kind: rank for rank, kind in enumerate(Simulator.EVALUATION_ORDER_OF_KINDS)}
-        unknown = [kind.__name__ for kind in kinds if kind not in rank_of_kind]
-        if unknown:
-            raise ValueError(f"Not kind base classes, so not placeable in a pass: {unknown}.")
         by_kind = sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
         l2 = L2Order.ordered(kinds, sources)
         ordered_l2 = iter(l2.positions)
@@ -561,71 +515,58 @@ class Simulator:
             l2_cycles=l2.l2_cycles,
         )
 
-    def evaluation_plan(self) -> List[ComponentWrapper]:
-        """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.
+    @staticmethod
+    def evaluation_order_of(components: Sequence[cp.Component]) -> EvaluationOrder:
+        """Return the positions of the components in the order a pass evaluates them, from their kinds and their wiring.
 
-        Computed once, at the first time step, from the kinds and the resolved wiring (:meth:`evaluation_positions`).
+        The kinds are looked up with :meth:`hisim.component.ComponentKinds.of`; a component's sources are the positions
+        of the components whose outputs its inputs resolved to, so an input that stayed unconnected (an optional one,
+        or one the parameters allow to stay unconnected) adds no ordering constraint, and neither does an input that
+        resolved to an output no component of the list owns (the setup rule ``CB-10`` refuses such an input before
+        the first step). For example, a hot-water tank, its boiler and the boiler's controller, added in that order and
+        wired, give the positions (2, 1, 0). Both the plan of a run and the setup rules of the evaluation order read
+        it, so that the order a run uses and the cycles the rules report cannot disagree.
+
+        Args:
+            components: The components, in the order they were added.
+
+        Returns:
+            The evaluation order of :meth:`evaluation_positions`, with the physics and L2 cycles.
+
+        Raises:
+            ComponentKindNotDeclaredError: If a component's class inherits no kind base class, or more than one.
+        """
+        # An output is keyed by the object itself: an input resolves to the very output its component registered.
+        position_of_output = {output: position for position, component in enumerate(components) for output in component.outputs}
+        kinds = [cp.ComponentKinds.of(type(component)) for component in components]
+        sources: List[FrozenSet[int]] = [
+            frozenset(
+                position_of_output[component_input.source_output]
+                for component_input in component.inputs
+                if component_input.source_output is not None and component_input.source_output in position_of_output
+            )
+            for component in components
+        ]
+        order: EvaluationOrder = Simulator.evaluation_positions(kinds, sources)
+        return order
+
+    def evaluation_plan(self) -> List[ComponentWrapper]:
+        """Return the wrapped components in the order a pass evaluates them.
+
+        Computed once, at the first time step, from the kinds and the resolved wiring (:meth:`evaluation_order_of`).
         For example, a setup that adds a hot-water tank, its boiler and the boiler's controller gets the plan
         controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
         columns keep the order they were added in. A group of physics components whose constraints form a cycle, or
-        of L2 controllers that read one another in a cycle, is evaluated as one block in the order it was added in,
-        and a warning names its components. Only a member of such a group waits for a component evaluated after it.
-
-        A component's sources are read from the outputs its inputs resolved to, so an input that stayed unconnected
-        (an optional one, or one the parameters allow to stay unconnected) adds no ordering constraint.
-
-        Raises:
-            ValueError: If an input resolved to an output that no added component registered; its ordering constraint
-                would otherwise be lost without a word.
+        of L2 controllers that read one another in a cycle, is evaluated as one block in the order it was added in;
+        the setup rules ``CB-12`` and ``CB-13`` (``hisim/setup_rules/components.py``) log a warning naming its
+        components before the first step. Only a member of such a group waits for a component evaluated after it.
 
         Returns:
             The wrapped components in evaluation order; the same list on every later call until a component is added
             or the inputs are connected (:meth:`add_component` and :meth:`connect_all_components` drop the plan).
         """
         if self._evaluation_plan is None:
-            components = [wrapped_component.my_component for wrapped_component in self.wrapped_components]
-            # An output is keyed by the object itself: an input resolves to the very output its component registered.
-            position_of_output = {
-                output: position
-                for position, wrapped_component in enumerate(self.wrapped_components)
-                for output in wrapped_component.component_outputs
-            }
-            kinds = [cp.ComponentKinds.of(type(component)) for component in components]
-            unregistered = [
-                component_input.fullname
-                for component in components
-                for component_input in component.inputs
-                if component_input.source_output is not None and component_input.source_output not in position_of_output
-            ]
-            if unregistered:
-                raise ValueError(
-                    f"The inputs {unregistered} resolved to outputs that no added component registered, so the "
-                    "evaluation order cannot place their sources."
-                )
-            sources = [
-                frozenset(
-                    position_of_output[component_input.source_output]
-                    for component_input in component.inputs
-                    if component_input.source_output is not None
-                )
-                for component in components
-            ]
-            order = self.evaluation_positions(kinds, sources)
-            for cycle in order.physics_cycles:
-                names = ", ".join(components[position].component_name for position in cycle)
-                log.warning(
-                    f"The physics components {names} require one another to be evaluated first: each is a device "
-                    "of an L1 controller that reads another of them. They keep the order they were added in, so a "
-                    "controller among them may pair its device's report with a store's answer of the pass before, "
-                    "and its iteration may circle instead of settling."
-                )
-            for cycle in order.l2_cycles:
-                names = ", ".join(components[position].component_name for position in cycle)
-                log.warning(
-                    f"The L2 controllers {names} read one another in a cycle. They keep the order they were added "
-                    "in, so each of them that reads a later one applies its signal of the pass before, and the "
-                    "iteration may need more passes or circle instead of settling."
-                )
+            order = self.evaluation_order_of([wrapped_component.my_component for wrapped_component in self.wrapped_components])
             self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
         return self._evaluation_plan
 
@@ -714,92 +655,65 @@ class Simulator:
         if parameters.result_directory:
             CalculationDirectories.register_result_directory(parameters.result_directory)
 
-    def check_cost_declarations(self) -> None:
-        """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
+    def added_system(self) -> AddedSystem:
+        """Return the components as they were added, the subject of the setup rules a run checks before it prepares anything.
 
-        The completeness check roadmap/cost_spec.md §9.2 asks for "at simulation start, not end", and this
-        method answers it for the two defects that are visible without the cost database:
-
-        1. a class that declares no `cost_relevance` at all and therefore keeps the `UNDECLARED`
-           base-class default, and
-        2. a class that declares `PRICED` while nothing can produce facts for it — neither a
-           `get_cost_facts` implementation of its own nor an entry in
-           `adapter.FactsExtractors.BY_CLASS_NAME`.
-
-        The rule for one class is `cost_declaration_refusal`; this method applies it to the class of
-        every registered component and raises one error per kind of refusal.
-
-        Both end the same way in postprocessing: the bridge turns them into unresolved subjects and
-        the D7 check aborts the evaluation. Finding that out there means a year-long simulation runs
-        for hours and then dies without producing the cost report it was started for, so both are
-        caught here instead. The second check mirrors the precedence `adapter.extract_cost_facts`
-        applies — hook first, table second — so this refusal and that one can never disagree about
-        which classes have a facts source.
-
-        What still belongs to the bridge, because it needs data this method has no business
-        loading: whether the facts a source produces can actually be *priced* — an asset class with
-        no `devices_<COUNTRY>.json` row, a meter whose configured fuel maps to no carrier, an
-        extractor that returns None for this particular configuration. Those stay with the D7
-        check.
-
-        Does nothing unless `PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS` or
-        `LIFECYCLE_COST_REPORT` was requested: components are free to be undeclared in a run that
-        never asks what anything costs.
-
-        Raises:
-            UndeclaredCostRelevanceError: If lifecycle costs were requested and at least one
-                registered component's class declares no `cost_relevance`. The message names
-                every offending class and the module it lives in. It is a `ValueError`, so a
-                caller catching `run_all_timesteps`' documented refusal type still catches it.
-            UnpriceableComponentError: If a registered component's class declares `PRICED` and has
-                neither its own `get_cost_facts` nor an adapter-table entry. Also a `ValueError`,
-                for the same reason. Reported separately from the undeclared classes because the
-                fix is a different one.
+        Example: a setup that added a weather and a building gives both components, their registered outputs and the
+        post-processing options of the parameters, for instance ``COMPUTE_LIFECYCLE_COSTS``, which the cost rules
+        ``CB-08`` and ``CB-09`` read.
         """
-        options = self._simulation_parameters.post_processing_options
-        wanted = (
-            postprocessingoptions.PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in options
-            or postprocessingoptions.PostProcessingOptions.LIFECYCLE_COST_REPORT in options
+        options = self._simulation_parameters.post_processing_options if self._simulation_parameters is not None else []
+        return AddedSystem(
+            components=tuple(wrapped.my_component for wrapped in self.wrapped_components),
+            outputs=tuple(self.all_outputs),
+            post_processing_options=tuple(options),
         )
-        if not wanted:
-            return
-        undeclared: List[type] = []
-        unpriceable: List[type] = []
-        for wrapped_component in self.wrapped_components:
-            component_class = type(wrapped_component.my_component)
-            refusal = cost_declaration_refusal(component_class)
-            if refusal is UndeclaredCostRelevanceError and component_class not in undeclared:
-                undeclared.append(component_class)
-            elif refusal is UnpriceableComponentError and component_class not in unpriceable:
-                unpriceable.append(component_class)
-        if undeclared:
-            raise UndeclaredCostRelevanceError(undeclared)
-        if unpriceable:
-            raise UnpriceableComponentError(unpriceable)
+
+    def built_system(self) -> BuiltSystem:
+        """Return the components with their inputs connected, the subject of the setup rules a run checks before its first step.
+
+        Example: after :meth:`prepare_calculation` and :meth:`connect_all_components`, the components in the order
+        added, every registered output including those a dynamic component grew while it was connected, and the names
+        of the components added with ``connect_automatically=True``.
+        """
+        return BuiltSystem(
+            components=tuple(wrapped.my_component for wrapped in self.wrapped_components),
+            outputs=tuple(self.all_outputs),
+            connects_automatically=frozenset(
+                wrapped.my_component.component_name for wrapped in self.wrapped_components if wrapped.connect_automatically
+            ),
+        )
 
     # @profile
     # @utils.measure_execution_time
     def run_all_timesteps(self) -> None:
         """Performs all timesteps and saves results for post-processing.
 
+        The setup rules of the build stage run twice (``hisim/setup_rules/``): on the components as added, first thing,
+        and on the connected components, before the first step.
+
         Raises:
-            ValueError: If simulation parameters are not initialized, no components
-                are defined, post-processing data transfer is None, or lifecycle costs were
-                requested while some component declares no `cost_relevance`
-                (`check_cost_declarations`).
+            ValueError: If simulation parameters are not initialized, or post-processing data transfer is None.
+            UndeclaredSetupKindError: If the setup declared no kind (:meth:`declare_setup_kind`), first thing.
+            SetupRuleViolation: Listing every fault of the rules of the components as added, first thing: no
+                component or no output, a class without one kind, a name added twice, and, when lifecycle costs were
+                requested, a class that declares no ``cost_relevance`` (an ``UndeclaredCostRelevanceError`` when only
+                that rule found faults) or a ``PRICED`` class nothing can describe (an ``UnpriceableComponentError``).
+                Then, before the first step, listing every fault of the build rules of the connected system; a
+                ``FluidLoopWiringError`` when only the fluid-loop rules found faults, an ``EnergyPortWiringError`` when
+                only the energy-port rules did.
         """
         # Error Tests
         # Test if all parameters were initialized
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
 
-        # Tests if wrapper has any components at all
-        if len(self.wrapped_components) == 0:
-            raise ValueError("Not a single component was defined. Quitting.")
-
-        # A lifecycle-cost run needs every component to have declared a cost role; refuse now
-        # rather than after hours of simulation (roadmap/cost_spec.md §9.2).
-        self.check_cost_declarations()
+        # The setup rules of the components as added refuse now, before anything is prepared: an empty run, a class
+        # without a kind, a name added twice, and a lifecycle-cost run with a class no cost model describes, which
+        # would otherwise fail after hours of simulation (roadmap/cost_spec.md §9.2); a setup that declares no kind
+        # is refused here
+        registry = SetupRuleRegistry.collect()
+        registry.run(RuleStage.BUILD, self.added_system(), self.setup_kind)
 
         # prepare logging and simulation directory
         self.prepare_simulation_directory()
@@ -815,8 +729,10 @@ class Simulator:
         self.prepare_calculation()
         # Connects all components
         self.connect_all_components()
-        # a wiring that breaks a rule of the energy ports fails now, not after the run (hisim-hydronics-fxix.6)
-        Wiring.refuse_a_broken_wiring([wrapped.my_component for wrapped in self.wrapped_components])
+        # The setup rules of the built system, in both modes: a connection between ports that do not fit, a mandatory
+        # input left unconnected, a wiring that is no fluid loop or breaks a rule of the energy ports fail now, not
+        # after the run
+        registry.run(RuleStage.BUILD, self.built_system(), self.setup_kind)
         log.information(
             f"finished connecting all components. A total of {len(self.wrapped_components)} "
             f"components were defined. They have a total of {len(self.all_outputs)} outputs."
@@ -925,8 +841,8 @@ class Simulator:
     def prepare_post_processing(self, all_result_lines, start_counter):
         """Assembles simulation results into a DataFrame and prepares data for post-processing.
 
-        Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
-        simulation start/end dates and timestep size, and optionally computes monthly, daily,
+        Builds a pandas DataFrame from simulation outputs, assigns a datetime index from the
+        simulation's start date and timestep size, one entry per row, and optionally computes monthly, daily,
         hourly, and cumulative aggregations: all four for the monthly and scenario-evaluation
         options, only the cumulative one (the sums and means over the run) for
         ``MAKE_NETWORK_CHARTS``. Returns a PostProcessingDataTransfer object containing all
@@ -940,9 +856,8 @@ class Simulator:
             PostProcessingDataTransfer: Object bundling results, outputs, parameters, and timing for post-processing.
         """
         log.information("Preparing post processing")
-        # Prepares the results from the simulation for the post processing.
-        if len(all_result_lines) != self._simulation_parameters.timesteps:
-            raise ValueError("not all lines were generated")
+        # Prepares the results from the simulation for the post processing. A table without one row per step is
+        # refused by the setup rule AR-02 (hisim/setup_rules/results.py), first thing in the post-processing.
         colum_names = []
         if self.setup_function is None:
             raise ValueError("No setup function was set")
@@ -954,9 +869,9 @@ class Simulator:
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         df_index = pd.date_range(
             start=self._simulation_parameters.start_date,
-            end=self._simulation_parameters.end_date,
+            periods=len(all_result_lines),
             freq=f"{self._simulation_parameters.seconds_per_timestep}s",
-        )[:-1]
+        )
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
@@ -1004,6 +919,7 @@ class Simulator:
             execution_time_in_s=execution_time,
             scenario_name=scenario_name,
             description=self.description,
+            setup_kind=self.setup_kind,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,
@@ -1200,83 +1116,63 @@ class Simulator:
         source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
         target_component: Union[cp.Component, dcp.DynamicComponent],
     ) -> None:
-        """Connects a target component to source components via default connections.
+        """Connects a target component to source components via its default connections, static and dynamic.
+
+        A static default connection names a source class and wires its outputs into the target's named inputs. A
+        dynamic component also says what it reads of each source through the inputs it grows
+        (``default_connections_for``): the declarations for the source's class, or, for the electricity meter, every
+        electricity port the source declares. A component may declare both: the building reads the weather and the
+        occupancy by name and grows an input for every device that releases heat into its heated zone. Each kind is
+        applied to the sources it names; a component never reads its own outputs.
+
+        A target that declares no default connections, or none from any source of the run, is
+        connected to nothing here; the setup rule ``CB-07`` (``hisim/setup_rules/components.py``)
+        refuses it before the first step.
 
         Args:
-            source_component_list: Candidate source components to connect from.
+            source_component_list: Candidate source components to connect from, in the order of the run.
             target_component: The component whose default connections to resolve.
 
         Raises:
             TypeError: If target_component is not a Component or DynamicComponent.
-            KeyError: If no source matches the target's default connections, or the
-                target has no default connections defined.
         """
-
-        if isinstance(target_component, dcp.DynamicComponent):
-            self.connect_dynamic_component_automatically(source_component_list, target_component)
-            return
         if not isinstance(target_component, cp.Component):
             raise TypeError(
                 f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
             )
         target_default_connection_dict: Dict[str, List[cp.ComponentConnection]] = target_component.default_connections
-
-        # check if target component has any default connections (otherwise automatic connection cannot be made)
-        if not target_default_connection_dict:
-            raise KeyError(
-                f"Automatic connection does not work for {target_component.component_name} because no default "
-                "connections were found. Please check if a connection is needed and if yes, create the missing "
-                "default connection in your component."
-            )
-        # check if at least one source_component is in the target default connections
-        if not any(
-            source_component.get_classname() in target_default_connection_dict
-            for source_component in source_component_list
-        ):
-            raise KeyError(
-                "No component in the system setup matches the default connections of "
-                f"{target_component.component_name}."
-            )
         # go through all registered components; a source whose class the target names is connected
         for source_component in source_component_list:
             if source_component.get_classname() in target_default_connection_dict:
                 connections = target_component.get_default_connections(source_component=source_component)
                 target_component.connect_with_connections_list(connections=connections)
+        if isinstance(target_component, dcp.DynamicComponent):
+            self.connect_dynamic_component_automatically(source_component_list, target_component)
 
     @staticmethod
     def connect_dynamic_component_automatically(
         source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
         target_component: dcp.DynamicComponent,
     ) -> None:
-        """Connects a dynamic component to every source it declares default connections from.
+        """Connects a dynamic component to every source it declares dynamic default connections from.
 
         The dynamic component itself says what it reads of each source (``default_connections_for``): the
-        declarations for the source's class, or for the electricity meter every electricity port the source declares.
-        It never reads its own outputs.
+        declarations for the source's class, or for the electricity meter every electricity port the source declares,
+        or for the building every port of heat released into its heated zone. It never reads its own outputs. Its
+        static default connections are applied by :meth:`connect_everything_automatically` before this.
+
+        A target that declares no default connections, or none from any source of the run, is connected to nothing
+        here; the setup rule ``CB-07`` (``hisim/setup_rules/components.py``) refuses it before the first step.
 
         Args:
             source_component_list: Candidate source components to connect from, in the order of the run.
             target_component: The dynamic component whose default connections to resolve.
-
-        Raises:
-            KeyError: If the target declares no default connections, or none from any source of the run.
         """
-        if not target_component.declares_default_connections():
-            raise KeyError(
-                f"Automatic connection does not work for {target_component.component_name} because no default "
-                "connections were found. Please check if a connection is needed and if yes, create the missing "
-                "default connection in your component."
-            )
         sources = [
             source_component
             for source_component in source_component_list
             if source_component is not target_component and target_component.default_connections_for(source_component)
         ]
-        if not sources:
-            raise KeyError(
-                "No component in the system setup matches the default connections of "
-                f"{target_component.component_name}."
-            )
         for source_component in sources:
             target_component.connect_with_dynamic_connections_list(
                 dynamic_component_connections=target_component.get_dynamic_default_connections(

@@ -17,8 +17,9 @@ probes:
   - column: baseline
     description: >-
       The class defaults, recorded with no module configuration at all, which is what makes this
-      column's flat file the committed twin: the 1958-1968 single-family house, its weather, and the
-      air conditioner and controller that both stand at their own class defaults.
+      column's flat file the committed twin: the 1958-1968 single-family house, its weather, the
+      archetype's residents, and the air conditioner and controller that both stand at their own
+      class defaults.
 
   - column: nineties_building
     description: >-

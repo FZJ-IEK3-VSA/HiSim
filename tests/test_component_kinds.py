@@ -40,6 +40,10 @@ from hisim.dynamic_component import DynamicComponent
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.components import NoL2Cycle, NoPhysicsCycle, SourceOutputRegistered
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import RuleStage, SetupRuleViolation
+from tests import functions_for_testing as fft
 
 pytestmark = pytest.mark.base
 
@@ -394,6 +398,7 @@ def probe_simulator(tmp_path: Path) -> Simulator:
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     parameters.result_directory = str(tmp_path / "results")
     simulator: Simulator = Simulator(module_directory=str(tmp_path), module_filename="kinds", my_simulation_parameters=parameters)
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     return simulator
 
@@ -422,11 +427,12 @@ def test_a_pass_runs_kind_by_kind_while_the_outputs_keep_the_order_added(tmp_pat
     assert [output.global_index for output in simulator.all_outputs] == [0, 1, 2]
 
 
-def test_a_component_without_a_kind_is_refused_when_it_is_added(tmp_path: Path) -> None:
-    """Catches a class without a kind reaching the time loop, where the simulator could not place it in a pass."""
+def test_a_component_without_a_kind_is_refused_when_the_run_starts(tmp_path: Path) -> None:
+    """Catches a class without a kind reaching the time loop, where the simulator could not place it in a pass (the setup rule CB-01)."""
     simulator = probe_simulator(tmp_path)
-    with pytest.raises(ComponentKindNotDeclaredError, match="must inherit exactly one kind base class"):
-        simulator.add_component(KindProbe(simulator.get_simulation_parameters(), "Probe", []))
+    simulator.add_component(KindProbe(simulator.get_simulation_parameters(), "Probe", []))
+    with pytest.raises(SetupRuleViolation, match="must inherit exactly one kind base class"):
+        simulator.run_all_timesteps()
 
 
 def wired_probes(simulator: Simulator, letters: str, sources: Tuple[FrozenSet[int], ...]) -> List[KindProbe]:
@@ -477,13 +483,14 @@ def test_a_cycle_of_constraints_is_warned_about_and_keeps_the_order_added(
     """Catches a cycle of physics constraints that fails the build, reorders its components or passes silently.
 
     Two controllers each command one device and read the other's, so each device must run first; the simulator keeps
-    them in the order added and names both in a warning.
+    them in the order added, and the setup rule CB-12 names both in a warning.
     """
     simulator = probe_simulator(tmp_path)
     wired_probes(simulator, "PPCC", (frozenset({2}), frozenset({3}), frozenset({1}), frozenset({0})))
     capsys.readouterr()
     planned = [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()]
     assert planned == ["C2", "C3", "P0", "P1"]
+    fft.ComponentRules.registry([NoPhysicsCycle, NoL2Cycle]).run(RuleStage.BUILD, simulator.built_system(), SetupKind.DEMO)
     warnings = [line for line in capsys.readouterr().out.splitlines() if line.startswith("WRN:")]
     assert len(warnings) == 1
     assert "P0, P1" in warnings[0]
@@ -494,13 +501,15 @@ def test_l2_controllers_that_read_one_another_are_warned_about_and_keep_the_orde
 ) -> None:
     """Catches an L2 cycle the simulator keeps in the order added without a warning, while it warns of a physics one.
 
-    Two L2 controllers read each other; the plan keeps them in the order added and one warning names both.
+    Two L2 controllers read each other; the plan keeps them in the order added and one warning of the setup rule CB-13
+    names both.
     """
     simulator = probe_simulator(tmp_path)
     wired_probes(simulator, "LL", (frozenset({1}), frozenset({0})))
     capsys.readouterr()
     planned = [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()]
     assert planned == ["L0", "L1"]
+    fft.ComponentRules.registry([NoPhysicsCycle, NoL2Cycle]).run(RuleStage.BUILD, simulator.built_system(), SetupKind.DEMO)
     warnings = [line for line in capsys.readouterr().out.splitlines() if line.startswith("WRN:")]
     assert len(warnings) == 1
     assert "L0, L1" in warnings[0]
@@ -519,6 +528,7 @@ def test_an_l2_controller_reading_into_an_l2_cycle_goes_after_the_cycle(
     capsys.readouterr()
     planned = [wrapped.my_component.component_name for wrapped in simulator.evaluation_plan()]
     assert planned == ["L1", "L2", "L0"]
+    fft.ComponentRules.registry([NoPhysicsCycle, NoL2Cycle]).run(RuleStage.BUILD, simulator.built_system(), SetupKind.DEMO)
     warnings = [line for line in capsys.readouterr().out.splitlines() if line.startswith("WRN:")]
     assert len(warnings) == 1
     assert "L1, L2" in warnings[0]
@@ -571,8 +581,8 @@ def test_an_input_that_stays_unconnected_orders_nothing(tmp_path: Path) -> None:
 def test_an_input_resolved_to_an_unregistered_output_is_refused(tmp_path: Path) -> None:
     """Catches the plan dropping the ordering constraint of an input whose output no added component registered.
 
-    Such an output would have no position, so its read would vanish from the order without a word; the plan refuses
-    it and names the input.
+    Such an output would have no position, so its read would vanish from the order without a word; the build refuses
+    it before the first step and names the input (the setup rule CB-10).
     """
     simulator = probe_simulator(tmp_path)
     probes = wired_probes(simulator, "CP", (frozenset({1}), frozenset({0})))
@@ -581,7 +591,7 @@ def test_an_input_resolved_to_an_unregistered_output_is_refused(tmp_path: Path) 
     )
 
     with pytest.raises(ValueError, match="C0 # FromP1"):
-        simulator.evaluation_plan()
+        fft.ComponentRules.registry([SourceOutputRegistered]).run(RuleStage.BUILD, simulator.built_system(), SetupKind.DEMO)
 
 
 def test_a_plan_computed_before_the_wiring_is_recomputed_after_it(tmp_path: Path) -> None:

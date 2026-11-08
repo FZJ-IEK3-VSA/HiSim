@@ -262,7 +262,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 0.0
+    "value": 855.299967738001
   },
   "BUI1.Costs.Costs of other heating fuels for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 893.1581199999999
+    "value": 1748.4580877380008
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -302,7 +302,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 460.68
+    "value": 470.68
   },
   "BUI1.Costs.Investment costs for equipment per simulated period minus subsidies": {
     "building": "BUI1",
@@ -310,7 +310,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 433.41
+    "value": 443.41
   },
   "BUI1.Costs.Investment costs for equipment without heatpump per simulated period": {
     "building": "BUI1",
@@ -318,7 +318,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 460.68
+    "value": 470.68
   },
   "BUI1.Costs.Investment costs for equipment without heatpump per simulated period minus subsidies": {
     "building": "BUI1",
@@ -326,7 +326,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 433.41
+    "value": 443.41
   },
   "BUI1.Costs.Investment costs upfront for equipment period minus subsidies": {
     "building": "BUI1",
@@ -334,7 +334,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 12756.38
+    "value": 12956.38
   },
   "BUI1.Costs.Maintenance costs for simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1575.22812
+    "value": 2440.528087738001
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1575.22812
+    "value": 2440.528087738001
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (meter)": {
     "building": "BUI1",
@@ -572,7 +572,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 0.0
+    "value": 2755.3287551291305
   },
   "BUI1.Emissions.CO2 footprint of other heating fuels for simulated period": {
     "building": "BUI1",
@@ -588,7 +588,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 1242.1383999999998
+    "value": 3997.4671551291303
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -604,7 +604,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 1242.1383999999998
+    "value": 3997.4671551291303
   },
   "BUI1.Gas Boiler.CAPEX - CO2 Footprint (boiler)": {
     "building": "BUI1",
@@ -831,6 +831,66 @@
     "unit": "kWh",
     "value": 11218.3
   },
+  "BUI1.Gas Meter.CO2 footprint of gas consumption from grid (gas_meter)": {
+    "building": "BUI1",
+    "name": "CO2 footprint of gas consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "gas_meter",
+      "name": "gas_meter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kg",
+    "value": 2755.3287551291305
+  },
+  "BUI1.Gas Meter.Opex costs of gas consumption from grid (gas_meter)": {
+    "building": "BUI1",
+    "name": "Opex costs of gas consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "gas_meter",
+      "name": "gas_meter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "Euro",
+    "value": 855.299967738001
+  },
+  "BUI1.Gas Meter.Total gas consumption (gas_meter)": {
+    "building": "BUI1",
+    "name": "Total gas consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "gas_meter",
+      "name": "gas_meter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kWh",
+    "value": 11480.5
+  },
+  "BUI1.Gas Meter.Total gas demand from grid (gas_meter)": {
+    "building": "BUI1",
+    "name": "Total gas demand from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "gas_meter",
+      "name": "gas_meter",
+      "path": []
+    },
+    "tag": "Gas Meter",
+    "unit": "kWh",
+    "value": 11480.5
+  },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
     "name": "Grid injection of electricity",
@@ -853,7 +913,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 2972.24350823275
+    "value": 14452.743508232776
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",

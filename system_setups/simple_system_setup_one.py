@@ -11,6 +11,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 from hisim.config import ComponentID
+from hisim.setup_rules.kinds import SetupKind
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
@@ -20,6 +21,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
     a series with values between 110 and 220, produced by the sum builder.
     """
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     log.information("Starting first system setup: ")
 
     # Set the simulation parameters for the simulation

@@ -93,7 +93,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values, for example a quantity that
         is undefined while a device stands still. Every other output must be finite in every step: after the run,
-        :class:`~hisim.postprocessing.finite_results.FiniteResultsCheck` fails a run whose result table holds a NaN
+        the setup rule ``AR-01`` (:class:`~hisim.setup_rules.results.Finite`) fails a run whose result table holds a NaN
         or an infinity in a column that does not declare it.
 
         ``aggregation`` says how post-processing combines the output's time steps into monthly
@@ -106,14 +106,15 @@ class ComponentOutput:  # noqa: too-few-public-methods
                 The prefix is normally the already-validated component name, but a direct
                 construction can pass anything, and an unusable prefix would defeat the rule
                 on the very column name it exists for. Also if ``energy_port`` is given for an
-                output that is neither a power nor an energy.
+                output that is neither a power nor an energy nor a fuel's mass flow
+                (:meth:`hisim.energy_port.EnergyPort.validate_unit`).
             FluidLoopError: If ``fluid_loop`` does not fit the output: a quantity of an input, a
                 unit other than its quantity's, or an ``energy_port`` beside it.
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component output")
         if energy_port is not None:
-            EnergyPort.validate_unit(unit)
+            EnergyPort.validate_unit(unit, energy_port.carrier)
         if fluid_loop is not None:
             fluid_loop.check_fits(object_name, field_name, unit, is_input=False, energy_port=energy_port)
         self.full_name: str = object_name + " # " + field_name
@@ -196,14 +197,14 @@ class ComponentInput:  # noqa: too-few-public-methods
                 on an output; it is enforced anyway, because an input and an output of the same
                 flow that spelled their names by different rules would be a trap for every
                 reader of both. Also if ``energy_port`` is given for an input that is neither a
-                power nor an energy, or does not fit an input
+                power nor an energy nor a fuel's mass flow, or does not fit an input
                 (:meth:`hisim.energy_port.EnergyPort.check_fits_an_input`).
         """
         cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component input")
         if energy_port is not None:
-            EnergyPort.validate_unit(unit)
-            energy_port.check_fits_an_input(object_name, field_name)
+            EnergyPort.validate_unit(unit, energy_port.carrier)
+            energy_port.check_fits_an_input(object_name, field_name, unit)
         if fluid_loop is not None:
             fluid_loop.check_fits(object_name, field_name, unit, is_input=True, energy_port=energy_port)
         self.fullname: str = object_name + " # " + field_name
@@ -228,12 +229,11 @@ class FluidLoopPortSet:
     """One component's channels of one fluid loop, keyed by the quantity each carries.
 
     The build groups a component's tagged channels by the :class:`~hisim.energy_port.FluidLoop` their tags name
-    (:meth:`group`); one group is a port set. In stage 1a of ``roadmap/hydraulic_circuits_spec.md`` a port set has
-    three channels: the two temperatures and the one flow the member has today, a ``FLOW_OUT`` at the member that
-    publishes the loop's flow, a ``FLOW_IN`` at the member that reads it. Stage 1b gives every member both flows. For
-    example, a buffer's ``generator`` set holds its inputs ``WaterMassFlowRateFromHeatGenerator`` (``FLOW_IN``) and
-    ``WaterTemperatureFromHeatGenerator`` (``TEMPERATURE_IN``) and its output ``WaterTemperatureToHeatGenerator``
-    (``TEMPERATURE_OUT``).
+    (:meth:`group`); one group is a port set, with one channel of each of the four quantities (D1 of
+    ``roadmap/fluid_loops_spec.md``). For example, a buffer's ``generator`` set holds its inputs
+    ``WaterMassFlowRateFromHeatGenerator`` (``FLOW_IN``) and ``WaterTemperatureFromHeatGenerator``
+    (``TEMPERATURE_IN``) and its outputs ``WaterMassFlowRateToHeatGenerator`` (``FLOW_OUT``) and
+    ``WaterTemperatureToHeatGenerator`` (``TEMPERATURE_OUT``).
 
     Attributes:
         component_name: The component the channels belong to.
@@ -245,15 +245,15 @@ class FluidLoopPortSet:
     loop: FluidLoop
     channels: Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]
 
-    #: The quantities every port set has in stage 1a; besides them it has exactly one of :attr:`FLOWS`.
-    TEMPERATURES: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.TEMPERATURE_IN, LoopQuantity.TEMPERATURE_OUT)
-    #: The two flow quantities.
-    FLOWS: ClassVar[Tuple[LoopQuantity, ...]] = (LoopQuantity.FLOW_IN, LoopQuantity.FLOW_OUT)
-
     @property
-    def flow_quantity(self) -> LoopQuantity:
-        """The one flow quantity the set has: ``FLOW_OUT`` where the member publishes the flow, else ``FLOW_IN``."""
-        return LoopQuantity.FLOW_OUT if LoopQuantity.FLOW_OUT in self.channels else LoopQuantity.FLOW_IN
+    def pumped_flow_quantity(self) -> LoopQuantity:
+        """The channel through which the member sees the flow the pump owner moves.
+
+        The pump owner publishes it as its ``FLOW_OUT``; a member that passes the flow on reads it through its
+        ``FLOW_IN``. For example, a boiler that pumps its space-heating loop has ``FLOW_OUT``, the buffer it charges
+        ``FLOW_IN``.
+        """
+        return LoopQuantity.FLOW_OUT if self.loop.pumps else LoopQuantity.FLOW_IN
 
     @property
     def label(self) -> str:
@@ -261,14 +261,69 @@ class FluidLoopPortSet:
         return f"{self.component_name}.{self.loop.name}"
 
     @staticmethod
+    def tagged_channels(
+        channels: Sequence[Union[ComponentInput, ComponentOutput]],
+    ) -> Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]]:
+        """Return a component's tagged channels by the fluid loop their tags name, each keyed by its quantity.
+
+        The loops come in the order they first appear in ``channels``; untagged channels are skipped, and a channel
+        without a ``fluid_loop`` attribute counts as untagged. For example, a boiler's four space-heating channels and
+        its four hot-water channels give two loops of four channels each; a tank that tags only its flow in gives one
+        loop with one channel.
+
+        Args:
+            channels: The component's inputs and outputs.
+
+        Returns:
+            The channels of each loop by quantity.
+        """
+        grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
+        for channel in channels:
+            tag: Optional[FluidLoopChannel] = getattr(channel, "fluid_loop", None)
+            if tag is not None:
+                grouped.setdefault(tag.loop, {})[tag.quantity] = channel
+        return grouped
+
+    @staticmethod
+    def half_tagged(component_name: str, channels: Sequence[Union[ComponentInput, ComponentOutput]]) -> List[str]:
+        """Return one sentence for every loop a component tags by half, without all four quantities; empty when there is none.
+
+        Rule 0 of §3.3 of ``roadmap/fluid_loops_spec.md``: a member of a loop has a flow in, a flow out, a temperature
+        in and a temperature out. For example, a tank that tags its flow in and both temperatures of its loop
+        ``generator`` gives ``Tank tags the loop 'generator' by half: it tags FlowIn (flow_in), TemperatureIn
+        (temperature_in), TemperatureOut (temperature_out) and lacks flow_out; ...``. The build refuses such a loop
+        with the setup rule ``FL-01`` (``hisim/setup_rules/fluid_loops.py``), and :meth:`group` refuses it again for a
+        caller outside a build.
+
+        Args:
+            component_name: The component the channels belong to.
+            channels: Its inputs and outputs (:meth:`tagged_channels`).
+
+        Returns:
+            The sentences, one per loop tagged by half, in the order the loops first appear.
+        """
+        sentences: List[str] = []
+        for loop, by_quantity in FluidLoopPortSet.tagged_channels(channels).items():
+            missing = [quantity.value for quantity in LoopQuantity if quantity not in by_quantity]
+            if missing:
+                tagged = ", ".join(f"{channel.field_name} ({quantity.value})" for quantity, channel in by_quantity.items())
+                sentences.append(
+                    f"{component_name} tags the loop {loop.name!r} by half: it tags {tagged} and lacks "
+                    f"{', '.join(missing)}; a member of a fluid loop has a flow in, a flow out, a temperature in and "
+                    "a temperature out."
+                )
+        return sentences
+
+    @staticmethod
     def group(
         component_name: str, channels: Sequence[Union[ComponentInput, ComponentOutput]]
     ) -> Tuple["FluidLoopPortSet", ...]:
         """Group a component's channels by the fluid loop their tags name, one port set per loop.
 
-        The sets come in the order their loops first appear in ``channels``. Untagged channels are skipped. A loop
-        tagged by half is refused: one without both temperatures, or (stage 1a) with no flow or with both. For
-        example, a boiler's three space-heating channels and its three hot-water channels give two sets.
+        The sets come in the order their loops first appear in ``channels`` (:meth:`tagged_channels`). Untagged
+        channels are skipped. For example, a boiler's four space-heating channels and its four hot-water channels give
+        two sets. A loop tagged by half cannot be a port set: the build refuses it first, with the setup rule
+        ``FL-01``, and a caller outside a build gets the same sentence here (:meth:`half_tagged`).
 
         Args:
             component_name: The component the channels belong to.
@@ -278,26 +333,16 @@ class FluidLoopPortSet:
             The port sets.
 
         Raises:
-            FluidLoopError: For a loop tagged by half, naming the component, the loop and what it lacks.
+            FluidLoopError: For a loop tagged by half, naming the component, the loop, the channels it tags and the
+                quantities it lacks.
         """
-        grouped: Dict[FluidLoop, Dict[LoopQuantity, Union[ComponentInput, ComponentOutput]]] = {}
-        for channel in channels:
-            tag: Optional[FluidLoopChannel] = getattr(channel, "fluid_loop", None)
-            if tag is not None:
-                grouped.setdefault(tag.loop, {})[tag.quantity] = channel
-        port_sets: List[FluidLoopPortSet] = []
-        for loop, by_quantity in grouped.items():
-            missing = [quantity.value for quantity in FluidLoopPortSet.TEMPERATURES if quantity not in by_quantity]
-            flows = [quantity for quantity in FluidLoopPortSet.FLOWS if quantity in by_quantity]
-            if missing or len(flows) != 1:
-                raise FluidLoopError(
-                    f"{component_name} tags the loop {loop.name!r} by half: it has "
-                    f"{', '.join(quantity.value for quantity in by_quantity)}; a port set has both temperatures "
-                    "and, until stage 1b of the hydraulic circuits spec, exactly one flow (flow_out where the member "
-                    "publishes the loop's flow, flow_in where it reads it)."
-                )
-            port_sets.append(FluidLoopPortSet(component_name, loop, by_quantity))
-        return tuple(port_sets)
+        half_tagged = FluidLoopPortSet.half_tagged(component_name, channels)
+        if half_tagged:
+            raise FluidLoopError(half_tagged[0])
+        return tuple(
+            FluidLoopPortSet(component_name, loop, by_quantity)
+            for loop, by_quantity in FluidLoopPortSet.tagged_channels(channels).items()
+        )
 
 
 class SingleTimeStepValues:
@@ -372,7 +417,7 @@ class Component:
     # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
     # UNDECLARED is only the loadable default, and a component that still carries it aborts any
     # lifecycle-cost run it appears in — at simulation start via
-    # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
+    # the setup rules CB-08 and CB-09 (hisim/setup_rules/components.py), and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     #: Why this component declares no energy port although it is neither a controller nor a meter, or None.
@@ -589,7 +634,7 @@ class Component:
         """Adds an output definition; ``energy_port`` declares its role in the energy balance.
 
         ``may_be_non_finite`` declares that the output may hold NaN or infinite values; the check of the results
-        after the run (:mod:`hisim.postprocessing.finite_results`) skips its column and fails the run on a NaN or an
+        after the run (the setup rule ``AR-01``, :mod:`hisim.setup_rules.results`) skips its column and fails the run on a NaN or an
         infinity in any other. ``aggregation`` declares how its time steps are combined into monthly values and a
         run total; left out, the unit decides (:meth:`hisim.loadtypes.OutputAggregation.of_unit`). ``fluid_loop``
         tags the output as a leg of one of the component's fluid loops; an output takes it or ``energy_port``, never
@@ -660,12 +705,28 @@ class Component:
         """Return the component's port sets, its tagged channels grouped by fluid loop (:meth:`FluidLoopPortSet.group`).
 
         For example, a buffer behind a generator has three, ``generator``, ``secondary_generator`` and
-        ``distribution``. The energy balance reads nothing else about a component's loops.
+        ``distribution``. The build's loop walk (:mod:`hisim.fluid_loops`) reads nothing else about a component's
+        loops.
 
         Raises:
-            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`).
+            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`), which the build refuses
+                first (setup rule ``FL-01``).
         """
         return FluidLoopPortSet.group(self.component_name, [*self.inputs, *self.outputs])
+
+    def port_sets_in_the_energy_balance(self) -> Tuple["FluidLoopPortSet", ...]:
+        """Return the port sets the energy balance books: all of :meth:`port_sets`, unless the component says otherwise.
+
+        The build's loop walk reads :meth:`port_sets`, every loop the component is a member of. The balance reads
+        these. The one component that books fewer is the heat distribution system without a buffer, whose outputs
+        lag one step behind its loop, so that its balance would not close (bead hisim-pnw7); it books none until
+        stage 3 of ``roadmap/fluid_loops_spec.md`` and is drawn as undeclared, as before.
+
+        Raises:
+            FluidLoopError: If a loop is tagged by half (:meth:`FluidLoopPortSet.group`), which the build refuses
+                first (setup rule ``FL-01``).
+        """
+        return self.port_sets()
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""
@@ -1107,8 +1168,9 @@ class ComponentKindNotDeclaredError(TypeError):
     """A component class inherits no kind base class, or more than one, so the simulator cannot place it in a pass.
 
     For example, a class derived from :class:`Component` or :class:`StatelessComponent` alone has no kind. Raised by
-    :meth:`ComponentKinds.of`, which the simulator calls when a component is added, so the error comes while the
-    system is built rather than at the first time step.
+    :meth:`ComponentKinds.of` when a class without one kind is looked up. A run never gets that far: the setup rule
+    ``CB-01`` (``hisim/setup_rules/components.py``) refuses such a class first thing, before the run prepares
+    anything.
     """
 
 
@@ -1134,6 +1196,31 @@ class ComponentKinds:
     )
 
     @classmethod
+    def problem(cls, component_class: type) -> Optional[str]:
+        """Return why a class has no one kind, or ``None`` when it inherits exactly one kind base class.
+
+        For example, a class derived from :class:`StatelessComponent` alone gives ``The component class
+        tests.Probe must inherit exactly one kind base class of [...] from hisim.component; it inherits none.``, and
+        ``Weather`` gives ``None``. The build refuses such a class with the setup rule ``CB-01``
+        (``hisim/setup_rules/components.py``), and :meth:`of` refuses a lookup of it with the same sentence.
+
+        Args:
+            component_class: The component class to look at; any class, so that a stand-in is judged, not crashed on.
+
+        Returns:
+            The sentence, or ``None``.
+        """
+        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
+        if len(kinds) == 1:
+            return None
+        found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
+        return (
+            f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
+            f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
+            f"{found}."
+        )
+
+    @classmethod
     def of(cls, component_class: Type[Component]) -> Type[Component]:
         """Return the kind base class a component class inherits.
 
@@ -1148,17 +1235,13 @@ class ComponentKinds:
             The one class of :attr:`BASES` in the method resolution order of ``component_class``.
 
         Raises:
-            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one.
+            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one
+                (:meth:`problem`).
         """
-        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
-        if len(kinds) != 1:
-            found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
-            raise ComponentKindNotDeclaredError(
-                f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
-                f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
-                f"{found}."
-            )
-        return kinds[0]
+        problem = cls.problem(component_class)
+        if problem is not None:
+            raise ComponentKindNotDeclaredError(problem)
+        return next(base for base in component_class.__mro__ if base in cls.BASES)
 
 
 @dataclass

@@ -188,6 +188,8 @@ class ElectricHeating(PhysicsComponent):
     #: The hot-water supply temperature the controller aims at: the heater's hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
+    #: The hot-water loop's flow returning to the heater, in kg/s: its own flow, passed back by the tank.
+    WaterInputMassFlowRateReturningDhw = "WaterInputMassFlowRateReturningDhw"
 
     #: The lift at which the hot-water side runs at its maximal power, in K: it regulates its power as
     #: ``P = P_max lift / 100 K``, so a 25 K lift draws a quarter of the maximal power.
@@ -288,6 +290,14 @@ class ElectricHeating(PhysicsComponent):
                 Units.CELSIUS,
                 True,
                 fluid_loop=self.hot_water_loop.temperature_in,
+            )
+            self.water_input_mass_flow_dhw_channel: ComponentInput = self.add_input(
+                self.component_name,
+                ElectricHeating.WaterInputMassFlowRateReturningDhw,
+                LoadTypes.WARM_WATER,
+                Units.KG_PER_SEC,
+                False,
+                fluid_loop=self.hot_water_loop.flow_in,
             )
 
         # Outputs Space Heating
@@ -431,15 +441,17 @@ class ElectricHeating(PhysicsComponent):
     def get_default_connections_from_simple_dhw_storage(
         self,
     ) -> List[ComponentConnection]:
-        """Return the default connection from the hot-water tank: the tank's step mean, the hot-water circuit's return.
+        """Return the default connections from the hot-water tank: the hot-water circuit's return and its flow back.
 
-        The heater pumps the hot-water circuit itself and books its heat from its own flow, so it reads only the
-        temperature the tank sends back, not a flow of the tank. For example, a tank whose step mean is 50 °C sends
-        50 °C back to the heater, which heats that water to its hot-water supply temperature.
+        The heater pumps the hot-water circuit itself and books its heat from its own flow; it reads the temperature
+        the tank sends back and, as the loop's fourth wire, its own flow passed back by the tank's primary coil, which
+        it does not compute with. For example, a tank whose step mean is 50 °C sends 50 °C back to the heater, which
+        heats that water to its hot-water supply temperature.
 
         Returns:
-            The one connection from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
-            ``WaterInputTemperatureDhw``.
+            The connections from ``SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius`` to
+            ``WaterInputTemperatureDhw`` and from ``SimpleDHWStorage.WaterMassFlowRateToHeatGenerator`` to
+            ``WaterInputMassFlowRateReturningDhw``.
         """
 
         component_class = SimpleDHWStorage
@@ -449,6 +461,11 @@ class ElectricHeating(PhysicsComponent):
                 ElectricHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
+            ),
+            ComponentConnection(
+                ElectricHeating.WaterInputMassFlowRateReturningDhw,
+                hws_classname,
+                component_class.WaterMassFlowRateToHeatGenerator,
             ),
         ]
 

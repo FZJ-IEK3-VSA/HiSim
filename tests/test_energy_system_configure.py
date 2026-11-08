@@ -49,7 +49,8 @@ from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.loader import EnergySystemReader
-from hisim.energy_system.sizing_bridge import KernelFailure, sizing_sources_bridge
+from hisim.energy_system.sizing_bridge import resolve_sizing, sizing_sources_bridge
+from hisim.setup_rules.sizing import ConsumerPhrasing, KernelFailure
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -99,7 +100,7 @@ class Systems:
         Returns:
             The parsed, unexpanded file.
         """
-        text = f"schema_version: 3\nname: sizing under test\ncomponents:\n{entries}"
+        text = f"schema_version: 3\nname: sizing under test\nsetup_kind: demo\ncomponents:\n{entries}"
         return EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
 
     @classmethod
@@ -889,8 +890,6 @@ def test_a_many_read_sums_the_listed_providers_and_an_empty_list_is_refused() ->
     a group switched off may shrink one to ``[]`` -- would sum to a plausible zero, so it is the
     catalogue's ``EF-4G`` naming the consumer, never a number.
     """
-    from hisim.energy_system.sizing_bridge import resolve_sizing
-
     configs = [
         _PowerProviderConfig(component_id=ComponentID(name="left")),
         _PowerProviderConfig(component_id=ComponentID(name="right")),
@@ -900,19 +899,20 @@ def test_a_many_read_sums_the_listed_providers_and_an_empty_list_is_refused() ->
     both = {
         "maximal_thermal_power_in_watt": ["left.maximal_thermal_power_in_watt", "right.maximal_thermal_power_in_watt"]
     }
-    resolved, report = resolve_sizing(configs, {"aggregator": both}, names)
-    single = resolve_sizing(configs[:1] + configs[2:], {}, ["left", "aggregator"])[0][1]
+    sized = resolve_sizing(configs, {"aggregator": both}, names)
+    single = resolve_sizing(configs[:1] + configs[2:], {}, ["left", "aggregator"]).configs[1]
 
     assert single.total_in_watt == 5000.0
-    assert resolved[2].total_in_watt == 10000.0
-    assert [(lookup.source, lookup.many) for lookup in report.lookups if lookup.consumer == "aggregator"] == [
+    assert sized.failure is None and sized.configs[2].total_in_watt == 10000.0
+    assert [(lookup.source, lookup.many) for lookup in sized.report.lookups if lookup.consumer == "aggregator"] == [
         ("left", True),
         ("right", True),
     ]
-    with pytest.raises(EnergySystemSizingError) as raised:
-        resolve_sizing(configs, {"aggregator": {"maximal_thermal_power_in_watt": []}}, names)
-    assert raised.value.error_id is EnergySystemErrorId.SIZING_MANY_READ
-    assert "components.aggregator" in str(raised.value)
+    refused = resolve_sizing(configs, {"aggregator": {"maximal_thermal_power_in_watt": []}}, names)
+    assert refused.failure is not None and not refused.configs
+    message = str(refused.failure)
+    assert KernelFailure.classify(message) is EnergySystemErrorId.SIZING_MANY_READ
+    assert ConsumerPhrasing.location(message, names) == "components.aggregator"
 
 
 @pytest.mark.base

@@ -52,7 +52,7 @@ def test_a_version_4_file_round_trips_with_its_imports_verbs_ports_and_placehold
 def test_a_version_3_file_that_imports_is_refused() -> None:
     """Catches a flat file silently gaining imports without declaring the version that reads them."""
     with pytest.raises(EnergySystemFormatError, match="EF-01") as refusal:
-        read_system("schema_version: 3\nname: x\nimports: {pv: {assembly: pv/array}}\n")
+        read_system("schema_version: 3\nname: x\nsetup_kind: demo\nimports: {pv: {assembly: pv/array}}\n")
     assert "imports" in str(refusal.value)
 
 
@@ -60,7 +60,7 @@ def test_a_version_3_file_that_imports_is_refused() -> None:
 def test_a_version_3_entry_with_ports_or_verbs_is_refused() -> None:
     """Catches the keys of version 4 leaking into a version-3 file or into a group's entry."""
     with pytest.raises(EnergySystemFormatError, match="EF-18"):
-        read_system(f"schema_version: 3\nname: x\ncomponents:\n  {Mocks.WEATHER.replace('}', ', bind: {a: b}}')}\n")
+        read_system(f"schema_version: 3\nname: x\nsetup_kind: demo\ncomponents:\n  {Mocks.WEATHER.replace('}', ', bind: {a: b}}')}\n")
 
 
 @pytest.mark.assemblies
@@ -95,6 +95,22 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
     with pytest.raises(EnergySystemFormatError, match="EF-73") as refusal:
         read_assembly(text)
     assert f"'{construct}'" in str(refusal.value) and "D26" in str(refusal.value)
+
+
+@pytest.mark.assemblies
+def test_a_monotone_condition_is_read_and_a_malformed_one_is_refused() -> None:
+    """Catches ``applies_when`` of a monotone entry being dropped, or a value that is no list being accepted.
+
+    The condition is read like a port's ``required_when``: a parameter to a non-empty list of values, kept as
+    written; the schema an editor validates against admits the same shape.
+    """
+    entry = "{parameter: a, kpi: k, direction: decreasing, applies_when: {b: [none]}}"
+    text = MINIMAL.replace("monotone: []}", f"monotone: [{entry}]}}")
+    model, _lines = AssemblyReader.read_text(text, "test/minimal.assembly.yaml")
+    jsonschema.validate(yaml.safe_load(text), AssemblySchemaBuilder().build())
+    assert model.tests is not None and dict(model.tests.monotone[0].applies_when) == {"b": ("none",)}
+    with pytest.raises(EnergySystemFormatError, match="a non-empty list of values"):
+        read_assembly(text.replace("applies_when: {b: [none]}", "applies_when: {b: none}"))
 
 
 @pytest.mark.assemblies

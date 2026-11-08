@@ -8,6 +8,7 @@
 #       simulation_parameters/one_day_15min_export.simulation.yaml
 schema_version: 3
 name: Gas boiler household
+setup_kind: residential
 description: Single-family house with a condensing gas boiler, floor heating and grid electricity.
 components:
   weather:
@@ -44,9 +45,13 @@ components:
       - hds_controller
       - input: WaterTemperatureInput
         from: boiler.WaterOutputTemperatureSh
+      - input: WaterMassFlowInput
+        from: boiler.WaterOutputMassFlowSh
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
+    config:
+      pumps_space_heating_loop: false
     inputs:
       - boiler_controller
       - input: WaterInputTemperatureSh
@@ -60,6 +65,18 @@ components:
       - heating_curve
       - input: WaterTemperatureInputFromWaterStorage
         from: hds.WaterTemperatureOutput
+  gas_meter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    inputs:
+      - from: boiler.EnergyDemandSh
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: boiler.EnergyDemandDhw
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard

@@ -1,18 +1,22 @@
 """Tests for the simple air-conditioner household building-sizer system setup.
 
-Covers three concerns:
+Covers four concerns:
 
 1.  That a :class:`~hisim.components.building.Building` whose
     ``HeatingByResidents`` and ``HeatingByDevices`` inputs are left unconnected
     (no occupancy component) still simulates correctly with zero internal heat
-    gains — the foundation for the new setup that has no occupancy component.
+    gains: the two inputs are optional.
 2.  That :func:`setup_function` in
     ``system_setups/simple_air_conditioner_household_building_sizer.py`` builds
-    the expected four-component graph (Building, Weather, SimpleAirConditioner,
-    SimpleAirConditionerController) with the manual AC → Building
-    ThermalPowerDelivered connection, and that all mandatory inputs resolve.
-3.  That the recorded ``.energy_system.yaml`` twin declares the same four
-    components and the same one manual connection.
+    the expected six-component graph (Building, UTSPConnector, Weather,
+    SimpleAirConditioner, SimpleAirConditionerController, ElectricityMeter) with the
+    manual AC → Building ThermalPowerDelivered connection, the residents' heat gains
+    wired to the building, and that all mandatory inputs resolve.
+3.  That the recorded ``.energy_system.yaml`` twin declares the same six
+    components and the same manual connections, and its meter reads the residents'
+    and the air conditioner's electricity.
+4.  That the setup completes a KPI run in which the residents warm the building and
+    consume electricity.
 """
 
 import json
@@ -26,6 +30,8 @@ import yaml
 from hisim import component as cp
 from hisim.components import building
 from hisim.components import weather
+from hisim.components.electricity_meter import ElectricityMeter
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.config import SizingContext
 from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
@@ -137,17 +143,18 @@ def test_building_simulates_without_occupancy_connections() -> None:
 
 @pytest.mark.base
 def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
-    """The setup function creates 4 components and wires them correctly.
+    """The setup function creates 6 components and wires them correctly.
 
     Uses :func:`hisim_main.initialize_from_python` to load the setup module (which
     handles the ``system_setups`` import path) with a short one-day simulation, then
     verifies:
-    - exactly four components (Building, Weather, SimpleAirConditioner,
-      SimpleAirConditionerController);
+    - exactly six components (Building, UTSPConnector, Weather, SimpleAirConditioner,
+      SimpleAirConditionerController, ElectricityMeter);
     - the manual AC → Building ThermalPowerDelivered and HeatRemovedByCoolingInWatt
       connections are set;
     - ``prepare_calculation`` and ``connect_all_components`` succeed (all
-      mandatory inputs resolve).
+      mandatory inputs resolve), and the building's two heat-gain inputs read the
+      residents.
     """
     # Use a one-day simulation so prepare_calculation (weather data loading) is
     # fast.  Set a concrete result_directory so the setup function does not try
@@ -165,15 +172,17 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
         my_module_config=None,
     )
 
-    # ---- Verify the four expected components are present ----------------
+    # ---- Verify the six expected components are present -----------------
     component_types = {
         type(wrapped.my_component) for wrapped in my_sim.wrapped_components
     }
     assert building.Building in component_types
+    assert UtspLpgConnector in component_types
     assert weather.Weather in component_types
     assert SimpleAirConditioner in component_types
     assert SimpleAirConditionerController in component_types
-    assert len(my_sim.wrapped_components) == 4
+    assert ElectricityMeter in component_types
+    assert len(my_sim.wrapped_components) == 6
 
     # ---- Verify the manual AC → Building ThermalPowerDelivered connection --
     my_building = next(
@@ -210,10 +219,12 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
         f"Unconnected mandatory inputs: {unconnected_mandatory}"
     )
 
-    # The heat-gain inputs must be unconnected (no occupancy component) yet
-    # optional, so they must not appear in the unconnected_mandatory list above.
-    assert my_building.occupancy_heat_gain_channel.source_output is None
-    assert my_building.device_heat_gain_channel.source_output is None
+    # The residents' body heat and the heat of their devices reach the building through its default
+    # connections to the occupancy component.
+    assert my_building.occupancy_heat_gain_channel.src_object_name == "UTSPConnector"
+    assert my_building.occupancy_heat_gain_channel.src_field_name == UtspLpgConnector.HeatingByResidents
+    assert my_building.device_heat_gain_channel.src_object_name == "UTSPConnector"
+    assert my_building.device_heat_gain_channel.src_field_name == UtspLpgConnector.HeatingByDevices
 
 
 # ==============================================================================
@@ -223,10 +234,12 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
 
 @pytest.mark.base
 def test_recorded_twin_structure() -> None:
-    """The recorded twin declares 4 components and the two manual connections.
+    """The recorded twin declares 6 components, the two manual connections and the meter's feeds.
 
     Verifies that ``energy_systems/<setup>.energy_system.yaml`` is valid YAML, names the
-    four expected component classes, and declares the manual
+    six expected component classes, that the electricity meter reads the air conditioner's
+    and the residents' electricity, that the building reads the residents, and that it
+    declares the manual
     SimpleAirConditioner.ThermalPowerDelivered -> Building.ThermalPowerDelivered and
     SimpleAirConditioner.HeatDrawnForCoolingInWatt -> Building.HeatRemovedByCoolingInWatt
     connections. This replaced the same check against the setup's ``.scenario.json``
@@ -236,14 +249,30 @@ def test_recorded_twin_structure() -> None:
     twin = yaml.safe_load(_ENERGY_SYSTEM_YAML.read_text(encoding="utf-8"))
     components = twin["components"]
 
-    # Four components with the expected class names
+    # Six components with the expected class names
     assert {entry["class"] for entry in components.values()} == {
         "hisim.components.building.building.Building",
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
         "hisim.components.weather.Weather",
         "hisim.components.simple_air_conditioner.SimpleAirConditioner",
         "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
+        "hisim.components.electricity_meter.ElectricityMeter",
     }
-    assert len(components) == 4
+    assert len(components) == 6
+    assert components["ElectricityMeter"]["inputs"] == [
+        {
+            "from": "SimpleAirConditioner.ElectricalPowerConsumption",
+            "tags": ["ELECTRICITY_CONSUMPTION_UNCONTROLLED"],
+            "weight": 999,
+        },
+        {
+            "from": "UTSPConnector.ElectricalPowerConsumption",
+            "tags": ["ELECTRICITY_CONSUMPTION_UNCONTROLLED"],
+            "weight": 999,
+        },
+    ]
+    # The building reads the residents' heat gains through its default connections, a bare name in the twin.
+    assert "UTSPConnector" in components["Building"]["inputs"]
 
     # Two manual connections: AC.ThermalPowerDelivered -> Building.ThermalPowerDelivered, the
     # signed heat the building computes with, and AC.HeatDrawnForCoolingInWatt ->
@@ -254,7 +283,7 @@ def test_recorded_twin_structure() -> None:
         feed
         for entry in components.values()
         for feed in entry.get("inputs", [])
-        if isinstance(feed, dict)
+        if isinstance(feed, dict) and "input" in feed
     ]
     assert named == [
         {"input": "HeatRemovedByCoolingInWatt", "from": "SimpleAirConditioner.HeatDrawnForCoolingInWatt"},
@@ -284,40 +313,19 @@ def test_recorded_twin_structure() -> None:
     assert built_controller.deadband_k == 0.5
 
 
-class UndefinedForThisHousehold:
-    """The KPIs that cannot exist for a household with no electricity at all.
-
-    This setup builds a weather, a building and an air conditioner: no occupancy, no generation, no
-    meter. Its total electricity consumption is genuinely zero, so every figure expressed as a
-    proportion of it has no value -- not zero, which would be a measurement, but nothing. The KPI
-    layer used to divide by that total and end the run with ``ZeroDivisionError``; it now emits the
-    entries without values, the way it already did for a self-consumption rate with no production.
-
-    Pinning the names keeps the distinction from being quietly "fixed" into zeros later, which would
-    make a household that consumes nothing indistinguishable from one that consumes plenty and
-    self-supplies none of it.
-    """
-
-    NAMES = (
-        "Ratio between total production and total consumption",
-        "Ratio between PV production and total consumption",
-        "Relative electricity demand from grid",
-        "Self-sufficiency rate according to solar htw berlin",
-        "Total energy self-suffiency rate",
-    )
-
-
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_the_setup_completes_a_kpi_run_with_its_undefined_ratios_empty() -> None:
+def test_the_setup_completes_a_kpi_run_in_which_the_residents_warm_the_house_and_buy_electricity() -> None:
     """Run the setup for one day with KPI and cost post-processing on.
 
     The three tests above build the component graph and inspect it; none of them runs the setup to
     completion, and none asks for KPIs -- the default post-processing options leave them off. So the
-    setup could pass this suite while dying in post-processing, which is exactly what it did.
+    setup could pass this suite while dying in post-processing, or while its residents warmed nothing.
 
-    Asserting that the undefined ratios carry no value, rather than only that the run finished,
-    is what makes this a test of the convention instead of a test that nothing raised.
+    The house used to have no residents: on a January day it consumed nothing, and its ratios of the
+    consumption had no value. With the residents, the building books their heat as internal gains, the
+    total electricity is the residents' plus the air conditioner's, and the ratios are defined. The
+    undefined-ratio convention itself is pinned by the direct tests in ``tests/test_kpi_preparation.py``.
     """
     path = Path("../system_setups/simple_air_conditioner_household_building_sizer.py")
 
@@ -339,8 +347,13 @@ def test_the_setup_completes_a_kpi_run_with_its_undefined_ratios_empty() -> None
     # by name when the KPI is missing or more than one entry carries it.
     finder = KpiFinder(json.loads(kpi_path.read_text(encoding="utf-8")))
 
-    for name in UndefinedForThisHousehold.NAMES:
-        assert finder.value(name=name) is None, (
-            f"KPI '{name}' carries {finder.value(name=name)!r}, but this household consumes no "
-            "electricity at all, so a proportion of its consumption is undefined rather than zero."
-        )
+    internal_gains_in_kilowatt_hour = finder.value(name="Internal energy gains")
+    residents_electricity_in_kilowatt_hour = finder.value(name="Residents' total electricity consumption")
+    air_conditioner_electricity_in_kilowatt_hour = finder.value(name="Electrical energy consumption")
+    total_electricity_in_kilowatt_hour = finder.value(name="Total electricity consumption")
+    assert internal_gains_in_kilowatt_hour > 0, "the building books no internal gains, so it has no residents"
+    assert residents_electricity_in_kilowatt_hour > 0
+    assert total_electricity_in_kilowatt_hour == pytest.approx(
+        residents_electricity_in_kilowatt_hour + air_conditioner_electricity_in_kilowatt_hour, abs=0.1
+    )
+    assert finder.value(name="Ratio between total production and total consumption") == 0.0

@@ -627,7 +627,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 25.393267574843296
+    "value": 25.393267574843186
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -691,7 +691,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 11.473143078383332
+    "value": 11.473143078383448
   },
   "BUI1.General.Self-consumption rate according to solar htw berlin": {
     "building": "BUI1",
@@ -707,7 +707,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 31.00849480644144
+    "value": 31.00849480644175
   },
   "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
     "building": "BUI1",
@@ -723,7 +723,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 19.59719631366043
+    "value": 19.59719631366063
   },
   "BUI1.General.Total electricity consumption": {
     "building": "BUI1",
@@ -770,7 +770,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 58.53225990335944
+    "value": 58.53225990335995
   },
   "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": {
     "building": "BUI1",

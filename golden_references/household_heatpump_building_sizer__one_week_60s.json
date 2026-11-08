@@ -96,7 +96,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 92.4628356349933
+    "value": 92.4628356349938
   },
   "BUI1.Building.Maximum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 22.00000000000014
+    "value": 22.00000000000002
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 19.999999999999964
+    "value": 19.999999999999925
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 3.726204530115259e-13
+    "value": 3.7789031163507993e-13
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -636,36 +636,6 @@
     "unit": "-",
     "value": 3.0
   },
-  "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_6 (L2EMSElectricityController)": {
-    "building": "BUI1",
-    "name": "Priority for Input_Battery_AcBatteryPowerUsed_6",
-    "source": {
-      "assembly": null,
-      "import": null,
-      "instance": null,
-      "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController",
-      "path": []
-    },
-    "tag": "Energy Management System",
-    "unit": "-",
-    "value": 3.0
-  },
-  "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5 (L2EMSElectricityController)": {
-    "building": "BUI1",
-    "name": "Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5",
-    "source": {
-      "assembly": null,
-      "import": null,
-      "instance": null,
-      "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController",
-      "path": []
-    },
-    "tag": "Energy Management System",
-    "unit": "-",
-    "value": 2.0
-  },
   "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_7 (L2EMSElectricityController)": {
     "building": "BUI1",
     "name": "Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_7",
@@ -680,21 +650,6 @@
     "tag": "Energy Management System",
     "unit": "-",
     "value": 2.0
-  },
-  "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_4 (L2EMSElectricityController)": {
-    "building": "BUI1",
-    "name": "Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_4",
-    "source": {
-      "assembly": null,
-      "import": null,
-      "instance": null,
-      "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController",
-      "path": []
-    },
-    "tag": "Energy Management System",
-    "unit": "-",
-    "value": 1.0
   },
   "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_6 (L2EMSElectricityController)": {
     "building": "BUI1",
@@ -739,7 +694,7 @@
     },
     "tag": "Energy Management System",
     "unit": "kWh",
-    "value": 72.26829185705614
+    "value": 72.26829185705652
   },
   "BUI1.Energy Management System.Space heating heat pump electricity from grid (MoreAdvancedHeatPumpHPLib)": {
     "building": "BUI1",
@@ -1415,7 +1370,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 93.62913485213707
+    "value": 93.62913485213758
   },
   "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": {
     "building": "BUI1",

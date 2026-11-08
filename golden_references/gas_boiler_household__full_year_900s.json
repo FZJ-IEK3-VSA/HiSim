@@ -81,7 +81,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 0.46880764130204433
+    "value": 0.4688076413020408
   },
   "BUI1.Building.Internal energy gains (building)": {
     "building": "BUI1",
@@ -96,7 +96,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 4149.37876999055
+    "value": 4149.378769990575
   },
   "BUI1.Building.Maximum building indoor air temperature reached (building)": {
     "building": "BUI1",
@@ -412,7 +412,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 8.294743552969516
+    "value": 8.294743552969518
   },
   "BUI1.Electricity Meter.Max power to grid (meter)": {
     "building": "BUI1",
@@ -442,7 +442,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.3392972041361587
+    "value": 0.3392972041361616
   },
   "BUI1.Electricity Meter.Mean power to grid (meter)": {
     "building": "BUI1",
@@ -472,7 +472,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.08311378622228603
+    "value": 0.083113786222289
   },
   "BUI1.Electricity Meter.Min power to grid (meter)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 2972.24350823275
+    "value": 2972.243508232776
   },
   "BUI1.Electricity Meter.Total energy to grid (meter)": {
     "building": "BUI1",
@@ -1190,7 +1190,7 @@
     },
     "tag": "Residents",
     "unit": "kWh",
-    "value": 2972.2435082327497
+    "value": 2972.2435082327765
   },
   "BUI1.Residents.Residents' total warm water consumption (occupancy)": {
     "building": "BUI1",

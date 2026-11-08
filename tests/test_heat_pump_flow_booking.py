@@ -23,6 +23,10 @@ import yaml
 from hisim import component as cp
 from hisim import hydronics
 from hisim import loadtypes as lt
+from hisim.components.more_advanced_heat_pump.backup_rod import (
+    BackupHeatingRod,
+    RodAssistedHeating,
+)
 from hisim.components.more_advanced_heat_pump.hplib_operation import HplibResult
 from hisim.components.more_advanced_heat_pump.controller_dhw import (
     HeatPumpDhwState,
@@ -135,7 +139,7 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
 
     The flow's heat is ``m c (T_out - T_in)`` from the heat pump's own mass-flow, outlet and return outputs, in the
     order :func:`hisim.hydronics.circuit_power_w` evaluates it. On every heating step (a flow and a COP above 0) the
-    electricity is that heat over the COP. On every cooling step (a negative booked heat) the electricity for
+    electricity of the compressor and the backup heating rod is that heat over the COP. On every cooling step (a negative booked heat) the electricity for
     cooling is the heat drawn over hplib's EER, ``ElectricalInputPowerForCooling = -P_th / EER``. On a step without
     flow the booked heat and the electricity are zero.
 
@@ -149,6 +153,9 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
     eer = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.EER], dtype=float)
     electrical_power_for_cooling_in_watt = np.asarray(
         outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling], dtype=float
+    )
+    electrical_power_heating_rod_in_watt = np.asarray(
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod], dtype=float
     )
     running_steps: Dict[str, int] = {}
     for circuit, (mass_flow, t_out, t_in, thermal, electrical) in HeatPumpTwins.CIRCUITS.items():
@@ -165,7 +172,7 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
         heating = running & (cop > 0.0)
         cooling = booked_power_in_watt < 0.0
         np.testing.assert_allclose(
-            consumed_electrical_power_in_watt[heating],
+            consumed_electrical_power_in_watt[heating] + electrical_power_heating_rod_in_watt[heating],
             booked_power_in_watt[heating] / cop[heating],
             rtol=1e-12,
             err_msg=circuit,
@@ -224,6 +231,7 @@ class SingleStep:
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
+        config.heating_rod_rated_electrical_power_in_watt = 9000.0
         config.heating_reference_temperature_in_celsius = -7.0
         config.flow_temperature_in_celsius = 52.0
         config.cycling_mode = cycling_mode
@@ -303,18 +311,34 @@ def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out:
     )
 
 
+def compressor_only_heating(cop: float) -> RodAssistedHeating:
+    """A whole step of 0.4 kg/s from a return of 30.04 °C to 35.0 °C that the compressor delivers alone, at a COP.
+
+    Args:
+        cop: The compressor's coefficient of performance, dimensionless.
+
+    Returns:
+        The step.
+    """
+    return BackupHeatingRod(rated_electrical_power_in_watt=9000.0).heating(
+        part_load_ratio=1.0,
+        mass_flow_in_kg_per_second=0.4,
+        return_temperature_in_celsius=30.04,
+        required_outlet_temperature_in_celsius=35.0,
+        compressor_thermal_capacity_in_watt=10000.0,
+        compressor_maximal_outlet_temperature_in_celsius=60.0,
+        compressor_cop=cop,
+    )
+
+
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
     """A flow of 0.4 kg/s from a return of 30.04 °C to 35.0 °C books 0.4 * 4180 * 4.96 = 8293.12 W, over the COP."""
-    powers = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
-        mass_flow_in_kg_per_second=0.4,
-        outlet_temperature_in_celsius=35.0,
-        return_temperature_in_celsius=30.04,
-        cop=3.5,
-    )
-    assert powers.thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
-    assert powers.thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
-    assert powers.electrical_power_in_watt == powers.thermal_power_in_watt / 3.5
+    heating = compressor_only_heating(3.5)
+    assert heating.thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
+    assert heating.thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
+    assert heating.electrical_power_in_watt == heating.thermal_power_in_watt / 3.5
+    assert heating.heating_rod_electrical_power_in_watt == 0.0
 
 
 @pytest.mark.base
@@ -322,12 +346,7 @@ def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> N
 def test_a_heating_circuit_without_a_positive_cop_is_refused(cop: float) -> None:
     """A COP of 0 or less would book infinite or negative electricity; the booking must refuse it by name."""
     with pytest.raises(ValueError, match="coefficient of performance above 0"):
-        MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
-            mass_flow_in_kg_per_second=0.4,
-            outlet_temperature_in_celsius=35.0,
-            return_temperature_in_celsius=30.0,
-            cop=cop,
-        )
+        compressor_only_heating(cop)
 
 
 @pytest.mark.base
@@ -480,6 +499,7 @@ def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
     """Catches a negative nominal flow that would only fail at the first fixed-flow step, without naming the field."""
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.massflow_nominal_secondary_side_in_kg_per_s = mass_flow_in_kg_per_s
     config.position_hot_water_storage_in_system = position
@@ -500,6 +520,7 @@ def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_
     """Catches a negative minimum time that would mean no minimum in cycling mode without a word."""
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     setattr(config, field_name, seconds)
     with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
@@ -830,6 +851,7 @@ def test_passive_cooling_books_the_heat_its_flow_draws_and_only_the_brine_pump_s
     """
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_rod_rated_electrical_power_in_watt = 9000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.flow_temperature_in_celsius = 35.0
     config.cycling_mode = False

@@ -56,6 +56,7 @@ def _air_water_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
         "MoreAdvancedHeatPumpHPLib"
     )
     config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_rod_rated_electrical_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     return config
 

@@ -14,8 +14,8 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Tuple
 import numpy as np
 
 from hisim.subcomponents.base import Subcomponent
-from hisim.components.more_advanced_heat_pump.hplib_operation import (
-    HplibResult,
+from hisim.components.more_advanced_heat_pump.carnot_cop import (
+    CarnotCopHeatPump,
 )
 
 
@@ -28,11 +28,12 @@ class ScopApplication(str, Enum):
 
 
 class StandardizedSeasonalCop(Subcomponent):
-    """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
+    """The seasonal COP of a heat pump by the bin method of EN 14825, average climate.
 
     What a manufacturer states on the datasheet or ErP fiche is a SCOP rated this way, so
-    computing the same figure for hplib's curve fit is what lets the fit be calibrated to it
-    (:class:`ScopCalibration`). The method, in the simplified form the calibration needs:
+    computing the same figure for the simulated machine (:class:`CarnotCopHeatPump`: hplib's thermal
+    power, the Carnot-efficiency COP) is what lets it be calibrated to it (:class:`ScopCalibration`).
+    The method, in the simplified form the calibration needs:
 
     * the heating season is :attr:`BINS`, one outdoor temperature per bin with its hours;
     * the building's demand falls linearly from the design load at :attr:`DESIGN_TEMPERATURE` to
@@ -42,9 +43,9 @@ class StandardizedSeasonalCop(Subcomponent):
       reference sizing has it);
     * the outlet temperature follows the application's line, :attr:`FLOW_LINES`, through two
       points and extended beyond them;
-    * the machine modulates at the COP hplib gives for the bin (hplib's own 25 % electrical floor
-      is the only part-load limit it knows), and whatever the demand exceeds its output is met by
-      an electric back-up heater at COP 1, as is a bin where hplib's COP is 1 or less.
+    * the machine modulates at the COP it has in the bin (hplib's own 25 % electrical floor is the
+      only part-load limit it knows), and whatever the demand exceeds its output is met by an
+      electric back-up heater at COP 1, as is a bin where the machine's COP is 1 or less.
 
     Source: EN 14825:2022, average climate (bins -10 to +15 °C, 4910 h) and the variable-outlet
     lines of its low- (W35) and medium-temperature (W55) applications. For a brine/water machine
@@ -53,7 +54,7 @@ class StandardizedSeasonalCop(Subcomponent):
 
     Example::
 
-        StandardizedSeasonalCop.of(heatpump, ScopApplication.W55)   # 3.40 for hplib's generic air/water fit
+        StandardizedSeasonalCop.of(heatpump, ScopApplication.W55)   # 3.33 for the air/water Carnot law
     """
 
     #: Outdoor bin temperature in °C and its hours in the EN 14825 average heating season.
@@ -122,11 +123,12 @@ class StandardizedSeasonalCop(Subcomponent):
     def of(
         cls, heatpump: Any, application: ScopApplication, calibration: Optional["ScopCalibration"] = None
     ) -> float:
-        """Return the seasonal COP of one hplib heat pump for one application.
+        """Return the seasonal COP of one heat pump for one application.
 
         Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 (air/water) or 2 (brine/water); it is only
-                read, through pure ``simulate`` calls.
+            heatpump: A machine of hplib group 1 (air/water) or 2 (brine/water) that answers
+                ``simulate`` as ``hplib.HeatPump`` does, in HiSim a :class:`CarnotCopHeatPump`; it is
+                only read, through pure ``simulate`` calls.
             application: The rating's application, which picks the outlet-temperature line.
             calibration: Applied to every call when given, so the calibrated machine is rated.
 
@@ -153,7 +155,7 @@ class StandardizedSeasonalCop(Subcomponent):
                 p_th_min=0,
             )
             if calibration is not None:
-                result = calibration.apply(heatpump, result, 1)
+                result = calibration.apply(result, 1)
             return float(result["P_th"]), float(result["COP"])
 
         design_load, _cop = run(cls.SIZING_OUTDOOR_TEMPERATURE, cls.SIZING_FLOW_TEMPERATURE)
@@ -163,19 +165,19 @@ class StandardizedSeasonalCop(Subcomponent):
         for outdoor, hours in cls.BINS:
             demand = design_load * cls.part_load(outdoor)
             output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
+            by_heat_pump = min(demand, output) if cop > CarnotCopHeatPump.HPLIB_HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
             heat += hours * demand
             electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
         return heat / electricity
 
 
 class ScopCalibration(Subcomponent):
-    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
+    """Scales a heat pump's COP to the SCOP its datasheet states (hisim-component-physics-4g9.15).
 
-    hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole
-    database group, so the simulated machine is the average unit of its group. A stated
-    standardised SCOP says how much better or worse the real unit is. Every heating call multiplies
-    hplib's COP by a factor for its own outlet temperature and divides the compressor's
+    The simulated machine's COP is the Carnot-efficiency law fitted to the whole Keymark population
+    of its source type (:class:`CarnotEfficiencyCop`), so uncalibrated it is the average certified
+    unit. A stated standardised SCOP says how much better or worse the real unit is. Every heating
+    call multiplies the COP by a factor for its own outlet temperature and divides the compressor's
     electricity by it; the thermal output is unchanged, so the building gets the same heat for
     less or more electricity. The factors are solved (:meth:`of`) so that the calibrated machine,
     rated by :class:`StandardizedSeasonalCop`, gives exactly the stated SCOPs.
@@ -187,8 +189,8 @@ class ScopCalibration(Subcomponent):
       the 55 °C factor to 0.2–0.5 for wide pairs (decision with Noah, 2026-09-23; the check against
       measured units is hisim-x2mu).
     * One stated: its factor everywhere.
-    * The heating rod is never calibrated: a call where hplib runs the rod alone (COP 1) is left
-      as it is, and in hplib's compressor-plus-rod branch only the compressor's share is scaled.
+    * The machine has no heating rod (:class:`CarnotCopHeatPump`), so every heating call is the
+      compressor's and is scaled.
     * Cooling (mode 2) is out of scope and left as hplib returns it.
 
     What the solve rests on: each rating is continuous and non-decreasing in each factor (a bin
@@ -201,15 +203,15 @@ class ScopCalibration(Subcomponent):
     Example::
 
         calibration = ScopCalibration.of(heatpump, scop_w35=4.6, scop_w55=3.4)
-        calibration.apply(heatpump, heatpump.simulate(...), mode=1)
+        calibration.apply(heatpump.simulate(...), mode=1)
     """
 
     #: How close the calibrated rating must come to the stated SCOP.
     TOLERANCE: ClassVar[float] = 1e-5
 
-    #: The factors the solve searches between. At 0.001 no hplib COP comes near 1, so every bin
+    #: The factors the solve searches between. At 0.001 no calibrated COP comes near 1, so every bin
     #: runs its back-up heater and the rating is 1; at 1000 the compressor draws a thousandth of
-    #: hplib's electricity, and the back-up heater's share is all that still bounds a rating.
+    #: its electricity, and the back-up heater's share is all that still bounds a rating.
     MINIMUM_FACTOR: ClassVar[float] = 1e-3
     MAXIMUM_FACTOR: ClassVar[float] = 1e3
 
@@ -229,25 +231,30 @@ class ScopCalibration(Subcomponent):
 
     @classmethod
     def of(
-        cls, heatpump: Any, scop_w35: Optional[float], scop_w55: Optional[float], machine: str = "hplib's fit"
+        cls,
+        heatpump: Any,
+        scop_w35: Optional[float],
+        scop_w55: Optional[float],
+        machine: str = "the Carnot-efficiency COP",
     ) -> "ScopCalibration":
-        """Return the factors that bring the fit, rated by the bin method, to the stated SCOPs.
+        """Return the factors that bring the machine, rated by the bin method, to the stated SCOPs.
 
         One rating: its factor is the root of ``rated(factor) = stated`` (:meth:`solve`). Two
         ratings: for a given W55 factor the W35 factor that rates W35 exactly is solved, and the
         W55 rating of that pair rises with the W55 factor (the W55 factor moves the W55 line's hot
-        bins more than the W35 factor it displaces moves its mild ones; checked on the Generic
-        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range),
-        so the W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
+        bins more than the W35 factor it displaces moves its mild ones; checked on hplib's Generic
+        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range,
+        and on the Carnot-efficiency law of both source types for the pairs of the tests), so the
+        W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
         the back-up heater's share of the season is not scaled, and with two ratings each factor
         reaches into the other rating's line. A typical pair takes a few hundred ratings, some tens
         of milliseconds.
 
         Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 or 2, only read.
+            heatpump: A :class:`CarnotCopHeatPump` of hplib group 1 or 2, only read.
             scop_w35: The stated W35 rating, or ``None``.
             scop_w55: The stated W55 rating, or ``None``.
-            machine: How a refusal names the fit, e.g. "hplib's Generic air/water fit".
+            machine: How a refusal names the machine, e.g. "the air/water Carnot-efficiency COP".
 
         Raises:
             ValueError: When no factors between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`
@@ -268,6 +275,7 @@ class ScopCalibration(Subcomponent):
             ((application, target),) = stated.items()
 
             def single(factor: float) -> float:
+                """Return the rating of this application with one factor."""
                 return StandardizedSeasonalCop.of(heatpump, application, cls({application: factor}))
 
             at_lowest, at_highest = single(lowest), single(highest)
@@ -413,24 +421,24 @@ class ScopCalibration(Subcomponent):
             )
         )
 
-    def apply(self, heatpump: Any, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
-        """Return hplib's results for one call with the calibration applied (a new dictionary)."""
+    def apply(self, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
+        """Return a machine's results for one call with the calibration applied (a new dictionary).
+
+        In heating the COP is multiplied by the factor at the call's outlet and the electricity divided by it; the
+        thermal power stays. For example, a W55 factor of 0.8 turns a COP of 3.0 at 6 kW into 2.4, and 2.0 kW of
+        electricity into 2.5 kW. Without factors, and in cooling, the results are returned as they are.
+
+        Args:
+            results: A :class:`CarnotCopHeatPump`'s answer, with ``COP``, ``P_th``, ``P_el`` and ``T_out``.
+            mode: 1 heating, 2 cooling.
+
+        Returns:
+            The calibrated answer.
+        """
         if not self.factors or mode != 1:
             return results
-        cop = float(results["COP"])
-        if cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
-            return results
         factor = self.factor(float(results["T_out"]))
-        p_th = float(results["P_th"])
-        p_el = float(results["P_el"])
-        rod = float(heatpump.p_th_ref)
-        compressor = float(heatpump.p_el_ref)
-        if abs(p_el - (compressor + rod)) < 1e-6 * max(p_el, 1.0):
-            # hplib's compressor-plus-rod branch: only the compressor's share is calibrated.
-            calibrated_el = compressor / factor + rod
-        else:
-            calibrated_el = p_el / factor
         calibrated = dict(results)
-        calibrated["P_el"] = calibrated_el
-        calibrated["COP"] = p_th / calibrated_el
+        calibrated["P_el"] = float(results["P_el"]) / factor
+        calibrated["COP"] = float(results["COP"]) * factor
         return calibrated

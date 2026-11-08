@@ -109,6 +109,17 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
+            # The heat pump's backup heating rod (#1113), a metered draw of its own, ahead of the hot-water
+            # draw in the solar-thermal heat-pump sizer, which shifts the participants after it by one.
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerHeatingRod_5": (
+                "ElectricalInputPowerHeatingRodFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_6": (
+                "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_SolarThermalSystem_ElectricityConsumptionOutput_7": (
+                "ElectricityConsumptionOutputFromSolarThermalSystem"
+            ),
             # The car battery's charging, which the meter reads from the battery itself (Sankey PR 5b).
             "Input_CarBattery_1_AcBatteryChargingPower_6": "AcBatteryChargingPowerFromCarBattery_1",
             # The battery, the last participant, so its index counts the devices before it.
@@ -117,11 +128,13 @@ class DeclaredPortRenamings:
             "Input_Battery_ChargingPower_4": "ChargingPowerFromBattery",
             "Input_Battery_ChargingPower_6": "ChargingPowerFromBattery",
             "Input_Battery_ChargingPower_7": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_8": "ChargingPowerFromBattery",
             "Input_Battery_DischargingPower_3": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_4": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_5": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_7": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_8": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_9": "DischargingPowerFromBattery",
             # dynamic_components (hisim-meter-bought-carriers-lyfl): the meter reads the two batteries, the two
             # CHPs, the occupancy and the PV system, in the order the setup adds them.
             "Input_Battery1_ChargingPower_0": "ChargingPowerFromBattery1",

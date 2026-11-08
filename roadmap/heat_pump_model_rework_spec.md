@@ -7,7 +7,7 @@ Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (P1); children .1
 backup heating rod (decision 8). Evidence: hisim-x2mu (closed).
 
 The model in question is `MoreAdvancedHeatPumpHPLib` (`hisim/components/more_advanced_heat_pump/heat_pump.py`, model
-parts in `hplib_operation.py` and `seasonal_cop.py` beside it). It calls hplib (https://github.com/FZJ-IEK3-VSA/hplib) for the
+parts in `carnot_cop.py`, `backup_rod.py`, `hplib_operation.py` and `seasonal_cop.py` beside it). It calls hplib (https://github.com/FZJ-IEK3-VSA/hplib) for the
 thermal power, the electrical power and the COP of each step, and since hisim-component-physics-4g9.15 scales the
 COP to a stated EN 14825 SCOP pair (`ScopCalibration`). Every RenoVisor heat-pump calculation runs this model.
 
@@ -142,8 +142,9 @@ as hplib's COP-1 fit artefact:
   power until step d replaces the capacity surface); (2) the required outlet exceeds the compressor's maximal
   outlet. That limit is the configured maximal supply temperature of hisim-heat-pump-outlet-limit-2vq7 once it
   exists; until then the outlet at which hplib's fitted plane reaches COP 1 at the current source temperature
-  stands in (for the 8 kW Generic air unit about 65 °C at A-7 and 69 °C at A0), the line at which hplib switched
-  to its rod. In both cases the compressor runs at its continuous COP (the law above) and its full capacity, and
+  stands in, the line at which hplib switched to its rod: for the 8 kW Generic air unit 56.7 °C at A-7, 69.0 °C at
+  A0 and 81.4 °C at A7, so a house on 70/55 radiators needs the rod on the coldest days until 2vq7 brings the
+  configured limit. In both cases the compressor runs at its continuous COP (the law above) and its full capacity, and
   the rod adds only the missing heat, at COP 1, up to its rated power: in case (1) the requested heat minus the
   compressor's capacity, in case (2) the heat that lifts the compressor's flow from its maximal outlet to the
   required outlet, `m_flow · c_p · (T_required − T_max)`. What the rod cannot cover is not delivered. Where the

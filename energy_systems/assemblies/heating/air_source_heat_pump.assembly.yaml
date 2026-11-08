@@ -25,11 +25,11 @@ parameters:
      # range: residential air-to-water heat pumps, a small flat (2 kW) to a large old detached house (20 kW)
   scop_en14825_w35:
     {type: float, unit: ANY, default: none, range: {min: 2.5, max: 6.0},
-     description: Datasheet SCOP at W35 (EN 14825); none leaves hplib's generic fit.}
+     description: Datasheet SCOP at W35 (EN 14825); none leaves the pooled Keymark unit's Carnot-efficiency COP.}
      # range: EN 14825 average-climate W35 SCOPs of air-to-water units on the market span about 3 to 5.5; with margin
   scop_en14825_w55:
     {type: float, unit: ANY, default: none, range: {min: 2.0, max: 4.5},
-     description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
+     description: Datasheet SCOP at W55 (EN 14825); none leaves the pooled Keymark unit's Carnot-efficiency COP.}
      # range: W55 SCOPs on the market span about 2.5 to 4; with margin. The two ranges overlap: a W55 above the
      # W35 is refused by the heat pump itself (ConfigurationRefusedError), not by these ranges, and the harness
      # counts such a sample as refused, not failed (§9.4)
@@ -112,6 +112,7 @@ tests:
     - {output: HeatPump.ElectricalInputPowerSH, unit: WATT, min: 0, max: 20000}               # 40 kW at a COP >= 2
     - {output: HeatPump.ElectricalInputPowerForCooling, unit: WATT, min: 0, max: 20000}       # zero: heating only
     - {output: HeatPump.ElectricalInputPowerBrinePump, unit: WATT, min: 0, max: 1000}         # zero for an air source
+    - {output: HeatPump.ElectricalInputPowerHeatingRod, unit: WATT, min: 0, max: 9000}        # at most its 9 kW rating
     - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: -5000, max: 40000}
@@ -137,8 +138,8 @@ tests:
       # the heating curve's supply temperature plus the energy manager's raise, at which the charge ends the buffer
     - {output: HeatPump.ThermalOutputPowerDHW, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ElectricalInputPowerDHW, unit: WATT, min: 0, max: 25000}
-      # a cylinder above about 63 °C runs hplib at COP 1, its heating-rod mode, where the electricity is the heat:
-      # the 20 kW rating, booked from the flow up to 0.5 % above it, with margin (measured at most 10.5 kW)
+      # the compressor's share of a charge; above the compressor's maximal outlet the backup rod's electricity is its
+      # own output (ElectricalInputPowerHeatingRod); with margin from the 20 kW rating
     - {output: HeatPump.TemperatureInputDHW, unit: CELSIUS, min: 0, max: 90}                  # the cylinder's return
     - {output: HeatPump.TemperatureOutputDHW, unit: CELSIUS, min: 0, max: 95}                 # above the SH flow
     - {output: HeatPump.ThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 10000}
@@ -182,5 +183,6 @@ tests:
       # the mirror: the W55 rating alone scales the COP at every outlet; with W35 held the W55 sweep has its own
       # pivot near 30.5-31 °C, below which a small machine falling behind its load charges (31.5 °C measured)
   expect:
-    - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.4, max: 4.3}
-      # 3.84 measured at the defaults on the test day (1 January, Aachen)
+    - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 2.85, max: 3.6}
+      # 3.22 measured at the defaults on the test day (1 January, Aachen), with the Carnot-efficiency COP of the
+      # pooled Keymark unit (3.84 with hplib's generic fit before it)

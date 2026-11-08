@@ -117,8 +117,8 @@ class PVSystem(cp.PhysicsComponent):
     stands (owner decision D-h of ``roadmap/device_location_spec.md``): the array publishes it on one of two fixed
     outputs, :attr:`HeatToHeatedZoneInWatt`, room heat the building takes in as an internal gain, when the inverter
     stands in the heated zone, and :attr:`HeatLossInWatt`, a ``LOSS`` of electricity that leaves the house, when it
-    stands in an unheated space or outdoors; the other is 0 in every step. :attr:`DcPowerInWatt` and
-    :attr:`InverterLossInWatt` tell the split and carry no port. For example, at noon of a clear June day in Aachen
+    stands in an unheated space or outdoors; the other is 0 in every step, so the inverter's loss is the sum of the
+    two. :attr:`DcPowerInWatt` tells the split and carries no port. For example, at noon of a clear June day in Aachen
     a 10 kWp array of the default modules receives 44.0 kW of sunlight, gives 8.99 kW DC and 8.75 kW AC, and so
     loses 35.0 kW in its modules and 0.24 kW in its inverter.
     """
@@ -147,8 +147,6 @@ class PVSystem(cp.PhysicsComponent):
     DcPowerInWatt = "DcPowerInWatt"
     #: What the modules do not convert: the solar power on the modules minus the DC power, in W.
     ModuleLossInWatt = "ModuleLossInWatt"
-    #: What the inverter does not convert: the DC power minus the AC power, in W; at night its standby draw.
-    InverterLossInWatt = "InverterLossInWatt"
     #: The heat the inverter releases into the building's heated zone, in W: its loss when it stands in the heated
     #: zone, 0 elsewhere.
     HeatToHeatedZoneInWatt = "HeatToHeatedZoneInWatt"
@@ -280,7 +278,7 @@ class PVSystem(cp.PhysicsComponent):
         # leaves to the electricity meter that reads it (through the energy manager in the household twins), what
         # the modules do not convert leaves as unconverted sunlight, and the inverter's loss goes where the inverter
         # stands: into the building's heated zone or out of the house (owner decision D-h of
-        # roadmap/device_location_spec.md). The DC power and the inverter loss tell the split and carry no port.
+        # roadmap/device_location_spec.md). The DC power tells the split and carries no port.
         self.solar_power_on_modules_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.SolarPowerOnModulesInWatt,
@@ -314,19 +312,11 @@ class PVSystem(cp.PhysicsComponent):
             ),
             energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR),
         )
-        self.inverter_loss_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.InverterLossInWatt,
-            load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT,
-            output_description=(
-                "What the inverter does not convert to AC power, in W: the DC power minus the electricity output. At "
-                "dawn and dusk it is the inverter's standby consumption, which the electricity output carries as a "
-                f"small negative power. Its energy leaves the array through {self.HeatToHeatedZoneInWatt} or "
-                f"{self.HeatLossInWatt}, whichever the inverter's installation location fills."
-            ),
+        inverter_loss = (
+            f"The inverter's loss, in W: the modules' {self.DcPowerInWatt} minus the {self.ElectricityOutput}, which ends "
+            "as heat where the inverter stands; at dawn and dusk its standby draw, by which the electricity output is "
+            f"below zero. The inverter's loss is the sum of {self.HeatToHeatedZoneInWatt} and {self.HeatLossInWatt}."
         )
-        inverter_loss = f"The inverter's loss, in W: the array's {self.InverterLossInWatt}, which ends as heat where it stands."
         self.heat_to_heated_zone_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.HeatToHeatedZoneInWatt,
@@ -538,7 +528,6 @@ class PVSystem(cp.PhysicsComponent):
         stsv.set_output_value(self.solar_power_on_modules_channel, solar_power_in_watt)
         stsv.set_output_value(self.dc_power_channel, dc_power_in_watt)
         stsv.set_output_value(self.module_loss_channel, solar_power_in_watt - dc_power_in_watt)
-        stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
         stsv.set_output_value(self.heat_to_heated_zone_channel, heat_to_heated_zone_in_watt)
         stsv.set_output_value(self.heat_loss_channel, heat_loss_in_watt)
         stsv.set_output_value(

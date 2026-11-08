@@ -440,12 +440,11 @@ def test_the_array_closes_with_the_sun_the_ac_power_and_both_losses_in_every_ste
         released = values[pv.HeatToHeatedZoneInWatt] + values[pv.HeatLossInWatt]
         assert sun == pytest.approx(ac + values[pv.ModuleLossInWatt] + released, abs=1e-9)
         assert values[pv.ModuleLossInWatt] == pytest.approx(sun - dc, abs=1e-9)
-        assert values[pv.InverterLossInWatt] == pytest.approx(dc - ac, abs=1e-9)
-        assert released == values[pv.InverterLossInWatt]
+        assert released == pytest.approx(dc - ac, abs=1e-9)
         assert sun >= dc >= ac and dc >= 0.0
         idle = pv.HeatLossInWatt if installation_location.releases_into_heated_zone else pv.HeatToHeatedZoneInWatt
         assert values[idle] == 0.0
-    assert max(values[pv.InverterLossInWatt] for values in steps) > 100.0
+    assert max(values[pv.HeatToHeatedZoneInWatt] + values[pv.HeatLossInWatt] for values in steps) > 100.0
 
 
 @pytest.mark.base
@@ -458,7 +457,6 @@ def test_without_an_inverter_the_array_loses_nothing_in_it() -> None:
     steps = PvBalance.outputs_per_step(lt.InstallationLocation.HEATED_ZONE, integrate_inverter=False)
     pv = generic_pv_system.PVSystem
     assert all(values[pv.DcPowerInWatt] == values[pv.ElectricityOutput] for values in steps)
-    assert all(values[pv.InverterLossInWatt] == 0.0 for values in steps)
     assert all(values[pv.HeatToHeatedZoneInWatt] == 0.0 == values[pv.HeatLossInWatt] for values in steps)
     assert max(values[pv.ElectricityOutput] for values in steps) > 1000.0
 
@@ -481,7 +479,7 @@ def test_the_released_heat_goes_to_the_output_of_the_location() -> None:
 def test_the_ports_of_the_split_loss() -> None:
     """The module loss is a loss of sunlight, the heated-zone output room heat for the building, the other a loss of electricity.
 
-    The DC power and the inverter loss carry no port, and the single loss output of before is gone. Catches: an
+    The DC power carries no port; the single loss output of before and an inverter-loss output are gone. Catches: an
     inverter loss booked as unconverted sunlight, and a port on an output that only tells the split.
     """
     config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
@@ -496,8 +494,8 @@ def test_the_ports_of_the_split_loss() -> None:
     assert ports[pv.ModuleLossInWatt] == EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR)
     assert ports[pv.HeatToHeatedZoneInWatt] == EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE
     assert ports[pv.HeatLossInWatt] == EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY)
-    assert ports[pv.DcPowerInWatt] is None and ports[pv.InverterLossInWatt] is None
-    assert "ModuleAndInverterLossInWatt" not in ports
+    assert ports[pv.DcPowerInWatt] is None
+    assert "ModuleAndInverterLossInWatt" not in ports and "InverterLossInWatt" not in ports
 
 
 @pytest.mark.base

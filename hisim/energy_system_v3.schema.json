@@ -4160,6 +4160,20 @@
                       }
                     ]
                   },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
                   "weather_identity": {
                     "anyOf": [
                       {
@@ -4177,6 +4191,7 @@
                 "propertyNames": {
                   "enum": [
                     "roof_area_in_m2",
+                    "technical_room_location",
                     "weather_identity"
                   ]
                 }

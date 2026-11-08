@@ -408,7 +408,7 @@ class DrawnNode:
 
     Attributes:
         name: The node's name in the drawing, the key its links use.
-        label: The one-line label beside the node, for example "PVSystem · module and inverter loss · 1,234 kWh".
+        label: The one-line label beside the node, for example "PVSystem · module loss · 1,234 kWh".
         hover: The hover text: the node's full name, or the nodes an "other" node stands for.
         colour: The node's colour, by its kind.
     """
@@ -426,7 +426,8 @@ class SankeyDrawing:
     hisim-sankey-readability-8e20):
 
     1. ``overall`` nets a component's solar losses against the sunlight it receives (:meth:`net_solar_losses`): the
-       PV system starts at its electricity, and the split of the sunlight is drawn in the ``solar`` view only.
+       PV system starts at its modules' DC power, its inverter loss and its electricity leave it, and the split of the
+       sunlight is drawn in the ``solar`` view only.
     2. A flow below :attr:`EMPTY_FLOW_IN_KILOWATT_HOUR` is left out (:meth:`drop_empty`), and a node left with no
        flow goes with it. A view with nothing left is not drawn.
     3. Small nodes, through which less than :attr:`SMALL_FLOW_SHARE` of the view's largest flow passes, merge into
@@ -546,10 +547,12 @@ class SankeyDrawing:
     def net_solar_losses(links: Sequence[SankeyLink], kinds: Mapping[str, NodeKind]) -> List[SankeyLink]:
         """Net every component's solar losses against the sunlight it receives, so it starts at what it makes of it.
 
-        A PV system takes 126,925 kWh of sunlight and loses 100,610 kWh of it in its modules and inverter: the drawing
-        leaves out its loss node and draws "sun → PVSystem" at 26,315 kWh, its electricity, instead of letting the
-        unconverted sunlight fill three quarters of ``overall``. A solar collector's ``CollectorHeatLoss`` is netted
-        the same way. Every other link is kept as it is; the ``solar`` view, which draws the split, does not call this.
+        A PV system takes 126,925 kWh of sunlight and loses 99,796 kWh of it in its modules: the drawing leaves out its
+        module-loss node and draws "sun → PVSystem" at 27,129 kWh, its modules' DC power, instead of letting the
+        unconverted sunlight fill three quarters of ``overall``; its inverter loss (814 kWh, a loss of electricity or
+        room heat for the building) and its electricity (26,315 kWh) leave it as drawn. A solar collector's
+        ``CollectorHeatLoss`` is netted the same way. Every other link is kept as it is; the ``solar`` view, which
+        draws the split, does not call this.
 
         Args:
             links: The links of one view.
@@ -724,7 +727,7 @@ class SankeyDrawing:
     def words(cls, output_name: str) -> str:
         """An output's name in words: unit suffix left out, CamelCase split, words in lower case but acronyms.
 
-        Examples: ``ModuleAndInverterLossInWatt`` is "module and inverter loss", ``ThermalPowerConsumptionDHW``
+        Examples: ``ModuleLossInWatt`` is "module loss", ``ThermalPowerConsumptionDHW``
         "thermal power consumption DHW", ``stored`` "stored"; :attr:`DISPLAY_NAMES` overrides a poor result, so
         ``TransmissionLossOpaqueInWatt`` is "opaque transmission loss".
         """
@@ -745,7 +748,7 @@ class SankeyDrawing:
         """The name a node is drawn with: a loss node's port in words, every other node's name as it is.
 
         Components keep the name the energy system gives them (spec §4.1). Example: the loss node
-        "PVSystem · ModuleAndInverterLossInWatt" is drawn as "PVSystem · module and inverter loss", "Battery · stored"
+        "PVSystem · ModuleLossInWatt" is drawn as "PVSystem · module loss", "Battery · stored"
         and "grid import" as they are.
         """
         if kind != NodeKind.LOSS:

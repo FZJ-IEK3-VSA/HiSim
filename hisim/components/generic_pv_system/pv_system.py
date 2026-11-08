@@ -14,7 +14,7 @@ cost and KPI declarations and the predictive forecast.
 
 # Generic/Built-in
 import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 
@@ -110,6 +110,17 @@ class PVSystem(cp.PhysicsComponent):
     name : str, optional
         Name of pv panel within simulation. The default is 'PVSystem'
 
+    The array's energy balance closes over three ports and a released-heat pair (bead
+    hisim-device-location-820d.5): the sun on the modules (:attr:`SolarPowerOnModulesInWatt`) equals the AC
+    electricity (:attr:`ElectricityOutput`) plus what the modules do not convert (:attr:`ModuleLossInWatt`,
+    unconverted sunlight) plus what the inverter does not convert. The inverter's loss goes where the inverter
+    stands (owner decision D-h of ``roadmap/device_location_spec.md``): the array publishes it on one of two fixed
+    outputs, :attr:`HeatToHeatedZoneInWatt`, room heat the building takes in as an internal gain, when the inverter
+    stands in the heated zone, and :attr:`HeatLossInWatt`, a ``LOSS`` of electricity that leaves the house, when it
+    stands in an unheated space or outdoors; the other is 0 in every step. :attr:`DcPowerInWatt` and
+    :attr:`InverterLossInWatt` tell the split and carry no port. For example, at noon of a clear June day in Aachen
+    a 10 kWp array of the default modules receives 44.0 kW of sunlight, gives 8.99 kW DC and 8.75 kW AC, and so
+    loses 35.0 kW in its modules and 0.24 kW in its inverter.
     """
 
     # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
@@ -132,8 +143,18 @@ class PVSystem(cp.PhysicsComponent):
     ElectricityEnergyOutput = "ElectricityEnergyOutput"
     #: The solar power on the modules, the plane-of-array irradiance times the array's module area, in W.
     SolarPowerOnModulesInWatt = "SolarPowerOnModulesInWatt"
-    #: What the modules and the inverter do not convert: the solar power on the modules minus the AC power, in W.
-    ModuleAndInverterLossInWatt = "ModuleAndInverterLossInWatt"
+    #: The modules' DC power at their maximum power point, the power the inverter receives, in W.
+    DcPowerInWatt = "DcPowerInWatt"
+    #: What the modules do not convert: the solar power on the modules minus the DC power, in W.
+    ModuleLossInWatt = "ModuleLossInWatt"
+    #: What the inverter does not convert: the DC power minus the AC power, in W; at night its standby draw.
+    InverterLossInWatt = "InverterLossInWatt"
+    #: The heat the inverter releases into the building's heated zone, in W: its loss when it stands in the heated
+    #: zone, 0 elsewhere.
+    HeatToHeatedZoneInWatt = "HeatToHeatedZoneInWatt"
+    #: The heat the inverter loses out of the house, in W: its loss when it stands in an unheated space or outdoors,
+    #: 0 in the heated zone.
+    HeatLossInWatt = "HeatLossInWatt"
 
     # Similar components to connect to:
     # 1. Weather
@@ -148,7 +169,10 @@ class PVSystem(cp.PhysicsComponent):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.ac_power_ratios_for_all_timesteps_output: List = []
+        self.dc_power_ratios_for_all_timesteps: List[float] = []
         self.solar_power_ratios_for_all_timesteps: List[float] = []
+        #: Where the inverter stands, which decides where its loss goes.
+        self.installation_location: lt.InstallationLocation = concrete(config.installation_location)
         #: The array's peak power in W, the configured ``power_in_watt``, resolved once in
         #: ``i_prepare_simulation`` so that ``i_simulate`` only multiplies.
         self.peak_power_in_watt: float
@@ -251,10 +275,12 @@ class PVSystem(cp.PhysicsComponent):
             output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
         )
 
-        # The sun's input and the conversion loss close the array's energy balance (complete Sankey spec, Q-D):
-        # the solar power on the modules enters from the sun, the AC power leaves to the electricity meter that
-        # reads it (through the energy manager in the household twins), and what the modules and the inverter do
-        # not convert leaves to the boundary node "unconverted sunlight" (device-location spec, D-e).
+        # The sun's input and the two conversion losses close the array's energy balance (complete Sankey spec,
+        # Q-D; bead hisim-device-location-820d.5): the solar power on the modules enters from the sun, the AC power
+        # leaves to the electricity meter that reads it (through the energy manager in the household twins), what
+        # the modules do not convert leaves as unconverted sunlight, and the inverter's loss goes where the inverter
+        # stands: into the building's heated zone or out of the house (owner decision D-h of
+        # roadmap/device_location_spec.md). The DC power and the inverter loss tell the split and carry no port.
         self.solar_power_on_modules_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.SolarPowerOnModulesInWatt,
@@ -266,17 +292,64 @@ class PVSystem(cp.PhysicsComponent):
             ),
             energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.SOLAR),
         )
-        self.module_and_inverter_loss_channel: cp.ComponentOutput = self.add_output(
+        self.dc_power_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ModuleAndInverterLossInWatt,
+            field_name=self.DcPowerInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            output_description=(
+                "The modules' DC power at their maximum power point, in W: the power the inverter receives. It equals "
+                "the electricity output when the array is simulated without an inverter. It stays inside the array "
+                "and carries no energy port."
+            ),
+        )
+        self.module_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ModuleLossInWatt,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             output_description=(
-                "What the modules and the inverter do not convert to AC power, in W: the solar power on the modules "
-                "minus the electricity output. At night it is the inverter's standby consumption, which the "
-                "electricity output carries as a small negative power."
+                "What the modules do not convert to DC power, in W: the solar power on the modules minus the DC power. "
+                "It stays on the roof as unconverted sunlight."
             ),
             energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR),
+        )
+        self.inverter_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.InverterLossInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                "What the inverter does not convert to AC power, in W: the DC power minus the electricity output. At "
+                "dawn and dusk it is the inverter's standby consumption, which the electricity output carries as a "
+                f"small negative power. Its energy leaves the array through {self.HeatToHeatedZoneInWatt} or "
+                f"{self.HeatLossInWatt}, whichever the inverter's installation location fills."
+            ),
+        )
+        inverter_loss = f"The inverter's loss, in W: the array's {self.InverterLossInWatt}, which ends as heat where it stands."
+        self.heat_to_heated_zone_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatToHeatedZoneInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                f"{inverter_loss} It carries the number when the inverter stands in the heated zone, where the heat "
+                "enters the building as an internal gain (PRODUCTION of ROOM_HEAT, read by the building), and is 0 in "
+                "every step elsewhere."
+            ),
+            energy_port=EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE,
+        )
+        self.heat_loss_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatLossInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                f"{inverter_loss} It carries the number when the inverter stands in an unheated space or outdoors, "
+                "where the heat leaves the house (a LOSS of electricity: the building counts an unheated space as "
+                "outside its envelope, and nothing brings the heat back), and is 0 in every step in the heated zone."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -454,11 +527,20 @@ class PVSystem(cp.PhysicsComponent):
         simulation repository for the controller to consume.
         """
         ac_power_in_watt = self.ac_power_ratios_for_all_timesteps_output[timestep] * self.peak_power_in_watt
+        dc_power_in_watt = self.dc_power_ratios_for_all_timesteps[timestep] * self.peak_power_in_watt
         solar_power_in_watt = self.solar_power_ratios_for_all_timesteps[timestep] * self.peak_power_in_watt
+        inverter_loss_in_watt = dc_power_in_watt - ac_power_in_watt
+        heat_to_heated_zone_in_watt, heat_loss_in_watt = self.released_heat_in_watt(
+            self.installation_location, inverter_loss_in_watt
+        )
 
         stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
         stsv.set_output_value(self.solar_power_on_modules_channel, solar_power_in_watt)
-        stsv.set_output_value(self.module_and_inverter_loss_channel, solar_power_in_watt - ac_power_in_watt)
+        stsv.set_output_value(self.dc_power_channel, dc_power_in_watt)
+        stsv.set_output_value(self.module_loss_channel, solar_power_in_watt - dc_power_in_watt)
+        stsv.set_output_value(self.inverter_loss_channel, inverter_loss_in_watt)
+        stsv.set_output_value(self.heat_to_heated_zone_channel, heat_to_heated_zone_in_watt)
+        stsv.set_output_value(self.heat_loss_channel, heat_loss_in_watt)
         stsv.set_output_value(
             self.electricity_energy_output_channel,
             ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
@@ -480,6 +562,29 @@ class PVSystem(cp.PhysicsComponent):
                 entry=pvforecast,
             )
 
+    @staticmethod
+    def released_heat_in_watt(
+        installation_location: lt.InstallationLocation, inverter_loss_in_watt: float
+    ) -> Tuple[float, float]:
+        """Return the inverter's two released-heat outputs of one step: into the heated zone, and out of the house, in W.
+
+        The location fills one of them with the inverter's loss and leaves the other 0
+        (:attr:`hisim.loadtypes.InstallationLocation.releases_into_heated_zone`). For example, 120 W of inverter loss
+        give ``(120.0, 0.0)`` in the heated zone and ``(0.0, 120.0)`` in an unheated space or outdoors. Two fixed
+        outputs, rather than one whose port follows the location, keep the array's wiring the same in every house
+        (owner decision D-h of ``roadmap/device_location_spec.md``).
+
+        Args:
+            installation_location: Where the inverter stands.
+            inverter_loss_in_watt: The inverter's loss of the step, the DC minus the AC power, in W.
+
+        Returns:
+            The values of :attr:`HeatToHeatedZoneInWatt` and :attr:`HeatLossInWatt`, in W.
+        """
+        if installation_location.releases_into_heated_zone:
+            return inverter_loss_in_watt, 0.0
+        return 0.0, inverter_loss_in_watt
+
     def i_save_state(self) -> None:
         """Saves the state."""
         pass
@@ -499,7 +604,7 @@ class PVSystem(cp.PhysicsComponent):
     def i_prepare_simulation(self) -> None:
         """Prepare the component by computing or loading the whole simulation period's PV output.
 
-        On a cache hit, the AC power ratios for every timestep are read from the
+        On a cache hit, the AC, DC and solar power ratios for every timestep are read from the
         cache CSV. On a cache miss, the producer computes them from the weather
         series over the run's window the weather component published, in one vectorized pvlib
         run, and the result is written to the cache file immediately, so even
@@ -514,7 +619,7 @@ class PVSystem(cp.PhysicsComponent):
         database -- files the series somewhere else by itself.
 
         The configured peak power is resolved here once, as ``peak_power_in_watt``, which every
-        step multiplies the two ratios with.
+        step multiplies the three ratios with.
         """
         self.peak_power_in_watt = float(concrete(self.pvconfig.power_in_watt))
         calculation_inputs = self.build_calculation_inputs()
@@ -524,6 +629,7 @@ class PVSystem(cp.PhysicsComponent):
             log.information("Get PV results from cache.")
             cached = pd.read_csv(entry.path, sep=",", decimal=".")
             self.ac_power_ratios_for_all_timesteps_output = cached[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.dc_power_ratios_for_all_timesteps = cached[PvSeriesColumn.DC_POWER_RATIO.value].tolist()
             self.solar_power_ratios_for_all_timesteps = cached[
                 PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
             ].tolist()
@@ -538,6 +644,7 @@ class PVSystem(cp.PhysicsComponent):
             log.information(f"PV series cache miss: computing it and filing it at {entry.path}")
             database = calculation.produce_pv_series(calculation_inputs)
             self.ac_power_ratios_for_all_timesteps_output = database[PvSeriesColumn.AC_POWER_RATIO.value].tolist()
+            self.dc_power_ratios_for_all_timesteps = database[PvSeriesColumn.DC_POWER_RATIO.value].tolist()
             self.solar_power_ratios_for_all_timesteps = database[
                 PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value
             ].tolist()

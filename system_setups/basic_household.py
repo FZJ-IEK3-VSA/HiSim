@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim.setup_rules.kinds import SetupKind
 
 
@@ -92,9 +92,13 @@ def setup_function(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     # A demo array with no building to size it from, so the power is stated here rather than
     # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    # Its inverter stands in the building's technical room.
     my_photovoltaic_system_config.power_in_watt = 10000.0
     my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
-        SizingContext(weather_identity=my_weather_config.identity())
+        SizingContext(
+            weather_identity=my_weather_config.identity(),
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -162,6 +166,11 @@ def setup_function(
     )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    # The building reads the heat the PV inverter releases into its heated zone (HeatToHeatedZoneInWatt), which is 0
+    # in every step while the inverter stands in an unheated cellar; a run refuses that output unread.
+    my_building.connect_with_dynamic_connections_list(
+        my_building.get_dynamic_default_connections(my_photovoltaic_system)
+    )
 
     my_building.connect_input(
         my_building.ThermalPowerDelivered,

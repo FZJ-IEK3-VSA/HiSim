@@ -106,7 +106,10 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     # A demo array with no building to size it from, so the power is stated here rather than
     # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    # Nor has it a building whose technical room the inverter could follow, so it stands outdoors
+    # and its loss leaves the system.
     my_photovoltaic_system_config.power_in_watt = 10000.0
+    my_photovoltaic_system_config.installation_location = lt.InstallationLocation.OUTDOORS
     my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
         SizingContext(weather_identity=my_weather_config.identity())
     )

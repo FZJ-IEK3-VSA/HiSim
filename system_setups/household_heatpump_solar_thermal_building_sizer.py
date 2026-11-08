@@ -286,6 +286,7 @@ def setup_function(
         SizingContext(
             roof_area_in_m2=my_building_information.roof_area_in_m2,
             weather_identity=my_weather_config.identity(),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(

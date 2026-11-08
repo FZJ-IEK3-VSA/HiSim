@@ -2,14 +2,17 @@
 
 import dataclasses
 import os
+from typing import Dict, List
 
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
+from hisim import loadtypes as lt
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.config import ConfigSizingError, SizingContext, concrete
+from hisim.energy_port import EnergyPort
 from hisim import simulator as sim
 from hisim import log
 
@@ -116,6 +119,7 @@ def test_photovoltaic_sandia() -> None:
     my_pvs_config.inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     my_pvs_config.inverter_database = generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE
     my_pvs_config.power_in_watt = 10 * 1e3
+    my_pvs_config.installation_location = lt.InstallationLocation.UNHEATED_SPACE
     _run_pv_at_timestep_655(
         pvs_config=my_pvs_config, expected_power_w=334.8800144821672
     )
@@ -131,6 +135,7 @@ def test_photovoltaic_cec() -> None:
     """
     my_pvs_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     my_pvs_config.power_in_watt = 10 * 1e3
+    my_pvs_config.installation_location = lt.InstallationLocation.UNHEATED_SPACE
     _run_pv_at_timestep_655(
         pvs_config=my_pvs_config, expected_power_w=340.552602382255
     )
@@ -164,6 +169,7 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
 
     my_pvs_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     my_pvs_config.power_in_watt = 10 * 1e3
+    my_pvs_config.installation_location = lt.InstallationLocation.UNHEATED_SPACE
     my_pvs_config.weather_identity = my_weather_config.identity()
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=my_sim_params
@@ -195,6 +201,7 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     assert my_pvs_cached.ac_power_ratios_for_all_timesteps_output == pytest.approx(
         my_pvs.ac_power_ratios_for_all_timesteps_output
     )
+    assert my_pvs_cached.dc_power_ratios_for_all_timesteps == pytest.approx(my_pvs.dc_power_ratios_for_all_timesteps)
 
 
 @pytest.mark.base
@@ -215,10 +222,10 @@ def test_a_rooftop_array_records_the_share_it_was_sized_with() -> None:
     half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     half.share_of_maximum_pv_potential = 0.5
     half_config = half.resolve(
-        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen")
+        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED)
     )
     full_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen")
+        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED)
     )
 
     assert half_config.share_of_maximum_pv_potential == 0.5
@@ -245,7 +252,7 @@ def test_a_rooftop_record_re_executes_to_the_same_power() -> None:
     """
     half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     half.share_of_maximum_pv_potential = 0.5
-    scaled_config = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+    scaled_config = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED))
 
     re_executed = fft.round_trip_config_block(
         scaled_config, generic_pv_system.PVSystemConfig, "PVSystem"
@@ -266,7 +273,7 @@ def test_the_rooftop_preset_reproduces_the_array_the_scaled_factory_built() -> N
     for digit, or every recorded twin in the fleet moved.
     """
     config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=168.9, weather_identity="Aachen")
+        SizingContext(roof_area_in_m2=168.9, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED)
     )
 
     assert config.power_in_watt == 22272.28
@@ -292,7 +299,7 @@ def test_a_pinned_power_survives_the_rooftop_law() -> None:
     config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     config.power_in_watt = 10000.0
 
-    resolved = config.resolve(SizingContext(weather_identity="Aachen"))
+    resolved = config.resolve(SizingContext(weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED))
 
     assert resolved.power_in_watt == 10000.0
 
@@ -307,7 +314,7 @@ def test_the_rooftop_law_contributes_the_resolved_peak_power() -> None:
     """
     half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     half.share_of_maximum_pv_potential = 0.5
-    resolved = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+    resolved = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED))
 
     contribution = generic_pv_system.PVSystemConfig.SIZING_CONTRIBUTIONS[0]
     assert contribution.facts == ("pv_peak_power_in_watt",)
@@ -327,7 +334,7 @@ def test_the_rooftop_law_refuses_a_context_without_a_roof() -> None:
     config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
 
     with pytest.raises(ConfigSizingError, match="roof_area_in_m2"):
-        config.resolve(SizingContext(weather_identity="Aachen"))
+        config.resolve(SizingContext(weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED))
 
 
 @pytest.mark.base
@@ -343,7 +350,7 @@ def test_the_rooftop_law_refuses_a_module_it_has_no_area_for() -> None:
     config.module_name = "No Such Module [2099]"
 
     with pytest.raises(ConfigSizingError, match="No Such Module"):
-        config.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+        config.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen", technical_room_location=PvBalance.UNHEATED))
 
 
 @pytest.mark.base
@@ -362,3 +369,151 @@ def test_a_share_that_is_not_a_share_is_refused(impossible_share: float) -> None
             generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem"),
             share_of_maximum_pv_potential=impossible_share,
         )
+
+
+class PvBalance:
+    """A PV array beside the Aachen weather over the first days of June 2021 at 900 s, stepped output by output.
+
+    The tests of the split loss read every output of the array in every step: the sun on the modules, the DC and the
+    AC power, the module loss, the inverter loss and the two released-heat outputs.
+    """
+
+    #: The technical room of a house with an unheated cellar, the location the sizing tests resolve against.
+    UNHEATED: lt.InstallationLocation = lt.InstallationLocation.UNHEATED_SPACE
+    #: The first step and the number of steps the tests read: 1 June 2021, 00:00, for three days at 900 s.
+    FIRST_TIMESTEP: int = 151 * 96
+    NUMBER_OF_TIMESTEPS: int = 3 * 96
+
+    @classmethod
+    def outputs_per_step(
+        cls, installation_location: lt.InstallationLocation, integrate_inverter: bool = True
+    ) -> List[Dict[str, float]]:
+        """Simulate a 10 kWp default rooftop array and return its outputs, by field name, in every step read.
+
+        Args:
+            installation_location: Where the array's inverter stands.
+            integrate_inverter: Whether the inverter is simulated.
+
+        Returns:
+            One mapping from output field name to value, in W, per step.
+        """
+        repo = sim_repository.SimRepository()
+        parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=900)
+        weather_config = weather.WeatherConfig.preset_aachen("Weather")
+        my_weather = weather.Weather(config=weather_config, my_simulation_parameters=parameters)
+        my_weather.set_sim_repo(repo)
+        my_weather.i_prepare_simulation()
+        config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+        config.power_in_watt = 10000.0
+        config.integrate_inverter = integrate_inverter
+        config.installation_location = installation_location
+        config.weather_identity = weather_config.identity()
+        my_pvs = generic_pv_system.PVSystem(config=config, my_simulation_parameters=parameters)
+        my_pvs.set_sim_repo(repo)
+        my_pvs.i_prepare_simulation()
+        fft.add_global_index_of_components([my_weather, my_pvs])
+        stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_pvs]))
+        steps: List[Dict[str, float]] = []
+        for timestep in range(cls.FIRST_TIMESTEP, cls.FIRST_TIMESTEP + cls.NUMBER_OF_TIMESTEPS):
+            my_weather.i_simulate(timestep, stsv, False)
+            my_pvs.i_simulate(timestep, stsv, False)
+            steps.append({output.field_name: stsv.values[output.global_index] for output in my_pvs.outputs})
+        return steps
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("installation_location", list(lt.InstallationLocation))
+def test_the_array_closes_with_the_sun_the_ac_power_and_both_losses_in_every_step(
+    installation_location: lt.InstallationLocation,
+) -> None:
+    """Sun = AC + module loss + inverter loss per step, DC >= AC, and the location fills one released-heat output.
+
+    The module loss is the sun minus the DC power, the inverter loss the DC minus the AC power; the inverter loss leaves
+    through ``HeatToHeatedZoneInWatt`` in the heated zone and through ``HeatLossInWatt`` elsewhere, and the other one
+    is 0 in every step. Catches: a loss booked twice or not at all, a negative module or inverter loss, and a location
+    that fills the wrong output.
+    """
+    steps = PvBalance.outputs_per_step(installation_location)
+    pv = generic_pv_system.PVSystem
+    for values in steps:
+        sun, dc, ac = values[pv.SolarPowerOnModulesInWatt], values[pv.DcPowerInWatt], values[pv.ElectricityOutput]
+        released = values[pv.HeatToHeatedZoneInWatt] + values[pv.HeatLossInWatt]
+        assert sun == pytest.approx(ac + values[pv.ModuleLossInWatt] + released, abs=1e-9)
+        assert values[pv.ModuleLossInWatt] == pytest.approx(sun - dc, abs=1e-9)
+        assert values[pv.InverterLossInWatt] == pytest.approx(dc - ac, abs=1e-9)
+        assert released == values[pv.InverterLossInWatt]
+        assert sun >= dc >= ac and dc >= 0.0
+        idle = pv.HeatLossInWatt if installation_location.releases_into_heated_zone else pv.HeatToHeatedZoneInWatt
+        assert values[idle] == 0.0
+    assert max(values[pv.InverterLossInWatt] for values in steps) > 100.0
+
+
+@pytest.mark.base
+def test_without_an_inverter_the_array_loses_nothing_in_it() -> None:
+    """With ``integrate_inverter`` false the DC power is the AC power and both released-heat outputs are 0 in every step.
+
+    Catches: an inverter loss booked for an array simulated without an inverter, which would heat the building with
+    energy the array never lost.
+    """
+    steps = PvBalance.outputs_per_step(lt.InstallationLocation.HEATED_ZONE, integrate_inverter=False)
+    pv = generic_pv_system.PVSystem
+    assert all(values[pv.DcPowerInWatt] == values[pv.ElectricityOutput] for values in steps)
+    assert all(values[pv.InverterLossInWatt] == 0.0 for values in steps)
+    assert all(values[pv.HeatToHeatedZoneInWatt] == 0.0 == values[pv.HeatLossInWatt] for values in steps)
+    assert max(values[pv.ElectricityOutput] for values in steps) > 1000.0
+
+
+@pytest.mark.base
+def test_the_released_heat_goes_to_the_output_of_the_location() -> None:
+    """``released_heat_in_watt`` puts the inverter loss into the heated zone there and out of the house elsewhere.
+
+    120 W give ``(120.0, 0.0)`` in the heated zone and ``(0.0, 120.0)`` in an unheated space and outdoors; a negative
+    loss is passed on unchanged. Catches: a location that fills the wrong output, or both.
+    """
+    released = generic_pv_system.PVSystem.released_heat_in_watt
+    assert released(lt.InstallationLocation.HEATED_ZONE, 120.0) == (120.0, 0.0)
+    assert released(lt.InstallationLocation.UNHEATED_SPACE, 120.0) == (0.0, 120.0)
+    assert released(lt.InstallationLocation.OUTDOORS, 120.0) == (0.0, 120.0)
+    assert released(lt.InstallationLocation.HEATED_ZONE, -0.5) == (-0.5, 0.0)
+
+
+@pytest.mark.base
+def test_the_ports_of_the_split_loss() -> None:
+    """The module loss is a loss of sunlight, the heated-zone output room heat for the building, the other a loss of electricity.
+
+    The DC power and the inverter loss carry no port, and the single loss output of before is gone. Catches: an
+    inverter loss booked as unconverted sunlight, and a port on an output that only tells the split.
+    """
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    config.power_in_watt = 10000.0
+    config.installation_location = lt.InstallationLocation.HEATED_ZONE
+    config.weather_identity = "Aachen"
+    my_pvs = generic_pv_system.PVSystem(
+        config=config, my_simulation_parameters=sim.SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    )
+    ports = {output.field_name: output.energy_port for output in my_pvs.outputs}
+    pv = generic_pv_system.PVSystem
+    assert ports[pv.ModuleLossInWatt] == EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SOLAR)
+    assert ports[pv.HeatToHeatedZoneInWatt] == EnergyPort.HEAT_RELEASED_INTO_THE_HEATED_ZONE
+    assert ports[pv.HeatLossInWatt] == EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.ELECTRICITY)
+    assert ports[pv.DcPowerInWatt] is None and ports[pv.InverterLossInWatt] is None
+    assert "ModuleAndInverterLossInWatt" not in ports
+
+
+@pytest.mark.base
+def test_the_installation_location_follows_the_technical_room_unless_pinned() -> None:
+    """Left ``AUTO`` the location is the building's technical room; a pinned location stays; no building refuses it.
+
+    Catches: an inverter that ignores the house it stands in, a pinned location the sizing overwrites, and an array
+    without a building that runs with a location nobody chose.
+    """
+    context = SizingContext(weather_identity="Aachen", technical_room_location=lt.InstallationLocation.HEATED_ZONE)
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    config.power_in_watt = 10000.0
+    assert config.resolve(context).installation_location is lt.InstallationLocation.HEATED_ZONE
+
+    pinned = dataclasses.replace(config, installation_location=lt.InstallationLocation.OUTDOORS)
+    assert pinned.resolve(context).installation_location is lt.InstallationLocation.OUTDOORS
+
+    with pytest.raises(ConfigSizingError, match="technical_room_location"):
+        config.resolve(SizingContext(weather_identity="Aachen"))

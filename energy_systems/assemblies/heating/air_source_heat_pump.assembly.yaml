@@ -40,7 +40,7 @@ parameters:
 
 components:
   ControllerSH:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - HeatPump                                            # ActualPartLoadRatioSh
@@ -49,14 +49,14 @@ components:
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   ControllerDHW:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
       - {$port: ems_modifier_dhw}                           # DHWStorageTemperatureModifier
       - ControllerSH                                        # SpaceHeatingStateFromController, for the priority limit
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
   HeatPump:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit

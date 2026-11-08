@@ -99,7 +99,7 @@ components:
   # second provider, so all three must say which (R4.3 — the cliff is per fact and
   # hits existing consumers; the error lists the candidates ready to paste; see O3).
   heat_pump_controller_sh:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - weather
@@ -110,7 +110,7 @@ components:
       maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
 
   heat_pump_controller_dhw:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
       - dhw_storage
@@ -119,7 +119,7 @@ components:
       maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
 
   heat_pump:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water                       # thermal power AUTO <- building.heating_load_in_watt
     config:
       with_domestic_hot_water_preparation: true

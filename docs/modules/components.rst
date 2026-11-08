@@ -56,7 +56,7 @@ is documented via autodoc.
 
 * **Heating** —
   heat pumps (:py:mod:`~hisim.components.generic_heat_pump`,
-  :py:mod:`~hisim.components.more_advanced_heat_pump_hplib`),
+  :py:mod:`~hisim.components.more_advanced_heat_pump`),
   boilers (:py:mod:`~hisim.components.generic_boiler`),
   electric heating (:py:mod:`~hisim.components.generic_electric_heating`,
   :py:mod:`~hisim.components.idealized_electric_heater`,

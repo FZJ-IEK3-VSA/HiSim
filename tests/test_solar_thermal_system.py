@@ -17,7 +17,7 @@ from hisim.components import (
     weather,
 )
 from hisim.components.controller_l2_energy_management_system import EMSConfig
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
+from hisim.components.more_advanced_heat_pump.controller_dhw import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.subcomponents.pumps import FixedLiftPump, PumpOperatingPoint

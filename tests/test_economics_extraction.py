@@ -1292,7 +1292,7 @@ class TestDeviceEnergyFlows:
 _ENERGY_BALANCE_MODULES = {
     "PVSystem": "generic_pv_system.pv_system",
     "Battery": "advanced_battery_bslib",
-    "MoreAdvancedHeatPumpHPLib": "more_advanced_heat_pump_hplib",
+    "MoreAdvancedHeatPumpHPLib": "more_advanced_heat_pump.heat_pump",
     "GenericHeatPump": "generic_heat_pump",
     "UtspLpgConnector": "loadprofilegenerator_utsp_connector",
     "ElectricityMeter": "electricity_meter",

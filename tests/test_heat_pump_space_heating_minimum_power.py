@@ -10,12 +10,12 @@ from typing import Dict, List
 import numpy as np
 import pytest
 
-from hisim.components import more_advanced_heat_pump_hplib
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
     PositionHotWaterStorageInSystemSetup,
 )
-from hisim.components.more_advanced_heat_pump_hplib_model import (
+from hisim.components.more_advanced_heat_pump.hplib_operation import (
     HeatPumpRunTimers,
     HeatPumpStepConditions,
     HplibResult,
@@ -64,7 +64,7 @@ def heat_pump_with_hot_water(position: PositionHotWaterStorageInSystemSetup) -> 
     Returns:
         The heat pump, recording the minimum of every hplib request.
     """
-    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = True

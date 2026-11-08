@@ -16,10 +16,21 @@ from hisim.components import (
     building,
     electricity_meter,
     heating_meter,
-    more_advanced_heat_pump_hplib,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
+)
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
 from hisim import utils
 
@@ -160,7 +171,7 @@ def test_house(
 
     # Build the heat pump's config first: the buffer storage below is sized from the heat
     # pump's rated thermal output, not from the building's heating load.
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     )
     # The preset sizes both fields from the building; this setup states the machine instead,
@@ -190,7 +201,7 @@ def test_house(
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
@@ -203,24 +214,24 @@ def test_house(
     )
 
     my_heatpump_controller_space_heating = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
         )
     )
 
     # Build Heat Pump Controller for dhw
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
             "HeatPumpControllerDHW"
         )
     )
 
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+    my_heatpump_controller_dhw = MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

@@ -10,8 +10,11 @@ from typing import Optional, Tuple
 
 import pytest
 
-from hisim.components import more_advanced_heat_pump_hplib
-from hisim.components.more_advanced_heat_pump_hplib_model import HplibResult
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.hplib_operation import HplibResult
 from hisim.simulationparameters import SimulationParameters
 
 pytestmark = pytest.mark.base
@@ -86,7 +89,7 @@ class TestHplibsOwnVerdict:
 
 def air_water_heat_pump(
     scop_w35: Optional[float] = None, scop_w55: Optional[float] = None
-) -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib:
+) -> MoreAdvancedHeatPumpHPLib:
     """Build an 8 kW air-water heat pump with hot-water preparation, at 60 s steps, with an optional stated SCOP.
 
     At 0 °C outside its hplib model switches to the heating rod alone between a return of 64.0 and 64.1 °C: 4.8 kW
@@ -102,19 +105,19 @@ def air_water_heat_pump(
     Returns:
         The heat pump.
     """
-    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = True
     config.standardized_scop_en14825_w35 = scop_w35
     config.standardized_scop_en14825_w55 = scop_w55
-    return more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    return MoreAdvancedHeatPumpHPLib(
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60), config=config
     )
 
 
 def answers_at(
-    heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib, return_temperature_in_celsius: float
+    heat_pump: MoreAdvancedHeatPumpHPLib, return_temperature_in_celsius: float
 ) -> Tuple[HplibResult, HplibResult]:
     """Return the heat pump's answer at a hot-water return at 0 °C outside, and hplib's own answer there.
 

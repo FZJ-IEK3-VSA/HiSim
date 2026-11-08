@@ -1155,7 +1155,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         """Get advanced het pump default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.more_advanced_heat_pump_hplib"
+        component_module_name = "hisim.components.more_advanced_heat_pump.heat_pump"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "MoreAdvancedHeatPumpHPLib")
         connections = []
@@ -2537,7 +2537,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         """Get advanced het pump default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.more_advanced_heat_pump_hplib"
+        component_module_name = "hisim.components.more_advanced_heat_pump.heat_pump"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "MoreAdvancedHeatPumpHPLib")
         connections = []

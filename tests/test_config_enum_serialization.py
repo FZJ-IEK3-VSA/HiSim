@@ -32,13 +32,16 @@ from hisim.config import ConfigBase, SizingContext
 from hisim.components import generic_boiler
 from hisim.components import generic_pv_system
 from hisim.components import heat_distribution_system
-from hisim.components import more_advanced_heat_pump_hplib
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLibConfig,
+    PositionHotWaterStorageInSystemSetup,
+)
 from hisim.components import simple_heat_source
 from hisim.components import simple_water_storage
 from hisim.components import weather
 
 
-def _air_water_heat_pump_config() -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig:
+def _air_water_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
     """Builds the air/water heat pump configuration this module round-trips.
 
     The ``air_water`` preset leaves the machine's rated thermal power and the outside
@@ -49,7 +52,7 @@ def _air_water_heat_pump_config() -> more_advanced_heat_pump_hplib.MoreAdvancedH
     Returns:
         MoreAdvancedHeatPumpHPLibConfig: A concrete configuration with every enum field set.
     """
-    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     )
     config.set_thermal_output_power_in_watt = 8000.0
@@ -73,7 +76,7 @@ class ConfigEnumSerializationCases:
         weather.WeatherDataSourceEnum,
         heat_distribution_system.HeatDistributionSystemType,
         heat_distribution_system.PositionHotWaterStorageInSystemSetup,
-        more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup,
+        PositionHotWaterStorageInSystemSetup,
         simple_water_storage.PositionHotWaterStorageInSystemSetup,
         simple_water_storage.HotWaterStorageSizingEnum,
         simple_heat_source.SimpleHeatSourceType,

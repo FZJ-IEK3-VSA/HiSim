@@ -11,9 +11,9 @@ from hisim.components import (
     building,
     generic_pv_system,
     advanced_battery_bslib,
-    more_advanced_heat_pump_hplib,
     simple_water_storage,
 )
+from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLibConfig
 
 from hisim import log
 from hisim import utils
@@ -153,7 +153,7 @@ def simulation_for_one_timestep(
     )
 
     # Set hplib
-    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_hplib_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     ).resolve(
         SizingContext(

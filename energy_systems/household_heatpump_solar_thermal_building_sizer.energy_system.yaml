@@ -52,7 +52,7 @@ components:
       - L2EMSElectricityController
       - Weather
   MoreAdvancedHeatPumpHPLib:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true
@@ -195,7 +195,7 @@ components:
         weight: 1
         dispatch: {}
   MoreAdvancedHeatPumpHPLibControllerSH:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - MoreAdvancedHeatPumpHPLib
@@ -203,7 +203,7 @@ components:
       - HeatingCurveController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
       - MoreAdvancedHeatPumpHPLibControllerSH

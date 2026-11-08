@@ -3,7 +3,7 @@
 import pytest
 
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
     HeatPumpSpaceHeatingMode,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,

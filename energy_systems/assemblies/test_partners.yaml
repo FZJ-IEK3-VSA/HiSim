@@ -134,7 +134,7 @@ partners:
     serves: {circuit: dhw, other_end: [SimpleDHWStorage]}
     requires: [HeatPumpControllerDHW, HeatPumpControllerSH, Buffer, Weather]
     component:
-      class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
+      class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
       preset: air_water
       config:
         with_domestic_hot_water_preparation: true

@@ -49,7 +49,7 @@ from hisim import hydronics
 from hisim.components.generic_boiler import GenericBoiler
 from hisim.components.generic_district_heating import DistrictHeating
 from hisim.components.generic_electric_heating import ElectricHeating
-from hisim.components.more_advanced_heat_pump.component import MoreAdvancedHeatPumpHPLib
+from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLib
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.solar_thermal_system import SolarThermalSystem
 from hisim.energy_system.executor import build_energy_system, SimulationParametersReader

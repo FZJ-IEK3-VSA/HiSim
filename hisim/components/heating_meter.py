@@ -240,7 +240,7 @@ class HeatingMeter(DynamicComponent, cp.MeterComponent):
     ) -> List[dynamic_component.DynamicComponentConnection]:
         """Get default connections from MoreAdvancedHeatPump."""
 
-        from hisim.components.more_advanced_heat_pump.component import (  # pylint: disable=import-outside-toplevel
+        from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
         )
 

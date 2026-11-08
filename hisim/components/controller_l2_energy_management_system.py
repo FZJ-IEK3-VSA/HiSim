@@ -507,7 +507,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
     ):
         """Get advanced heat pump default connections."""
 
-        from hisim.components.more_advanced_heat_pump.component import (  # pylint: disable=import-outside-toplevel
+        from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
         )
 

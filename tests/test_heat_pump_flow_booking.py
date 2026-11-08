@@ -29,7 +29,7 @@ from hisim.components.more_advanced_heat_pump.controller_dhw import (
     MoreAdvancedHeatPumpHPLibControllerDHW,
     MoreAdvancedHeatPumpHPLibControllerDHWConfig,
 )
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,

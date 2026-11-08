@@ -137,7 +137,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     property of the secondary circuit, not of the building.
     """
 
-    MAIN_CLASS = "hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib"
+    MAIN_CLASS = "hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib"
 
     component_id: ComponentID
     #: hplib parameter set to evaluate. ``"Generic"`` is the curve fit hplib derives from the

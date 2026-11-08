@@ -132,7 +132,7 @@ not evaluated and the number reaches the component unchanged. In
 
 ```yaml
   MoreAdvancedHeatPumpHPLib:
-    class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true  # recorded

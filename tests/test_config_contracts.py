@@ -696,7 +696,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
     from hisim.components.idealized_electric_heater import IdealizedHeaterConfig
-    from hisim.components.more_advanced_heat_pump.component import MoreAdvancedHeatPumpHPLibConfig
+    from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLibConfig
     from hisim.components.more_advanced_heat_pump.controller_dhw import MoreAdvancedHeatPumpHPLibControllerDHWConfig
     from hisim.components.more_advanced_heat_pump.controller_space_heating import MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig

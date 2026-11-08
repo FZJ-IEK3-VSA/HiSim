@@ -6,7 +6,7 @@ fields instead of dictionary keys, and the interpolation between two cached grid
 (:class:`HeatPumpStepConditions`, :class:`HeatPumpRunTimers`, :class:`HeatPumpModeTrack`,
 :class:`HeatPumpSwitchCounters`, :class:`HeatPumpEnergyTotals`, :class:`HeatingCircuitPowers`) carry one step's
 inputs, timers, counters and running totals, so the component's step is a chain of pure functions over them. Nothing
-here needs the component (:mod:`hisim.components.more_advanced_heat_pump.component`).
+here needs the component (:mod:`hisim.components.more_advanced_heat_pump.heat_pump`).
 """
 
 from dataclasses import dataclass

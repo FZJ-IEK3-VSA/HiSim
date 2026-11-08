@@ -56,7 +56,7 @@ components:
       - ControllerSH                                        # SpaceHeatingStateFromController, for the priority limit
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
   HeatPump:
-    class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit

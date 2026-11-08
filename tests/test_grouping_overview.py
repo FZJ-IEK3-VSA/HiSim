@@ -142,7 +142,7 @@ variants:
             config:
               water_mass_flow_rate_in_kg_per_second: 0.5
           pump:
-            class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
+            class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
             config:
               model: Generic
       boiler:

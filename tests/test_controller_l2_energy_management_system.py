@@ -26,7 +26,7 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
 )
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )

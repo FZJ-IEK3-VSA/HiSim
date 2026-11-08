@@ -25,7 +25,7 @@ from hisim.components import (
     generic_car,
     controller_l1_generic_ev_charge,
 )
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )

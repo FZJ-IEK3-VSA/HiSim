@@ -20,7 +20,7 @@ from hisim.components import (
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )

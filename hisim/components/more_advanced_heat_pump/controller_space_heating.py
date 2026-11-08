@@ -5,7 +5,7 @@ buffer's start-of-step water temperature against the supply temperature the heat
 heating season, and commands the part-load ratio a space-heating charge runs. Its configuration
 (:class:`MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig`), its operating modes
 (:class:`HeatPumpSpaceHeatingMode`) and the state it keeps between steps (:class:`HeatPumpSpaceHeatingControllerState`)
-live beside it. The heat pump it commands is :mod:`hisim.components.more_advanced_heat_pump.component`.
+live beside it. The heat pump it commands is :mod:`hisim.components.more_advanced_heat_pump.heat_pump`.
 """
 
 import importlib
@@ -411,7 +411,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             The one connection of ``ActualPartLoadRatioSh``.
         """
         # The heat pump's module imports this controller for its own default connections, so this import waits for the call.
-        from hisim.components.more_advanced_heat_pump.component import (  # pylint: disable=import-outside-toplevel
+        from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
         )
 

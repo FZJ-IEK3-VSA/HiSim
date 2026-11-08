@@ -13,7 +13,7 @@ from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.gas_meter import GasMeter
 from hisim.components.fuel_meter import FuelMeter
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
-from hisim.components.more_advanced_heat_pump.component import MoreAdvancedHeatPumpHPLib
+from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLib
 from hisim.components.simple_heat_source import SimpleHeatSource
 
 

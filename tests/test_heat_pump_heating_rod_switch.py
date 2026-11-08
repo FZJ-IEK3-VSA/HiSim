@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 
 import pytest
 
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )

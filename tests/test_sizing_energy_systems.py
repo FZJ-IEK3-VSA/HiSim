@@ -13,7 +13,7 @@ from hisim.components import (
     advanced_battery_bslib,
     simple_water_storage,
 )
-from hisim.components.more_advanced_heat_pump.component import MoreAdvancedHeatPumpHPLibConfig
+from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLibConfig
 
 from hisim import log
 from hisim import utils

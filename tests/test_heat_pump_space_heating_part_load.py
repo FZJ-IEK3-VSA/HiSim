@@ -21,7 +21,7 @@ from hisim.components.more_advanced_heat_pump.controller_space_heating import (
     MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     PositionHotWaterStorageInSystemSetup,
 )

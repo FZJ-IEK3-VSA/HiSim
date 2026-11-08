@@ -10,7 +10,7 @@ from typing import Dict, List
 import numpy as np
 import pytest
 
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
     PositionHotWaterStorageInSystemSetup,

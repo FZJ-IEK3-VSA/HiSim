@@ -22,7 +22,7 @@ from hisim import loadtypes as lt
 from hisim import simulator as sim
 from hisim.components import advanced_battery_bslib, controller_l2_energy_management_system, electricity_meter
 from hisim.components import advanced_ev_battery_bslib, generic_car
-from hisim.components.more_advanced_heat_pump.component import (
+from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )

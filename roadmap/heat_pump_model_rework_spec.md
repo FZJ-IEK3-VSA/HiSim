@@ -6,7 +6,7 @@ Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (P1); children .1
 .3 defrost, .4 part load and cycling, .5 capacity law, .6 outdoor humidity, hisim-heat-pump-backup-rod-a121 the
 backup heating rod (decision 8). Evidence: hisim-x2mu (closed).
 
-The model in question is `MoreAdvancedHeatPumpHPLib` (`hisim/components/more_advanced_heat_pump/component.py`, model
+The model in question is `MoreAdvancedHeatPumpHPLib` (`hisim/components/more_advanced_heat_pump/heat_pump.py`, model
 parts in `hplib_operation.py` and `seasonal_cop.py` beside it). It calls hplib (https://github.com/FZJ-IEK3-VSA/hplib) for the
 thermal power, the electrical power and the COP of each step, and since hisim-component-physics-4g9.15 scales the
 COP to a stated EN 14825 SCOP pair (`ScopCalibration`). Every RenoVisor heat-pump calculation runs this model.

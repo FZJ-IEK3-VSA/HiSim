@@ -1,13 +1,21 @@
 # Spec: every energy-system YAML gets a matplotlib Sankey in the chained style, laid out automatically, with a warnings box and a data panel
 
-Status: decided (owner, 2026-11-08), nothing built. Owner: Noah Pflugradt. Epic: hisim-energy-sankeys-9uoo. Builds on:
-`roadmap/complete_energy_sankeys_spec.md` (the graph model, §4; its D4 is amended here), `roadmap/fluid_loops_spec.md`
-(the loop columns of the balance report), #1122 (loop specs), the prototype of 2026-11-08
-(`agent-tmp/sankey-matplotlib-proto/`, not in the repository: twelve hand layouts of the building-sizer systems in
-one style, a trial with temperatures, specific values and plausibility checks, and a second trial with every
-warning in one box) and the May 2026 comparison (`agent-tmp/sankey-may2026/`, the "unaccounted loss/gain" arrows).
+Status: decided (owner, 2026-11-08; the open questions of the first draft decided the same day, D13 to D21; D2
+corrected the same day: the diagram is drawn with `matplotlib.sankey`), nothing merged. A first try of PRs 4 and 5
+exists on branch `sankey-mpl-auto-layout` (worktree `agent-tmp/wt-sankey-auto`, results in
+`agent-tmp/sankey-auto-try/README.md`): it laid out 41 of the 42 drawable energy-system files with 0 faults and 0
+overlaps and matched the twelve hand layouts' chain, parents and orientations, but with its own rectangular band
+renderer, so the bends, notches and arrowheads of the hand figures were gone; its graph, role, chain, tree,
+orientation, routing and label modules carry over, its output switches to `matplotlib.sankey` parameters (§10), and
+its twenty corrections are worked into §3, §6 and §7. Owner: Noah Pflugradt. Epic: hisim-energy-sankeys-9uoo.
+Builds on: `roadmap/complete_energy_sankeys_spec.md` (the graph model, §4; its D4 is amended here),
+`roadmap/fluid_loops_spec.md` (the loop columns of the balance report), #1122 (loop specs), the prototype of
+2026-11-08 (`agent-tmp/sankey-matplotlib-proto/`, not in the repository: twelve hand layouts of the building-sizer
+systems in one style drawn with `matplotlib.sankey` by `draw_sankey.py`, a trial with temperatures, specific values
+and plausibility checks, and a second trial with every warning in one box) and the May 2026 comparison
+(`agent-tmp/sankey-may2026/`, the "unaccounted loss/gain" arrows).
 
-All code citations are against `origin/main` at b58f31a1a.
+All code citations are against `origin/main` at 5fbd2c7ee; `matplotlib.sankey` citations against matplotlib 3.10.9.
 
 ## 1. Problem
 
@@ -19,22 +27,27 @@ hisim-sankey-layout-48b8). The picture does not say what a reader of a heating s
 chain the heat takes from the meter to the rooms, how big the losses beside it are, what temperatures the loops run
 at, and whether the numbers are plausible. The PDF report has no Sankey at all (bead hisim-4hed).
 
-The prototype of 2026-11-08 drew the twelve building-sizer systems as "chained sub-diagram" Sankeys: every component
-a trunk with its name inside, the main heat chain on one row from left to right, losses peeling off at the side,
-storages above and below, every cross-link a connected band. All twelve reached 0 label overlaps, with 56 to 187
-lines of hand layout each, about 10 minutes of agent time per system including the overlap checker. The owner
-reviewed them and decided on a computed layout for every energy-system file (§2). The two trials added loop
-temperatures, specific values, comfort figures, plausibility markers, one warnings box and a data panel; the second
-trial's figure (`figures/trial/household_heatpump_building_sizer_trial.png` of the prototype) is the target picture.
+The prototype of 2026-11-08 drew the twelve building-sizer systems as "chained sub-diagram" Sankeys with
+`matplotlib.sankey`: every component a sub-diagram whose trunk carries its name, the main heat chain on one row
+from left to right, losses peeling off at the side in quarter-circle bends, inputs ending in notches and outputs in
+arrowheads, storages above and below, every cross-link a connected band. All twelve reached 0 label overlaps, with
+56 to 187 lines of hand layout each, about 10 minutes of agent time per system including the overlap checker. The
+owner reviewed them and decided on a computed layout for every energy-system file (§2). The two trials added loop
+temperatures, specific values, comfort figures, plausibility markers, one warnings box and a data panel; the
+second trial's figure (`figures/trial/household_heatpump_building_sizer_trial.png` of the prototype) is the target
+picture.
 
-The prototype also showed where `matplotlib.sankey` stands in the way: it places sub-diagrams implicitly through a
-chain of path lengths, orders flows along a side by list rules, rotates a connected sub-diagram's frame, allows one
-connection per sub-diagram, and has no label handling. Every feature the prototype added (connectors, flattened
-stubs, placed trees) worked around the library.
+The prototype also listed where `matplotlib.sankey` has to be worked around: it places sub-diagrams implicitly
+through path lengths, orders flows along a side by list rules, sets a connected sub-diagram's frame from the
+connection, allows one connection per sub-diagram, centres its labels on the arrow tips and has no collision
+handling (§6.11). The first try of the engine replaced the library by its own rectangular renderer and lost the
+look of the hand figures ("all the arrow roundings are gone", owner); the engine of this spec keeps the library and
+computes its parameters (D2).
 
 ## 2. Decisions
 
-All taken by the owner on 2026-11-08 after reviewing the prototype's round 2 and the two trials.
+All taken by the owner on 2026-11-08 after reviewing the prototype's round 2, the two trials and the first try of
+the engine.
 
 **D1 — Every energy-system YAML gets a matplotlib Sankey in the chained sub-diagram style, with an automatically
 computed layout; an optional per-file pin file may fix individual placements** (owner, 2026-11-08). The picture of
@@ -45,27 +58,32 @@ choices for showcase figures and is never required. *This amends D4 of `roadmap/
 ("the renderer is plotly, as today; an arrow-style renderer is a later step"): the arrow-style renderer is now this
 spec, built as its §10 plans; bead hisim-energy-sankeys-9uoo.19 (the arrow renderer) and hisim-4hed (static images
 for the PDF report) close with it. The graph model of that spec (§4) and `energy_sankey.json` stay as they are:
-one graph, now two renderers (§4.3, Q1).
+one graph, now two renderers (D13).
 
-**D2 — The renderer is HiSim's own band renderer with absolute positions, not built on `matplotlib.sankey`**
-(owner, 2026-11-08). The prototype mostly worked around that library's implicit positions. Consequence: the
-renderer draws trunks, arrows, notches and connector bands as its own matplotlib polygons from coordinates the
-layout engine computed (§6.11); only the look of `matplotlib.sankey` (trunk, side branches, arrowheads, notches)
-is kept.
+**D2 — The diagram is drawn with `matplotlib.sankey`; the layout engine computes the library's parameters**
+(owner, 2026-11-08). The first draft of this spec proposed HiSim's own band renderer with absolute positions; that
+was the agent's recommendation, not a decision, and is withdrawn: the first try built on it drew trunks as
+rectangles with right-angled branches and lost the quarter-circle bends, the input notches, the output arrowheads
+and the pointed trunk ends of the hand figures. Consequence: the engine's output is what the prototype's
+`layouts/*.yaml` held (§6.5): per sub-diagram its prior and connection, each flow's orientation (−1, 0, 1) and path
+length, the trunk length, the label offsets, the `at` position of a further tree, the colour; the library draws
+the bands, the engine places by an iterative search over those parameters (§6.6), joins the cross-links with the
+prototype's connectors (§6.7) and places the labels itself (§6.8). The look of the twelve hand figures is the visual
+reference (§9.6).
 
 **D3 — The PV system is its own visible element, drawn from its AC electricity for now** (owner, 2026-11-08). The
 sunlight and the module-and-inverter loss would make the PV the widest band of the picture (126.9 MWh of sun
-against 26.3 MWh of electricity). Consequence: a component that converts `SOLAR` into `ELECTRICITY` is drawn with
-a flat tail that carries the net of its solar input and solar losses, unlabelled; its block shows kWp and kWh/kWp.
-The space left of the block is the slot for the sun and the loss arrows once bead hisim-device-location-820d.5
-publishes the DC output and the inverter loss; then the cut goes and the diagram starts after the modules. A
-component that converts `SOLAR` into heat (the collector) keeps its sunlight and its losses, as the prototype
-drew them.
+against 26.3 MWh of electricity). Consequence: a component that converts `SOLAR` into an `ELECTRICITY` link is
+drawn with a flat tail that carries the net of its solar input and solar losses, unlabelled; its block shows kWp
+and kWh/kWp. The space left of the block is the slot for the sun and the loss arrows once bead
+hisim-device-location-820d.5 publishes the DC output and the inverter loss; then the cut goes and the diagram
+starts after the modules. A component that converts `SOLAR` into heat (the collector) keeps its sunlight and its
+losses, as the prototype drew them.
 
 **D4 — Every cross-link is a connected band with rounded corners** (owner, 2026-11-08). Merges (a generator's
 second input from the same meter), loops (the battery's discharge back to the meter) and far links (the household's
 heat into the building) are drawn as bands routed from stub to stub, never as a pair of labelled stubs.
-Consequence: the router of §6.7.
+Consequence: the connectors of §6.7.
 
 **D5 — On the bands and nodes only values and KPIs** (owner, 2026-11-08): flows, efficiencies (heat pump SPF and
 ambient share, boiler efficiency, battery round trip, collector efficiency, substation efficiency), specific values
@@ -99,7 +117,7 @@ refuses an entry that claims neither.
 
 **D10 — A minimum drawn band width, with a "†" after the value and a caption note for every band drawn wider than
 its value** (owner, 2026-11-08). The prototype used 2 px. Consequence: §6.5; the numbers in the labels stay exact,
-and a trunk whose inflated bands no longer balance tapers.
+and a sub-diagram whose inflated bands no longer balance is drawn with the library's smoothed taper.
 
 **D11 — An unbalanced or undeclared component is drawn closed by an explicit, visibly marked residual, and is an
 error entry in the warnings box** (owner, 2026-11-08). The May 2026 comparison drew every gap of the old version as
@@ -109,35 +127,81 @@ never hides a gap.
 
 **D12 — No winter-week Sankey for now** (owner, 2026-11-08). One figure per run, over the run's whole period.
 
+The open questions of the first draft (§11), decided by the owner on 2026-11-08:
+
+**D13 — Both renderers stay in v1; whether the plotly `overall.html` goes is decided in PR 7** (owner,
+2026-11-08). `EXPORT_ENERGY_BALANCE` keeps writing every view's plotly HTML, hover texts and per-carrier views
+included; `PLOT_SANKEY` adds the matplotlib figure. Consequence: nothing of `SankeyDrawing` changes; PR 7 asks the
+owner, after the figures of PRs 5 and 6, whether the plotly `overall.html` is still opened, and closes
+hisim-sankey-layout-48b8 as superseded if it goes.
+
+**D14 — `PostProcessingOptions.PLOT_SANKEY` (value 3) gets this meaning** (owner, 2026-11-08). The option exists,
+is listed in the parameter format and does nothing today; a Sankey plot is what it always meant, so the wire-form
+rule of the option set is kept. Consequence: §4.3.
+
+**D15 — A layout fault never fails the run** (owner, 2026-11-08). The run finishes, the fault is a logged error
+and `energy_sankeys/overall.layout_error.json`, and the tests of §9 fail on it. A picture never costs a result.
+
+**D16 — The pin file is `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file, and the redraw
+command takes `--pins`** (owner, 2026-11-08). Consequence: §6.10.
+
+**D17 — Only the `overall` view is drawn in v1** (owner, 2026-11-08). A per-carrier matplotlib view is a later
+bead.
+
+**D18 — PNG, PDF and SVG** (owner, 2026-11-08). Three `savefig` calls; the SVG keeps text selectable for reviews.
+
+**D19 — The heat pump's peak thermal power against its rating is a data-panel row, not a warning** (owner,
+2026-11-08). The hplib model exceeds its rating at milder outdoor temperatures by design; a range enters the table
+only with a source that says what a heat pump's peak over rating should be.
+
+**D20 — The PV plausibility check is a performance-ratio check on the run's own irradiation, not a yield against
+PVGIS** (owner, 2026-11-08): "the PV yield plausibility should be based on the solar radiation at the location from
+the weather and some standard efficiency, not an arbitrary PVGIS value." Consequence: the metric
+`pv_performance_ratio` of §7.1, the specific AC yield in kWh/kWp divided by the irradiation on the module plane in
+kWh/m² (the PV's `SolarPowerOnModulesInWatt` energy over its module area, §5.2), compared with a sourced range for
+modern systems (§7.3, an estimate of 0.75–0.88 until checked under D9). The specific yield stays a value on the PV
+block; only the ratio is judged. Location-independent, no PVGIS table, no network call.
+
+**D21 — An agent prepares every source, the owner marks it checked** (owner, 2026-11-08). For each range the agent
+fetches the original, quotes the exact passage with table and page into the PR description; the owner reviews the
+quotes and writes the `checked` block in that PR; an agent never marks anything checked. Order of value: the
+Fraunhofer ISE SPF range, the HTW battery efficiencies, the DIN V 18599-10 internal gains, DVGW W 551, the PV
+performance-ratio range.
+
 ## 3. Terms
 
 - **Drawn node**: a component, meter or undeclared node of the `overall` view (`NodeKind.COMPONENT`, `METER`,
-  `UNDECLARED` of `sankey.py`), drawn as one trunk. Boundary, loss, storage and unaccounted nodes are not drawn as
-  trunks: their edges become terminal flows of the drawn node they touch.
+  `UNDECLARED` of `sankey.py`), drawn as one **sub-diagram** of `matplotlib.sankey` (one `Sankey.add` call).
+  Boundary, loss, storage and unaccounted nodes are not drawn as sub-diagrams: their edges become terminal flows
+  of the drawn node they touch.
 - **Flow**: one edge of the `overall` view as the drawn node sees it: positive into the node, negative out of it,
-  in kWh over the run. A **link** is a flow between two drawn nodes; a **terminal flow** has a boundary, loss,
-  storage or unaccounted node at its other end.
-- **Trunk**: the polygon of a drawn node: a band of width Σ|drawn inputs| (it tapers to Σ|drawn outputs| at the
-  head) along the node's **axis** (one of E, S, W, N: the compass direction the trunk's main flow runs in), with
-  the title inside. Its **tail** is the upstream end, its **head** the downstream end, its two **lateral sides**
-  the others. A flow attaches to one **side** (tail, head, or a lateral side named by compass direction).
-- **Branch**: a terminal flow or a link's stub on a lateral side: a short band perpendicular to the trunk, ending
-  in an arrowhead (output) or starting with a notch (input).
+  in kWh over the run; one entry of the sub-diagram's `flows` list. A **link** is a flow between two drawn nodes;
+  a **terminal flow** has a boundary, loss, storage or unaccounted node at its other end.
+- **Trunk**: the straight middle part of a sub-diagram, of length `trunklength` along the node's **axis** (one of
+  E, S, W, N: the compass direction the trunk's main flow runs in on the page), with the title inside. Its **tail**
+  is the upstream end, its **head** the downstream end, its two **lateral sides** the others. A flow attaches to
+  one **side** (tail, head, or a lateral side named by compass direction), which the engine translates into the
+  library's **orientation** (0 along the axis, 1 and −1 to the frame's two sides, §6.4).
+- **Branch**: a flow on a lateral side: the library draws it leaving or joining the trunk in a quarter-circle bend
+  of radius `radius`, then straight for its **path length**, ending in an arrowhead (output) or starting in a
+  notch (input). A flow on the tail or head runs straight for its path length.
 - **Tree connection**: the link by which a drawn node hangs from its **parent**, the drawn node its largest input
-  comes from. **Cross-link**: every other link. A **tree** is a parent with all its descendants; a node without a
-  parent is a **root**.
+  comes from; the library's `prior`/`connect` pair, which joins the child's connecting flow to the parent's at
+  their tips and sets the child's frame. **Cross-link**: every other link. A **tree** is a parent with all its
+  descendants; a node without a parent is a **root**. A root other than the first is placed by an `at` offset.
 - **Main chain**: the row of drawn nodes from the heat chain's meter to the building (§6.2), laid on y = 0.
 - **Connector**: the band that draws a cross-link, an orthogonal polyline from the source's stub to the target's
-  stub with rounded corners (§6.7).
-- **Canvas unit (u)**: the layout's length unit; a band's width in u is its drawn kWh divided by `kwh_per_unit`
-  (§6.5). Pixels follow from the figure width (26 in at 110 dpi, as the prototype: 2,860 px).
+  stub with rounded corners (§6.7); the prototype's `draw_connectors`.
+- **Canvas unit (u)**: the axes' data unit; a band's width in u is its drawn kWh divided by `kwh_per_unit`
+  (the library's `scale` is `1 / kwh_per_unit`). Pixels follow from a fixed 30 px/u (§6.5).
 - **Overlap**: two label boxes intersecting, a label box intersecting a band it is not drawn inside on purpose, a
-  connector band (without its ends) intersecting another band, or a label clipped by the canvas (the four findings
-  of the prototype's `report_overlaps`).
+  connector band (without its ends) intersecting another band, two bands of different sub-diagrams intersecting,
+  or a label clipped by the canvas (the four findings of the prototype's `report_overlaps` plus the band/band case
+  between sub-diagrams, which the placement search of §6.6 needs).
 - **Metric**: a derived value of a drawn node or band (§7.1), with its formula. **Range**: an entry of the
   plausibility table (§7.3) attached to a metric by role. **Warning**: a metric outside its range (plausibility),
   or one of the error conditions of §8.1.
-- **Pin**: one entry of the pin file (§6.10) that replaces one choice of the layout engine.
+- **Pin**: one entry of the pin file (§6.10) that replaces one parameter the layout engine computed.
 - **Flow-weighted mean**: Σ ṁ·T / Σ ṁ over the steps with ṁ > 0, ṁ the loop's mass flow in kg/s, T a temperature
   in °C (c is constant along a loop and cancels).
 
@@ -150,13 +214,13 @@ the post-processing; both paths carry the same four things:
 
 | Input | File in the result directory | Used for |
 |---|---|---|
-| the `overall` view | `energy_sankeys/energy_sankey.json` (`EnergyBalanceReport.sankeys()`) | nodes, flows, carriers, kinds; every number on a band |
+| the `overall` view | `energy_sankeys/energy_sankey.json` (`EnergyBalanceReport.sankeys()`) | nodes, flows, carriers, kinds; every number on a band; the PV's solar input for the performance ratio |
 | the balance report | `balance_report.json`, schema 7 (§5) | component classes, verdicts, residuals, the loop statistics, the device and storage statistics |
 | the KPIs | `all_kpis.json` (`WRITE_KPIS_TO_JSON`; in memory the KPI table `COMPUTE_KPIS` builds) | grid import and export, self-consumption and self-sufficiency rates, unmet hot-water demand, heat pump starts, comfort figures, floor area, TABULA reference need |
-| the realized configuration | `realized.energy_system.yaml` (`AnnotatedEmitter.RECORD_FILENAME`, written by `hisim/energy_system/executor.py`) | kWp (`PVSystem.config.power_in_watt`), battery capacity, TABULA code, household profile name, emitter type. Read only through the statistic tags of §5.2 where those exist; the renderer itself reads a configuration field in exactly two places, the PV peak power and the household's profile name, both listed in `SankeyStyle.CONFIG_FIELDS` |
+| the realized configuration | `realized.energy_system.yaml` (`AnnotatedEmitter.RECORD_FILENAME`, written by `hisim/energy_system/executor.py`) | the household's profile name and the TABULA code for the panel; everything else a component states through its statistic tag (§5.2). The two fields the renderer reads itself are listed in `SankeyStyle.CONFIG_FIELDS` |
 
 A run started from a Python setup has no realized record; the fields it supplies are then absent, and the values
-that need them (kWh/kWp, the profile name) are left out, never estimated.
+that need them are left out, never estimated.
 
 ### 4.2 What the renderer writes
 
@@ -164,30 +228,30 @@ Into `energy_sankeys/` of the result directory, beside the plotly files:
 
 | File | What |
 |---|---|
-| `overall.png` | the figure, 2,860 px wide, white background |
-| `overall.pdf`, `overall.svg` | the same figure as vector graphics (the SVG keeps text as text) |
-| `overall.layout.json` | the computed layout: every node's axis, anchor and trunk length, every flow's side, order and stub length, every connector's route points, every label's position, the scale, the canvas, the pins applied. The determinism test compares this file (§9.3), and a person starts a pin file from it |
-| `overall.layout_error.json` | only when the layout engine fails (§6.12): the faults, as sentences, and the partial layout |
+| `overall.png` | the figure at 30 px per canvas unit (§6.5), so its width follows the canvas: about 2,400 to 2,900 px for a full-year building-sizer system, 1,300 to 2,400 px for a week; white background |
+| `overall.pdf`, `overall.svg` | the same figure as vector graphics (the SVG keeps text as text); D18 |
+| `overall.layout.json` | the computed layout: the `matplotlib.sankey` parameters of every sub-diagram (§6.5) in the order added, every connector's route points, every label's position and its data source (§7.2), the scale, the canvas, the pins applied, the rounds the search took. The determinism test compares this file (§9.3), and a person starts a pin file from it |
+| `overall.layout_error.json` | only when the layout engine fails (§6.12): the faults, as sentences, and the layout as far as it got |
 
-Only the `overall` view is drawn in v1. The per-carrier views stay plotly HTML (Q1); a per-carrier matplotlib view
-is a filter of the same layout and is left for a later bead.
+Only the `overall` view is drawn in v1 (D17). The per-carrier views stay plotly HTML (D13); a per-carrier
+matplotlib view is a filter of the same layout and is left for a later bead.
 
 ### 4.3 The post-processing option and the plotly HTML
 
 `PostProcessingOptions.PLOT_SANKEY` (value 3) exists, is listed in `hisim/energy_system/parameters_format.py`,
-and does nothing today (its only other mention is a comment in `hisim/simulationparameters.py`). Recommendation
-(Q2): it gets this meaning. `PLOT_SANKEY` requires `COMPUTE_KPIS` and implies `EXPORT_ENERGY_BALANCE` (the figure
-is drawn from the same report and views that option writes, and the files are what the CLI redraws from); a
-parameter set with `PLOT_SANKEY` and without `COMPUTE_KPIS` is refused when the parameters are read, with the
-sentence that names both options. The figure is drawn at the end of `PostProcessor.export_sankeys`
+and does nothing today (its only other mention is a comment in `hisim/simulationparameters.py`). It gets this
+meaning (D14). `PLOT_SANKEY` requires `COMPUTE_KPIS` and implies `EXPORT_ENERGY_BALANCE` (the figure is drawn from
+the same report and views that option writes, and the files are what the CLI redraws from); a parameter set with
+`PLOT_SANKEY` and without `COMPUTE_KPIS` is refused when the parameters are read, with the sentence that names
+both options. The figure is drawn at the end of `PostProcessor.export_sankeys`
 (`hisim/postprocessing/postprocessing_main.py`), after the balance files are written, and also in the failure path
 of `judge_the_results`, where the balance report is written before an `EnergyBalanceError` propagates: a run that
 fails its balance gets its picture with the residual arrows (D11) when the option is set.
 
-The plotly HTML stays as it is in v1: `EXPORT_ENERGY_BALANCE` keeps writing the per-view HTML, interactive hover
-text included, and nothing of `SankeyDrawing` changes. The matplotlib figure is the picture of the run; the PDF
-report shows it (`INCLUDE_IMAGES_IN_PDF_REPORT`, bead hisim-4hed, PR 7). Whether the plotly `overall.html` is
-retired later is Q1.
+The plotly HTML stays as it is in v1 (D13): `EXPORT_ENERGY_BALANCE` keeps writing the per-view HTML, interactive
+hover text included, and nothing of `SankeyDrawing` changes. The matplotlib figure is the picture of the run; the
+PDF report shows it (`INCLUDE_IMAGES_IN_PDF_REPORT`, bead hisim-4hed, PR 7). Whether the plotly `overall.html` is
+retired is decided in PR 7 (D13).
 
 ### 4.4 The redraw command
 
@@ -196,10 +260,9 @@ result directory without simulating again: it builds `SankeyInputs.from_result_d
 when given (else the one §6.10 finds), writes the files of §4.2 into `--out` (default: the result directory's
 `energy_sankeys/`) and exits 0 on 0 overlaps, 4 when the layout engine reports faults (the files of §4.2 are still
 written where it could draw), 2 when the directory lacks an input. A render takes a few seconds, a run 20 to 45 s,
-so layout work and pin files are done with this command. It is a developer tool in the sense of
-`.semgrep/file_writes.yml`: it writes into the directory it is pointed at, and its module joins the allowlist when
-it does not live under `hisim/postprocessing/` (the renderer does: `hisim/postprocessing/energy_balance/figure/`,
-§6.13).
+so layout work and pin files are done with this command (the first try built it in `hisim/cli.py`). It writes into
+the directory it is pointed at; the renderer lives under `hisim/postprocessing/`, which `.semgrep/file_writes.yml`
+already sanctions.
 
 ## 5. The run statistics in the balance report (D8)
 
@@ -231,8 +294,8 @@ One entry per fluid loop the balance resolved (`DeclaredPorts.add_loops`), keyed
 }
 ```
 
-Definitions, each a static function of `LoopStatistics` in a new module `hisim/postprocessing/energy_balance/statistics.py`,
-each with direct tests on arrays of a few steps:
+Definitions, each a static function of `LoopStatistics` in a new module
+`hisim/postprocessing/energy_balance/statistics.py`, each with direct tests on arrays of a few steps:
 
 - `steps_with_flow`: the steps with ṁ > `FLOW_THRESHOLD_IN_KG_PER_SECOND` (1e-9); `hours_with_flow` =
   steps × seconds per step / 3600.
@@ -246,7 +309,8 @@ each with direct tests on arrays of a few steps:
 - `design_supply_limit_in_celsius` and `hours_above_design_supply`: present when the receiving end declares a
   design supply temperature; the hours with flow in which the supply exceeds it. The heat distribution system
   declares it: `FluidLoop` (`hisim/energy_port.py`) gains an optional `design_supply_temperature_in_celsius`,
-  which `HeatDistribution` sets from `EmitterDesign.for_type(config.heating_system).maximal_supply_temperature_in_celsius`
+  which `HeatDistribution` sets from
+  `EmitterDesign.for_type(config.heating_system).maximal_supply_temperature_in_celsius`
   (`hisim/components/heating_curve.py`); `design_limit_source` names the emitter type. No other loop has a limit in
   v1 (a tank coil has no design supply).
 
@@ -255,15 +319,16 @@ each with direct tests on arrays of a few steps:
 The renderer must not know which output of which class is "the tank temperature". A component says it about
 itself, once, where it declares the output: `Component.add_output(..., statistic=StatisticTag(...))`, beside the
 existing `energy_port=` argument. `hisim/loadtypes.py` gains the enum `StatisticRole`, `hisim/energy_port.py` the
-frozen data class `StatisticTag(role, rated_in_watt=None, capacity_in_kilowatt_hour=None)`:
+frozen data class `StatisticTag(role, rated_in_watt=None, capacity_in_kilowatt_hour=None,
+module_area_in_square_metre=None)`:
 
 | `StatisticRole` | Declared on | Statistics written |
 |---|---|---|
 | `THERMAL_OUTPUT_POWER` | a heat generator's total thermal output in W, with `rated_in_watt` (the heat pump's `ThermalOutputPowerTotalHeatpump` with `set_thermal_output_power_in_watt`; the boilers', the substation's and the electric heater's output with their rated power) | `runtime_hours` (steps with P > 1 W), `full_load_hours` (Σ P·Δt / rated), `peak_in_watt`, `peak_on_coldest_day_in_watt`, `coldest_day` (date), `coldest_day_mean_outdoor_in_celsius` (needs `OUTDOOR_AIR_TEMPERATURE`) |
-| `ELECTRIC_OUTPUT_POWER` | a generator's AC electricity in W with `rated_in_watt` (the PV's `ElectricityOutput` with `power_in_watt`) | `energy_in_kilowatt_hour`, `specific_yield_in_kilowatt_hour_per_kilowatt` (energy / rated in kW), `peak_in_watt` |
+| `ELECTRIC_OUTPUT_POWER` | a generator's AC electricity in W with `rated_in_watt` (the PV's `ElectricityOutput` with `power_in_watt`) and, for a solar generator, `module_area_in_square_metre` (the array's module area the PV already computes for `SolarPowerOnModulesInWatt`: peak power over the module's peak power, times the module area) | `energy_in_kilowatt_hour`, `specific_yield_in_kilowatt_hour_per_kilowatt` (energy / rated in kW), `peak_in_watt`, and with a module area `irradiation_on_modules_in_kilowatt_hour_per_square_metre` (the component's `SOLAR` consumption over the run / module area) and `performance_ratio` (§7.1, D20) |
 | `START_COUNTER` | a cumulative start counter (`CounterOnOff` of the heat pump) | `starts` (the last value minus the first) |
 | `STORAGE_TEMPERATURE` | a storage's medium temperature in °C (`SimpleDHWStorage.WaterTemperatureAtEndOfStepInCelsius`, `SimpleHotWaterStorage.WaterMeanTemperatureInStorage`) | `min_in_celsius`, `max_in_celsius`, `hours_below_40_celsius`, `hours_at_or_above_60_celsius` (the two thresholds are `StorageTemperatureThresholds` constants of the statistics module, named for the taps and DVGW W 551; the plausibility table owns their sources) |
-| `STATE_OF_CHARGE` | a battery's state of charge in [0, 1] with `capacity_in_kilowatt_hour` (`Battery.StateOfCharge`, `CarBattery`) | `mean_state_of_charge`, `equivalent_full_cycles` (Σ positive SOC increments × capacity / capacity = Σ positive increments; equal to the charged energy of the cells over the capacity) |
+| `STATE_OF_CHARGE` | a battery's state of charge in [0, 1] with `capacity_in_kilowatt_hour` (`Battery.StateOfCharge`, `CarBattery`) | `mean_state_of_charge`, `equivalent_full_cycles` (Σ positive SOC increments: the charged energy of the cells over the capacity) |
 | `INDOOR_AIR_TEMPERATURE` | the building's `TemperatureIndoorAir` | `min_in_celsius`, `max_in_celsius` (the comfort K·h figures stay KPIs) |
 | `OUTDOOR_AIR_TEMPERATURE` | `Weather.TemperatureOutside` | `coldest_day`, `coldest_day_mean_in_celsius` (daily means over the run's calendar days) |
 | `OCCUPANTS` | `UtspLpgConnector.NumberOfResidents` | `mean_occupants` (the time mean) |
@@ -277,10 +342,11 @@ A tag changes no result and no KPI; the semgrep gate is untouched (the writer is
 ## 6. The layout engine
 
 Module `hisim/postprocessing/energy_balance/figure/` (§6.13). Input: `SankeyInputs` (§4.1) and the optional pins
-(§6.10); output: a `Layout` (what `overall.layout.json` serialises) and the list of faults. Every step is a static
-function or a small class with direct tests on hand-built graphs; the engine never reads a class name of a
-component for a layout decision (roles come from kinds, carriers and the shape of the links), and it never reads
-a file.
+(§6.10); output: a `Layout` (the `matplotlib.sankey` parameters §6.5 lists, which `overall.layout.json`
+serialises) and the list of faults. The graph half (§6.1 to §6.4) is pure: static functions on hand-built graphs,
+no class name of a component read for a layout decision (roles come from kinds, carriers and the shape of the
+links), no file read. The placement half (§6.6 to §6.8) builds the `Sankey` on an `Agg` figure, since the library
+places implicitly and the engine has to read back what it drew.
 
 ### 6.1 The drawn graph
 
@@ -292,9 +358,11 @@ From the `overall` view:
    terminal flow in the direction the view gives (into the component when the run's net released energy, out when
    it stored); a boundary edge a terminal flow to or from the boundary node; a residual edge a terminal flow marked
    `residual` (§6.3).
-2. **The solar cut (D3)**: a drawn node with a `SOLAR` input and a production of `ELECTRICITY` has its `SOLAR`
-   input and its `SOLAR` losses replaced by one unlabelled terminal input, flagged `cut`, of their difference, so
-   the trunk is drawn with a flat tail. A node with a `SOLAR` input and no electricity production keeps them.
+2. **The solar cut (D3)**: a drawn node with a `SOLAR` input and an `ELECTRICITY` link to a drawn node has its
+   `SOLAR` input and its `SOLAR` losses replaced by one unlabelled terminal input, flagged `cut`, of their
+   difference, so the trunk is drawn with a flat tail (the prototype's `flatten_input_notch` on that input). A node
+   with a `SOLAR` input and no electricity link keeps them (the collector: its pump loss is an electricity loss,
+   not a link, and does not make it a PV).
 3. **Empty flows**: a flow below `SankeyStyle.OMIT_BELOW_KWH` (0.001 kWh, as `SankeyDrawing.EMPTY_FLOW_IN_KILOWATT_HOUR`)
    is left out; a link left out at one end is left out at the other.
 4. **Balance of a drawn node**: Σ inputs − Σ outputs over its flows (signed kWh). A node whose imbalance exceeds
@@ -315,7 +383,7 @@ A **role** per drawn node, from kinds and carriers only, decided in this order (
 | `ELECTRICITY_METER` | kind `meter`, its boundary flows carry `ELECTRICITY` |
 | `FUEL_METER` | kind `meter`, any other carrier (gas, oil, pellets, wood chips, hydrogen, district heat) |
 | `PV` | consumes `SOLAR`, produces `ELECTRICITY` to a drawn node |
-| `SOLAR_COLLECTOR` | consumes `SOLAR`, produces a heat carrier |
+| `SOLAR_COLLECTOR` | consumes `SOLAR`, produces a heat carrier to a drawn node (the building also takes sun and loses room heat, but to loss nodes, so it does not match) |
 | `VEHICLE_STORAGE` | produces `VEHICLE_ELECTRICITY` |
 | `VEHICLE` | consumes `VEHICLE_ELECTRICITY` |
 | `ELECTRIC_STORAGE` | has a storage flow, consumes and produces `ELECTRICITY` to the same drawn node |
@@ -326,7 +394,7 @@ A **role** per drawn node, from kinds and carriers only, decided in this order (
 | `BUILDING` | consumes `SPACE_HEATING_HEAT` or `ROOM_HEAT` from a drawn node and produces no heat carrier to a drawn node except `COOLING` |
 | `DISTRIBUTION` | consumes a heat carrier from a drawn node and produces the same carrier to a drawn node, no storage flow (the heat distribution system, declared or undeclared) |
 | `GENERATOR` | produces a heat carrier (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `ROOM_HEAT`) to a drawn node and consumes a carrier that is no heat carrier |
-| `CONVERTER` | everything else (electrolyzer, fuel cell, CHP, transformer, hydrogen storage) |
+| `CONVERTER` | everything else (electrolyzer, fuel cell, CHP, transformer, hydrogen storage, a battery without a discharge link in the run's period) |
 
 A node of kind `undeclared` gets its role from the same criteria on the flows its neighbours book, with
 `DISTRIBUTION` as the common case; the fallback is `CONVERTER`.
@@ -341,6 +409,11 @@ root**; when the chain ends at a node without an input link (a collector feeding
 is the root. Without a `BUILDING` (the electrolyzer and the `dynamic_components` systems), the chain starts at the
 meter with the largest throughput and follows the largest output link until a node has none.
 
+**Sources go upstream.** A drawn node without an input link that feeds a meter (the PV; the electrolyzer system's
+wind transformer, 180 MWh in a week) is the first sub-diagram of the meter's tree and the meter hangs from it as a
+continuation (the prototype: `PVSystem` first, `ElectricityMeter` with `prior: PVSystem`); the meter's boundary
+import then moves to a lateral side (§6.4). Hung below the meter, such a node's band would make a U-turn.
+
 ### 6.3 Residuals (D11)
 
 A residual flow is drawn as a terminal branch of its node in the **unaccounted style**: grey fill with a hatch,
@@ -348,194 +421,316 @@ dashed grey outline, the label in a dashed grey box: "unaccounted loss · 20 kWh
 "unaccounted gain · 20 kWh" for an input gap. When the node is undeclared, or when the balance report's verdict for
 the node is `does_not_close`, the label and the box are red and the label says why in three to five words
 ("undeclared: no energy ports", "balance does not close"); either is an error entry of the warnings box (§8.1).
-The residual flow takes the side the role table gives for losses (§6.4). A node whose residual is within
-`RESIDUAL_KWH` draws none.
+The library draws one fill per sub-diagram, so the residual branch gets its own style by a second `PathPatch` over
+the branch's outline (the prototype's `mark_errors`). The residual flow takes the side the role table gives for
+losses (§6.4). A node whose residual is within `RESIDUAL_KWH` draws none.
 
 ### 6.4 Orientation rules by role
 
-The table decides, per role, the node's axis, where its tree connection comes in, the side of every other flow
-by carrier and kind, and the slot of each child. "Head" and "tail" are relative to the axis; the lateral sides are
-compass directions of the page. A flow whose rule names a side already taken by a wider flow of the opposite
-direction keeps the side (a side holds any number of flows in order); the order along a side is: tree connection
-first, then links by value descending, then terminal flows by value descending, residual last.
+The table decides, per role, the node's axis, the side its tree connection comes in at, the side of each class of
+flow, and the slot of each child. It is data (one row per role, six flow classes: link in, terminal in, link out,
+boundary out, loss, storage change) plus the context rules below it; the first try implemented it as `RoleSides`
+rows in `orientation.py`, which carry over. "Head" and "tail" are relative to the axis; the lateral sides are
+compass directions of the page.
 
-| Role | Axis | Tree connection in at | Other inputs | Outputs | Children |
-|---|---|---|---|---|---|
-| `ELECTRICITY_METER` | E | tail (W), from the `PV` when there is one | grid import: N; storage discharge (from `ELECTRIC_STORAGE`): S; other component production (collector pump? no — a CHP, a fuel cell): S | grid export: N when the meter is the chain root, else head (E); to `GENERATOR`, `CONVERTER` on the chain: head (E), a second flow to the same node stacked below the first; to `HOUSEHOLD`, `ELECTRIC_STORAGE`, `VEHICLE_STORAGE`, `COOLER`, `SOLAR_COLLECTOR` (pump electricity): S | `GENERATOR` on the chain: continuation E; `HOUSEHOLD`: below, rightmost; `ELECTRIC_STORAGE`: below, leftmost; `VEHICLE_STORAGE`: below, between them |
-| `FUEL_METER` | E | tail (W): the supply boundary flow | – | to its generator: head (E), a second flow to the same generator stacked below | `GENERATOR`: continuation E |
-| `PV` | E | – (root) | the cut: tail (W), flat | to the meter: head (E) | `ELECTRICITY_METER`: continuation E |
-| `GENERATOR` | E | tail (W); a second input from the same source: tail, stacked below | `AMBIENT_HEAT`, `SOLAR`: S | `SPACE_HEATING_HEAT` to the chain's next node: head (E); `DOMESTIC_HOT_WATER_HEAT`: N; losses: S | chain successor: continuation E; `HOT_WATER_TANK`: above |
-| `BUFFER`, `DISTRIBUTION` | E | tail (W) | a second heat source (collector): S | chain successor: head (E); losses: N; storage change: S; residual: S | chain successor: continuation E |
-| `BUILDING` | E | tail (W) | `SOLAR`: N; `ROOM_HEAT` from `HOUSEHOLD`: S; storage change: S | opaque transmission and gains lost: head (E); ventilation: N; windows and doors: S; `COOLING` to a `COOLER`: head (E) | `COOLER`: continuation E |
-| `HOT_WATER_TANK` | E | S (from the generator below) | a second heat source (collector): tail (W); storage change (released): N | taps: head (E); losses, storage change (stored): N | – |
-| `SOLAR_COLLECTOR` | E | – (root) | sun: tail (W); pump electricity: S | heat: head (E); losses: N | – |
-| `HOUSEHOLD` | S | tail (N) | body heat: W | heat to the building (two flows): E; appliance electricity not released: head (S) | – |
-| `ELECTRIC_STORAGE` | S | tail (N) | storage change (released): W | discharge (back to the meter): W; inverter loss: E; cell loss: head (S); storage change (stored): W | – |
-| `VEHICLE_STORAGE` | S | tail (N) | – | to the vehicle: head (S); losses: E | `VEHICLE`: continuation S |
-| `VEHICLE` | E | tail (W), after a corner from the storage's head | – | driving: head (E); losses: S | – |
-| `COOLER` | E | tail (W) | electricity: N | to the ambient sink: head (E) | – |
-| `CONVERTER` | E | tail (W) | boundary inputs: N | links: head (E); losses: S; storage change: S | each child: continuation E for the largest, below for the others |
+| Role | Axis | Tree connection in at | Links in | Terminal in (boundary) | Links out | Boundary out | Losses | Storage change |
+|---|---|---|---|---|---|---|---|---|
+| `ELECTRICITY_METER` | E | tail (W), from the source upstream (`PV`, a transformer) when there is one; else no tree connection and grid import takes the tail | storage discharge: S; other production (a CHP, a fuel cell): S | grid import: N (tail when nothing is upstream) | to the chain's next node (`GENERATOR`, `CONVERTER`, `HOUSEHOLD` on the chain): head (E), a second flow to the same node stacked below the first; to `HOUSEHOLD`, `ELECTRIC_STORAGE`, `VEHICLE_STORAGE`: S; to `SOLAR_COLLECTOR` (pump) and `COOLER`: N (both sit above or after the chain; from the south the band would U-turn) | grid export: N when the meter is the chain root, else head (E) | – | – |
+| `FUEL_METER` | E | – (root): the supply boundary flow takes the tail (W) | – | tail (W) | to its generator: head (E), a second flow to the same generator stacked below | – | – | – |
+| `PV` | E | – (root): the cut takes the tail (W), flat | – | tail (W) | to the meter: head (E) | – | (cut) | – |
+| `GENERATOR` | E | tail (W); a second input from the same source: tail, stacked below | – | `AMBIENT_HEAT`, `SOLAR`: S | `SPACE_HEATING_HEAT` to the chain's next node: head (E); `DOMESTIC_HOT_WATER_HEAT`: N | – | S | S |
+| `BUFFER`, `DISTRIBUTION` | E | tail (W) | a second heat source (collector): S | – | chain successor: head (E) | – | N; residual: S | S |
+| `BUILDING` | E | tail (W) | `ROOM_HEAT` from `HOUSEHOLD`: S | `SOLAR`: N | `COOLING` to a `COOLER`: head (E) | – | by rank: largest head (E), second N, third and further S | S |
+| `HOT_WATER_TANK` | E | S (from the generator below) | a second heat source (collector): tail (W) | – | – | taps: head (E); not delivered (§8.1): N | N | N (released: an input from N; stored: an output to N) |
+| `SOLAR_COLLECTOR` | E | – (root): sun takes the tail (W) | pump electricity: S | tail (W) | heat: head (E) | – | N | – |
+| `HOUSEHOLD` | E | N (lateral), from the meter above; on the chain (air-conditioner twin): tail (W) | – | body heat: S | heat to the building (two flows): head (E) | – | appliance electricity not released: S | – |
+| `ELECTRIC_STORAGE` | S | tail (N) | – | – | discharge (back to the meter's S side): W | – | by rank: largest E, the rest head (S) | W |
+| `VEHICLE_STORAGE` | S | tail (N) | – | – | to the vehicle: head (S) | – | E | W |
+| `VEHICLE` | E | N (lateral), from the storage above | – | – | – | driving: head (E) | S | – |
+| `COOLER` | E | tail (W) | electricity: N | – | – | to the ambient sink: head (E) | S | – |
+| `CONVERTER` | E | tail (W) | S | N | head (E) | head (E) | S | S |
 
-Storage changes whose sign flipped between runs (the tank stored heat in the gas twin and released it in the
-heat-pump twin) keep their side; only the arrow's direction and the display name change (`{in: "Stored heat
-released", out: "Heat stored"}` in the style table).
+Context rules, applied after the table:
 
-### 6.5 Scale, sizes and the minimum band
+1. **A chain node enters at its tail**, whatever its role's tree-connection side: the household on the chain of the
+   air-conditioner twin takes the meter's band at its tail (W), not at its north side, else the whole chain turns
+   vertical.
+2. **A connected sub-diagram's frame comes from its connection**, never from `rotation` (the library ignores
+   `rotation` for a connected sub-diagram, `Sankey.add`). The engine therefore chooses the child's connecting
+   orientation from the axis the table wants and the direction the parent's flow leaves in: with `d` the page
+   direction of the parent's connecting output (its axis for a head output, the side's compass direction for a
+   lateral one) and `up(axis)` the page direction of the child's frame "up" side (E → N, S → E, W → S, N → W), the
+   child's connecting input has orientation 0 when its axis equals `d` (a continuation), 1 when `up(axis)` is
+   opposite to `d` (the band enters the frame's top), −1 when `up(axis)` equals `d` (it enters the frame's
+   bottom); an axis opposite to `d` is impossible and a fault. Examples from the hand layouts: the battery below
+   the meter (`d` = S, axis S → 0), the household below the meter (`d` = S, axis E, up = N → 1), the tank above
+   the heat pump (`d` = N, axis E → −1), the car below its battery (`d` = S, axis E → 1: horizontal, fed from the
+   top, driving east, as the hand layout).
+3. **Losses are ranked by value, not by name**: the roles above say "by rank" where the losses share a carrier
+   (the building's room-heat losses, the battery's electricity losses); largest head, second north, third and
+   further south for the building; largest east, the rest head for the battery. This reproduces all twelve hand
+   layouts; a rule by port name would read class knowledge the engine must not have.
+4. **Slot rank overrides value order**: on the meter's south side the `ELECTRIC_STORAGE` is leftmost, the
+   `VEHICLE_STORAGE` next, the `HOUSEHOLD` rightmost, whatever their values (in the electric-heating twin's January
+   week the battery's charge exceeds the household's electricity; by value the battery would take the household's
+   place and block its bands to the building). Everywhere else links are stacked by value descending.
+5. **Storage changes whose sign flipped between runs** (the tank stored heat in the gas twin and released it in the
+   heat-pump twin) keep their side; only the arrow's direction and the display name change (`{in: "Stored heat
+   released", out: "Heat stored"}` in the style table).
+6. **Children**: a `GENERATOR`, `CONVERTER` or `HOUSEHOLD` that is the chain's next node is a continuation child
+   (E); a `HOT_WATER_TANK` hangs above its generator; `HOUSEHOLD`, `ELECTRIC_STORAGE` and `VEHICLE_STORAGE` hang
+   below the meter in the slot rank of rule 4; a `VEHICLE` hangs below its storage; a `COOLER` continues the
+   building (E); a `CONVERTER`'s children continue it for the largest and hang below for the others.
 
-- **Scale.** One `kwh_per_unit` per figure: the smallest value of the series 1, 2, 5 × 10ⁿ for which the widest
-  drawn band is at most `WIDEST_BAND_IN_UNITS` (7 u). Every full-year building-sizer system lands at 4,000 kWh/u
-  (the PV's 26.3 MWh is the widest band at 6.6 u), as the prototype's family scale; a week-long test run lands at
-  100 kWh/u. A pin may fix it.
-- **Band width** of a flow: |drawn kWh| / `kwh_per_unit`. **Trunk width**: Σ drawn inputs at the tail, tapering by
-  each lateral flow to Σ drawn outputs at the head.
-- **Minimum band (D10).** `MIN_BAND_PX` = 2. The layout is computed twice: the first pass with the raw values gives
-  the canvas span and so the pixels per unit (2,860 px × 0.98 / span in u); every band below `MIN_BAND_PX /
-  px_per_unit × kwh_per_unit` kWh is then drawn at that minimum, flagged `inflated`, and the second pass uses the
-  drawn values. If the second pass's span differs from the first by more than 1 % a third pass runs; a fourth is
-  never needed, and a difference after the third is a fault. An inflated band's label ends in " †" and the caption
-  says "† drawn at the minimum width of 2 px, not to scale".
-- **Trunk length** of a node: the largest of (a) the title's width plus `TITLE_PAD` (0.6 u) on both sides, (b) the
-  note block's width (§6.8) plus the pads, (c) for each lateral side, `GAP` (0.56 u) × (n + 1) + Σ widths of its n
-  flows, (d) `MIN_TRUNK` (3 u). Text widths come from `matplotlib.textpath.TextPath` at the style's font size,
-  converted to u through the pixels per unit, so they need no canvas and are deterministic given the font (§9.3).
-- **Stub length** of a branch: `STUB` (1.3 u) for a terminal flow, 0.48 u for the stub of a link (the connector
-  continues it), grown by the label pass (§6.8). **Connection length** of a tree connection: the width of the label
-  drawn inside it plus 2 × `TITLE_PAD`, at least `MIN_CONNECTION` (2 u); a label does not fit inside a band
-  narrower than 1.1 line heights and goes above it instead (§6.8).
-- **Arrowheads and notches**: head length 0.5 × band width + `SHOULDER` (0.1 u), head half-width = band half-width
-  + `SHOULDER`; a notch is the mirror image cut into the receiving edge. Where a connector continues a stub, the
-  stub is cut flat (no head, no notch), and where a tree connection runs beside a connector into the same side of
-  the child (the generator's two inputs from one meter), the connection's head is cut flat too, so the two bands
-  enter side by side with one seam (the prototype's `flatten_parallel_connections`). These constants are the
-  prototype's `sankey:` style, in u.
+**Sides into orientations and list order.** A side becomes the library's orientation through the frame: for a
+sub-diagram with axis `a`, a flow on the tail or head has orientation 0; a flow on the page side `up(a)` has
+orientation 1 and on the opposite side −1 (the battery with axis S: its discharge to the west is −1, its inverter
+loss to the east 1, as the hand layout). The library then stacks the flows along the trunk by the position in the
+`flows` list (`Sankey.add`, matplotlib 3.10.9), which the engine must produce from the wanted order:
 
-### 6.6 Placing the trees
+- frame-top inputs (orientation 1) stack from the trunk's tail corner outward toward the tail in list order, the
+  first in the list nearest the trunk; frame-top outputs (orientation 1) stack from the head corner outward toward
+  the head in list order, the first nearest the trunk;
+- frame-bottom inputs (orientation −1) stack from the tail corner outward in *reversed* list order, the last in
+  the list nearest the trunk; frame-bottom outputs (orientation −1) from the head corner outward in reversed order,
+  the last nearest the trunk;
+- tail inputs (orientation 0) stack across the tail from the frame's bottom upward in reversed list order (the last
+  in the list lowest); head outputs (orientation 0) across the head from the frame's top downward in list order
+  (the first highest);
+- a flow whose |value| is below the library's `tolerance` is not drawn and cannot connect; the minimum band (§6.5)
+  keeps every drawn flow above it.
 
-1. **The main chain** goes on y = 0, the chain root's tail at x = 0, each node's tail at the previous node's head
-   plus the connection length, axis E. The `PV`, when it is the root's parent, goes left of the root on the same
-   row.
-2. **The spanning tree.** Every drawn node not on the chain hangs from the drawn node its largest input link
-   comes from (ties: carrier order of §6.2's chain walk, then name). Roots are the nodes without an input link:
-   the chain root's tree, the `PV` (already placed), a `SOLAR_COLLECTOR`, a second meter.
-3. **Children of a placed node**, in the slots the role table names: a *continuation* child sits on the parent's
-   axis after the connection; a *below* child has its tail facing the parent's S side, its anchor `DROP` (2.5 u)
-   below the parent's lower edge, at the x of its stub on the parent; an *above* child the same upwards. Several
-   children in one slot are ordered as the role table says (leftmost, rightmost, between) and by value descending
-   otherwise, and are spread along the parent's axis so their bounding boxes (inflated by `NODE_MARGIN`, 1 u)
-   do not intersect: each is shifted outward from the previous by the overlap found, in order. The children's
-   subtrees are placed recursively before their siblings are spread, so a subtree moves as a whole.
-4. **Further trees** go into the quadrant their root's role names: a `SOLAR_COLLECTOR` above and left of the node
+So the engine orders each side as the rules above want (tree connection first, then links in slot rank, then by
+value descending, then terminal flows by value descending, residual last, "first" meaning nearest the trunk for
+a lateral side and the frame's top for a head or tail stack) and emits the `flows` list by interleaving the sides
+according to these four rules; a direct test per side checks that the emitted list puts the wanted flow nearest
+the trunk (by reading the drawn tips back).
+
+### 6.5 Scale, sizes and the parameters
+
+- **Pixels per unit are fixed**: `PX_PER_UNIT` = 30 (the prototype's 29.7). Text and bands then keep their
+  proportions in every figure, the minimum band is known in kWh before the layout starts, and the figure's size
+  follows its canvas (§6.9).
+- **Scale.** One `kwh_per_unit` per figure: the smallest value of the series 1, 2, 4, 5 × 10ⁿ for which the widest
+  drawn band is at most `WIDEST_BAND_IN_UNITS` (7 u). The 4 is in the series so that every full-year
+  building-sizer system lands at 4,000 kWh/u (the PV's 26.3 MWh is the widest band at 6.6 u), the prototype's
+  family scale; a week-long test run lands at 100 kWh/u. A pin may fix it. The library's `scale` is
+  `1 / kwh_per_unit`, its `unit` None and `format` "" (no library labels).
+- **Band width** of a flow: |drawn kWh| / `kwh_per_unit`.
+- **Minimum band (D10).** `MIN_BAND_PX` = 2, so `min_band_kwh = MIN_BAND_PX / PX_PER_UNIT × kwh_per_unit`
+  (267 kWh at 4,000 kWh/u). Every band below it is drawn at that minimum (`drawn_kwh = copysign(max(|value|,
+  min_band_kwh), value)`, at both ends of a link, so a connection still matches within the library's tolerance)
+  and flagged `inflated`; its label ends in " †" and the caption says "† drawn at the minimum width of 2 px, not to
+  scale". A sub-diagram whose inflated flows no longer sum to zero is drawn with the library's smoothed taper (it
+  logs the imbalance at info level and draws on). The library's `tolerance` is 1e-6 u.
+- **The library's style constants**, on `LayoutConstants`, the prototype's `canvas.sankey`: `gap` 0.56 u (the
+  spacing between stacked lateral flows and the inset of the first from the trunk corner), `radius` 0.24 u (the
+  inner radius of a branch's quarter-circle bend; the outer radius is `radius` plus the band width, so a hairline
+  keeps a visible bend), `shoulder` 0.096 u (the arrowhead's overhang beyond the band), `offset` 0.192 u (the
+  library's label offset, unused since labels are placed by the engine), `head_angle` 110° (the arrowhead's and
+  notch's opening). These give the look of the twelve hand figures and are not tuned per system.
+- **Trunk length** (`trunklength`) of a sub-diagram: the largest of (a) the title's width plus `TITLE_PAD`
+  (0.6 u) on both sides, (b) the note block's width (§6.8) plus the pads, (c) `MIN_TRUNK` (3 u). The lateral
+  stacks sit beyond the trunk's corners and need no trunk length of their own. Text widths come from
+  `matplotlib.textpath.TextPath` at the style's font size, converted to u through `PX_PER_UNIT`, so they are
+  deterministic given the font (§9.3).
+- **Path lengths** (`pathlengths`, one per flow): `STUB` (1.3 u) for a terminal branch, 0.48 u for the stub of a
+  cross-link (the connector continues it), 0.8 u for a tail input that is a tree connection or a boundary supply
+  (the prototype's value), and for a tree connection's output at the parent the **connection length**: the width
+  of its label plus 2 × `TITLE_PAD`, at least `MIN_CONNECTION` (2 u), whether the label is drawn inside the band (a
+  band at least 1.1 line heights wide) or beside it (a narrower band; else the heat pump's electricity label
+  collides with both trunks). The placement search (§6.6) grows path lengths from these starts.
+- **The parameters per sub-diagram**, what `Layout` holds and `overall.layout.json` writes, are exactly the keys of
+  a prototype layout entry: `component`, `prior` and `connect` (the link label; `None` for a root), `at` for a root
+  that is not the first, `trunklength`, `title_offset`, `color`, and per flow `link` (or `residual`/`cut`),
+  `orientation`, `pathlength`, the label's candidate and shift; plus per connector its `turns` and label placement
+  (§6.7). The order of the sub-diagrams is the order they are added: a parent before its children (the library
+  requires `prior` to exist), the chain's tree first, then the further trees.
+
+### 6.6 Placing by search
+
+The library places every connected sub-diagram implicitly: the child's connecting tip is put on the parent's, so a
+child's position is the sum of the path lengths and band widths of everything before it on its tree, and an
+unconnected root sits at the origin until moved. Placement is therefore an iterative search over the parameters of
+§6.5, with the drawn result read back after each round:
+
+1. **Initial parameters** from §6.4 and §6.5: the sub-diagram list in tree order (the chain's tree, then the further
+   trees), the `flows` lists in the emitted side order, the orientations, the initial trunk and path lengths, the
+   `at` of each further tree at the nearest position of its quadrant: a `SOLAR_COLLECTOR` above and left of the node
    it feeds (the tank), so its head faces the tank's tail with a Z route; an `ELECTRICITY_METER` that is not the
    chain root (fuel systems) below the chain, its tail at the chain root's x; any other root below the chain, right
-   of the trees already placed there. The tree is first put at the nearest position of its quadrant and then slid
-   away from the chain in steps of `SLIDE` (0.5 u) until its bounding box, inflated by `TREE_MARGIN` (1.5 u), is
-   clear of every placed tree and every connector it needs (§6.7) routes. `MAX_SLIDES` (200) steps without
-   success is a fault.
-5. **Pins** (§6.10) fix a root's anchor or a node's axis before this step runs; the rest is computed around them.
+   of the trees already placed there. A pin (§6.10) replaces any of these before the first round.
+2. **Build**: `Sankey(ax, scale, unit=None, format="", tolerance=1e-6, gap, radius, shoulder, offset, head_angle)`,
+   one `add` per sub-diagram with `patchlabel=""` and empty labels, `finish()`, then the further trees moved by
+   their `at` (the prototype's `place_trees`: the whole tree's patch vertices, tips and text anchors shifted so the
+   anchor sub-diagram's centre lands on `at`), the stacked second input's seam flattened
+   (`flatten_parallel_connections`), the connectors routed (§6.7), the labels placed (§6.8), and the axes limits
+   set to the canvas (the library's `finish()` fits the axes to its own extents, which must not win).
+3. **Check**: `OverlapCheck` on the drawn patches' paths, the connector outlines and the label boxes, reporting the
+   findings of §3; 0 findings ends the search.
+4. **Repair**, one deterministic move per finding, applied in this order within a round, then back to step 2:
+   - a label on a label or a band: the label's next candidate (§6.8), no rebuild needed;
+   - a label with no clear candidate on a lateral branch: the branch's path length grows by `GROW` (0.5 u); on a
+     tree connection: the connection length grows by `GROW` (the child's whole subtree moves away);
+   - a band of one subtree on a band of another subtree that hangs from the same parent side: the deeper child in
+     slot rank gets its connection length raised until its subtree clears the other's extent along the axis plus
+     `NODE_MARGIN` (1 u) — siblings are staggered in depth, as the hand layouts staggered the household (5.6 u),
+     the battery (9.6 u) and the car battery (17.5 u) under the meter;
+   - a band of a further tree on anything, or a connector of it that found no route: the tree's `at` slides away
+     from the chain by `SLIDE` (0.5 u) along its quadrant's direction;
+   - a title wider than its trunk: the trunk length grows to fit (the title is wrapped to two lines first when it is
+     wider than 2 × `MAX_TITLE_WIDTH`, 6 u).
+   The flow order along a side is not a search move: it is fixed by §6.4 (the prototype's hand orderings all
+   follow those rules).
+5. **Bound**: `MAX_ROUNDS` (12) rounds; a round that changes no parameter and still has findings, or the twelfth
+   round, ends the search with the findings as faults (§6.12). The first try needed 2 to 5 rounds per system with
+   a comparable loop.
 
-### 6.7 Routing the cross-links (D4)
+The search is deterministic: the findings are sorted by (kind, first element name, second element name), the moves
+by that order, and no step draws a random number.
 
-For every cross-link, in order of band width descending:
+### 6.7 Connectors (D4)
 
-1. The source's stub leaves the side the role table gives (an output side), the target's stub enters its side (an
-   input side); both stubs are cut flat (§6.5).
+Every cross-link is drawn as the prototype's connector (`draw_sankey.py`: `flatten_output_head`,
+`flatten_input_notch`, `route_points`, `rounded_centre_line`, `band_outline`, `draw_connectors`), in order of band
+width descending:
+
+1. **Stubs.** The link is a flow at both ends with path length 0.48 u. The source's stub is an output on the side
+   the role table gives, the target's an input on its side. The source stub's arrowhead is cut flat (the head's tip
+   and shoulders moved onto the head's base line) and the target stub's notch filled (its inner point moved onto the
+   line of its outer corners), so the connector continues both stubs without a seam; the connector reaches
+   `connector_overlap` (0.096 u) into both stubs so its fill covers the cut ends. A tree connection that runs beside
+   a connector into the same side of the child (a generator's two inputs from one meter) is flattened the same way,
+   and the child's notch moved back by the shoulder, so the two bands enter side by side with one straight seam.
 2. **Shape**: *straight* when the two stubs are collinear and face each other; *L* when they are perpendicular and
    the lines through them meet in front of both; *Z* when they are parallel, face opposite directions and are
-   offset. Each shape is tested against the obstacle map; the first that is clear is taken.
+   offset. Each shape is tested against the obstacle map; the first that is clear is taken. `route_points` turns a
+   list of `turns` (where each segment ends, absolute or relative) into orthogonal corner points, refusing a route
+   whose first segment does not leave the source stub along its direction or whose last does not arrive along the
+   target's.
 3. **Grid search** otherwise: A* over a grid of `GRID` (0.25 u) on the canvas inflated by 3 u, orthogonal moves,
    cost = length + `BEND_COST` (3 u) per turn, a cell blocked when the band (its full width plus `CLEARANCE`,
-   0.3 u) would intersect a trunk, a branch, a placed connector or a placed label. The route is the cell path
-   simplified to its corners.
-4. **Corners** are rounded with `CONNECTOR_RADIUS` (0.64 u), reduced to the half of the shortest adjacent segment
-   when that is smaller, down to `MIN_RADIUS` (0.24 u); a route that leaves less is a fault, and the engine first
-   retries after sliding the target's tree (§6.6, step 4) one more step.
+   0.3 u) would intersect a drawn patch, a placed connector or a placed label. The route is the cell path
+   simplified to its corners, written as `turns`.
+4. **Corners** are rounded with `CONNECTOR_RADIUS` (0.64 u), reduced to half of the shortest adjacent segment when
+   that is smaller, down to `MIN_RADIUS` (0.24 u); a route that leaves less is a fault, and the search first retries
+   after sliding the target's tree (§6.6 step 4) one more step. The centre line is sampled at 16 points per corner,
+   the outline is the centre line offset by ± half the width, drawn as a `PathPatch` in the source sub-diagram's
+   colour with the two sides as thin dark lines (0.6 pt).
 5. **Parallel connectors** (two routes that share a corridor, such as the household's two heat flows to the
-   building): ordered so they never cross, the band nearer the trunk turning first; their stubs on a shared side are
-   stacked in that order.
+   building) never cross when both ends stack the bands in the same order: the L shapes then nest by themselves,
+   and no ordering step is needed beyond the stacking order of §6.4. The first try confirmed this on all twelve
+   systems.
 6. **A route that fails** after `MAX_ROUTE_ROUNDS` (3) slides of the involved trees is a fault that names the link
-   and both ends; the layout continues without that band, and the stubs are drawn with their labels (the
-   prototype's stub style), so the picture is still readable while the fault is visible.
-
-Connector polygons: the centre line is sampled at 16 points per corner; the outline is the centre line offset by
-± half the width (the prototype's `rounded_centre_line` and `band_outline`); the fill is the source node's colour,
-the two sides are drawn as thin dark lines.
+   and both ends; the layout continues without that band, and the stubs keep their arrowhead and notch and get
+   their labels (the prototype's stub style), so the picture is still readable while the fault is visible.
+7. **Routes and labels** (open item of the first try): a label cannot move a route, and in the first try routes did
+   not avoid labels; in `dynamic_components` six hairline labels of two tiny batteries end on a discharge route
+   that loops around the second battery, 3 overlaps that the search cannot repair. The obstacle map of step 3
+   therefore includes the labels placed so far, and a connector is re-routed in the round after a label of another
+   node was placed on it; until that lands, that file is the one known failure (§6.14).
 
 ### 6.8 Labels and the note block
 
-Every flow has a label of two lines, name and value (`format_kwh`: MWh with one decimal from 10 MWh, whole kWh
+The library's labels are disabled (`labels=[""] * n`, the `text` of each sub-diagram hidden); the engine places its
+own. Every flow has a label of two lines, name and value (`format_kwh`: MWh with one decimal from 10 MWh, whole kWh
 from 10 kWh, one decimal below; thousands separators; no sign). A loop's band carries a third line with its
-temperatures (§7.1). Every drawn node has a title (bold, inside the trunk) and a **note block** under the title: the
-metric lines §7.1 gives its role, each one value with its unit and, when it has a warning, the marker ⚠n. The note
-block is reserved before placement: its width counts in the trunk length (§6.5) and its box is an obstacle, so
-the label pass never has to move it.
+temperatures (§7.1). Every sub-diagram has a title (bold, at the trunk's centre, the library's `text` position,
+plus `title_offset`) and a **note block** under the title: the metric lines §7.1 gives its role, each one value with
+its unit and, when it has a warning, the marker ⚠n. The note block is reserved before placement: its width counts
+in the trunk length (§6.5) and its box is an obstacle, so the search never has to move it.
 
 **Candidates** per label, tried in this order:
 
-- terminal branch: beyond the arrow tip (inputs: beyond the notch), anchored away from the arrow (the prototype's
-  rule); beside the stub on either side; the same with the name wrapped to two lines (`textwrap` at 18 characters);
+- terminal branch: beyond the arrow tip, on the side facing away from the trunk (the prototype's rule: the label
+  anchored so it never covers the arrow; an input's label moved out by its notch depth, since the library's tip of
+  an input is the notch's inner point); beside the stub on either side; the same with the name wrapped to two lines
+  (`textwrap` at 18 characters);
 - tree connection: inside the band (white, bold) when the band is at least 1.1 line heights wide; else above the
   band at its middle, below it, at its quarter points;
 - connector: above, below, left or right of each segment's middle, from the longest segment to the shortest;
-- node title and note block: fixed (no candidates); a title wider than the trunk by more than 2 × `TITLE_PAD` is
-  wrapped to two lines before the trunk length is computed.
+- title and note block: fixed (no candidates); a title wider than `MAX_TITLE_WIDTH` is wrapped to two lines before
+  the trunk length is computed.
 
-**Scoring** of a candidate: 1,000 per overlap with a placed label, a trunk, a branch or a connector band (a label
-inside its own band is exempt from that band), 1,000 when it leaves the canvas, plus its distance from the first
+**Scoring** of a candidate: 1,000 per overlap with a placed label, a drawn patch or a connector band (a label inside
+its own band is exempt from that band), 1,000 when it leaves the canvas, plus its distance from the first
 candidate in u. **Order**: labels of the widest bands first, then the rest by width descending. **Repair**: after
-one greedy pass, every label that still overlaps is re-placed over all its candidates with the others fixed, twice.
-**Growth**: labels that still overlap grow the stub of their flow and the trunk of their node by `GROW` (0.5 u)
-and the layout is recomputed from §6.5; `MAX_GROWTH_ROUNDS` (6) rounds without 0 overlaps is a fault that lists
-the pairs. The overlap checker is the prototype's `report_overlaps`, made a class `OverlapCheck` with the four
-findings of §3 as typed records.
+one greedy pass, every label that still overlaps is re-placed over all its candidates with the others fixed, twice;
+what remains goes to the search's repair moves (§6.6 step 4). The overlap checker is the prototype's
+`report_overlaps`, made a class `OverlapCheck` with the five findings of §3 as typed records.
 
 ### 6.9 Canvas, panel and caption
 
-The canvas is the bounding box of every polygon and label plus `CANVAS_MARGIN` (1 u). The figure is 26 in wide at
-110 dpi; its height follows from the canvas's aspect ratio plus a title line (0.55 in), the panel (§8.3, its height
-from its rows) and the caption (0.7 in). The caption reads: the data source ("yearly energy from the run's energy
-balance, overall view"), the scale ("band width: 1 u = 4 MWh"), the loop-temperature definition in one line, the
-marker legend, the PV note of D3, the balance verdict, the † note when a band is inflated, and a second line with
-the run's key results from the KPIs (grid import and export, self-consumption and self-sufficiency rates, heat
-delivered to the rooms or heat removed by cooling).
+The canvas is the bounding box of every patch, connector and label plus `CANVAS_MARGIN` (1 u), set as the axes
+limits after `finish()` (the prototype's `canvas.xlim/ylim`, now computed). The figure's width is the canvas's
+width at `PX_PER_UNIT` (30 px/u, 110 dpi); its height is the canvas's height at the same scale plus a title line
+(0.55 in), the panel (§8.3, its height from its rows) and the caption (0.7 in). The caption reads: the data source
+("yearly energy from the run's energy balance, overall view"), the scale ("band width: 1 u = 4 MWh"), the
+loop-temperature definition in one line, the marker legend, the PV note of D3, the balance verdict, the † note when
+a band is inflated, and a second line with the run's key results from the KPIs (grid import and export,
+self-consumption and self-sufficiency rates, heat delivered to the rooms or heat removed by cooling).
 
 ### 6.10 The pin file
 
-An optional YAML file, `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file (found through the
-realized record's source path when the run came from a YAML, else none; the CLI takes `--pins`), schema
-`hisim.sankey_pins/1`:
+An optional YAML file, `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file (D16; found through
+the realized record's source path when the run came from a YAML, else none; the CLI takes `--pins`), schema
+`hisim.sankey_pins/1`. Its keys are the prototype's layout keys (`layouts/<stem>.yaml`), reduced to what differs
+from the computed layout:
 
 ```yaml
 schema: hisim.sankey_pins/1
 canvas: {kwh_per_unit: 4000}                       # fixes the scale
-nodes:
-  SolarThermalSystem: {at: [3.5, 10.3]}            # a root's anchor in u; its whole tree moves with it
-  Battery: {axis: S}                               # overrides the role's axis
-  ElectricityMeter: {trunk_length: 9.6}            # overrides the computed length
-flows:
-  Building.GainsLostThroughWindowsInWatt: {side: E, stub: 0.48, label: beside_below}
-  SolarThermalSystem.ElectricityConsumptionOutput: {turns: ["+2.5", -9.8, 4.6]}   # a connector's corners
-labels:
-  Battery.StoredEnergyIncreaseInWattHour: {shift: [0.3, -0.5], lines: 2}
+diagrams:
+  - component: SolarThermalSystem
+    at: [3.5, 10.3]                                # a further tree's anchor in u; its whole tree moves with it
+    trunklength: 3.0
+    title_offset: [-0.15, 0.0]
+    flows:
+      - {link: SolarThermalSystem.SolarPumpHeatLoss, orientation: 1, pathlength: 0.6, label: [0.2, -0.3], ha: left}
+  - component: Battery
+    flows:
+      - {link: Battery.StoredEnergyIncreaseInWattHour, pathlength: 0.6, lines: 2}
+connectors:
+  - {link: SolarThermalSystem.ElectricityConsumptionOutput, turns: ["+2.5", -9.8, 4.6], label: {segment: 2, side: right, at: 0.85}}
 ```
 
-A pin replaces the engine's choice for that one element in the step where the choice is made; everything else is
+A pin replaces the engine's value for that one parameter before the first round of §6.6; everything else is
 computed around it, and the validation of §6.12 applies unchanged (a pin that causes an overlap is a fault like
-any other). A pin naming a node or flow the run does not have is a fault. The applied pins are listed in
-`overall.layout.json`. The pin file is the escape hatch for the hard cases of §6.14; no energy-system file in the
-repository ships one in v1 (a showcase figure may add one later, under the acceptance test).
+any other; the search may grow a pinned path length no further). A pin naming a component, flow or connector the
+run does not have, or an orientation the frame rule of §6.4 forbids, is a fault. The applied pins are listed in
+`overall.layout.json`, which is itself a complete pin file: a person copies it, deletes what the engine should keep
+computing, and keeps the rest. The pin file is the escape hatch for the hard cases of §6.14; no energy-system file
+in the repository ships one in v1.
 
-### 6.11 Rendering
+### 6.11 Rendering, and the library's quirks
 
-The renderer takes a `Layout` and draws it with matplotlib's `Agg` backend into one `Figure`: trunk polygons
-(`PathPatch`, the node's colour, dark outline 0.6 pt), branch and connector polygons, labels (`Text`), the note
-blocks, the markers (⚠n in bold, red `#c62828` for errors, orange `#d35400` for plausibility), the residual style
-(§6.3), the unmet stub (§8.1), the panel and the caption (§8.3), then saves PNG, PDF and SVG. Fonts: DejaVu Sans,
-matplotlib's bundled default, pinned in an `rc_context`, so text widths are the same on every machine. Colours and
-titles per component class and display names per output come from one style table,
-`hisim/postprocessing/energy_balance/figure/sankey_style.yaml` (the prototype's `_style.yaml`: `kinds`,
-`port_names`); a class without an entry takes its role's colour and its instance name; two instances of one class
-get the instance name appended to the title. Class-keyed colours and names are presentation, not a layout
-dependence; the layout engine reads roles only.
+The renderer takes a `Layout`, builds the `Sankey` as §6.6 step 2 describes on an `Agg` figure with equal aspect,
+draws the connectors, the residual styles (§6.3), the labels, the note blocks, the markers (⚠n in bold, red
+`#c62828` for errors, orange `#d35400` for plausibility), the unmet stub (§8.1), the panel and the caption (§8.3),
+then saves PNG, PDF and SVG (D18). Fonts: DejaVu Sans, matplotlib's bundled default, pinned in an `rc_context`, so
+text widths are the same on every machine. Colours and titles come from one style table,
+`hisim/postprocessing/energy_balance/figure/sankey_style.yaml` (the prototype's `_style.yaml`), keyed by component
+class (`kinds`), with a title and a colour per role as the fallback (meters have no class in the balance report, and
+a composed file names its meter `grid-ElectricityMeter`, so a key by instance name breaks); a class without an
+entry and a role without one take the instance name. Two instances of one class get the instance name appended to
+the title. Display names of flows are keyed `<class>.<port>` (`port_names`), never by the instance's port label,
+with `SankeyDrawing.words` as the fallback; a storage change has an `{in, out}` pair. Class-keyed colours and names
+are presentation, not a layout dependence; the layout engine reads roles only.
+
+The library's behaviour the engine works around, each recorded by the prototype (its README and `draw_sankey.py`):
+
+| Quirk (`matplotlib.sankey`, 3.10.9) | What the engine does |
+|---|---|
+| `finish()` fits the axes to the sub-diagrams' extents and resets the limits | the canvas limits are set after `finish()` (§6.9) |
+| labels are centred on the arrow tips, with no collision handling | labels disabled; the engine's own labels and candidates (§6.8) |
+| a connected sub-diagram ignores `rotation`: its frame comes from the connection | the axis is chosen through the connecting orientation (§6.4 rule 2); `rotation` is used for roots only |
+| flows are stacked along a side by list position, in the four orders of §6.4 | the `flows` list is emitted from the wanted side orders |
+| one connection per sub-diagram (`prior`/`connect`) | every other link is a connector (§6.7) |
+| one fill per sub-diagram | a connector takes its source's colour; a residual branch gets a second patch (§6.3) |
+| a flow below `tolerance` is not drawn and cannot connect; connected flows must match within `tolerance` | the minimum band is applied at both ends of a link (§6.5) |
+| a sub-diagram whose flows do not sum to zero is drawn with a smoothed taper and an info log | accepted for inflated bands; a real imbalance is a residual flow (§6.3) |
+| an unconnected sub-diagram is placed at the origin | moved by `at` after `finish()` (§6.6 step 2) |
+| an input's tip is the notch's inner point | input labels moved out by the notch depth; a connector fills the notch (§6.7) |
 
 ### 6.12 Validation: what fails loudly
 
@@ -544,18 +739,18 @@ the acceptance tests (§9) fail on any fault. Faults:
 
 - a drawn node without a role (cannot happen by construction; `CONVERTER` is the fallback) or a chain that finds
   no root;
-- a flow of the view that no node placed, or placed twice;
+- a flow of the view that no sub-diagram placed, or placed twice; a connection the library refuses (its `ValueError`
+  on a mismatch or a flow below tolerance, caught and reported with the link);
 - a node whose flows do not balance within `RESIDUAL_KWH` and that has no residual flow (cannot happen after
   §6.1 step 4; checked anyway);
-- a tree that found no clear position (`MAX_SLIDES`), a connector that found no route (`MAX_ROUTE_ROUNDS`), a
-  corner without room for `MIN_RADIUS`;
-- an overlap after `MAX_GROWTH_ROUNDS`, listed pair by pair;
-- the minimum-band passes not converging (§6.5);
-- a pin naming an unknown element or an unknown key;
+- a child whose wanted axis is opposite to its parent's flow direction (§6.4 rule 2);
+- findings left after `MAX_ROUNDS` of the search (§6.6), listed pair by pair; a connector without a route after
+  `MAX_ROUTE_ROUNDS`; a corner without room for `MIN_RADIUS`;
+- a pin naming an unknown element, an unknown key or a forbidden orientation;
 - a metric whose inputs the run lacks is no fault: the line is left out (§7.1).
 
-Whether a fault fails the run is Q3; the recommendation is that the run finishes and the fault is a logged error
-plus the file, and that the tests fail.
+A fault never fails the run (D15): the run finishes, the fault is a logged error plus the file, and the tests
+fail.
 
 ### 6.13 Code layout
 
@@ -565,45 +760,49 @@ hisim/postprocessing/energy_balance/
   figure/
     __init__.py            draw_overall(inputs, pins) -> Layout; the entry the post-processing and the CLI call
     inputs.py              SankeyInputs.from_result_directory / from_run
-    graph.py               the drawn graph (§6.1), roles and the main chain (§6.2), residuals (§6.3)
-    layout.py              Layout, the orientation table (§6.4), sizes (§6.5), tree placement (§6.6)
-    routing.py             shapes, the grid search, corners (§6.7)
-    labels.py              candidates, scoring, OverlapCheck (§6.8)
+    graph.py               the drawn graph (§6.1), roles and the main chain (§6.2), residuals (§6.3), the trees
+    orientation.py         the role table and the context rules (§6.4), sides into orientations and list order
+    parameters.py          Layout: the matplotlib.sankey parameters per sub-diagram and connector (§6.5), its JSON
+    search.py              the placement search (§6.6): build, check, repair, bound
+    connectors.py          stubs, shapes, the grid search, corners, the connector patches (§6.7)
+    labels.py              text sizes from TextPath, candidates, scoring, OverlapCheck (§6.8)
     metrics.py             the metric formulas (§7.1) and the plausibility evaluation (§7.3)
     warnings.py            the warning entries, their order and numbering (§8)
-    render.py              matplotlib drawing (§6.11), the panel and the caption (§8.3)
+    render.py              the Sankey build, finish, place_trees, the panel and the caption, PNG/PDF/SVG (§6.11)
     pins.py                the pin file (§6.10)
-    sankey_style.yaml      colours, titles, display names, the layout constants that are style, the panel rows
+    sankey_style.yaml      colours, titles, display names, the panel rows
   plausibility_ranges.yaml the range table (§7.3)
 ```
 
 Constants live on the classes they belong to (`system_docs/coding_style.md` §4): the layout constants of §6.5 to
 §6.8 on `LayoutConstants`, a frozen data class the style file may override field by field. `hisim/cli.py` gains
-the `energy-system sankey` command (§4.4). No module outside `figure/` imports matplotlib for this feature.
+the `energy-system sankey` command (§4.4). No module outside `figure/` imports `matplotlib.sankey` for this
+feature.
 
 ### 6.14 Hard cases and what v1 does
 
 | Case | v1 |
 |---|---|
-| several generators in parallel (hybrid heat pump plus boiler feeding one buffer) | the generator with the larger heat output into the buffer is on the chain; the other hangs from its own meter or, without one, below the chain as a further tree, its heat routed into the buffer's S side by the router. Drawn by the generic rules, not exercised by any energy-system file today; a pin file is the escape hatch |
-| very unequal sizes (a 16 kWh pump hairline beside a 21 MWh export band) | the minimum band (D10) and the label candidates; the prototype's robustness test broke labels, not routes, at +50 %, which the label pass now re-solves per run |
-| storages whose change flips sign between runs | the side stays, the arrow direction and the display name flip (§6.4) |
-| systems without PV (`simple_air_conditioner_household_building_sizer`) | the meter is a root with its grid import at the tail (W); the role table's "from the PV when there is one" falls through |
-| cooling-only systems | the chain runs meter → household → building; the cooler is the building's continuation child; the ambient sink is its head |
+| several generators in parallel (hybrid heat pump plus boiler feeding one buffer) | the generator with the larger heat output into the buffer is on the chain; the other hangs from its own meter or, without one, below the chain as a further tree, its heat routed into the buffer's S side by a connector. Drawn by the generic rules, not exercised by any energy-system file today; a pin file is the escape hatch |
+| very unequal sizes (a 16 kWh pump hairline beside a 21 MWh export band) | the minimum band (D10) and the label candidates; the prototype's robustness test broke labels, not routes, at +50 %, which the search now re-solves per run |
+| storages whose change flips sign between runs | the side stays, the arrow direction and the display name flip (§6.4 rule 5) |
+| systems without PV (`simple_air_conditioner_household_building_sizer`) | the meter is a root with its grid import at the tail (W); the role table's "from the source upstream when there is one" falls through |
+| cooling-only systems | the chain runs meter → household → building; the cooler is the building's continuation child; the ambient sink is its head. In a January week the cooler has no flow and drops out (empty flows) |
 | a cooling flow of a heat pump into a buffer (hisim-energy-sankeys-9uoo.17) | a negative loop heat turns the edge round: it is drawn as a `COOLING` input of the generator from the buffer, side S; untested until that bead lands |
-| systems without a building (`electrolyzer_with_renewables`, `dynamic_components`) | the fallback chain of §6.2 from the largest meter; every node a `CONVERTER` or a meter; acceptance requires 0 faults, not a reviewed picture |
+| systems without a building (`electrolyzer_with_renewables`, `dynamic_components`) | the fallback chain of §6.2 from the largest meter; every node a `CONVERTER` or a meter; acceptance requires 0 faults, not a reviewed picture. The first try laid `electrolyzer_with_renewables` out cleanly (meter → electrolyzer → hydrogen meter, the wind transformer upstream of the meter); `dynamic_components` kept 3 label overlaps (§6.7 rule 7) and is the one open item of PR 5 |
+| a storage without a discharge link in the run's period | it is not an `ELECTRIC_STORAGE` by §6.2 and falls to `CONVERTER`; the picture is still correct, the role only steers placement |
 | systems with nothing declared (`simple_system_setup_one`, `_two`: verdict `nothing_declared`) | no figure; `export_sankeys` logs that there is nothing to draw; not a fault |
 | several buildings, multi-family or district systems | out of scope for v1: the chain is the largest building's, the other buildings hang as children of their parents by the generic rules; no acceptance test; the pin file is the escape hatch. A rule set for siblings on one row is a later bead |
-| the per-carrier views as matplotlib figures | not in v1 (Q1) |
+| the per-carrier views as matplotlib figures | not in v1 (D17) |
 
 ## 7. Metrics and plausibility
 
 ### 7.1 The metric definitions
 
 Every metric is a static function of `Metrics` with direct tests; its inputs are the drawn flows of its node (in
-kWh, by port name), the statistics of §5 and the KPIs. A metric whose input the run lacks (no kWp without a
-realized record; no occupants without the tag) is left out, never estimated. Notation: P(x) is the yearly kWh of
-the node's output port x, C(x) of its input x; "heat out" is the sum of the node's heat productions to drawn nodes.
+kWh, by port name), the statistics of §5 and the KPIs. A metric whose input the run lacks (no kWp without a tag; no
+occupants without the tag) is left out, never estimated. Notation: P(x) is the yearly kWh of the node's output port
+x, C(x) of its input x; "heat out" is the sum of the node's heat productions to drawn nodes.
 
 | Metric (unit) | Role | Formula | Shown |
 |---|---|---|---|
@@ -611,12 +810,13 @@ the node's output port x, C(x) of its input x; "heat out" is the sum of the node
 | ambient share (%) | the same | ambient heat in / heat out × 100 | with the SPF |
 | generator efficiency (%) | `GENERATOR` consuming a fuel or `DISTRICT_HEAT`, or `ELECTRICITY` without `AMBIENT_HEAT` | heat out / fuel (or district heat, or electricity) in × 100 | note block; left out when it is 100.0 % by construction (the electric heater) |
 | collector efficiency (%) | `SOLAR_COLLECTOR` | heat out / solar in × 100 | note block |
-| battery round trip, AC to AC (%) | `ELECTRIC_STORAGE` | discharge to the meter / charge from the meter × 100 (the run's net storage change is ignored; it is below 0.1 % of the charge over a year) | note block |
-| equivalent full cycles (1/a) | `ELECTRIC_STORAGE`, `VEHICLE_STORAGE` | `statistics.states[..].equivalent_full_cycles`, scaled to a year by 8,760 h / run hours | note block |
-| specific yield (kWh/kWp) | `PV` | `specific_yield_in_kilowatt_hour_per_kilowatt` of the `ELECTRIC_OUTPUT_POWER` tag, scaled to a year | note block, with the kWp |
-| specific heat to the rooms (kWh/(m²a)) | `BUILDING` | heat received from the `DISTRIBUTION` or `GENERATOR` / KPI "Conditioned floor area", scaled to a year | note block |
+| battery round trip, AC to AC (%) | `ELECTRIC_STORAGE` | discharge to the meter / (charge from the meter + stored energy released − energy stored) × 100: the storage change counts, since over a January week it is not small (without it the first try read 194 %) | note block |
+| equivalent full cycles (1/a) | `ELECTRIC_STORAGE`, `VEHICLE_STORAGE` | `statistics.states[..].equivalent_full_cycles` (see the scaling rule below) | note block |
+| specific yield (kWh/kWp) | `PV` | `specific_yield_in_kilowatt_hour_per_kilowatt` of the `ELECTRIC_OUTPUT_POWER` tag | note block, with the kWp; a value, never judged (D20) |
+| PV performance ratio (–) | `PV` | specific AC yield (kWh/kWp) / irradiation on the module plane (kWh/m², the PV's `SOLAR` consumption over the run divided by `module_area_in_square_metre` of its tag, §5.2), the standard test irradiance of 1 kW/m² making the ratio dimensionless: PR = E_AC · 1 kW/m² · A / (P_rated · E_sun). Period-independent, location-independent (D20) | judged against the table (§7.3); in the note block only when it has a warning |
+| specific heat to the rooms (kWh/(m²a)) | `BUILDING` | heat received from the `DISTRIBUTION` or `GENERATOR` / KPI "Conditioned floor area" | note block |
 | internal gains (Wh/(m²d)) | `HOUSEHOLD` | (appliance heat + body heat to the building) / floor area / run days × 1,000 | note block |
-| hot water per person (kWh/(person·a)) | `HOT_WATER_TANK` | heat to the taps / `mean_occupants`, scaled to a year | note block |
+| hot water per person (kWh/(person·a)) | `HOT_WATER_TANK` | heat to the taps / `mean_occupants` | note block |
 | energy efficiency ratio (–) | `COOLER` | heat removed / electricity in | note block |
 | substation efficiency (%) | `GENERATOR` consuming `DISTRICT_HEAT` | as generator efficiency | note block |
 | loop temperatures (°C) | every link that is a loop | `supply_mean_flow_weighted` / `return_mean_flow_weighted` · "max" `supply_p99_flow_weighted`; a fourth line "n h above the d °C design supply" when the loop has a limit, red when n > 0 | on the band |
@@ -624,8 +824,12 @@ the node's output port x, C(x) of its input x; "heat out" is the sum of the node
 | comfort (°C, K·h) | `BUILDING` | KPIs "Minimum building indoor air temperature reached" and "Degree-hours … more than 1.0 K below its heating set temperature" | note block: "min. air 18.3 °C · 1.3 K·h below" |
 | unmet hot water (kWh) | `HOT_WATER_TANK` | KPI "Unmet DHW heat demand" | a red stub (§8.1) |
 
-Scaling to a year uses the run's hours from the balance report (`timesteps × seconds_per_timestep / 3600`), so a
-week's figure is labelled per year and reads like the full year's; the caption states the run's period.
+**No extrapolation.** A specific value per year (kWh/kWp, kWh/(m²a), kWh/(person·a), cycles per year) is given
+per year only when the run covers a year (`timesteps × seconds_per_timestep` ≥ 8,760 h within one step);
+otherwise the value is stated for the run's period and its unit says so ("kWh/kWp over the week"), and no range
+of §7.3 applies to it. The first try scaled a January week to a year and read 193 kWh/kWp and 233 kWh/(m²a), which
+misleads. Ratios (SPF, efficiencies, round trip, performance ratio) are period-independent and are judged in every
+run.
 
 ### 7.2 Where a number comes from
 
@@ -657,13 +861,13 @@ ranges:
       where: "press release #30, 2025; https://www.ise.fraunhofer.de/de/presse-und-medien/presseinformationen/2025/..."
     checked: {by: "<name>", on: 2026-11-xx, against: "the press release and the final report's table of the measured SPFs"}
     estimate: false
-  - id: hot_water_per_person
-    metric: hot_water_per_person
-    applies_to: {role: HOT_WATER_TANK}
-    low: 500
-    high: 1000
-    unit: "kWh/(person a)"
-    basis: "typical German per-person values; no exact source found"
+  - id: pv_performance_ratio_modern_systems
+    metric: pv_performance_ratio
+    applies_to: {role: PV}
+    low: 0.75
+    high: 0.88
+    unit: "-"
+    basis: "typical performance ratios of recent grid-connected residential systems; no source prepared yet"
     estimate: true
 ```
 
@@ -681,13 +885,20 @@ Rules, each enforced by a `base` test of the table:
 The first version of the table ships with PR 3 and holds: the heat pump SPF (Fraunhofer ISE, to be checked), the
 battery AC-to-AC round trip derived from HTW Berlin's Stromspeicher-Inspektion 2024 (the derivation of the trial:
 AC2BAT × battery × BAT2AC for the worst and the best values with AC2BAT assumed in the BAT2AC range, Bild 21 p. 25
-and Bild 24 pp. 26–27; marked `estimate: true` until a person checks the figures), the PV specific yield (PVGIS
-5.2 for Aachen, E_y ± 2 SD; Q8: it is site-specific, so it applies only when the run's weather location is Aachen
-and is otherwise left out), the building's specific heat (TABULA ±20 %, estimate), the internal gains (DIN V
-18599-10, estimate until checked), the hot water per person (estimate), the battery cycles (estimate), the comfort
-criterion (own criterion after EN 16798-1 category II, estimate), and the tank thresholds 40 °C (estimate) and
-60 °C (DVGW W 551, to be checked). Only a person with the original turns an estimate into a checked range; an
-agent never writes `checked`.
+and Bild 24 pp. 26–27; marked `estimate: true` until a person checks the figures), the PV performance ratio (D20:
+the entry above, an estimate until a source for the performance ratio of recent residential systems is prepared
+and checked; the context sentence names the run's irradiation on the module plane and its specific yield), the
+building's specific heat (TABULA ±20 %, estimate), the internal gains (DIN V 18599-10, estimate until checked), the
+hot water per person (estimate), the battery cycles (estimate), the comfort criterion (own criterion after
+EN 16798-1 category II, estimate), and the tank thresholds 40 °C (estimate) and 60 °C (DVGW W 551, to be checked).
+No PVGIS value and no per-location table enter the repository.
+
+**How a range gets checked (D21).** For each entry, in the order Fraunhofer ISE SPF, HTW battery efficiencies,
+DIN V 18599-10 internal gains, DVGW W 551, PV performance ratio: an agent fetches the original, quotes the exact
+passage with table and page into the PR description beside the entry's `low`, `high` and `basis`; the owner reads
+the quotes against the entry and writes the `checked` block (`by`, `on`, `against`) in that PR. An agent never
+writes `checked`; the `base` test of the table cannot tell who wrote it, so the rule is a review rule, stated here
+and in the table's header comment.
 
 ## 8. Warnings and the panel
 
@@ -703,7 +914,7 @@ Errors (red), in this order within a component:
 4. a loop ran above its design supply: `hours_above_design_supply` > 0.
 
 Plausibility warnings (orange): a metric of §7.1 outside its applicable range of §7.3. A metric without a range
-gets no marker. The heat pump's peak thermal power against its rating is shown in the panel only (Q7).
+gets no marker. The heat pump's peak thermal power against its rating is shown in the panel only (D19).
 
 ### 8.2 The warnings box (D6)
 
@@ -726,7 +937,7 @@ in this order with these rows:
 
 | Section | Rows (left out when the input is absent) |
 |---|---|
-| per `GENERATOR` with a `THERMAL_OUTPUT_POWER` tag | runtime (h), starts, full-load hours, max. thermal power / rated (kW, and % of rated), max. on the coldest day (date, daily mean outdoor °C) |
+| per `GENERATOR` with a `THERMAL_OUTPUT_POWER` tag | runtime (h), starts, full-load hours, max. thermal power / rated (kW, and % of rated; D19), max. on the coldest day (date, daily mean outdoor °C) |
 | Grid and battery | peak grid import / export (KPIs "Max power from grid", "Max power to grid"), battery capacity, equivalent full cycles, mean state of charge |
 | Storages and loops | buffer temperature range, hot-water tank range, unmet hot water, each loop's design supply where it has one |
 | Building and comfort | conditioned floor area, TABULA reference need (KPI), lowest / highest indoor air temperature, K·h above 26 °C, K·h below the set point, household profile |
@@ -742,24 +953,29 @@ Every static function of §5, §6 and §7 has direct tests on hand-built inputs 
 test (`system_docs/coding_style.md` §1, `system_docs/testing.md` §4): the flow-weighted mean and percentile on
 five-step arrays; each statistic of the tag roles; the drawn graph from a ten-link view (loss folding, the solar
 cut, the empty flow, the synthetic residual); every role of §6.2 from a minimal node; the chain of each family
-(heat pump, gas, district heat, electric heating, air conditioner, no building); the tree with a tie; the scale
-series; the minimum-band passes; the trunk length from a title and two lateral flows; each connector shape and a
-grid route around one obstacle; corner radius reduction and the fault; label candidates and the scoring; the
-overlap checker on two boxes and a box over a band; every metric with a known answer; the range table's rules on
+(heat pump, gas, district heat, electric heating, air conditioner, no building); the tree with a tie; the
+connecting orientation from axis and parent direction for every case of §6.4 rule 2, including the forbidden one;
+each of the four side orders of §6.4 read back from the tips of a two-flow sub-diagram the library drew; the scale
+series; the minimum band at both ends of a link; the trunk length from a title and a note block; each connector
+shape and a grid route around one obstacle; the flattened head and notch; corner radius reduction and the fault;
+label candidates and the scoring; the overlap checker on two boxes, a box over a band and two bands; one repair
+move of each kind of §6.6 step 4 on a two-node layout; every metric with a known answer; the range table's rules on
 good and bad entries; the warning order and numbering; the pin file's application and its faults; the caption.
 
-### 9.2 Layout tests on recorded inputs (`base`)
+### 9.2 Layout tests on recorded inputs (`base`, measured)
 
 `tests/sankey_inputs/<stem>/` holds the four input files of §4.1 of a full-year 900 s run of each of the twelve
-building-sizer systems (about 50 to 150 KB each; from the balance report only the keys the renderer reads, to
-keep them small), refreshed by `scripts/refresh_sankey_inputs.py <result dir>…` and stamped with the schema and
-the commit. `tests/test_sankey_layout_recorded.py` runs the layout engine (not the PNG) on each and asserts:
-0 faults, 0 overlaps; and the **structure** against `tests/sankey_inputs/<stem>/structure.yaml`, which records the
-hand layout's chain, every node's parent, axis and slot, and every cross-link's shape class (straight, L, Z,
-routed): "the twelve building-sizer systems match the hand layouts' structure (same tree and orientations, not
-pixel-equal)". A `base` test checks each recording's schema against `REPORT_SCHEMA`, so a schema bump without a
-refresh fails. The layout of one system takes well under two seconds (text extents through `TextPath`, no canvas);
-the module fixture loads the inputs once.
+building-sizer systems (the first try's `scripts/refresh_sankey_inputs.py` records them trimmed, 344 KB for the
+twelve), stamped with the schema and the commit. `tests/test_sankey_layout_recorded.py` runs the layout engine on
+each (the search builds the `Sankey` on an `Agg` figure; no file is saved) and asserts: 0 faults, 0 overlaps; and
+the **structure** against `tests/sankey_inputs/<stem>/structure.yaml`, which records the hand layout's chain, every
+sub-diagram's parent, axis and connecting orientation, every flow's side, and every cross-link's shape class
+(straight, L, Z, routed): "the twelve building-sizer systems match the hand layouts' structure (same tree and
+orientations, not pixel-equal)". A `base` test checks each recording's schema against `REPORT_SCHEMA`, so a schema
+bump without a refresh fails. The first try's layout took 0.6 to 1.5 s per system without the library; with the
+library built per round the search is expected at 1 to 4 s per system, inside the `base` budget of a few seconds
+(`system_docs/testing.md` §3); the module fixture loads the inputs once, and a system that measures above the
+budget moves its test to `extendedbase` in the same PR.
 
 ### 9.3 Determinism (`base`)
 
@@ -783,74 +999,49 @@ Every flat twin under `energy_systems/*.energy_system.yaml` (grouped and compose
 are covered by one grouped file as a smoke case) renders with 0 faults over a full year. Full-year renders of
 every system take too long for a pull request; the sweep runs where the full years already run: the full-year
 golden workflow (`golden-year.yml`) sets `PLOT_SANKEY` in its parameter set once PR 7 lands, and a layout fault
-there fails the job, as a failing balance does. Until then PR 4's description reports the sweep run locally (the
-command of §4.4 over the twelve recorded result directories plus the non-building-sizer files for a week).
+there fails the job, as a failing balance does. Until then PR 5's description reports the sweep run locally (the
+command of §4.4 over the twelve recorded result directories plus one-week runs of the non-building-sizer files, as
+the first try did with `scripts/sweep.py`).
 
-### 9.6 What the acceptance test does not check
+### 9.6 The visual acceptance
 
-Picture quality beyond 0 overlaps: the owner reviews one figure per family on PR 5 and PR 6 (the figures attached
-to the PR descriptions), as D4 of the complete Sankey spec asked for the arrow renderer.
+0 overlaps is necessary, not sufficient. The twelve hand figures of the prototype (`figures/*.png`) are the visual
+reference for the look: quarter-circle bends where a branch leaves or joins a trunk, notches on inputs, arrowheads
+on outputs, pointed trunk ends on the tree connections, connectors that continue their stubs without a seam, and
+hairlines that keep a visible bend. PR 4's figures of the twelve recordings are put beside the hand figures
+(`comparisons/<stem>.png`, as the first try did) and reviewed by the owner before PR 5's layouts are judged; the
+owner reviews one figure per family again on PR 5 and the heat-pump figure against the trial's on PR 6.
 
 ## 10. Pull requests
 
 Stacked, each small, each closing its bead in its own branch (AGENTS.md). Bead ids are the children of
-hisim-energy-sankeys-9uoo listed in §12.
+hisim-energy-sankeys-9uoo listed in §12. The first try on branch `sankey-mpl-auto-layout` built PRs 4 and 5 in
+their essentials with its own band renderer; PRs 4 and 5 are cut from that branch, keep its `inputs.py`,
+`graph.py`, `orientation.py`, `routing.py`, `labels.py`, `metrics.py`, the CLI, the recording script and the
+tests, and switch the engine's output to the `matplotlib.sankey` parameters of §6.5 with the search of §6.6 in place
+of its placement pass and the library's drawing in place of its `render.py` polygons.
 
 | PR | Bead | Scope | Done when |
 |---|---|---|---|
 | 1 | hisim-sankey-mpl-loop-statistics-3f1a (P1: every later PR reads it) | §5.1: `statistics.py` with `LoopStatistics`, `statistics.loops` in the report, schema 6, `FluidLoop.design_supply_temperature_in_celsius` set by `HeatDistribution` | `tests/test_energy_balance.py` pins the new keys on a hand-built table; the week of `test_energy_balance_storages.py` shows a loop entry with the floor heating's 35 °C limit; no result or KPI changes |
-| 2 | hisim-sankey-mpl-state-statistics-7c2e | §5.2: `StatisticRole`, `StatisticTag`, `add_output(statistic=)`, `StateStatistics`, the tags on the heat pump, boilers, substation, electric heater, PV, both batteries, both storages, the building, the weather and the occupancy; schema 7 | every statistic tested directly; the heat-pump twin's week writes every state of the table; a wrong-unit tag is refused |
-| 3 | hisim-sankey-mpl-plausibility-table-b4d9 | §7.3 the table with its first entries and the `base` test of its rules; §7.1 `metrics.py` with every formula and the evaluation against the table (no drawing) | every metric and rule tested; the table's estimates are marked; no checked entry written by an agent |
-| 4 | hisim-sankey-mpl-band-renderer-5a8c | §6.1 to §6.3, §6.5, §6.11, §6.13: the drawn graph, roles, chain, residuals, the band renderer with absolute positions, the overlap checker, the pin file as the only source of positions (a full pin file for the heat-pump twin, written by hand from the prototype's layout), the files of §4.2, `PLOT_SANKEY` wired (§4.3), the redraw command (§4.4) | the heat-pump twin renders from its pin file with 0 overlaps from its recorded inputs; the `extendedbase` week of §9.4 for that twin; semgrep clean |
-| 5 | hisim-sankey-mpl-auto-layout-9e2b | §6.4, §6.6 to §6.8, §6.10 pins as overrides, §6.12, §6.14: the orientation table, tree placement, routing, labels, growth, faults | §9.2 for all twelve recordings with their `structure.yaml`; §9.3; the five weeks of §9.4; the local sweep of §9.5 reported in the PR; the owner reviews one figure per family |
-| 6 | hisim-sankey-mpl-warnings-panel-c6f3 | §8: markers, the warnings box, the data panel, the unmet stub, loop temperatures on the bands, the caption's second line | the heat-pump recording reproduces the trial's nine warnings in its order (the ranges of PR 3 give the same findings); 0 overlaps on all twelve with the notes and the panel; the owner reviews the heat-pump figure against the trial's |
-| 7 | hisim-sankey-mpl-report-integration-2d7a | the figure in the PDF report (`INCLUDE_IMAGES_IN_PDF_REPORT`), `PLOT_SANKEY` in the full-year golden parameter set (§9.5), `energy_systems/README.md` and `simulation_parameters/README.md` updated, the D4 amendment and status lines written into `roadmap/complete_energy_sankeys_spec.md`, beads hisim-energy-sankeys-9uoo.19 and hisim-4hed closed with a note, Q1's decision applied | the PDF of the heat-pump week shows the figure; `golden-year.yml` renders every twin with 0 faults |
+| 2 | hisim-sankey-mpl-state-statistics-7c2e | §5.2: `StatisticRole`, `StatisticTag` (with the module area), `add_output(statistic=)`, `StateStatistics`, the tags on the heat pump, boilers, substation, electric heater, PV, both batteries, both storages, the building, the weather and the occupancy; schema 7 | every statistic tested directly; the heat-pump twin's week writes every state of the table, the PV's performance ratio included; a wrong-unit tag is refused |
+| 3 | hisim-sankey-mpl-plausibility-table-b4d9 | §7.3 the table with its first entries and the `base` test of its rules; §7.1 `metrics.py` with every formula (the first try's module, with the round trip and the no-extrapolation rule corrected and the performance ratio added) and the evaluation against the table (no drawing); the D21 workflow started for the Fraunhofer ISE range | every metric and rule tested; the table's estimates are marked; no `checked` written by an agent |
+| 4 | hisim-sankey-mpl-band-renderer-5a8c | §6.1 to §6.3, §6.5, §6.7, §6.11, §6.13, §4.2 to §4.4: the drawn graph, roles, chain, residuals (from the first try), `parameters.py` (the `matplotlib.sankey` parameters), `render.py` building the `Sankey`, `place_trees`, the connectors ported from `draw_sankey.py` (flattened stubs, shapes, grid search, corners, the parallel seam), the overlap checker, the files of §4.2, `PLOT_SANKEY` wired (§4.3), the redraw command (§4.4), the style table with role fallbacks. The parameters come from a complete pin file (§6.10) in this PR: the twelve prototype layouts converted to pin files under `tests/sankey_inputs/<stem>/pins.yaml`, so the renderer is judged on the hand layouts before the engine computes them | the twelve recordings render from their pin files with 0 overlaps; the comparisons of §9.6 beside the hand figures show the same bends, notches, arrowheads and seams, reviewed by the owner; the `extendedbase` week of §9.4 for the heat-pump twin; semgrep clean |
+| 5 | hisim-sankey-mpl-auto-layout-9e2b | §6.4, §6.6, §6.8, §6.10 pins as overrides, §6.12, §6.14: the orientation table with the frame rule and the side orders, the search, the label candidates, growth and faults, labels as routing obstacles (§6.7 rule 7), `structure.yaml` per recording | §9.2 for all twelve recordings without their pin files; §9.3; the five weeks of §9.4; the local sweep of §9.5 reported in the PR with 0 faults on every drawable file, `dynamic_components` included; the owner reviews one figure per family |
+| 6 | hisim-sankey-mpl-warnings-panel-c6f3 | §8: markers, the warnings box, the data panel, the unmet stub, loop temperatures on the bands, the caption's second line | the heat-pump recording reproduces the trial's nine warnings in its order (the PV's entry now the performance ratio); 0 overlaps on all twelve with the notes and the panel; the owner reviews the heat-pump figure against the trial's |
+| 7 | hisim-sankey-mpl-report-integration-2d7a | the figure in the PDF report (`INCLUDE_IMAGES_IN_PDF_REPORT`), `PLOT_SANKEY` in the full-year golden parameter set (§9.5), `energy_systems/README.md` and `simulation_parameters/README.md` updated, the D4 amendment and status lines written into `roadmap/complete_energy_sankeys_spec.md`, beads hisim-energy-sankeys-9uoo.19 and hisim-4hed closed with a note, the owner's decision on the plotly `overall.html` (D13) taken and applied | the PDF of the heat-pump week shows the figure; `golden-year.yml` renders every twin with 0 faults |
 
 Order: 1 before 2 (schema sequence); 3 and 4 are independent of each other and of 2; 5 needs 4; 6 needs 1, 2, 3
 and 5; 7 needs 6. Nothing here changes a simulation result or a KPI; the goldens stay.
 
 ## 11. Owner questions
 
-Each with its options, what each means, and a recommendation.
-
-- **Q1. The plotly HTML beside the matplotlib figure.** (a) *Keep both*: `EXPORT_ENERGY_BALANCE` keeps writing
-  every view's HTML as today; `PLOT_SANKEY` adds the figure. Nothing is lost, the HTML keeps hover texts and the
-  per-carrier views, two renderers to maintain. (b) *Replace*: the matplotlib figure replaces the HTML; one
-  renderer, no interactivity, the per-carrier views vanish until a matplotlib filter exists. (c) *Keep the
-  per-carrier HTML, drop the plotly `overall.html`*: the figure is the overall picture, the HTML the filters; the
-  bead hisim-sankey-layout-48b8 (plotly columns) closes as not needed. Recommendation: (a) for v1, (c) in PR 7 if
-  the owner, after reviewing PR 5's figures, no longer opens the plotly overall; hisim-sankey-layout-48b8 then
-  closes as superseded.
-- **Q2. The post-processing option.** (a) *Give `PLOT_SANKEY` (3) this meaning*: the name says what it does, it is
-  already in the parameter format's list, and the option set's wire form rule ("a number is never reused for a
-  different option") is kept, since a Sankey plot is what it always meant. (b) *A new option 31*
-  (`PLOT_ENERGY_SANKEY_FIGURE`) and `PLOT_SANKEY` stays dead. Recommendation: (a).
-- **Q3. A layout fault at the end of a run.** (a) *The run finishes*; the fault is a logged error and
-  `overall.layout_error.json`; the tests fail. A picture never costs a result. (b) *The run fails*, as a failing
-  balance does; a layout the engine cannot solve is then found at once, but a user's run dies for a drawing.
-  Recommendation: (a).
-- **Q4. Where the pin file lives.** (a) `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file,
-  found by the file's stem through the realized record; the CLI takes `--pins`. (b) A `sankey_pins:` key inside
-  the energy-system YAML's `metadata`: one file, but layout data in the model's input. (c) Pins only through the
-  CLI, never in a run. Recommendation: (a).
-- **Q5. Views in v1.** (a) `overall` only (this spec). (b) Also one figure per carrier as filters of the same
-  layout, which needs a rule for what a filtered trunk looks like. Recommendation: (a); (b) is a later bead.
-- **Q6. Formats.** (a) PNG, PDF and SVG, as the prototype (three `savefig` calls, a few seconds). (b) PNG and PDF.
-  Recommendation: (a); the SVG keeps text selectable for reviews.
-- **Q7. The heat pump's peak against its rating** (153 % in the trial). (a) *Panel only*: the hplib model exceeds
-  its A-7/W35 rating at milder outdoor temperatures by design, so a fixed threshold would warn in every run. (b)
-  *A plausibility warning* above a threshold the table names (say 130 %). Recommendation: (a) in v1; a range enters
-  the table only with a source that says what a heat pump's peak over rating should be.
-- **Q8. The PV yield range is site-specific** (PVGIS for Aachen: 909–1,149 kWh/kWp). (a) *Apply it only when the
-  run's weather location is Aachen* (read from the realized `Weather` configuration), else no PV range. (b) *A
-  small table of PVGIS yields per weather location HiSim ships* (`lt.Locations`), queried once by a person and
-  recorded with the query parameters, so every location gets a checked range. (c) Query PVGIS at render time (a
-  network call in post-processing; refused by the write guard's spirit and by offline runs). Recommendation: (a)
-  now, (b) as a `data` bead once the location table exists.
-- **Q9. Who checks the sources** (D9). The table of PR 3 ships with every entry an estimate except those a person
-  has checked by then. Recommendation: the owner names who checks the Fraunhofer ISE SPF range, the HTW battery
-  figures, DIN V 18599-10 and DVGW W 551, in that order of value (each turned a warning in the trial), and the
-  checking person writes the `checked` block in a PR of their own.
+All decided on 2026-11-08 and recorded as D13 to D21: the plotly HTML stays beside the figure, PR 7 decides on
+its `overall.html` (D13); `PLOT_SANKEY` (3) gets this meaning (D14); a layout fault never fails the run (D15); the
+pin file lives beside the energy-system file and the CLI takes `--pins` (D16); `overall` only (D17); PNG, PDF and
+SVG (D18); the heat pump's peak over rating is a panel row (D19); the PV check is a performance ratio on the run's
+own irradiation (D20); an agent prepares each source, the owner marks it checked, in the stated order (D21). No
+question is open.
 
 ## 12. Beads
 
@@ -862,10 +1053,10 @@ existing beads close with PR 7.
 | hisim-sankey-mpl-loop-statistics-3f1a (P1) | §5.1, schema 6 | 1 |
 | hisim-sankey-mpl-state-statistics-7c2e (P2) | §5.2, schema 7 | 2 |
 | hisim-sankey-mpl-plausibility-table-b4d9 (P2) | §7 | 3 |
-| hisim-sankey-mpl-band-renderer-5a8c (P2) | §6.1–§6.3, §6.5, §6.11, §6.13, §4.2–§4.4 | 4 |
-| hisim-sankey-mpl-auto-layout-9e2b (P2) | §6.4, §6.6–§6.8, §6.10, §6.12, §6.14, §9.2–§9.3 | 5 |
+| hisim-sankey-mpl-band-renderer-5a8c (P2) | §6.1–§6.3, §6.5, §6.7, §6.11, §6.13, §4.2–§4.4; the renderer on `matplotlib.sankey` (D2) | 4 |
+| hisim-sankey-mpl-auto-layout-9e2b (P2) | §6.4, §6.6, §6.8, §6.10, §6.12, §6.14, §9.2–§9.3 | 5 |
 | hisim-sankey-mpl-warnings-panel-c6f3 (P2) | §8 | 6 |
-| hisim-sankey-mpl-report-integration-2d7a (P2) | §4.3's PDF report, §9.5, the amendment of the complete Sankey spec, Q1 | 7 |
+| hisim-sankey-mpl-report-integration-2d7a (P2) | §4.3's PDF report, §9.5, the amendment of the complete Sankey spec, D13 | 7 |
 | hisim-energy-sankeys-9uoo.19 (P3, existing) | the arrow renderer of D4 — superseded by this spec | closes with 7 |
 | hisim-4hed (P3, existing) | static images for the PDF report | closes with 7 |
-| hisim-sankey-layout-48b8 (P2, existing) | plotly node columns — kept or superseded by Q1 | – |
+| hisim-sankey-layout-48b8 (P2, existing) | plotly node columns — kept or superseded by the PR 7 decision of D13 | – |

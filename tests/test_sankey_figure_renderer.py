@@ -603,12 +603,12 @@ def test_pin_parameters_diagram_and_connector(layout: Layout) -> None:
 
 
 def test_draw_overall(tmp_path: Path) -> None:
-    """With a pin file the figure is written; without one only the fault file; nothing for a run with nothing to draw."""
+    """With a pin file or laid out automatically the figure is written; nothing for a run with nothing to draw."""
     pins = SankeySystems.pin_file(SankeySystems.heat_pump_house_pins(), tmp_path)
     layout, written = draw_overall(SankeySystems.heat_pump_house(), tmp_path / "a", pins)
-    assert not layout.faults and len(written) == 4
+    assert not layout.faults and len(written) == 4 and layout.parameters.pinned
     layout, written = draw_overall(SankeySystems.heat_pump_house(), tmp_path / "b")
-    assert [f.kind for f in layout.faults] == ["layout"] and [path.name for path in written] == ["overall.layout_error.json"]
+    assert not layout.faults and len(written) == 4 and not layout.parameters.pinned
     layout, nothing = draw_overall(SankeySystems.nothing_to_draw(), tmp_path / "c")
     assert not nothing and layout.nothing_to_draw
 
@@ -633,20 +633,34 @@ def write_result_directory(directory: Path) -> Path:
     return directory
 
 
-def test_draw_run_never_raises(tmp_path: Path) -> None:
-    """``draw_run`` lists the faults and writes them; a directory without inputs is a fault too, not an exception (D15)."""
+def with_a_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the automatic layout report one fault on top of what it finds."""
+    run = PlacementSearch.run
+
+    def faulty(*args: Any, **kwargs: Any) -> Layout:
+        layout = run(*args, **kwargs)
+        layout.faults.append(Fault("overlap", "1 overlaps left after 12 rounds"))
+        return layout
+
+    monkeypatch.setattr(PlacementSearch, "run", faulty)
+
+
+def test_draw_run_never_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``draw_run`` draws a clean figure with no fault, lists and writes faults, and turns a missing input into one (D15)."""
     directory = write_result_directory(tmp_path / "run")
     assert SankeyInputs.from_result_directory(directory).title == "run"
+    assert not FigureFiles.draw_run(directory) and (directory / "energy_sankeys" / "overall.png").is_file()
+    with_a_fault(monkeypatch)
     faults = FigureFiles.draw_run(directory)
-    assert faults == [f"layout: {FigureFiles.NO_LAYOUT}"]
+    assert faults == ["overlap: 1 overlaps left after 12 rounds"]
     assert json.loads((directory / "energy_sankeys" / "overall.layout_error.json").read_text(encoding="utf-8"))["faults"] == faults
     missing = FigureFiles.draw_run(tmp_path / "empty")
     assert len(missing) == 1 and missing[0].startswith("error: the figure could not be drawn: SankeyInputError")
     assert (tmp_path / "empty" / "energy_sankeys" / "overall.layout_error.json").is_file()
 
 
-def test_the_command_draws_and_exits_by_its_faults(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """``hisim energy-system sankey`` exits 0 drawn from a clean pin file, 4 with layout faults, 2 without inputs."""
+def test_the_command_draws_and_exits_by_its_faults(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """``hisim energy-system sankey`` exits 0 drawn from a clean pin file or laid out, 4 with layout faults, 2 without inputs."""
     directory = write_result_directory(tmp_path / "run")
     pins = {
         "schema": "hisim.sankey_pins/1",
@@ -668,8 +682,10 @@ def test_the_command_draws_and_exits_by_its_faults(tmp_path: Path, capsys: pytes
     pin_path = SankeySystems.pin_file(pins, tmp_path)
     assert cli.main(["energy-system", "sankey", str(directory), "--pins", str(pin_path), "--out", str(tmp_path / "out")]) == 0
     assert (tmp_path / "out" / "overall.png").is_file()
+    assert cli.main(["energy-system", "sankey", str(directory)]) == 0
+    with_a_fault(monkeypatch)
     assert cli.main(["energy-system", "sankey", str(directory)]) == 4
-    assert "layout fault (layout)" in capsys.readouterr().err
+    assert "layout fault (overlap): 1 overlaps left after 12 rounds" in capsys.readouterr().err
     assert cli.main(["energy-system", "sankey", str(tmp_path / "missing")]) == 2
 
 
@@ -684,8 +700,8 @@ def test_plot_sankey_implies_the_export_and_draws_the_figure(tmp_path: Path) -> 
     assert PostProcessor.writes_energy_balance(plotting) and PostProcessor.writes_energy_balance(exporting) and not PostProcessor.writes_energy_balance(quiet)
     PostProcessor.plot_sankey(quiet)
     assert not (tmp_path / "quiet").exists()
-    PostProcessor.plot_sankey(plotting)  # logs the fault, never raises
-    assert (directory / "energy_sankeys" / "overall.layout_error.json").is_file()
+    PostProcessor.plot_sankey(plotting)
+    assert (directory / "energy_sankeys" / "overall.png").is_file() and not (directory / "energy_sankeys" / "overall.layout_error.json").exists()
     concluded: List[Optional[str]] = []
     balance = cast(Any, SimpleNamespace(conclude=concluded.append))
     PostProcessor.export_sankeys(plotting, balance)

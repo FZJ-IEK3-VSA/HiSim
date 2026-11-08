@@ -272,6 +272,75 @@ class SankeySystems:
         return SankeySystems.inputs(kinds, edges)
 
     @staticmethod
+    def summer_tank() -> SankeyInputs:
+        """Return a summer week of a gas and solar-thermal house: the collector covers most of the hot water.
+
+        Without space heating the chain is meter, household, building; the tank's largest heat input is the
+        collector, so the tank hangs from the collector's tree, and the boiler's little hot-water heat is a connector
+        from the gas meter's tree into the tank's south side (the tank's tail holds the collector).
+        """
+        kinds = {
+            "sun": "boundary",
+            "gas": "boundary",
+            "grid": "boundary",
+            "taps": "boundary",
+            "out": "boundary",
+            "S": "component",
+            "S · L": "loss",
+            "G": "meter",
+            "B": "component",
+            "B · L": "loss",
+            "T": "component",
+            "E": "meter",
+            "H": "component",
+            "Bld": "component",
+        }
+        edges: List[Edge] = [
+            ("sun", "S", 10.0, "solar", "boundary", "S.sun"),
+            ("S", "S · L", 4.0, "solar", "loss", "S.loss"),
+            ("S", "T", 6.0, "domestic_hot_water_heat", "transfer", "T.solar"),
+            ("gas", "G", 2.0, "natural_gas", "meter_boundary", "G.in"),
+            ("G", "B", 2.0, "natural_gas", "metered", "B.in"),
+            ("B", "B · L", 0.2, "natural_gas", "loss", "B.loss"),
+            ("B", "T", 1.8, "domestic_hot_water_heat", "transfer", "T.boiler"),
+            ("T", "taps", 7.8, "domestic_hot_water_heat", "boundary", "T.taps"),
+            ("grid", "E", 5.0, "electricity", "meter_boundary", "E.in"),
+            ("E", "H", 5.0, "electricity", "metered", "H.in"),
+            ("H", "Bld", 5.0, "room_heat", "transfer", "Bld.gains"),
+            ("Bld", "out", 5.0, "room_heat", "boundary", "Bld.out"),
+        ]
+        return SankeySystems.inputs(kinds, edges)
+
+    @staticmethod
+    def hot_water_only() -> SankeyInputs:
+        """Return a hot-water system without a building: gas meter, boiler and tank on the chain, a collector beside.
+
+        The tank is on the chain, so the boiler's heat holds its tail; the collector's heat comes in from the north.
+        """
+        kinds = {
+            "sun": "boundary",
+            "gas": "boundary",
+            "taps": "boundary",
+            "S": "component",
+            "S · L": "loss",
+            "G": "meter",
+            "B": "component",
+            "B · L": "loss",
+            "T": "component",
+        }
+        edges: List[Edge] = [
+            ("sun", "S", 10.0, "solar", "boundary", "S.sun"),
+            ("S", "S · L", 4.0, "solar", "loss", "S.loss"),
+            ("S", "T", 6.0, "domestic_hot_water_heat", "transfer", "T.solar"),
+            ("gas", "G", 2.0, "natural_gas", "meter_boundary", "G.in"),
+            ("G", "B", 2.0, "natural_gas", "metered", "B.in"),
+            ("B", "B · L", 0.2, "natural_gas", "loss", "B.loss"),
+            ("B", "T", 1.8, "domestic_hot_water_heat", "transfer", "T.boiler"),
+            ("T", "taps", 7.8, "domestic_hot_water_heat", "boundary", "T.taps"),
+        ]
+        return SankeySystems.inputs(kinds, edges)
+
+    @staticmethod
     def nothing_to_draw() -> SankeyInputs:
         """Return a view without a component, meter or undeclared node."""
         return SankeySystems.inputs({"sun": "boundary"}, [])

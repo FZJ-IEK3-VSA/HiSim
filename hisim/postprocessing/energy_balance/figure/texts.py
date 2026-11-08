@@ -19,7 +19,7 @@ from hisim.postprocessing.energy_balance.figure.graph import DrawnGraph, Flow, F
 from hisim.postprocessing.energy_balance.figure.inputs import SankeyInputs
 from hisim.postprocessing.energy_balance.figure.labels import Candidate, Candidates, LabelSpec, TextBlock, TextMeasure
 from hisim.postprocessing.energy_balance.figure.metrics import Metrics
-from hisim.postprocessing.energy_balance.figure.parameters import DiagramParams, FlowParams, LabelPin, LayoutConstants, Parameters
+from hisim.postprocessing.energy_balance.figure.parameters import ConnectorParams, DiagramParams, FlowParams, LabelPin, LayoutConstants, Parameters
 from hisim.postprocessing.energy_balance.figure.style import SankeyStyle
 
 Point = Tuple[float, float]
@@ -196,7 +196,29 @@ class FigureTexts:
         # by a longer tree connection; any other connector's label has no growth move.
         target = parameters.diagram(params.target_flow.split("|", 1)[0])
         grows = f"path:{target.prior_flow}" if target.prior == params.source_flow.split("|", 1)[0] and target.prior_flow else ""
+        outer = FigureTexts.outer_sibling(parameters, params)
+        if outer is not None:
+            # Two seconds into one child nest: the wider is routed first and runs outside, so the narrower one's label
+            # lies between the two; the outer one's stub grows to make room (the heat pump's rod and hot-water power).
+            grows = f"path:{outer.source_flow}"
         return LabelSpec(f"link:{connector_link}", block, tuple(candidates), (), width, False, grows)
+
+    @staticmethod
+    def outer_sibling(parameters: Parameters, connector: ConnectorParams) -> Optional[ConnectorParams]:
+        """Return the parallel connector between the same two nodes that is routed before this one (a wider one), else None.
+
+        Connectors are routed widest first, so of two seconds into one child the wider runs outside the narrower.
+        Example: the heat pump's hot-water electricity (26 kWh) runs outside its heating rod's electricity (1.6 kWh).
+        """
+        if not connector.parallel:
+            return None
+        ends = (connector.source_flow.split("|", 1)[0], connector.target_flow.split("|", 1)[0])
+        siblings = [
+            c for c in parameters.connectors if c.parallel and c.link_id != connector.link_id and (c.source_flow.split("|", 1)[0], c.target_flow.split("|", 1)[0]) == ends
+        ]
+        position = {c.link_id: k for k, c in enumerate(parameters.connectors)}
+        earlier = [c for c in siblings if position[c.link_id] < position[connector.link_id]]
+        return earlier[0] if earlier else None
 
     @staticmethod
     def stub_length(diagram: DiagramParams, flow: FlowParams) -> float:

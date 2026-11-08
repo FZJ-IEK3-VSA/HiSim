@@ -327,7 +327,11 @@ class GridSearch:
 
     @staticmethod
     def raster(polygon: np.ndarray, origin: Point, size: Tuple[int, int], step: float) -> np.ndarray:
-        """Return the grid cells whose centre lies inside a polygon, as a boolean array indexed [i, j] (x, y)."""
+        """Return the grid cells a polygon covers, as a boolean array indexed [i, j] (x, y).
+
+        A cell is covered when its centre lies inside the polygon or the polygon's outline passes through it, so a
+        hairline stub narrower than a cell, whose outline holds no cell centre, still blocks the grid.
+        """
         mask = np.zeros(size, dtype=bool)
         x0, y0 = polygon[:, 0].min(), polygon[:, 1].min()
         x1, y1 = polygon[:, 0].max(), polygon[:, 1].max()
@@ -339,18 +343,32 @@ class GridSearch:
         centres = np.column_stack([origin[0] + ii.ravel() * step, origin[1] + jj.ravel() * step])
         inside = Polygons.closed_path(polygon).contains_points(centres)
         mask[i0 : i1 + 1, j0 : j1 + 1] = inside.reshape(ii.shape)
+        corners = np.vstack([polygon, polygon[:1]])
+        for (xa, ya), (xb, yb) in zip(corners[:-1], corners[1:]):
+            samples = max(2, int(math.hypot(xb - xa, yb - ya) / (step / 2)) + 2)
+            xs, ys = np.linspace(xa, xb, samples), np.linspace(ya, yb, samples)
+            cells_i = np.rint((xs - origin[0]) / step).astype(int)
+            cells_j = np.rint((ys - origin[1]) / step).astype(int)
+            keep = (cells_i >= 0) & (cells_i < size[0]) & (cells_j >= 0) & (cells_j < size[1])
+            mask[cells_i[keep], cells_j[keep]] = True
         return mask
 
     @staticmethod
     def dilate(mask: np.ndarray, cells: int) -> np.ndarray:
-        """Return a boolean grid grown by ``cells`` cells in every direction (a square neighbourhood)."""
+        """Return a boolean grid grown by ``cells`` cells in every direction, diagonals included (a square neighbourhood).
+
+        Each step grows along x and then along y, so a corner cell of an obstacle blocks the cells diagonal to it too: a
+        band that turns beside a label's corner keeps its clearance (growing by the four neighbours only gives a
+        diamond, and the route then fails the clearance check at the corner).
+        """
         result = mask.copy()
         for _ in range(max(0, cells)):
-            grown = result.copy()
-            grown[1:, :] |= result[:-1, :]
-            grown[:-1, :] |= result[1:, :]
-            grown[:, 1:] |= result[:, :-1]
-            grown[:, :-1] |= result[:, 1:]
+            along_x = result.copy()
+            along_x[1:, :] |= result[:-1, :]
+            along_x[:-1, :] |= result[1:, :]
+            grown = along_x.copy()
+            grown[:, 1:] |= along_x[:, :-1]
+            grown[:, :-1] |= along_x[:, 1:]
             result = grown
         return result
 

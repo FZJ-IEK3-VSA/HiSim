@@ -57,6 +57,7 @@ class Documents:
         return {
             "schema_version": 3,
             "name": "one entry under test",
+            "setup_kind": "demo",
             "components": {cls.ENTRY_NAME: entry},
         }
 

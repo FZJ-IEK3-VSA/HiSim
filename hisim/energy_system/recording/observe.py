@@ -31,6 +31,8 @@ from hisim.dynamic_component import DynamicComponent
 from hisim.energy_system.parity import ResolvedWire, WiringSnapshot
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import UndeclaredSetupKindError
 
 
 @dataclass(frozen=True)
@@ -132,6 +134,8 @@ class RecordedSystem:
     components: Tuple[ObservedComponent, ...]
     wiring: WiringSnapshot
     simulation_parameters: SimulationParameters
+    #: What the system is, as the setup declared it; the recorded file states it as ``setup_kind``.
+    setup_kind: SetupKind
 
     def by_name(self) -> Dict[str, ObservedComponent]:
         """Indexes the observed components by their runtime name.
@@ -178,7 +182,12 @@ class SystemObserver:
 
         Returns:
             The observation, in registration order.
+
+        Raises:
+            UndeclaredSetupKindError: If the setup declared no kind, which the recorded file has to state.
         """
+        if simulator.setup_kind is None:
+            raise UndeclaredSetupKindError()
         components = [wrapper.my_component for wrapper in simulator.wrapped_components]
         wiring = WiringSnapshot.from_components(components)
         consumers = cls._consumers_of(wiring)
@@ -191,6 +200,7 @@ class SystemObserver:
             components=observed,
             wiring=wiring,
             simulation_parameters=simulator.get_simulation_parameters(),
+            setup_kind=simulator.setup_kind,
         )
 
     @classmethod

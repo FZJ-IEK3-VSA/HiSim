@@ -842,8 +842,12 @@ def test_component_input_allow_unconnected_mandatory_default() -> None:
 
 @pytest.mark.base
 def test_connect_inputs_raises_for_unconnected_mandatory() -> None:
-    """Test that connect_inputs raises ValueError for an unconnected mandatory input."""
+    """Test that the build refuses an unconnected mandatory input with a ValueError (the setup rule CB-06)."""
     from hisim.component_wrapper import ComponentWrapper
+    from hisim.setup_rules.components import MandatoryInputConnected
+    from hisim.setup_rules.kinds import SetupKind
+    from hisim.setup_rules.rule import RuleStage
+    from hisim.setup_rules.subjects import BuiltSystem
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     config = fft.sized_example_component_config()
@@ -861,8 +865,9 @@ def test_connect_inputs_raises_for_unconnected_mandatory() -> None:
     component.inputs.append(mandatory_input)
 
     wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
+    wrapper.connect_inputs(all_outputs=[])
     with pytest.raises(ValueError, match="not connected to any ComponentOutput"):
-        wrapper.connect_inputs(all_outputs=[])
+        fft.ComponentRules.registry([MandatoryInputConnected]).run(RuleStage.BUILD, BuiltSystem(components=(component,)), SetupKind.DEMO)
 
 
 @pytest.mark.base

@@ -34,12 +34,12 @@ from hisim.energy_system.errors import (
     EnergySystemAssemblyError,
     EnergySystemCatalogueError,
     EnergySystemError,
+    EnergySystemImportsError,
     EnergySystemWiringError,
 )
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
-from hisim.energy_system.model import AggregatorFeed, DefaultInputs, EnergySystemFile, SourceReference
-from hisim.energy_system.wiring_checks import ConsumingOutput
+from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DefaultInputs, EnergySystemFile, SourceReference
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from tests.assemblies.helpers import EMPTY_CONTRACT, Library, Mocks, Real, build_text, expand_text, imports, site
 from tests.assemblies.mock_components import MEASURED
@@ -92,19 +92,32 @@ class Gas:
 
 
 def refusal(text: str, library: Library = None) -> str:  # type: ignore[assignment]
-    """The message an expansion refuses a file with."""
+    """The message an expansion refuses a file with: an assembly error's, or the assembly rules' faults, one per line."""
     with pytest.raises(EnergySystemAssemblyError) as raised:
         expand_text(text, library.resolver() if library is not None else None)
-    return str(raised.value)
+    return message_of(raised.value)
+
+
+def message_of(error: BaseException) -> str:
+    """The message of a refusal: the faults of the wiring or the assembly rules, one per line, or the error's own message."""
+    if isinstance(error, (EnergySystemWiringError, EnergySystemImportsError)):
+        return "\n".join(fault.message for fault in error.faults)
+    return str(error)
 
 
 def build_refusal(text: str, directory: Path, library: Library = None) -> str:  # type: ignore[assignment]
-    """The message a build refuses a file with whose expansion succeeds."""
+    """The message a build refuses a file with whose expansion succeeds: a catalogue error's, or the wiring rules' faults, one per line."""
     resolver = library.resolver() if library is not None else None
     expand_text(text, resolver)
-    with pytest.raises(EnergySystemCatalogueError) as raised:
+    with pytest.raises((EnergySystemCatalogueError, EnergySystemWiringError)) as raised:
         build_text(text, directory, resolver)
-    return str(raised.value)
+    return message_of(raised.value)
+
+
+def refused_by_binder(binder: PortBinder) -> str:
+    """The refusals a binder records when it binds, one message per line; empty when it binds every port."""
+    binder.bind()
+    return "\n".join(refused.message for refused in binder.refusals)
 
 
 def gas_heating() -> Tuple[EnergySystemFile, ImportRecord]:
@@ -220,7 +233,7 @@ def test_binding_an_end_of_another_circuit_is_refused(tmp_path: Path) -> None:
         "floor: {assembly: test/floor, none: [space_heating]}",
     )
     message = refusal(text, library)
-    assert message.startswith("EF-7K at import 'cylinder'")
+    assert "\nEF-7K at import 'cylinder'" in message
     assert "the circuit space_heating ('space_heating')" in message
 
 
@@ -426,7 +439,7 @@ def test_the_reader_refuses_a_provision_of_the_wrong_shape(tmp_path: Path, port:
         expand_text(
             site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports("supply: {assembly: test/supply}"), library.resolver()
         )
-    assert str(raised.value).startswith(code) and fragment in str(raised.value)
+    assert message_of(raised.value).startswith(code) and fragment in message_of(raised.value)
 
 
 @pytest.mark.assemblies
@@ -651,7 +664,7 @@ def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_
         message = build_refusal(
             site(Real.WEATHER) + imports(Real.PV, f"battery: {{assembly: test/{name}}}"), tmp_path / name, library
         )
-        assert message.startswith("EF-4E") and fragment in message
+        assert "- EF-4E source-shape: EF-4E at components.battery-Battery: " in message and fragment in message
 
 
 @pytest.mark.assemblies
@@ -703,9 +716,8 @@ def test_a_fuel_provision_whose_meter_is_absent_is_refused_by_name() -> None:
         {"gas": need},
         {"gas": PortState.REQUIRED},
     )
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7J") as raised:
-        PortBinder({}, {"gas": [provider], "boiler": [consumer]}, ImportRecord()).bind()
-    message = str(raised.value)
+    message = refused_by_binder(PortBinder({}, {"gas": [provider], "boiler": [consumer]}, ImportRecord()))
+    assert message.startswith("EF-7J")
     for name in ("import 'gas'", "'connection'", "'Meter'", "boiler.gas"):
         assert name in message, f"{name!r} is not in: {message}"
 
@@ -723,9 +735,8 @@ def test_an_active_observer_port_whose_members_are_all_absent_is_refused_by_name
         {"reading": port},
         {"reading": PortState.REQUIRED},
     )
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7J") as raised:
-        PortBinder({}, {"grid": [owner]}, ImportRecord()).bind()
-    message = str(raised.value)
+    message = refused_by_binder(PortBinder({}, {"grid": [owner]}, ImportRecord()))
+    assert message.startswith("EF-7J")
     for name in ("import 'grid'", "observer port 'reading'", "Meter"):
         assert name in message, f"{name!r} is not in: {message}"
 

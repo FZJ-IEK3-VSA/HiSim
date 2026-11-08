@@ -376,7 +376,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {
@@ -1027,6 +1028,16 @@
             "decreasing",
             "constant"
           ]
+        },
+        "applies_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
         }
       }
     },

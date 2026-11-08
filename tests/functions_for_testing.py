@@ -1,16 +1,30 @@
 """Helper functions for testing."""
 import dataclasses
-from typing import Any, ClassVar, Optional, Tuple, Type
+from types import SimpleNamespace
+from typing import Any, ClassVar, Optional, Sequence, Tuple, Type
 
+import pandas as pd
 import yaml
 
 from hisim.component import ComponentOutput
 from hisim.components.example_component import ExampleComponentConfig
 from hisim.config import ComponentID, SizingContext
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.codec import ConfigValueCodec
+from hisim.energy_system.configure import ConfigurationOutcome
+from hisim.energy_system.document import RawDocument
+from hisim.energy_system.errors import WiringRefusal
+from hisim.energy_system.loader import EnergySystemReader, parse_energy_system
+from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
+from hisim.energy_system.wiring import WiredSystem
+from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.registry import SetupRuleRegistry, StageFindings
+from hisim.setup_rules.rule import RuleCodes, RuleStage, RuleSubject, SetupRule
+from hisim.setup_rules.subjects import BoundDocument, BuiltDocument, BuiltSystem, ConfiguredDocument, LoadedDocument, RunResults
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -81,6 +95,209 @@ def round_trip_config_block(config: Any, config_class: Type, component_name: str
     )
     payload[ConfigBlockWriter.IDENTITY_FIELD] = {"name": component_name}
     return config_class.from_dict(payload)
+
+
+class FamilyRules:
+    """The setup rules of one family run alone on components, as the build runs them.
+
+    A test that wires stand-ins by hand runs only one family, so that the rules of the other families, which may read
+    what a stand-in lacks, stay out of it. A registry needs every code a rule requires, so a rule the family requires
+    from another family is taken as met: a sample rule with its code that finds nothing stands in for it. For example,
+    the loop-wiring rules require the fluid-loop rules, which cannot walk a hand-built loop whose channels carry no loop
+    tags; the energy-port tests judge the energy ports, not the loops.
+    """
+
+    #: The family of the rules, the module of ``hisim/setup_rules/`` that holds them.
+    FAMILY: ClassVar[str]
+
+    @classmethod
+    def registry(cls, rules: Optional[Sequence[Type[SetupRule]]] = None) -> SetupRuleRegistry:
+        """Return a registry of the given rules, by default every rule of the family, with their other requirements taken as met.
+
+        Args:
+            rules: The rules to run; ``None`` for every rule of the family.
+
+        Returns:
+            The registry: the rules, and for every code they require that is none of them, a sample rule that finds nothing.
+        """
+        # The sample rules are a tool of the tests of the rules package.
+        from tests.rules.sample_rules import SampleRules  # pylint: disable=import-outside-toplevel
+
+        chosen = list(rules) if rules is not None else [rule for rule in SetupRuleRegistry.discover() if RuleCodes.family_of(rule.__module__) == cls.FAMILY]
+        codes = {rule.CODE for rule in chosen}
+        met = sorted({code for rule in chosen for code in rule.REQUIRES} - codes)
+        return SetupRuleRegistry(chosen + [SampleRules.rule(code, f"taken-as-met-{code.lower()}") for code in met])
+
+    @classmethod
+    def refuse_a_broken_wiring(cls, components: Sequence[Any], kind: SetupKind = SetupKind.RESIDENTIAL) -> None:
+        """Run the family's rules on components whose inputs are connected, as the simulator does before the first step.
+
+        Args:
+            components: The components, or stand-ins with ``component_name``, ``inputs``, ``outputs`` and ``port_sets``.
+            kind: The kind the system declares.
+
+        Raises:
+            SetupRuleViolation: Listing every fault the rules found, as the family's error (for example
+                ``EnergyPortWiringError``).
+        """
+        cls.registry().run(RuleStage.BUILD, BuiltSystem(components=tuple(components)), kind)
+
+
+class EnergyPortRules(FamilyRules):
+    """The energy-port setup rules (``hisim/setup_rules/energy_ports.py``) run on components; their faults raise ``EnergyPortWiringError``."""
+
+    FAMILY: ClassVar[str] = "energy_ports"
+
+
+class FluidLoopRules(FamilyRules):
+    """The fluid-loop setup rules (``hisim/setup_rules/fluid_loops.py``) run on components; their faults raise ``FluidLoopWiringError``."""
+
+    FAMILY: ClassVar[str] = "fluid_loops"
+
+
+class ComponentRules(FamilyRules):
+    """The component-build setup rules (``hisim/setup_rules/components.py``) run alone; their faults raise ``SetupRuleViolation``, or the cost rules' errors."""
+
+    FAMILY: ClassVar[str] = "components"
+
+
+class WiringRules(FamilyRules):
+    """The wiring setup rules (``hisim/setup_rules/wiring.py``) run on a built file; their faults raise ``EnergySystemWiringError``.
+
+    A test that drives the feed resolver or the channel matcher directly holds the refusals they recorded; :meth:`refuse`
+    hands them to the rules as the wiring of a file with no wire, as the build does, so the test sees the error the build
+    would raise.
+    """
+
+    FAMILY: ClassVar[str] = "wiring"
+
+    @classmethod
+    def subject(cls, wired: Any, name: str = "wiring under test") -> BuiltDocument:
+        """The built file of a wired system, its model a file of this name that holds nothing else."""
+        model = EnergySystemFile.model_construct(name=name, components={}, setup_kind=SetupKind.DEMO)
+        return BuiltDocument(model=model, wired=wired)
+
+    @classmethod
+    def refuse(cls, refusals: Sequence[WiringRefusal]) -> None:
+        """Run the wiring rules on the refusals a resolver or a matcher recorded, as the build does.
+
+        The wired system holds no component and no wire, so that no rule of the plan judges components the test never
+        meant to wire.
+
+        Args:
+            refusals: The refusals the test's resolver or matcher recorded.
+
+        Raises:
+            EnergySystemWiringError: Listing every refusal, when there is one.
+        """
+        wired = WiredSystem(components=(), wires=(), resolved_feeds=(), refusals=tuple(refusals))
+        cls.registry().run(RuleStage.BUILD, cls.subject(wired), SetupKind.DEMO)
+
+
+class DocumentRules(FamilyRules):
+    """The structural setup rules (``hisim/setup_rules/document.py``) run on a document; their faults raise ``EnergySystemStructureError``."""
+
+    FAMILY: ClassVar[str] = "document"
+
+    @staticmethod
+    def subject(text: str, rerun: Optional[bool] = None) -> LoadedDocument:
+        """The document of an energy-system file written as YAML text, as the reader built it, for a run when ``rerun`` is not ``None``."""
+        return LoadedDocument(model=parse_energy_system(text), document={}, rerun=rerun)
+
+    @classmethod
+    def findings(cls, text: str, rerun: Optional[bool] = None) -> StageFindings:
+        """Run the structural rules alone on a document written as YAML text, and return what they found without raising."""
+        subject = cls.subject(text, rerun)
+        return cls.registry().findings(RuleStage.LOAD, subject, subject.model.setup_kind)
+
+
+class AssemblyRules(FamilyRules):
+    """The assembly setup rules (``hisim/setup_rules/assemblies.py``) run on what an expansion recorded; their faults raise ``EnergySystemImportsError``."""
+
+    FAMILY: ClassVar[str] = "assemblies"
+
+    @staticmethod
+    def model(name: str = "imports under test") -> EnergySystemFile:
+        """An energy-system file of this name, a demo, that holds nothing else: the file a subject of recorded refusals belongs to."""
+        return EnergySystemFile.model_construct(name=name, components={}, imports={}, setup_kind=SetupKind.DEMO)
+
+    @classmethod
+    def findings(cls, subject: RuleSubject) -> StageFindings:
+        """Run the assembly rules alone on a subject of the stage ``BUILD`` and return what they found without raising."""
+        return cls.registry().findings(RuleStage.BUILD, subject, SetupKind.DEMO)
+
+
+class BindingRules(FamilyRules):
+    """The binding setup rules (``hisim/setup_rules/bindings.py``) run on a file written as YAML text; their faults raise ``EnergySystemClassBindingError``.
+
+    The bound file is bound by the real binder and the configured file configured by the real configurator, so a test
+    writes the entries that break a rule and sees what a run of the file would see.
+    """
+
+    FAMILY: ClassVar[str] = "bindings"
+
+    @staticmethod
+    def file(entries: str) -> EnergySystemFile:
+        """The file of a ``demo`` system whose ``components`` block holds the given entries, indented by two spaces."""
+        text = f"schema_version: 3\nname: binding rule under test\nsetup_kind: demo\ncomponents:\n{entries}"
+        return EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
+
+    @classmethod
+    def bound(cls, entries: str) -> BoundDocument:
+        """The bound file of the given entries, as ``validate_classes`` hands it to the rules."""
+        model = cls.file(entries)
+        return BoundDocument(model=model, bindings=ClassBinder(model).bind())
+
+    @classmethod
+    def configured(cls, entries: str, resolver: Optional[PathResolver] = None) -> ConfiguredDocument:
+        """The configured file of the given entries, as ``configure_energy_system`` hands it to the rules; the entries must bind."""
+        model = cls.file(entries)
+        outcome = ConfigurationOutcome.attempt(model, ClassBinder(model).bind(), resolver or PathResolver.default())
+        return ConfiguredDocument(model=model, outcome=outcome)
+
+    @classmethod
+    def findings(cls, subject: Any, rules: Optional[Sequence[Type[SetupRule]]] = None) -> StageFindings:
+        """Run the family's rules, or the rules given, on a subject and return what they found without raising."""
+        return cls.registry(rules).findings(RuleStage.BUILD, subject, SetupKind.DEMO)
+
+
+class SizingRules(BindingRules):
+    """The sizing setup rules (``hisim/setup_rules/sizing.py``) run on a configured file; their faults raise ``EnergySystemSizingError``."""
+
+    FAMILY: ClassVar[str] = "sizing"
+
+
+class AfterRunRules:
+    """The setup rules after the run on an energy balance built by hand, as the post-processing runs them.
+
+    A test of the balance builds an :class:`~hisim.postprocessing.energy_balance.EnergyBalanceReport` from a hand-made
+    result table and stand-ins; these helpers hand it to the rules as the run's balance, beside an empty result table
+    with no outputs and no steps, which the rules of the table (``AR-01``, ``AR-02``) pass. So the rules judge exactly the balance the test
+    built, and a port the test fills with NaN reaches the port rule ``AR-03``, as it did when the balance judged itself.
+    """
+
+    @staticmethod
+    def subject(balance: EnergyBalanceReport) -> RunResults:
+        """The results of a run whose energy balance is ``balance``."""
+        return RunResults(results=pd.DataFrame(), outputs=(), components=(), timesteps=0, read_energy_balance=lambda: balance)
+
+    @classmethod
+    def refuse(cls, balance: EnergyBalanceReport, kind: SetupKind = SetupKind.RESIDENTIAL) -> None:
+        """Run every rule after the run on ``balance``, as the post-processing does first thing.
+
+        Raises:
+            EnergyBalanceError: Listing every fault of the balance's rules.
+        """
+        SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, cls.subject(balance), kind)
+
+    @staticmethod
+    def post_processing(result_directory: str, export: bool, kind: SetupKind = SetupKind.RESIDENTIAL) -> Any:
+        """The part of a post-processing transfer the judging reads: options with or without ``EXPORT_ENERGY_BALANCE``, a directory, a kind."""
+        return SimpleNamespace(
+            post_processing_options=[PostProcessingOptions.EXPORT_ENERGY_BALANCE] if export else [],
+            simulation_parameters=SimpleNamespace(result_directory=result_directory, seconds_per_timestep=900),
+            setup_kind=kind,
+        )
 
 
 class SetupTestParameters:

@@ -129,7 +129,7 @@ traceability the downstream behaviour is:
   - **Heat pumps** -- the coefficient of performance (COP) is derived from a
     temperature-dependent performance model fitted to manufacturer/database
     reference points
-    (:class:`~hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib`
+    (:class:`~hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib`
     and :class:`~hisim.components.generic_heat_pump.GenericHeatPump`).
   - **Direct electric heating** -- a fixed efficiency (default 1.0)
     (:class:`~hisim.components.generic_electric_heating.ElectricHeating`).
@@ -147,7 +147,7 @@ traceability the downstream behaviour is:
   full power
   (:class:`~hisim.components.generic_boiler.GenericBoilerController`); the
   heat-pump controller
-  (:class:`~hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating`)
+  (:class:`~hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating`)
   switches the heat pump between heating and off against the flow-temperature
   setpoint with hysteresis; the heat-distribution controller
   (:class:`~hisim.components.heat_distribution_system.HeatDistributionController`)

@@ -14,16 +14,20 @@ their defaults; an import writing two members is refused. Written nothing, the d
 the library check has made sure exactly one of them is stated. An ``all_or_none_of`` (D31) states
 every member or none: an import stating some of its members and leaving others unstated is refused,
 nothing is filled in for it.
+
+:func:`resolve_selection` records every value that does not fit and every violated constraint of one
+import for the assembly rules (``hisim/setup_rules/assemblies.py``, ``EF-76``, ``EF-77``) instead of
+raising the first; :func:`select` raises the first, for a caller that selects one import alone.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 from hisim.config.sizing import _AutoSize
 from hisim.energy_system.assemblies.model import AssemblyFile, MemberTemplate, ParameterDeclaration, ParameterType
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, ImportRefusal
 from hisim.energy_system.imports_model import Port, PortState
 
 
@@ -160,7 +164,11 @@ SITE = Selection(given={}, resolved={}, variants={}, members={}, dropped=())
 
 
 def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: str) -> Selection:
-    """Resolves and checks one import's parameters and selects its internal variants.
+    """Resolves and checks one import's parameters and selects its internal variants, raising the first refusal.
+
+    The isolation harness selects the parameters of one sample this way; the expansion of a file calls
+    :func:`resolve_selection`, which records every refusal. Example: ``select(model, "test/base.assembly.yaml",
+    {"volume_in_liter": 900}, "import 'tank'")`` raises ``EF-76`` naming the range [50, 500].
 
     Args:
         assembly: The assembly imported, which the library check has accepted.
@@ -172,71 +180,117 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
         The selection.
 
     Raises:
-        EnergySystemAssemblyError: ``EF-76`` for an unknown parameter, a value that does not fit or a
-            variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of`` or one the
-            import writes two members of, and for an ``all_or_none_of`` stated in part.
+        EnergySystemAssemblyError: The first refusal :func:`resolve_selection` records.
+    """
+    selection, refusals = resolve_selection(assembly, label, given, where)
+    if selection is None:
+        raise refusals[0].error(EnergySystemAssemblyError)
+    return selection
+
+
+def resolve_selection(
+    assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: str
+) -> Tuple[Optional[Selection], Tuple[ImportRefusal, ...]]:
+    """Resolves and checks one import's parameters and selects its internal variants, recording what does not fit.
+
+    Every value the import writes is checked, and every refusal is recorded; the constraints are checked only on a
+    resolved set whose values all fit, and the variants selected only once the constraints hold, since each reads
+    what the step before resolved. Example: an import writing an unknown parameter and a value outside its range
+    gets two ``EF-76`` refusals and no selection.
+
+    Args:
+        assembly: The assembly imported, which the library check has accepted.
+        label: Its file label, for messages.
+        given: The parameter values the import (or instance) writes.
+        where: The import (and instance) and its line, for messages.
+
+    Returns:
+        The selection, or ``None`` with what was refused: ``EF-76`` for an unknown parameter, a value that does not
+        fit or a variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of`` or one the import
+        writes two members of, and for an ``all_or_none_of`` stated in part.
     """
     declarations = assembly.parameters
+    refusals: List[ImportRefusal] = []
     values: Dict[str, Any] = {name: declaration.default for name, declaration in declarations.items()}
     for name, value in given.items():
         declaration = declarations.get(name)
         if declaration is None:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.PARAMETER_INVALID,
-                where,
-                f"the import sets '{name}', which is not a parameter of '{label}'.",
-                alternatives=tuple(declarations),
-                alternatives_label="parameters",
-                offending_value=str(name),
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.PARAMETER_INVALID,
+                    where,
+                    f"the import sets '{name}', which is not a parameter of '{label}'.",
+                    alternatives=tuple(declarations),
+                    alternatives_label="parameters",
+                    offending_value=str(name),
+                )
             )
+            continue
         written = declaration.type.written(value)
         problem = ParameterChecks.problem(declaration, written)
         if problem is not None:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.PARAMETER_INVALID,
-                where,
-                f"the import sets the {declaration.type.value} parameter '{name}' of '{label}' to {problem}.",
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.PARAMETER_INVALID,
+                    where,
+                    f"the import sets the {declaration.type.value} parameter '{name}' of '{label}' to {problem}.",
+                )
             )
+            continue
         values[name] = written
+    if refusals:
+        return None, tuple(refusals)
     for names in assembly.exactly_one_of:
         violation = ParameterChecks.written_alone(names, given, values) or ParameterChecks.violation(names, values)
         if violation is not None:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.CONSTRAINT_VIOLATED,
-                where,
-                f"the parameters violate the constraint exactly_one_of [{', '.join(names)}] of '{label}': {violation}.",
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.CONSTRAINT_VIOLATED,
+                    where,
+                    f"the parameters violate the constraint exactly_one_of [{', '.join(names)}] of '{label}': {violation}.",
+                )
             )
     for names in assembly.all_or_none_of:
         violation = ParameterChecks.partly_stated(names, values)
         if violation is not None:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.CONSTRAINT_VIOLATED,
-                where,
-                f"the parameters violate the constraint all_or_none_of [{', '.join(names)}] of '{label}': {violation}.",
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.CONSTRAINT_VIOLATED,
+                    where,
+                    f"the parameters violate the constraint all_or_none_of [{', '.join(names)}] of '{label}': {violation}.",
+                )
             )
+    if refusals:
+        return None, tuple(refusals)
     members: Dict[str, MemberTemplate] = dict(assembly.components)
     variants: Dict[str, str] = {}
     offered: Set[str] = set()
     for variant in assembly.variants.values():
         option = variant.option_for(values[variant.selected_by])
         if option is None:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.PARAMETER_INVALID,
-                where,
-                f"the parameter '{variant.selected_by}' of '{label}' selects the variant '{variant.name}', but it "
-                f"resolves to {values[variant.selected_by]!r}, which no option covers.",
-                alternatives=[repr(value) for option in variant.options.values() for value in option.when],
-                alternatives_label=f"values of '{variant.selected_by}'",
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.PARAMETER_INVALID,
+                    where,
+                    f"the parameter '{variant.selected_by}' of '{label}' selects the variant '{variant.name}', but it "
+                    f"resolves to {values[variant.selected_by]!r}, which no option covers.",
+                    alternatives=tuple(repr(value) for option in variant.options.values() for value in option.when),
+                    alternatives_label=f"values of '{variant.selected_by}'",
+                )
             )
+            continue
         variants[variant.name] = option.name
         members.update(option.components)
         for other in variant.options.values():
             offered.update(other.components)
+    if refusals:
+        return None, tuple(refusals)
     ordered = {member.name: member for member in assembly.all_members() if member.name in members}
-    return Selection(
+    selection = Selection(
         given=dict(given),
         resolved=values,
         variants=variants,
         members={name: members[name] for name in ordered},
         dropped=tuple(sorted(offered - set(members))),
     )
+    return selection, ()

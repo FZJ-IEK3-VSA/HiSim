@@ -67,6 +67,7 @@ from hisim.components import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 from tests.fake_component_source import NamedComponentSource
 from tests.idealized_heater_rig import controller_between, heat_into
 
@@ -90,6 +91,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_economics_bridge",
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # The weather config is built first because the PV and building configs copy its identity
@@ -149,6 +151,16 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
         source_component_output=my_occupancy.ElectricalPowerConsumption,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    # The heater's electricity passes the meter too: with the weather exempt, no component of this run is
+    # undeclared, so the energy balance fails an electricity port no meter reads (owner decision Q-H).
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_idealized_electric_heater.component_name,
+        source_component_output=my_idealized_electric_heater.ElectricityConsumptionInWatt,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

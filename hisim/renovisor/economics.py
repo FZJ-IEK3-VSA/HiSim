@@ -438,10 +438,10 @@ class RealizedTwin:
         from hisim.energy_system.classes import validate_classes
         from hisim.energy_system.configure import configure_energy_system
         from hisim.energy_system.groups import expand_groups
-        from hisim.energy_system.validation import validate_structure
+        from hisim.energy_system.loader import run_load_rules
 
         expanded, _record = expand_groups(model)
-        validate_structure(expanded)
+        run_load_rules(expanded, {}, None)
         bindings = validate_classes(expanded)
         configured = configure_energy_system(expanded, bindings=bindings)
         return cls(

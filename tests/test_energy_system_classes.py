@@ -61,7 +61,7 @@ class Systems:
         Returns:
             The parsed, unexpanded file.
         """
-        text = f"schema_version: 3\nname: class rule under test\ncomponents:\n{entries}"
+        text = f"schema_version: 3\nname: class rule under test\nsetup_kind: demo\ncomponents:\n{entries}"
         return EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
 
 

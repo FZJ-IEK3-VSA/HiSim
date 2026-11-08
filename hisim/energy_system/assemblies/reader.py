@@ -7,7 +7,8 @@ construct lean v1 does not have by name (``EF-73``): inner ``imports``, ``preset
 ``internal:``, ``order:``, ``$switch``/``$fact``/``$derived``, ``at_most_one_of``/``requires``,
 ``export``, ``priorities`` and ``actuates``. Whether the members' classes exist, whether ports name
 real members and whether the variants partition their selector is the library check's
-(:mod:`.library`), which lists every problem of a file at once.
+(:class:`hisim.setup_rules.assemblies.LibraryChecker`, the assembly rule ``EF-75``), which lists every
+problem of a file at once.
 """
 
 from __future__ import annotations
@@ -284,7 +285,9 @@ class AssemblyReader:
         monotone: List[MonotoneDeclaration] = []
         for index, item in enumerate(entries["monotone"]):
             where = f"{location}.monotone[{index}]"
-            ImportsReader.check_keys(item, where, ("parameter", "kpi", "member", "direction"), "a monotone entry")
+            ImportsReader.check_keys(
+                item, where, ("parameter", "kpi", "member", "direction", "applies_when"), "a monotone entry"
+            )
             try:
                 direction = MonotoneDirection(item.get("direction"))
             except ValueError as error:
@@ -294,7 +297,10 @@ class AssemblyReader:
                     allowed=[member.value for member in MonotoneDirection],
                 ) from error
             strings = cls._strings(item, where, "parameter", "kpi", "member", required=("parameter", "kpi"))
-            monotone.append(MonotoneDeclaration.model_validate({"direction": direction, **strings}))
+            applies_when = ImportsReader.conditions(item.get("applies_when") or {}, f"{where}.applies_when")
+            monotone.append(
+                MonotoneDeclaration.model_validate({"direction": direction, "applies_when": applies_when, **strings})
+            )
         expect: List[ExpectDeclaration] = []
         for index, item in enumerate(entries["expect"]):
             where = f"{location}.expect[{index}]"

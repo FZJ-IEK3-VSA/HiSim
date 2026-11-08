@@ -33,7 +33,7 @@ from hisim.energy_system.aggregator_ports import AggregatorPortChecker
 from hisim.energy_system.channel_matching import ChannelMatcher
 from hisim.energy_system.channels import DynamicConnectionChannel, FeedRequest
 from hisim.energy_system.dispatch_signals import DispatchSignalPlanner
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemErrorId, WiringRefusal
 from hisim.energy_system.resolution import (
     ResolvedDispatch,
     ResolvedDynamicConnection,
@@ -49,11 +49,13 @@ class DynamicConnectionResolver:
 
     One resolver serves one build. It is constructed with the system's components, is handed the
     feeds grouped by the aggregator they address, and returns the wires that have to be made.
-    Along the way it raises every wiring error that concerns a feed — a target that is not an
-    aggregator, a participant port that does not exist, a feed matching no channel, two feeds
-    measuring the same port, a derived name colliding with an existing port — and it records
-    which ports it created, so that the wiring stage can reject an explicit wire reaching into
-    one of them.
+    Along the way it records in :attr:`refusals` every wiring fault that concerns a feed — a target
+    that is not an aggregator, a participant port that does not exist, a feed matching no channel,
+    two feeds measuring the same port, a derived name colliding with an existing port — and an
+    aggregator with any of them is left untouched and gets no wire; the wiring rules of the setup
+    rules (``hisim/setup_rules/wiring.py``) refuse them, every one of a build at once. It also
+    records which ports it created, so that a rule can refuse an explicit wire reaching into one of
+    them.
 
     Aggregator capability is discovered by duck typing over two well-known names rather than by
     a type test: a component that declares channels and implements the resolution hook is an
@@ -85,6 +87,7 @@ class DynamicConnectionResolver:
         self.components_by_name: Dict[str, "Component"] = dict(components_by_name)
         self.resolved_by_target: Dict[str, List[ResolvedDynamicConnection]] = {}
         self.created_ports: Dict[str, List[str]] = {}
+        self.refusals: List[WiringRefusal] = []
 
     @classmethod
     def channels_of(cls, component: Any) -> Tuple[DynamicConnectionChannel, ...]:
@@ -137,6 +140,27 @@ class DynamicConnectionResolver:
         if not isinstance(declared, Mapping):
             return ()
         return tuple(declared.get(source.get_classname(), ()) or ())
+
+    @classmethod
+    def declared_feeds_for(cls, target: Any, source: Any, output: str) -> Tuple[Any, ...]:
+        """Reads the default feeds an aggregator declares from one participant for one of its outputs.
+
+        Example: a gas meter declares one feed for ``GenericBoiler.EnergyDemandSh``, so the boiler's
+        output gives that one declaration; an output it declares nothing for gives ``()``. A carrier
+        need's consuming output lands at its meter as the one declaration this returns, and the wiring
+        rule ``EF-7N`` refuses an output with none or several.
+
+        Args:
+            target: The aggregator, a constructed component.
+            source: The participant, a constructed component.
+            output: The participant's output.
+
+        Returns:
+            The declarations for that output, in declaration order.
+        """
+        return tuple(
+            declaration for declaration in cls.default_feeds_of(target, source) if declaration.source_component_field_name == output
+        )
 
     @classmethod
     def feed_from_declaration(
@@ -198,16 +222,14 @@ class DynamicConnectionResolver:
 
         Targets are processed in sorted name order and their feeds in the deterministic order
         described in the module docstring, so the resulting wire list depends only on the
-        system's content.
+        system's content. An aggregator whose feeds were refused contributes no wire; its
+        refusals are in :attr:`refusals`.
 
         Args:
             feeds_by_target: The feeds of the system, grouped by the aggregator addressed.
 
         Returns:
             The forward and dispatch wires of every resolved feed, target by target.
-
-        Raises:
-            EnergySystemWiringError: On any feed condition of the error catalogue.
         """
         wires: List[ResolvedDynamicWire] = []
         for target_name in sorted(feeds_by_target):
@@ -220,41 +242,52 @@ class DynamicConnectionResolver:
     ) -> List[ResolvedDynamicConnection]:
         """Resolves the feeds addressed at one aggregator and creates its ports.
 
-        A component's resolution hook may refuse the batch it is handed by raising a
-        ``ValueError``. That is the escape hatch for an instance-level condition only the
-        component itself can decide — the fuel and gas meters cross-check the carrier of every
-        feed against the one their configuration prices, which no class-level channel declaration
-        could express. Such a refusal is caught here and re-raised as the located wiring error the
-        rest of the catalogue uses, so the author reads it in the terms of the file they wrote
-        rather than as a traceback out of a component.
+        Every feed is checked, and then the batch, before anything is created: a refusal of any
+        of them is recorded in :attr:`refusals` and the aggregator is left untouched, with no port
+        created and no connection returned. A component's resolution hook may refuse the batch it
+        is handed by raising a ``ValueError``. That is the escape hatch for an instance-level
+        condition only the component itself can decide — the fuel and gas meters cross-check the
+        carrier of every feed against the one their configuration prices, which no class-level
+        channel declaration could express. Such a refusal is recorded as the located refusal the
+        rest of the catalogue uses (``EF-30``), so the author reads it in the terms of the file
+        they wrote rather than as a traceback out of a component.
 
         Args:
             target_name: Name of the aggregator in the file.
             feeds: The feeds addressed at it.
 
         Returns:
-            The resolved connections in deterministic order.
-
-        Raises:
-            EnergySystemWiringError: On any feed condition of the error catalogue, and on a
-                refusal the target's own resolution hook raised.
+            The resolved connections in deterministic order; empty when a refusal was recorded.
         """
         target = self.components_by_name[target_name]
-        channels = self._require_channels(target_name, target, len(feeds))
-        resolved = [self._resolve_feed(target_name, target, channels, feed) for feed in feeds]
-        AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved)
+        if not self.is_aggregator(target):
+            self.refusals.append(self._not_an_aggregator(target_name, target, len(feeds)))
+            return []
+        channels = self.channels_of(target)
+        found: List[WiringRefusal] = []
+        resolved = [
+            connection
+            for connection in (self._resolve_feed(target_name, target, channels, feed, found) for feed in feeds)
+            if connection is not None
+        ]
+        AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved, found)
         resolved.sort(key=lambda connection: connection.sort_key())
-        DispatchSignalPlanner(target_name, target).check(resolved)
-        created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved)
+        DispatchSignalPlanner(target_name, target).check(resolved, found)
+        created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved, found)
+        if found:
+            self.refusals.extend(found)
+            return []
         try:
             getattr(target, self.RESOLUTION_HOOK)(list(resolved))
         except ValueError as error:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.PORT_TYPE_MISMATCH,
-                f"components.{target_name}.inputs",
-                str(error),
-            ) from error
-        AggregatorPortChecker.check_ports_were_created(target_name, target, resolved)
+            self.refusals.append(
+                WiringRefusal(EnergySystemErrorId.PORT_TYPE_MISMATCH, f"components.{target_name}.inputs", str(error), cause=error)
+            )
+            return []
+        AggregatorPortChecker.check_ports_were_created(target_name, target, resolved, found)
+        if found:
+            self.refusals.extend(found)
+            return []
         self.resolved_by_target[target_name] = resolved
         self.created_ports.setdefault(target_name, []).extend(created)
         return resolved
@@ -302,14 +335,13 @@ class DynamicConnectionResolver:
             )
         return wires
 
-    def _require_channels(
-        self, target_name: str, target: Any, feed_count: int
-    ) -> Tuple[DynamicConnectionChannel, ...]:
-        """Fetches the target's channels or reports that it is not an aggregator.
+    @staticmethod
+    def _not_an_aggregator(target_name: str, target: Any, feed_count: int) -> WiringRefusal:
+        """Builds the refusal of feeds addressed at a component that is not an aggregator.
 
         A component with no channel declaration cannot classify a single participant, so
         addressing a feed at it is the same authoring mistake as addressing one at a component
-        that never implements the resolution hook, and it produces the same error rather than a
+        that never implements the resolution hook, and it produces the same refusal rather than a
         confusing "no matching channel" message.
 
         Args:
@@ -318,24 +350,19 @@ class DynamicConnectionResolver:
             feed_count: How many feeds are addressed at it, for the message.
 
         Returns:
-            The target's declared channels.
-
-        Raises:
-            EnergySystemWiringError: ``EF-27`` if the target accepts no feeds.
+            ``EF-27`` naming the target and its class.
         """
-        if not self.is_aggregator(target):
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.NOT_AN_AGGREGATOR,
-                f"components.{target_name}.inputs",
-                f"'{target_name}' ({target.get_full_classname()}) is not an aggregator — it "
-                f"declares no dynamic-connection channels — so the {feed_count} feed(s) "
-                "addressed at it cannot be applied.",
-                remedy=(
-                    "Wire these participants with explicit '{input, from}' items, or address "
-                    "them at a component that aggregates."
-                ),
-            )
-        return self.channels_of(target)
+        return WiringRefusal(
+            EnergySystemErrorId.NOT_AN_AGGREGATOR,
+            f"components.{target_name}.inputs",
+            f"'{target_name}' ({target.get_full_classname()}) is not an aggregator — it "
+            f"declares no dynamic-connection channels — so the {feed_count} feed(s) "
+            "addressed at it cannot be applied.",
+            remedy=(
+                "Wire these participants with explicit '{input, from}' items, or address "
+                "them at a component that aggregates."
+            ),
+        )
 
     def _resolve_feed(
         self,
@@ -343,7 +370,8 @@ class DynamicConnectionResolver:
         target: Any,
         channels: Tuple[DynamicConnectionChannel, ...],
         feed: FeedRequest,
-    ) -> ResolvedDynamicConnection:
+        refusals: List[WiringRefusal],
+    ) -> Optional[ResolvedDynamicConnection]:
         """Classifies and checks one feed against the target's channels.
 
         Args:
@@ -351,35 +379,43 @@ class DynamicConnectionResolver:
             target: The aggregator component.
             channels: Its declared channels.
             feed: The feed to resolve.
+            refusals: Where every fault of the feed is recorded: ``EF-21`` if the participant
+                does not declare the named output, plus any channel or dispatch violation.
 
         Returns:
-            The resolved connection, with its channel, tags, weight and dispatch settled.
-
-        Raises:
-            EnergySystemWiringError: ``EF-21`` if the participant does not declare the named
-                output, plus any channel or dispatch violation.
+            The resolved connection, with its channel, tags, weight and dispatch settled, or
+            ``None`` when the feed was refused.
         """
         source = self.components_by_name[feed.source]
-        source_output = self._require_output_name(target, feed)
+        source_output = self.output_name_of(target, source, feed)
+        if source_output is None:
+            refusals.append(self._underivable_output(target, source, feed))
+            return None
         port = self._find_output(source, source_output)
         if port is None:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
-                feed.location,
-                f"the {feed.describe()} names the output '{source_output}', which "
-                f"'{feed.source}' ({source.get_full_classname()}) does not declare.",
-                alternatives=[existing.field_name for existing in source.outputs],
-                alternatives_label="outputs",
-                offending_value=source_output,
+            refusals.append(
+                WiringRefusal(
+                    EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
+                    feed.location,
+                    f"the {feed.describe()} names the output '{source_output}', which "
+                    f"'{feed.source}' ({source.get_full_classname()}) does not declare.",
+                    alternatives=tuple(existing.field_name for existing in source.outputs),
+                    alternatives_label="outputs",
+                    offending_value=source_output,
+                )
             )
+            return None
         description = f"'{target_name}' ({target.get_full_classname()})"
         channel = ChannelMatcher.match_and_validate(
             feed=feed,
             channels=channels,
             target=description,
+            refusals=refusals,
             source_load_type=port.load_type,
             source_unit=port.unit,
         )
+        if channel is None:
+            return None
         dispatch: Optional[ResolvedDispatch] = None
         if feed.has_dispatch:
             dispatch = ResolvedDispatch(
@@ -400,46 +436,50 @@ class DynamicConnectionResolver:
             dispatch=dispatch,
         )
 
-    def output_name(self, feed: FeedRequest) -> str:
-        """The participant output a feed measures: its own, else its aggregator's one declaration for the class.
-
-        Raises:
-            EnergySystemWiringError: ``EF-21`` if the output cannot be derived.
-        """
-        return self._require_output_name(self.components_by_name[feed.consumer], feed)
-
-    def _require_output_name(self, target: Any, feed: FeedRequest) -> str:
-        """Determines which participant output a feed measures.
+    @classmethod
+    def output_name_of(cls, target: Any, source: Any, feed: FeedRequest) -> Optional[str]:
+        """Determines which participant output a feed measures: its own, else its aggregator's one declaration.
 
         A feed may omit the dotted half of its ``from`` when the aggregator's declared default
-        for the participant's class already names the port unambiguously. Several declarations
-        make the omission ambiguous and none makes it unanswerable; both are errors that name
-        the candidates.
+        for the participant's class already names the port unambiguously. Example: a feed
+        ``from: battery`` into an energy management system that declares one feed for the
+        battery's class measures the output that declaration names; with two declarations, or
+        none, the output is undecidable and the result is ``None``.
 
         Args:
             target: The aggregator component.
+            source: The participant component.
             feed: The feed whose participant port is wanted.
 
         Returns:
-            The name of the participant output.
-
-        Raises:
-            EnergySystemWiringError: ``EF-21`` if the output cannot be derived.
+            The name of the participant output, or ``None`` when it cannot be derived.
         """
         if feed.output is not None:
             return feed.output
-        source = self.components_by_name[feed.source]
-        declarations = self.default_feeds_of(target, source)
+        declarations = cls.default_feeds_of(target, source)
         if len(declarations) == 1:
             return str(declarations[0].source_component_field_name)
-        candidates = [str(declaration.source_component_field_name) for declaration in declarations]
-        raise EnergySystemWiringError(
+        return None
+
+    def _underivable_output(self, target: Any, source: Any, feed: FeedRequest) -> WiringRefusal:
+        """Builds the refusal of a feed whose participant output cannot be derived, naming the candidates.
+
+        Args:
+            target: The aggregator component.
+            source: The participant component.
+            feed: The feed that names no output.
+
+        Returns:
+            ``EF-21`` listing the outputs the aggregator declares feeds for.
+        """
+        declarations = self.default_feeds_of(target, source)
+        return WiringRefusal(
             EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
             feed.location,
             f"the {feed.describe()} names no output of '{feed.source}', and the aggregator "
             f"'{feed.consumer}' declares {len(declarations)} default feeds for the class "
             f"'{source.get_classname()}', so which port is meant is undecidable.",
-            alternatives=candidates,
+            alternatives=tuple(str(declaration.source_component_field_name) for declaration in declarations),
             alternatives_label="outputs",
             remedy=(
                 "Write the port as the dotted half of 'from', as in "

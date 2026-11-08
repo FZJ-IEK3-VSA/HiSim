@@ -1,13 +1,18 @@
 """Simple air-conditioner household building-sizer system setup.
 
 This setup pairs a :class:`~hisim.components.building.Building` with
-:class:`~hisim.components.weather.Weather`, a
-:class:`~hisim.components.simple_air_conditioner.SimpleAirConditioner` and its
-:class:`~hisim.components.simple_air_conditioner.SimpleAirConditionerController`.
+:class:`~hisim.components.weather.Weather`, the residents of a
+:class:`~hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector`, a
+:class:`~hisim.components.simple_air_conditioner.SimpleAirConditioner`, its
+:class:`~hisim.components.simple_air_conditioner.SimpleAirConditionerController` and an
+:class:`~hisim.components.electricity_meter.ElectricityMeter` for the electricity the residents
+and the air conditioner buy.
 
 It is derived from ``household_heatpump_building_sizer.py`` but stripped down to
-weather + building + AC + controller only — no UTSP/occupancy, PV, battery, EMS,
-heat pump, heat distribution, DHW storage, or electricity meter.
+weather + building + occupancy + AC + controller + electricity meter only — no PV, battery,
+EMS, heat pump, heat distribution or DHW storage. The residents' body heat and the heat of their
+devices warm the building (its internal gains), and their electricity passes the meter. Their
+hot-water draw has no consumer here: the setup has no hot-water storage, so it stays unread.
 """
 
 import re
@@ -15,9 +20,11 @@ from typing import Optional, Any
 
 from hisim.simulator import SimulationParameters
 from hisim.components import weather
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.config import SizingContext
 from hisim.components import building
 from hisim.components import simple_air_conditioner
+from hisim.components import electricity_meter
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
@@ -25,6 +32,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
 )
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "HiSim Project"
 __copyright__ = "Copyright 2025, the House Infrastructure Project"
@@ -43,10 +51,13 @@ def setup_function(
 
     Components:
         - Building (German single-family home, cooling setpoint 25 °C)
+        - Occupancy (the archetype's LPG households: internal gains and electricity)
         - Weather
         - SimpleAirConditioner (Carnot-efficiency cooling model)
         - SimpleAirConditionerController (hysteresis on indoor temperature)
+        - ElectricityMeter (reads the residents' and the air conditioner's electricity)
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
     # =================================================================================================================================
     # Set System Parameters from Config
     config_filename = my_sim.my_module_config
@@ -85,6 +96,7 @@ def setup_function(
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = arche_type_config_.conditioned_floor_area_in_m2
     number_of_apartments = arche_type_config_.number_of_dwellings_per_building
+    lpg_households = arche_type_config_.resolve_lpg_households()
 
     # =================================================================================================================================
     # Build Building
@@ -116,6 +128,17 @@ def setup_function(
     )
 
     # =================================================================================================================================
+    # Build Occupancy
+    # The residents of the other household building-sizer setups: the archetype's LPG households, computed by the
+    # local LoadProfileGenerator. Their heat gains reach the building through its default connections.
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
+    my_occupancy_config.household = lpg_households
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # =================================================================================================================================
     # Build Weather
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -144,9 +167,12 @@ def setup_function(
     # =================================================================================================================================
     # Wire and add components
 
-    # Building: connect weather defaults, then add
+    # Building: connect weather defaults, then add; connecting automatically also wires the residents' heat gains
     my_building.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_building, connect_automatically=True)
+
+    # Occupancy: add (no inputs)
+    my_sim.add_component(my_occupancy)
 
     # Weather: add (no auto-connect needed)
     my_sim.add_component(my_weather)
@@ -169,6 +195,15 @@ def setup_function(
 
     # Controller: add with auto-connect (connects to Building via default connections)
     my_sim.add_component(my_air_conditioner_controller, connect_automatically=True)
+
+    # =================================================================================================================================
+    # Build Electricity Meter: the electricity the air conditioner draws is bought, so it passes the meter, which reads
+    # every electricity port by its role
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # =================================================================================================================================
     # Set Results Path

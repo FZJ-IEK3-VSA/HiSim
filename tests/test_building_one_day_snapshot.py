@@ -67,7 +67,7 @@ import pytest
 
 from hisim import component as cp
 from hisim.caching import CacheSettings
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 from hisim.components.building import Building, BuildingConfig
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
@@ -352,7 +352,8 @@ class OneDaySnapshot:
                 initial_internal_temperature_in_celsius=cls.SCALED_VARIANT_INITIAL_INTERNAL_TEMPERATURE_IN_CELSIUS,
                 set_cooling_temperature_in_celsius=cls.SCALED_VARIANT_SET_COOLING_TEMPERATURE_IN_CELSIUS,
             )
-        return config
+        # The technical room's location follows from the TABULA row; resolving sizes it, the only field left AUTO.
+        return config.resolve(SizingContext())
 
     @classmethod
     def simulation_parameters(cls) -> SimulationParameters:

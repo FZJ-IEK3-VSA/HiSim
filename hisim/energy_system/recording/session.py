@@ -44,6 +44,8 @@ from hisim.energy_system.recording.observe import RecordedSystem, observe
 from hisim.energy_system.recording.parameters import ParameterFileLibrary, ParameterReference
 from hisim.energy_system.repository import RepositoryLayout
 from hisim.energy_system.schema_export import default_schema_path
+from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.rule import RuleStage
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -344,14 +346,23 @@ class RecordingSession:
                 component or the component no such field. Every one of these leaves the output path
                 as it was: the text is verified from a staging file beside it and only then renamed
                 into place.
+            SetupRuleViolation: When the build rules a run checks before its first step refuse the
+                system (``hisim/setup_rules/``), on the components as added or connected; nothing
+                is written.
+            UndeclaredSetupKindError: When the setup declares no kind.
         """
         from hisim.hisim_main import get_description_from_py, initialize_from_python  # noqa: PLC0415
 
         setup_name = self.relative(self.module_path)
         configuration = str(self.module_config) if self.module_config is not None else None
         simulator = initialize_from_python(str(self.module_path), parameters, configuration)
+        # The build rules of a run judge the system before it is recorded: a system a run would refuse is never
+        # written down as a twin.
+        registry = SetupRuleRegistry.collect()
+        registry.run(RuleStage.BUILD, simulator.added_system(), simulator.setup_kind)
         simulator.prepare_calculation()
         simulator.connect_all_components()
+        registry.run(RuleStage.BUILD, simulator.built_system(), simulator.setup_kind)
         observed = observe(simulator, setup=setup_name)
         reference = self.library.reference(simulator.get_simulation_parameters())
         builder = EnergySystemBuilder(observed)

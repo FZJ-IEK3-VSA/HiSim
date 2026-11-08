@@ -5,6 +5,7 @@
 # (the monitor). Four site components and three imports.
 schema_version: 4
 name: mock_house
+setup_kind: demo
 description: A composed mock house for the assemblies tests.
 
 components:

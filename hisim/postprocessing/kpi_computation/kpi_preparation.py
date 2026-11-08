@@ -28,6 +28,9 @@ class KpiPreparation:
     WATT_HOUR_PER_ENERGY_UNIT: ClassVar[Mapping[Units, float]] = MappingProxyType(
         {Units.WATT_HOUR: 1.0, Units.KWH: 1000.0}
     )
+    #: Half the step the total electricity consumption is rounded to, in kWh (it is rounded to one decimal): the most
+    #: the rounded total can fall short of the unrounded self-consumption it bounds.
+    CONSUMPTION_ROUNDING_IN_KILOWATT_HOUR: ClassVar[float] = 0.05
 
     def __init__(
         self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list
@@ -415,6 +418,40 @@ class KpiPreparation:
             building_production_in_kilowatt_hour,
         )
 
+    @classmethod
+    def self_sufficiency_within_rounding(
+        cls,
+        self_sufficiency_rate_in_percent: float,
+        self_consumption_in_kilowatt_hour: float,
+        electricity_consumption_in_kilowatt_hour: float,
+    ) -> float:
+        """Return the self-sufficiency rate, 100 % where it exceeds it only by the rounding of the consumption.
+
+        The self-consumption is the per-step minimum of production and consumption, so it never exceeds the
+        consumption; but the consumption it is divided by is rounded to 0.1 kWh, and a run whose production covers
+        its consumption in every step can come out a hair above 100 %. For example, 5,272,971.74 kWh self-consumed
+        against the same consumption rounded to 5,272,971.7 kWh is 100.0000008 %, which is 100 %. A self-consumption beyond the
+        consumption by more than its rounding is a fault of the computation and is refused.
+
+        Args:
+            self_sufficiency_rate_in_percent: The self-consumption divided by the rounded consumption, in %.
+            self_consumption_in_kilowatt_hour: The self-consumption, in kWh, unrounded.
+            electricity_consumption_in_kilowatt_hour: The consumption, in kWh, rounded to one decimal.
+
+        Returns:
+            The rate, at most 100 %.
+
+        Raises:
+            ValueError: If the self-consumption exceeds the consumption by more than :attr:`CONSUMPTION_ROUNDING_IN_KILOWATT_HOUR`.
+        """
+        if self_sufficiency_rate_in_percent <= 100:
+            return self_sufficiency_rate_in_percent
+        if self_consumption_in_kilowatt_hour - electricity_consumption_in_kilowatt_hour <= cls.CONSUMPTION_ROUNDING_IN_KILOWATT_HOUR:
+            return 100.0
+        raise ValueError(
+            "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code."
+        )
+
     def compute_self_consumption_injection_self_sufficiency(
         self,
         result_dataframe: pd.DataFrame,
@@ -472,10 +509,9 @@ class KpiPreparation:
                 if electricity_consumption_in_kilowatt_hour > 0
                 else 0
             )
-            if self_sufficiency_rate_in_percent > 100:
-                raise ValueError(
-                    "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code."
-                )
+            self_sufficiency_rate_in_percent = self.self_sufficiency_within_rounding(
+                self_sufficiency_rate_in_percent, self_consumption_in_kilowatt_hour, electricity_consumption_in_kilowatt_hour
+            )
 
         else:
             self_consumption_series_in_watt = pd.Series([])
@@ -589,9 +625,19 @@ class KpiPreparation:
         kpi_tag: KpiTagEnumClass,
         name: str = "Relative electricity demand from grid",
     ) -> Optional[float]:
-        """Return the relative electricity demand."""
+        """Return the relative electricity demand: the electricity bought from the grid per electricity consumed, in %.
 
-        if electricity_from_grid_in_kilowatt_hour is None:
+        A run that consumes nothing and buys nothing (both round to 0.0 kWh) has no relative demand: the entry is
+        emitted with no value, as :meth:`compute_ratio_between_two_values_and_set_as_kpi` does for a total
+        consumption of zero, because 0/0 is undefined, not 0 % or 100 %. For example, the simple air conditioner's
+        household in a January week neither cools nor consumes. A run that buys electricity it does not count as
+        consumed still fails below: that is a consumer the KPIs miss.
+        """
+
+        relative_electricity_demand_from_grid_in_percent: Optional[float]
+        if electricity_from_grid_in_kilowatt_hour is None or (
+            round(electricity_from_grid_in_kilowatt_hour, 1) == 0 and round(total_electricity_consumption_in_kilowatt_hour, 1) == 0
+        ):
             relative_electricity_demand_from_grid_in_percent = None
         else:
             relative_electricity_demand_from_grid_in_percent = (
@@ -701,8 +747,8 @@ class KpiPreparation:
         ratio = denominator / numerator * 100 [%].
 
         Every caller divides by a total consumption, and a system can legitimately consume nothing:
-        the simple air-conditioner household has no occupancy and no generation at all, so it
-        reported a total of zero and the division ended the KPI run with ZeroDivisionError. The ratio
+        a house without residents or generation whose air conditioner stays off on a winter day
+        reports a total of zero, and the division ended the KPI run with ZeroDivisionError. The ratio
         there is not zero, it is undefined -- there is nothing for the numerator to be a proportion
         of -- and the entry is emitted with no value, which is what this module already does for a
         self-consumption rate when there is no production

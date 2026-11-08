@@ -25,6 +25,7 @@ from hisim.component import ComponentInput, ComponentOutput, PhysicsComponent, S
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -187,6 +188,7 @@ def slow_loop_simulator(tmp_path: Path, seconds_per_timestep: int) -> Tuple[Simu
     simulator = Simulator(
         module_directory=str(tmp_path), module_filename="pass_limit", my_simulation_parameters=parameters
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     simulator.set_simulation_parameters(parameters)
     leader = SlowLeader(parameters, SlowLoopStubConfig(component_id=ComponentID(name="Leader")))
     follower = SlowFollower(parameters, SlowLoopStubConfig(component_id=ComponentID(name="Follower")))

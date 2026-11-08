@@ -109,6 +109,17 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
+            # The heat pump's backup heating rod (#1113), a metered draw of its own, ahead of the hot-water
+            # draw in the solar-thermal heat-pump sizer, which shifts the participants after it by one.
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerHeatingRod_5": (
+                "ElectricalInputPowerHeatingRodFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_6": (
+                "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_SolarThermalSystem_ElectricityConsumptionOutput_7": (
+                "ElectricityConsumptionOutputFromSolarThermalSystem"
+            ),
             # The car battery's charging, which the meter reads from the battery itself (Sankey PR 5b).
             "Input_CarBattery_1_AcBatteryChargingPower_6": "AcBatteryChargingPowerFromCarBattery_1",
             # The battery, the last participant, so its index counts the devices before it.
@@ -117,11 +128,33 @@ class DeclaredPortRenamings:
             "Input_Battery_ChargingPower_4": "ChargingPowerFromBattery",
             "Input_Battery_ChargingPower_6": "ChargingPowerFromBattery",
             "Input_Battery_ChargingPower_7": "ChargingPowerFromBattery",
+            "Input_Battery_ChargingPower_8": "ChargingPowerFromBattery",
             "Input_Battery_DischargingPower_3": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_4": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_5": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_7": "DischargingPowerFromBattery",
             "Input_Battery_DischargingPower_8": "DischargingPowerFromBattery",
+            "Input_Battery_DischargingPower_9": "DischargingPowerFromBattery",
+            # dynamic_components (hisim-meter-bought-carriers-lyfl): the meter reads the two batteries, the two
+            # CHPs, the occupancy and the PV system, in the order the setup adds them.
+            "Input_Battery1_ChargingPower_0": "ChargingPowerFromBattery1",
+            "Input_Battery1_DischargingPower_1": "DischargingPowerFromBattery1",
+            "Input_Battery2_ChargingPower_2": "ChargingPowerFromBattery2",
+            "Input_Battery2_DischargingPower_3": "DischargingPowerFromBattery2",
+            "Input_CHP1_ElectricityOutput_4": "ElectricityOutputFromCHP1",
+            "Input_CHP2_ElectricityOutput_5": "ElectricityOutputFromCHP2",
+            "Input_UTSPConnector_ElectricalPowerConsumption_6": "ElectricalPowerConsumptionFromUTSPConnector",
+            "Input_PVSystem_ElectricityOutput_7": "ElectricityOutputFromPVSystem",
+            # simple_air_conditioner_household_building_sizer: the air conditioner is the meter's one participant.
+            "Input_SimpleAirConditioner_ElectricalPowerConsumption_0": (
+                "ElectricalPowerConsumptionFromSimpleAirConditioner"
+            ),
+            # electrolyzer_with_renewables, the grid connection: the transformer's delivery and the
+            # electrolyzer's draw.
+            "Input_StandardTransformerAndRectifier_ElectricityDeliveredInWatt_0": (
+                "ElectricityDeliveredInWattFromStandardTransformerAndRectifier"
+            ),
+            "Input_Electrolyzer_CurrentLoad_1": "CurrentLoadFromElectrolyzer",
         },
         # The energy-management controller, which is an aggregator on its consumption and
         # production side as well as a dispatcher on its target side. The battery is always the
@@ -200,6 +233,13 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
+        },
+        # The hydrogen meter of dynamic_components, which measures the mass flow each CHP burns, and
+        # of electrolyzer_with_renewables, which measures the mass flow the electrolyzer produces.
+        "HydrogenMeter": {
+            "Input_CHP1_GasDemandReal_0": "GasDemandRealFromCHP1",
+            "Input_CHP2_GasDemandReal_1": "GasDemandRealFromCHP2",
+            "Input_Electrolyzer_CurrentHydrogenFlowRate_0": "CurrentHydrogenFlowRateFromElectrolyzer",
         },
         # The gas meter, which measures a boiler's two fuel demands. Space heating is always
         # inserted before domestic hot water.

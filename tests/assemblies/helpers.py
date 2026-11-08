@@ -180,7 +180,7 @@ def expand_text(text: str, resolver: Optional[AssemblyResolver] = None) -> Tuple
 def site(*entries: str, imports: str = "") -> str:  # pylint: disable=redefined-outer-name  # the file's key
     """A version-4 file with the given site entries (each an indented YAML block) and imports block."""
     body = "\n".join(textwrap.indent(textwrap.dedent(entry).strip(), "  ") for entry in entries)
-    text = f"schema_version: 4\nname: inline\ncomponents:\n{body}\n"
+    text = f"schema_version: 4\nname: inline\nsetup_kind: demo\ncomponents:\n{body}\n"
     if imports:
         text += "imports:\n" + textwrap.indent(textwrap.dedent(imports).strip(), "  ") + "\n"
     return text

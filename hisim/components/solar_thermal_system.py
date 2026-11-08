@@ -463,6 +463,9 @@ class SolarThermalSystem(PhysicsComponent):
     #: the pump: the stagnation temperature while the pump stood in the previous step, the outlet while it ran.
     CollectorSensorTemperatureAtStartOfStepInCelsius: ClassVar[str] = "CollectorSensorTemperatureAtStartOfStepInCelsius"
     WaterMassFlowOutput: ClassVar[str] = "WaterMassFlowOutput"
+    #: The collector loop's flow returning to the collector, in kg/s: the solar pump's own flow, passed back by the
+    #: tank's solar coil.
+    WaterMassFlowInput: ClassVar[str] = "WaterMassFlowInput"
     WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
     ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
     #: The irradiance on the collector plane times the collector area: the solar power the collectors receive (W).
@@ -580,6 +583,14 @@ class SolarThermalSystem(PhysicsComponent):
             loadtypes.Units.CELSIUS,
             True,
             fluid_loop=self.solar_loop.temperature_in,
+        )
+        self.water_mass_flow_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterMassFlowInput,
+            loadtypes.LoadTypes.WARM_WATER,
+            loadtypes.Units.KG_PER_SEC,
+            False,
+            fluid_loop=self.solar_loop.flow_in,
         )
         self.inlet_temperature_at_start_of_step_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -886,12 +897,13 @@ class SolarThermalSystem(PhysicsComponent):
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ) -> List[ComponentConnection]:
-        """Return the connections from the hot-water storage: the collector inlet's temperatures.
+        """Return the connections from the hot-water storage: the collector inlet's temperatures and its flow back.
 
         The collector's inlet is the storage's return leg of its secondary coil, the lower solar coil of a bivalent
         cylinder, which the storage's own defaults wire the collector into (owner decision of 2026-10-21,
         hisim-dhw-tank-one-return-7kq2). Its step mean is the temperature the collector runs at; its start-of-step
-        temperature is the inlet of the outlet the collector's sensor reads while the pump runs.
+        temperature is the inlet of the outlet the collector's sensor reads while the pump runs. The coil passes the
+        solar pump's flow back, the loop's fourth wire, which the collector does not compute with.
 
         Returns:
             The connection list.
@@ -911,6 +923,13 @@ class SolarThermalSystem(PhysicsComponent):
                 SolarThermalSystem.TemperatureCollectorInletAtStartOfStepInCelsius,
                 storage_classname,
                 SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.WaterMassFlowInput,
+                storage_classname,
+                SimpleDHWStorage.WaterMassFlowRateToSecondaryHeatGenerator,
             )
         )
         return connections

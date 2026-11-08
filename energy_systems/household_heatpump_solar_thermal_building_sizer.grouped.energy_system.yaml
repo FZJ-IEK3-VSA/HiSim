@@ -3,6 +3,7 @@
 # Grouped by energy_systems/household_heatpump_solar_thermal_building_sizer.grouping.yaml from the probe configurations of energy_systems/household_heatpump_solar_thermal_building_sizer.probes.yaml.
 schema_version: 3
 name: household_heatpump_solar_thermal_building_sizer
+setup_kind: residential
 description: Basic household system setup. Shows how to set up a standard system.
 components:
   Building:
@@ -52,7 +53,7 @@ components:
       - L2EMSElectricityController
       - Weather
   MoreAdvancedHeatPumpHPLib:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true
@@ -101,7 +102,7 @@ components:
       - MoreAdvancedHeatPumpHPLib
       - SolarThermalSystem
   MoreAdvancedHeatPumpHPLibControllerSH:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - MoreAdvancedHeatPumpHPLib
@@ -109,7 +110,7 @@ components:
       - HeatingCurveController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
       - MoreAdvancedHeatPumpHPLibControllerSH
@@ -141,6 +142,10 @@ variants:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
               - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
@@ -229,6 +234,10 @@ variants:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999
               - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
+                tags:
+                  - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                weight: 999
+              - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod
                 tags:
                   - ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 weight: 999

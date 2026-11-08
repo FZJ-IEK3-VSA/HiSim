@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from hisim.config import ComponentID
 from hisim.energy_system.imports_model import BindingVerbs, ImportEntry, PlacedPlaceholder, Port, Selection
 from hisim.energy_system.names import NameRules
+from hisim.setup_rules.kinds import SetupKind
 
 
 class SourceReference(BaseModel):
@@ -398,7 +399,7 @@ class EnergySystemFile(BaseModel):
     """A whole energy-system document as loaded from YAML.
 
     The document has a fixed, small top level: the schema version that pins the format, a
-    name and description, the ungrouped components, the groups, the variants, and a metadata
+    name, the kind of setup it is, a description, the ungrouped components, the groups, the variants, and a metadata
     block only generated files carry. Simulation parameters — time range, resolution,
     post-processing — are deliberately not part of it: the same energy system is run over
     different periods, and mixing the two would force a copy of the system per run.
@@ -431,6 +432,7 @@ class EnergySystemFile(BaseModel):
     TOP_LEVEL_KEYS: ClassVar[Tuple[str, ...]] = (
         "schema_version",
         "name",
+        "setup_kind",
         "description",
         "components",
         "imports",
@@ -441,6 +443,9 @@ class EnergySystemFile(BaseModel):
 
     schema_version: int
     name: str
+    #: What the system is (``setup_kind`` in the file): a demonstration, a residential or a commercial building, or
+    #: a plant. Mandatory and without a default: the setup rules a kind waives depend on it.
+    setup_kind: SetupKind
     description: Optional[str] = None
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
     imports: Mapping[str, ImportEntry] = Field(default_factory=dict)

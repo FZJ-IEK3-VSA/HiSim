@@ -2,6 +2,7 @@
 # Recorded from system_setups/household_heatpump_car_building_sizer.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: household_heatpump_car_building_sizer
+setup_kind: residential
 description: Basic household new system setup.
 components:
   Building:
@@ -51,7 +52,7 @@ components:
       - L2EMSElectricityController
       - Weather
   MoreAdvancedHeatPumpHPLibControllerSH:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - MoreAdvancedHeatPumpHPLib
@@ -60,14 +61,14 @@ components:
       - L2EMSElectricityController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
       - L2EMSElectricityController
       - MoreAdvancedHeatPumpHPLibControllerSH
       - DHWStorage
   MoreAdvancedHeatPumpHPLib:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true
@@ -166,6 +167,10 @@ components:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod
         tags:
           - ELECTRICITY_CONSUMPTION_UNCONTROLLED
         weight: 999

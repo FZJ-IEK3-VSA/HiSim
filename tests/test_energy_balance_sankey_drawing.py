@@ -200,8 +200,10 @@ def test_merged_links_list_what_they_merge_in_their_hover_text() -> None:
 
 @pytest.mark.base
 def test_a_small_group_that_only_takes_goes_to_one_sink_node_and_one_linked_to_nothing_stays() -> None:
-    """A small store that only takes is merged into "other (sinks)"; two small components linked only to each other
-    are drawn as they are, since there is nothing to merge them into."""
+    """A small store that only takes is merged into "other (sinks)", and two small components stay as they are.
+
+    The two components are linked only to each other, so there is nothing to merge them into.
+    """
     links = [link("Grid", "Tank", 100.0), link("Tank", "Tank · stored", 99.0), link("Tank", "Tank · Loss", 1.0), link("A", "B", 0.5)]
     kinds = {"Grid": K.B, "Tank": K.C, "Tank · stored": K.S, "Tank · Loss": K.L, "A": K.C, "B": K.C}
     drawn, merged = SankeyDrawing.merge_small(links, kinds, 2.0)

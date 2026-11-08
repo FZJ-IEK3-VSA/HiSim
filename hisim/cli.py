@@ -16,7 +16,7 @@ reads, and which provider each read resolved to — without running a single tim
 record`` goes the other way and writes a Python setup out as such a file, which is how the setups
 this repository already has become declarative twins without anybody retyping them. And ``hisim
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one, and ``hisim
-energy-system sankey`` reads a finished run's result directory for its matplotlib Sankey figure.
+energy-system sankey`` redraws the matplotlib Sankey figure of a finished run from its result directory.
 A second noun reads what a run wrote: ``hisim kpis list`` prints the address, value and unit of
 every KPI of one ``all_kpis.json``, filtered by building, tag, name, source, import or instance.
 A third, ``hisim setup-rules``, lists the rules every setup obeys and the kinds that waive them,
@@ -55,7 +55,7 @@ from hisim.energy_system.recording.grouping_overview import OverviewPage
 from hisim.energy_system.recording.session import RecordingSession, record_setup
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import default_schema_path, export_schema
-from hisim.postprocessing.energy_balance.figure import DrawnGraph, GraphBuilder, SankeyInputError, SankeyInputs
+from hisim.postprocessing.energy_balance.figure import DrawnGraph, FigureFiles, GraphBuilder, SankeyInputError, SankeyInputs, draw_overall
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.setup_rules.rule import SetupRuleViolation
 
@@ -216,13 +216,18 @@ class EnergySystemCommands:
 
 
 class SankeyCommand:
-    """The ``energy-system sankey`` verb: read a finished run's result directory for its matplotlib Sankey figure."""
+    """The ``energy-system sankey`` verb: redraw the Sankey figure of a finished run without simulating again."""
+
+    #: The sub-directory of a result directory the figure goes to by default.
+    DEFAULT_SUBDIRECTORY = FigureFiles.SUBDIRECTORY
 
     @classmethod
     def sankey(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
-        """Prints the drawn graph of a result directory: every node with its role and parent, the chain, the residuals.
+        """Draws the overall Sankey of a result directory into ``--out`` (default: its ``energy_sankeys``).
 
-        Returns 0 when the directory holds the inputs, 2 when it lacks one (the message names what is missing).
+        With ``--pins`` the figure is drawn from that pin file; with ``--graph`` only the drawn graph is printed
+        (every node with its role and parent, the chain, the residuals). Returns 0 when the layout has no fault, 4 when
+        it has faults (``overall.layout_error.json`` lists them), 2 when the directory lacks an input.
         """
         directory = Path(arguments.result_directory)
         try:
@@ -230,9 +235,19 @@ class SankeyCommand:
         except SankeyInputError as error:
             print(str(error), file=error_stream)
             return ExitCodes.USAGE
-        for line in cls.graph_lines(GraphBuilder.build(inputs)):
-            print(line, file=out)
-        return ExitCodes.OK
+        if arguments.graph:
+            for line in cls.graph_lines(GraphBuilder.build(inputs)):
+                print(line, file=out)
+            return ExitCodes.OK
+        target = Path(arguments.out) if arguments.out else directory / cls.DEFAULT_SUBDIRECTORY
+        layout, written = draw_overall(inputs, target, Path(arguments.pins) if arguments.pins else None)
+        if layout.nothing_to_draw:
+            print(f"{directory}: the overall view has no component to draw; no figure written.", file=out)
+            return ExitCodes.OK
+        print(f"Wrote {', '.join(path.name for path in written)} to {target}.", file=out)
+        for fault in layout.faults:
+            print(f"layout fault ({fault.kind}): {fault.message}", file=error_stream)
+        return ExitCodes.LAYOUT_FAULTS if layout.faults else ExitCodes.OK
 
     @staticmethod
     def graph_lines(graph: DrawnGraph) -> List[str]:
@@ -386,8 +401,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--rerun", action="store_true",
                      help="the file is a generated run record and is expected to reproduce it")
 
-    sankey = verbs.add_parser("sankey", help="read a finished run's result directory for its Sankey figure")
+    sankey = verbs.add_parser("sankey", help="redraw the matplotlib Sankey figure of a finished run")
     sankey.add_argument("result_directory", metavar="RESULT_DIR", help="the run's result directory")
+    sankey.add_argument("--out", default=None, help="where the figure goes (default: RESULT_DIR/energy_sankeys)")
+    sankey.add_argument("--pins", default=None, help="a complete pin file (a hand layout) to draw from")
+    sankey.add_argument("--graph", action="store_true", help="print the drawn graph instead of drawing")
 
     SetupRuleCommands.add_parser(nouns)
 

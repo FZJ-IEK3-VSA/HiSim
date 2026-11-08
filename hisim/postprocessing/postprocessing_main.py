@@ -35,7 +35,7 @@ Execution flow
    not), and every component that declares energy ports must close its balance, with its links, loops and
    meters (:class:`~hisim.setup_rules.results.EnergyBalanceError`; ``hisim/setup_rules/results.py``,
    ``hisim/setup_rules/meters.py``). A run whose balance fails writes the balance report first when
-   ``EXPORT_ENERGY_BALANCE`` asks for it.
+   ``EXPORT_ENERGY_BALANCE`` or ``PLOT_SANKEY`` asks for it, and draws its Sankey figure for ``PLOT_SANKEY``.
 1. **Plots** -- line, carpet, single-day, and (for near-year-long runs) monthly bar charts
    are generated and collected as report image entries.
 2. **Exports** -- the result ``DataFrame`` is written to CSV and/or Pickle.
@@ -54,7 +54,8 @@ Execution flow
    (including the building-sizer format) are written to JSON files.
 8. **Energy balance** -- in every run, whatever the options: the summary of the balance the rules judged in step 0
    is logged (:mod:`hisim.postprocessing.energy_balance`); ``EXPORT_ENERGY_BALANCE`` also writes the report and the
-   Sankeys.
+   Sankeys, and ``PLOT_SANKEY`` (which implies it) draws the matplotlib Sankey figure, whose layout faults are logged
+   and never fail the run.
 """
 from __future__ import annotations
 import importlib
@@ -66,6 +67,7 @@ import os
 import pickle
 import string
 import sys
+from pathlib import Path
 from timeit import default_timer as timer
 from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING, cast
 
@@ -1201,9 +1203,10 @@ class PostProcessor:
             SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, subject, ppdt.setup_kind)
         except EnergyBalanceError:
             # Every rule of this error read the balance, so it is there; written when asked, unless it is not finite
-            if PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options and not subject.energy_balance.nonfinite:
+            if PostProcessor.writes_energy_balance(ppdt) and not subject.energy_balance.nonfinite:
                 report_path = subject.energy_balance.write(ppdt.simulation_parameters.result_directory)
                 log.error(f"The energy balance of this run does not close; its report is {report_path}.")
+                PostProcessor.plot_sankey(ppdt)
             raise
         return subject.energy_balance
 
@@ -1226,15 +1229,45 @@ class PostProcessor:
 
     @staticmethod
     def export_sankeys(ppdt: PostProcessingDataTransfer, energy_balance: "EnergyBalanceReport") -> None:
-        """Write the balance report and the Sankeys when asked, and log what the balance found.
+        """Write the balance report and the Sankeys when asked, draw the matplotlib Sankey, and log what the balance found.
 
-        ``EXPORT_ENERGY_BALANCE`` writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory.
-        The balance was judged first thing (:meth:`judge_the_results`), so this never fails the run.
+        ``EXPORT_ENERGY_BALANCE`` (implied by ``PLOT_SANKEY``) writes ``balance_report.json`` and ``energy_sankeys/``
+        into the result directory; ``PLOT_SANKEY`` then draws the matplotlib figure from those files
+        (:meth:`plot_sankey`). The balance was judged first thing (:meth:`judge_the_results`), so this never fails
+        the run.
         """
-        write = PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options
+        write = PostProcessor.writes_energy_balance(ppdt)
         start = timer()
         energy_balance.conclude(ppdt.simulation_parameters.result_directory if write else None)
         log.information(f"Concluding the energy balance took {timer() - start:1.2f}s.")
+        PostProcessor.plot_sankey(ppdt)
+
+    @staticmethod
+    def writes_energy_balance(ppdt: PostProcessingDataTransfer) -> bool:
+        """Whether the run writes its balance report and Sankey views: ``EXPORT_ENERGY_BALANCE`` or ``PLOT_SANKEY``.
+
+        ``PLOT_SANKEY`` implies the export, since the figure is drawn from the files it writes (the matplotlib
+        Sankey spec, §4.3).
+        """
+        options = ppdt.post_processing_options
+        return PostProcessingOptions.EXPORT_ENERGY_BALANCE in options or PostProcessingOptions.PLOT_SANKEY in options
+
+    @staticmethod
+    def plot_sankey(ppdt: PostProcessingDataTransfer) -> None:
+        """Draw the matplotlib Sankey of the run into ``energy_sankeys/`` when ``PLOT_SANKEY`` asks for it.
+
+        A layout fault never fails the run (D15 of the matplotlib Sankey spec): each fault is logged as an error and
+        listed in ``energy_sankeys/overall.layout_error.json``, which the golden check reads.
+        """
+        if PostProcessingOptions.PLOT_SANKEY not in ppdt.post_processing_options:
+            return
+        from hisim.postprocessing.energy_balance.figure import FigureFiles  # pylint: disable=import-outside-toplevel
+
+        start = timer()
+        faults = FigureFiles.draw_run(Path(ppdt.simulation_parameters.result_directory))
+        for fault in faults:
+            log.error(f"Sankey figure: {fault}")
+        log.information(f"Drawing the Sankey figure took {timer() - start:1.2f}s ({len(faults)} layout faults).")
 
     @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:

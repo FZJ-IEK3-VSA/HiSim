@@ -116,6 +116,57 @@ def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
     assert report["pairs"][0]["deviations"]
 
 
+def _faulty_run_fn(kpis: dict, layout_faults: list[str]):
+    """A ``run_fn`` whose one run drew its Sankey figure with ``layout_faults``."""
+    def fake(_config: GoldenConfig, _results_root: Path, _repo_root: Path, _subdir: str) -> list[RunResult]:
+        return [RunResult("setup_a", "one_week_60s", "rd", kpis=kpis, layout_faults=layout_faults)]
+    return fake
+
+
+@pytest.mark.parametrize("nondeterministic", [False, True])
+def test_a_sankey_layout_fault_fails_the_pair_with_matching_kpis(tmp_path: Path, nondeterministic: bool, capsys: pytest.CaptureFixture[str]) -> None:
+    """A run whose figure has layout faults is a ``layout_fault`` pair: rc 1, each fault in both reports and on stdout.
+
+    The KPIs match, so only the figure fails; a nondeterministic parameter set does not make the fault advisory.
+    """
+    config_path = _write_config(tmp_path, nondeterministic=nondeterministic)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, general({"a": 1.0}))
+    faults = ["overlap: 1 overlaps left after the search", "overlap left: label Battery <> arrow Grid"]
+
+    rc = main(config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=tmp_path, run_fn=_faulty_run_fn(general({"a": 1.0}), faults))
+
+    assert rc == 1
+    report = _read_report(tmp_path)
+    assert report["passed"] is False
+    assert report["pairs"][0]["status"] == "layout_fault"
+    assert report["pairs"][0]["layout_faults"] == faults
+    assert report["pairs"][0]["deviations"] == []
+    text = (tmp_path / "golden-ref-check" / "report.txt").read_text()
+    assert text.startswith("GOLDEN CHECK FAILED (1 pair(s)): 1 with Sankey layout faults")
+    assert "[LAYOUT_FAULT] setup_a / one_week_60s" in text
+    assert "    - [sankey] overlap left: label Battery <> arrow Grid" in text
+    printed = capsys.readouterr().out
+    assert "[SANKEY LAYOUT FAULT] setup_a / one_week_60s" in printed
+    assert "      - overlap: 1 overlaps left after the search" in printed
+
+
+def test_a_kpi_divergence_stays_a_fail_and_also_lists_the_layout_faults(tmp_path: Path) -> None:
+    """A pair that diverges and has layout faults is ``fail``; the summary counts it under both reasons."""
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, general({"a": 1.0}))
+
+    rc = main(config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=tmp_path, run_fn=_faulty_run_fn(general({"a": 2.0}), ["layout: no route"]))
+
+    assert rc == 1
+    pair = _read_report(tmp_path)["pairs"][0]
+    assert pair["status"] == "fail"
+    assert pair["layout_faults"] == ["layout: no route"]
+    summary = (tmp_path / "golden-ref-check" / "report.txt").read_text().splitlines()[0]
+    assert "1 with KPI divergences" in summary and "1 with Sankey layout faults" in summary
+
+
 def test_port_named_kpis_are_excluded_from_both_sides_in_yaml_mode(tmp_path: Path) -> None:
     """The declared port-named KPI family is dropped from run and reference alike.
 

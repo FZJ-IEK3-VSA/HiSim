@@ -252,7 +252,7 @@ Into `energy_sankeys/` of the result directory, beside the plotly files:
 | `overall.png` | the figure at 30 px per canvas unit (§6.5), so its width follows the canvas: about 2,400 to 2,900 px for a full-year building-sizer system, 1,300 to 2,400 px for a week; white background |
 | `overall.pdf`, `overall.svg` | the same figure as vector graphics (the SVG keeps text as text); D18 |
 | `overall.layout.json` | the computed layout: the `matplotlib.sankey` parameters of every sub-diagram (§6.5) in the order added, every connector's route points, every label's position and its data source (§7.2), the scale, the canvas, the pins applied, the rounds the search took. The determinism test compares this file (§9.3), and a person starts a pin file from it |
-| `overall.layout_error.json` | only when the layout engine fails (§6.12): the faults, as sentences, and the layout as far as it got |
+| `overall.layout_error.json` | only when the layout has a fault (§6.12): `{"faults": [...], "overlaps": [...]}`, each fault a sentence starting with its kind (`overlap: 2 overlaps left`, `route: no clear route for link ...`, `layout: ...`, `error: the figure could not be drawn: ...`), each overlap left as `<kind> <first> <> <second>`; the layout as far as it got is in `overall.layout.json`. A clean redraw deletes a stale one. The golden check reads this file (§9.5) |
 
 Only the `overall` view is drawn in v1 (D17). The per-carrier views stay plotly HTML (D13); a per-carrier
 matplotlib view is a filter of the same layout and is left for a later bead.
@@ -269,19 +269,33 @@ both options. The figure is drawn at the end of `PostProcessor.export_sankeys`
 of `judge_the_results`, where the balance report is written before an `EnergyBalanceError` propagates: a run that
 fails its balance gets its picture with the residual arrows (D11) when the option is set.
 
+As built in PR 4b: `PostProcessor.writes_energy_balance` is the one test of "the balance files are written"
+(`EXPORT_ENERGY_BALANCE` or `PLOT_SANKEY`), used by `export_sankeys` and by the failure path of `judge_the_results`;
+`PostProcessor.plot_sankey` then calls `FigureFiles.draw_run(result_directory)`, which never raises (D15): a layout
+fault, a missing input and an exception inside the renderer each become a sentence in the returned list and in
+`overall.layout_error.json`, and every sentence is logged as an error. The refusal is
+`SimulationParametersReader.refuse_sankey_without_kpis` (`EF-07`, "PLOT_SANKEY draws the Sankey figure from the run's
+KPIs, so it requires COMPUTE_KPIS; add COMPUTE_KPIS or drop PLOT_SANKEY."); it guards every parameter file, the
+JSON files of the Python setups included (all shipped files that name `PLOT_SANKEY` also name `COMPUTE_KPIS`), but
+not a Python setup that appends options in code. Until the automatic layout lands (PR 5), a run with `PLOT_SANKEY`
+and no pin file writes the one fault `layout: no pin file given, and this version has no automatic layout yet`;
+that is why the golden week parameter sets get the option only in PR 5 (§9.5).
+
 The plotly HTML stays as it is in v1 (D13): `EXPORT_ENERGY_BALANCE` keeps writing the per-view HTML, interactive
-hover text included, and nothing of `SankeyDrawing` changes. The matplotlib figure is the picture of the run; the
-PDF report shows it (`INCLUDE_IMAGES_IN_PDF_REPORT`, bead hisim-4hed, PR 7). Whether the plotly `overall.html` is
-retired is decided in PR 7 (D13).
+hover text included, and nothing of `SankeyDrawing` changes. The matplotlib figure is the picture of the run, its
+PNG/PDF/SVG beside the plotly HTML; the PDF report is retired and shows nothing of it (D23). Whether the plotly
+`overall.html` is retired is decided in PR 7 (D13).
 
 ### 4.4 The redraw command
 
-`hisim energy-system sankey <result directory> [--pins FILE] [--out DIRECTORY]` draws the figure from a finished
-result directory without simulating again: it builds `SankeyInputs.from_result_directory`, applies the pin file
-when given (else the one §6.10 finds), writes the files of §4.2 into `--out` (default: the result directory's
+`hisim energy-system sankey <result directory> [--pins FILE] [--out DIRECTORY] [--graph]` draws the figure from a
+finished result directory without simulating again: it builds `SankeyInputs.from_result_directory`, applies the pin
+file when given (no pin file is looked up, §6.10), writes the files of §4.2 into `--out` (default: the result directory's
 `energy_sankeys/`) and exits 0 on 0 overlaps, 4 when the layout engine reports faults (the files of §4.2 are still
 written where it could draw), 2 when the directory lacks an input. A render takes a few seconds, a run 20 to 45 s,
-so layout work and pin files are done with this command (the first try built it in `hisim/cli.py`). It writes into
+so layout work and pin files are done with this command (the first try built it in `hisim/cli.py`). `--graph`
+prints the drawn graph instead (chain, every node with role, parent and flows, the residuals), exit 0 or 2; the
+exit code 4 is `ExitCodes.LAYOUT_FAULTS` in `hisim/cli_exit.py`. It writes into
 the directory it is pointed at; the renderer lives under `hisim/postprocessing/`, which `.semgrep/file_writes.yml`
 already sanctions.
 
@@ -551,7 +565,10 @@ the trunk (by reading the drawn tips back).
   library's label offset, unused since labels are placed by the engine), `head_angle` 110° (the arrowhead's and
   notch's opening). These give the look of the twelve hand figures and are not tuned per system.
 - **Trunk length** (`trunklength`) of a sub-diagram: the largest of (a) the title's width plus `TITLE_PAD`
-  (0.6 u) on both sides, (b) the note block's width (§6.8) plus the pads, (c) `MIN_TRUNK` (3 u). The lateral
+  (0.6 u) on both sides, (b) the note block's width (§6.8) plus the pads, (c) `MIN_TRUNK` (3 u). To (a) and (b) add
+  the library's `gap` at both trunk ends and the notch depth of a tail input (half its width × the pitch): the title
+  sits between the first lateral flows' corners, not between the trunk's ends, and without these the title of a
+  short trunk touches the prior's arrow (finding of the second try). The lateral
   stacks sit beyond the trunk's corners and need no trunk length of their own. Text widths come from
   `matplotlib.textpath.TextPath` at the style's font size, converted to u through `PX_PER_UNIT`, so they are
   deterministic given the font (§9.3).
@@ -622,7 +639,13 @@ width descending:
    line of its outer corners), so the connector continues both stubs without a seam; the connector reaches
    `connector_overlap` (0.096 u) into both stubs so its fill covers the cut ends. A tree connection that runs beside
    a connector into the same side of the child (a generator's two inputs from one meter) is flattened the same way,
-   and the child's notch moved back by the shoulder, so the two bands enter side by side with one straight seam.
+   and the child's notch moved back by the shoulder, so the two bands enter side by side with one straight seam:
+   this is the prototype's look and stays for a pinned connector without `parallel`. A connector marked `parallel`
+   (D24; the automatic layout marks every second link into a child of its source, a pin file says
+   `parallel: true`) keeps the child's notch, stops at its outer edge and enters it with an arrowhead of its own
+   (`SankeyFigure.arrowhead`), so it reads as a second arrow. The route of a connector is checked against its own
+   source's patch only beyond the stub's arrowhead (`RouteRequest.reach`): the head is cut flat after the route is
+   found, so checking it would refuse every route (finding of the second try).
 2. **Shape**: *straight* when the two stubs are collinear and face each other; *L* when they are perpendicular and
    the lines through them meet in front of both; *Z* when they are parallel, face opposite directions and are
    offset. Each shape is tested against the obstacle map; the first that is clear is taken. `route_points` turns a
@@ -634,7 +657,10 @@ width descending:
    0.3 u) would intersect a drawn patch, a placed connector or a placed label. The route is the cell path
    simplified to its corners, written as `turns`.
 4. **Corners** are rounded with `CONNECTOR_RADIUS` (0.64 u), reduced to half of the shortest adjacent segment when
-   that is smaller, down to `MIN_RADIUS` (0.24 u); a route that leaves less is a fault, and the search first retries
+   that is smaller, down to `MIN_RADIUS` (0.24 u); a grid route of a narrow band may go down to half its width plus
+   0.05 u, at least half a grid cell (a hairline's inner edge folds only below half its width, and a corridor of one
+   grid cell has no 0.48 u to turn in; one-cell jogs are removed first, `Router.remove_jogs`); a route that leaves
+   less is a fault, and the search first retries
    after sliding the target's tree (§6.6 step 4) one more step. The centre line is sampled at 16 points per corner,
    the outline is the centre line offset by ± half the width, drawn as a `PathPatch` in the source sub-diagram's
    colour with the two sides as thin dark lines (0.6 pt).
@@ -657,7 +683,9 @@ The library's labels are disabled (`labels=[""] * n`, the `text` of each sub-dia
 own. Every flow has a label of two lines, name and value (`format_kwh`: MWh with one decimal from 10 MWh, whole kWh
 from 10 kWh, one decimal below; thousands separators; no sign). A loop's band carries a third line with its
 temperatures (§7.1). Every sub-diagram has a title (bold, at the trunk's centre, the library's `text` position,
-plus `title_offset`) and a **note block** under the title: the metric lines §7.1 gives its role, each one value with
+plus `title_offset`; 11 pt) and a **note block** under the title (11 pt regular, one text block with the title;
+flow labels are 9 pt; the hand figures used 9 pt for the metric lines, a presentation choice the layout does not
+depend on): the metric lines §7.1 gives its role, each one value with
 its unit and, when it has a warning, the marker ⚠n. The note block is reserved before placement: its width counts
 in the trunk length (§6.5) and its box is an obstacle, so the search never has to move it.
 
@@ -693,9 +721,12 @@ self-consumption and self-sufficiency rates, heat delivered to the rooms or heat
 
 ### 6.10 The pin file
 
-An optional YAML file, `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file (D16; found through
-the realized record's source path when the run came from a YAML, else none; the CLI takes `--pins`), schema
-`hisim.sankey_pins/1`. Its keys are the prototype's layout keys (`layouts/<stem>.yaml`), reduced to what differs
+An optional YAML file, `energy_systems/<stem>.sankey_pins.yaml` beside the energy-system file (D16; the CLI takes
+`--pins`), schema `hisim.sankey_pins/1`. The post-processing looks none up: the realized record carries no source
+path (finding of PR 4b), so a run cannot find the file beside its energy-system file; since no file ships one in v1,
+pins are applied through the redraw command only. PR 4b reads *complete* pin files (every sub-diagram with its
+flows, every connector with its turns), drawn in one round without repair moves; a partial pin over the computed
+layout needs the automatic layout and comes with PR 5. Its keys are the prototype's layout keys (`layouts/<stem>.yaml`), reduced to what differs
 from the computed layout:
 
 ```yaml
@@ -703,7 +734,7 @@ schema: hisim.sankey_pins/1
 canvas: {kwh_per_unit: 4000}                       # fixes the scale
 diagrams:
   - component: SolarThermalSystem
-    at: [3.5, 10.3]                                # a further tree's anchor in u; its whole tree moves with it
+    at: [3.5, 10.3]                                # the trunk centre of this member in u; its whole tree moves with it
     trunklength: 3.0
     title_offset: [-0.15, 0.0]
     flows:
@@ -715,12 +746,23 @@ connectors:
   - {link: SolarThermalSystem.ElectricityConsumptionOutput, turns: ["+2.5", -9.8, 4.6], label: {segment: 2, side: right, at: 0.85}}
 ```
 
+`at` may sit on any member of a tree, not only its root (the prototype pins the electricity meter, whose PV hangs
+upstream of it): the tree is moved so that member's trunk centre lands there. A connector may carry
+`parallel: true` (§6.7 step 1). A converted pin file keeps the prototype's lengths in u and draws at the fixed 30 px/u
+(§6.5); the prototype drew each figure at its own pixel scale (near 30 px/u for eleven of the twelve, 63 px/u for the
+air conditioner, whose texts are therefore twice as large against its bands and collide: 10 overlaps). A pin file
+is valid at 30 px/u only; an old hand layout drawn at another scale needs its label shifts redone. In PR 4b's local
+check the other eleven draw with 0 to 3 overlaps, each a title touching a neighbouring inside label or branch label,
+because the title and its metric lines are one 11 pt block where the hand figures set the metric lines in 9 pt
+(§6.8).
+
 A pin replaces the engine's value for that one parameter before the first round of §6.6; everything else is
 computed around it, and the validation of §6.12 applies unchanged (a pin that causes an overlap is a fault like
 any other; the search may grow a pinned path length no further). A pin naming a component, flow or connector the
 run does not have, or an orientation the frame rule of §6.4 forbids, is a fault. The applied pins are listed in
-`overall.layout.json`, which is itself a complete pin file: a person copies it, deletes what the engine should keep
-computing, and keeps the rest. The pin file is the escape hatch for the hard cases of §6.14; no energy-system file
+`overall.layout.json`, which holds every parameter a complete pin file needs except the connectors' turns (it
+records their route points) and writes a cut or residual flow under its link key; turning it into a pin file is a
+small converter left for after PR 5. The pin file is the escape hatch for the hard cases of §6.14; no energy-system file
 in the repository ships one in v1.
 
 ### 6.11 Rendering, and the library's quirks
@@ -752,6 +794,7 @@ The library's behaviour the engine works around, each recorded by the prototype 
 | a sub-diagram whose flows do not sum to zero is drawn with a smoothed taper and an info log | accepted for inflated bands; a real imbalance is a residual flow (§6.3) |
 | an unconnected sub-diagram is placed at the origin | moved by `at` after `finish()` (§6.6 step 2) |
 | an input's tip is the notch's inner point | input labels moved out by the notch depth; a connector fills the notch (§6.7) |
+| tail inputs and head outputs are justified: every one is drawn as long as the longest of its stack, whatever its path length (lateral flows keep theirs) | a stub on the tail or head is read back from the drawn tip, not from its path length; a connector's label line runs back along both stubs (`FigureTexts.with_stubs`), and a second link is never a stub under the tree connection (D24) |
 
 ### 6.12 Validation: what fails loudly
 
@@ -990,7 +1033,8 @@ one per case a rule needs: the heat-pump house (PV, meter, heat pump, buffer, bu
 a boiler fed twice by its meter with an electricity meter apart (a further tree), a storage without a discharge, a
 system without a building (a wind transformer upstream of the meter), two generators into one buffer, a solar
 collector with its pump, an undeclared component with a gap, a car. The graph tests (PR 4a) check every case's roles,
-chain, trees and residuals; the renderer tests (PR 4b) draw them from hand-written pin parameters; the layout tests
+chain, trees and residuals; the renderer tests (PR 4b) draw two of them, the heat-pump house and the boiler fed twice
+(its second fuel link a `parallel` connector), from hand-written pin files with 0 faults and 0 overlaps; the layout tests
 (PR 5) lay each out automatically and assert 0 faults and 0 overlaps. Each case lays out in well under a second.
 
 ### 9.3 Determinism (`base`)
@@ -1011,6 +1055,15 @@ The golden check (`.github/workflows/golden-check.yml`, `scripts/golden_check.py
 figure is laid out in every pull request. A run that writes `energy_sankeys/overall.layout_error.json` is a pair of
 status `layout_fault` in the golden report, with each fault as a line, and fails the job as a failing balance or a
 KPI divergence does; the run itself finishes (D15), and the KPIs are compared as usual.
+
+As built in PR 4b (`scripts/runner.py`, `scripts/golden_check.py`): `run_one` reads the file into
+`RunResult.layout_faults` (`read_layout_faults`, one line per fault and per overlap left), which travels through the
+child's result file; `_evaluate` gives a pair whose KPIs match and whose figure has faults the status `layout_fault`,
+which fails the gate also for a nondeterministic parameter set (its KPI deviations alone stay advisory); a pair that
+diverges stays `fail` and carries its layout faults beside the deviations. `report.json` holds them as
+`layout_faults` per pair, `report.txt` lists them under the pair as `- [sankey] <fault>`, the summary line counts
+"N with Sankey layout faults", and the console prints a `[SANKEY LAYOUT FAULT]` block per pair, as it prints
+`[KPI DIVERGENCE]`.
 
 ### 9.6 The visual acceptance
 

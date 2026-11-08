@@ -215,6 +215,9 @@ class RunResult:
     error: Optional[str] = None
     #: Wall time of the run in seconds; what ``golden_config.json``'s ``seconds`` weights come from.
     duration_s: Optional[float] = None
+    #: The Sankey figure's layout faults (``energy_sankeys/overall.layout_error.json``, ``PLOT_SANKEY``); empty
+    #: when the run drew its figure cleanly or drew none.
+    layout_faults: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +526,21 @@ def run_energy_system_file(path: Path, params: SimulationParameters) -> None:
         simulate_energy_system(str(path), params)
 
 
+def read_layout_faults(result_directory: Path) -> list[str]:
+    """Return the Sankey layout faults a run wrote, each fault and each overlap as one line; empty without the file.
+
+    A run with ``PLOT_SANKEY`` writes ``energy_sankeys/overall.layout_error.json`` (``{"faults": [...],
+    "overlaps": [...]}``) only when its figure's layout has a fault; the golden check fails such a pair as
+    ``layout_fault``. Example: a file ``{"faults": ["overlap: 1 overlaps left"], "overlaps": ["label a <> b"]}``
+    gives ``["overlap: 1 overlaps left", "overlap left: label a <> b"]``.
+    """
+    path = result_directory / "energy_sankeys" / "overall.layout_error.json"  # FigureFiles.SUBDIRECTORY, SankeyFigure.STEM
+    if not path.is_file():
+        return []
+    document = json.loads(path.read_text(encoding="utf-8"))
+    return [str(fault) for fault in document.get("faults", [])] + [f"overlap left: {overlap}" for overlap in document.get("overlaps", [])]
+
+
 def run_one(
     setup: SetupConfig,
     parameter_set: ParameterSetConfig,
@@ -587,6 +605,7 @@ def run_one(
             parameter_set_id=parameter_set.id,
             result_directory=result_directory,
             kpis=kpis,
+            layout_faults=read_layout_faults(Path(result_directory)),
         )
     except Exception:  # noqa: BLE001 - run_one must never raise
         return RunResult(

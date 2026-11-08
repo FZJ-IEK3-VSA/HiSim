@@ -143,13 +143,16 @@ class PairReport:
 
     setup_id: str
     parameter_set_id: str
-    status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "unusable_golden" | "run_error" | "skipped"
+    #: "pass" | "fail" | "advisory" | "layout_fault" | "missing_golden" | "unusable_golden" | "run_error" | "skipped"
+    status: str
     nondeterministic: bool = False
     deviations: list[str] = field(default_factory=list)
     #: KPIs whose unit changed: a failure of its own kind, kept apart from ``deviations``.
     unit_changes: list[str] = field(default_factory=list)
     #: Wall time of the pair's run in seconds; the source of ``golden_config.json``'s weights.
     duration_s: Optional[float] = None
+    #: The Sankey figure's layout faults (``PLOT_SANKEY``): a failure of its own kind, kept apart from the KPIs.
+    layout_faults: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -160,6 +163,7 @@ class ComparisonReport:
     pairs: list[PairReport] = field(default_factory=list)
 
     def summary_line(self) -> str:
+        """The report's first line: OK with the pair count, or FAILED with a count per reason (Sankey layout faults included)."""
         skipped = sum(1 for p in self.pairs if p.status == "skipped")
         total = len(self.pairs) - skipped
         counted = f"{total} pair(s)" + (f", {skipped} skipped without a composed file" if skipped else "")
@@ -172,6 +176,7 @@ class ComparisonReport:
         errored = sum(1 for p in self.pairs if p.status == "run_error")
         missing = sum(1 for p in self.pairs if p.status == "missing_golden")
         unusable = sum(1 for p in self.pairs if p.status == "unusable_golden")
+        laid_out_badly = sum(1 for p in self.pairs if p.layout_faults)
         reasons = []
         if errored:
             reasons.append(f"{errored} failed to run")
@@ -179,6 +184,8 @@ class ComparisonReport:
             reasons.append(f"{diverged} with KPI divergences")
         if unit_changed:
             reasons.append(f"{unit_changed} with KPI unit changes")
+        if laid_out_badly:
+            reasons.append(f"{laid_out_badly} with Sankey layout faults")
         if missing:
             reasons.append(f"{missing} missing a golden reference")
         if unusable:
@@ -215,7 +222,15 @@ def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bo
                 print(f"    {len(pair.unit_changes)} KPI(s) are reported in another unit than the golden's:")
                 for dev in pair.unit_changes:
                     print(f"      - {dev}")
-        elif pair.status == "missing_golden":
+        if pair.layout_faults:
+            print(f"\n[SANKEY LAYOUT FAULT] {name}")
+            print(
+                f"    The simulation ran, but its Sankey figure has {len(pair.layout_faults)} layout fault(s) "
+                "(energy_sankeys/overall.layout_error.json):"
+            )
+            for fault in pair.layout_faults:
+                print(f"      - {fault}")
+        if pair.status == "missing_golden":
             print(f"\n[MISSING GOLDEN] {name}")
             print("    No golden reference file was found to compare against:")
             for dev in pair.deviations:
@@ -245,6 +260,8 @@ def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
             lines.append(f"    - {dev}")
         for dev in pair.unit_changes:
             lines.append(f"    - [unit] {dev}")
+        for fault in pair.layout_faults:
+            lines.append(f"    - [sankey] {fault}")
     (out_dir / "report.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -372,13 +389,15 @@ def _evaluate(
         deviations = [str(deviation) for deviation in found if deviation.kind != UNIT]
         unit_changes = [str(deviation) for deviation in found if deviation.kind == UNIT]
 
-        if not found:
-            status = "pass"
-        elif nondet:
+        if found and not nondet:
+            status = "fail"
+        elif result.layout_faults:
+            status = "layout_fault"  # fails the gate as a divergence does, nondeterministic or not
+        elif found:
             status = "advisory"  # compared, but does not fail the gate
         else:
-            status = "fail"
-            passed = False
+            status = "pass"
+        passed = passed and status not in ("fail", "layout_fault")
         pair_reports.append(
             PairReport(
                 result.setup_id,
@@ -388,6 +407,7 @@ def _evaluate(
                 deviations,
                 unit_changes,
                 result.duration_s,
+                list(result.layout_faults),
             )
         )
     for setup_id, param_id in skipped:

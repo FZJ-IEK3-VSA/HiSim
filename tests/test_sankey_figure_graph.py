@@ -453,7 +453,7 @@ def test_graph_lines() -> None:
 
 @pytest.mark.base
 def test_sankey_command(tmp_path: Path) -> None:
-    """``hisim energy-system sankey`` reads a result directory and exits 0; a directory without inputs exits 2."""
+    """``hisim energy-system sankey --graph`` reads a result directory and exits 0; a directory without inputs exits 2."""
     view = {
         "overall": {
             "nodes": [{"name": "grid", "kind": "boundary"}, {"name": "M", "kind": "meter"}],
@@ -462,5 +462,5 @@ def test_sankey_command(tmp_path: Path) -> None:
     }
     (tmp_path / "energy_sankey.json").write_text(json.dumps(view), encoding="utf-8")
     (tmp_path / "balance_report.json").write_text(json.dumps({"timesteps": 4, "seconds_per_timestep": 900, "verdict": "closes"}), encoding="utf-8")
-    assert cli.main(["energy-system", "sankey", str(tmp_path)]) == 0
-    assert cli.main(["energy-system", "sankey", str(tmp_path / "missing")]) == 2
+    assert cli.main(["energy-system", "sankey", str(tmp_path), "--graph"]) == 0
+    assert cli.main(["energy-system", "sankey", str(tmp_path / "missing"), "--graph"]) == 2

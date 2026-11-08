@@ -4,10 +4,15 @@ Each factory builds the ``SankeyInputs`` of one hand-made ``overall`` view whose
 case one rule of the drawn graph, the renderer or the automatic layout needs (a boiler fed twice by its meter, a
 battery that charges and discharges, a storage without a discharge, a system without a building, two generators
 into one buffer, a solar collector with its pump, an undeclared component with a gap, a car). No recorded run is
-committed; the figures of every real twin are laid out in the golden jobs.
+committed; the figures of every real twin are laid out in the golden jobs. Two of the systems have a hand-written
+complete pin file (``heat_pump_house_pins``, ``boiler_fed_twice_pins``) that draws them with no overlap, for the
+renderer's tests before the automatic layout exists.
 """
 
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+import yaml
 
 from hisim.postprocessing.energy_balance.figure.inputs import SankeyInputs, ViewLink, ViewNode
 
@@ -270,3 +275,198 @@ class SankeySystems:
     def nothing_to_draw() -> SankeyInputs:
         """Return a view without a component, meter or undeclared node."""
         return SankeySystems.inputs({"sun": "boundary"}, [])
+
+    @staticmethod
+    def heat_pump_house_pins() -> Dict[str, Any]:
+        """Return a complete pin file for :meth:`heat_pump_house`: the PV upstream of the meter, the chain east of it.
+
+        The household hangs below the meter and heats the building through a connector; the battery hangs below the
+        meter and discharges back into it through a second connector. Drawn, it has no fault and no overlap.
+        """
+        return {
+            "schema": "hisim.sankey_pins/1",
+            "diagrams": [
+                {
+                    "component": "PV",
+                    "trunklength": 3.5,
+                    "cut": True,
+                    "flows": [
+                        {
+                            "link": "PV.ElectricityOutput",
+                            "orientation": 0,
+                            "pathlength": 3.0,
+                            "label": [-2.0, -2.0],
+                            "inside": True,
+                            "color": "#1a1a1a",
+                            "on_bands": ["PV", "Meter"],
+                        }
+                    ],
+                },
+                {
+                    "component": "Meter",
+                    "prior": "PV",
+                    "connect": "PV.ElectricityOutput",
+                    "at": [0.0, 0.0],
+                    "trunklength": 9.6,
+                    "flows": [
+                        {"link": "PV.ElectricityOutput", "orientation": 0, "pathlength": 0.8},
+                        {"link": "Meter.ElectricityFromGridInWatt", "orientation": 1, "pathlength": 1.92},
+                        {"link": "Battery.DischargingPower", "orientation": -1, "pathlength": 0.48},
+                        {"link": "Meter.ElectricityToGridInWatt", "orientation": 1, "pathlength": 2.88},
+                        {"link": "HeatPump.ElectricalInputPowerSH", "orientation": 0, "pathlength": 8.0, "label": [-4.16, 0.75], "ha": "center", "va": "bottom"},
+                        {"link": "Household.ElectricalPowerConsumption", "orientation": -1, "pathlength": 5.6, "label": [0.9, 2.88], "ha": "left"},
+                        {"link": "Battery.ChargingPower", "orientation": -1, "pathlength": 9.6, "label": [-0.8, 4.48], "ha": "right"},
+                    ],
+                },
+                {
+                    "component": "HeatPump",
+                    "prior": "Meter",
+                    "connect": "HeatPump.ElectricalInputPowerSH",
+                    "trunklength": 4.8,
+                    "flows": [
+                        {"link": "HeatPump.ElectricalInputPowerSH", "orientation": 0, "pathlength": 0.8},
+                        {"link": "HeatPump.Ambient", "orientation": -1, "pathlength": 1.92},
+                        {"link": "Buffer.loop", "orientation": 0, "pathlength": 7.2, "label": [-4.0, 0.0], "inside": True, "on_bands": ["HeatPump", "Buffer"]},
+                    ],
+                },
+                {
+                    "component": "Buffer",
+                    "prior": "HeatPump",
+                    "connect": "Buffer.loop",
+                    "trunklength": 3.52,
+                    "flows": [
+                        {"link": "Buffer.loop", "orientation": 0, "pathlength": 0.48},
+                        {"link": "Buffer.Stored", "orientation": -1, "pathlength": 1.28},
+                        {"link": "Buffer.StandbyHeatLoss", "orientation": 1, "pathlength": 1.6},
+                        {
+                            "link": "Building.HeatReceivedInWatt",
+                            "orientation": 0,
+                            "pathlength": 6.08,
+                            "label": [-3.36, 0.0],
+                            "inside": True,
+                            "on_bands": ["Buffer", "Building"],
+                        },
+                    ],
+                },
+                {
+                    "component": "Building",
+                    "prior": "Buffer",
+                    "connect": "Building.HeatReceivedInWatt",
+                    "trunklength": 6.4,
+                    "title_offset": [1.28, 0.0],
+                    "flows": [
+                        {"link": "Building.HeatReceivedInWatt", "orientation": 0, "pathlength": 0.48},
+                        {"link": "Building.HeatingByDevices", "orientation": -1, "pathlength": 0.48},
+                        {"link": "Building.Vent", "orientation": 1, "pathlength": 2.4},
+                        {"link": "Building.Opaque", "orientation": 0, "pathlength": 2.4},
+                    ],
+                },
+                {
+                    "component": "Household",
+                    "prior": "Meter",
+                    "connect": "Household.ElectricalPowerConsumption",
+                    "trunklength": 6.72,
+                    "title_offset": [0.0, 0.8],
+                    "flows": [
+                        {"link": "Household.ElectricalPowerConsumption", "orientation": 1, "pathlength": 0.8},
+                        {"link": "Building.HeatingByDevices", "orientation": 0, "pathlength": 0.48},
+                        {"link": "Household.Rest", "orientation": -1, "pathlength": 2.56},
+                    ],
+                },
+                {
+                    "component": "Battery",
+                    "prior": "Meter",
+                    "connect": "Battery.ChargingPower",
+                    "trunklength": 4.0,
+                    "title_offset": [-1.92, -1.12],
+                    "flows": [
+                        {"link": "Battery.ChargingPower", "orientation": 0, "pathlength": 0.48},
+                        {"link": "Battery.Stored", "orientation": -1, "pathlength": 0.96},
+                        {"link": "Battery.DischargingPower", "orientation": -1, "pathlength": 0.48},
+                        {"link": "Battery.InverterLossInWatt", "orientation": 1, "pathlength": 1.28},
+                    ],
+                },
+            ],
+            "connectors": [
+                {"link": "Battery.DischargingPower", "turns": [], "label": {"segment": 0, "side": "below"}},
+                {"link": "Building.HeatingByDevices", "turns": [], "label": {"segment": 0, "side": "above"}},
+            ],
+        }
+
+    @staticmethod
+    def boiler_fed_twice_pins() -> Dict[str, Any]:
+        """Return a complete pin file for :meth:`boiler_fed_twice`, the hot-water fuel drawn as an arrow of its own.
+
+        The gas meter's second link into the boiler is a parallel connector below the tree connection; the
+        electricity meter's tree is placed below the chain by its at. Drawn, it has no fault and no overlap.
+        """
+        return {
+            "schema": "hisim.sankey_pins/1",
+            "canvas": {"kwh_per_unit": 4.0},
+            "diagrams": [
+                {
+                    "component": "G",
+                    "trunklength": 4.0,
+                    "flows": [
+                        {"link": "G.in", "orientation": 0, "pathlength": 1.0},
+                        {"link": "B.EnergyDemandSh", "orientation": 0, "pathlength": 3.0, "label": [-1.5, 0.0], "inside": True, "on_bands": ["G", "B"]},
+                        {"link": "B.EnergyDemandDhw", "orientation": -1, "pathlength": 0.6},
+                    ],
+                },
+                {
+                    "component": "B",
+                    "prior": "G",
+                    "connect": "B.EnergyDemandSh",
+                    "trunklength": 4.0,
+                    "flows": [
+                        {"link": "B.EnergyDemandSh", "orientation": 0, "pathlength": 0.5},
+                        {"link": "B.EnergyDemandDhw", "orientation": -1, "pathlength": 0.6},
+                        {"link": "B.Loss", "orientation": -1, "pathlength": 1.0},
+                        {"link": "T.in", "orientation": 1, "pathlength": 2.0},
+                        {"link": "Bld.in", "orientation": 0, "pathlength": 3.0},
+                    ],
+                },
+                {
+                    "component": "T",
+                    "prior": "B",
+                    "connect": "T.in",
+                    "trunklength": 2.0,
+                    "flows": [{"link": "T.in", "orientation": -1, "pathlength": 0.5}, {"link": "T.taps", "orientation": 0, "pathlength": 1.0}],
+                },
+                {
+                    "component": "Bld",
+                    "prior": "B",
+                    "connect": "Bld.in",
+                    "trunklength": 3.0,
+                    "flows": [
+                        {"link": "Bld.in", "orientation": 0, "pathlength": 0.5},
+                        {"link": "Bld.gains", "orientation": -1, "pathlength": 0.6},
+                        {"link": "Bld.out", "orientation": 0, "pathlength": 1.5},
+                    ],
+                },
+                {
+                    "component": "E",
+                    "at": [0.0, -9.0],
+                    "trunklength": 5.0,
+                    "flows": [{"link": "E.in", "orientation": 0, "pathlength": 1.0}, {"link": "H.in", "orientation": 0, "pathlength": 2.0}],
+                },
+                {
+                    "component": "H",
+                    "prior": "E",
+                    "connect": "H.in",
+                    "trunklength": 2.0,
+                    "flows": [{"link": "H.in", "orientation": 0, "pathlength": 0.5}, {"link": "Bld.gains", "orientation": 0, "pathlength": 0.6}],
+                },
+            ],
+            "connectors": [
+                {"link": "B.EnergyDemandDhw", "parallel": True, "turns": ["-2.0"], "label": {"segment": 1, "side": "below"}},
+                {"link": "Bld.gains", "turns": [], "label": {"segment": 0, "side": "below"}},
+            ],
+        }
+
+    @staticmethod
+    def pin_file(document: Mapping[str, Any], directory: Path) -> Path:
+        """Write a pin document as pins.yaml into a directory and return its path."""
+        path = directory / "pins.yaml"
+        path.write_text(yaml.safe_dump(dict(document), sort_keys=False), encoding="utf-8")
+        return path

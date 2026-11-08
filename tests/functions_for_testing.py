@@ -11,6 +11,7 @@ from hisim.components.example_component import ExampleComponentConfig
 from hisim.config import ComponentID, SizingContext
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.errors import WiringRefusal
+from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
@@ -18,9 +19,9 @@ from hisim.energy_system.wiring import WiredSystem
 from hisim.postprocessing.energy_balance import EnergyBalanceReport
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.kinds import SetupKind
-from hisim.setup_rules.registry import SetupRuleRegistry
+from hisim.setup_rules.registry import SetupRuleRegistry, StageFindings
 from hisim.setup_rules.rule import RuleCodes, RuleStage, SetupRule
-from hisim.setup_rules.subjects import BuiltDocument, BuiltSystem, RunResults
+from hisim.setup_rules.subjects import BuiltDocument, BuiltSystem, LoadedDocument, RunResults
 from hisim.simulationparameters import SimulationParameters
 
 #: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
@@ -188,6 +189,23 @@ class WiringRules(FamilyRules):
         """
         wired = WiredSystem(components=(), wires=(), resolved_feeds=(), refusals=tuple(refusals))
         cls.registry().run(RuleStage.BUILD, cls.subject(wired), SetupKind.DEMO)
+
+
+class DocumentRules(FamilyRules):
+    """The structural setup rules (``hisim/setup_rules/document.py``) run on a document; their faults raise ``EnergySystemStructureError``."""
+
+    FAMILY: ClassVar[str] = "document"
+
+    @staticmethod
+    def subject(text: str, rerun: Optional[bool] = None) -> LoadedDocument:
+        """The document of an energy-system file written as YAML text, as the reader built it, for a run when ``rerun`` is not ``None``."""
+        return LoadedDocument(model=parse_energy_system(text), document={}, rerun=rerun)
+
+    @classmethod
+    def findings(cls, text: str, rerun: Optional[bool] = None) -> StageFindings:
+        """Run the structural rules alone on a document written as YAML text, and return what they found without raising."""
+        subject = cls.subject(text, rerun)
+        return cls.registry().findings(RuleStage.LOAD, subject, subject.model.setup_kind)
 
 
 class AfterRunRules:

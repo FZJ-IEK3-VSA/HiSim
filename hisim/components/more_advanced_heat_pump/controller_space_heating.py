@@ -360,7 +360,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         )
 
         # PV mode: the energy manager's target, and the heat pump's full load the target and the own need are
-        # measured against. Signals, no energy ports.
+        # measured against. Signals, no energy ports. Both are optional, like ActualPartLoadRatioSh: a controller
+        # whose heat pump is not wired (an assembly's isolation run) reads a full load of 0 W, so its own need is 0
+        # and, without a target, it keeps its own ratio; a target with no full load still fails loudly
+        # (pv_mode_part_load_ratio).
         self.electrical_power_target_channel: ComponentInput = self.add_input(
             self.component_name,
             self.ElectricalPowerTargetFromEnergyManagerInWatt,
@@ -373,7 +376,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             self.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
             LoadTypes.ELECTRICITY,
             Units.WATT,
-            mandatory=True,
+            mandatory=False,
         )
         self.own_need_channel: ComponentOutput = self.add_output(
             self.component_name,

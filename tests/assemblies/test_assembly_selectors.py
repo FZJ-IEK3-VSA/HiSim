@@ -294,7 +294,11 @@ def test_a_declared_output_the_built_source_does_not_have_is_no_candidate(tmp_pa
     assert [(feed.source, feed.output) for feed in feeds(model, "control-EMS")] == [
         ("UTSPConnector", "ElectricalPowerConsumption"),
         ("pv-pv_system-PVSystem", "ElectricityOutput"),
+        # the PV mode's signals (#1237): the space-heating controller's own need, the heat pump's full and minimum load
+        ("heating-ControllerSH", "OwnNeedElectricalPowerInWatt"),
         ("heating-HeatPump", "ElectricalInputPowerSH"),
+        ("heating-HeatPump", "ElectricalPowerAtFullLoadSpaceHeatingInWatt"),
+        ("heating-HeatPump", "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt"),
         ("battery-battery-Battery", "AcBatteryPowerUsed"),
         ("battery-battery-Battery", "MaximumChargingPowerInWatt"),
         ("battery-battery-Battery", "MinimumChargingPowerInWatt"),
@@ -504,13 +508,18 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
     assert [(item["from"], item["weight"]) for item in written] == [
         ("UTSPConnector.ElectricalPowerConsumption", weights[lt.ComponentType.RESIDENTS]),
         ("pv-pv_system-PVSystem.ElectricityOutput", MEASURED),
+        # the PV mode's signals (#1237), measured only: the controllers' own need and charge, the heat pump's range
+        ("heating-ControllerSH.OwnNeedElectricalPowerInWatt", MEASURED),
+        ("heating-ControllerDHW.ChargesWithoutRaise", MEASURED),
         ("heating-HeatPump.ElectricalInputPowerSH", weights[lt.ComponentType.HEAT_PUMP_BUILDING]),
         ("heating-HeatPump.ElectricalInputPowerDHW", weights[lt.ComponentType.HEAT_PUMP_DHW]),
+        ("heating-HeatPump.ElectricalPowerAtFullLoadSpaceHeatingInWatt", MEASURED),
+        ("heating-HeatPump.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt", MEASURED),
         ("battery-battery-Battery.AcBatteryPowerUsed", weights[lt.ComponentType.BATTERY]),
         ("battery-battery-Battery.MaximumChargingPowerInWatt", MEASURED),
         ("battery-battery-Battery.MinimumChargingPowerInWatt", MEASURED),
     ]
-    battery = written[4]
+    battery = written[8]
     assert (battery["component_type"], battery["tags"], battery["dispatch"]["target_input"]) == (
         "BATTERY",
         ["ELECTRICITY_CONSUMPTION_EMS_CONTROLLED"],

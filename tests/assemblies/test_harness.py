@@ -432,16 +432,15 @@ def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribu
     resolver = AssemblyResolver([Real.LIBRARY])
     registry = TestPartnerRegistry.from_directories(resolver.directories)
     for path, expected in (
-        ("heating/electric_resistive", {"heating": SUBJECT}),
-        ("heating/gas_condensing_boiler", {"heating": "HeatDistributionSystem"}),
-        ("heating/district_heating", {"heating": "HeatDistributionSystemWithoutStorage"}),
-        ("supply/oil_tank", {"heating": "HeatDistributionSystem"}),
+        ("heating/electric_resistive", SUBJECT),
+        ("heating/gas_condensing_boiler", "HeatDistributionSystem"),
+        ("heating/district_heating", "HeatDistributionSystemWithoutStorage"),
+        ("supply/oil_tank", "HeatDistributionSystem"),
         ("pv/array", None),
     ):
         assembly = resolver.resolve(path, "test")
         document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
-        verbs = document["components"]["Building"].get("optional-bind") or {}
-        assert ({"heating": verbs["heating"]} if "heating" in verbs else None) == expected, path
+        assert (document["components"]["Building"].get("optional-bind") or {}).get("heating") == expected, path
 
 
 @pytest.mark.assemblies
@@ -470,6 +469,25 @@ def test_the_test_building_reads_the_heat_every_located_device_beside_it_release
         verbs = document["components"]["Building"].get("optional-bind") or {}
         ports = ("battery_heat", "buffer_heat", "cylinder_heat")
         assert {port: verbs[port] for port in ports if port in verbs} == expected, path
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reads_the_heat_of_the_pv_inverter_beside_it() -> None:
+    """Catches a PV array whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run refuses (D-h).
+
+    Beside the PV array under test the building's ``pv_heat`` port binds the subject; beside a battery the partner
+    ``PVArray`` it is sized from; beside a boiler there is no array and the port stays unbound.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    for path, expected in (
+        ("pv/array", SUBJECT),
+        ("storage/battery", "PVArray"),
+        ("heating/gas_condensing_boiler", None),
+    ):
+        assembly = resolver.resolve(path, "test")
+        document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
+        assert (document["components"]["Building"].get("optional-bind") or {}).get("pv_heat") == expected, path
 
 
 @pytest.mark.assemblies

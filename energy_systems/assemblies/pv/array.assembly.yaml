@@ -1,5 +1,8 @@
 # One PV array with its inverter; a house with several arrays imports it with one instance per request system id
-# (spec §10.4, #83). The array's size is stated one way, a peak power or a share of the roof's PV potential: AUTO
+# (spec §10.4, #83). Where the inverter stands follows the building's technical room (its installation_location stays
+# AUTO, roadmap/device_location_spec.md) unless an import states inverter_location, so its loss goes into the heated
+# zone or out of the house; the building reads its HeatToHeatedZoneInWatt by a port of its own in every location, and
+# the modules' loss stays on the roof. The array's size is stated one way, a peak power or a share of the roof's PV potential: AUTO
 # power counts as unstated (spec §2.6), so the default is the twin's array, the whole roof (share 1.0); an importer
 # stating a power unstates the share (D27). The power law reads the roof area and the weather from the site by the
 # engine's bare-fact rule, as in the twin.
@@ -21,6 +24,10 @@ parameters:
   share_of_maximum_pv_potential:
     {type: float, unit: ANY, default: 1.0, range: {min: 0, max: 1},
      description: "Fraction (0..1) of the roof's PV potential the array covers, the alternative to the power."}
+  inverter_location:
+    {type: enum, values: [HEATED_ZONE, UNHEATED_SPACE, OUTDOORS], default: none,
+     description: "Where the inverter stands; none follows the building's technical room."}
+     # a house without a building (a test, a plant) states it; OUTDOORS for a module inverter on the roof
 
 constraints:
   - {exactly_one_of: [power_in_watt, share_of_maximum_pv_potential]}
@@ -35,6 +42,7 @@ components:
       tilt: {$param: tilt_in_degree}
       power_in_watt: {$param: power_in_watt}
       share_of_maximum_pv_potential: {$param: share_of_maximum_pv_potential}
+      installation_location: {$param: inverter_location}
     inputs:
       - {$port: weather}
 
@@ -53,10 +61,17 @@ tests:
     - {output: PVSystem.ElectricityOutput, unit: WATT, min: -100, max: 33000}
     - {output: PVSystem.ElectricityEnergyOutput, unit: WATT_HOUR, min: -25, max: 8250}     # per step: x 0.25 h
     - {output: PVSystem.SolarPowerOnModulesInWatt, unit: WATT, min: 0, max: 180000}
-    - {output: PVSystem.ModuleAndInverterLossInWatt, unit: WATT, min: 0, max: 180000}
+    - {output: PVSystem.DcPowerInWatt, unit: WATT, min: 0, max: 36000}
+      # the modules' DC power: at most 1.1x the box's 30 kWp, as the AC power, and never below zero
+    - {output: PVSystem.ModuleLossInWatt, unit: WATT, min: 0, max: 180000}
       # the sun on the modules: the box's 30 kWp are 136 m² of 1.98 m² modules of 435 W, under at most about
-      # 1200 W/m² on the plane of the array, 164 kW; the loss is that minus the AC power, and at night it is the
-      # inverter's standby draw, a few watts, by which the AC power is below zero
+      # 1200 W/m² on the plane of the array, 164 kW; the module loss is that minus the DC power
+    - {output: PVSystem.InverterLossInWatt, unit: WATT, min: 0, max: 2000}
+    - {output: PVSystem.HeatLossInWatt, unit: WATT, min: 0, max: 2000}
+    - {output: PVSystem.HeatToHeatedZoneInWatt, unit: WATT, min: 0, max: 2000}
+      # the DC minus the AC power, about 3 % of the DC power (at most about 1 kW at 33 kW DC), and at night the
+      # inverter's standby draw, a few watts, by which the AC power is below zero; it is on the output of where the
+      # inverter stands, the other 0: in the test house its unheated cellar, so the loss leaves the house
   monotone:
     - {parameter: power_in_watt, kpi: PV production, direction: increasing}
       # more peak power, more yield on the same weather; PV production is a derived KPI (no member, spec §9.4)

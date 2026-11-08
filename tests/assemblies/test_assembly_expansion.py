@@ -387,7 +387,7 @@ def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults(tm
     # G9: the unstated power writes no line, so the preset's open power stays and its law reads the share.
     assert "power_in_watt" not in config and config["share_of_maximum_pv_potential"] == 0.5
     half, whole = (
-        dict(build_text(array(parameters, Real.OCCUPANCY, Real.BUILDING), tmp_path / name).wired.components)[
+        dict(build_text(array(parameters, Real.OCCUPANCY, Real.BUILDING_BESIDE_PV), tmp_path / name).wired.components)[
             "pv-PVSystem"
         ].config
         for name, parameters in (("half", "{share_of_maximum_pv_potential: 0.5}"), ("whole", "{}"))

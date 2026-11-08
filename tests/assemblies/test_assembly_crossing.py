@@ -840,8 +840,8 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
 ) -> None:
     """5 kWp + 3 kWp give 8 kWh; the record writes the list, the audit one lookup per array, and re-runs."""
     arrays = (
-        "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90, power_in_watt: 5000}, "
-        "west: {azimuth_in_degree: 270, power_in_watt: 3000}}}"
+        "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90, power_in_watt: 5000, "
+        "inverter_location: OUTDOORS}, west: {azimuth_in_degree: 270, power_in_watt: 3000, inverter_location: OUTDOORS}}}"
     )
     house = tmp_path / "two_arrays.energy_system.yaml"
     house.write_text(

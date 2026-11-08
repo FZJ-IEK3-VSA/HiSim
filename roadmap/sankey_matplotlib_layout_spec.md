@@ -168,6 +168,27 @@ quotes and writes the `checked` block in that PR; an agent never marks anything 
 Fraunhofer ISE SPF range, the HTW battery efficiencies, the DIN V 18599-10 internal gains, DVGW W 551, the PV
 performance-ratio range.
 
+**D22 — No committed recordings and no committed pin files** (owner, 2026-11-08, after the three tries). The
+twelve recorded building-sizer inputs and the twelve converted prototype pin files are not committed. Consequence:
+the unit and rule tests build small synthetic systems in test code (`tests/sankey_test_systems.py`: a boiler fed
+twice by its meter, a battery loop, a storage without a discharge, a system without a building, two generators
+into one buffer, a solar collector with its pump, an undeclared component with a gap, a car), determinism and
+robustness run on them, and the figure of every real twin is laid out in the golden jobs CI already runs (§9.5). The
+pin-file feature stays (D16); the visual check against the hand figures happens once, in PR 4b's review, with the
+comparison figures rendered from local pin files and attached to the PR description.
+
+**D23 — The PDF report is retired; nothing goes into it** (owner, 2026-11-08; bead hisim-retire-pdf-report-be23,
+#1245). The figure is the run's PNG/PDF/SVG beside the plotly HTML; §4.3's PDF-report sentence and PR 7's report
+item fall away.
+
+**D24 — A second link to the same node stays a second arrow** (owner, 2026-11-08, after the third try). A meter
+that feeds its boiler twice (space heating and hot water) is drawn with two ports and two arrows, the second clearly
+an arrow of its own (§6.4, §6.7), never merged into one band. The air-conditioner twin's household keeps the chain
+rule (on the main row) for now.
+
+**D25 — Three small PRs for the renderer and the layout** (owner, 2026-11-08). PR 4 is cut into 4a (the drawn
+graph and what builds on it) and 4b (the renderer); PR 5 is the automatic layout; each is green on its own (§10).
+
 ## 3. Terms
 
 - **Drawn node**: a component, meter or undeclared node of the `overall` view (`NodeKind.COMPONENT`, `METER`,
@@ -962,77 +983,66 @@ label candidates and the scoring; the overlap checker on two boxes, a box over a
 move of each kind of §6.6 step 4 on a two-node layout; every metric with a known answer; the range table's rules on
 good and bad entries; the warning order and numbering; the pin file's application and its faults; the caption.
 
-### 9.2 Layout tests on recorded inputs (`base`, measured)
+### 9.2 Layout tests on synthetic systems (`base`)
 
-`tests/sankey_inputs/<stem>/` holds the four input files of §4.1 of a full-year 900 s run of each of the twelve
-building-sizer systems (the first try's `scripts/refresh_sankey_inputs.py` records them trimmed, 344 KB for the
-twelve), stamped with the schema and the commit. `tests/test_sankey_layout_recorded.py` runs the layout engine on
-each (the search builds the `Sankey` on an `Agg` figure; no file is saved) and asserts: 0 faults, 0 overlaps; and
-the **structure** against `tests/sankey_inputs/<stem>/structure.yaml`, which records the hand layout's chain, every
-sub-diagram's parent, axis and connecting orientation, every flow's side, and every cross-link's shape class
-(straight, L, Z, routed): "the twelve building-sizer systems match the hand layouts' structure (same tree and
-orientations, not pixel-equal)". A `base` test checks each recording's schema against `REPORT_SCHEMA`, so a schema
-bump without a refresh fails. The first try's layout took 0.6 to 1.5 s per system without the library; with the
-library built per round the search is expected at 1 to 4 s per system, inside the `base` budget of a few seconds
-(`system_docs/testing.md` §3); the module fixture loads the inputs once, and a system that measures above the
-budget moves its test to `extendedbase` in the same PR.
+No recorded run is committed (D22). `tests/sankey_test_systems.py` builds the `SankeyInputs` of small hand-made views,
+one per case a rule needs: the heat-pump house (PV, meter, heat pump, buffer, building, household, a battery loop),
+a boiler fed twice by its meter with an electricity meter apart (a further tree), a storage without a discharge, a
+system without a building (a wind transformer upstream of the meter), two generators into one buffer, a solar
+collector with its pump, an undeclared component with a gap, a car. The graph tests (PR 4a) check every case's roles,
+chain, trees and residuals; the renderer tests (PR 4b) draw them from hand-written pin parameters; the layout tests
+(PR 5) lay each out automatically and assert 0 faults and 0 overlaps. Each case lays out in well under a second.
 
 ### 9.3 Determinism (`base`)
 
-The layout of the heat-pump recording is computed twice in one process and once in a subprocess
-(`sys.executable -c`), and the three `Layout` serialisations are byte-identical. The test also perturbs every
-flow by +25 % and asserts 0 faults and 0 overlaps, the prototype's robustness case that broke the hand layouts.
+The automatic layout of the synthetic heat-pump house is computed twice in one process and once in a subprocess
+(`sys.executable -c`), and the three `overall.layout.json` serialisations are byte-identical. The test also perturbs
+every flow by +25 % and asserts 0 faults and 0 overlaps.
 
 ### 9.4 End-to-end (`extendedbase`)
 
-`tests/test_sankey_figure_runs.py` runs one week at 900 s of one twin per family — `household_heatpump_building_sizer`,
-`household_gas_building_sizer`, `household_district_heating_building_sizer`, `household_electric_heating_building_sizer`,
-`simple_air_conditioner_household_building_sizer` — with `PLOT_SANKEY`, `COMPUTE_KPIS` and `WRITE_KPIS_TO_JSON`,
-and asserts the files of §4.2 exist, `overall.layout_error.json` does not, `balance_report.json` has schema 7 with
-a `statistics.loops` entry per loop of the twin and the expected tagged states, and the redraw command (§4.4)
-reproduces `overall.layout.json` from the result directory. One PNG is compared by size and aspect only; no pixel
-golden.
+Covered by the golden jobs (§9.5), which run every twin with `PLOT_SANKEY`; no separate end-to-end test.
 
-### 9.5 The sweep over every energy-system file
+### 9.5 Every twin's figure in the golden jobs
 
-Every flat twin under `energy_systems/*.energy_system.yaml` (grouped and composed files are the same systems and
-are covered by one grouped file as a smoke case) renders with 0 faults over a full year. Full-year renders of
-every system take too long for a pull request; the sweep runs where the full years already run: the full-year
-golden workflow (`golden-year.yml`) sets `PLOT_SANKEY` in its parameter set once PR 7 lands, and a layout fault
-there fails the job, as a failing balance does. Until then PR 5's description reports the sweep run locally (the
-command of §4.4 over the twelve recorded result directories plus one-week runs of the non-building-sizer files, as
-the first try did with `scripts/sweep.py`).
+The golden check (`.github/workflows/golden-check.yml`, `scripts/golden_check.py`) runs every twin and setup of
+`scripts/golden_config.json` in the python, yaml and composed modes. Its week parameter sets (`one_week_60s`,
+`july_week_60s`, `one_week_900s`) carry `PLOT_SANKEY` (from PR 5, when the automatic layout exists), so every twin's
+figure is laid out in every pull request. A run that writes `energy_sankeys/overall.layout_error.json` is a pair of
+status `layout_fault` in the golden report, with each fault as a line, and fails the job as a failing balance or a
+KPI divergence does; the run itself finishes (D15), and the KPIs are compared as usual.
 
 ### 9.6 The visual acceptance
 
 0 overlaps is necessary, not sufficient. The twelve hand figures of the prototype (`figures/*.png`) are the visual
 reference for the look: quarter-circle bends where a branch leaves or joins a trunk, notches on inputs, arrowheads
 on outputs, pointed trunk ends on the tree connections, connectors that continue their stubs without a seam, and
-hairlines that keep a visible bend. PR 4's figures of the twelve recordings are put beside the hand figures
-(`comparisons/<stem>.png`, as the first try did) and reviewed by the owner before PR 5's layouts are judged; the
-owner reviews one figure per family again on PR 5 and the heat-pump figure against the trial's on PR 6.
+hairlines that keep a visible bend. In PR 4b's review the twelve full-year runs are drawn once from pin files
+converted locally from the prototype layouts and put beside the hand figures (the PNGs attached to the PR
+description; nothing committed, D22); the owner reviews one figure per family again on PR 5 and the heat-pump figure
+against the trial's on PR 6.
 
 ## 10. Pull requests
 
 Stacked, each small, each closing its bead in its own branch (AGENTS.md). Bead ids are the children of
-hisim-energy-sankeys-9uoo listed in §12. The first try on branch `sankey-mpl-auto-layout` built PRs 4 and 5 in
-their essentials with its own band renderer; PRs 4 and 5 are cut from that branch, keep its `inputs.py`,
-`graph.py`, `orientation.py`, `routing.py`, `labels.py`, `metrics.py`, the CLI, the recording script and the
-tests, and switch the engine's output to the `matplotlib.sankey` parameters of §6.5 with the search of §6.6 in place
-of its placement pass and the library's drawing in place of its `render.py` polygons.
+hisim-energy-sankeys-9uoo listed in §12. PRs 4a, 4b and 5 are cut from branch `sankey-mpl-auto-layout` (three tries:
+an own band renderer, then `matplotlib.sankey` with the search, then the second link as its own arrow; D25), each a
+branch on top of the previous and green on its own. Bead hisim-sankey-mpl-band-renderer-5a8c covers 4a and 4b (open in
+4a, closed in 4b).
 
 | PR | Bead | Scope | Done when |
 |---|---|---|---|
 | 1 | hisim-sankey-mpl-loop-statistics-3f1a (P1: every later PR reads it) | §5.1: `statistics.py` with `LoopStatistics`, `statistics.loops` in the report, schema 6, `FluidLoop.design_supply_temperature_in_celsius` set by `HeatDistribution` | `tests/test_energy_balance.py` pins the new keys on a hand-built table; the week of `test_energy_balance_storages.py` shows a loop entry with the floor heating's 35 °C limit; no result or KPI changes |
 | 2 | hisim-sankey-mpl-state-statistics-7c2e | §5.2: `StatisticRole`, `StatisticTag` (with the module area), `add_output(statistic=)`, `StateStatistics`, the tags on the heat pump, boilers, substation, electric heater, PV, both batteries, both storages, the building, the weather and the occupancy; schema 7 | every statistic tested directly; the heat-pump twin's week writes every state of the table, the PV's performance ratio included; a wrong-unit tag is refused |
 | 3 | hisim-sankey-mpl-plausibility-table-b4d9 | §7.3 the table with its first entries and the `base` test of its rules; §7.1 `metrics.py` with every formula (the first try's module, with the round trip and the no-extrapolation rule corrected and the performance ratio added) and the evaluation against the table (no drawing); the D21 workflow started for the Fraunhofer ISE range | every metric and rule tested; the table's estimates are marked; no `checked` written by an agent |
-| 4 | hisim-sankey-mpl-band-renderer-5a8c | §6.1 to §6.3, §6.5, §6.7, §6.11, §6.13, §4.2 to §4.4: the drawn graph, roles, chain, residuals (from the first try), `parameters.py` (the `matplotlib.sankey` parameters), `render.py` building the `Sankey`, `place_trees`, the connectors ported from `draw_sankey.py` (flattened stubs, shapes, grid search, corners, the parallel seam), the overlap checker, the files of §4.2, `PLOT_SANKEY` wired (§4.3), the redraw command (§4.4), the style table with role fallbacks. The parameters come from a complete pin file (§6.10) in this PR: the twelve prototype layouts converted to pin files under `tests/sankey_inputs/<stem>/pins.yaml`, so the renderer is judged on the hand layouts before the engine computes them | the twelve recordings render from their pin files with 0 overlaps; the comparisons of §9.6 beside the hand figures show the same bends, notches, arrowheads and seams, reviewed by the owner; the `extendedbase` week of §9.4 for the heat-pump twin; semgrep clean |
-| 5 | hisim-sankey-mpl-auto-layout-9e2b | §6.4, §6.6, §6.8, §6.10 pins as overrides, §6.12, §6.14: the orientation table with the frame rule and the side orders, the search, the label candidates, growth and faults, labels as routing obstacles (§6.7 rule 7), `structure.yaml` per recording | §9.2 for all twelve recordings without their pin files; §9.3; the five weeks of §9.4; the local sweep of §9.5 reported in the PR with 0 faults on every drawable file, `dynamic_components` included; the owner reviews one figure per family |
+| 4a | hisim-sankey-mpl-band-renderer-5a8c (stays open) | §4.1, §6.1 to §6.3, §7.1's metrics of the first try: `inputs.py`, the drawn graph, roles, main chain, trees and residuals (`graph.py`), `metrics.py`, the style table with role fallbacks (`style.py`, `sankey_style.yaml`), the command frame `hisim energy-system sankey <result dir>` (prints the drawn graph); `tests/sankey_test_systems.py` | every static function tested directly on synthetic systems (§9.2); the roles, chains and trees of every synthetic case |
+| 4b | hisim-sankey-mpl-band-renderer-5a8c (closed) | §4.2 to §4.4, §6.5's parameters as data, §6.7, §6.9 to §6.11: the `matplotlib.sankey` drawing from pin parameters (`parameters.py` data, `drawing.py`), the connectors (`connectors.py`), the labels and the overlap check (`labels.py`, `texts.py`), the files of §4.2 (`render.py`), complete pin files (`pins.py`), `PLOT_SANKEY` (D14) and its fault handling (D15), the redraw command with `--pins`; the golden check reads `overall.layout_error.json` (status `layout_fault`) | the synthetic systems draw from hand-written pin parameters with 0 overlaps; the twelve hand layouts drawn from local pin files beside the hand figures in the PR description (§9.6); semgrep clean |
+| 5 | hisim-sankey-mpl-auto-layout-9e2b | §6.4, §6.6, §6.8, §6.12, §6.14: the orientation table with the frame rule and the side orders, the second link as its own arrow (D24), the library parameters (`ParameterBuilder`), the repair search, label spots and labels as routing obstacles (§6.7 rule 7), the automatic `draw_overall`; `PLOT_SANKEY` in the golden check's week parameter sets (§9.5) | §9.2 and §9.3 on the synthetic systems; every twin laid out with 0 faults and 0 overlaps in the golden jobs (§9.5); the owner reviews one figure per family |
 | 6 | hisim-sankey-mpl-warnings-panel-c6f3 | §8: markers, the warnings box, the data panel, the unmet stub, loop temperatures on the bands, the caption's second line | the heat-pump recording reproduces the trial's nine warnings in its order (the PV's entry now the performance ratio); 0 overlaps on all twelve with the notes and the panel; the owner reviews the heat-pump figure against the trial's |
-| 7 | hisim-sankey-mpl-report-integration-2d7a | the figure in the PDF report (`INCLUDE_IMAGES_IN_PDF_REPORT`), `PLOT_SANKEY` in the full-year golden parameter set (§9.5), `energy_systems/README.md` and `simulation_parameters/README.md` updated, the D4 amendment and status lines written into `roadmap/complete_energy_sankeys_spec.md`, beads hisim-energy-sankeys-9uoo.19 and hisim-4hed closed with a note, the owner's decision on the plotly `overall.html` (D13) taken and applied | the PDF of the heat-pump week shows the figure; `golden-year.yml` renders every twin with 0 faults |
+| 7 | hisim-sankey-mpl-report-integration-2d7a | `PLOT_SANKEY` in the full-year golden parameter set (§9.5), no PDF report (D23), `energy_systems/README.md` and `simulation_parameters/README.md` updated, the D4 amendment and status lines written into `roadmap/complete_energy_sankeys_spec.md`, beads hisim-energy-sankeys-9uoo.19 and hisim-4hed closed with a note, the owner's decision on the plotly `overall.html` (D13) taken and applied | `golden-year.yml` renders every twin with 0 faults |
 
-Order: 1 before 2 (schema sequence); 3 and 4 are independent of each other and of 2; 5 needs 4; 6 needs 1, 2, 3
-and 5; 7 needs 6. Nothing here changes a simulation result or a KPI; the goldens stay.
+Order: 1 before 2 (schema sequence); 3 and 4a are independent of each other and of 2; 4b needs 4a; 5 needs 4b; 6
+needs 1, 2, 3 and 5; 7 needs 6. Nothing here changes a simulation result or a KPI; the goldens stay.
 
 ## 11. Owner questions
 

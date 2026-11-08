@@ -1,0 +1,104 @@
+# Style of the matplotlib Sankey figure: presentation only, never read by the layout engine.
+# `kinds`: a title and a colour per component class (meters by component name: the balance report gives meters no
+# class); a class without an entry takes its role's colour from `role_colors` and its instance name as title.
+# `port_names`: the display name of a flow, by "<class of the port's component>.<port>", then by port name, optionally {in:, out:} by the
+# flow's direction; without an entry a flow is named after the boundary node at its other end, else its port.
+schema: hisim.sankey_style/1
+kinds:
+  PVSystem:                  {title: "PV system", color: "#f2c94c"}
+  # meters (by component name: the balance report gives meters no class)
+  ElectricityMeter:          {title: "Electricity\nmeter", color: "#7aa6d8"}
+  GasMeter:                  {title: "Gas meter", color: "#a8a39d"}
+  FuelMeter:                 {title: "Fuel meter", color: "#a8a39d"}
+  # generators
+  MoreAdvancedHeatPumpHPLib: {title: "Heat pump", color: "#e07a5f"}
+  GenericBoiler:             {title: "Boiler", color: "#c8553d"}
+  DistrictHeating:           {title: "District heating\nsubstation", color: "#bc6c25"}
+  ElectricHeating:           {title: "Electric heater", color: "#d1495b"}
+  SolarThermalSystem:        {title: "Solar thermal", color: "#f2d14c"}
+  SimpleAirConditioner:      {title: "Air conditioner", color: "#48cae4"}
+  # storages and distribution
+  SimpleHotWaterStorage:     {title: "Buffer", color: "#f4a261"}
+  SimpleDHWStorage:          {title: "Hot-water tank", color: "#f6bd60"}
+  HeatDistribution:          {title: "Heat distribution", color: "#d4a73a"}
+  undeclared:                {title: "undeclared", color: "#c9c9c9"}
+  # consumers
+  Building:                  {title: "Building", color: "#9c89b8"}
+  UtspLpgConnector:          {title: "Household", color: "#84a59d"}
+  Battery:                   {title: "Battery", color: "#90be6d"}
+  CarBattery:                {title: "Car battery", color: "#6a994e"}
+  Car:                       {title: "Car", color: "#4f7f52"}
+
+port_names:
+  PVSystem.ElectricityOutput: "PV electricity (AC)"
+  UtspLpgConnector.ElectricalPowerConsumption: "Household electricity"
+  SimpleAirConditioner.ElectricalPowerConsumption: "Air-conditioner electricity"
+  ElectricityFromGridInWatt: "Grid import"
+  ElectricityToGridInWatt: "Grid export"
+  ChargingPower: "Battery charging"
+  DischargingPower: "Battery discharging"
+  InverterLossInWatt: "Inverter loss"
+  CellLossInWatt: "Cell loss"
+  StoredEnergyIncreaseInWattHour: {in: "Stored energy released", out: "Energy stored"}
+  ThermalEnergyIncreaseInStorage: {in: "Stored heat released", out: "Heat stored"}
+  ThermalMassStoredEnergyIncreaseInWattHour: {in: "Stored heat released", out: "Heat stored"}
+  ElectricalInputPowerSH: "Heat pump electricity\n(space heating)"
+  ElectricalInputPowerDHW: "Heat pump electricity\n(hot water)"
+  ElectricalInputPowerHeatingRod: "Heating rod electricity"
+  ThermalPowerInputFromEnvironment: "Ambient heat"
+  MassFlowOutputSH: "Space-heating heat"
+  MassFlowOutputDHW: "Hot-water heat"
+  WaterOutputMassFlowSh: "Space-heating heat"
+  WaterOutputMassFlowDhw: "Hot-water heat"
+  WaterOutputDhwMassFlowRate: "Hot-water heat"
+  WaterMassFlowHDS: "Heating water"
+  HeatReceivedInWatt: "Heat to the rooms"
+  SolarGainThroughWindows: "Solar gains"
+  HeatingByDevices: "Appliance heat to the building"
+  HeatingByResidents: "Body heat to the building"
+  BodyHeatToBuildingInWatt: "Residents' body heat"
+  ApplianceElectricityNotReleasedIndoorsInWatt: "Appliance electricity\nnot released indoors"
+  TransmissionLossOpaqueInWatt: "Transmission, opaque"
+  VentilationLossInWatt: "Ventilation"
+  TransmissionLossWindowsAndDoorsInWatt: "Transmission,\nwindows and doors"
+  GainsLostThroughWindowsInWatt: "Gains lost through windows"
+  StandbyHeatLoss: "Standby loss"
+  ThermalPowerConsumptionDHW: "Hot water drawn at the taps"
+  CombustionHeatLoss: "Combustion loss"
+  EnergyDemandSh: "Fuel for space heating"
+  EnergyDemandDhw: "Fuel for hot water"
+  ThermalOutputShEnergy: "District heat\n(space heating)"
+  ThermalOutputDhwEnergy: "District heat\n(hot water)"
+  ElectricOutputShPower: "Heater electricity\n(space heating)"
+  ElectricOutputDhwPower: "Heater electricity\n(hot water)"
+  SolarPowerOnCollector: "Sunlight on the collector"
+  CollectorHeatLoss: "Collector heat loss"
+  SolarPumpHeatLoss: "Pump heat loss"
+  ElectricityConsumptionOutput: "Solar pump electricity"
+  WaterMassFlowOutput: "Solar heat"
+  AcBatteryChargingPower: "Car charging"
+  ElectricityFromCarBatteryInWatt: "Car battery to motor"
+  HeatDrawnForCoolingInWatt: "Heat removed by cooling"
+  HeatToAmbientInWatt: "Heat to outdoors"
+
+role_colors:
+  electricity_meter: "#7aa6d8"
+  fuel_meter: "#a8a39d"
+  pv: "#f2c94c"
+  solar_collector: "#f2d14c"
+  vehicle_storage: "#6a994e"
+  vehicle: "#4f7f52"
+  electric_storage: "#90be6d"
+  household: "#84a59d"
+  cooler: "#48cae4"
+  hot_water_tank: "#f6bd60"
+  buffer: "#f4a261"
+  building: "#9c89b8"
+  distribution: "#d4a73a"
+  generator: "#e07a5f"
+  converter: "#b0b0b0"
+
+# The title of a meter whose component name has no entry in `kinds` (a composed file prefixes its names).
+role_titles:
+  electricity_meter: "Electricity\nmeter"
+  fuel_meter: "Fuel meter"

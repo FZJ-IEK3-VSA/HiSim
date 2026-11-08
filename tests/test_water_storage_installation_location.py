@@ -138,8 +138,10 @@ class Tanks:
 def test_the_three_temperature_inputs_are_wired_by_the_same_defaults_in_every_location(
     tank_class: TankClass, location: lt.InstallationLocation
 ) -> None:
-    """A default connection that followed the location would make a recorded file right only for the house it was
-    recorded on (D-h); all three inputs are mandatory, so a file without a building or a weather is refused.
+    """Every location wires the same three temperature inputs, all mandatory.
+
+    A default connection that followed the location would make a recorded file right only for the house it was
+    recorded on (D-h); because all three inputs are mandatory, a file without a building or a weather is refused.
     """
     tank = Tanks.build(tank_class, location)
     wired = {
@@ -157,7 +159,9 @@ def test_the_three_temperature_inputs_are_wired_by_the_same_defaults_in_every_lo
 @pytest.mark.base
 @pytest.mark.parametrize("tank_class", [SimpleHotWaterStorage, SimpleDHWStorage])
 def test_the_two_released_heat_outputs_have_the_same_ports_in_every_location(tank_class: TankClass) -> None:
-    """A port that followed the location would bring back the location-dependent wiring D-h removed; the standby loss
+    """The two released-heat outputs carry the same energy ports in every location.
+
+    A port that followed the location would bring back the location-dependent wiring D-h removed; the standby loss
     output of the first build is gone, since the two channels say all it said.
     """
     carrier = Tanks.CARRIER[tank_class.__name__]
@@ -181,8 +185,10 @@ def test_every_location_picks_a_temperature_input() -> None:
 def test_each_location_picks_its_temperature_and_fills_its_own_released_heat_output(
     tank_class: TankClass, location: lt.InstallationLocation
 ) -> None:
-    """With three different temperatures on the three inputs, the tank loses against its place's and books the loss on
-    its place's output; the other output is 0.
+    """The tank loses against its own place's temperature and books the loss on its place's output.
+
+    With three different temperatures on the three inputs, the tank computes its loss against the temperature of the
+    place it stands in and publishes it on that place's output; the other output is 0.
 
     Catches: a tank that reads another place's temperature, publishes another than it computed with, or books its heat
     on the output of another destination.
@@ -491,7 +497,9 @@ def test_both_tanks_close_their_balance_in_every_step_at_every_location(
 def test_each_tank_loses_against_the_temperature_of_its_place_and_the_building_books_what_it_releases(
     pinned_run: Tuple[Optional[lt.InstallationLocation], Any, Path],
 ) -> None:
-    """A loss against another temperature than the place's, on another output, or a heated-zone loss the building did
+    """The pinned twin's tanks lose against their place's temperature, and the building takes in a heated-zone loss.
+
+    A loss against another temperature than the place's, on another output, or a heated-zone loss the building did
     not take in, fails; the wiring is the recorded file's in every location.
     """
     location, built, _ = pinned_run

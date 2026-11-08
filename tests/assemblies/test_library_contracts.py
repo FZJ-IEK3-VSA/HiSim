@@ -37,7 +37,7 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 import pytest
 
-from hisim.energy_system.assemblies.library import check_assembly
+from hisim.setup_rules.assemblies import LibraryChecker
 from hisim.energy_system.assemblies.model import BoundsDeclaration, ExpectDeclaration, MonotoneDeclaration
 from hisim.energy_system.assemblies.parameters import select
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
@@ -110,7 +110,7 @@ class ContractLibrary:
         self.sweeps: List[Any] = []
         for path in self.paths:
             assembly = self.assembly(path)
-            if check_assembly(assembly):
+            if LibraryChecker(assembly).check():
                 continue  # test_library_check names every problem; nothing else of it can run
             space = ParameterSpace(assembly.model)
             deterministic = deterministic_samples(space)
@@ -259,7 +259,7 @@ def fixture_runs(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPa
 
 def test_library_check(library: str, assembly_path: str, request: pytest.FixtureRequest) -> None:
     """The library check accepts the assembly: descriptions, defaults, ranges, units, names, the test contract."""
-    problems = check_assembly(library_of(request.config, library).assembly(assembly_path))
+    problems = LibraryChecker(library_of(request.config, library).assembly(assembly_path)).check()
     assert not problems, f"{assembly_path} library check: " + " | ".join(problems)
 
 

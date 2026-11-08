@@ -422,9 +422,10 @@ class EnergySystemExecutor:
             The expanded file, what the expansion of the groups resolved and what the expansion of the imports did.
 
         Raises:
-            EnergySystemError: For a condition of the error catalogue the expansion meets.
+            EnergySystemError: For a condition of the error catalogue the expansion meets, every fault the assembly
+                rules find in the imports at once as ``EnergySystemImportsError``.
         """
-        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
+        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines, file=self.source_energy_system or None)
         expanded, expansion = expand_groups(imported)
         return expanded, expansion, imports
 

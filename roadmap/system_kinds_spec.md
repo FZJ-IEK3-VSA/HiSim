@@ -2,7 +2,7 @@
 
 Status: decided (owner, 2026-11-06: D1 with the request, D2 to D11 the answers to the questions of the draft, D12
 to D15 from the comparison with ruff, pylint, ESLint and clippy);
-PR 1 to PR 8 are built; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
+PR 1 to PR 9 are built; every family is moved; no question is open. Owner: Noah. Epic: proposed, hisim-setup-kinds-<hash> (P2, `core`), §12.
 PR: #1216 (spec only). Builds on: `roadmap/device_location_spec.md` (D-h: the build rule "room heat needs a
 receiver", PRs #1211 and #1213), `roadmap/complete_energy_sankeys_spec.md` (D1 and Q-B: a component declares its
 ports or is exempt with a reason; Q-H: the meter check is enforced only while nothing is undeclared),

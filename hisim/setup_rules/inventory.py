@@ -1,6 +1,6 @@
 """The inventory of every check HiSim applies to a setup: where each lives today, what it is, and where it moves.
 
-The inventory is the one list of the checks, the 114 that move into the rules package and the 88 that stay where
+The inventory is the one list of the checks, the 113 that move into the rules package and the 88 that stay where
 they are: a parse fault of the reader, a check the reader makes while it builds the model, a device's own physics
 guard, a call of the component API refused when it is made, a recorder check, a CI gate, a policy of the run, and
 one retired check that never fired. Each record names
@@ -126,9 +126,7 @@ class Inventory:
             when="load; in a run on the file after its imports and groups were expanded, again when recorded",
             enforcement="E", checks="no absolute filesystem path in a value",
             lives="hisim/setup_rules/document.py:NoAbsolutePath",
-            note=(
-                "the recorder runs the same walk, NoAbsolutePath.absolute_paths, in hisim/energy_system/recording/builder.py:PortablePathGuard"
-            ),
+            note="the recorder runs the same walk, NoAbsolutePath.absolute_paths, in hisim/energy_system/recording/builder.py:PortablePathGuard",
         ),
         RuleRecord(
             rule_id="document.reference_syntax", codes=("EF-06",), nature=RuleNature.LAW, when="load", enforcement="E",
@@ -165,18 +163,14 @@ class Inventory:
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="an entry names a preset or a constructor, never both",
             lives="hisim/setup_rules/document.py:OneConfigurationOrigin",
-            note=(
-                "split in PR 7 from the record of EF-11 and EF-12, one rule per code"
-            ),
+            note="split in PR 7 from the record of EF-11 and EF-12, one rule per code",
         ),
         RuleRecord(
             rule_id="document.configuration_stated", codes=("EF-12",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="an entry names at least one of preset, constructor, config",
             lives="hisim/setup_rules/document.py:ConfigurationStated",
-            note=(
-                "split in PR 7 from the record of EF-11 and EF-12, one rule per code"
-            ),
+            note="split in PR 7 from the record of EF-11 and EF-12, one rule per code",
         ),
         RuleRecord(
             rule_id="document.constructor_block", codes=("EF-14",), nature=RuleNature.LAW, when="load", enforcement="E",
@@ -242,18 +236,14 @@ class Inventory:
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="sizing_sources names an existing component",
             lives="hisim/setup_rules/document.py:KnownSizingSource",
-            note=(
-                "split in PR 7 from the record of EF-40 and EF-41, one rule per code"
-            ),
+            note="split in PR 7 from the record of EF-40 and EF-41, one rule per code",
         ),
         RuleRecord(
             rule_id="document.sizing_source_names_its_fact", codes=("EF-41",), nature=RuleNature.LAW, target="document", stage=RuleStage.LOAD,
             when="load; in a run on the file after its imports and groups were expanded",
             enforcement="E", checks="a sizing_sources reference names the fact it is written under",
             lives="hisim/setup_rules/document.py:SizingSourceNamesItsFact",
-            note=(
-                "split in PR 7 from the record of EF-40 and EF-41, one rule per code"
-            ),
+            note="split in PR 7 from the record of EF-40 and EF-41, one rule per code",
         ),
         RuleRecord(
             rule_id="document.no_nested_group", codes=("EF-50",), nature=RuleNature.LAW, when="load", enforcement="E",
@@ -567,100 +557,178 @@ class Inventory:
             lives="hisim/energy_system/imports_reader.py:ImportsReader.shape_error; hisim/energy_system/assemblies/reader.py:AssemblyReader.build",
         ),
         RuleRecord(
-            rule_id="assemblies.found", codes=("EF-71",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="the assembly is in one library directory", lives="hisim/energy_system/assemblies/resolver.py:AssemblyResolver.resolve",
+            rule_id="assemblies.found", codes=("EF-71",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="the assembly is in one library directory",
+            lives="hisim/setup_rules/assemblies.py:AssemblyFound",
+            note=(
+                "the lookups are recorded by hisim/energy_system/assemblies/resolver.py:AssemblyResolver.find, every import's; the refusal of a library "
+                "directory that does not exist stays in AssemblyResolver.__init__, a configuration of the machine refused when the resolver is made, before "
+                "any file"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.found_once", codes=("EF-72",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="not in two", lives="hisim/energy_system/assemblies/resolver.py:AssemblyResolver.resolve",
+            rule_id="assemblies.found_once", codes=("EF-72",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="not in two",
+            lives="hisim/setup_rules/assemblies.py:AssemblyFoundOnce",
+            note="the lookups are recorded by hisim/energy_system/assemblies/resolver.py:AssemblyResolver.find",
         ),
         RuleRecord(
-            rule_id="assemblies.library_valid", codes=("EF-75",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            rule_id="assemblies.library_valid", codes=("EF-75", "EF-78", "EF-79"), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
             when="build; CI tests/assemblies/test_assembly_library.py", enforcement="E",
             checks=(
-                "the assembly file passes the library check (the 45 problems LibraryChecker.check lists: name equals path, members load, parameters described with "
-                "defaults, units and ranges, constraints consistent, variants cover the selector, ports and placeholders name members, a tests: contract with bounds,"
-                " monotone and expect entries)"
+                "the assembly file passes the library check (the 45 problems LibraryChecker.check lists: name equals path, members load, parameters described"
+                " with defaults, units and ranges, constraints consistent, variants cover the selector, ports and placeholders name members, a tests: "
+                "contract with bounds, monotone and expect entries); a parameter's unit equals its field's (EF-78), a fed field has a unit (EF-79)"
             ),
-            lives="hisim/energy_system/assemblies/library.py:LibraryChecker.check, require_valid",
-            note="the checker moves whole; its problems are one rule with 45 messages",
+            lives="hisim/setup_rules/assemblies.py:LibraryValid",
+            note=(
+                "the checker moved whole into the package (hisim/setup_rules/assemblies.py:LibraryChecker); its problems are one rule with 45 messages; the "
+                "CI test tests/assemblies/test_assembly_library.py runs the checker on every library file. PR 9 merged the record assemblies.parameter_unit "
+                "(EF-78, EF-79): the unit problems are problems of the library check, listed in the fault of EF-75 under their own codes as they always were,"
+                " and a rule of their own would take them out of that list"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.parameter_valid", codes=("EF-76",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="an import parameter has the type, value and range its declaration states", lives="hisim/energy_system/assemblies/parameters.py:select",
+            rule_id="assemblies.parameter_valid", codes=("EF-76",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="an import parameter has the type, value and range its declaration states",
+            lives="hisim/setup_rules/assemblies.py:ParameterValid",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/parameters.py:resolve_selection and, for a member's preset parameter and display"
+                " template, by hisim/energy_system/assemblies/addresses.py:member_units"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.constraint_holds", codes=("EF-77",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="exactly_one_of / all_or_none_of hold", lives="hisim/energy_system/assemblies/parameters.py:select",
+            rule_id="assemblies.constraint_holds", codes=("EF-77",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="exactly_one_of / all_or_none_of hold",
+            lives="hisim/setup_rules/assemblies.py:ConstraintHolds",
+            note="the refusals are recorded by hisim/energy_system/assemblies/parameters.py:resolve_selection",
         ),
         RuleRecord(
-            rule_id="assemblies.parameter_unit", codes=("EF-78", "EF-79"), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build / CI",
-            enforcement="E", checks="a parameter's unit equals its field's; a fed field has a unit",
-            lives="hisim/energy_system/assemblies/library.py:LibraryChecker._unit",
+            rule_id="assemblies.port_has_a_partner", codes=("EF-7A",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a required port finds a candidate; a many-fact port a provider",
+            lives="hisim/setup_rules/assemblies.py:PortHasAPartner",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide, _many_fact",
         ),
         RuleRecord(
-            rule_id="assemblies.port_has_a_partner", codes=("EF-7A",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a required port finds a candidate; a many-fact port a provider", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.port_unambiguous", codes=("EF-7B",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="several candidates need a verb",
+            lives="hisim/setup_rules/assemblies.py:PortUnambiguous",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide, resolve",
         ),
         RuleRecord(
-            rule_id="assemblies.port_unambiguous", codes=("EF-7B",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="several candidates need a verb", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.required_port_not_declined", codes=("EF-7C",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="no none: on a required port",
+            lives="hisim/setup_rules/assemblies.py:RequiredPortNotDeclined",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide",
         ),
         RuleRecord(
-            rule_id="assemblies.required_port_not_declined", codes=("EF-7C",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="no none: on a required port", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.bound_partner_exists", codes=("EF-7D",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="the bind target exists",
+            lives="hisim/setup_rules/assemblies.py:BoundPartnerExists",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide, check_declared, resolve, provided",
         ),
         RuleRecord(
-            rule_id="assemblies.bound_partner_exists", codes=("EF-7D",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="the bind target exists", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.optional_port_decided", codes=("EF-7E",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="an optional port with candidates carries a verb",
+            lives="hisim/setup_rules/assemblies.py:OptionalPortDecided",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide",
         ),
         RuleRecord(
-            rule_id="assemblies.optional_port_decided", codes=("EF-7E",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="an optional port with candidates carries a verb", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.verb_on_an_active_port", codes=("EF-7F",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="no verb on a switched-off port",
+            lives="hisim/setup_rules/assemblies.py:VerbOnAnActivePort",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.decide",
         ),
         RuleRecord(
-            rule_id="assemblies.verb_on_an_active_port", codes=("EF-7F",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="no verb on a switched-off port", lives="hisim/energy_system/assemblies/binding.py:PortBinder.decide",
+            rule_id="assemblies.known_port", codes=("EF-7G",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a verb names an existing port of the right kind",
+            lives="hisim/setup_rules/assemblies.py:KnownPort",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.bind",
         ),
         RuleRecord(
-            rule_id="assemblies.known_port", codes=("EF-7G",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a verb names an existing port of the right kind", lives="PortBinder.bind",
+            rule_id="assemblies.bound_output_is_read", codes=("EF-7H",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a bound provided output is one the port's wires name",
+            lives="hisim/setup_rules/assemblies.py:BoundOutputIsRead",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.provided",
         ),
         RuleRecord(
-            rule_id="assemblies.bound_output_is_read", codes=("EF-7H",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="a bound provided output is one the port's wires name", lives="PortBinder.provided",
-        ),
-        RuleRecord(
-            rule_id="assemblies.port_contract", codes=("EF-7J",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="assemblies.port_contract", codes=("EF-7J",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
             checks="a port fits its members (carrier, fact, circuit lowering, observer, controllables); placeholders have counterparts",
-            lives="PortBinder._carrier, _land_fact, _lower_circuit, _observe, _plan_controllables; hisim/energy_system/assemblies/expansion.py:ImportExpander",
+            lives="hisim/setup_rules/assemblies.py:PortContract",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder.lower, _carrier, _land_fact, _lower_circuit, _observe, "
+                "_plan_controllables and hisim/energy_system/assemblies/expansion.py:ImportExpander.expand, _site_owner"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.circuit_ends_match", codes=("EF-7K",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="both ends of a circuit binding name one circuit, written consistently", lives="PortBinder._joined, resolve",
+            rule_id="assemblies.circuit_ends_match", codes=("EF-7K",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="both ends of a circuit binding name one circuit, written consistently",
+            lives="hisim/setup_rules/assemblies.py:CircuitEndsMatch",
+            note="the refusals are recorded by hisim/energy_system/assemblies/binding.py:PortBinder._joined, resolve",
         ),
         RuleRecord(
-            rule_id="assemblies.one_provider_per_carrier", codes=("EF-7L",), nature=RuleNature.DOMAIN, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="a carrier has exactly one provider; a provider has a bound consumer; a required need a provider",
-            lives="PortBinder._carrier, bind",
-            note="one site with one supply per carrier: a district or a plant with two grid connections is refused; today no setup has two",
+            rule_id="assemblies.one_provider_per_carrier", codes=("EF-7L",), nature=RuleNature.DOMAIN, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a carrier has exactly one provider; a provider has a bound consumer; a required need a provider",
+            lives="hisim/setup_rules/assemblies.py:OneProviderPerCarrier",
+            note=(
+                "one site with one supply per carrier: a district or a plant with two grid connections is refused; today no setup has two; the refusals are "
+                "recorded by hisim/energy_system/assemblies/binding.py:PortBinder.bind, _carrier"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.order_valid", codes=("EF-7P",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
+            rule_id="assemblies.order_valid", codes=("EF-7P",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
             checks="an evaluation order names each number once; recorded members follow the record's sequence",
-            lives="hisim/energy_system/assemblies/addresses.py:sequence; expansion.py:_check_recorded_sequence",
+            lives="hisim/setup_rules/assemblies.py:OrderValid",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/addresses.py:sequence and "
+                "hisim/energy_system/assemblies/expansion.py:recorded_sequence_refusal"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.observer_selection", codes=("EF-7S",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="an observes: selector resolves", lives="hisim/energy_system/assemblies/selection.py:SelectionPlan._select",
+            rule_id="assemblies.observer_selection", codes=("EF-7S",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="an observes: selector resolves",
+            lives="hisim/setup_rules/assemblies.py:ObserverSelection",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/selection.py:SelectionPlan._select, which the wiring runs; the rule reads the "
+                "built file"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.actuation_selection", codes=("EF-7U",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build",
-            enforcement="E", checks="a controllable selection resolves", lives="SelectionPlan.__call__",
+            rule_id="assemblies.actuation_selection", codes=("EF-7U",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a controllable selection resolves",
+            lives="hisim/setup_rules/assemblies.py:ActuationSelection",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/selection.py:SelectionPlan.__call__, which the wiring runs; the rule reads the "
+                "built file"
+            ),
         ),
         RuleRecord(
-            rule_id="assemblies.weight_free", codes=("EF-7V",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD, when="build", enforcement="E",
-            checks="a derived weight reaches no other kind's base weight", lives="SelectionPlan._refuse_collision",
+            rule_id="assemblies.weight_free", codes=("EF-7V",), nature=RuleNature.LAW, target="assemblies", stage=RuleStage.BUILD,
+            when="build", enforcement="E",
+            checks="a derived weight reaches no other kind's base weight",
+            lives="hisim/setup_rules/assemblies.py:WeightFree",
+            note=(
+                "the refusals are recorded by hisim/energy_system/assemblies/selection.py:SelectionPlan._rank, collision, which the wiring runs; the rule "
+                "reads the built file"
+            ),
         ),
         RuleRecord(
             rule_id="components.one_kind_base", codes=("CB-01",), nature=RuleNature.LAW, target="components", stage=RuleStage.BUILD,
@@ -1074,9 +1142,7 @@ class Inventory:
         ),
         RuleRecord(
             rule_id="house.heat_distribution_system_needs_building", nature=RuleNature.BUILDING, when="build (EF-31)", enforcement="E",
-            checks=(
-                "a heat distribution system needs a building: mandatory inputs TheoreticalThermalBuildingDemand, ResidenceTemperatureIndoorAir only a Building feeds"
-            ),
+            checks="a heat distribution system needs a building: mandatory inputs TheoreticalThermalBuildingDemand, ResidenceTemperatureIndoorAir only a Building feeds",
             lives="hisim/components/heat_distribution_system.py:HeatDistribution.__init__, HeatDistributionController.__init__", note="right for any heated building",
         ),
         RuleRecord(

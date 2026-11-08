@@ -25,7 +25,7 @@ from hisim.energy_system.assemblies.record import SourceMap, SourceMapEntry
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.codec import ConfigValueCodec
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, ImportRefusal
 from hisim.energy_system.imports_model import BindingVerbs, ParameterReference, PortPlaceholder
 from hisim.energy_system.model import AnyInputItem, ComponentEntry, SourceReference
 from hisim.energy_system.source_lines import LineIndex, SourceLocation
@@ -98,33 +98,48 @@ class Block:
     location: str
     order: Optional[int]
     units: List[Unit]
+    #: The key path of the block in the energy-system file: ``("components", "Building")``, ``("imports", "heating")``.
+    key_path: Tuple[Any, ...] = ()
 
 
-def sequence(blocks: Sequence[Block]) -> List[Unit]:
+def sequence(blocks: Sequence[Block]) -> Tuple[List[Unit], Tuple[ImportRefusal, ...]]:
     """The units of ``blocks`` (in file order, sites first): those carrying ``order:`` ascending, then the rest.
 
-    Raises:
-        EnergySystemAssemblyError: ``EF-7P`` when two blocks carry the same number.
+    Two blocks carrying the same number are recorded for the assembly rules (``EF-7P``), every such pair, and the
+    first of them keeps the number. Example: a site entry and an import both carrying ``order: 2`` give one refusal
+    naming both.
+
+    Returns:
+        The units in their sequence, and what was refused; the sequence is meaningless when a refusal was recorded.
     """
     numbered: Dict[int, Block] = {}
+    refusals: List[ImportRefusal] = []
     for block in blocks:
         if block.order is None:
             continue
         if block.order in numbered:
-            raise EnergySystemAssemblyError(
-                EnergySystemErrorId.ORDER_INVALID,
-                block.location,
-                f"{block.label} and {numbered[block.order].label} both carry order: {block.order}.",
+            refusals.append(
+                ImportRefusal(
+                    EnergySystemErrorId.ORDER_INVALID,
+                    block.location,
+                    f"{block.label} and {numbered[block.order].label} both carry order: {block.order}.",
+                    key_path=block.key_path,
+                    owner=block.key_path[-1] if block.key_path else None,
+                )
             )
+            continue
         numbered[block.order] = block
     chosen = [numbered[number] for number in sorted(numbered)] + [block for block in blocks if block.order is None]
-    return [unit for block in chosen for unit in block.units]
+    return [unit for block in chosen for unit in block.units], tuple(refusals)
 
 
 def member_units(
     assembly: ResolvedAssembly, selection: Selection, step: AddressStep, origin: SourceLocation
-) -> List[Unit]:
+) -> Tuple[List[Unit], Tuple[ImportRefusal, ...]]:
     """The members of one import instance, in their assembly's written order.
+
+    A member whose preset parameter does not resolve to a name, or whose display template does not render with the
+    resolved values, is recorded for the assembly rules (``EF-76``) and left out; the other members are still built.
 
     Args:
         assembly: The resolved assembly.
@@ -133,14 +148,12 @@ def member_units(
         origin: Where the import (or instance) is written in the energy-system file.
 
     Returns:
-        One unit per selected member.
-
-    Raises:
-        EnergySystemAssemblyError: ``EF-76`` when a member's preset parameter does not resolve to a
-            name or its display template does not render with the resolved values.
+        One unit per selected member, and what was refused.
     """
     local_names = {name: ComponentID(name=name, path=(step,)).address for name in selection.members}
     units: List[Unit] = []
+    refusals: List[ImportRefusal] = []
+    reference = step.import_key if step.instance is None else f"{step.import_key}.{step.instance}"
     for name, template in selection.members.items():
         location = f"{assembly.label}: {'.'.join(template.source_path)}"
         entry = template.entry
@@ -148,21 +161,29 @@ def member_units(
         if template.preset_parameter is not None:
             preset = selection.resolved[template.preset_parameter]
             if not isinstance(preset, str):
-                raise EnergySystemAssemblyError(
-                    EnergySystemErrorId.PARAMETER_INVALID,
-                    location,
-                    f"'{name}' takes its preset from '{template.preset_parameter}', which resolves to {preset!r}.",
+                refusals.append(
+                    ImportRefusal(
+                        EnergySystemErrorId.PARAMETER_INVALID,
+                        location,
+                        f"'{name}' takes its preset from '{template.preset_parameter}', which resolves to {preset!r}.",
+                        owner=reference,
+                    )
                 )
+                continue
         display = None
         if template.display is not None:
             try:
                 display = template.display.format(**selection.resolved)
             except (TypeError, ValueError) as error:
-                raise EnergySystemAssemblyError(
-                    EnergySystemErrorId.PARAMETER_INVALID,
-                    f"{location}.display",
-                    f"the display template '{template.display}' does not render with these parameters: {error}.",
-                ) from error
+                refusals.append(
+                    ImportRefusal(
+                        EnergySystemErrorId.PARAMETER_INVALID,
+                        f"{location}.display",
+                        f"the display template '{template.display}' does not render with these parameters: {error}.",
+                        owner=reference,
+                    )
+                )
+                continue
         constructor = entry.constructor
         if constructor is not None:
             arguments = ParameterReference.substitute(dict(constructor.arguments), selection.resolved)
@@ -189,7 +210,7 @@ def member_units(
                 block_path=template.source_path,
             )
         )
-    return sorted(units, key=lambda unit: unit.lines.location(*unit.block_path).line)
+    return sorted(units, key=lambda unit: unit.lines.location(*unit.block_path).line), tuple(refusals)
 
 
 def config_overrides(name: str, entry: ComponentEntry, resolved: Mapping[str, Any], location: str) -> Dict[str, Any]:

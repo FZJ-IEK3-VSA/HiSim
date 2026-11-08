@@ -16,6 +16,7 @@ from hisim.components import air_conditioner
 from hisim.components import electricity_meter
 from hisim import loadtypes
 from hisim.config import ComponentID, SizingContext
+from hisim.setup_rules.kinds import SetupKind
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"
@@ -66,6 +67,7 @@ def setup_function(
         7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013
 
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # Set general simulation parameters
     year = 2021
@@ -100,34 +102,15 @@ def setup_function(
         "Weather", weather.LocationEnum.SEVILLE, heating_reference_temperature
     )
 
-    my_building_config = building.BuildingConfig(
-        component_id=ComponentID(name="Building"),
-        building_code="ES.ME.SFH.04.Gen.ReEx.001.003",
-        building_heat_capacity_class="medium",
-        initial_internal_temperature_in_celsius=22,
-        set_heating_temperature_in_celsius=20,
-        set_cooling_temperature_in_celsius=24,
-        absolute_conditioned_floor_area_in_m2=None,
-        total_base_area_in_m2=None,
-        number_of_apartments=None,
-        enable_opening_windows=False,
-        max_thermal_building_demand_in_watt=None,
-        floor_u_value_in_watt_per_m2_per_kelvin=None,
-        floor_area_in_m2=None,
-        facade_u_value_in_watt_per_m2_per_kelvin=None,
-        facade_area_in_m2=None,
-        roof_u_value_in_watt_per_m2_per_kelvin=None,
-        roof_area_in_m2=None,
-        window_u_value_in_watt_per_m2_per_kelvin=None,
-        window_area_in_m2=None,
-        door_u_value_in_watt_per_m2_per_kelvin=None,
-        door_area_in_m2=None,
-        device_co2_footprint_in_kg=None,
-        investment_costs_in_euro=None,
-        maintenance_costs_in_euro_per_year=None,
-        subsidy_as_percentage_of_investment_costs=None,
-        lifetime_in_years=None,
-    )
+    # The German reference house's preset with the Spanish archetype: the preset's sized fields (where the
+    # technical room is, from the archetype's cellar code) stay AUTO, so the recorded twin re-sizes them.
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
+    my_building_config.building_code = "ES.ME.SFH.04.Gen.ReEx.001.003"
+    my_building_config.absolute_conditioned_floor_area_in_m2 = None
+    my_building_config.initial_internal_temperature_in_celsius = 22
+    my_building_config.set_heating_temperature_in_celsius = 20
+    my_building_config.set_cooling_temperature_in_celsius = 24
+    my_building_config.enable_opening_windows = False
     my_building_config.weather_identity = my_weather_config.identity()
     # The design outside temperature is the weather's, not the building's: the building reads
     # it as a sized field, so it is resolved before the component is built.

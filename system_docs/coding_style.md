@@ -173,7 +173,7 @@ the class docstring ("Strategy for the heating curve: ..."), so readers and auto
 
 | Anti-pattern | What it looks like | Example in HiSim (2026-10-10) |
 |---|---|---|
-| **God class** | One class or module does many jobs | `more_advanced_heat_pump_hplib.py`, 3419 lines: physics, two controllers, the hplib cache and the SCOP calibration; a 607-line `__init__` |
+| **God class** | One class or module does many jobs | `more_advanced_heat_pump_hplib.py`, 3419 lines: physics, two controllers, the hplib cache and the SCOP calibration; a 607-line `__init__` (split into the package `more_advanced_heat_pump/` on 2026-11-08; the component class is still one) |
 | **Singleton, global state** | State reachable from everywhere | `SingletonMeta`, `ResultPathProviderSingleton`; the `SimRepository` used as a channel between components |
 | **Type switch** | `if`/`elif`/`isinstance` over types or Enum values, repeated in several modules | `PositionHotWaterStorageInSystemSetup`, three Enums that must agree, compared in 7 places |
 | **Shotgun surgery** | One change forces edits in many places | A new generator means editing the storage tank, the energy manager and the meter, whose default connections name it by class |

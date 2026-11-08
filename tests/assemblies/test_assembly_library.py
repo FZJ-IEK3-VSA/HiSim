@@ -12,7 +12,7 @@ from hisim import cli
 from hisim import loadtypes as lt
 from hisim.config import ComponentID, ConfigBase, preset, sized_field
 from hisim.config.sizing import declared_field_unit
-from hisim.energy_system.assemblies.library import check_assembly
+from hisim.setup_rules.assemblies import LibraryChecker
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
 from tests.assemblies.helpers import Library, Mocks, expand_text, site
@@ -51,7 +51,7 @@ def problems_of(tmp_path: Path, text: str, library_path: str = "test/base") -> s
     """The library check's problems of one file, joined."""
     library = Library(tmp_path)
     library.add(library_path, text)
-    return " | ".join(check_assembly(library.resolver().resolve(library_path, "test")))
+    return " | ".join(LibraryChecker(library.resolver().resolve(library_path, "test")).check())
 
 
 def with_parameter(line: str) -> str:
@@ -431,6 +431,58 @@ def test_the_test_contract_rules(tmp_path: Path, text: str, names: Tuple[str, ..
     problems = problems_of(tmp_path, text)
     for name in names:
         assert name in problems, f"{name!r} is not in: {problems}"
+
+
+#: The base assembly with an enum ``mode`` that switches its port, so a monotone condition can name a live parameter.
+WITH_MODE = with_parameter("mode: {type: enum, values: [eco, boost], default: eco, description: m.}").replace(
+    "demand: {into: [Tank], partner: MockOccupancy}",
+    "demand: {into: [Tank], partner: MockOccupancy, required_when: {mode: [eco]}}",
+)
+
+
+def conditioned(condition: str) -> str:
+    """The assembly with an enum ``mode`` whose monotone entry carries ``applies_when: <condition>``."""
+    return WITH_MODE.replace("direction: increasing}", f"direction: increasing, applies_when: {condition}}}")
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("condition", "problem"),
+    [
+        ("{colour: [none]}", "the monotone entry's applies_when names 'colour', which is no parameter."),
+        ("{volume_in_liter: [none]}", "names 'volume_in_liter', the parameter it sweeps"),
+        ("{mode: [turbo]}", "lists mode='turbo', which is neither one of its allowed values nor none or AUTO"),
+    ],
+)
+def test_a_monotone_condition_names_a_held_parameter_at_a_value_it_takes(
+    tmp_path: Path, condition: str, problem: str
+) -> None:
+    """Catches ``applies_when`` naming an unknown parameter, the swept one, or a value the parameter never takes.
+
+    Each would make the condition fail on every base, so the entry would silently check nothing.
+    """
+    assert problem in problems_of(tmp_path, conditioned(condition))
+
+
+@pytest.mark.assemblies
+@pytest.mark.parametrize("condition", ["{mode: [eco]}", "{mode: [eco, boost]}", "{mode: [none]}", "{mode: [AUTO]}"])
+def test_a_monotone_condition_on_an_allowed_or_unstated_value_is_accepted(tmp_path: Path, condition: str) -> None:
+    """Catches the check refusing a valid condition: one of the closed set's values, or ``none``/``AUTO``."""
+    assert "applies_when" not in problems_of(tmp_path, conditioned(condition))
+
+
+@pytest.mark.assemblies
+def test_describe_shows_a_monotone_condition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Catches ``describe`` hiding that a monotone entry applies only to some bases."""
+    library = Library(tmp_path)
+    library.add("test/base", conditioned("{mode: [eco]}"))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(library.directory))
+    assert cli.main(["energy-system", "describe", "test/base"]) == 0
+    assert "monotone  volume_in_liter rises: Standby heat losses of Tank increasing (applies when mode in ['eco'])" in (
+        capsys.readouterr().out
+    )
 
 
 @pytest.mark.assemblies

@@ -11,6 +11,7 @@ from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.config import AUTO, ComponentID, SizableFieldKind, describe_config
+from hisim.setup_rules.kinds import SetupKind
 from tests import functions_for_testing as fft
 
 
@@ -194,6 +195,7 @@ def test_the_example_component_runs_inside_a_simulator(tmp_path: Path) -> None:
         module_filename="example_component_in_a_simulator",
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
     my_sim.add_component(
         example_component.ExampleComponent(

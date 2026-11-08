@@ -14,6 +14,7 @@ from hisim.components import (
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import generic_boiler
+from hisim.setup_rules.kinds import SetupKind
 
 
 __authors__ = "Maximilian Hillen"
@@ -44,6 +45,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         - Electricity meter
         - Gas meter
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # =================================================================================================================================
     # Set System Parameters

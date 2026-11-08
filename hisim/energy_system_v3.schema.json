@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "name"
+    "name",
+    "setup_kind"
   ],
   "properties": {
     "schema_version": {
@@ -20,6 +21,15 @@
     "name": {
       "type": "string",
       "description": "The name of the energy system."
+    },
+    "setup_kind": {
+      "enum": [
+        "demo",
+        "residential",
+        "commercial",
+        "plant"
+      ],
+      "description": "What the system is: a demo (a demonstration or a test rig), a residential or a commercial building, or a plant (a system without a building). It selects the setup rules the system waives."
     },
     "description": {
       "type": "string"
@@ -196,9 +206,9 @@
             "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
             "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            "hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW",
+            "hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            "hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib",
             "hisim.components.night_setback_controller.NightSetbackController",
             "hisim.components.simple_air_conditioner.SimpleAirConditioner",
             "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
@@ -1065,6 +1075,20 @@
                     "anyOf": [
                       {
                         "type": "string"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "technical_room_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
                       },
                       {
                         "const": "AUTO"
@@ -2714,6 +2738,9 @@
                   "minimal_lift_at_maximal_power_in_kelvin": {
                     "type": "number"
                   },
+                  "pumps_space_heating_loop": {
+                    "type": "boolean"
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -3254,6 +3281,9 @@
                 "properties": {
                   "component_id": {},
                   "with_domestic_hot_water_preparation": {
+                    "type": "boolean"
+                  },
+                  "pumps_space_heating_loop": {
                     "type": "boolean"
                   },
                   "device_co2_footprint_in_kg": {
@@ -4217,6 +4247,9 @@
                       "NO_STORAGE_MASS_FLOW_FIX"
                     ]
                   },
+                  "pumps_the_distribution_loop": {
+                    "type": "boolean"
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -4704,7 +4737,142 @@
             "properties": {
               "class": {
                 "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib"
+                  "hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "t_min_dhw_storage_in_celsius": {
+                    "type": "number"
+                  },
+                  "t_max_dhw_storage_in_celsius": {
+                    "type": "number"
+                  },
+                  "charge_end_below_target_in_kelvin": {
+                    "type": "number"
+                  },
+                  "maximum_hot_water_priority_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "space_heating_interval_after_hot_water_priority_in_seconds": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "mode": {
+                    "type": "integer"
+                  },
+                  "set_cooling_threshold_outside_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "upper_temperature_offset_for_state_conditions_in_celsius": {
+                    "type": "number"
+                  },
+                  "lower_temperature_offset_for_state_conditions_in_celsius": {
+                    "type": "number"
+                  },
+                  "heat_distribution_system_type": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "RADIATOR",
+                          "FLOORHEATING",
+                          "LOW_TEMPERATURE_RADIATOR"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "set_heating_temperature_for_building_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "heat_distribution_system_type",
+                    "set_heating_temperature_in_celsius"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib"
                 ]
               }
             },
@@ -4891,6 +5059,16 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "heating_rod_rated_electrical_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -4900,141 +5078,6 @@
                   "enum": [
                     "heating_load_in_watt",
                     "heating_reference_temperature_in_celsius"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "class": {
-                "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW"
-                ]
-              }
-            },
-            "required": [
-              "class"
-            ]
-          },
-          "then": {
-            "properties": {
-              "preset": {
-                "enum": [
-                  "standard"
-                ]
-              },
-              "constructor": false,
-              "config": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "component_id": {},
-                  "t_min_dhw_storage_in_celsius": {
-                    "type": "number"
-                  },
-                  "t_max_dhw_storage_in_celsius": {
-                    "type": "number"
-                  },
-                  "charge_end_below_target_in_kelvin": {
-                    "type": "number"
-                  },
-                  "maximum_hot_water_priority_time_in_seconds": {
-                    "type": "number"
-                  },
-                  "space_heating_interval_after_hot_water_priority_in_seconds": {
-                    "type": "number"
-                  }
-                }
-              },
-              "sizing_sources": {
-                "$ref": "#/$defs/sizing_sources",
-                "propertyNames": {
-                  "enum": []
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "class": {
-                "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
-                ]
-              }
-            },
-            "required": [
-              "class"
-            ]
-          },
-          "then": {
-            "properties": {
-              "preset": {
-                "enum": [
-                  "standard"
-                ]
-              },
-              "constructor": false,
-              "config": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "component_id": {},
-                  "mode": {
-                    "type": "integer"
-                  },
-                  "set_cooling_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "upper_temperature_offset_for_state_conditions_in_celsius": {
-                    "type": "number"
-                  },
-                  "lower_temperature_offset_for_state_conditions_in_celsius": {
-                    "type": "number"
-                  },
-                  "heat_distribution_system_type": {
-                    "anyOf": [
-                      {
-                        "enum": [
-                          "RADIATOR",
-                          "FLOORHEATING",
-                          "LOW_TEMPERATURE_RADIATOR"
-                        ]
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
-                  "set_heating_temperature_for_building_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  }
-                }
-              },
-              "sizing_sources": {
-                "$ref": "#/$defs/sizing_sources",
-                "propertyNames": {
-                  "enum": [
-                    "heat_distribution_system_type",
-                    "set_heating_temperature_in_celsius"
                   ]
                 }
               }
@@ -5261,6 +5304,9 @@
                     ]
                   },
                   "use_external_massflow_as_signal_input_for_nominal_massflow": {
+                    "type": "boolean"
+                  },
+                  "pumps_the_brine_loop": {
                     "type": "boolean"
                   },
                   "device_co2_footprint_in_kg": {
@@ -6015,6 +6061,27 @@
                   "rated_power_in_kilowatt": {
                     "type": "number"
                   },
+                  "received_carrier": {
+                    "enum": [
+                      "ELECTRICITY",
+                      "NATURAL_GAS",
+                      "HEATING_OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "HYDROGEN",
+                      "DIESEL",
+                      "DISTRICT_HEAT",
+                      "SPACE_HEATING_HEAT",
+                      "DOMESTIC_HOT_WATER_HEAT",
+                      "COOLING",
+                      "AMBIENT_HEAT",
+                      "SOLAR",
+                      "ROOM_HEAT",
+                      "DRIVING",
+                      "VEHICLE_ELECTRICITY",
+                      "WIND_ELECTRICITY"
+                    ]
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -6396,7 +6463,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {
@@ -6487,7 +6555,8 @@
             "solar",
             "room_heat",
             "driving",
-            "vehicle_electricity"
+            "vehicle_electricity",
+            "wind_electricity"
           ]
         },
         "outputs": {

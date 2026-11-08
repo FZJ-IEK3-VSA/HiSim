@@ -3,34 +3,34 @@
 Epic hisim-energy-sankeys-9uoo; the graph model is ``roadmap/complete_energy_sankeys_spec.md`` §4. ``ports`` reads
 the declared ports and the meters of a run and finds each port's peer through the wiring: a meter that reads it,
 also through the exempt controllers, or a component that moves energy, else the port's carrier default; ``check``
-closes each component's balance and each link between declared components (both sides must book it); ``meters``
-checks per step that each meter publishes what it reads from the declared ports linked to it, and that every
-metered port passes a meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier;
-``export`` fails the run when they do not hold and writes the report and the Sankeys into the result directory. The
-check runs in every simulation; :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE``
-only writes the files.
+computes each component's balance and each link between declared components (both sides must book it); ``meters``
+computes per step whether each meter publishes what it reads from the declared ports linked to it, and which
+metered ports pass no meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier,
+and makes each view readable for its HTML (solar losses netted in ``overall``, small nodes merged, one-line labels);
+``export`` writes the report and the Sankeys into the result directory. The balance is computed in every
+simulation, and the setup rules after the run (``hisim/setup_rules/results.py``, ``hisim/setup_rules/meters.py``)
+fail the run with :class:`~hisim.setup_rules.results.EnergyBalanceError` when it does not hold;
+:class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only writes the files.
 
 Coverage: the heat generators, the electricity devices and the occupancy declare their ports, the meters their
 published exchanges; the water storages and the heat distribution system behind a buffer tag their water circuits
 as fluid loops (:class:`~hisim.energy_port.FluidLoop`) on their channels, as the generators at the other end do (PR
 3 of the spec's §9, hydronic stage E, hisim-hydronics-fxix.6). The building and the rest follow in the other PRs of §9, the distribution system without a
-buffer with hisim-pnw7; until then they are drawn as undeclared nodes. :meth:`ports.Wiring.refuse_a_broken_wiring`
-refuses a wiring that breaks a rule of the ports before the run simulates.
+buffer with hisim-pnw7; until then they are drawn as undeclared nodes. The energy-port rules of
+``hisim/setup_rules/energy_ports.py`` refuse a wiring that breaks a rule of the ports before the run simulates.
 """
 
 from hisim.postprocessing.energy_balance.check import (
     BalanceCheck,
     ComponentBalance,
-    EnergyBalanceError,
     LinkBalance,
     Tolerance,
 )
 from hisim.postprocessing.energy_balance.export import EnergyBalanceReport
 from hisim.postprocessing.energy_balance.meters import MeterBalance, MeterCheck
 from hisim.postprocessing.energy_balance.ports import (
-    CircuitColumns,
+    LoopColumns,
     DeclaredPorts,
-    EnergyPortWiringError,
     Exemptions,
     Peer,
     PeerKind,
@@ -40,11 +40,9 @@ from hisim.postprocessing.energy_balance.ports import (
 
 __all__ = [
     "BalanceCheck",
-    "CircuitColumns",
+    "LoopColumns",
     "ComponentBalance",
     "DeclaredPorts",
-    "EnergyBalanceError",
-    "EnergyPortWiringError",
     "EnergyBalanceReport",
     "Exemptions",
     "LinkBalance",

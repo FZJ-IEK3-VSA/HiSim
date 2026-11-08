@@ -251,6 +251,7 @@ class TwoGroupFile:
     #: The part both variants share: everything up to the groups.
     SHARED: ClassVar[str] = """schema_version: 3
 name: Identity probe
+setup_kind: demo
 description: The minimal household with its meter in a group of its own.
 components:
   weather:
@@ -857,8 +858,8 @@ def test_an_override_of_a_field_the_preset_left_open_is_auditable(tmp_path: Path
     """
     source = Fixtures.MINIMAL.read_text(encoding="utf-8")
     pinned = source.replace(
-        "    preset: condensing_gas",
-        "    preset: condensing_gas\n    config:\n      maximal_thermal_power_in_watt: 5000.0",
+        "      pumps_space_heating_loop: false",
+        "      maximal_thermal_power_in_watt: 5000.0\n      pumps_space_heating_loop: false",
         1,
     )
     assert pinned != source

@@ -93,13 +93,30 @@ class SourceMap:
         entry of the item it names, else of the component, is appended to the message. An error
         about no produced component is left as it is.
         """
-        parts = error.location.split(".")
+        suffix = self.suffix(error.location)
+        if suffix:
+            error.args = (f"{error}{suffix}",)
+
+    def suffix(self, location: str) -> str:
+        """The text a refusal at this location ends with: the source-map entry of the component it names, or nothing.
+
+        Example: ``components.boiler-Boiler.inputs`` of a boiler an import produced gives
+        `` [source: boiler-Boiler (import boiler, energy_system.yaml:12 → test/burner.yaml:5)]``; a location
+        that names no produced component, or one the expansion did not produce, gives ``""``. The entry of the
+        item the location names is preferred to the component's.
+
+        Args:
+            location: The key path of the refusal, ``components.<name>…``.
+
+        Returns:
+            The suffix with its leading space, or an empty string.
+        """
+        parts = location.split(".")
         if len(parts) < 2 or parts[0] != "components":
-            return
+            return ""
         item = parts[2] if len(parts) > 2 else "component"
         entry = self.entries.get((parts[1], item)) or self.entries.get((parts[1], "component"))
-        if entry is not None:
-            error.args = (f"{error} [source: {entry.text(parts[1])}]",)
+        return f" [source: {entry.text(parts[1])}]" if entry is not None else ""
 
 
 @dataclass(frozen=True)

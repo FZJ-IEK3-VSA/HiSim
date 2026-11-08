@@ -341,6 +341,10 @@ class EnergyBalanceCarrier(str, enum.Enum):
     ``DRIVING`` environment node. ``VEHICLE_ELECTRICITY`` is the electricity a car battery gives its car's drive: it
     flows from one component straight into the other, past every meter, so it is a carrier of its own, which no meter
     reads and the KPIs do not count; the battery takes its charge as ``ELECTRICITY`` through the meter.
+    ``WIND_ELECTRICITY`` is the electricity a wind turbine that the run does not model delivers at its terminals, read
+    from a series: like the sun of a PV system it enters at a boundary node, ``WIND_TURBINE``, which the port of the
+    component that reads the series names, and it is a carrier of its own because no meter reads it; the component
+    turns it into ``ELECTRICITY`` (owner decision of 2026-10-28 on bead hisim-component-physics-4g9.69).
     A port whose wiring names no peer takes its carrier's boundary default where one exists
     (:meth:`hisim.energy_port.EnergyPort.default_boundary`); electricity and heat have none, and such a port is
     unlinked.
@@ -362,6 +366,41 @@ class EnergyBalanceCarrier(str, enum.Enum):
     ROOM_HEAT = "room_heat"
     DRIVING = "driving"
     VEHICLE_ELECTRICITY = "vehicle_electricity"
+    WIND_ELECTRICITY = "wind_electricity"
+
+
+@enum.unique
+class InstallationLocation(str, enum.Enum):
+
+    """Where a device stands: inside the building's heated zone, in an unheated space under its roof, or outdoors.
+
+    The heated zone is the zone inside the building's thermal envelope, the one the building's 5R1C model simulates.
+    An unheated space is an unheated cellar or utility room outside the envelope but under the house. Outdoors is
+    outside the house altogether: a roof, a garage, a wall-mounted inverter. For example, a buffer tank in the cellar
+    of a 1995 house with an unheated cellar stands in ``UNHEATED_SPACE``, the same tank in the utility room of a 2005
+    house without a cellar in ``HEATED_ZONE``.
+
+    The location decides the temperature a device's loss is computed against and where the loss goes: into the
+    heated zone as an internal gain, or out of the house. The building's ``technical_room_location`` is one of the
+    first two values; a device follows it unless its own configuration names another place. An energy-system file
+    spells a member by its name (``HEATED_ZONE``), as it does every enum field, and the decoder also accepts the value
+    (``heated_zone``).
+    """
+
+    HEATED_ZONE = "heated_zone"
+    UNHEATED_SPACE = "unheated_space"
+    OUTDOORS = "outdoors"
+
+    @property
+    def releases_into_heated_zone(self) -> bool:
+        """Whether a device standing here releases its heat into the building's heated zone.
+
+        True for ``HEATED_ZONE`` only. A device in an unheated space or outdoors loses its heat out of the house: the
+        building counts an unheated cellar as outside its envelope, and nothing brings the heat back. A located device
+        has two fixed outputs of the heat it releases, one into the heated zone and one lost out of the house; this
+        property picks the one its location fills, and the other is 0 in every step.
+        """
+        return self is InstallationLocation.HEATED_ZONE
 
 
 @enum.unique
@@ -378,7 +417,9 @@ class EnvironmentNode(str, enum.Enum):
     collector (``SimpleHeatSource``), which its ports name (Q-O). ``GRID_IMPORT`` and ``GRID_EXPORT`` are where the
     electricity meter's published import comes from and its export goes to, which no port names
     (:meth:`hisim.energy_port.MeteredExchange.import_node`). ``HOT_WATER_USE`` is the hot water drawn
-    at the taps, ``RESIDENTS`` the residents' body heat and ``DRIVING`` the energy cars use to drive. The supply node of a bought carrier, such as
+    at the taps, ``RESIDENTS`` the residents' body heat, ``DRIVING`` the energy cars use to drive and ``WIND_TURBINE``
+    the wind turbine a series stands for, whose electricity the component that reads the series takes (carrier
+    ``WIND_ELECTRICITY``). The supply node of a bought carrier, such as
     "natural gas supply", is derived from its carrier and not listed here
     (:meth:`hisim.energy_port.EnergyPort.supply_node_name`).
     """
@@ -393,6 +434,7 @@ class EnvironmentNode(str, enum.Enum):
     HOT_WATER_USE = "hot water drawn at the taps"
     RESIDENTS = "residents' body heat"
     DRIVING = "driving"
+    WIND_TURBINE = "wind turbine"
 
 
 @enum.unique

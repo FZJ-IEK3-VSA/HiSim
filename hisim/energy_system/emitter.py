@@ -258,7 +258,11 @@ class EnergySystemEmitter:
             The document with its keys in canonical order and every optional empty block
             omitted.
         """
-        document: Dict[str, Any] = {"schema_version": model.schema_version, "name": model.name}
+        document: Dict[str, Any] = {
+            "schema_version": model.schema_version,
+            "name": model.name,
+            "setup_kind": model.setup_kind.value,
+        }
         if model.description is not None:
             document["description"] = model.description
         document["components"] = {name: cls.entry(entry) for name, entry in model.components.items()}

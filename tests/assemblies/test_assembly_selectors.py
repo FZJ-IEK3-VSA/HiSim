@@ -39,6 +39,7 @@ from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordErro
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
+from hisim.setup_rules.rule import SetupRuleViolation
 from tests.assemblies.helpers import Mocks, Real, build_text, expand_text, imports, site
 
 #: The weight of a feed an observer only measures.
@@ -117,9 +118,11 @@ def build(text: str, directory: Path) -> EnergySystemFile:
 
 
 def refusal(text: str, directory: Path) -> str:
-    """The message a build refuses an inline file with."""
+    """The message a build refuses an inline file with: a catalogue error's, or the setup rules' faults, one per line."""
     with pytest.raises(EnergySystemError) as raised:
         build_text(text, directory)
+    if isinstance(raised.value, SetupRuleViolation):
+        return "\n".join(fault.message for fault in raised.value.faults)
     return str(raised.value)
 
 
@@ -211,7 +214,7 @@ def ranked_by_fake_controller(
     }
     components["Controller"] = FakeComponent("FakeController", declared)
     plan = SelectionPlan(observers=[Observer("Controller", Selection(), "Controller")])
-    return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)["Controller"]]
+    return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)[0]["Controller"]]
 
 
 @pytest.mark.assemblies
@@ -384,6 +387,7 @@ def test_the_double_count_check_covers_hand_written_files(tmp_path: Path, reside
     text = f"""\
 schema_version: 3
 name: written
+setup_kind: demo
 components:
   {Real.WEATHER}
   {Real.OCCUPANCY}
@@ -515,8 +519,9 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
     observers = record["metadata"]["imports"]["observers"]
     assert [(item["observer"], item["selection"], len(item["feeds"])) for item in observers] == [
         ("control-EMS", "declared", len(written)),
-        # residents, PV, the heat pump's four electricity ports and the battery's two
-        ("grid-ElectricityMeter", "declared", 8),
+        # residents, PV, the heat pump's five electricity ports (its backup heating rod's among them) and the
+        # battery's two
+        ("grid-ElectricityMeter", "declared", 9),
     ]
 
     second = tmp_path / "second"

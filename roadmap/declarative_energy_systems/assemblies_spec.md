@@ -806,7 +806,11 @@ for a fuel the assembly provides a consumer partner, and for every sizing fact a
 provides, no fact port names and no partner already in the system contributes by its class the registered provider
 of that fact (it crosses by the bare-fact rule, §6, D29; `facts_needed` in `testing/isolation.py`: a fuel meter copies
 its carrier from the consumer partner beside it, and a second `energy_carrier` provider of any value is refused at
-sizing, §5.1, D30); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
+sizing, §5.1, D30), and for every carrier its components move through a metered port and no component of it meters
+the registered provider of that carrier, its meter (every bought carrier passes a meter, Q-J of
+`roadmap/complete_energy_sankeys_spec.md`; `carriers_to_meter` in `testing/isolation.py` finds the carriers by
+building the system once without running it, since a component declares its energy ports when it is constructed:
+the residents beside a boiler, a PV array and a battery get the electricity meter); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
 check and `i_doublecheck` on. The test partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires; a requirement a member of the assembly has the class of is
 met by that member and does not join (D32). The run fails on an exception,
@@ -825,7 +829,8 @@ tests:
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 1.5, max: 7}
   monotone:                                 # one parameter rises, all else at the sample; the KPI moves one way
     - {parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}
-    - {parameter: scop_en14825_w35, kpi: Electricity consumption, member: HeatPump, direction: decreasing}
+    - {parameter: scop_en14825_w35, kpi: Electricity consumption, member: HeatPump, direction: decreasing,
+       applies_when: {scop_en14825_w55: [none]}}  # only from the bases that meet the condition
   expect:                                   # the result at the defaults on the test weather lies in a band
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.3, max: 4.6}
 ```
@@ -840,7 +845,14 @@ tests:
   equidistant steps (an `int` parameter takes the nearest integer of each, so up to four distinct values); bases
   reaching the same points are one sweep;
   `direction` is `increasing`, `decreasing` or `constant`, within the gate's numeric tolerance. It is the cheap test
-  that catches wrong-sign physics.
+  that catches wrong-sign physics. An optional `applies_when` restricts the entry to the bases whose parameters meet a
+  conjunctive `{parameter: [values]}` condition, spelled like a port's `required_when`; a value is one of the
+  parameter's closed set or `none`/`AUTO`, and the condition names neither the swept parameter nor an undeclared one
+  (the library check refuses both, and a value the parameter never takes). A base that does not meet it runs no
+  sweep and is reported as skipped with the unmet condition, never passed (owner, 2026-11-07). It is for a claim the
+  physics makes only in part of the box: the heat pumps' W35 SCOP sweep holds where W55 is unstated, because with
+  both ratings stated the calibrated COP near the W55 line's outlet temperatures does not move with W35 (the factor
+  rises with W35 only below an outlet of about 38.5-39 °C, where the test day charges since #1083).
 - `expect` pins the results at the defaults to a band (v1; per preset in the design, D26), like the goldens do
   exactly; a band is wider than a golden and states the modeller's plausibility judgement.
 - **Required (D24):** every parameter has a `default`; every numeric parameter has a `range`; every energy-carrying or

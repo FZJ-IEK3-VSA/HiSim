@@ -3,6 +3,7 @@
 # Grouped by energy_systems/household_wood_chips_building_sizer.grouping.yaml from the probe configurations of energy_systems/household_wood_chips_building_sizer.probes.yaml.
 schema_version: 3
 name: household_wood_chips_building_sizer
+setup_kind: residential
 description: Basic household new system setup.
 components:
   Building:

@@ -6,6 +6,7 @@ import pandas as pd
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.kinds import SetupKind
 
 
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
@@ -35,6 +36,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         kpi_collection_dict: Optional[Dict[str, Any]] = None,
         scenario_name: str = "",
         description: str = "",
+        setup_kind: Optional[SetupKind] = None,
     ) -> None:
         """Initialize a PostProcessingDataTransfer instance.
 
@@ -60,6 +62,8 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
             description: One-line description of the run, as the simulator carries it.
                 No post-processing artifact has carried it since ``scenario.json`` retired
                 with its writer (F-9). Empty when the run has no description.
+            setup_kind: What the simulated system is, as the setup declared it; the setup rules after the run read
+                it to decide which rules the system waives, and refuse a run that declared none.
         """
         if kpi_collection_dict is None:
             kpi_collection_dict = {}
@@ -80,3 +84,4 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.kpi_collection_dict: Dict[str, Any] = kpi_collection_dict
         self.scenario_name: str = scenario_name
         self.description: str = description
+        self.setup_kind: Optional[SetupKind] = setup_kind

@@ -18,6 +18,8 @@ this repository already has become declarative twins without anybody retyping th
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one.
 A second noun reads what a run wrote: ``hisim kpis list`` prints the address, value and unit of
 every KPI of one ``all_kpis.json``, filtered by building, tag, name, source, import or instance.
+A third, ``hisim setup-rules``, lists the rules every setup obeys and the kinds that waive them,
+explains one rule, and checks a file against them without simulating (:mod:`hisim.cli_setup_rules`).
 
 Two conventions hold throughout. Nothing here decides anything: every command asks the same code
 the executor asks, so a command can never report something a run would contradict. And a failure
@@ -33,7 +35,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Sequence, TextIO
+from typing import Dict, Optional, Sequence, TextIO
 
 from dotenv import load_dotenv
 
@@ -41,6 +43,7 @@ from hisim.cli_exit import ExitCodes
 from hisim.cli_grouping import GroupingCommands, GroupingPaths
 from hisim.config.introspection import describe_config
 from hisim.cli_render import DescriptionRenderer, FactsRenderer, KpiAddressRenderer
+from hisim.cli_setup_rules import SetupRuleCommands, Verb
 from hisim.energy_system.assemblies.describe import AssemblyDescription
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, export_assembly_schema
@@ -52,6 +55,7 @@ from hisim.energy_system.recording.session import RecordingSession, record_setup
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import default_schema_path, export_schema
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.setup_rules.rule import SetupRuleViolation
 
 
 class ClassLookup:
@@ -342,6 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--rerun", action="store_true",
                      help="the file is a generated run record and is expected to reproduce it")
 
+    SetupRuleCommands.add_parser(nouns)
+
     kpis = nouns.add_parser("kpis", help="read a run's all_kpis.json by address")
     kpi_verbs = kpis.add_subparsers(dest="verb")
     kpi_list = kpi_verbs.add_parser(
@@ -383,7 +389,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         arguments = parser.parse_args(list(argv) if argv is not None else None)
     except SystemExit as exit_request:  # argparse reports usage errors by exiting
         return int(exit_request.code or ExitCodes.OK)
-    verbs_by_noun = {
+    verbs_by_noun: Dict[str, Dict[str, Verb]] = {
         "energy-system": {
             "describe": EnergySystemCommands.describe,
             "facts": EnergySystemCommands.facts,
@@ -393,6 +399,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "run": EnergySystemCommands.run,
         },
         "kpis": {"list": KpiCommands.list},
+        "setup-rules": SetupRuleCommands.verbs(),
     }
     verb = verbs_by_noun.get(arguments.noun or "", {}).get(getattr(arguments, "verb", None) or "")
     if verb is None:
@@ -400,7 +407,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return ExitCodes.USAGE
     try:
         return verb(arguments, sys.stdout, sys.stderr)
-    except EnergySystemError as error:
+    except (EnergySystemError, SetupRuleViolation) as error:
         print(str(error), file=sys.stderr)
         return ExitCodes.FILE_REJECTED
 

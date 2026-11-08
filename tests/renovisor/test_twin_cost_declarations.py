@@ -1,7 +1,7 @@
 """Every twin the translator can select passes the simulator's pre-run cost-declaration check.
 
-A RenoVisor calculation always asks for lifecycle costs, and `Simulator.check_cost_declarations`
-refuses such a run before its first timestep when a component's class declares no
+A RenoVisor calculation always asks for lifecycle costs, and the setup rules `CB-08` and `CB-09`
+(`hisim/setup_rules/components.py`) refuse such a run before its first timestep when a component's class declares no
 `cost_relevance`, or declares `PRICED` with nothing that can produce its cost facts. Several
 component classes are in the second state today (the list is the bead hisim-cost-data-l07.12), among them
 the car pair and the air conditioner. The translator never selects the two twins that wire them
@@ -9,7 +9,7 @@ the car pair and the air conditioner. The translator never selects the two twins
 refused (decision of 2026-09-23). This test keeps it that way: a twin added to `BaseFiles` with
 such a class fails here, not in a user's cost run.
 
-It applies the simulator's own rule, `simulator.cost_declaration_refusal`, to every class a twin
+It applies the rules' own statement, `CostDeclarationRule.refusal`, to every class a twin
 names -- in its components and in the options of its grouped variants alike -- so the test and the
 refusal cannot disagree about which classes are refused. What the check does not cover is whether
 the facts a class produces can be priced against the country's cost database; that is checked by
@@ -34,7 +34,7 @@ from hisim.economics.adapter import FactsExtractors
 from hisim.economics.facts import CostRelevance
 from hisim.renovisor.economics import DeviceAssets, TwinEquipment
 from hisim.renovisor.translate import BaseFiles
-from hisim.simulator import cost_declaration_refusal
+from hisim.setup_rules.components import CostDeclarationRule
 
 pytestmark = pytest.mark.base
 
@@ -70,7 +70,7 @@ def refused_by_the_check(classes: Set[type]) -> List[str]:
     return sorted(
         component_class.__name__
         for component_class in classes
-        if cost_declaration_refusal(component_class) is not None
+        if CostDeclarationRule.refusal(component_class) is not None
     )
 
 

@@ -31,6 +31,12 @@ from hisim.components.simple_water_storage import (
 )
 from hisim.config import ComponentID
 from hisim.simulationparameters import SimulationParameters
+from hisim.setup_rules.components import MandatoryInputConnected
+from hisim.setup_rules.kinds import SetupKind
+from hisim.setup_rules.rule import RuleStage
+from hisim.setup_rules.subjects import BuiltSystem
+from tests import functions_for_testing as fft
+from tests.part_load_rigs import AllInputsRig
 
 
 class StorageWiring:
@@ -89,7 +95,7 @@ class StorageWiring:
 
         Raises:
             CoilWiredByHalfError: If the component refuses a secondary circuit wired by half while it is prepared.
-            ValueError: If a mandatory input is left unwired when the inputs are resolved.
+            ValueError: If a mandatory input is left unwired when the inputs are resolved (the setup rule CB-06).
         """
         inputs_by_name = {component_input.field_name: component_input for component_input in component.inputs}
         outputs: List[cp.ComponentOutput] = []
@@ -104,6 +110,10 @@ class StorageWiring:
         wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
         wrapper.prepare_calculation()
         wrapper.connect_inputs(outputs)
+        # The connection judges nothing; the build rule of mandatory inputs does, as in a run.
+        fft.ComponentRules.registry([MandatoryInputConnected]).run(
+            RuleStage.BUILD, BuiltSystem(components=(component,), outputs=tuple(outputs)), SetupKind.RESIDENTIAL
+        )
 
     @staticmethod
     def buffer_primary_inputs() -> List[str]:
@@ -226,10 +236,12 @@ def test_a_secondary_circuit_wired_whole_or_not_at_all_builds(storage_kind: str,
 @pytest.mark.base
 @pytest.mark.parametrize("generator_kind", ["district_heating", "electric_heating"])
 def test_the_hot_water_generators_read_no_flow_of_the_tank(generator_kind: str) -> None:
-    """The district-heating substation and the electric heater declare no tank-flow input and take none by default.
+    """The district-heating substation and the electric heater read their own flow back from the tank, not its tap flow.
 
     Both pump their hot-water circuit themselves and book its heat from their own flow; the tank's tap flow they used
-    to declare as a mandatory input was never read. Fails if the input or its default connection comes back.
+    to declare as a mandatory input was never read. Their hot-water loop's fourth wire is their own flow, passed back by
+    the tank's primary coil (stage 1b of ``roadmap/fluid_loops_spec.md``). Fails if the tap-flow input or its default
+    connection comes back, or if the flow back is read from anything but the coil.
     """
     generator: Union[DistrictHeating, ElectricHeating]
     if generator_kind == "district_heating":
@@ -246,5 +258,52 @@ def test_the_hot_water_generators_read_no_flow_of_the_tank(generator_kind: str) 
     assert not hasattr(type(generator), StorageWiring.REMOVED_TANK_FLOW_INPUT)
     connections = generator.get_default_connections_from_simple_dhw_storage()
     assert [(connection.target_input_name, connection.source_output_name) for connection in connections] == [
-        ("WaterInputTemperatureDhw", SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius)
+        ("WaterInputTemperatureDhw", SimpleDHWStorage.StepMeanWaterTemperatureToHeatGeneratorInCelsius),
+        ("WaterInputMassFlowRateReturningDhw", SimpleDHWStorage.WaterMassFlowRateToHeatGenerator),
     ]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("storage_kind", ["buffer", "tank"])
+def test_the_storages_pass_every_loop_s_flow_back_unchanged(storage_kind: str) -> None:
+    """Catches a storage that publishes a flow of its own on a loop it does not pump, or none.
+
+    A storage moves no water: on each of its loops it publishes the flow it reads as the flow leaving, which the pump
+    owner reads back (the fourth wire of stage 1b of ``roadmap/fluid_loops_spec.md``). Every loop is tagged whole and
+    none is pumped by the storage.
+    """
+    storage: Union[SimpleHotWaterStorage, SimpleDHWStorage]
+    if storage_kind == "buffer":
+        storage = StorageWiring.buffer()
+        flows = {
+            (SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator, SimpleHotWaterStorage.WaterMassFlowRateToHeatGenerator): 0.36,
+            (
+                SimpleHotWaterStorage.WaterMassFlowRateFromSecondaryHeatGenerator,
+                SimpleHotWaterStorage.WaterMassFlowRateToSecondaryHeatGenerator,
+            ): 0.1,
+            (
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterMassFlowRateToHeatDistributionSystem,
+            ): 0.27,
+        }
+        temperatures = {
+            SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: 55.0,
+            SimpleHotWaterStorage.WaterTemperatureFromSecondaryHeatGenerator: 50.0,
+            SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: 35.0,
+        }
+    else:
+        storage = StorageWiring.tank()
+        flows = {
+            (SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator, SimpleDHWStorage.WaterMassFlowRateToHeatGenerator): 0.12,
+            (
+                SimpleDHWStorage.WaterMassFlowRateFromSecondaryHeatGenerator,
+                SimpleDHWStorage.WaterMassFlowRateToSecondaryHeatGenerator,
+            ): 0.006,
+        }
+        temperatures = {
+            SimpleDHWStorage.WaterTemperatureFromHeatGenerator: 65.0,
+            SimpleDHWStorage.WaterTemperatureFromSecondaryHeatGenerator: 60.0,
+        }
+    assert all(len(port_set.channels) == 4 and not port_set.loop.pumps for port_set in storage.port_sets())
+    outputs = AllInputsRig.step_once(storage, {**{arriving: flow for (arriving, _), flow in flows.items()}, **temperatures})
+    assert {leaving: outputs[leaving] for (_, leaving) in flows} == {leaving: flow for (_, leaving), flow in flows.items()}

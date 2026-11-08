@@ -66,6 +66,7 @@ class Systems:
     GROUPED: ClassVar[str] = """
 schema_version: 3
 name: off rule under test
+setup_kind: demo
 components:
   consumer:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -280,6 +281,7 @@ def test_a_sizing_list_may_shrink_all_the_way_to_empty() -> None:
         """
 schema_version: 3
 name: emptied list
+setup_kind: demo
 components:
   consumer:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -314,6 +316,7 @@ def test_a_scalar_sizing_source_into_a_disabled_group_is_refused() -> None:
         """
 schema_version: 3
 name: dangling scalar
+setup_kind: demo
 components:
   consumer:
     class: hisim.components.generic_boiler.GenericBoiler

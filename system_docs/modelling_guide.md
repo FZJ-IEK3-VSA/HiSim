@@ -15,7 +15,7 @@ controller (#941).
   circuit carries a mass flow `m` (kg/s), a supply temperature and a return temperature (°C); its heat flow is
   `P = m c (T_sup - T_ret)` in W (`hisim.hydronics.circuit_power_w`), and its heat over a step of `dt` seconds is
   `Q = m c (T_sup - T_ret) dt`, that heat flow times the step
-  (`hisim.postprocessing.energy_balance.ports.CircuitColumns.heat_in_kilowatt_hours_per_step`, in kWh), with
+  (`hisim.postprocessing.energy_balance.ports.LoopColumns.heat_in_kilowatt_hours_per_step`, in kWh), with
   `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K` (a loop's `c` is its fluid's, `hisim.energy_port.LoopFluid`).
   Neither end books a heat of its own making. Why: before stage B (#908) the hplib heat pump booked hplib's own thermal power, computed at a
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two
@@ -52,8 +52,11 @@ controller (#941).
   declares an `EnergyPort` (role `CONSUMPTION`, `PRODUCTION`, `LOSS` or `STORED_CHANGE`, carrier), and so does an
   input on which energy arrives (`energy_port=` on `add_input`), instead of an output that copies the input; the
   wiring finds each port's peer. A water circuit is a
-  `FluidLoop` that both of its members tag on their own channels (`fluid_loop=` on `add_input` and `add_output`),
-  from which the check derives the circuit's heat once for both members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
+  `FluidLoop` that each of its members tags on its own four channels, flow and temperature in and out (`fluid_loop=`
+  on `add_input` and `add_output`), stating whether it supplies and whether it pumps; the member that pumps publishes
+  its flow, every other member passes the flow it reads on unchanged, and the build walks the loop through the
+  wiring and refuses one that does not close or has no or two pump owners (`hisim/fluid_loops.py`). The check
+  derives the circuit's heat once for its members and books it by the supplier's sign. The check in `hisim/postprocessing/energy_balance/check.py` runs in every simulation and fails
   the run when a balance does not close: the run's residual above 0.1 % of the component's throughput, a step's
   above `max(1e-6 kWh, 0.1 %)` of the step's throughput, a transfer booked by only one of two declared components,
   or a port that is not finite (owner decision 6 of epic hisim-energy-sankeys-9uoo). A new or changed energy-moving component
@@ -70,7 +73,10 @@ controller (#941).
   inputs, use it: `MixedNode.step` solves `C dT/dt = Σ m_i c (T_i - T) - UA (T - T_amb)` exactly, so its heat
   balance closes to float precision at any step length, without sub-stepping.
 - **Physical constants have one home.** Water's specific heat and density are `hydronics.Water`; a second literal
-  (`0.992` kg/l in the occupancy connector's KPI) is a duplicate to remove (`coding_style.md` §1, DRY).
+  (`0.992` kg/l in the occupancy connector's KPI) is a duplicate to remove (`coding_style.md` §1, DRY). A fuel's
+  lower heating value is `PhysicsConfig`'s: an energy port on a fuel's mass flow in kg/s is converted by it
+  (`hisim/energy_port.py`, "Ports on mass-flow channels"), so a component hands its fuel over as kg/s and publishes
+  no copy of the flow in W.
 
 ## 2. Sign conventions
 

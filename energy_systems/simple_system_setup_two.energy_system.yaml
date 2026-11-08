@@ -2,6 +2,7 @@
 # Recorded from system_setups/simple_system_setup_two.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: simple_system_setup_two
+setup_kind: demo
 description: Simple System Setup Module.
 components:
   RandomNumbers100To200:

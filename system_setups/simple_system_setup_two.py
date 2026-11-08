@@ -14,6 +14,7 @@ from hisim.components.example_transformer import (
 )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 from hisim.config import ComponentID
+from hisim.setup_rules.kinds import SetupKind
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
@@ -28,6 +29,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     The result is a series (my_sum) with random values between 150 and 300.
     """
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     log.information("Starting second system setup")
 
     # Set the simulation parameters for the simulation

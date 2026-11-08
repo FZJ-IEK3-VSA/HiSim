@@ -12,12 +12,23 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import (
-    more_advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
     electricity_meter,
+)
+from hisim.components.more_advanced_heat_pump.heat_pump import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -28,6 +39,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
 )
 from hisim import log
+from hisim.setup_rules.kinds import SetupKind
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -61,6 +73,7 @@ def setup_function(
         - Energy Management System
         - Electricity Meter
     """
+    my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)
 
     # =================================================================================================================================
     # Set System Parameters from Config
@@ -344,7 +357,7 @@ def setup_function(
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
@@ -357,25 +370,25 @@ def setup_function(
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
-    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+    my_heatpump_controller_sh = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
             "HeatPumpControllerDHW"
         )
     )
 
     # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+    my_heatpump_controller_dhw = MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     ).resolve(
         SizingContext(
@@ -385,7 +398,7 @@ def setup_function(
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

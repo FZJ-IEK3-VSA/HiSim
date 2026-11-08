@@ -287,7 +287,7 @@ def origins_of(entries: str) -> Dict[str, Any]:
     Returns:
         A mapping from component name to the configuration its builder produced.
     """
-    text = f"schema_version: 3\nname: constructor arguments\ncomponents:\n{entries}"
+    text = f"schema_version: 3\nname: constructor arguments\nsetup_kind: demo\ncomponents:\n{entries}"
     model = EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
     expanded, _ = expand_groups(model)
     return dict(configure_energy_system(expanded).origins)

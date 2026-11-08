@@ -198,3 +198,27 @@ def test_the_configured_maintenance_rate_reaches_the_simulated_period() -> None:
 
     assert capex.maintenance_costs_in_euro_per_year == 10
     assert capex.maintenance_cost_per_simulated_period_in_euro == pytest.approx(10.0)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("pumps", [True, False])
+def test_the_brine_loop_states_its_pumping_flag_and_a_nominal_flow_needs_the_pump(pumps: bool) -> None:
+    """Catches a brine loop whose pumping flag is not the configuration's, or a source that runs its own flow unpumped.
+
+    ``pumps_the_brine_loop`` (D16 of ``roadmap/fluid_loops_spec.md``) states on the loop whether the source pumps it;
+    a source told to run its nominal flow (``use_external_massflow_as_signal_input_for_nominal_massflow``) moves the
+    brine itself, so with the flag false it is refused when it is built.
+    """
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_near_surface_brine("HeatSource")
+    config.pumps_the_brine_loop = pumps
+    port_sets = simple_heat_source.SimpleHeatSource(config=config, my_simulation_parameters=parameters).port_sets()
+    assert len(port_sets) == 1
+    port_set = port_sets[0]
+    assert port_set.loop.pumps is pumps
+    config.use_external_massflow_as_signal_input_for_nominal_massflow = True
+    if pumps:
+        simple_heat_source.SimpleHeatSource(config=config, my_simulation_parameters=parameters)
+        return
+    with pytest.raises(ValueError, match="only a source that pumps its brine loop can do; pumps_the_brine_loop is false"):
+        simple_heat_source.SimpleHeatSource(config=config, my_simulation_parameters=parameters)

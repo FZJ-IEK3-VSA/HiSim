@@ -86,6 +86,111 @@ def test_production_without_consumption_reports_zero_self_sufficiency() -> None:
     assert "Self-consumption rate of electricity" in collected
 
 
+@pytest.mark.base
+def test_a_run_that_consumes_and_buys_nothing_has_no_relative_grid_demand() -> None:
+    """Catches 0 kWh bought of 0 kWh consumed reported as NaN, which no golden can compare, or as a number.
+
+    A house without residents whose air conditioner never cools in a January week consumes nothing, and its meter
+    reads 0 kWh from the grid. A run that buys what it does not count as consumed still fails: that is a consumer the
+    KPIs miss.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    relative = preparation.compute_relative_electricity_demand(
+        total_electricity_consumption_in_kilowatt_hour=0.0,
+        electricity_from_grid_in_kilowatt_hour=0.0,
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    assert relative is None
+    assert preparation.kpi_collection_dict_unsorted["BUI1"]["Relative electricity demand from grid"]["value"] is None
+    with pytest.raises(ValueError, match="should not be over 100 %"):
+        preparation.compute_relative_electricity_demand(
+            total_electricity_consumption_in_kilowatt_hour=1.0,
+            electricity_from_grid_in_kilowatt_hour=1.8,
+            building_objects_in_district="BUI1",
+            kpi_tag=KpiTagEnumClass.GENERAL,
+        )
+
+
+@pytest.mark.base
+def test_a_ratio_of_a_zero_consumption_is_emitted_without_a_value() -> None:
+    """Catches a proportion of zero consumption reported as 0 % or ending the KPI run with ZeroDivisionError.
+
+    A system that consumes no electricity, such as a house without residents whose air conditioner stays off on a
+    January day, has no total for the production to be a proportion of. The ratio is undefined, so its entry is
+    written with no value; a consumption above zero gives the plain percentage.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    preparation.compute_ratio_between_two_values_and_set_as_kpi(
+        denominator_value=0.0,
+        numerator_value=0.0,
+        kpi_name="Ratio between total production and total consumption",
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+    preparation.compute_ratio_between_two_values_and_set_as_kpi(
+        denominator_value=1.0,
+        numerator_value=4.0,
+        kpi_name="Ratio between PV production and total consumption",
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    collected = preparation.kpi_collection_dict_unsorted["BUI1"]
+    assert collected["Ratio between total production and total consumption"]["value"] is None
+    assert collected["Ratio between PV production and total consumption"]["value"] == pytest.approx(25.0)
+
+
+@pytest.mark.base
+def test_an_undefined_relative_grid_demand_gives_an_undefined_self_sufficiency() -> None:
+    """Catches the self-sufficiency of a system that consumes nothing reported as 100 %, the complement of nothing.
+
+    The rate is 100 % minus the relative demand from the grid; when that demand is undefined (``None``, nothing
+    consumed), the rate is undefined too and its entry carries no value.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    preparation.compute_self_sufficiency_according_to_solar_htw_berlin(
+        relative_electricity_demand_in_percent=None,
+        building_objects_in_district="BUI1",
+        kpi_tag=KpiTagEnumClass.GENERAL,
+    )
+
+    collected = preparation.kpi_collection_dict_unsorted["BUI1"]
+    assert collected["Self-sufficiency rate according to solar htw berlin"]["value"] is None
+
+
+@pytest.mark.base
+def test_the_total_energy_self_sufficiency_of_no_consumption_is_undefined() -> None:
+    """Catches a total-energy self-sufficiency of a system without any consumption reported as a number.
+
+    Both ways the figure is undefined return ``None``: an electricity rate that is itself undefined, and a total
+    consumption of zero across electricity, gas and other fuels, which would otherwise be a ZeroDivisionError.
+    """
+    preparation = _bare_preparation("BUI1")
+
+    undefined_electricity_rate = preparation.get_total_energy_self_sufficiency(
+        self_sufficency_rate_for_electricity_in_percent=None,
+        total_electricity_consumption_in_kwh=10.0,
+        gas_demand_from_grid_in_kwh=0.0,
+        total_gas_consumption_in_kwh=0.0,
+        other_fuel_consumption_in_kwh=0.0,
+    )
+    no_consumption = preparation.get_total_energy_self_sufficiency(
+        self_sufficency_rate_for_electricity_in_percent=0.0,
+        total_electricity_consumption_in_kwh=0.0,
+        gas_demand_from_grid_in_kwh=0.0,
+        total_gas_consumption_in_kwh=0.0,
+        other_fuel_consumption_in_kwh=0.0,
+    )
+
+    assert undefined_electricity_rate is None
+    assert no_consumption is None
+
+
 def _source(component_name: str) -> KpiSource:
     """The source a plain component of that name stamps on its KPI entries."""
     return KpiSource.for_component(ComponentID(component_name), DisplayConfig())
@@ -573,14 +678,15 @@ class TestElectricityKpisReadTheDeclaredUnit:
     """The electricity KPIs convert each flagged column from the unit its output declares (hisim-50kh)."""
 
     @staticmethod
-    def one_hour_of_transformer_output(power_in_kilowatt: float) -> tuple[Transformer, List, pd.DataFrame]:
-        """Build a standard transformer and one hour at 60 s steps of its output at a constant power.
+    def one_hour_of_transformer_output(power_in_watt: float) -> tuple[Transformer, List, pd.DataFrame]:
+        """Build a standard transformer and one hour at 60 s steps of its outputs, delivering a constant power.
 
         Args:
-            power_in_kilowatt: The power the transformer delivers in every step, in its declared unit kW.
+            power_in_watt: The power the transformer delivers in every step, in its declared unit W.
 
         Returns:
-            The transformer, its outputs in column order, and the result frame with its one output column.
+            The transformer, its outputs in column order, and the result frame with one column per output: the
+            delivered power, and zero in every other.
         """
         simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
         transformer = Transformer(
@@ -588,18 +694,43 @@ class TestElectricityKpisReadTheDeclaredUnit:
             config=TransformerConfig.preset_standard("StandardTransformerAndRectifier"),
         )
         outputs = list(transformer.get_outputs())
-        frame = pd.DataFrame({0: [power_in_kilowatt] * 60})
+        frame = pd.DataFrame(
+            {
+                index: [power_in_watt if output is transformer.electricity_output else 0.0] * 60
+                for index, output in enumerate(outputs)
+            }
+        )
         return transformer, outputs, frame
 
-    @pytest.mark.base
-    def test_the_total_production_of_a_transformer_in_kilowatt_equals_its_delivered_energy(self) -> None:
-        """Catches the general KPI summing a kW column as watts, which reported 180.5 for 180,546 kWh delivered.
+    @staticmethod
+    def one_hour_of_a_kilowatt_production(power_in_kilowatt: float) -> tuple[ComponentOutput, pd.DataFrame]:
+        """An output flagged as electricity production in kW, and one hour at 60 s steps of it at a constant power.
 
-        The transformer publishes its output in kW and flags it as electricity production. One hour at 10 kW is
-        10 kWh: the transformer's own KPI says so, and the general "Total electricity production" must agree
-        instead of reading the column as 10 W and reporting 0.01 kWh (rounded to 0.0).
+        Args:
+            power_in_kilowatt: The power in every step, in kW.
+
+        Returns:
+            The output and the result frame with its one column.
         """
-        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
+        output = ComponentOutput(
+            object_name="KilowattProducer",
+            field_name="ElectricityOutput",
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.KILOWATT,
+            postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION],
+            component_id=ComponentID(name="KilowattProducer"),
+        )
+        return output, pd.DataFrame({0: [power_in_kilowatt] * 60})
+
+    @pytest.mark.base
+    def test_the_total_production_of_a_transformer_equals_its_delivered_energy(self) -> None:
+        """Catches the general KPI and the transformer's own KPI reading its delivered power in different units.
+
+        The transformer publishes what it delivers in W and flags it as electricity production. One hour at
+        10,000 W is 10 kWh: the transformer's own KPI says so, and the general "Total electricity production" must
+        agree.
+        """
+        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_watt=10_000.0)
         building = transformer.component_id.building_label
         preparation = _bare_preparation(building)
 
@@ -623,27 +754,46 @@ class TestElectricityKpisReadTheDeclaredUnit:
         )
 
     @pytest.mark.base
+    def test_a_kilowatt_column_is_read_in_kilowatt(self) -> None:
+        """Catches the general KPI summing a kW column as watts, which reported 180.5 for 180,546 kWh delivered.
+
+        One hour at 10 kW is 10 kWh, not the 0.01 kWh (rounded to 0.0) of the column read as 10 W.
+        """
+        output, frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
+        building = output.component_id.building_label
+        preparation = _bare_preparation(building)
+
+        filtered = preparation.filter_results_according_to_postprocessing_flags(
+            all_outputs=[output], results=frame, building_objects_in_district=building
+        )
+        _, total_production_in_kilowatt_hour, _, _, _ = (
+            preparation.compute_electricity_consumption_and_production_and_battery_kpis(
+                result_dataframe=filtered, building_objects_in_district=building, kpi_tag=KpiTagEnumClass.GENERAL
+            )
+        )
+
+        assert total_production_in_kilowatt_hour == pytest.approx(10.0, rel=1e-9)
+
+    @pytest.mark.base
     def test_a_watt_column_and_a_kilowatt_column_each_keep_their_own_factor(self) -> None:
         """Catches the unit factors being applied to the wrong columns when W and kW outputs are summed together.
 
-        A PV-flagged output in W comes first and the transformer's output in kW after it, as in a run where both
+        A PV-flagged output in W comes first and a producer's output in kW after it, as in a run where both
         feed the grid. Each column must be scaled by its own factor before the sum: 2000 W plus 10 kW is 12 kW,
         so one hour gives 12 kWh. Factors swapped or shifted by one column would give 2,000,010 W or 20 kW.
         """
-        transformer, transformer_outputs, transformer_frame = self.one_hour_of_transformer_output(
-            power_in_kilowatt=10.0
-        )
+        kilowatt_output, kilowatt_frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
         pv_output_in_watt = ComponentOutput(
             object_name="PhotovoltaicStandIn",
             field_name="ElectricityOutput",
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_PRODUCTION, ComponentType.PV],
-            component_id=transformer.component_id,
+            component_id=kilowatt_output.component_id,
         )
-        outputs = [pv_output_in_watt, *transformer_outputs]
-        frame = pd.DataFrame({0: [2000.0] * 60, 1: transformer_frame[0].tolist()})
-        building = transformer.component_id.building_label
+        outputs = [pv_output_in_watt, kilowatt_output]
+        frame = pd.DataFrame({0: [2000.0] * 60, 1: kilowatt_frame[0].tolist()})
+        building = kilowatt_output.component_id.building_label
         preparation = _bare_preparation(building)
 
         filtered = preparation.filter_results_according_to_postprocessing_flags(
@@ -666,11 +816,37 @@ class TestElectricityKpisReadTheDeclaredUnit:
     @pytest.mark.base
     def test_a_flagged_output_in_a_unit_without_a_conversion_is_refused(self) -> None:
         """Catches a flagged column in an unexpected unit, here kWh, being summed as watts without notice."""
-        transformer, outputs, frame = self.one_hour_of_transformer_output(power_in_kilowatt=10.0)
-        outputs[0].unit = Units.KWH
-        building = transformer.component_id.building_label
+        output, frame = self.one_hour_of_a_kilowatt_production(power_in_kilowatt=10.0)
+        output.unit = Units.KWH
+        building = output.component_id.building_label
         preparation = _bare_preparation(building)
         with pytest.raises(ValueError, match="no conversion to W"):
             preparation.filter_results_according_to_postprocessing_flags(
-                all_outputs=outputs, results=frame, building_objects_in_district=building
+                all_outputs=[output], results=frame, building_objects_in_district=building
             )
+
+
+class TestSelfSufficiencyWithinRounding:
+    """The self-sufficiency rate is at most 100 %, and only the consumption's rounding may push it above."""
+
+    @pytest.mark.base
+    def test_a_rate_up_to_100_percent_is_returned_as_it_is(self) -> None:
+        """Catches the bound changing a rate it has no reason to touch."""
+        assert KpiPreparation.self_sufficiency_within_rounding(99.5, 199.0, 200.0) == 99.5
+        assert KpiPreparation.self_sufficiency_within_rounding(100.0, 200.0, 200.0) == 100.0
+
+    @pytest.mark.base
+    def test_a_rate_above_100_percent_by_the_rounding_of_the_consumption_is_100_percent(self) -> None:
+        """Catches a run whose production covers its consumption in every step failing on the rounded consumption.
+
+        5,272,971.74 kWh self-consumed against the consumption rounded down to 5,272,971.7 kWh is 100.0000008 %.
+        """
+        rate = 100 * 5_272_971.74 / 5_272_971.7
+        assert rate > 100
+        assert KpiPreparation.self_sufficiency_within_rounding(rate, 5_272_971.74, 5_272_971.7) == 100.0
+
+    @pytest.mark.base
+    def test_a_self_consumption_beyond_the_consumption_by_more_than_its_rounding_is_refused(self) -> None:
+        """Catches the bound hiding a self-consumption that exceeds the consumption: a fault of the computation."""
+        with pytest.raises(ValueError, match="should not be over 100 %"):
+            KpiPreparation.self_sufficiency_within_rounding(100 * 201.0 / 200.0, 201.0, 200.0)

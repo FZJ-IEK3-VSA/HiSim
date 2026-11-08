@@ -235,17 +235,22 @@ def test_the_building_is_linked_to_the_occupancy_the_distribution_system_and_out
 
 
 @pytest.mark.extendedbase2
-def test_only_the_weather_is_undeclared_so_the_meter_check_is_reported(week: Tuple[str, str, Path]) -> None:
-    """With the building declared, the weather is the households' last undeclared component (its exemption is PR 5d).
+def test_no_component_is_undeclared_so_the_meter_check_is_enforced(week: Tuple[str, str, Path]) -> None:
+    """With the building declared and the weather exempt (Sankey PR 5d), no component of the households is undeclared.
 
-    The electricity meter's check therefore stays reported and not enforced (owner decision Q-H); it agrees in every
-    step all the same.
+    The electricity meter's check and the metering rule are therefore enforced (owner decision Q-H); the meter agrees in
+    every step and no port is unmetered.
+
+    Catches: a component that declares no port and states no exemption, and a meter or metered port that would fail
+    the run.
     """
     _, _, results = week
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
-    assert [entry["component"] for entry in report["undeclared"]] == ["Weather"]
+    assert report["undeclared"] == []
+    assert {entry["component"]: entry["class"] for entry in report["exempt"]}["Weather"] == "Weather"
     meter = {meter["meter"]: meter for meter in report["meters"]}["ElectricityMeter"]
-    assert meter["verdict"] == "agrees" and meter["enforced"] is False
+    assert meter["verdict"] == "agrees" and meter["enforced"] is True
+    assert report["unmetered"]["enforced"] is True and report["unmetered"]["ports"] == []
 
 
 @pytest.mark.extendedbase2

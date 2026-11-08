@@ -292,19 +292,22 @@ class Electrolyzer(cp.PhysicsComponent):
     ramp_down_rate : float
         Ramp down rate of the electrolyzer in [% of nom_load/s].
 
-    Its energy ports: the electricity it draws, ``CurrentLoad`` (``CONSUMPTION``), the hydrogen it produces, by its
-    lower heating value, ``HydrogenProductionInWatt`` (``PRODUCTION``), and the difference of the two,
-    ``ConversionLossInWatt`` (``LOSS`` of electricity). The hydrogen production rate is computed in kg/h, which
-    ``CurrentHydrogenFlowRate`` publishes although it declares kg/s; the energy port converts the kg/h.
+    Its energy ports: the electricity it draws, ``CurrentLoad`` (``CONSUMPTION``), the hydrogen it produces as a mass
+    flow in kg/s, ``CurrentHydrogenFlowRate`` (``PRODUCTION`` of hydrogen, which the balance counts by its lower heating
+    value), and the difference of the two, ``ConversionLossInWatt`` (``LOSS`` of electricity). The production rates
+    are computed in kg/h, as the manufacturer table states the nominal flow; the hydrogen, oxygen and water flows are
+    published in kg/s. For example, 18.875 kg/h of hydrogen are published as 5.243e-3 kg/s, which the balance counts
+    as 629 kW of hydrogen.
     """
 
     cost_relevance = CostRelevance.PRICED
 
-    #: The lower heating value of hydrogen, in J/kg: the energy the hydrogen ports count per kilogram.
+    #: The lower heating value of hydrogen, in J/kg: what the conversion loss subtracts per kilogram produced, the
+    #: value the balance counts the hydrogen port by.
     HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = PhysicsConfig.get_properties_for_energy_carrier(
         lt.LoadTypes.GREEN_HYDROGEN
     ).lower_heating_value_in_joule_per_kg
-    #: Seconds per hour, to turn the hydrogen production rate in kg/h into kg/s.
+    #: Seconds per hour, to turn the production rates in kg/h into the published kg/s.
     SECONDS_PER_HOUR: ClassVar[float] = 3600.0
     #: Watts per kilowatt: the load is held in kW and published in W.
     WATTS_PER_KILOWATT: ClassVar[float] = 1000.0
@@ -326,8 +329,6 @@ class Electrolyzer(cp.PhysicsComponent):
 
     CurrentEfficiency = "CurrentEfficiency"
     OperatingTime = "OperatingTime"
-    #: The hydrogen produced in the step by its lower heating value, in W.
-    HydrogenProductionInWatt = "HydrogenProductionInWatt"
     #: The electricity drawn in the step minus the hydrogen produced, in W.
     ConversionLossInWatt = "ConversionLossInWatt"
 
@@ -401,29 +402,17 @@ class Electrolyzer(cp.PhysicsComponent):
         # =================================================================================================================================
         # Output channels
 
-        # no consumption flag: the KPIs would then count the electrolyzer's electricity as the household's own
-        # consumption, which changes the results of the setup that runs it
         self.current_load: ComponentOutput = self.add_output(
             self.component_name,
             Electrolyzer.CurrentLoad,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,  # for EMS
+            lt.Units.WATT,
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description=(
                 "The electricity the electrolyzer draws in the step, in W, >= 0: the load it follows, within its ramp "
                 "rates."
             ),
             energy_port=EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY),
-        )
-        self.hydrogen_production_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            Electrolyzer.HydrogenProductionInWatt,
-            lt.LoadTypes.GREEN_HYDROGEN,
-            lt.Units.WATT,
-            output_description=(
-                "The hydrogen the electrolyzer produces in the step, in W, >= 0: its mass flow times the lower heating "
-                "value of hydrogen."
-            ),
-            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
         )
         self.conversion_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -482,7 +471,8 @@ class Electrolyzer(cp.PhysicsComponent):
             Electrolyzer.CurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
-            output_description="Current hydrogen flow rate",
+            output_description="The hydrogen the electrolyzer produces in the step, in kg/s, >= 0.",
+            energy_port=EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.HYDROGEN),
         )
         # Total hydrogen produced
         self.total_hydrogen: ComponentOutput = self.add_output(
@@ -499,7 +489,7 @@ class Electrolyzer(cp.PhysicsComponent):
             Electrolyzer.CurrentOxygenFlowRate,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
-            output_description="Current oxygen flow rate",
+            output_description="The oxygen the electrolyzer produces in the step, in kg/s, >= 0.",
         )
         # Total oxygen produced
         self.total_oxygen: ComponentOutput = self.add_output(
@@ -516,7 +506,7 @@ class Electrolyzer(cp.PhysicsComponent):
             Electrolyzer.CurrentWaterFlowRate,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
-            output_description="Current water flow rate",
+            output_description="The water the electrolyzer takes in the step, in kg/s, >= 0.",
         )
         # Total water demand
         self.total_water: ComponentOutput = self.add_output(
@@ -953,18 +943,15 @@ class Electrolyzer(cp.PhysicsComponent):
 
         self.total_energy += self.current_load_state * (seconds_per_timestep / 3600)
 
-        # Initializing outputs
-        stsv.set_output_value(self.hydrogen_flow_rate, current_h2_production_rate)
-        stsv.set_output_value(self.oxygen_flow_rate, current_flow_rate_oxygen)
-        stsv.set_output_value(self.water_flow_rate, current_flow_rate_water)
+        # Initializing outputs: the rates are computed in kg/h and published in kg/s
+        hydrogen_flow_in_kilogram_per_second = current_h2_production_rate / self.SECONDS_PER_HOUR
+        stsv.set_output_value(self.hydrogen_flow_rate, hydrogen_flow_in_kilogram_per_second)
+        stsv.set_output_value(self.oxygen_flow_rate, current_flow_rate_oxygen / self.SECONDS_PER_HOUR)
+        stsv.set_output_value(self.water_flow_rate, current_flow_rate_water / self.SECONDS_PER_HOUR)
         stsv.set_output_value(self.electrolyzer_state, state)
-        current_load_in_watt = self.current_load_state * self.WATTS_PER_KILOWATT  # the energy manager reads W
+        current_load_in_watt = self.current_load_state * self.WATTS_PER_KILOWATT
         stsv.set_output_value(self.current_load, current_load_in_watt)
-        # the production rate is in kg/h
-        hydrogen_production_in_watt = (
-            current_h2_production_rate / self.SECONDS_PER_HOUR * self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG
-        )
-        stsv.set_output_value(self.hydrogen_production_channel, hydrogen_production_in_watt)
+        hydrogen_production_in_watt = hydrogen_flow_in_kilogram_per_second * self.HYDROGEN_LOWER_HEATING_VALUE_IN_JOULE_PER_KG
         stsv.set_output_value(self.conversion_loss_channel, current_load_in_watt - hydrogen_production_in_watt)
         stsv.set_output_value(self.total_energy_consumed, self.total_energy)
 

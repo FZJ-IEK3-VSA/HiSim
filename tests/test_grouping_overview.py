@@ -101,6 +101,7 @@ class TwoGroups:
     GROUPED: ClassVar[str] = """
 schema_version: 3
 name: two_groups
+setup_kind: demo
 description: A setup with two variant groups.
 components:
   weather:
@@ -141,7 +142,7 @@ variants:
             config:
               water_mass_flow_rate_in_kg_per_second: 0.5
           pump:
-            class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+            class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
             config:
               model: Generic
       boiler:
@@ -281,14 +282,14 @@ class Headers:
     )
 
     #: A hand-authored energy system: no recorder line at all, so no twin of anything.
-    HAND_WRITTEN: ClassVar[str] = "# The reference system of this directory.\nschema_version: 3\nname: exemplar\n"
+    HAND_WRITTEN: ClassVar[str] = "# The reference system of this directory.\nschema_version: 3\nname: exemplar\nsetup_kind: demo\n"
 
     #: A flat twin, which is the only shape the census counts.
-    FLAT: ClassVar[str] = ORIGIN.format(stem="flat") + "schema_version: 3\nname: flat\n"
+    FLAT: ClassVar[str] = ORIGIN.format(stem="flat") + "schema_version: 3\nname: flat\nsetup_kind: demo\n"
 
     #: The grouped second file of a setup the flat twin already stands for.
     GROUPED: ClassVar[str] = (
-        ORIGIN.format(stem="flat") + GROUPED_BY.format(stem="flat") + "schema_version: 3\nname: flat\n"
+        ORIGIN.format(stem="flat") + GROUPED_BY.format(stem="flat") + "schema_version: 3\nname: flat\nsetup_kind: demo\n"
     )
 
     #: The class every component of a synthetic twin is given; the page never imports it, so any
@@ -307,7 +308,7 @@ class Headers:
         Returns:
             The file's text.
         """
-        body = ["schema_version: 3", f"name: {stem}", f"description: {description}", "components:"]
+        body = ["schema_version: 3", f"name: {stem}", "setup_kind: demo", f"description: {description}", "components:"]
         for weight, name in enumerate(components):
             body.extend(
                 [f"  {name}:", f"    class: {cls.COMPONENT_CLASS}", "    config:", f"      source_weight: {weight}"]

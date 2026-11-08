@@ -27,7 +27,7 @@ import yaml
 
 from hisim import loadtypes as lt
 from hisim.config import ConfigurationRefusedError
-from hisim.energy_system.assemblies.model import MonotoneDirection
+from hisim.energy_system.assemblies.model import MonotoneDeclaration, MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing import checks
@@ -43,11 +43,13 @@ from hisim.energy_system.assemblies.testing.isolation import (
     IsolationRunError,
     bind_optional_partner_ports,
     brought_by_circuit_end,
+    carriers_to_meter,
     facts_needed,
     facts_of_partners,
     isolation_document,
     refusal_in,
     run_isolation,
+    unmetered_carriers,
 )
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.testing.partners import (
@@ -74,7 +76,16 @@ from hisim.postprocessing.kpi_computation import tolerances
 from hisim.simulationparameters import SimulationParameters
 from scripts import golden_kpis
 from tests.assemblies.helpers import Library, Mocks, Real
-from tests.assemblies.mock_components import MockHeater, MockHeaterConfig, MockTank, MockTankConfig
+from tests.assemblies.mock_components import (
+    MockBoiler,
+    MockBoilerConfig,
+    MockElectricityMeter,
+    MockElectricityMeterConfig,
+    MockHeater,
+    MockHeaterConfig,
+    MockTank,
+    MockTankConfig,
+)
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
 BOX = f"""
@@ -1097,7 +1108,7 @@ def test_a_member_refusing_its_configuration_is_handled_and_any_other_error_fail
     refusing_heater(monkeypatch, 1000.0, ValueError)
     crashed = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "crashed", "h s0")
     assert crashed.refusal is None
-    with pytest.raises(AssemblyCheckFailure, match="^h s0 run the isolation run: EnergySystemWiringError: EF-33"):
+    with pytest.raises(AssemblyCheckFailure, match=r"(?s)^h s0 run the isolation run: EnergySystemWiringError: The build rules refuse .*- EF-33 constructed: EF-33"):
         checks.check_run(crashed)
     with pytest.raises(AssemblyCheckFailure, match="^h s0 finite every result column: the run did not finish"):
         checks.check_finite(crashed)
@@ -1152,6 +1163,87 @@ def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monk
 
 
 @pytest.mark.assemblies
+@pytest.mark.parametrize(
+    ("applies_when", "values", "unmet"),
+    [
+        ({}, {"control": "standard"}, None),
+        ({"control": ("standard", "eco")}, {"control": "eco"}, None),
+        ({"control": ("eco",)}, {"control": "standard"}, "control is standard, and the entry applies only at eco"),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": None}, None),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": 2000.0}, "power_in_watt is 2000.0, and the entry applies only at none"),
+        ({"power_in_watt": ("none",)}, {"power_in_watt": "AUTO"}, "power_in_watt is AUTO, and the entry applies only at none"),
+        (
+            {"control": ("standard",), "with_thermostat": (False,)},
+            {"control": "standard", "with_thermostat": True},
+            "with_thermostat is True, and the entry applies only at False",
+        ),
+    ],
+)
+def test_a_monotone_condition_holds_on_the_values_its_parameters_take(
+    applies_when: Dict[str, Tuple[Any, ...]], values: Dict[str, Any], unmet: Optional[str]
+) -> None:
+    """Catches ``applies_when`` comparing written spellings with resolved values, or ignoring one of its conditions.
+
+    ``none`` is the spelling of a parameter without a value (``None``), so it matches ``None`` and neither a number
+    nor ``AUTO``; every condition of the mapping must hold, and an empty mapping holds everywhere.
+    """
+    _assembly, space = mock("mock/variant_heater")
+    declaration = MonotoneDeclaration(
+        parameter="set_temperature_in_celsius",
+        kpi="Heater energy",
+        member="Heater",
+        direction=MonotoneDirection.INCREASING,
+        applies_when=applies_when,
+    )
+    assert declaration.unmet_condition(values, space.declarations) == unmet
+
+
+@pytest.mark.assemblies
+def test_a_monotone_entry_is_skipped_visibly_from_a_base_its_condition_excludes() -> None:
+    """Catches a sweep running (or passing silently) from a base that does not meet the entry's ``applies_when``.
+
+    From the defaults (``control: standard``) an entry that applies only at ``eco`` raises
+    ``MonotoneNotApplicable`` naming the unmet condition, before any point runs; one that applies at ``standard``
+    goes on to run its first point.
+    """
+    _assembly, space = mock("mock/variant_heater")
+    (defaults, *_) = deterministic_samples(space)
+    started: List[int] = []
+
+    class PointRan(Exception):
+        """Raised by the stand-in run factory, so the test sees that the sweep began to run its points."""
+
+    def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:
+        """Records the point and stops the sweep there."""
+        del values, label  # the stand-in only records that a point was asked for
+        started.append(index)
+        raise PointRan()
+
+    def entry(control: str) -> MonotoneDeclaration:
+        """The power sweep of the heater, applying only at one thermostat preset."""
+        return MonotoneDeclaration(
+            parameter="power_in_watt",
+            kpi="Heater energy",
+            member="Heater",
+            direction=MonotoneDirection.INCREASING,
+            applies_when={"control": (control,)},
+        )
+
+    with pytest.raises(
+        checks.MonotoneNotApplicable,
+        match=re.escape(
+            "mock/variant_heater sweep of power_in_watt from s000 does not apply: control is standard, and the entry "
+            "applies only at eco"
+        ),
+    ):
+        checks.evaluate_monotone(run_point, space, defaults, entry("eco"))
+    assert not started and not isinstance(checks.MonotoneNotApplicable(""), AssertionError)
+    with pytest.raises(PointRan):
+        checks.evaluate_monotone(run_point, space, defaults, entry("standard"))
+    assert started == [0]
+
+
+@pytest.mark.assemblies
 def test_the_real_heat_pump_refuses_a_w55_scop_above_its_w35_scop_as_a_configuration_refusal(tmp_path: Path) -> None:
     """Catches the box's refused corner failing the contract: both SCOPs in range, W55 above W35, is handled.
 
@@ -1169,3 +1261,64 @@ def test_the_real_heat_pump_refuses_a_w55_scop_above_its_w35_scop_as_a_configura
     with pytest.raises(checks.SampleRefused, match="^hp s0 refused by a member: HeatPump"):
         checks.check_run(run)
     run.release()
+
+
+@pytest.mark.assemblies
+def test_the_carriers_to_meter_are_those_moved_through_a_metered_port_that_no_component_meters() -> None:
+    """A heater's electricity and a boiler's natural gas need meters; beside an electricity meter only the gas does."""
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    heater = MockHeater(parameters, MockHeaterConfig.preset_standard("Heater"))
+    boiler = MockBoiler(parameters, MockBoilerConfig.preset_condensing("Boiler"))
+    meter = MockElectricityMeter(parameters, MockElectricityMeterConfig.preset_standard("Grid"))
+    assert unmetered_carriers([heater, boiler]) == ["electricity", "natural_gas"]
+    assert unmetered_carriers([heater, boiler, meter]) == ["natural_gas"]
+    assert unmetered_carriers([meter]) == []
+
+
+@pytest.mark.assemblies
+def test_a_carrier_to_meter_brings_its_registered_provider_once() -> None:
+    """Catches an isolation system that moves electricity without the meter the energy balance requires (z026).
+
+    Beside an oil boiler the residents' electricity brings the registry's electricity meter, ``Grid``, with the
+    energy manager it requires; beside the mock heater, whose electricity need binds ``Grid`` already, nothing joins;
+    a carrier no partner serves refuses the build by name.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/oil_boiler", "test")
+    defaults = ParameterSpace(assembly.model).defaults()
+    unmetered = list(isolation_document(assembly, defaults, registry)["components"])
+    metered = list(isolation_document(assembly, defaults, registry, ["electricity"])["components"])
+    assert "Grid" not in unmetered
+    assert sorted(metered) == sorted(unmetered + ["EnergyManager", "Grid"])
+    heater, space = mock("mock/variant_heater")
+    mocks = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    assert isolation_document(heater, space.defaults(), mocks, ["electricity"]) == isolation_document(
+        heater, space.defaults(), mocks
+    )
+    with pytest.raises(
+        TestPartnerMissingError,
+        match="the metered carrier 'natural_gas' of 'mock/variant_heater' needs a test partner, the provider of "
+        "natural_gas",
+    ):
+        isolation_document(heater, space.defaults(), mocks, ["natural_gas"])
+
+
+@pytest.mark.assemblies
+def test_the_meter_probe_finds_the_residents_electricity_beside_a_boiler(tmp_path: Path) -> None:
+    """The probe build names electricity beside an oil boiler, and nothing once the meter joins.
+
+    A system that does not build gives nothing either: its run raises the same error, which the checks report. Each
+    probe deletes its directory.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/oil_boiler", "test")
+    defaults = ParameterSpace(assembly.model).defaults()
+    document = isolation_document(assembly, defaults, registry)
+    assert carriers_to_meter(document, tmp_path / "probe", resolver) == ["electricity"]
+    metered = isolation_document(assembly, defaults, registry, ["electricity"])
+    assert carriers_to_meter(metered, tmp_path / "probe", resolver) == []
+    broken = dict(document, components={**document["components"], "Weather": {"class": "hisim.components.nowhere.Nothing"}})
+    assert carriers_to_meter(broken, tmp_path / "probe", resolver) == []
+    assert not (tmp_path / "probe").exists()

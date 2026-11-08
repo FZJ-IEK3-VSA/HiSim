@@ -2,11 +2,14 @@
 
 What this module produces is one artifact: the AC power of the array divided by its peak power, one
 value per simulated timestep, computed in a single vectorized pvlib run over the whole simulation
-period, and beside it the solar power on the modules divided by the same peak power, which the component
-publishes as the sun's input to the array's energy balance (complete Sankey spec, Q-D). Both come from one
-plane-of-array irradiance: :func:`produce_pv_series` computes it once (:func:`calculate_irradiance`), hands
-it to the performance model (:func:`simulate_cec` or :func:`simulate_sandia`) for the AC power, and
-multiplies it by the module area for the solar power. It is the second producer under
+period; beside it the DC power of the modules divided by the same peak power, the power the inverter
+receives; and the solar power on the modules divided by the same peak power, which the component
+publishes as the sun's input to the array's energy balance (complete Sankey spec, Q-D). All three come
+from one plane-of-array irradiance: :func:`produce_pv_series` computes it once
+(:func:`calculate_irradiance`), hands it to the performance model (:func:`simulate_cec` or
+:func:`simulate_sandia`) for the DC and the AC power, and multiplies it by the module area for the solar
+power. The component splits the array's loss with them: the sun minus the DC power is lost in the
+modules, the DC minus the AC power in the inverter (bead hisim-device-location-820d.5). It is the second producer under
 ``roadmap/cache_service_spec.md`` (§3, §12), after the weather series it consumes, which is why it is a
 module of its own inside the component's package rather than a section of the component.
 
@@ -51,7 +54,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from enum import Enum, unique
-from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -95,14 +98,34 @@ ARTIFACT_KIND: str = "pv_series"
 class PvSeriesColumn(str, Enum):
     """The columns of the produced frame, which the cached CSV is read back by; one row per simulated timestep.
 
-    ``AC_POWER_RATIO`` is the AC power of the array divided by its peak power. ``SOLAR_POWER_ON_MODULES_RATIO`` is
-    the solar power on the modules, the global plane-of-array irradiance times the modules' area, divided by the
+    ``AC_POWER_RATIO`` is the AC power of the array divided by its peak power. ``DC_POWER_RATIO`` is the DC power
+    of the modules at their maximum power point, the power the inverter receives, divided by the same peak power;
+    without an inverter (``integrate_inverter`` false) it equals the AC power ratio. ``SOLAR_POWER_ON_MODULES_RATIO``
+    is the solar power on the modules, the global plane-of-array irradiance times the modules' area, divided by the
     same peak power (W per W peak). For example, 1000 W/m² on a 1.98 m² module of 435.16 W peak gives 4.55: the
-    sun brings 4.55 W for every watt peak of the array. The component multiplies both by the array's peak power.
+    sun brings 4.55 W for every watt peak of the array. The component multiplies all three by the array's peak
+    power.
     """
 
     AC_POWER_RATIO = "output_power"
+    DC_POWER_RATIO = "dc_power_ratio"
     SOLAR_POWER_ON_MODULES_RATIO = "solar_power_on_modules_ratio"
+
+
+class ArrayPowerRatios(NamedTuple):
+    """The DC and the AC power of the array per timestep, each divided by the module's peak power.
+
+    What a performance model (:func:`simulate_cec`, :func:`simulate_sandia`) returns. The DC power is the modules'
+    output at their maximum power point, the AC power what the inverter makes of it. For example, at noon of a clear
+    June day the default rooftop module gives about 0.90 W DC and 0.88 W AC per watt peak; at dawn, when the DC power
+    is below the inverter's start-up power, the AC power is the inverter's small negative standby draw. Both arrays
+    are NaN-free.
+    """
+
+    #: The DC power ratio per timestep, 0.0 where pvlib gives NaN (at night).
+    dc_power_ratios: np.ndarray
+    #: The AC power ratio per timestep, 0.0 where pvlib gives NaN (at night).
+    ac_power_ratios: np.ndarray
 
 
 #: What one weather series may arrive as: the component reads lists out of the repository, a caller
@@ -377,20 +400,20 @@ class PvSeriesInputs:
 
 
 def produce_pv_series(inputs: PvSeriesInputs) -> pd.DataFrame:
-    """Produce the AC power ratio and the solar power ratio of the array for every timestep of the simulated period.
+    """Produce the AC, the DC and the solar power ratio of the array for every timestep of the simulated period.
 
     Reads the module and inverter parameters and computes the plane-of-array irradiance once
     (:func:`calculate_irradiance`). From it, the performance model the module database implies gives the
-    AC power ratio in one vectorized pvlib call, and the global irradiance times the module area over the
-    module peak power gives the solar power ratio; night timesteps, whose irradiance is NaN, give 0.0.
-    Both go into the two-column frame the cache stores. The result is a pure function of ``inputs``.
+    DC and the AC power ratio in one vectorized pvlib call, and the global irradiance times the module area
+    over the module peak power gives the solar power ratio; night timesteps, whose irradiance is NaN, give
+    0.0. All three go into the frame the cache stores. The result is a pure function of ``inputs``.
 
     Args:
         inputs: the calculation's inputs.
 
     Returns:
-        pd.DataFrame: one row per timestep, with the columns of :class:`PvSeriesColumn`: the AC power and
-            the solar power on the modules, each divided by the array's peak power.
+        pd.DataFrame: one row per timestep, with the columns of :class:`PvSeriesColumn`: the AC power, the DC
+            power and the solar power on the modules, each divided by the array's peak power.
 
     Raises:
         ValueError: if the weather payload does not cover exactly the requested number of timesteps --
@@ -421,15 +444,14 @@ def produce_pv_series(inputs: PvSeriesInputs) -> pd.DataFrame:
         irradiance = calculate_irradiance(inputs, weather)
 
     # one vectorized pvlib run over the entire simulation period
-    ac_power_ratios = simulate_fct(
-        inputs=inputs, weather=weather, module=module, inverter=inverter, irradiance=irradiance
-    )
+    power_ratios = simulate_fct(inputs=inputs, weather=weather, module=module, inverter=inverter, irradiance=irradiance)
     module_area_in_square_meter, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
     poa_global_in_watt_per_square_meter = np.nan_to_num(np.asarray(irradiance[0]["poa_global"], dtype=float), nan=0.0)
     solar_power_ratios = poa_global_in_watt_per_square_meter * module_area_in_square_meter / module_peak_power_in_watt
     return pd.DataFrame(
         {
-            PvSeriesColumn.AC_POWER_RATIO.value: list(ac_power_ratios),
+            PvSeriesColumn.AC_POWER_RATIO.value: list(power_ratios.ac_power_ratios),
+            PvSeriesColumn.DC_POWER_RATIO.value: list(power_ratios.dc_power_ratios),
             PvSeriesColumn.SOLAR_POWER_ON_MODULES_RATIO.value: list(solar_power_ratios),
         },
         columns=[column.value for column in PvSeriesColumn],
@@ -612,16 +634,16 @@ def simulate_sandia(
     module: Any,
     inverter: Any,
     irradiance: Tuple[Dict[str, Any], np.ndarray, np.ndarray],
-) -> np.ndarray:
+) -> ArrayPowerRatios:
     """Simulates with the Sandia PV Array Performance Model, vectorized.
 
     All weather parameters are numpy arrays covering the whole simulation
     period; the function is called exactly once per produced artifact and
-    returns the AC power ratio (AC power divided by the module peak load) for
-    every timestep in one array. Night timesteps carry NaN through the pvlib
-    chain (the relative airmass is undefined for zenith angles beyond 90
-    degrees) and are mapped to a power ratio of 0.0 at the end, exactly like the
-    scalar per-timestep implementation this replaced.
+    returns the DC and the AC power ratio (power divided by the module peak load)
+    for every timestep (:func:`dc_and_ac_power_ratios`). Night timesteps carry NaN
+    through the pvlib chain (the relative airmass is undefined for zenith angles
+    beyond 90 degrees) and are mapped to a power ratio of 0.0 at the end, exactly
+    like the scalar per-timestep implementation this replaced.
 
     The implementation is done in accordance with following tutorial:
     https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
@@ -638,7 +660,7 @@ def simulate_sandia(
             incidence from :func:`calculate_irradiance`, computed once by :func:`produce_pv_series`.
 
     Returns:
-        np.ndarray: AC power ratio per timestep, NaN-free.
+        ArrayPowerRatios: the DC and the AC power ratio per timestep, NaN-free.
     """
     poa_irrad, airmass, aoi = irradiance
     _, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
@@ -664,22 +686,58 @@ def simulate_sandia(
             module=module,
             temp_cell=pvtemps,
         )
-        if inputs.integrate_inverter:
-            # calculate load after inverter
-            inverter_load_in_watt = pvlib.inverter.sandia(
-                inverter=inverter,
-                v_dc=sapm_out["v_mp"],
-                p_dc=sapm_out["p_mp"],
-            )
-            # if inverter load is nan, make it zero otherwise ac_power_ratio
-            # will be nan also
-            inverter_load_in_watt = np.where(np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt)
-            ac_power_ratio = inverter_load_in_watt / module_peak_power_in_watt
-        else:
-            # load in [kW/kWp]
-            ac_power_ratio = np.asarray(sapm_out["p_mp"], dtype=float) / module_peak_power_in_watt
+        return dc_and_ac_power_ratios(
+            inputs=inputs,
+            inverter=inverter,
+            dc_voltage_in_volt=np.asarray(sapm_out["v_mp"], dtype=float),
+            dc_power_in_watt=np.asarray(sapm_out["p_mp"], dtype=float),
+            module_peak_power_in_watt=module_peak_power_in_watt,
+        )
 
-    return np.where(np.isnan(ac_power_ratio), 0.0, ac_power_ratio)
+
+def dc_and_ac_power_ratios(
+    inputs: PvSeriesInputs,
+    inverter: Any,
+    dc_voltage_in_volt: np.ndarray,
+    dc_power_in_watt: np.ndarray,
+    module_peak_power_in_watt: float,
+) -> ArrayPowerRatios:
+    """Return the DC and the AC power ratio of one module from its maximum power point, NaN-free.
+
+    The DC power ratio is the module's DC power over its peak power. The AC power ratio is what pvlib's Sandia
+    inverter model makes of that DC power and voltage, over the same peak power, when ``integrate_inverter`` is
+    true, and the DC power ratio itself when it is false: without an inverter nothing is lost between the two.
+    NaN, which pvlib gives at night, becomes 0.0 in both. For example, 380 W DC at 40 V into the default Enphase
+    IQ8P give 0.873 DC and 0.850 AC per watt peak of a 435.16 W module; below the inverter's start-up power
+    (1.87 W DC) the AC power is its standby draw, -0.045 W, so the AC ratio is slightly below 0. When the inverter
+    clips at its rated AC power, pvlib still reports the maximum power point as the DC power, so the clipped energy
+    counts as inverter loss rather than as module loss; the default inverter's 475 W AC are above any power its
+    435 W module reaches.
+
+    Args:
+        inputs: the calculation's inputs; supplies whether the inverter counts.
+        inverter: the inverter parameters from :func:`read_inverter`.
+        dc_voltage_in_volt: the module's voltage at its maximum power point per timestep, in V.
+        dc_power_in_watt: the module's power at its maximum power point per timestep, in W.
+        module_peak_power_in_watt: the module's peak power, in W, which both ratios divide by.
+
+    Returns:
+        ArrayPowerRatios: the DC and the AC power ratio per timestep.
+    """
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dc_power_ratio = dc_power_in_watt / module_peak_power_in_watt
+        dc_power_ratio = np.where(np.isnan(dc_power_ratio), 0.0, dc_power_ratio)
+        if not inputs.integrate_inverter:
+            return ArrayPowerRatios(dc_power_ratios=dc_power_ratio, ac_power_ratios=dc_power_ratio.copy())
+        inverter_load_in_watt = np.asarray(
+            pvlib.inverter.sandia(inverter=inverter, v_dc=dc_voltage_in_volt, p_dc=dc_power_in_watt), dtype=float
+        )
+        # if inverter load is nan, make it zero otherwise ac_power_ratio will be nan also
+        inverter_load_in_watt = np.where(np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt)
+        ac_power_ratio = inverter_load_in_watt / module_peak_power_in_watt
+    return ArrayPowerRatios(
+        dc_power_ratios=dc_power_ratio, ac_power_ratios=np.where(np.isnan(ac_power_ratio), 0.0, ac_power_ratio)
+    )
 
 
 def simulate_cec(
@@ -688,10 +746,12 @@ def simulate_cec(
     module: Any,
     inverter: Any,
     irradiance: Tuple[Dict[str, Any], np.ndarray, np.ndarray],
-) -> np.ndarray:
+) -> ArrayPowerRatios:
     """Simulates a defined PV array using the single-diode model.
 
-    This simulation works with data from the CEC database.
+    This simulation works with data from the CEC database. It returns the DC and the AC power ratio
+    (power divided by the module peak load) for every timestep (:func:`dc_and_ac_power_ratios`); a
+    timestep whose global irradiance is undefined (at night) gives 0.0 in both.
     The implementation is done in accordance with following tutorial:
     https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
     https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm
@@ -706,7 +766,7 @@ def simulate_cec(
             the irradiance components are used.
 
     Returns:
-        np.ndarray: AC power ratio per timestep, NaN-free.
+        ArrayPowerRatios: the DC and the AC power ratio per timestep, NaN-free.
     """
     poa_irrad = irradiance[0]
     _, module_peak_power_in_watt = module_area_and_peak_power(inputs, module)
@@ -741,6 +801,7 @@ def simulate_cec(
         # expensive brentq root search for roughly half of all timesteps.
         poa_global = np.asarray(poa_irrad["poa_global"], dtype=float)
         pvtemps = np.asarray(pvtemps, dtype=float)
+        dc_power_ratio = np.zeros(len(poa_global))
         ac_power_ratio = np.zeros(len(poa_global))
         valid = ~np.isnan(poa_global)
 
@@ -772,20 +833,17 @@ def simulate_cec(
                 method="newton",
             )
 
-            if inputs.integrate_inverter:
-                # calculate load after inverter
-                inverter_load_in_watt = pvlib.inverter.sandia(inverter=inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"])
-                # if inverter load is nan, make it zero otherwise
-                # ac_power_ratio will be nan also
-                inverter_load_in_watt = np.where(np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt)
-                valid_ac_power_ratio = inverter_load_in_watt / module_peak_power_in_watt
-            else:
-                # load in [kW/kWp]
-                valid_ac_power_ratio = np.asarray(mp["p_mp"], dtype=float) / module_peak_power_in_watt
+            valid_power_ratios = dc_and_ac_power_ratios(
+                inputs=inputs,
+                inverter=inverter,
+                dc_voltage_in_volt=np.asarray(mp["v_mp"], dtype=float),
+                dc_power_in_watt=np.asarray(mp["p_mp"], dtype=float),
+                module_peak_power_in_watt=module_peak_power_in_watt,
+            )
+            dc_power_ratio[valid] = valid_power_ratios.dc_power_ratios
+            ac_power_ratio[valid] = valid_power_ratios.ac_power_ratios
 
-            ac_power_ratio[valid] = np.where(np.isnan(valid_ac_power_ratio), 0.0, valid_ac_power_ratio)
-
-    return ac_power_ratio
+    return ArrayPowerRatios(dc_power_ratios=dc_power_ratio, ac_power_ratios=ac_power_ratio)
 
 
 def calculate_irradiance(

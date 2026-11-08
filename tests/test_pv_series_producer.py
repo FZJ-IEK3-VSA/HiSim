@@ -546,8 +546,109 @@ def test_the_ac_power_column_is_unchanged_and_below_the_solar_power() -> None:
 
     irradiance = pv_calculation.calculate_irradiance(inputs, inputs.weather_series)
     np.testing.assert_array_equal(
-        ac_ratio, pv_calculation.simulate_cec(inputs, inputs.weather_series, module, inverter, irradiance)
+        ac_ratio, pv_calculation.simulate_cec(inputs, inputs.weather_series, module, inverter, irradiance).ac_power_ratios
     )
     assert (solar - ac_ratio >= 0.0).all()
     noon = int(np.argmax(solar))
     assert 0.15 < ac_ratio[noon] / solar[noon] < 0.25
+
+
+class SplitOfTheLoss:
+    """Helpers for the tests of the DC power column, which splits the array's loss into the modules' and the inverter's."""
+
+    @staticmethod
+    def columns(inputs: PvSeriesInputs) -> Dict[str, np.ndarray]:
+        """The three columns of the produced frame, by their enum member's name.
+
+        Args:
+            inputs: the calculation's inputs.
+
+        Returns:
+            The AC, DC and solar power ratio per timestep.
+        """
+        frame = pv_calculation.produce_pv_series(inputs)
+        return {column.name: frame[column.value].to_numpy() for column in pv_calculation.PvSeriesColumn}
+
+    @staticmethod
+    def sandia(inputs: PvSeriesInputs) -> PvSeriesInputs:
+        """The same inputs with the Sandia module "Hanwha HSL60P6-PA-4-250T [2013]" behind the same inverter.
+
+        Args:
+            inputs: the calculation's inputs.
+
+        Returns:
+            The inputs of the Sandia performance model.
+        """
+        from hisim import utils  # pylint: disable=import-outside-toplevel
+
+        return dataclasses.replace(
+            inputs,
+            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+            module_database_path=str(utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]),
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("model", ["cec", "sandia"])
+def test_the_dc_power_lies_between_the_sun_and_the_ac_power_in_every_step(model: str) -> None:
+    """Sun >= DC >= AC per step and DC >= 0, in both performance models.
+
+    The module loss (sun minus DC) and the inverter loss (DC minus AC) are therefore never negative, and the AC power
+    is below 0 only by the inverter's standby draw (at most its 0.045 W per module). Catches: a DC column taken
+    after the inverter and a DC power that is NaN at night.
+    """
+    inputs = ClearSkyDay.inputs() if model == "cec" else SplitOfTheLoss.sandia(ClearSkyDay.inputs())
+    columns = SplitOfTheLoss.columns(inputs)
+    ac_ratio, dc_ratio, solar = columns["AC_POWER_RATIO"], columns["DC_POWER_RATIO"], columns["SOLAR_POWER_ON_MODULES_RATIO"]
+    module = pv_calculation.read_module(inputs)
+    _, module_peak_power_in_watt = pv_calculation.module_area_and_peak_power(inputs, module)
+
+    assert not np.isnan(dc_ratio).any()
+    assert (dc_ratio >= 0.0).all()
+    assert (solar >= dc_ratio).all()
+    assert (dc_ratio >= ac_ratio).all()
+    assert ac_ratio.min() >= -0.045 / module_peak_power_in_watt - 1e-15
+    noon = int(np.argmax(solar))
+    assert 0.95 < ac_ratio[noon] / dc_ratio[noon] < 1.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("model", ["cec", "sandia"])
+def test_without_an_inverter_the_dc_power_is_the_ac_power(model: str) -> None:
+    """With ``integrate_inverter`` false the DC column equals the AC column, so the inverter loses nothing.
+
+    Catches: a DC power that differs from the AC power when no inverter is simulated, which would book an inverter
+    loss for an array without one.
+    """
+    inputs = dataclasses.replace(ClearSkyDay.inputs(), integrate_inverter=False)
+    if model == "sandia":
+        inputs = SplitOfTheLoss.sandia(inputs)
+    columns = SplitOfTheLoss.columns(inputs)
+    np.testing.assert_array_equal(columns["DC_POWER_RATIO"], columns["AC_POWER_RATIO"])
+    assert columns["DC_POWER_RATIO"].max() > 0.5
+
+
+@pytest.mark.base
+def test_the_dc_and_ac_power_ratios_follow_the_inverter_model_and_are_nan_free() -> None:
+    """``dc_and_ac_power_ratios`` divides by the peak power, runs pvlib's Sandia inverter, and maps NaN to 0.
+
+    380 W DC at 40 V into the default Enphase IQ8P give 0.873 DC and 0.850 AC per watt peak of a 435.16 W module; 1 W
+    DC is below the inverter's start-up power of 1.87 W, so the AC power is its standby draw of -0.045 W; NaN (a
+    night step) gives 0.0 in both. Without the inverter the AC ratio is a copy of the DC ratio. Catches: a ratio
+    divided by something else than the module's peak power, and a NaN left in either column.
+    """
+    inputs = ClearSkyDay.inputs()
+    inverter = pv_calculation.read_inverter(inputs)
+    voltage_in_volt = np.array([40.0, 40.0, np.nan])
+    power_in_watt = np.array([380.0, 1.0, np.nan])
+
+    ratios = pv_calculation.dc_and_ac_power_ratios(inputs, inverter, voltage_in_volt, power_in_watt, 435.16)
+    np.testing.assert_allclose(ratios.dc_power_ratios, [380.0 / 435.16, 1.0 / 435.16, 0.0], rtol=1e-12)
+    np.testing.assert_allclose(ratios.ac_power_ratios, [0.850150, -0.045 / 435.16, 0.0], rtol=1e-5)
+
+    without = pv_calculation.dc_and_ac_power_ratios(
+        dataclasses.replace(inputs, integrate_inverter=False), inverter, voltage_in_volt, power_in_watt, 435.16
+    )
+    np.testing.assert_array_equal(without.ac_power_ratios, without.dc_power_ratios)
+    np.testing.assert_allclose(without.dc_power_ratios, [380.0 / 435.16, 1.0 / 435.16, 0.0], rtol=1e-12)

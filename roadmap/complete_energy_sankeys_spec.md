@@ -545,8 +545,8 @@ has ports after this epic; "exempt" means it is never a node.
 | `Transformer` (transformer_rectifier) | physics | declares | in: `ElectricityReceivedInWatt` of its configured `received_carrier`: electricity (metered, so booked on an output) or, in `electrolyzer_with_renewables`, wind electricity from `wind turbine` (Q-Q); el out `ElectricityDeliveredInWatt`, at most its rating; `ConversionLossInWatt` (el); the input beyond its rating is curtailed, `CurtailedInputInWatt`, no port (built in 5c, W and the rating since Q-Q) | 5c, Q-Q |
 
 Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `generic_car_profile`,
-`lpg_car_information`, `lpg_local_time`, `more_advanced_heat_pump_hplib_model`, `pylpg_workspace`, the
-`calculation`/`config`/`information`/`solar_gains`/`window` modules of the packages.
+`lpg_car_information`, `lpg_local_time`, `pylpg_workspace`, the
+`calculation`/`config`/`hplib_operation`/`information`/`seasonal_cop`/`solar_gains`/`window` modules of the packages.
 
 ## 6. What changes and what does not
 

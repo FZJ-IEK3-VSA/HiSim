@@ -23,13 +23,15 @@ import yaml
 from hisim import component as cp
 from hisim import hydronics
 from hisim import loadtypes as lt
-from hisim.components.more_advanced_heat_pump_hplib_model import HplibResult
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.hplib_operation import HplibResult
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
     HeatPumpDhwState,
-    MoreAdvancedHeatPumpHPLib,
-    MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibControllerDHW,
     MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,
     PositionHotWaterStorageInSystemSetup,
 )

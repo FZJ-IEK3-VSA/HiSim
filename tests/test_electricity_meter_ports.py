@@ -21,7 +21,11 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import simulator as sim
 from hisim.components import advanced_battery_bslib, controller_l2_energy_management_system, electricity_meter
-from hisim.components import advanced_ev_battery_bslib, generic_car, more_advanced_heat_pump_hplib
+from hisim.components import advanced_ev_battery_bslib, generic_car
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
 from hisim.config import SizingContext
 from hisim.simulationparameters import SimulationParameters
 from hisim.setup_rules.kinds import SetupKind
@@ -32,10 +36,10 @@ class MeteredHouse:
 
     #: The heat pump's electricity ports, all four read as consumption.
     HEAT_PUMP_PORTS: Tuple[str, ...] = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling,
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump,
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+        MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+        MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling,
+        MoreAdvancedHeatPumpHPLib.ElectricalInputPowerBrinePump,
+        MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
     )
 
     def __init__(self, directory: Path, with_domestic_hot_water_preparation: bool = True) -> None:
@@ -55,11 +59,11 @@ class MeteredHouse:
         )
         self.simulator.declare_setup_kind(SetupKind.DEMO)
         self.simulator.set_simulation_parameters(parameters)
-        heat_pump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+        heat_pump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         heat_pump_config.set_thermal_output_power_in_watt = 8000.0
         heat_pump_config.heating_reference_temperature_in_celsius = -7.0
         heat_pump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
-        self.heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+        self.heat_pump = MoreAdvancedHeatPumpHPLib(
             my_simulation_parameters=parameters, config=heat_pump_config
         )
         battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(

@@ -64,7 +64,7 @@ groups:
     enabled: true
     components:
       heat_pump:
-        class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+        class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
         preset: air_water                   # thermal power AUTO <- building.heating_load_in_watt (whole
         config:                             # building — correct: it heats all of it)
           with_domestic_hot_water_preparation: false
@@ -85,7 +85,7 @@ groups:
           heat_distribution_system_type: apt1_hds_controller.heat_distribution_system_type
 
       heat_pump_controller_sh:
-        class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+        class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
         preset: standard
         inputs:
           - weather

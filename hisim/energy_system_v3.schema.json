@@ -206,9 +206,9 @@
             "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
             "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
-            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            "hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib",
+            "hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW",
+            "hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
             "hisim.components.night_setback_controller.NightSetbackController",
             "hisim.components.simple_air_conditioner.SimpleAirConditioner",
             "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
@@ -4723,7 +4723,7 @@
             "properties": {
               "class": {
                 "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib"
+                  "hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib"
                 ]
               }
             },
@@ -4930,7 +4930,7 @@
             "properties": {
               "class": {
                 "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW"
+                  "hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW"
                 ]
               }
             },
@@ -4982,7 +4982,7 @@
             "properties": {
               "class": {
                 "enum": [
-                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
+                  "hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
                 ]
               }
             },

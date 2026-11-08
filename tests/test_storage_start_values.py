@@ -23,7 +23,7 @@ from hisim.components import generic_boiler
 from hisim.components import generic_district_heating
 from hisim.components import generic_electric_heating
 from hisim.components import generic_electrolyzer_and_h2_storage
-from hisim.components import more_advanced_heat_pump_hplib
+from hisim.components.more_advanced_heat_pump.controller_dhw import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.components import simple_water_storage
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.config import ComponentID, SizingContext
@@ -85,7 +85,7 @@ class StartValues:
             "district heating": district_heating_controller.warm_water_temperature_aim_in_celsius,
             "electric heating": electric_heating_controller.warm_water_temperature_aim_in_celsius,
             "heat pump": (
-                more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.t_max_dhw_storage_in_celsius
+                MoreAdvancedHeatPumpHPLibControllerDHWConfig.t_max_dhw_storage_in_celsius
             ),
         }
 

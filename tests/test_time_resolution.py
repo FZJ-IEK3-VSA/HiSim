@@ -27,7 +27,18 @@ from hisim.components import (
     simple_water_storage,
     heat_distribution_system,
     electricity_meter,
-    more_advanced_heat_pump_hplib
+)
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
 
 from hisim import loadtypes as lt
@@ -671,7 +682,7 @@ def run_cluster_house(
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
@@ -684,25 +695,25 @@ def run_cluster_house(
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
-    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+    my_heatpump_controller_sh = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
             "HeatPumpControllerDHW"
         )
     )
 
     # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+    my_heatpump_controller_dhw = MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     ).resolve(
         SizingContext(
@@ -712,7 +723,7 @@ def run_cluster_house(
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

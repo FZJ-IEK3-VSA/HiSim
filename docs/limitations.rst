@@ -90,7 +90,7 @@ Heat Pump and HVAC Models
   performance, defrost cycles, and auxiliary heating elements are approximated.
 
 - **HPLib-based models.** The advanced heat-pump components
-  (e.g., :py:class:`hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib`)
+  (e.g., :py:class:`hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib`)
   delegate to external physics libraries. Their accuracy depends on the
   underlying library and its calibration data.
 

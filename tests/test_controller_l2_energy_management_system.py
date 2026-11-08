@@ -25,7 +25,18 @@ from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_water_storage,
-    more_advanced_heat_pump_hplib
+)
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_dhw import (
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+)
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
+    MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
 )
 from hisim import utils
 from hisim.config import ComponentID, DisplayConfig, SizingContext, concrete
@@ -206,7 +217,7 @@ def test_house(
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
@@ -218,25 +229,25 @@ def test_house(
         )
     )
 
-    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+    my_heatpump_controller_sh = MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
             "HeatPumpControllerDHW"
         )
     )
 
     # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+    my_heatpump_controller_dhw = MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
         "MoreAdvancedHeatPumpHPLib"
     ).resolve(
         SizingContext(
@@ -246,7 +257,7 @@ def test_house(
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -717,7 +728,7 @@ def test_a_grid_share_kpi_names_no_participant_it_cannot_find() -> None:
 
 def _heat_pump(
     name: str, with_domestic_hot_water_preparation: bool = False
-) -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib:
+) -> MoreAdvancedHeatPumpHPLib:
     """Builds a heat pump, the cheapest participant the energy manager steers by default.
 
     Args:
@@ -729,14 +740,14 @@ def _heat_pump(
     Returns:
         The heat pump.
     """
-    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(name)
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(name)
     # No building in this test, so the two fields the preset leaves to the building's facts are
     # stated here: an 8 kW machine rated at the German design outside temperature.
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
-    heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+    heat_pump: MoreAdvancedHeatPumpHPLib = (
+        MoreAdvancedHeatPumpHPLib(
             my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
             config=config,
         )

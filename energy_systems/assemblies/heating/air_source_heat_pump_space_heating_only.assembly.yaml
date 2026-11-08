@@ -33,7 +33,7 @@ parameters:
 
 components:
   ControllerSH:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
       - HeatPump                                            # ActualPartLoadRatioSh
@@ -42,7 +42,7 @@ components:
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   HeatPump:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       set_thermal_output_power_in_watt: {$param: thermal_power_in_watt}

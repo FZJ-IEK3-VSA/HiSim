@@ -8,7 +8,7 @@ hot water preparation is disabled.
 import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.component import (
     PositionHotWaterStorageInSystemSetup,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,

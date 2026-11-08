@@ -13,8 +13,11 @@ from typing import Any, Dict
 import pytest
 from hplib import hplib as hpl
 
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
-from hisim.components.more_advanced_heat_pump_hplib_model import (
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+)
+from hisim.components.more_advanced_heat_pump.seasonal_cop import (
     ScopApplication,
     ScopCalibration,
     StandardizedSeasonalCop,

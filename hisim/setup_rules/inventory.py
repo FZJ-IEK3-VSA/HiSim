@@ -1066,7 +1066,7 @@ class Inventory:
                 "curve, whose laws read the building's load per m²"
             ),
             lives=(
-                "hisim/components/generic_boiler.py, generic_district_heating.py, generic_electric_heating.py, more_advanced_heat_pump_hplib.py, "
+                "hisim/components/generic_boiler.py, generic_district_heating.py, generic_electric_heating.py, more_advanced_heat_pump/controller_space_heating.py, "
                 "heating_curve.py:HEATING_THRESHOLD_LAW"
             ),
             note="a process-heat boiler has no season; a commercial building has one",
@@ -1124,7 +1124,7 @@ class Inventory:
         RuleRecord(
             rule_id="house.cooling_through_emitter_needs_floor_heating", nature=RuleNature.BUILDING, when="build / step", enforcement="E",
             checks="cooling through the emitter needs floor heating; HDS cooling needs cooling_enabled",
-            lives="hisim/components/more_advanced_heat_pump_hplib.py; heat_distribution_system.py",
+            lives="hisim/components/more_advanced_heat_pump/controller_space_heating.py; heat_distribution_system.py",
         ),
         RuleRecord(
             rule_id="house.household_occupancy", nature=RuleNature.RESIDENTIAL, when="build", enforcement="E",

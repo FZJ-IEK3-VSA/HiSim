@@ -374,7 +374,7 @@ components:
     class: hisim.components.weather.Weather
     preset: aachen
   heat_pump:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.component.MoreAdvancedHeatPumpHPLib
     preset: air_water
     inputs:
       - input: TemperatureInputPrimary

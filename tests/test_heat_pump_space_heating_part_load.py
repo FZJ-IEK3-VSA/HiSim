@@ -16,14 +16,16 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.components.more_advanced_heat_pump_hplib import (
+from hisim.components.more_advanced_heat_pump.controller_space_heating import (
     HeatPumpSpaceHeatingMode,
-    MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeating,
     MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
+)
+from hisim.components.more_advanced_heat_pump.component import (
+    MoreAdvancedHeatPumpHPLib,
     PositionHotWaterStorageInSystemSetup,
 )
-from hisim.components.more_advanced_heat_pump_hplib_model import HeatPumpOperation
+from hisim.components.more_advanced_heat_pump.hplib_operation import HeatPumpOperation
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import StartOfStepPartLoadRule
 from hisim.simulationparameters import SimulationParameters

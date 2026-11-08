@@ -26,7 +26,7 @@ from hisim.component import Component
 from hisim.components.fuel_meter import FuelMeterConfig
 from hisim.components.generic_car import CarConfig
 from hisim.components.heating_curve import HeatDistributionSystemType
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
+from hisim.components.more_advanced_heat_pump.component import MoreAdvancedHeatPumpHPLibConfig
 from hisim.components.sumbuilder import CalculateOperation, SumBuilderConfig, SumBuilderForThreeInputs
 from hisim.config import ConfigBase, auto_fields, presets_of
 from hisim.config.context import SizingContext

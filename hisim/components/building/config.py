@@ -10,7 +10,7 @@ facts it contributes to every other component of a scenario. The physics behind 
 # module import order is acyclic)
 
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
@@ -59,6 +59,50 @@ def _technical_room_location_of_the_tabula_row(ctx: SizingContext, own: OwnField
 
     cellar_code = BuildingInformation.cellar_code_of(own.value_of("building_code"))
     return BuildingInformation.technical_room_location_of_cellar_code(cellar_code)
+
+
+@dataclass_json
+@dataclass
+class ConfiguredWindow:
+    """One window of a building that states its windows itself instead of taking the TABULA row's.
+
+    A window is its area, its orientation and four optics factors, which is exactly what the
+    solar-gains producer takes per window (``solar_gains.WindowGeometry``). The TABULA row states
+    one area per direction (south, east, north, west, horizontal) at a tilt of 90° or 0° and one
+    set of optics factors for all of them; a configured window may have any tilt and azimuth and
+    its own factors. An unset factor takes the row's value, as every unset field of
+    :class:`BuildingConfig` does.
+    """
+
+    #: The window's area in m², the whole of it: the frame fraction below takes its share.
+    area_in_m2: float
+    #: Azimuth in degrees, 180 being south, 90 east, 270 west; ``None`` for a horizontal window,
+    #: which has no azimuth, and for no other.
+    azimuth_angle_in_degrees: Optional[float]
+    #: Tilt against the horizontal in degrees: 90 for a facade window, 0 for a roof light.
+    tilt_angle_in_degrees: float
+    #: TABULA ``g_gl_n``: the total solar energy transmittance for perpendicular radiation.
+    glass_solar_transmittance: Optional[float] = None
+    #: TABULA ``F_f``: the fraction of the window area taken up by the frame.
+    frame_area_fraction_reduction_factor: Optional[float] = None
+    #: TABULA ``F_w``: the correction for radiation that does not arrive perpendicularly.
+    nonperpendicular_reduction_factor: Optional[float] = None
+    #: TABULA ``F_sh_vert``: the correction for external shading.
+    external_shading_vertical_reduction_factor: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        """Refuse a negative area and an azimuth-less window that is not horizontal.
+
+        Raises:
+            ValueError: for a negative area, or ``azimuth_angle_in_degrees`` ``None`` at a tilt
+                other than 0.
+        """
+        if self.area_in_m2 < 0:
+            raise ValueError(f"A window cannot have a negative area; this one states {self.area_in_m2} m2.")
+        if self.azimuth_angle_in_degrees is None and self.tilt_angle_in_degrees != 0:
+            raise ValueError(
+                f"A window without an azimuth is horizontal, but this one is tilted by {self.tilt_angle_in_degrees} " "degrees; state its azimuth (180 is south)."
+            )
 
 
 @dataclass_json
@@ -113,6 +157,30 @@ class BuildingConfig(ConfigBase):
     window_area_in_m2: Optional[float] = None
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
     door_area_in_m2: Optional[float] = None
+    #: The windows, each with its own angles and optics, instead of the TABULA row's areas per
+    #: direction with its single set of optics factors; unset keeps the row's windows. The window
+    #: area is then the list's sum, so a list beside ``window_area_in_m2`` is refused.
+    windows: Optional[List[ConfiguredWindow]] = None
+    #: Air change rates in 1/h: the use-related one (TABULA ``n_air_use``) and the infiltration
+    #: (``n_air_infiltration``); unset means the row's value, each on its own.
+    use_air_change_rate_per_hour: Optional[float] = None
+    infiltration_air_change_rate_per_hour: Optional[float] = None
+    #: The air volume in m³ the ventilation conductance multiplies; unset means the row's room
+    #: height times the conditioned floor area.
+    conditioned_air_volume_in_m3: Optional[float] = None
+    #: Transmission adjustment factors b of the opaque elements, used as given; unset means the
+    #: row's largest ``b_Transmission_*`` column, or the element's fixed factor when its U-value
+    #: is configured (0.5 for the floor, 1 for facade and roof).
+    floor_transmission_adjustment_factor: Optional[float] = None
+    facade_transmission_adjustment_factor: Optional[float] = None
+    roof_transmission_adjustment_factor: Optional[float] = None
+    #: The ISO 13790 mass and surface quantities of the 5R1C model: the thermal capacity C_m in
+    #: J/K, the effective mass area A_m and the total internal surface area A_tot in m²; unset
+    #: means the heat-capacity class times the conditioned floor area for the first two and 4.5
+    #: times the conditioned floor area for the last.
+    thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin: Optional[float] = None
+    effective_mass_area_in_m2: Optional[float] = None
+    total_internal_surface_area_in_m2: Optional[float] = None
     #: Indoor temperatures the residents set, which bound the heating and the cooling season.
     set_heating_temperature_in_celsius: float = 20.0
     set_cooling_temperature_in_celsius: float = 25.0

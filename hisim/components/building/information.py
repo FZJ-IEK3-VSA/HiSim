@@ -18,6 +18,32 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.config import concrete
 from hisim.components.building.config import BuildingConfig
+from hisim.components.building.solar_gains import WindowGeometry
+
+
+@dataclass(frozen=True)
+class ValueOrigin:
+    """Where one quantity the Building reads came from: the configuration, the TABULA row, or a rule.
+
+    Every optional field of :class:`BuildingConfig` means "take the TABULA row's value" when it is
+    unset, so a building described in the configuration can still carry values of the row it
+    names without anyone noticing. :meth:`BuildingInformation.value_origins` hands out one of
+    these per quantity, and a caller that wants nothing of the row checks that no origin is
+    :attr:`TABULA_ROW`.
+    """
+
+    #: The value was set in the configuration.
+    CONFIGURED: ClassVar[str] = "configured"
+    #: The value is the TABULA row's, or computed from the row's columns.
+    TABULA_ROW: ClassVar[str] = "TABULA row"
+    #: The value follows from a rule of this class: a fixed table, a fallback, or other derived
+    #: quantities, whose own origins say where they came from.
+    DERIVED: ClassVar[str] = "derived"
+
+    #: One of the three class constants.
+    source: str
+    #: The columns, the rule or the configuration field, for the report.
+    detail: str
 
 
 class ZeroReferenceWindowAreaError(ValueError):
@@ -186,6 +212,10 @@ class BuildingInformation:
         #: both zero (hisim-component-physics-4g9.1). A zero-area element has zero conductance either way,
         #: so the kept raw U-value is the material's property, unused by the physics.
         keep_u_value_when_reference_area_is_zero: bool = False
+        #: Name of the ``BuildingConfig`` field whose non-``None`` value is the element's
+        #: transmission adjustment factor, whatever the U-value's source; empty for window and
+        #: door, whose factor is always 1.
+        configured_adjustment_factor_field: str = ""
 
     @dataclass(frozen=True)
     class ElementValues:
@@ -223,6 +253,7 @@ class BuildingInformation:
         configured_area_field="floor_area_in_m2",
         configured_u_value_field="floor_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=FLOOR_ADJUSTMENT_FACTOR_FOR_CONFIGURED_U_VALUE,
+        configured_adjustment_factor_field="floor_transmission_adjustment_factor",
     )
     #: Wall: the only element with three TABULA sub-areas. Its derived attributes and
     #: config fields are named "facade" while the TABULA columns say "Wall".
@@ -234,6 +265,7 @@ class BuildingInformation:
         configured_area_field="facade_area_in_m2",
         configured_u_value_field="facade_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=1,
+        configured_adjustment_factor_field="facade_transmission_adjustment_factor",
     )
     #: Roof: two TABULA sub-areas, adjustment factor 1 when the U-value is configured.
     ROOF_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
@@ -244,6 +276,7 @@ class BuildingInformation:
         configured_area_field="roof_area_in_m2",
         configured_u_value_field="roof_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=1,
+        configured_adjustment_factor_field="roof_transmission_adjustment_factor",
     )
     #: Window: no b_Transmission columns (factor is always 1), and its own zero-area guard,
     #: the same rule the door's descriptor declares: a row whose reference window areas
@@ -287,6 +320,22 @@ class BuildingInformation:
     #: them and in which ``scaled_window_areas_in_m2`` is laid out.
     WINDOWS_DIRECTIONS: ClassVar[Tuple[str, ...]] = ("South", "East", "North", "West", "Horizontal")
 
+    #: The azimuth in degrees of each TABULA window direction, 180 being south; ``None`` for the
+    #: horizontal direction, which has no azimuth. The window of each direction stands at a tilt
+    #: of 90°, the horizontal one at 0°.
+    WINDOW_DIRECTION_AZIMUTHS_IN_DEGREES: ClassVar[Mapping[str, Optional[float]]] = {
+        "South": 180.0,
+        "East": 90.0,
+        "North": 0.0,
+        "West": 270.0,
+        "Horizontal": None,
+    }
+    #: The name of the horizontal direction in :attr:`WINDOWS_DIRECTIONS`.
+    HORIZONTAL_WINDOW_DIRECTION: ClassVar[str] = "Horizontal"
+    #: The tilt against the horizontal, in degrees, of a window in a facade and of a roof light.
+    FACADE_WINDOW_TILT_IN_DEGREES: ClassVar[float] = 90.0
+    HORIZONTAL_WINDOW_TILT_IN_DEGREES: ClassVar[float] = 0.0
+
     #: TABULA column holding the typology's own estimate of the door area [m2]. It is
     #: filled in on every row whose ``A_Door_1`` is 0, and it stands in for the reference
     #: door area of such a row (see :py:meth:`_door_area_in_m2_and_origin`).
@@ -326,6 +375,10 @@ class BuildingInformation:
         """
 
         self.buildingconfig = config
+
+        # Where each quantity the Building reads came from, filled by the pipeline steps below
+        # as they decide between a configured value and the row's; see value_origins().
+        self._origins: Dict[str, ValueOrigin] = {}
 
         # get set temperatures for building
         self.set_heating_temperature_for_building_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
@@ -384,12 +437,61 @@ class BuildingInformation:
         """
         return dict(self._element_values)
 
+    def value_origins(self) -> Dict[str, "ValueOrigin"]:
+        """Return where every quantity the Building reads came from, by the name the Building reads it under.
+
+        The five element areas, U-values and adjustment factors, the conditioned floor area, the
+        windows, the two air change rates and the air volume of the ventilation conductance, the
+        three ISO 13790 mass and surface quantities, the apartment count and the maximum thermal
+        demand: each is :attr:`ValueOrigin.CONFIGURED`, :attr:`ValueOrigin.TABULA_ROW` or
+        :attr:`ValueOrigin.DERIVED`, with the detail naming the field, the columns or the rule.
+        A caller that describes a building itself and wants nothing of the row it had to name
+        checks that no origin is the row's.
+
+        Returns:
+            Dict[str, ValueOrigin]: quantity name -> origin.
+        """
+        return dict(getattr(self, "_origins", {}))
+
+    def window_geometries(self) -> Tuple[WindowGeometry, ...]:
+        """Return the windows as the solar-gains producer takes them, one geometry per window.
+
+        From the TABULA row: one window per direction of :attr:`WINDOWS_DIRECTIONS`, in that
+        order, with the row's per-direction area rescaled to the window area, at the direction's
+        azimuth and tilt, and the row's single optics factors; a direction without area is still
+        a window of 0 m². From a configured window list: one geometry per item, in the list's
+        order, with its own angles and its own factors where it states them.
+
+        Returns:
+            Tuple[WindowGeometry, ...]: the windows.
+        """
+        return self._window_geometries
+
+    def _record_origin(self, quantity: str, source: str, detail: str) -> None:
+        """Record the origin of one quantity for :meth:`value_origins`.
+
+        The record is created here when it is missing, because the test harnesses of this class
+        run single pipeline steps on an instance built without ``__init__``.
+        """
+        if not hasattr(self, "_origins"):
+            self._origins = {}
+        self._origins[quantity] = ValueOrigin(source=source, detail=detail)
+
+    @property
+    def use_air_change_rate_per_hour(self) -> float:
+        """Use-related air exchange rate [1/h]: the configured one, else the TABULA row's ``n_air_use``."""
+        if self.buildingconfig.use_air_change_rate_per_hour is not None:
+            return self.buildingconfig.use_air_change_rate_per_hour
+        return float(self.buildingdata_ref["n_air_use"].values[0])
+
     @property
     def air_infiltration_rate_per_hour(self) -> float:
-        """Air infiltration rate [1/h] of the TABULA row (``n_air_infiltration``).
+        """Air infiltration rate [1/h]: the configured one, else the TABULA row's ``n_air_infiltration``.
 
-        The ventilation conductance adds it to the row's use-related air exchange rate.
+        The ventilation conductance adds it to the use-related air exchange rate.
         """
+        if self.buildingconfig.infiltration_air_change_rate_per_hour is not None:
+            return self.buildingconfig.infiltration_air_change_rate_per_hour
         return float(self.buildingdata_ref["n_air_infiltration"].values[0])
 
     @property
@@ -597,29 +699,56 @@ class BuildingInformation:
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         # labeled as C_m in the paper [1] (** Check header), before c_m
-        self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class]
-            * self.scaled_conditioned_floor_area_in_m2
-        )
+        if self.buildingconfig.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin is not None:
+            self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = self.buildingconfig.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
+            self._record_origin(
+                "thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin",
+                ValueOrigin.CONFIGURED,
+                "thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin",
+            )
+        else:
+            self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
+                self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class] * self.scaled_conditioned_floor_area_in_m2
+            )
+            self._record_origin(
+                "thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin",
+                ValueOrigin.DERIVED,
+                f"f_c of the heat-capacity class '{self.building_heat_capacity_class}' (ISO 13790 class table) " "times the scaled conditioned floor area",
+            )
         # Room Capacitance [Wh/m2K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_watthour_per_m2_per_kelvin = (
             self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
             / (self.JOULE_PER_WATT_HOUR * self.scaled_conditioned_floor_area_in_m2)
         )
         # before labeled as a_m
-        self.effective_mass_area_in_m2 = (
-            self.scaled_conditioned_floor_area_in_m2
-            * self.building_heat_capacity_class_f_a[self.building_heat_capacity_class]
-        )
+        if self.buildingconfig.effective_mass_area_in_m2 is not None:
+            self.effective_mass_area_in_m2 = self.buildingconfig.effective_mass_area_in_m2
+            self._record_origin("effective_mass_area_in_m2", ValueOrigin.CONFIGURED, "effective_mass_area_in_m2")
+        else:
+            self.effective_mass_area_in_m2 = self.scaled_conditioned_floor_area_in_m2 * self.building_heat_capacity_class_f_a[self.building_heat_capacity_class]
+            self._record_origin(
+                "effective_mass_area_in_m2",
+                ValueOrigin.DERIVED,
+                f"the scaled conditioned floor area times f_a of the heat-capacity class " f"'{self.building_heat_capacity_class}' (ISO 13790 class table)",
+            )
         # before labeled as a_t
-        self.total_internal_surface_area_in_m2 = (
-            self.scaled_conditioned_floor_area_in_m2 * self.ratio_between_internal_surface_area_and_floor_area
-        )
+        if self.buildingconfig.total_internal_surface_area_in_m2 is not None:
+            self.total_internal_surface_area_in_m2 = self.buildingconfig.total_internal_surface_area_in_m2
+            self._record_origin("total_internal_surface_area_in_m2", ValueOrigin.CONFIGURED, "total_internal_surface_area_in_m2")
+        else:
+            self.total_internal_surface_area_in_m2 = self.scaled_conditioned_floor_area_in_m2 * self.ratio_between_internal_surface_area_and_floor_area
+            self._record_origin(
+                "total_internal_surface_area_in_m2",
+                ValueOrigin.DERIVED,
+                f"the scaled conditioned floor area times {self.ratio_between_internal_surface_area_and_floor_area} " "(ISO 13790 7.2.2.2)",
+            )
 
         self.reduction_factor_for_non_perpedicular_radiation = self.buildingdata_ref["F_w"].values[0]
         self.reduction_factor_for_frame_area_fraction_of_window = self.buildingdata_ref["F_f"].values[0]
         self.reduction_factor_for_external_vertical_shading = self.buildingdata_ref["F_sh_vert"].values[0]
         self.total_solar_energy_transmittance_for_perpedicular_radiation = self.buildingdata_ref["g_gl_n"].values[0]
+
+        self._window_geometries: Tuple[WindowGeometry, ...] = self._build_window_geometries()
 
         # Get number of apartments
         self.number_of_apartments = int(
@@ -629,6 +758,106 @@ class BuildingInformation:
                 buildingdata=self.buildingdata_ref,
             )
         )
+
+    def _build_window_geometries(self) -> Tuple[WindowGeometry, ...]:
+        """Build the windows of :meth:`window_geometries` from the configured list or from the row.
+
+        From the row, the geometry of each direction carries the values ``Building.get_windows``
+        used to assemble itself: the direction's azimuth and tilt, the rescaled per-direction area
+        and the row's four optics factors, every one passed through ``float``. A configured
+        window takes its own angles and area and, for each factor it leaves unset, the row's.
+
+        Returns:
+            Tuple[WindowGeometry, ...]: the windows, in the order of the directions or of the list.
+        """
+        row_frame_fraction = float(self.reduction_factor_for_frame_area_fraction_of_window)
+        row_glass_transmittance = float(self.total_solar_energy_transmittance_for_perpedicular_radiation)
+        row_nonperpendicular = float(self.reduction_factor_for_non_perpedicular_radiation)
+        row_external_shading = float(self.reduction_factor_for_external_vertical_shading)
+
+        if self.buildingconfig.windows is not None:
+            self._record_origin(
+                "windows",
+                ValueOrigin.CONFIGURED,
+                f"{len(self.buildingconfig.windows)} configured windows; an unset optics factor is the row's",
+            )
+            return tuple(
+                WindowGeometry(
+                    tilt_angle_in_degrees=float(window.tilt_angle_in_degrees),
+                    azimuth_angle_in_degrees=(None if window.azimuth_angle_in_degrees is None else float(window.azimuth_angle_in_degrees)),
+                    area_in_m2=float(window.area_in_m2),
+                    frame_area_fraction_reduction_factor=(
+                        row_frame_fraction if window.frame_area_fraction_reduction_factor is None else float(window.frame_area_fraction_reduction_factor)
+                    ),
+                    glass_solar_transmittance=(row_glass_transmittance if window.glass_solar_transmittance is None else float(window.glass_solar_transmittance)),
+                    nonperpendicular_reduction_factor=(
+                        row_nonperpendicular if window.nonperpendicular_reduction_factor is None else float(window.nonperpendicular_reduction_factor)
+                    ),
+                    external_shading_vertical_reduction_factor=(
+                        row_external_shading if window.external_shading_vertical_reduction_factor is None else float(window.external_shading_vertical_reduction_factor)
+                    ),
+                )
+                for window in self.buildingconfig.windows
+            )
+
+        self._record_origin(
+            "windows",
+            ValueOrigin.TABULA_ROW,
+            "A_Window_<direction> rescaled to the window area; F_f, g_gl_n, F_w, F_sh_vert for every window",
+        )
+        geometries = []
+        for index, windows_direction in enumerate(self.windows_directions):
+            if windows_direction == self.HORIZONTAL_WINDOW_DIRECTION:
+                window_tilt_angle = self.HORIZONTAL_WINDOW_TILT_IN_DEGREES
+            else:
+                window_tilt_angle = self.FACADE_WINDOW_TILT_IN_DEGREES
+            azimuth_angle = self.WINDOW_DIRECTION_AZIMUTHS_IN_DEGREES[windows_direction]
+            geometries.append(
+                WindowGeometry(
+                    tilt_angle_in_degrees=window_tilt_angle,
+                    azimuth_angle_in_degrees=None if azimuth_angle is None else float(azimuth_angle),
+                    area_in_m2=float(self.scaled_window_areas_in_m2[index]),
+                    frame_area_fraction_reduction_factor=row_frame_fraction,
+                    glass_solar_transmittance=row_glass_transmittance,
+                    nonperpendicular_reduction_factor=row_nonperpendicular,
+                    external_shading_vertical_reduction_factor=row_external_shading,
+                )
+            )
+        return tuple(geometries)
+
+    def _record_floor_area_origin(self) -> None:
+        """Record where the scaled conditioned floor area came from, after the scaling step chose it."""
+        if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
+            self._record_origin(
+                "scaled_conditioned_floor_area_in_m2",
+                ValueOrigin.CONFIGURED,
+                "absolute_conditioned_floor_area_in_m2, passed through the row's A_C_Ref as ref * (target / ref)",
+            )
+        elif self.buildingconfig.total_base_area_in_m2 is not None:
+            self._record_origin(
+                "scaled_conditioned_floor_area_in_m2",
+                ValueOrigin.CONFIGURED,
+                "total_base_area_in_m2, passed through the row's A_C_Ref as ref * (target / ref)",
+            )
+        elif self.conditioned_floor_area_in_m2_tabula_ref == 0:
+            self._record_origin(
+                "scaled_conditioned_floor_area_in_m2",
+                ValueOrigin.DERIVED,
+                f"the fallback of {self.FALLBACK_CONDITIONED_FLOOR_AREA_IN_M2} m2 for a row whose A_C_Ref is 0",
+            )
+        else:
+            self._record_origin("scaled_conditioned_floor_area_in_m2", ValueOrigin.TABULA_ROW, "A_C_Ref")
+
+    def _record_element_area_origin(self, element: EnvelopeElement) -> None:
+        """Record where one element's area came from: its configured field or the row's scaled sub-areas."""
+        if getattr(self.buildingconfig, element.configured_area_field) is not None:
+            self._record_origin(element.configured_area_field, ValueOrigin.CONFIGURED, element.configured_area_field)
+        else:
+            self._record_origin(
+                element.configured_area_field,
+                ValueOrigin.TABULA_ROW,
+                f"{' + '.join(element.area_columns)} times the conditioned-floor-area scaling factor",
+            )
 
     def get_building_area_parameters(self):
         """Derive every envelope area of the building as an explicit ordered pipeline.
@@ -655,35 +884,62 @@ class BuildingInformation:
                 conditioned_floor_area_in_m2_tabula_ref=self.conditioned_floor_area_in_m2_tabula_ref
             )
         )
+        self._record_floor_area_origin()
 
         self.floor_area_in_m2 = self._scaled_element_area_in_m2(self.FLOOR_ELEMENT)
         self.facade_area_in_m2 = self._scaled_element_area_in_m2(self.WALL_ELEMENT)
         self.roof_area_in_m2 = self._scaled_element_area_in_m2(self.ROOF_ELEMENT)
-        self.window_area_in_m2 = self._scaled_element_area_in_m2(self.WINDOW_ELEMENT)
+        for element in (self.FLOOR_ELEMENT, self.WALL_ELEMENT, self.ROOF_ELEMENT):
+            self._record_element_area_origin(element)
 
-        # Window special case: rescale the per-direction TABULA window areas so their
-        # total matches the window area derived above. The divisor is the *reference*
-        # window area (findings log entries 1 and 2, hisim-component-physics-4g9.1). A code whose reference
-        # areas are both zero has no distribution to rescale. When the row has no window
-        # data anywhere the factor is 0, consistent with the window area of 0 derived from
-        # the same reference. When it states its windows per direction only, those windows
-        # would vanish silently, and a configured window area would count in the
-        # transmission losses but vanish from every orientation: both are refused by name.
-        tabula_reference_window_area_in_m2 = self._tabula_reference_area_in_m2(self.WINDOW_ELEMENT)
-        if tabula_reference_window_area_in_m2 == 0:
-            self._refuse_windows_without_a_reference_window_area()
-            self.window_scaling_factor = 0.0
+        if self.buildingconfig.windows is not None:
+            # Configured windows: the window area is their sum, and the row's per-direction
+            # areas are not consulted, so there is nothing to rescale and the factor scales
+            # nothing. A window area configured beside the list would be a second statement
+            # of the same quantity, so it is refused.
+            if self.buildingconfig.window_area_in_m2 is not None:
+                raise ValueError(
+                    f"building code {self.buildingconfig.building_code}: windows are configured as a list of "
+                    f"{len(self.buildingconfig.windows)} and a window area of "
+                    f"{self.buildingconfig.window_area_in_m2} m2 is configured beside it; the list's sum is the "
+                    "window area, so leave window_area_in_m2 unset"
+                )
+            self.window_area_in_m2 = self._left_associated_float_sum(float(window.area_in_m2) for window in self.buildingconfig.windows)
+            self.window_scaling_factor = 1.0
+            self.windows_directions: List[str] = []
+            self.scaled_window_areas_in_m2: List[float] = []
+            self._record_origin("window_area_in_m2", ValueOrigin.CONFIGURED, "the sum of the configured windows")
         else:
-            self.window_scaling_factor = self.window_area_in_m2 / tabula_reference_window_area_in_m2
-        self.windows_directions: List[str] = list(self.WINDOWS_DIRECTIONS)
-        self.scaled_window_areas_in_m2: List[float] = [
-            float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0]) * self.window_scaling_factor
-            for windows_direction in self.windows_directions
-        ]
+            self.window_area_in_m2 = self._scaled_element_area_in_m2(self.WINDOW_ELEMENT)
+            self._record_element_area_origin(self.WINDOW_ELEMENT)
+
+            # Window special case: rescale the per-direction TABULA window areas so their
+            # total matches the window area derived above. The divisor is the *reference*
+            # window area (findings log entries 1 and 2, hisim-component-physics-4g9.1). A code whose reference
+            # areas are both zero has no distribution to rescale. When the row has no window
+            # data anywhere the factor is 0, consistent with the window area of 0 derived from
+            # the same reference. When it states its windows per direction only, those windows
+            # would vanish silently, and a configured window area would count in the
+            # transmission losses but vanish from every orientation: both are refused by name.
+            tabula_reference_window_area_in_m2 = self._tabula_reference_area_in_m2(self.WINDOW_ELEMENT)
+            if tabula_reference_window_area_in_m2 == 0:
+                self._refuse_windows_without_a_reference_window_area()
+                self.window_scaling_factor = 0.0
+            else:
+                self.window_scaling_factor = self.window_area_in_m2 / tabula_reference_window_area_in_m2
+            self.windows_directions = list(self.WINDOWS_DIRECTIONS)
+            self.scaled_window_areas_in_m2 = [
+                float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0]) * self.window_scaling_factor for windows_direction in self.windows_directions
+            ]
 
         # Door special case: a row without a reference door area gets TABULA's estimated
         # door instead of none (see _door_area_in_m2_and_origin).
         self.door_area_in_m2, self._door_area_origin = self._door_area_in_m2_and_origin()
+        self._record_origin(
+            "door_area_in_m2",
+            ValueOrigin.CONFIGURED if self.buildingconfig.door_area_in_m2 is not None else ValueOrigin.TABULA_ROW,
+            self._door_area_origin,
+        )
 
         self.building_total_area_in_m2 = (
             self.window_area_in_m2
@@ -986,18 +1242,45 @@ class BuildingInformation:
         self._record_element_values(element, u_value, adjustment_factor, origin)
         return u_value, adjustment_factor
 
+    def _configured_adjustment_factor(self, element: EnvelopeElement) -> Optional[float]:
+        """Return the element's configured transmission adjustment factor, or ``None`` when it has no field or it is unset."""
+        if not element.configured_adjustment_factor_field:
+            return None
+        configured_factor: Optional[float] = getattr(self.buildingconfig, element.configured_adjustment_factor_field)
+        return configured_factor
+
     def _record_element_values(
         self, element: EnvelopeElement, u_value: float, adjustment_factor: float, origin: str
     ) -> None:
-        """Record what the building uses for one element, as :py:meth:`element_values` hands it out."""
+        """Record what the building uses for one element, as :py:meth:`element_values` hands it out.
+
+        The origins of :py:meth:`value_origins` are recorded beside it, under the element's two
+        configured-field names and ``<element>_adjustment_factor``.
+        """
         configured = getattr(self.buildingconfig, element.configured_u_value_field) is not None
+        factor_configured = self._configured_adjustment_factor(element) is not None
+        from_row = bool(element.transmission_adjustment_columns) and not configured and not factor_configured
         self._element_values[element.element_name] = self.ElementValues(
             u_value_in_watt_per_m2_per_kelvin=u_value,
             adjustment_factor=adjustment_factor,
             fixed_adjustment_factor=element.fixed_adjustment_factor,
-            adjustment_factor_from_tabula_row=bool(element.transmission_adjustment_columns) and not configured,
+            adjustment_factor_from_tabula_row=from_row,
             u_value_origin=origin,
         )
+        self._record_origin(
+            element.configured_u_value_field,
+            ValueOrigin.CONFIGURED if configured else ValueOrigin.TABULA_ROW,
+            element.configured_u_value_field if configured else origin,
+        )
+        if factor_configured:
+            factor_source, factor_detail = ValueOrigin.CONFIGURED, element.configured_adjustment_factor_field
+        elif from_row:
+            factor_source = ValueOrigin.TABULA_ROW
+            factor_detail = f"the largest of {' / '.join(element.transmission_adjustment_columns)}"
+        else:
+            factor_source = ValueOrigin.DERIVED
+            factor_detail = f"the fixed factor {element.fixed_adjustment_factor} of the {element.element_name}"
+        self._record_origin(f"{element.element_name}_adjustment_factor", factor_source, factor_detail)
 
     def _element_u_value_and_adjustment_factor(self, element: EnvelopeElement) -> Tuple[float, float]:
         """Return the U-value [W/(m2 K)] and transmission adjustment factor of one element.
@@ -1014,10 +1297,15 @@ class BuildingInformation:
         the division only when the reference area is zero (door and window, hisim-component-physics-4g9.1
         for the window's two columns) and keeps the raw first U-value. The
         adjustment factor is the largest of the ``b_Transmission`` columns when the
-        descriptor names any, and the fixed factor otherwise (window and door).
+        descriptor names any, and the fixed factor otherwise (window and door). A configured
+        adjustment factor (:attr:`EnvelopeElement.configured_adjustment_factor_field`) replaces
+        either, as given.
         """
+        configured_factor = self._configured_adjustment_factor(element)
         configured_u_value: Optional[float] = getattr(self.buildingconfig, element.configured_u_value_field)
         if configured_u_value is not None:
+            if configured_factor is not None:
+                return configured_u_value, configured_factor
             return configured_u_value, element.fixed_adjustment_factor
 
         u_values = [float(self.buildingdata_ref[u_value_column].values[0]) for u_value_column in element.u_value_columns]
@@ -1037,7 +1325,9 @@ class BuildingInformation:
                 / total_reference_area_in_m2
             )
 
-        if element.transmission_adjustment_columns:
+        if configured_factor is not None:
+            adjustment_factor = configured_factor
+        elif element.transmission_adjustment_columns:
             adjustment_factor = max(
                 float(self.buildingdata_ref[adjustment_column].values[0])
                 for adjustment_column in element.transmission_adjustment_columns
@@ -1064,16 +1354,28 @@ class BuildingInformation:
         """Return the ventilation heat-transfer conductance of the building [W/K].
 
         The conductance is the volumetric heat capacity of air times the total air
-        exchange rate (use plus infiltration, from the TABULA row), the room height and
-        the scaled conditioned floor area. Requires the area pipeline to have run for the
-        scaled conditioned floor area.
+        exchange rate (use plus infiltration, each configured or the TABULA row's) times the air
+        volume: the configured one, or the row's room height times the scaled conditioned floor
+        area, multiplied in that order, which is pinned float behaviour. Requires the area
+        pipeline to have run for the scaled conditioned floor area.
         """
+        for quantity, field_name, column in (
+            ("use_air_change_rate_per_hour", "use_air_change_rate_per_hour", "n_air_use"),
+            ("infiltration_air_change_rate_per_hour", "infiltration_air_change_rate_per_hour", "n_air_infiltration"),
+        ):
+            if getattr(self.buildingconfig, field_name) is not None:
+                self._record_origin(quantity, ValueOrigin.CONFIGURED, field_name)
+            else:
+                self._record_origin(quantity, ValueOrigin.TABULA_ROW, column)
+        total_air_change_rate_per_hour = self.use_air_change_rate_per_hour + self.air_infiltration_rate_per_hour
+
+        if self.buildingconfig.conditioned_air_volume_in_m3 is not None:
+            self._record_origin("conditioned_air_volume_in_m3", ValueOrigin.CONFIGURED, "conditioned_air_volume_in_m3")
+            return self.HEAT_CAPACITY_OF_AIR_PER_VOLUME_IN_WATT_HOUR_PER_M3_PER_KELVIN * total_air_change_rate_per_hour * self.buildingconfig.conditioned_air_volume_in_m3
+        self._record_origin("conditioned_air_volume_in_m3", ValueOrigin.TABULA_ROW, "h_room times the scaled conditioned floor area")
         return (
             self.HEAT_CAPACITY_OF_AIR_PER_VOLUME_IN_WATT_HOUR_PER_M3_PER_KELVIN
-            * (
-                float(self.buildingdata_ref["n_air_use"].values[0])
-                + self.air_infiltration_rate_per_hour
-            )
+            * total_air_change_rate_per_hour
             * float(self.buildingdata_ref["h_room"].values[0])
             * self.scaled_conditioned_floor_area_in_m2
         )
@@ -1088,8 +1390,15 @@ class BuildingInformation:
                 self.buildingconfig.initial_internal_temperature_in_celsius
                 - self.heating_reference_temperature_in_celsius
             )
+            self._record_origin(
+                "max_thermal_building_demand_in_watt",
+                ValueOrigin.DERIVED,
+                "(transmission + ventilation conductance) times (initial indoor temperature - heating reference "
+                "temperature); the thermal-bridging conductance is in the transmission total",
+            )
         else:
             self.max_thermal_building_demand_in_watt = self.buildingconfig.max_thermal_building_demand_in_watt
+            self._record_origin("max_thermal_building_demand_in_watt", ValueOrigin.CONFIGURED, "max_thermal_building_demand_in_watt")
 
     def get_number_of_apartments(
         self,
@@ -1110,19 +1419,27 @@ class BuildingInformation:
         if self.buildingconfig.number_of_apartments is not None:
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
             use_average_apartment_size_fallback = number_of_apartments_origin == 0
+            origin_source, origin_detail = ValueOrigin.CONFIGURED, "number_of_apartments"
         else:
             number_of_apartments_origin = float(buildingdata["n_Apartment"].values[0])
             # if no value given or if the area given in the config is bigger than the tabula ref area
             use_average_apartment_size_fallback = number_of_apartments_origin == 0 or scaling_factor != 1
+            origin_source, origin_detail = ValueOrigin.TABULA_ROW, "n_Apartment"
 
         if use_average_apartment_size_fallback:
             # check table from the link for the year 2021
             number_of_apartments = conditioned_floor_area_in_m2 / self.AVERAGE_LIVING_AREA_PER_APARTMENT_IN_2021_IN_M2
+            origin_source = ValueOrigin.DERIVED
+            origin_detail = (
+                f"the conditioned floor area over {self.AVERAGE_LIVING_AREA_PER_APARTMENT_IN_2021_IN_M2} m2 per "
+                f"apartment, because {origin_detail} is 0 or the building is rescaled"
+            )
         elif number_of_apartments_origin > 0:
             number_of_apartments = number_of_apartments_origin
         else:
             raise ValueError("Number of apartments can not be negative.")
 
+        self._record_origin("number_of_apartments", origin_source, origin_detail)
         return number_of_apartments
 
     def set_reference_data_from_tabula(

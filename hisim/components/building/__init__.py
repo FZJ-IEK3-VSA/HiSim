@@ -55,8 +55,8 @@ Note on the package layout:
 """
 
 from hisim.components.building.building import Building, BuildingState
-from hisim.components.building.config import BuildingConfig
-from hisim.components.building.information import BuildingInformation, CellarCondition, ZeroReferenceWindowAreaError
+from hisim.components.building.config import BuildingConfig, ConfiguredWindow
+from hisim.components.building.information import BuildingInformation, CellarCondition, ValueOrigin, ZeroReferenceWindowAreaError
 from hisim.components.building.window import Window
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -73,6 +73,8 @@ __all__ = [
     "BuildingConfig",
     "BuildingInformation",
     "CellarCondition",
+    "ConfiguredWindow",
+    "ValueOrigin",
     "ZeroReferenceWindowAreaError",
     "BuildingState",
     "Window",

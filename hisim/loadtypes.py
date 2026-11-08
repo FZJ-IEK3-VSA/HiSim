@@ -563,6 +563,15 @@ class InandOutputType(str, enum.Enum):
     MAXIMUM_CHARGING_POWER = "MaximumChargingPower"
     #: The smallest power a storage charges with; an offer at or below it is not taken.
     MINIMUM_CHARGING_POWER = "MinimumChargingPower"
+    #: The electrical power a device draws at full load, from the temperatures at the step's start; a signal, no energy.
+    FULL_LOAD_ELECTRICITY = "FullLoadElectricity"
+    #: The electrical power a device draws at its minimum load, from the temperatures at the step's start; a signal.
+    MINIMUM_LOAD_ELECTRICITY = "MinimumLoadElectricity"
+    #: The electrical power a device's L1 controller would run it at without the energy manager's raise, from the
+    #: state at the step's start; a signal, no energy.
+    OWN_NEED_ELECTRICITY = "OwnNeedElectricity"
+    #: 1 while a charge runs that its L1 controller would run without the energy manager's raise, else 0; a signal.
+    OWN_NEED_CHARGE = "OwnNeedCharge"
     CHARGE_DISCHARGE = "ChargeDischarge"
     CHARGE = "Charge"
     DISCHARGE = "Discharge"

@@ -57,8 +57,8 @@ components:
     inputs:
       - MoreAdvancedHeatPumpHPLib
       - Weather
-      - HeatingCurveController
       - L2EMSElectricityController
+      - HeatingCurveController
       - SimpleHotWaterStorage
   HeatPumpControllerDHW:
     class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
@@ -211,6 +211,11 @@ components:
         tags:
           - MINIMUM_CHARGING_POWER
         weight: 999
+      - from: HeatPumpControllerDHW.ChargesWithoutRaise
+        component_type: HEAT_PUMP_DHW
+        tags:
+          - OWN_NEED_CHARGE
+        weight: 999
       - from: L1EVChargeControl_1.BatteryChargingPowerToEMS
         component_type: CAR_BATTERY
         tags:
@@ -218,6 +223,11 @@ components:
         weight: 5
         dispatch:
           target_input: ElectricityTargetFromEMS
+      - from: MoreAdvancedHeatPumpHPLibControllerSH.OwnNeedElectricalPowerInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - OWN_NEED_ELECTRICITY
+        weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
         component_type: HEAT_PUMP_DHW
         tags:
@@ -230,6 +240,16 @@ components:
           - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
         weight: 2
         dispatch: {}
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - FULL_LOAD_ELECTRICITY
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - MINIMUM_LOAD_ELECTRICITY
+        weight: 999
       - from: PVSystem.ElectricityOutput
         component_type: PV
         tags:

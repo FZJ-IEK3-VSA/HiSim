@@ -36,10 +36,10 @@ components:
     class: hisim.components.more_advanced_heat_pump.controller_space_heating.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard
     inputs:
-      - HeatPump                                            # ActualPartLoadRatioSh
+      - HeatPump                                            # ActualPartLoadRatioSh, the full-load electricity
       - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier, the PV-mode target
       - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
-      - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   HeatPump:
     class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
@@ -50,7 +50,7 @@ components:
       standardized_scop_en14825_w55: {$param: scop_en14825_w55}
     inputs:
       - ControllerSH
-      - Buffer                                              # TemperatureInputSecondarySH
+      - Buffer                                              # TemperatureInputSecondarySH, its start-of-step temperature
       - {$port: ambient}                                    # the two weather wires (G2)
   Buffer:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
@@ -81,8 +81,8 @@ tests:
   # One day at 900 s beside the site partners (the building it heats, its heat distribution, an energy manager, the
   # grid). Powers are bounded by the largest machine of the box (20 kW rated; hplib's output at a mild
   # ambient exceeds the rating, so 2x), per-step energies by power x 0.25 h, the day's cumulative ones by power x 24 h.
-  # Water stays liquid, flows below hplib's 75 °C limit plus margin. The controllers have no energy-carrying or
-  # temperature output; the heat pump has no DHW outputs.
+  # Water stays liquid, flows below hplib's 75 °C limit plus margin. The controllers' only power output is the
+  # space-heating controller's own need, a signal bounded by the heat pump's electricity; they have no temperature output; the heat pump has no DHW outputs.
   bounds:
     - {output: HeatPump.ThermalOutputPowerSH, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ElectricalInputPowerSH, unit: WATT, min: 0, max: 20000}               # 40 kW at a COP >= 2
@@ -112,6 +112,12 @@ tests:
       # the fraction of the step the space-heating charge runs: 1 at and below the part-load threshold
     - {output: ControllerSH.TargetTemperatureShInCelsius, unit: CELSIUS, min: 0, max: 100}
       # the heating curve's supply temperature plus the energy manager's raise, at which the charge ends the buffer
+    - {output: ControllerSH.OwnNeedElectricalPowerInWatt, unit: WATT, min: 0, max: 20000}
+      # the space-heating electricity the controller would run without the energy manager's raise: at most the full load
+    - {output: HeatPump.ElectricalPowerAtFullLoadSpaceHeatingInWatt, unit: WATT, min: 0, max: 20000}
+      # what the heat pump would draw at full load from the step's start temperatures, a signal; 40 kW at a COP >= 2
+    - {output: HeatPump.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt, unit: WATT, min: 0, max: 20000}
+      # the minimum thermal power over the full-load COP, at most the full load
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}

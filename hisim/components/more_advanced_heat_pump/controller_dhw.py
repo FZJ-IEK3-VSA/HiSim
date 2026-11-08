@@ -179,6 +179,9 @@ class HeatPumpDhwControllerState(NamedTuple):
     hot_water_priority_timer: HotWaterPriorityTimer
     #: The hot-water supply temperature the controller aims at, ``t_max`` plus the energy manager's raise, in °C.
     supply_temperature_set_for_dhw_in_celsius: float
+    #: The hysteresis decision without the energy manager's raise, which the next step starts from: whether the
+    #: controller would charge the tank on its own.
+    charge_without_raise: HeatPumpDhwState
 
 
 class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhwControllerState], L1ControllerComponent):
@@ -192,6 +195,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
     state at the start of the step (:meth:`decide`), and a forced pass republishes the state of the last unforced pass,
     which is also the state the step commits. Before, each pass decided from the pass before it, so a decision of any
     pass latched for the rest of the step (hisim-component-physics-4g9.24).
+
+    The controller also keeps the charge it would run without the energy manager's raise and publishes whether the
+    commanded charge is that own need (``ChargesWithoutRaise``), so the energy manager counts only such a charge's draw
+    as the heat pump's own need.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -207,6 +214,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
+    #: 1 while the heat pump charges the tank on a charge the controller would run without the raise, else 0.
+    ChargesWithoutRaise = "ChargesWithoutRaise"
 
     def __init__(
         self,
@@ -272,6 +281,19 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
                 "The hot-water supply temperature the controller aims at, t_max plus the energy manager's raise "
                 "(60 °C by default). The heat pump's hot-water supply stops at it, and a charge ends once the tank "
                 "is within the controller's charge end (2 K by default) of it."
+            ),
+        )
+
+        self.charges_without_raise_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ChargesWithoutRaise,
+            LoadTypes.ANY,
+            Units.BINARY,
+            output_description=(
+                "1 while the controller commands a hot-water charge that it would run without the energy manager's "
+                "raise, else 0: its own hysteresis at the unraised set temperature, on the tank's start-of-step "
+                "temperature. A charge only the raise starts is 0. The energy manager reads it to count the heat "
+                "pump's hot-water draw as its own need."
             ),
         )
 
@@ -345,6 +367,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             commanded_charge=HeatPumpDhwState.OFF,
             hot_water_priority_timer=HotWaterPriorityTimer(),
             supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+            charge_without_raise=HeatPumpDhwState.OFF,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -432,6 +455,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
         A first pass of the run reads the tank's zeroed output, 0 °C, and asks for a charge; the next pass decides
         again from the start of the step on the tank's real temperature, so that request does not last.
 
+        The same hysteresis decides a second time with no raise, from the charge without the raise the step started
+        with: whether the charge is the controller's own need (:attr:`ChargesWithoutRaise`).
+
         Args:
             timestep: The step.
             stsv: The step's values, to read the inputs from.
@@ -441,10 +467,19 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             The new state.
         """
         raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)
+        storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
         charge = self.next_state(
             state=state.charge,
-            storage_temperature_in_celsius=stsv.get_input_value(self.water_temperature_input_channel),
+            storage_temperature_in_celsius=storage_temperature_in_celsius,
             raise_in_kelvin=raise_in_kelvin,
+            minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
+            maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
+            charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
+        )
+        charge_without_raise = self.next_state(
+            state=state.charge_without_raise,
+            storage_temperature_in_celsius=storage_temperature_in_celsius,
+            raise_in_kelvin=0.0,
             minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
             maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
             charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
@@ -462,10 +497,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             commanded_charge=charge if charges else HeatPumpDhwState.OFF,
             hot_water_priority_timer=timer,
             supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin,
+            charge_without_raise=charge_without_raise,
         )
 
     def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpDhwControllerState) -> None:
-        """Write the outputs that belong to ``state``: the commanded charge and the set temperature.
+        """Write the outputs that belong to ``state``: the commanded charge, the set temperature and the own charge.
 
         Args:
             stsv: The step's values, to write the outputs to.
@@ -475,6 +511,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
         stsv.set_output_value(
             self.supply_temperature_set_for_dhw_in_celsius_channel, state.supply_temperature_set_for_dhw_in_celsius
         )
+        charges_on_its_own = (
+            state.commanded_charge == HeatPumpDhwState.ON and state.charge_without_raise == HeatPumpDhwState.ON
+        )
+        stsv.set_output_value(self.charges_without_raise_channel, 1.0 if charges_on_its_own else 0.0)
 
     @staticmethod
     def get_cost_capex(

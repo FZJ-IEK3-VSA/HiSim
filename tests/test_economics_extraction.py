@@ -1297,6 +1297,7 @@ _ENERGY_BALANCE_MODULES = {
     "UtspLpgConnector": "loadprofilegenerator_utsp_connector",
     "ElectricityMeter": "electricity_meter",
     "L2GenericEnergyManagementSystem": "controller_l2_energy_management_system",
+    "MoreAdvancedHeatPumpHPLibControllerSpaceHeating": "more_advanced_heat_pump.controller_space_heating",
     "FuelCellController": "controller_l1_fuel_cell",
     "L1Controller": "controller_l1_generic_ev_charge",
     "PTXController": "controller_l2_ptx_energy_management_system",

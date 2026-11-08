@@ -550,7 +550,7 @@ class PostProcessor:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt, building_objects_in_district_list)
 
-        if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
+        if self.writes_all_kpis(ppdt):
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
 
@@ -1251,6 +1251,19 @@ class PostProcessor:
         """
         options = ppdt.post_processing_options
         return PostProcessingOptions.EXPORT_ENERGY_BALANCE in options or PostProcessingOptions.PLOT_SANKEY in options
+
+    @staticmethod
+    def writes_all_kpis(ppdt: PostProcessingDataTransfer) -> bool:
+        """Whether the run writes ``all_kpis.json``: ``WRITE_KPIS_TO_JSON`` or ``PLOT_SANKEY``.
+
+        ``PLOT_SANKEY`` implies the file, since the figure's caption reads the run's key results (grid import and
+        export, self-consumption, self-sufficiency) from it, also when the figure is redrawn later from the result
+        directory. An energy-system file with ``PLOT_SANKEY`` must also set ``COMPUTE_KPIS`` (``EF-07``); a Python
+        setup may leave it out, and then there are no KPIs to write, the file is not written and the caption says so.
+        """
+        options = ppdt.post_processing_options
+        computes_kpis = PostProcessingOptions.COMPUTE_KPIS in options
+        return PostProcessingOptions.WRITE_KPIS_TO_JSON in options or (PostProcessingOptions.PLOT_SANKEY in options and computes_kpis)
 
     @staticmethod
     def plot_sankey(ppdt: PostProcessingDataTransfer) -> None:

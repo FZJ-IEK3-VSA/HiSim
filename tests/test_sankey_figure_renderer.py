@@ -698,6 +698,12 @@ def test_plot_sankey_implies_the_export_and_draws_the_figure(tmp_path: Path) -> 
     quiet = cast(Any, SimpleNamespace(post_processing_options=[], simulation_parameters=SimpleNamespace(result_directory=str(tmp_path / "quiet"))))
     exporting = cast(Any, SimpleNamespace(post_processing_options=[PostProcessingOptions.EXPORT_ENERGY_BALANCE]))
     assert PostProcessor.writes_energy_balance(plotting) and PostProcessor.writes_energy_balance(exporting) and not PostProcessor.writes_energy_balance(quiet)
+    # the figure's caption reads all_kpis.json, so PLOT_SANKEY writes it as WRITE_KPIS_TO_JSON does
+    # (when the KPIs are computed; a Python setup may set PLOT_SANKEY without COMPUTE_KPIS, and then nothing is written)
+    writing = cast(Any, SimpleNamespace(post_processing_options=[PostProcessingOptions.WRITE_KPIS_TO_JSON]))
+    plotting_with_kpis = cast(Any, SimpleNamespace(post_processing_options=[PostProcessingOptions.PLOT_SANKEY, PostProcessingOptions.COMPUTE_KPIS]))
+    assert PostProcessor.writes_all_kpis(plotting_with_kpis) and PostProcessor.writes_all_kpis(writing)
+    assert not PostProcessor.writes_all_kpis(plotting) and not PostProcessor.writes_all_kpis(quiet)
     PostProcessor.plot_sankey(quiet)
     assert not (tmp_path / "quiet").exists()
     PostProcessor.plot_sankey(plotting)

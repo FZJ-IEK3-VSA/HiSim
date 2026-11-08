@@ -7,6 +7,7 @@ table itself.
 """
 
 import math
+from types import MappingProxyType
 from typing import Any, List
 
 import numpy as np
@@ -325,7 +326,12 @@ class TestNoPortOnANode:
 
 
 class TestPortLinked:
-    """``AR-09``: a port that moves energy has a peer; it only logs."""
+    """``AR-09``: a port that moves energy has a peer; it refuses every run but a demo's."""
+
+    @staticmethod
+    def heater_without_peers() -> EnergyBalanceReport:
+        """A heater whose two space-heating ports no component reads and whose carrier has no boundary default."""
+        return report([("Heater", "Heat", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.1]), ("Heater", "Gas", lt.Units.KWH, EnergyPort(CONSUMPTION, SH), [0.1])])
 
     def test_an_unread_port_is_a_fault_and_one_with_a_boundary_none(self) -> None:
         """Catches energy drawn to nowhere, and a fault for a port its carrier's boundary node takes."""
@@ -336,15 +342,35 @@ class TestPortLinked:
         assert codes_and_places([fault]) == [("AR-09", "Pump", "Power")]
         assert "the energy port Pump.Power (consumption, electricity, 0.1 kWh) has no peer" in fault.message
         assert not PortLinked().check(fft.AfterRunRules.subject(report([("Heater", "Heat", lt.Units.KWH, outdoors, [0.1])])))
-        assert not PortLinked.ENFORCED
+        assert PortLinked.ENFORCED
 
-    def test_its_faults_are_logged_and_the_run_passes(self) -> None:
-        """Catches the log-only rule refusing a run, which the balance report has always only listed."""
-        balance = report([("Heater", "Heat", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [0.1]), ("Heater", "Gas", lt.Units.KWH, EnergyPort(CONSUMPTION, SH), [0.1])])
+    @pytest.mark.parametrize("kind", [SetupKind.RESIDENTIAL, SetupKind.COMMERCIAL, SetupKind.PLANT])
+    def test_every_kind_but_a_demo_is_refused(self, kind: SetupKind) -> None:
+        """Catches an unlinked port that a house, an office or a plant runs with, and the waiver reaching a kind it does not name."""
+        with pytest.raises(EnergyBalanceError, match=r"AR-09 port-linked: the energy port Heater\.Gas"):
+            fft.AfterRunRules.refuse(self.heater_without_peers(), kind)
 
-        findings = SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, fft.AfterRunRules.subject(balance), SetupKind.RESIDENTIAL)
+    def test_a_demo_runs_with_an_unlinked_port(self) -> None:
+        """Catches the rule refusing a demonstration whose occupancy runs without a building; the port stays in the report."""
+        balance = self.heater_without_peers()
 
-        assert not findings.faults and "AR-09" in {fault.code for fault in findings.logged}
+        findings = SetupRuleRegistry.collect().run(RuleStage.AFTER_RUN, fft.AfterRunRules.subject(balance), SetupKind.DEMO)
+
+        assert not findings.faults and "AR-09" not in {fault.code for fault in findings.logged}
+        assert [series.name for series in balance.declared.unlinked()] == ["Heater.Heat", "Heater.Gas"]
+
+    def test_without_its_waiver_the_rule_refuses_the_demo_too(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Catches a demo that passes because the rule skips it some other way, not because of the waiver it declares."""
+        monkeypatch.setattr(PortLinked, "WAIVED_FOR", MappingProxyType({}))
+
+        with pytest.raises(EnergyBalanceError, match=r"AR-09 port-linked: the energy port Heater\.Gas"):
+            fft.AfterRunRules.refuse(self.heater_without_peers(), SetupKind.DEMO)
+
+    def test_the_waiver_states_its_reason(self) -> None:
+        """Catches a waiver for another kind, or one whose reason drifted from the owner's decision of 2026-11-07."""
+        assert PortLinked.WAIVED_FOR == {
+            SetupKind.DEMO: "a demo may run an occupancy without a building; the room heat it does not place is reported as unlinked"
+        }
 
 
 class TestComponentDeclared:
@@ -365,6 +391,20 @@ class TestComponentDeclared:
 class TestTheFamily:
     """What the rules of the balance share: the error they raise and the one balance they read."""
 
+    @staticmethod
+    def linked_vessel() -> EnergyBalanceReport:
+        """A vessel that closes and whose heat comes from and goes to the outdoors, so every port has a peer."""
+        outdoors = lt.EnvironmentNode.OUTDOORS
+        heat_in, heat_out, loss, stored = vessel(4000.0, 700.0, 200.0, 250.0)
+        return report(
+            [
+                (*heat_in[:3], EnergyPort(CONSUMPTION, SH, environment=outdoors), heat_in[4]),
+                (*heat_out[:3], EnergyPort(PRODUCTION, SH, environment=outdoors), heat_out[4]),
+                loss,
+                stored,
+            ]
+        )
+
     def test_the_balance_rules_raise_energy_balance_error(self) -> None:
         """Catches an ``except EnergyBalanceError`` (the assembly harness has one) that a balance fault would slip past."""
         rules = (ColumnsReadable, NoPortOnANode, PortFinite, ComponentBalanceCloses, LinkCloses, LoopFaults, PortLinked, ComponentDeclared)
@@ -374,7 +414,7 @@ class TestTheFamily:
     def test_the_subject_reads_the_balance_once(self) -> None:
         """Catches a balance computed again by every rule that reads it, which costs a year's table each time."""
         reads: List[int] = []
-        balance = report(vessel(4000.0, 700.0, 200.0, 250.0))
+        balance = self.linked_vessel()
 
         def read() -> EnergyBalanceReport:
             """Counts the reads."""
@@ -388,7 +428,7 @@ class TestTheFamily:
 
     def test_a_finite_table_and_a_closing_balance_pass_every_rule(self) -> None:
         """Catches a rule that refuses a run whose results and balance hold."""
-        balance = report(vessel(4000.0, 700.0, 200.0, 250.0))
+        balance = self.linked_vessel()
         subject = RunResults(
             results=pd.DataFrame(np.ones((1, 1)), index=pd.date_range("2021-01-01", periods=1, freq="900s")),
             outputs=tuple(Table.outputs(1)), components=(), timesteps=1, read_energy_balance=lambda: balance,

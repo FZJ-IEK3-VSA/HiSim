@@ -31,6 +31,7 @@ from hisim.postprocessing.energy_balance.sankey import SankeyDiagram
 from hisim.postprocessing.postprocessing_main import PostProcessor
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.setup_rules.energy_ports import EnergyPortWiringError, InputPortPairs
+from hisim.setup_rules.kinds import SetupKind
 from hisim.setup_rules.results import EnergyBalanceError
 from hisim.setup_rules.subjects import BuiltSystem
 from tests import functions_for_testing as fft
@@ -502,7 +503,8 @@ def test_without_a_result_directory_nothing_is_written_and_the_run_still_fails(t
             fft.AfterRunRules.post_processing(str(tmp_path), export=False), fft.AfterRunRules.subject(report(vessel(4000.0, 300.0, 200.0, 150.0)))
         )
     closing = report(vessel(4000.0, 700.0, 200.0, 250.0))
-    fft.AfterRunRules.refuse(closing)
+    # the vessel's heat has no peer (AR-09), which a demo may leave unlinked
+    fft.AfterRunRules.refuse(closing, SetupKind.DEMO)
     assert closing.conclude(None) is None
     assert not list(tmp_path.iterdir())
 
@@ -556,7 +558,8 @@ def test_a_component_without_ports_is_undeclared_never_failing(tmp_path: Path) -
         [("Tank", "Temperature", lt.Units.CELSIUS, None, [40.0]), *vessel(4000.0, 700.0, 200.0, 250.0)],
         extra_components=["Weather"],
     )
-    fft.AfterRunRules.refuse(balance_report)
+    # the vessel's heat has no peer (AR-09), which a demo may leave unlinked
+    fft.AfterRunRules.refuse(balance_report, SetupKind.DEMO)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())
@@ -919,7 +922,8 @@ def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> Non
         "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
     }
     balance_report = report(columns, inputs=inputs, extra_components=["Building"])
-    fft.AfterRunRules.refuse(balance_report)
+    # the tank's electricity and the loop's heat to the undeclared building have no peer (AR-09), which a demo may leave
+    fft.AfterRunRules.refuse(balance_report, SetupKind.DEMO)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     (entry,) = json.loads(report_path.read_text())["links"]
@@ -1508,7 +1512,7 @@ def test_a_car_battery_whose_car_does_not_read_it_leaves_its_discharge_unlinked_
 
 @pytest.mark.base
 def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_path: Path) -> None:
-    """Only a helper reads the boiler's flow: the heat has no peer; the report lists the port as unlinked."""
+    """Only a helper reads the boiler's flow: the heat has no peer; the report lists the port as unlinked, and only a demo passes."""
     columns: List[Column] = [
         ("Boiler", "AmbientIn", lt.Units.KWH, EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.AMBIENT_HEAT), [1.0]),
         ("Boiler", "HeatOut", lt.Units.KWH, EnergyPort(PRODUCTION, SH), [1.0]),
@@ -1520,7 +1524,9 @@ def test_a_heat_port_whose_only_reader_is_exempt_is_unlinked_and_reported(tmp_pa
         extra_components=["Sum"],
         classes={"Sum": Helper},
     )
-    fft.AfterRunRules.refuse(balance_report)
+    with pytest.raises(EnergyBalanceError, match=r"AR-09 port-linked: the energy port Boiler\.HeatOut"):
+        fft.AfterRunRules.refuse(balance_report)
+    fft.AfterRunRules.refuse(balance_report, SetupKind.DEMO)
     report_path = balance_report.conclude(str(tmp_path), with_html=False)
     assert report_path is not None
     written = json.loads(report_path.read_text())

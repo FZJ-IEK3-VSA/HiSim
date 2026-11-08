@@ -1012,11 +1012,11 @@ class Inventory:
         ),
         RuleRecord(
             rule_id="results.port_linked", codes=("AR-09",), nature=RuleNature.DOMAIN, target="results", stage=RuleStage.AFTER_RUN, when="after the run",
-            enforcement="L (the acceptance PR makes it E)", checks="a non-idle port has a peer",
+            enforcement="E (since the acceptance of the complete Sankeys, PR 6)", checks="a non-idle port has a peer",
             lives="hisim/setup_rules/results.py:PortLinked",
             note=(
-                "the spec's row names a demo waiver, its sections 4.2 and 4.6 none (a demo's unlinked heat is reported); "
-                "waived for no kind; the unlinked ports are computed by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unlinked"
+                "waived for demo (owner decision 2026-11-07: a demo's occupancy without a building leaves its room heat unlinked); "
+                "the unlinked ports are computed by hisim/postprocessing/energy_balance/ports.py:DeclaredPorts.unlinked"
             ),
         ),
         RuleRecord(

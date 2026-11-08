@@ -5,7 +5,7 @@ three non-negative parts instead (bead hisim-hplib-cooling-rejection-node-q4m7, 
 ``roadmap/complete_energy_sankeys_spec.md``): ``HeatFromAmbientInWatt``, the heat taken from the source while the
 machine does not cool, to "ambient heat source"; ``HeatToAmbientInWatt``, the drawn heat plus the electricity it
 rejects while cooling, to "ambient heat sink"; and ``ElectricityLostInWatt``, the electricity beyond the heat in a step
-that heats at a calibrated coefficient of performance below 1, to "outdoors". Their difference is the signed output in
+that heats at a calibrated coefficient of performance below 1, to "heat loss to outdoors". Their difference is the signed output in
 every step.
 """
 

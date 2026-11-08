@@ -939,7 +939,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             unit=Units.WATT,
             output_description=(
                 "Electricity beyond the heat delivered in a step that does not cool in W, >= 0: at a coefficient of "
-                f"performance below 1, minus {self.ThermalPowerFromEnvironment}, else 0. Lost to the outdoors."
+                f"performance below 1, minus {self.ThermalPowerFromEnvironment}, else 0. Booked to 'heat loss to outdoors'."
             ),
             energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )

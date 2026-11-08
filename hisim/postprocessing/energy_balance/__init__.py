@@ -5,7 +5,8 @@ the declared ports and the meters of a run and finds each port's peer through th
 also through the exempt controllers, or a component that moves energy, else the port's carrier default; ``check``
 computes each component's balance and each link between declared components (both sides must book it); ``meters``
 computes per step whether each meter publishes what it reads from the declared ports linked to it, and which
-metered ports pass no meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier;
+metered ports pass no meter; ``sankey`` draws the yearly flows as one connected graph with one filter per carrier,
+and makes each view readable for its HTML (solar losses netted in ``overall``, small nodes merged, one-line labels);
 ``export`` writes the report and the Sankeys into the result directory. The balance is computed in every
 simulation, and the setup rules after the run (``hisim/setup_rules/results.py``, ``hisim/setup_rules/meters.py``)
 fail the run with :class:`~hisim.setup_rules.results.EnergyBalanceError` when it does not hold;

@@ -686,6 +686,27 @@ def test_the_sankey_files_are_written_into_the_result_directory(tmp_path: Path) 
 
 
 @pytest.mark.base
+def test_a_view_with_nothing_to_draw_stays_in_the_json_and_gets_no_html(tmp_path: Path) -> None:
+    """A chiller that books 0.5 Wh of cooling: the JSON keeps the cooling view, the drawing leaves out all of it.
+
+    Below 1 Wh a flow is not drawn (spec §4.8, hisim-sankey-readability-8e20), so the cooling view has no HTML; the
+    electricity view, with 1 kWh, has one.
+    """
+    columns: List[Column] = [
+        ("Heater", "In", lt.Units.WATT_HOUR, EnergyPort(CONSUMPTION, ELECTRICITY), [1000.0]),
+        ("Heater", "Loss", lt.Units.WATT_HOUR, EnergyPort(LOSS, ELECTRICITY), [1000.0]),
+        ("Chiller", "In", lt.Units.WATT_HOUR, EnergyPort(CONSUMPTION, COOLING), [0.5]),
+        ("Chiller", "Loss", lt.Units.WATT_HOUR, EnergyPort(LOSS, COOLING), [0.5]),
+    ]
+    report(columns).write(str(tmp_path))
+
+    written = json.loads((tmp_path / "energy_sankeys" / "energy_sankey.json").read_text())
+    assert set(written) == {"overall", "electricity", "cooling"}
+    assert written["cooling"]["links"][0]["value_kwh"] == pytest.approx(0.0005)
+    assert {path.name for path in (tmp_path / "energy_sankeys").glob("*.html")} == {"overall.html", "electricity.html"}
+
+
+@pytest.mark.base
 def test_a_receiver_booking_more_than_was_sent_within_the_tolerance_draws_no_negative_remainder() -> None:
     """The loop books 0.7004 kWh of the tank's 0.7: no link between the tank and unaccounted, the link closes."""
     balance_report = chain(received_watt_hour=700.4)
@@ -911,26 +932,6 @@ def test_a_sankey_is_titled_with_its_carrier_in_words() -> None:
     """The carrier's identifier is written as words in the title; ``overall`` reads "all carriers"."""
     assert SankeyDiagram.title("domestic_hot_water_heat") == "Energy flows over the run: domestic hot water heat (kWh)"
     assert SankeyDiagram.title("overall") == "Energy flows over the run: all carriers (kWh)"
-
-
-@pytest.mark.base
-def test_a_sankey_node_label_carries_the_energy_through_the_node() -> None:
-    """A printed Sankey shows no hover text, so each node label names its energy: the larger of in and out."""
-    diagram = {
-        "nodes": [{"name": "grid", "kind": "undeclared"}, {"name": "pump", "kind": "component"},
-                  {"name": "store", "kind": "undeclared"}, {"name": "ambient heat", "kind": "environment"}],
-        "links": [
-            {"source": 0, "target": 1, "value_kwh": 3621.6, "carrier": "electricity", "label": "a"},
-            {"source": 3, "target": 1, "value_kwh": 11630.7, "carrier": "ambient_heat", "label": "b"},
-            {"source": 1, "target": 2, "value_kwh": 15252.3, "carrier": "space_heating_heat", "label": "c"},
-        ],
-    }
-    assert SankeyDiagram.node_labels(diagram) == [
-        "grid<br>3,622 kWh",
-        "pump<br>15,252 kWh",
-        "store<br>15,252 kWh",
-        "ambient heat<br>11,631 kWh",
-    ]
 
 
 # --- input ports (decision D9 of roadmap/fluid_loops_spec.md) ------------------------------------------------------

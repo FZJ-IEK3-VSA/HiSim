@@ -22,7 +22,10 @@ reads); every breach of the loop rules;
 every meter with what it publishes, the ports it reads and whether the two agree; every unmetered port; every
 unlinked port; every undeclared component; and every exempt component with its reason. Beside it,
 ``energy_sankeys/`` holds ``energy_sankey.json`` (every view's nodes and links: ``overall``, the connected graph, and
-one filter per carrier) and one plotly HTML per view, which share one ``plotly.min.js``.
+one filter per carrier, every edge of each) and one plotly HTML per view with a flow to draw, which share one
+``plotly.min.js``. The HTML draws a view made readable (:class:`~.sankey.SankeyDrawing`: ``overall`` starts the PV at
+its electricity, flows below 1 Wh are left out, small nodes merge into "other" nodes, labels are one line); a view
+with nothing left to draw, such as a cooling view with a few mWh, gets no HTML.
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from hisim.postprocessing.energy_balance.check import (
 )
 from hisim.postprocessing.energy_balance.meters import MeterCheck
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts
-from hisim.postprocessing.energy_balance.sankey import SankeyBuilder, SankeyDiagram
+from hisim.postprocessing.energy_balance.sankey import SankeyBuilder, SankeyDiagram, SankeyDrawing
 
 
 class EnergyBalanceReport:
@@ -200,6 +203,8 @@ class EnergyBalanceReport:
     def write(self, result_directory: str, with_html: bool = True) -> Path:
         """Write the report and the Sankeys into ``result_directory``; this never fails the run.
 
+        The JSON holds every view with every edge; the HTML of a view is written when its drawing has a link left.
+
         Returns:
             The path of ``balance_report.json``.
         """
@@ -214,7 +219,10 @@ class EnergyBalanceReport:
             json.dump(diagrams, stream, indent=2)
         if with_html:
             for name, diagram in diagrams.items():
-                figure = SankeyDiagram.figure(diagram, SankeyDiagram.title(name))
+                drawing = SankeyDrawing.of(diagram, name)
+                if not drawing.links:
+                    continue
+                figure = drawing.figure(SankeyDiagram.title(name))
                 figure.write_html(str(sankey_directory / f"{name}.html"), include_plotlyjs="directory")
         return report_path
 

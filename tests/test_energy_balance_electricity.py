@@ -24,6 +24,7 @@ from typing import Any, ClassVar, Dict, Set, Tuple
 
 import pytest
 
+from hisim.postprocessing.energy_balance.sankey import NodeKind, SankeyDrawing
 from tests.test_energy_balance_generators import balance_entry, port_roles, run_household
 
 
@@ -174,3 +175,30 @@ def test_the_connected_diagram_draws_the_electricity_devices(twin: Tuple[str, Pa
     assert not {"undeclared: PVSystem", "undeclared: Battery", "undeclared: UTSPConnector"} & nodes
     report: Dict[str, Any] = json.loads((results / "balance_report.json").read_text(encoding="utf-8"))
     assert not report["unlinked"], "every port finds its peer"
+
+
+@pytest.mark.extendedbase2
+def test_the_drawn_overall_view_starts_the_pv_at_its_electricity_and_merges_its_small_nodes(
+    twin: Tuple[str, Path]
+) -> None:
+    """The HTML of ``overall`` draws no PV loss and no node below half a percent of its largest flow (spec §4.8).
+
+    The JSON keeps the sunlight's split (:func:`test_the_connected_diagram_draws_the_electricity_devices`); the
+    drawing nets it, so sun -> PVSystem carries the PV's electricity. Every node left below the threshold is a
+    boundary, a meter or a node that shows a fault, which are never merged, or an "other" node.
+    """
+    _, results = twin
+    diagrams: Dict[str, Any] = json.loads((results / "energy_sankeys" / "energy_sankey.json").read_text("utf-8"))
+    drawing = SankeyDrawing.of(diagrams["overall"], "overall")
+    drawn = {(link.source, link.target): link for link in drawing.links}
+    assert "PVSystem · ModuleAndInverterLossInWatt" not in {node.name for node in drawing.nodes}
+    pv_electricity = balance_entry(results, "PVSystem")["carriers"]["electricity"]["production_kwh"]
+    assert drawn[("sun", "PVSystem")].kilowatt_hours == pytest.approx(pv_electricity, rel=1e-9)
+    assert (results / "energy_sankeys" / "overall.html").exists()
+
+    kinds = {node["name"]: NodeKind(node["kind"]) for node in diagrams["overall"]["nodes"]}
+    threshold = SankeyDrawing.SMALL_FLOW_SHARE * max(link.kilowatt_hours for link in drawing.links)
+    for name, kilowatt_hours in SankeyDrawing.throughputs(drawing.links).items():
+        if kilowatt_hours < threshold:
+            assert name.startswith("other") or kinds[name] in SankeyDrawing.ALWAYS_DRAWN, name
+    assert all(link.kilowatt_hours >= SankeyDrawing.EMPTY_FLOW_IN_KILOWATT_HOUR for link in drawing.links)

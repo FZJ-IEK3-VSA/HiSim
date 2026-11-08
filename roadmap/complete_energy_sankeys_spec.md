@@ -1,7 +1,7 @@
 # Spec: one connected energy Sankey shows the whole house, from the grid, the fuels and the environment to every end use and loss
 
-Status: draft, D1 to D4 decided (owner, 2026-10-19), D1 revised for meters by Q-J (2026-10-20), open questions in
-§8. Nothing of §4 is built: today only the
+Status: draft, D1 to D4 decided (owner, 2026-10-19), D1 revised for meters by Q-J (2026-10-20), D4 amended for the
+drawing (2026-11-06, §4.8), open questions in §8. Nothing of §4 is built: today only the
 five heat generators declare energy ports, and the Sankeys are one diagram per carrier. Owner: Noah Pflugradt. Epic:
 hisim-energy-sankeys-9uoo, acceptance bead hisim-mzft. Builds on: #870 and #871 (the energy-port contract, the balance check, the
 per-carrier Sankeys), `roadmap/hydronic_coupling_spec.md` (stages B to D built, stage E is part of §9),
@@ -68,6 +68,17 @@ Consequence: the graph model (§4) does not depend on the drawing; one graph, on
 renderer is bead hisim-energy-sankeys-9uoo.19 (P3), with what it needs: orientation rules per node kind, losses as side branches,
 sources ordered left and sinks right.
 
+**D4 amendment — the HTML draws each view made readable; the JSON keeps every edge** (owner Noah Pflugradt,
+2026-11-06, bead hisim-sankey-readability-8e20). A full-year preview of five twins showed labels of nodes a few pixels
+high overlapping at both edges (plotly places a label beside its node and has no collision handling), the unconverted
+sunlight filling about three quarters of every `overall` with PV, raw output names (`ModuleAndInverterLossInWatt`)
+as labels, and 0 kWh nodes and views. Consequence: the HTML of a view is a drawing of it (§4.8): `overall` starts the
+PV at its electricity and the split of the sunlight is drawn in the `solar` view only, flows below 1 Wh are left out
+and a view with nothing left gets no HTML, nodes below 0.5 % of the view's largest flow merge into "other" nodes, one
+per sink, and labels are one line, "name · 1,234 kWh", with display names. `energy_sankey.json` keeps every view and
+every edge, unmerged: it is what tests and tools read, so it stays the whole graph, and a drawing step can change
+without touching a number. Q-D stands for the graph: the PV starts at the sun in the JSON and in the `solar` view.
+
 The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sankeys-9uoo: 0.1 % of the run's throughput, per step
 `max(1e-6 kWh, 0.1 %)`), and every failing balance or one-sided link fails the run (owner, 2026-10-02).
 
@@ -121,8 +132,9 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 | unaccounted | each component residual, each meter residual and each link difference | `unaccounted` | red |
 | undeclared | a physical component that declares no port and has no exemption: a coverage view until the acceptance PR, a failure after it (§9, PR 6) | `undeclared: Building` | light grey |
 
-Node labels use the component's display name once hisim-9w3g gives one, else its instance name; the loss and
-storage nodes add the port's display name.
+Node names in the graph and the JSON are the component's instance name, and for a loss or storage node the port's
+output name or `stored` after it. The drawing labels them with display names (§4.8): a component keeps its instance
+name (until hisim-9w3g gives components display names), a loss node's port is written in words.
 
 ### 4.2 Edge kinds and how an edge is formed
 
@@ -148,7 +160,7 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
    sun, body heat), or an `OUT` port to its environment node (hot water drawn at the taps, ambient heat sink,
    driving).
 6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to `outdoors` only in the
-   aggregate (the renderer may merge loss nodes, D4); the graph keeps one node per loss so that every loss is
+   aggregate (the drawing merges small loss nodes, §4.8); the graph keeps one node per loss so that every loss is
    readable where it occurs.
 7. **Storage edge**: a `STORED_CHANGE` port between the component and its storage node, component → storage when
    the run's net is positive (it charged), storage → component when negative.
@@ -288,6 +300,56 @@ through the wire that carries the fuel (owner, 2026-10-28):
 - No new carrier and no new node. The W copy-outputs PR 5c added for hydrogen go where the flow's own channel
   carries the port: `AdvancedElectrolyzer.HydrogenProductionInWatt`, `HydrogenStorage.HydrogenReceivedInWatt`,
   `CHP.FuelConsumptionInWatt` (no KPI reads any of them).
+
+### 4.8 Drawing a view (D4 amendment, 2026-11-06, hisim-sankey-readability-8e20)
+
+`energy_sankey.json` is the graph: every view, `overall` and one filter per carrier, with every edge of §4.2, which
+nothing below changes. The HTML of a view is a drawing of it (`SankeyDrawing` in
+`hisim/postprocessing/energy_balance/sankey.py`), made readable in four steps, in this order:
+
+1. **`overall` starts a solar converter at what it makes of the sunlight.** In the drawing of `overall` only, a
+   component's `SOLAR` `LOSS` ports are netted against the `SOLAR` it receives: its solar loss nodes are left out, and
+   the edge from `sun` carries its solar input minus its solar losses, for the PV system its electricity, for a solar
+   collector the heat it absorbs. The `solar` view, the filter of the carrier `SOLAR`, draws the whole split: `sun` →
+   PV system → its module and inverter loss → its boundary node. No other view has a `SOLAR` edge. The sunlight a
+   building takes through its windows has no solar loss and is drawn in full.
+2. **Empty flows are left out.** An edge below 1 Wh is not drawn, and a node left without edges goes with it; a view
+   with nothing left gets no HTML (the JSON keeps it). 1 Wh, not 1 kWh, so that the flows of a short run are still
+   drawn. Example: the 2.4e-7 kWh of cooling the heat-pump twins' hot-water circuit books over a year, and with it
+   their `cooling` view.
+3. **Small nodes merge into "other" nodes, one per sink.** A component, loss or storage node through which less than
+   0.5 % of the view's largest edge passes is small. Boundary nodes, meters and the nodes that show a fault
+   (`unaccounted`, `undeclared: …`, `unlinked`) are always drawn, so a merge never hides where energy enters or leaves
+   or what fails. Small nodes linked to each other form a group (a small battery with its losses and its store), and
+   each group goes into one "other" node: `other → <sink>` in front of the node the group gives most to,
+   `other (sources)` for a group that only gives (a store giving up a little), `other (sinks)` for one that only
+   takes; groups toward the same sink share it. Edges inside a group vanish; edges between a group and the rest are
+   redrawn to or from its "other" node, one per pair of nodes and carrier, so a link keeps its carrier's colour, and
+   their hover text lists the edges they merge. An "other" node is labelled "other (n flows)", n the edges it gives on
+   (for `other (sinks)`: takes in), and its hover text lists the nodes it stands for; one that stands for a single
+   node keeps that node's name and colour, since merging one node gains nothing. A group linked to nothing outside it
+   is drawn as it is.
+4. **Labels are one line, "name · energy".** Whole kWh with thousands separators from 10 kWh on ("grid import ·
+   1,805 kWh"), two significant digits below ("Tank · stored · 0.25 kWh"). A component keeps the name the energy
+   system gives it; a loss node writes its port in words: the unit suffix (`InWatt`, `InWattHour`, `InKilowatt`,
+   `InKilowattHour`, `InKilogramPerSecond`) left out, CamelCase split into lower-case words, acronyms kept
+   (`ModuleAndInverterLossInWatt` → "module and inverter loss", `StandbyHeatLoss` → "standby heat loss"), with a small
+   table of overrides where that reads poorly: `TransmissionLossOpaqueInWatt` → "opaque transmission loss",
+   `TransmissionLossWindowsAndDoorsInWatt` → "window and door transmission loss",
+   `ApplianceElectricityNotReleasedIndoorsInWatt` → "appliance energy leaving the house". A node's hover text names
+   it as the JSON does.
+
+Example, `household_heatpump_building_sizer`, 2021 at 900 s: `overall` draws `sun · 30,137 kWh` (26,315 kWh to the
+PV system, 3,822 kWh through the windows) instead of 130,746 kWh, the largest edge is 26,315 kWh and the threshold
+132 kWh; the stores of the building, the battery and the two tanks (19, 11, 2 and 2 kWh) come from one
+`other (4 flows) · 34 kWh`, the building's 47 kWh of gains lost through its windows keep their name, and the
+`cooling` view gets no HTML. Labels still overlap where plotly stacks small nodes of one column (the battery's cell
+loss on the hot-water tank) and in front of the boundary column (the building's loss nodes beside `grid export`), and
+the battery still draws a ring from and to the meter; the follow-ups are explicit node columns (`node.x`/`node.y`)
+with a minimum gap per label and a height scaled by the nodes per column, and a storage's change as a node of its
+own instead of the ring.
+
+Nothing else changes: the graph, `energy_sankey.json`, `balance_report.json`, every number and KPI.
 
 ## 5. Port tables per device group
 
@@ -504,7 +566,8 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
   steps, worst step and verdict, `enforced` and why not), `unmetered` (the metered ports that pass no meter, with
   `enforced` and why not), and `HydronicPort` circuits under `links`.
 - `energy_sankeys/energy_sankey.json`: node kinds of §4.1, every edge with its carrier; `overall.html` is the
-  connected diagram, one HTML per carrier as filters.
+  connected diagram, one HTML per carrier as filters. Since the D4 amendment (§4.8) the HTML draws a view made
+  readable and a view with nothing to draw has no HTML; the JSON keeps every view and every edge.
 - `lt.EnergyBalanceCarrier.ROOM_HEAT`, `lt.EnvironmentNode` members of §4.3, `HydronicPort.carrier`,
   `Component.metered_exchanges()` with `MeteredExchange` (Q-J).
 - PR 5b: `lt.EnergyBalanceCarrier.DRIVING` and `lt.EnvironmentNode.DRIVING` ("driving"), the energy a car's drive
@@ -725,6 +788,7 @@ Epic hisim-energy-sankeys-9uoo, acceptance hisim-mzft.
 |---|---|---|
 | hisim-energy-sankeys-9uoo.18 (P1) | D1, D2 recorded; colours by carrier, electricity from its physical source | 1 |
 | hisim-energy-sankeys-9uoo.19 (P3) | The arrow-style renderer (D4) | after 6 |
+| hisim-sankey-readability-8e20 (P2) | The drawing of a view (D4 amendment, §4.8): solar netted in `overall`, empty flows left out, small nodes merged, one-line labels; then node columns and a storage node of its own if labels still overlap | – |
 | hisim-energy-sankeys-9uoo.3 (P1), hisim-hydronics-fxix.6 | Storages and HDS, hydronic stage E | 3 |
 | hisim-energy-sankeys-9uoo.5 (P1) | Electricity devices | 2, 5b |
 | hisim-energy-sankeys-9uoo.6 (P1) | The building | 4 (4a first) |

@@ -119,6 +119,12 @@ from it and the 2 m temperature, for example with the Magnus formula over water,
 `RH = 100 * exp(17.625 * Td / (243.04 + Td)) / exp(17.625 * T / (243.04 + T))` with both temperatures in
 degrees Celsius.
 
+## EnergyPlus weather file of Denver (`EPW`, `EPW/Denver_Intl_AP/725650TYCST.epw`)
+
+The EPW format carries the relative humidity in field 9 of every hourly record (percent, 0 to 100),
+and the Denver TMY3 of the ANSI/ASHRAE Standard 140 test cases states it in every record. Nothing was
+added. The file's origin, integrity and licence are in `EPW/Denver_Intl_AP/PROVENANCE.md`.
+
 ## File sizes
 
 | Files                                                    | Before (bytes) | After (bytes) |

@@ -57,6 +57,7 @@ class ShippedSources:
         WeatherDataSourceEnum.NSRDB_15MIN: "NSRDB_15min/Potsdam/742114_52.41_13.06_2019.csv",
         WeatherDataSourceEnum.DWD_10MIN: "dwd_10min_data/dwd_10min_2021-2022_AACHEN_6.08_50.77.csv",
         WeatherDataSourceEnum.DWD_15MIN: "dwd_15min_data/dwd_15min_2024_Duesseldorf_6.7686_51.2960.csv",
+        WeatherDataSourceEnum.EPW: "EPW/Denver_Intl_AP/725650TYCST.epw",
     }
 
     #: The first label of each reader's raw frame: the anchor the source's own rows carry.
@@ -67,6 +68,7 @@ class ShippedSources:
         WeatherDataSourceEnum.DWD_10MIN: "2021-01-01 00:00:00+00:00",
         WeatherDataSourceEnum.DWD_15MIN: "2021-01-01 00:00:00+00:00",
         WeatherDataSourceEnum.ERA5: "2021-01-01 00:00:00+00:00",
+        WeatherDataSourceEnum.EPW: "2021-01-01 00:30:00-07:00",
     }
 
     #: The first label of the one-minute frame the producer computes from: the hourly sources are
@@ -78,6 +80,7 @@ class ShippedSources:
         WeatherDataSourceEnum.DWD_10MIN: "2021-01-01 00:00:00+00:00",
         WeatherDataSourceEnum.DWD_15MIN: "2021-01-01 00:00:00+00:00",
         WeatherDataSourceEnum.ERA5: "2021-01-01 00:00:00+00:00",
+        WeatherDataSourceEnum.EPW: "2021-01-01 00:00:00-07:00",
     }
 
     @classmethod
@@ -255,7 +258,7 @@ def test_a_full_leap_year_of_weather_is_refused_when_the_weather_prepares(tmp_pa
 def test_each_reader_starts_where_its_source_does(data_source: WeatherDataSourceEnum, tmp_path: pathlib.Path) -> None:
     """Each reader's first label, before and after the interpolation, and the run's first timestep.
 
-    The six sources use three anchors. Whatever the anchor, the produced frame's first label is
+    The seven sources use four anchors. Whatever the anchor, the produced frame's first label is
     1 January 00:00 in the source's standard time at every resolution, and a run from 1 January
     resolves to row 0 -- the first-timestep identity that keeps every January run unchanged.
     """

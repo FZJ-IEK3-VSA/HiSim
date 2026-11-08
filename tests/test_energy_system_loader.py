@@ -198,6 +198,7 @@ def test_a_duplicate_key_is_refused_with_its_key_path() -> None:
     text = """
 schema_version: 3
 name: duplicate config
+setup_kind: demo
 components:
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -234,7 +235,7 @@ def test_an_unknown_top_level_key_is_refused_listing_the_known_ones() -> None:
     A block the loader does not know would simply have no effect, which is the silent
     failure the format exists to remove; the message lists the keys that do exist.
     """
-    text = "schema_version: 3\nname: x\ncomponents: {}\nconnections: []\n"
+    text = "schema_version: 3\nname: x\nsetup_kind: demo\ncomponents: {}\nconnections: []\n"
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(text)
     assert caught.value.error_id is EnergySystemErrorId.TOP_LEVEL_SHAPE
@@ -253,6 +254,7 @@ def test_an_unknown_entry_key_is_refused_listing_the_entry_keys() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -275,6 +277,7 @@ def test_an_input_item_of_no_recognisable_shape_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -298,6 +301,7 @@ def test_a_dotted_bare_input_item_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -323,6 +327,7 @@ def test_a_constructor_block_naming_two_constructors_is_refused() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   weather:
     class: hisim.components.weather.Weather
@@ -345,6 +350,7 @@ def test_yaml_11_boolean_spellings_stay_strings() -> None:
     text = """
 schema_version: 3
 name: x
+setup_kind: demo
 components:
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -369,6 +375,7 @@ def test_a_group_without_a_boolean_flag_and_an_empty_group_are_refused() -> None
     without_flag = """
 schema_version: 3
 name: x
+setup_kind: demo
 components: {}
 groups:
   pv:
@@ -381,7 +388,7 @@ groups:
         load_energy_system(without_flag)
     assert caught.value.error_id is EnergySystemErrorId.GROUP_ENABLED_FLAG
 
-    empty = "schema_version: 3\nname: x\ncomponents: {}\ngroups:\n  pv:\n    enabled: true\n    components: {}\n"
+    empty = "schema_version: 3\nname: x\nsetup_kind: demo\ncomponents: {}\ngroups:\n  pv:\n    enabled: true\n    components: {}\n"
     with pytest.raises(EnergySystemFormatError) as caught:
         load_energy_system(empty)
     assert caught.value.error_id is EnergySystemErrorId.EMPTY_GROUP

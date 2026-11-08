@@ -18,6 +18,7 @@ import pytest
 
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.setup_rules.kinds import SetupKind
 
 pytestmark = pytest.mark.base
 
@@ -34,6 +35,7 @@ def _simulator(parameters: SimulationParameters) -> Simulator:
         module_filename="does_not_need_to_exist.py",
         my_simulation_parameters=parameters,
     )
+    simulator.declare_setup_kind(SetupKind.DEMO)
     return simulator
 
 

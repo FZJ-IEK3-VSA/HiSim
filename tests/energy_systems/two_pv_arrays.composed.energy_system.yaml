@@ -4,6 +4,7 @@
 # electricity port by its role, never the manager's grid balance. `order:` reproduces the flat file's evaluation order.
 schema_version: 4
 name: two_pv_arrays
+setup_kind: demo
 description: A household with a south and a west array, a battery and the self-consumption manager.
 
 components:

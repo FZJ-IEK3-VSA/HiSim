@@ -34,7 +34,6 @@ from hisim.components.loadprofilegenerator_utsp_connector import (
 from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import (
-    EnergySystemBindingError,
     EnergySystemFormatError,
     EnergySystemWiringError,
 )
@@ -43,6 +42,7 @@ from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.wiring import WiredSystem
 from hisim.simulationparameters import SimulationParameters
+from tests.functions_for_testing import WiringRules
 
 
 class Systems:
@@ -115,7 +115,7 @@ class Systems:
         Raises:
             EnergySystemError: Whatever the file under test provokes.
         """
-        text = f"schema_version: 3\nname: wiring rule under test\ncomponents:\n{entries}"
+        text = f"schema_version: 3\nname: wiring rule under test\nsetup_kind: demo\ncomponents:\n{entries}"
         model = EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
         parameters = SimulationParameters.one_day_only(2021, 900)
         parameters.result_directory = str(result_directory)
@@ -439,14 +439,14 @@ def test_a_feed_addressed_at_a_component_that_aggregates_nothing_is_rejected(tmp
     anything, and reporting it as "no matching channel" would send the author looking for a tag
     problem that does not exist.
     """
+    # The weather aggregates nothing: it declares no channel (the building, which grows inputs for the heat devices
+    # release into its heated zone, is an aggregator).
     entries = (
-        Systems.WEATHER
-        + Systems.OCCUPANCY
-        + """  building:
-    class: hisim.components.building.Building
-    preset: german_single_family_home
+        Systems.OCCUPANCY
+        + """  weather:
+    class: hisim.components.weather.Weather
+    preset: aachen
     inputs:
-      - weather
       - from: occupancy.ElectricalPowerConsumption
         tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         weight: 999
@@ -457,7 +457,7 @@ def test_a_feed_addressed_at_a_component_that_aggregates_nothing_is_rejected(tmp
         Systems.build(entries, tmp_path)
 
     assert failure.value.error_id.value == "EF-27"
-    assert "building" in str(failure.value) and "not an aggregator" in str(failure.value)
+    assert "weather" in str(failure.value) and "not an aggregator" in str(failure.value)
 
 
 @pytest.mark.base
@@ -519,7 +519,7 @@ def test_a_feed_naming_a_tag_no_vocabulary_knows_is_rejected(tmp_path: Path) -> 
 """
     )
 
-    with pytest.raises(EnergySystemBindingError) as failure:
+    with pytest.raises(EnergySystemWiringError) as failure:
         Systems.build(entries, tmp_path)
 
     assert failure.value.error_id.value == "EF-2A"
@@ -635,6 +635,7 @@ def test_a_derived_port_name_colliding_with_an_existing_one_is_rejected() -> Non
     resolver = DynamicConnectionResolver({"occupancy": occupancy, "meter": meter})
     with pytest.raises(EnergySystemWiringError) as failure:
         resolver.resolve_target("meter", [feed])
+        WiringRules.refuse(resolver.refusals)
 
     assert failure.value.error_id.value == "EF-32"
     assert "ElectricalPowerConsumptionFromoccupancy" in str(failure.value)

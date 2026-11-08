@@ -27,8 +27,7 @@ from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.assemblies.expansion import expand_imports
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.groups import expand_groups
-from hisim.energy_system.loader import parse_energy_system
-from hisim.energy_system.validation import validate_structure
+from hisim.energy_system.loader import parse_energy_system, run_load_rules
 from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 
 
@@ -312,7 +311,7 @@ class FactsRenderer(Report):
         authored = parse_energy_system(path)
         flat, imports = expand_imports(authored)
         expanded, _ = expand_groups(flat)
-        validate_structure(expanded)
+        run_load_rules(expanded, {}, None)
         print(f"{expanded.name} ({path})", file=stream)
         cls._knobs(authored, imports, stream)
         bindings = validate_classes(expanded)

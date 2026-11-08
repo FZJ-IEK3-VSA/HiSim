@@ -10,7 +10,8 @@ The modules follow the stages of §2.3:
 
     - :mod:`.model` and :mod:`.reader` — the assembly file and its reader;
     - :mod:`.resolver` — library paths along the search path, and each file's sha256;
-    - :mod:`.library` — the library check, listing every problem of a file at once;
+    - the library check, listing every problem of a file at once, is the assembly rule ``EF-75``
+      (:class:`hisim.setup_rules.assemblies.LibraryChecker`), with the other rules of the expansion;
     - :mod:`.parameters` — an import's parameters checked and the internal variants selected;
     - :mod:`.addresses` — every member's structured address and its substituted entry;
     - :mod:`.binding` — the ports bound by the verbs and the default rule, and lowered;

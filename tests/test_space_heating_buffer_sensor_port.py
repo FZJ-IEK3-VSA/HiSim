@@ -23,7 +23,7 @@ import pytest
 from hisim.component import ComponentConnection
 from hisim.components.generic_boiler import GenericBoilerController
 from hisim.components.generic_chp.controller import L1CHPController
-from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+from hisim.components.more_advanced_heat_pump.controller_space_heating import MoreAdvancedHeatPumpHPLibControllerSpaceHeating
 from hisim.components.simple_water_storage import SimpleHotWaterStorage, SimpleHotWaterStorageConfig
 from tests.part_load_rigs import AllInputsRig, Parameters
 

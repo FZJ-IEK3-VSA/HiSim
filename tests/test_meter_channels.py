@@ -19,7 +19,7 @@ signal-collision tests of ``test_energy_system_dispatch`` take, because the arra
 provoke need a participant no shipped energy-system file wires yet.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import ClassVar, List, Optional, Tuple
 
 import pytest
@@ -34,9 +34,10 @@ from hisim.config import ComponentID, ConfigBase, DisplayConfig, SizingContext
 from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.channel_matching import ChannelMatcher
 from hisim.energy_system.channels import FeedRequest
-from hisim.energy_system.errors import EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemWiringError, WiringRefusal
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.simulationparameters import SimulationParameters
+from tests.functions_for_testing import WiringRules
 
 
 @dataclass_json
@@ -256,6 +257,7 @@ class MeterFixtures:
         """
         resolver = DynamicConnectionResolver({cls.SOURCE_NAME: source, cls.METER_NAME: meter})
         resolver.resolve_target(cls.METER_NAME, [cls.feed(flow_tag)])
+        WiringRules.refuse(resolver.refusals)
 
 
 @pytest.mark.base
@@ -318,23 +320,62 @@ def test_the_matcher_lets_any_carrier_reach_the_fuel_and_gas_meters() -> None:
     the wood chips of one household and the green hydrogen of another reach the same channel that
     natural gas and oil do, because the tag and the unit are what identify the flow.
     """
+    refusals: List[WiringRefusal] = []
     fuel_channel = ChannelMatcher.match_and_validate(
         feed=MeterFixtures.feed(lt.InandOutputType.HEAT_CONSUMPTION),
         channels=FuelMeter.CHANNELS,
         target="the fuel meter",
+        refusals=refusals,
         source_load_type=lt.LoadTypes.WOOD_CHIPS,
         source_unit=lt.Units.WATT_HOUR,
     )
-    assert fuel_channel.key == FuelMeter.CONSUMPTION_UNCONTROLLED_CHANNEL
+    assert fuel_channel is not None and fuel_channel.key == FuelMeter.CONSUMPTION_UNCONTROLLED_CHANNEL
 
     gas_channel = ChannelMatcher.match_and_validate(
         feed=MeterFixtures.feed(lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED),
         channels=GasMeter.CHANNELS,
         target="the gas meter",
+        refusals=refusals,
         source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
         source_unit=lt.Units.WATT_HOUR,
     )
-    assert gas_channel.key == GasMeter.CONSUMPTION_UNCONTROLLED_CHANNEL
+    assert gas_channel is not None and gas_channel.key == GasMeter.CONSUMPTION_UNCONTROLLED_CHANNEL
+    assert not refusals
+
+
+@pytest.mark.base
+def test_a_mass_flow_feed_selects_the_gas_meter_s_mass_flow_channel_and_only_in_kg_per_s() -> None:
+    """A feed tagged ``MASS_FLOW`` beside the consumption tag reaches the kg/s channel; one in Wh is refused there.
+
+    A CHP publishes the hydrogen it burns as a mass flow, which the gas meter converts by the gas's heating value, so
+    the feed must land on the channel that converts it and nowhere else. Catches the two consumption channels tying
+    (overlapping instead of nested tag sets) and a mass-flow channel that would sum watt-hours unconverted.
+    """
+    feed = replace(
+        MeterFixtures.feed(lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED),
+        flow_tags=(lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED, lt.InandOutputType.MASS_FLOW),
+    )
+    refusals: List[WiringRefusal] = []
+    channel = ChannelMatcher.match_and_validate(
+        feed=feed,
+        channels=GasMeter.CHANNELS,
+        target="the gas meter",
+        refusals=refusals,
+        source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+        source_unit=lt.Units.KG_PER_SEC,
+    )
+    assert channel is not None and channel.key == GasMeter.CONSUMPTION_MASS_FLOW_CHANNEL and not refusals
+    with pytest.raises(EnergySystemWiringError) as caught:
+        ChannelMatcher.match_and_validate(
+            feed=feed,
+            channels=GasMeter.CHANNELS,
+            target="the gas meter",
+            refusals=refusals,
+            source_load_type=lt.LoadTypes.GREEN_HYDROGEN,
+            source_unit=lt.Units.WATT_HOUR,
+        )
+        WiringRules.refuse(refusals)
+    assert caught.value.error_id.value == "EF-30"
 
 
 @pytest.mark.base
@@ -345,14 +386,17 @@ def test_the_matcher_refuses_a_feed_in_the_wrong_unit() -> None:
     mistake this test exists to catch: a power output feeding an energy channel is the classic
     way to end up with a plausible-looking total that means nothing.
     """
+    refusals: List[WiringRefusal] = []
     with pytest.raises(EnergySystemWiringError) as caught:
         ChannelMatcher.match_and_validate(
             feed=MeterFixtures.feed(lt.InandOutputType.HEAT_CONSUMPTION),
             channels=FuelMeter.CHANNELS,
             target="the fuel meter",
+            refusals=refusals,
             source_load_type=lt.LoadTypes.OIL,
             source_unit=lt.Units.WATT,
         )
+        WiringRules.refuse(refusals)
 
     assert caught.value.error_id.value == "EF-30"
 

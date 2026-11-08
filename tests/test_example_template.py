@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 from hisim import component as cp
-from hisim.components import example_component, example_template
+from hisim.components import electricity_meter, example_component, example_template
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, SizingContext, describe_config
+from hisim.setup_rules.kinds import SetupKind
 from tests import functions_for_testing as fft
 
 
@@ -269,6 +270,10 @@ def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: P
     its ``ElectricityOutput`` is the one port in the two example modules with a matching load
     type and unit. It delivers 0 W over a day at hourly resolution, so the template's
     stateless output is its 1 W offset, far below the power the default building sizes it for.
+
+    The electricity meter reads the template's electricity port by its role, as in every house: the energy
+    balance of the run fails an electricity port that passes no meter once no component is undeclared, and the
+    example component is exempt.
     """
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     my_simulation_parameters.result_directory = str(tmp_path / "results")
@@ -279,6 +284,7 @@ def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: P
         module_filename="template_component_in_a_simulator",
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_sim.declare_setup_kind(SetupKind.DEMO)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     my_source = example_component.ExampleComponent(
@@ -296,8 +302,14 @@ def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: P
         my_source.ElectricityOutput,
     )
 
+    my_meter = electricity_meter.ElectricityMeter(
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
     my_sim.add_component(my_source)
     my_sim.add_component(my_template_component)
+    my_sim.add_component(my_meter, connect_automatically=True)
 
     my_sim.run_all_timesteps()
 

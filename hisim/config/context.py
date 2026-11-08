@@ -40,7 +40,7 @@ FactValue = Optional[Union[float, Tuple[float, ...]]]
 if TYPE_CHECKING:
     from hisim.components.building.config import BuildingConfig
     from hisim.components.heating_curve import HeatDistributionSystemType
-    from hisim.loadtypes import LoadTypes
+    from hisim.loadtypes import InstallationLocation, LoadTypes
 
 
 @dataclass(frozen=True)
@@ -71,6 +71,9 @@ class SizingContext:
     set_cooling_temperature_in_celsius: FactValue = None
     roof_area_in_m2: FactValue = None
     pv_peak_power_in_watt: FactValue = None
+    #: Where the building's technical room is, the heated zone or an unheated space: the place every device stands
+    #: unless its own configuration names another one. The building derives it from its TABULA row's cellar code.
+    technical_room_location: Optional["InstallationLocation"] = None
 
     # Fuel facts of the heat generator, for the meters that account its consumption. The
     # carrier is the generator's own field; the two constants derive from it and from the
@@ -171,6 +174,7 @@ class Size:
     SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")
     ROOF_AREA_IN_M2: ClassVar[_FactTerm] = _FactTerm("roof_area_in_m2")
     PV_PEAK_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("pv_peak_power_in_watt")
+    TECHNICAL_ROOM_LOCATION: ClassVar[_FactTerm] = _FactTerm("technical_room_location")
     ENERGY_CARRIER: ClassVar[_FactTerm] = _FactTerm("energy_carrier")
     HEATING_VALUE_OF_FUEL_IN_KWH_PER_LITER: ClassVar[_FactTerm] = _FactTerm(
         "heating_value_of_fuel_in_kwh_per_liter")

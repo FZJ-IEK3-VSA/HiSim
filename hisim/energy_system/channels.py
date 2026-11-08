@@ -10,7 +10,8 @@ What it adds is what only a document needs. A :class:`FeedRequest` is one aggreg
 file with its tag names already decoded into enumeration members, because the model layer of this
 package keeps every value as the plain string the author wrote and matching needs the members.
 And :class:`TagDecoder` is the step between the two: it turns a written name into the member,
-listing both tag vocabularies when neither knows the name.
+and records a name neither vocabulary knows as a refusal listing both, which the wiring rule ``EF-2A``
+(``hisim/setup_rules/wiring.py:KnownTag``) refuses.
 
 The rule that picks a channel for a feed — most-specific subset — and the checks that follow from
 it live next door in :mod:`hisim.energy_system.channel_matching`.
@@ -28,7 +29,7 @@ from hisim.config.channels import (
     DispatchRule,
     DynamicConnectionChannel,
 )
-from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemErrorId, WiringRefusal
 
 __all__ = [
     "ChannelDeclarationError",
@@ -110,51 +111,58 @@ class TagDecoder:
     because a name is stable, greppable and independent of whatever value the member happens to
     carry. Two enumerations are in play and an author writes both into the same file, so the
     decoder tries each in turn and, when neither knows the name, lists both vocabularies rather
-    than only the one it happened to check last.
+    than only the one it happened to check last. A name no vocabulary knows is not raised but
+    appended to the caller's refusals (``EF-2A``), so that every unknown tag of a file is reported
+    at once.
     """
 
     @classmethod
-    def component_type(cls, name: Optional[str], location: str) -> Optional[lt.ComponentType]:
+    def component_type(cls, name: Optional[str], location: str, refusals: List[WiringRefusal]) -> Optional[lt.ComponentType]:
         """Decodes the ``component_type`` of a feed, which may legitimately be absent.
+
+        Example: ``"BATTERY"`` gives ``lt.ComponentType.BATTERY``; ``"BATTERIE"`` gives ``None`` and appends an
+        ``EF-2A`` refusal listing the component types.
 
         Args:
             name: The written member name, or ``None`` when the tags alone identify the channel.
             location: Dotted key path of the feed, used in the message.
+            refusals: Where a name no component type carries is recorded (``EF-2A``).
 
         Returns:
-            The member, or ``None``.
-
-        Raises:
-            EnergySystemBindingError: ``EF-2A`` if no component type carries that name.
+            The member, or ``None`` when no name is written or the name is unknown.
         """
         if name is None:
             return None
         member = getattr(lt.ComponentType, name, None)
         if not isinstance(member, lt.ComponentType):
-            raise EnergySystemBindingError(
-                EnergySystemErrorId.UNKNOWN_TAG,
-                location,
-                f"'{name}' is not a component type.",
-                alternatives=[entry.name for entry in lt.ComponentType],
-                alternatives_label="component types",
-                offending_value=name,
+            refusals.append(
+                WiringRefusal(
+                    EnergySystemErrorId.UNKNOWN_TAG,
+                    location,
+                    f"'{name}' is not a component type.",
+                    alternatives=tuple(entry.name for entry in lt.ComponentType),
+                    alternatives_label="component types",
+                    offending_value=name,
+                )
             )
+            return None
         return member
 
     @classmethod
-    def flow_tags(cls, names: Iterable[str], location: str) -> Tuple[lt.InandOutputType, ...]:
+    def flow_tags(cls, names: Iterable[str], location: str, refusals: List[WiringRefusal]) -> Tuple[lt.InandOutputType, ...]:
         """Decodes the ``tags`` list of a feed or of a dispatch block.
+
+        Example: ``["ELECTRICITY_TARGET"]`` gives ``(lt.InandOutputType.ELECTRICITY_TARGET,)``; a name that is
+        a component type, ``["BATTERY"]``, is left out and appends an ``EF-2A`` refusal with the hint that it has
+        its own key.
 
         Args:
             names: The written member names, in the order the file lists them.
             location: Dotted key path of the feed, used in the message.
+            refusals: Where each name that belongs to no flow tag is recorded (``EF-2A``).
 
         Returns:
-            The members in the written order.
-
-        Raises:
-            EnergySystemBindingError: ``EF-2A`` if a name belongs to no flow tag; a
-                component type written here is reported with the hint that it has its own key.
+            The known members in the written order.
         """
         decoded: List[lt.InandOutputType] = []
         for name in names:
@@ -163,14 +171,17 @@ class TagDecoder:
                 remedy = None
                 if isinstance(getattr(lt.ComponentType, name, None), lt.ComponentType):
                     remedy = f"'{name}' is a component type; write it under 'component_type'."
-                raise EnergySystemBindingError(
-                    EnergySystemErrorId.UNKNOWN_TAG,
-                    location,
-                    f"'{name}' is not a flow tag.",
-                    alternatives=[entry.name for entry in lt.InandOutputType],
-                    alternatives_label="flow tags",
-                    offending_value=name,
-                    remedy=remedy,
+                refusals.append(
+                    WiringRefusal(
+                        EnergySystemErrorId.UNKNOWN_TAG,
+                        location,
+                        f"'{name}' is not a flow tag.",
+                        alternatives=tuple(entry.name for entry in lt.InandOutputType),
+                        alternatives_label="flow tags",
+                        offending_value=name,
+                        remedy=remedy,
+                    )
                 )
+                continue
             decoded.append(member)
         return tuple(decoded)

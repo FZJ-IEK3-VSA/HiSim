@@ -34,4 +34,3 @@ rules:
         - /hisim/renovisor/run.py
         - /hisim/renovisor/verify/__init__.py
         - /hisim/renovisor/contract/refresh.py
-        - /hisim/components/more_advanced_heat_pump_hplib.py

@@ -20,6 +20,11 @@ with the channel's dispatch rule and with the weight. The last of those ties two
 format keeps in separate places — a channel that never dispatches can only measure, so a
 participant on it must carry the reserved monitored-only weight, and a channel that always
 dispatches needs a real rank to serve.
+
+Nothing here raises: a feed that matches no channel or breaks a check is recorded as a
+:class:`~hisim.energy_system.errors.WiringRefusal` in the list the caller hands over, every broken
+check of the feed at once, and the wiring rules of the setup rules refuse them
+(``hisim/setup_rules/wiring.py``: ``EF-28``, ``EF-29``, ``EF-30``).
 """
 
 from __future__ import annotations
@@ -33,7 +38,7 @@ from hisim.energy_system.channels import (
     DynamicConnectionChannel,
     FeedRequest,
 )
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemErrorId, WiringRefusal
 
 
 class ChannelMatcher:
@@ -45,7 +50,8 @@ class ChannelMatcher:
     participant's port types and the dispatch rules against the channel that won.
 
     Everything is a classmethod over explicit arguments, so the check needs no aggregator
-    instance beyond the channel declaration it is handed.
+    instance beyond the channel declaration it is handed. A failed match or check is appended to
+    the caller's refusals rather than raised.
     """
 
     @classmethod
@@ -54,7 +60,8 @@ class ChannelMatcher:
         feed: FeedRequest,
         channels: Sequence[DynamicConnectionChannel],
         target: str,
-    ) -> DynamicConnectionChannel:
+        refusals: List[WiringRefusal],
+    ) -> Optional[DynamicConnectionChannel]:
         """Selects the most specific channel of an aggregator that accepts a feed's tags.
 
         Every channel whose tags are a subset of the feed's effective tags is a candidate, and
@@ -66,41 +73,45 @@ class ChannelMatcher:
             feed: The feed to classify.
             channels: The aggregator's declared channels.
             target: Human-readable description of the aggregator, used in messages.
+            refusals: Where an unmatched feed is recorded: ``EF-28`` if no channel matches, or if
+                two channels tie for the largest matching tag set.
 
         Returns:
-            The winning channel.
-
-        Raises:
-            EnergySystemWiringError: ``EF-28`` if no channel matches, or if two channels tie
-                for the largest matching tag set.
+            The winning channel, or ``None`` when the feed was refused.
         """
         feed_tags = frozenset(feed.effective_tags)
         candidates = [channel for channel in channels if channel.matches(feed_tags)]
         if not candidates:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.NO_CHANNEL_MATCH,
-                feed.location,
-                f"the {feed.describe()} carries the tags "
-                f"{sorted(tag.name for tag in feed_tags)}, which match no channel of the "
-                f"aggregator {target}.",
-                alternatives=[channel.describe() for channel in channels],
-                alternatives_label="channels",
+            refusals.append(
+                WiringRefusal(
+                    EnergySystemErrorId.NO_CHANNEL_MATCH,
+                    feed.location,
+                    f"the {feed.describe()} carries the tags "
+                    f"{sorted(tag.name for tag in feed_tags)}, which match no channel of the "
+                    f"aggregator {target}.",
+                    alternatives=tuple(channel.describe() for channel in channels),
+                    alternatives_label="channels",
+                )
             )
+            return None
         widest = max(len(channel.tags) for channel in candidates)
         winners = [channel for channel in candidates if len(channel.tags) == widest]
         if len(winners) > 1:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.NO_CHANNEL_MATCH,
-                feed.location,
-                f"the {feed.describe()} matches {len(winners)} equally specific channels of "
-                f"the aggregator {target}, so which one it belongs to is undecidable.",
-                alternatives=[channel.describe() for channel in winners],
-                alternatives_label="channels",
-                remedy=(
-                    "Channel tag sets must be nested, never overlapping: give the feed a tag "
-                    "that tells them apart, or redesign the aggregator's channels."
-                ),
+            refusals.append(
+                WiringRefusal(
+                    EnergySystemErrorId.NO_CHANNEL_MATCH,
+                    feed.location,
+                    f"the {feed.describe()} matches {len(winners)} equally specific channels of "
+                    f"the aggregator {target}, so which one it belongs to is undecidable.",
+                    alternatives=tuple(channel.describe() for channel in winners),
+                    alternatives_label="channels",
+                    remedy=(
+                        "Channel tag sets must be nested, never overlapping: give the feed a tag "
+                        "that tells them apart, or redesign the aggregator's channels."
+                    ),
+                )
             )
+            return None
         return winners[0]
 
     @classmethod
@@ -111,8 +122,8 @@ class ChannelMatcher:
         target: str,
         source_load_type: Optional[lt.LoadTypes] = None,
         source_unit: Optional[lt.Units] = None,
-    ) -> None:
-        """Checks a feed against the channel it selected.
+    ) -> List[WiringRefusal]:
+        """Checks a feed against the channel it selected, every check of it.
 
         The load type and unit of the participant's output are compared with the channel's when
         the caller knows them, which it does once the components are built; a purely textual
@@ -126,13 +137,15 @@ class ChannelMatcher:
             source_load_type: Load type of the participant's output port, if known.
             source_unit: Unit of the participant's output port, if known.
 
-        Raises:
-            EnergySystemWiringError: ``EF-30`` on a load type or unit mismatch, ``EF-29`` on
-                any violation of the channel's dispatch rule.
+        Returns:
+            The refusals: ``EF-30`` for a load type or unit mismatch, ``EF-29`` for each
+            violation of the channel's dispatch rule; empty for a feed the channel accepts.
         """
-        cls._check_port_types(feed, channel, target, source_load_type, source_unit)
-        cls._check_dispatch_rule(feed, channel, target)
-        cls._check_dispatch_tags(feed, channel, target)
+        return (
+            cls._check_port_types(feed, channel, target, source_load_type, source_unit)
+            + cls._check_dispatch_rule(feed, channel, target)
+            + cls._check_dispatch_tags(feed, channel, target)
+        )
 
     @classmethod
     def match_and_validate(
@@ -140,9 +153,10 @@ class ChannelMatcher:
         feed: FeedRequest,
         channels: Sequence[DynamicConnectionChannel],
         target: str,
+        refusals: List[WiringRefusal],
         source_load_type: Optional[lt.LoadTypes] = None,
         source_unit: Optional[lt.Units] = None,
-    ) -> DynamicConnectionChannel:
+    ) -> Optional[DynamicConnectionChannel]:
         """Matches a feed to a channel and validates it against that channel in one call.
 
         Args:
@@ -151,16 +165,17 @@ class ChannelMatcher:
             target: Human-readable description of the aggregator, used in messages.
             source_load_type: Load type of the participant's output port, if known.
             source_unit: Unit of the participant's output port, if known.
+            refusals: Where every matching or validation failure of the feed is recorded.
 
         Returns:
-            The channel the feed belongs to.
-
-        Raises:
-            EnergySystemWiringError: On any matching or validation failure.
+            The channel the feed belongs to, or ``None`` when the feed was refused.
         """
-        channel = cls.match(feed, channels, target)
-        cls.validate(feed, channel, target, source_load_type, source_unit)
-        return channel
+        channel = cls.match(feed, channels, target, refusals)
+        if channel is None:
+            return None
+        found = cls.validate(feed, channel, target, source_load_type, source_unit)
+        refusals.extend(found)
+        return None if found else channel
 
     @classmethod
     def resolved_dispatch_tags(
@@ -193,7 +208,7 @@ class ChannelMatcher:
         target: str,
         source_load_type: Optional[lt.LoadTypes],
         source_unit: Optional[lt.Units],
-    ) -> None:
+    ) -> List[WiringRefusal]:
         """Compares the participant port's load type and unit with the channel's declaration.
 
         A watt-valued electricity channel fed by a temperature output would produce numbers the
@@ -209,30 +224,36 @@ class ChannelMatcher:
             source_load_type: Load type of the participant's output port, or ``None``.
             source_unit: Unit of the participant's output port, or ``None``.
 
-        Raises:
-            EnergySystemWiringError: ``EF-30`` on a load type or unit mismatch.
+        Returns:
+            ``EF-30`` for a load type mismatch and for a unit mismatch; empty when both agree.
         """
+        found: List[WiringRefusal] = []
         if source_load_type is not None and not channel.accepts_load_type(source_load_type):
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.PORT_TYPE_MISMATCH,
-                feed.location,
-                f"the {feed.describe()} feeds a '{source_load_type.name}' output into the "
-                f"channel {channel.describe()} of the aggregator {target}, which carries "
-                f"'{channel.load_type.name}'.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.PORT_TYPE_MISMATCH,
+                    feed.location,
+                    f"the {feed.describe()} feeds a '{source_load_type.name}' output into the "
+                    f"channel {channel.describe()} of the aggregator {target}, which carries "
+                    f"'{channel.load_type.name}'.",
+                )
             )
         if source_unit is not None and not channel.accepts_unit(source_unit):
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.PORT_TYPE_MISMATCH,
-                feed.location,
-                f"the {feed.describe()} feeds an output in '{source_unit.value}' into the "
-                f"channel {channel.describe()} of the aggregator {target}, which is in "
-                f"'{channel.unit.value}'.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.PORT_TYPE_MISMATCH,
+                    feed.location,
+                    f"the {feed.describe()} feeds an output in '{source_unit.value}' into the "
+                    f"channel {channel.describe()} of the aggregator {target}, which is in "
+                    f"'{channel.unit.value}'.",
+                )
             )
+        return found
 
     @classmethod
     def _check_dispatch_rule(
         cls, feed: FeedRequest, channel: DynamicConnectionChannel, target: str
-    ) -> None:
+    ) -> List[WiringRefusal]:
         """Checks the presence or absence of a dispatch block, and the weight that goes with it.
 
         Beyond the channel's own rule this ties the weight to it, which the format leaves
@@ -247,58 +268,70 @@ class ChannelMatcher:
             channel: The channel it selected.
             target: Human-readable description of the aggregator.
 
-        Raises:
-            EnergySystemWiringError: ``EF-29`` on any violation.
+        Returns:
+            One ``EF-29`` refusal per violated condition; empty when the feed keeps the rule.
         """
         monitored_only = feed.weight == FeedRequest.MONITORED_ONLY_WEIGHT
+        found: List[WiringRefusal] = []
         if feed.has_dispatch and monitored_only:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
-                feed.location,
-                f"the {feed.describe()} uses the reserved monitored-only weight "
-                f"{FeedRequest.MONITORED_ONLY_WEIGHT} and therefore cannot carry a dispatch "
-                "block.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
+                    feed.location,
+                    f"the {feed.describe()} uses the reserved monitored-only weight "
+                    f"{FeedRequest.MONITORED_ONLY_WEIGHT} and therefore cannot carry a dispatch "
+                    "block.",
+                )
             )
         if feed.has_dispatch and channel.dispatch is DispatchRule.FORBIDDEN:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
-                feed.location,
-                f"the {feed.describe()} carries a dispatch block, but the channel "
-                f"{channel.describe()} of the aggregator {target} never sends a signal back.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
+                    feed.location,
+                    f"the {feed.describe()} carries a dispatch block, but the channel "
+                    f"{channel.describe()} of the aggregator {target} never sends a signal back.",
+                )
             )
         if not feed.has_dispatch and channel.dispatch is DispatchRule.REQUIRED:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
-                feed.location,
-                f"the {feed.describe()} has no dispatch block, but the channel "
-                f"{channel.describe()} of the aggregator {target} dispatches to every "
-                "participant on it and needs an output to write to.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
+                    feed.location,
+                    f"the {feed.describe()} has no dispatch block, but the channel "
+                    f"{channel.describe()} of the aggregator {target} dispatches to every "
+                    "participant on it and needs an output to write to.",
+                )
             )
         if channel.dispatch is DispatchRule.FORBIDDEN and not monitored_only:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
-                feed.location,
-                f"the {feed.describe()} carries a dispatch rank, but the channel "
-                f"{channel.describe()} of the aggregator {target} forbids dispatch, so the "
-                "participant could never be served.",
-                remedy=(
-                    f"Give it the reserved monitored-only weight "
-                    f"{FeedRequest.MONITORED_ONLY_WEIGHT}."
-                ),
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
+                    feed.location,
+                    f"the {feed.describe()} carries a dispatch rank, but the channel "
+                    f"{channel.describe()} of the aggregator {target} forbids dispatch, so the "
+                    "participant could never be served.",
+                    remedy=(
+                        f"Give it the reserved monitored-only weight "
+                        f"{FeedRequest.MONITORED_ONLY_WEIGHT}."
+                    ),
+                )
             )
         if channel.dispatch is DispatchRule.REQUIRED and monitored_only:
-            raise EnergySystemWiringError(
-                EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
-                feed.location,
-                f"the {feed.describe()} uses the reserved monitored-only weight "
-                f"{FeedRequest.MONITORED_ONLY_WEIGHT}, but the channel {channel.describe()} of "
-                f"the aggregator {target} dispatches to every participant and needs a real rank.",
+            found.append(
+                WiringRefusal(
+                    EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
+                    feed.location,
+                    f"the {feed.describe()} uses the reserved monitored-only weight "
+                    f"{FeedRequest.MONITORED_ONLY_WEIGHT}, but the channel {channel.describe()} of "
+                    f"the aggregator {target} dispatches to every participant and needs a real rank.",
+                )
             )
+        return found
 
     @classmethod
     def _check_dispatch_tags(
         cls, feed: FeedRequest, channel: DynamicConnectionChannel, target: str
-    ) -> None:
+    ) -> List[WiringRefusal]:
         """Checks explicitly written dispatch tags against the channel's declaration.
 
         A dispatch block may spell its tags out, and when it does they must equal the channel's:
@@ -310,14 +343,16 @@ class ChannelMatcher:
             channel: The channel it selected.
             target: Human-readable description of the aggregator.
 
-        Raises:
-            EnergySystemWiringError: ``EF-29`` if the written tags differ from the channel's.
+        Returns:
+            ``EF-29`` if the written tags differ from the channel's; empty otherwise.
         """
         if feed.dispatch_tags is None:
-            return
+            return []
         written: FrozenSet[Any] = frozenset(feed.dispatch_tags)
-        if written != frozenset(channel.dispatch_tags):
-            raise EnergySystemWiringError(
+        if written == frozenset(channel.dispatch_tags):
+            return []
+        return [
+            WiringRefusal(
                 EnergySystemErrorId.DISPATCH_RULE_VIOLATED,
                 feed.location,
                 f"the {feed.describe()} declares the dispatch tags "
@@ -326,3 +361,4 @@ class ChannelMatcher:
                 f"{sorted(tag.name for tag in channel.dispatch_tags)}.",
                 remedy="Omit 'dispatch.tags' to inherit the channel's tags.",
             )
+        ]

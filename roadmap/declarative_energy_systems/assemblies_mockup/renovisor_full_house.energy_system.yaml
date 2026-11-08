@@ -32,6 +32,7 @@
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
 name: renovisor_calculation_<job id>
+setup_kind: residential
 description: Composed by hisim.renovisor.translate from calculation request <id>; see mapping_report.json.
 
 # ----------------------------------------------------------------------------------------------- the site

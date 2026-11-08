@@ -37,6 +37,7 @@ tests:
       # production minus consumption of the step, negative while burning; the class labels it W, its value is the
       # step's watt-hours (measured -2.1 kWh)
     - {output: GasMeter.GasFromGrid, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: GasMeter.GasToGridInWattHour, unit: WATT_HOUR, min: 0, max: 12500}          # zero here
     - {output: GasMeter.GasConsumption, unit: WATT_HOUR, min: 0, max: 12500}
     - {output: GasMeter.GasProduction, unit: WATT_HOUR, min: 0, max: 12500}                 # zero here
     - {output: GasMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}

@@ -77,6 +77,13 @@ class Weather(DataSourceComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = (
+        "it publishes the weather, no energy: the sun and the ambient heat enter the balance as the boundary "
+        "nodes of the ports that take them"
+    )
+
     # The weather is not a device: there is nothing to buy, nothing to run and no indicator of its own
     # to report. See Component.MODELS_NO_DEVICE, which answers the cost and KPI hooks for it.
     MODELS_NO_DEVICE: ClassVar[bool] = True

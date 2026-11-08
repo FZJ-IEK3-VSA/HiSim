@@ -15,6 +15,7 @@ from hisim.components.generic_boiler import (
     GenericBoilerControllerConfig,
 )
 from hisim.config import ComponentID, DisplayConfig, SizingContext
+from hisim.energy_port import LoopQuantity
 from hisim.simulationparameters import SimulationParameters
 from hisim.subcomponents.pumps import PumpOperatingPoint
 
@@ -365,8 +366,9 @@ class BoilerStep:
     def build(*, space_heating_flow_is_wired: bool = False) -> Tuple[Any, Any, List[Any]]:
         """Return the boiler, the step values and its fakes in :attr:`INPUT_ORDER`.
 
-        With ``space_heating_flow_is_wired`` the boiler's optional space-heating flow input reads one more fake, the
-        last in the list, as it does on a heat distribution system's flow; otherwise that input stays unwired.
+        With ``space_heating_flow_is_wired`` the boiler does not pump its space-heating loop and its space-heating flow
+        input reads one more fake, the last in the list, as it does on a heat distribution system's flow; otherwise
+        the boiler pumps and that input stays unwired.
         """
         from hisim import component as cp  # pylint: disable=import-outside-toplevel  # keeps the test module light
         from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel  # as above
@@ -375,6 +377,8 @@ class BoilerStep:
         config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
         config.maximal_thermal_power_in_watt = 20000.0
         config.minimal_thermal_power_in_watt = 2000.0
+        # a boiler on the distribution system's flow does not pump its space-heating loop
+        config.pumps_space_heating_loop = not space_heating_flow_is_wired
         boiler = generic_boiler.GenericBoiler(parameters, config)
         channels = [
             (boiler.control_signal_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
@@ -1586,7 +1590,7 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
         hot_water_return=50.0,
         requested_space_heating_ratio=space_heating_ratio,
     )
-    assert boiler.space_heating_runs_on_distribution_flow() is False
+    assert boiler.space_heating_loop.pumps is True
     if operating_mode != HeatingMode.SPACE_HEATING:
         assert output(boiler.water_output_mass_flow_sh_channel) == 0.0
         assert output(boiler.thermal_output_power_sh_channel) == 0.0
@@ -1610,3 +1614,40 @@ def test_a_boiler_without_the_distribution_flow_wired_pumps_its_own_flow_as_befo
     assert output(boiler.water_output_temperature_sh_channel) == expected.t_supply_c
     assert output(boiler.thermal_output_power_sh_channel) == expected.power_w
     assert output(boiler.total_fuel_input_power_channel) == space_heating_ratio * full_load.fuel_power_in_watt
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("pumps_space_heating_loop", [True, False])
+def test_the_boiler_states_who_pumps_its_loops_and_reads_both_flows_back(pumps_space_heating_loop: bool) -> None:
+    """Catches a pumping flag the space-heating loop does not take from the configuration, or a loop without its flow back.
+
+    The boiler always pumps its hot-water loop; its space-heating loop it pumps unless its configuration says it heats
+    the flow a heat distribution system pumps (``pumps_space_heating_loop``, D16 of ``roadmap/fluid_loops_spec.md``).
+    Each loop has its four channels, and the defaults from the buffer and the tank bring each loop's flow back.
+    """
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    config.maximal_thermal_power_in_watt = 20000.0
+    config.minimal_thermal_power_in_watt = 2000.0
+    config.pumps_space_heating_loop = pumps_space_heating_loop
+    boiler = generic_boiler.GenericBoiler(SimulationParameters.one_day_only(2021, 900), config)
+    loops = {port_set.loop.name: port_set for port_set in boiler.port_sets()}
+    assert {name: port_set.loop.pumps for name, port_set in loops.items()} == {
+        "space_heating": pumps_space_heating_loop,
+        "dhw": True,
+    }
+    assert [loops[name].channels[LoopQuantity.FLOW_IN].field_name for name in ("space_heating", "dhw")] == [
+        generic_boiler.GenericBoiler.WaterInputMassFlowSh,
+        generic_boiler.GenericBoiler.WaterInputMassFlowDhw,
+    ]
+    flows_back = [
+        (connection.target_input_name, connection.source_output_name)
+        for connection in (
+            *boiler.get_default_connections_from_simple_hot_water_storage(),
+            *boiler.get_default_connections_from_simple_dhw_storage(),
+        )
+        if connection.target_input_name in (generic_boiler.GenericBoiler.WaterInputMassFlowSh, generic_boiler.GenericBoiler.WaterInputMassFlowDhw)
+    ]
+    assert flows_back == [
+        (generic_boiler.GenericBoiler.WaterInputMassFlowSh, "WaterMassFlowRateToHeatGenerator"),
+        (generic_boiler.GenericBoiler.WaterInputMassFlowDhw, "WaterMassFlowRateToHeatGenerator"),
+    ]

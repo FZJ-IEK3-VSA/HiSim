@@ -147,7 +147,10 @@ class ElectrolyzerController(L1ControllerComponent):
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
-    ProvidedLoad: str = "ProvidedLoad"
+    #: The electrical power offered to the electrolyzer, in W; the controller's loads are in kW.
+    ProvidedLoadInWatt: str = "ProvidedLoadInWatt"
+    #: Watts per kilowatt: the offered power is read in W and compared with the loads in kW.
+    WATTS_PER_KILOWATT: ClassVar[float] = 1000.0
 
     # Outputs
     DistributedLoad: str = "DistributedLoad"
@@ -197,9 +200,9 @@ class ElectrolyzerController(L1ControllerComponent):
         # Getting the load input
         self.load_input: ComponentInput = self.add_input(
             self.component_name,
-            ElectrolyzerController.ProvidedLoad,
+            ElectrolyzerController.ProvidedLoadInWatt,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
+            lt.Units.WATT,
             True,
         )
 
@@ -393,7 +396,7 @@ class ElectrolyzerController(L1ControllerComponent):
         cold_start_time_to_min = self.cold_start_time * (self.min_load / self.nom_load)
 
         (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
-            (stsv.get_input_value(self.load_input)),
+            stsv.get_input_value(self.load_input) / self.WATTS_PER_KILOWATT,
             self.min_load,
             self.max_load,
             self.standby_load,

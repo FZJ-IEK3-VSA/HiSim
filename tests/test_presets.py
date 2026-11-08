@@ -604,11 +604,12 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert tabula.parameters[0].name == "building_code"
     assert tabula.parameters[0].default is dataclasses.MISSING
     assert {parameter.name for parameter in tabula.parameters} >= {"number_of_apartments", "building_code"}
-    # The building sizes exactly two fields from the system, and the weather provides both: the
-    # design temperature it is computed for and which weather it is computed against (D-21).
+    # The building sizes three fields: the weather provides two, the design temperature it is computed for and which
+    # weather it is computed against (D-21); its own TABULA row decides where its technical room is.
     assert [field.name for field in building.sizable_fields] == [
         "heating_reference_temperature_in_celsius",
         "weather_identity",
+        "technical_room_location",
     ]
     assert "heating_load_in_watt" in building.facts_provided
 

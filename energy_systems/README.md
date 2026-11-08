@@ -27,6 +27,15 @@ Two kinds of file live side by side and are never mixed:
   `*.simulation.json` of the same shape is read as well, which is what the Python setups in
   `system_setups/` already ship.
 
+Every energy-system file states what it is in its top-level key `setup_kind`, written after
+`name`: `demo` (a demonstration or a test rig), `residential` (a building people live in),
+`commercial` (a building people work in) or `plant` (a system without a building). The key is
+mandatory and has no default; a Python setup declares the same with
+`my_sim.declare_setup_kind(SetupKind.RESIDENTIAL)` as the first line of its setup function. The
+kind selects which setup rules the system waives: `hisim setup-rules list` prints every rule and
+the kinds that waive it, and `hisim setup-rules check <file>` runs the rules on a file without
+simulating it.
+
 ## Running one
 
 Either of these runs the same thing:
@@ -123,7 +132,7 @@ not evaluated and the number reaches the component unchanged. In
 
 ```yaml
   MoreAdvancedHeatPumpHPLib:
-    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    class: hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
       with_domestic_hot_water_preparation: true  # recorded
@@ -508,7 +517,10 @@ exempt), and every applicable `bounds` entry and, at the defaults, every `expect
 bounded column that is not numeric or not finite fails. Every `monotone` entry sweeps its parameter
 across its range in four equidistant steps from the samples that admit a sweep, one sweep per distinct
 point set, within the golden gate's tolerance; an int parameter takes the nearest integer of each step,
-so its sweep yields up to four distinct values across the range. A failure is named by assembly,
+so its sweep yields up to four distinct values across the range. An entry with `applies_when` (a
+conjunctive `{parameter: [values]}`, like a port's `required_when`; `none` and `AUTO` name an unstated
+parameter) sweeps only from the bases that meet it; from any other base its test is skipped, naming the
+unmet condition: the heat pumps sweep the W35 SCOP with `applies_when: {scop_en14825_w55: [none]}`. A failure is named by assembly,
 sample, check and subject:
 `pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [-100, 33000]: …`. A run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
 parameters while its sample's checks run, and is deleted with the run once they are done.

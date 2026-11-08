@@ -76,6 +76,10 @@ class RandomNumbers(DataSourceComponent):
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
+    #: Why this component declares no energy port; the balance lists it as exempt and never draws it
+    #: (:attr:`hisim.component.Component.ENERGY_PORTS_EXEMPT_BECAUSE`).
+    ENERGY_PORTS_EXEMPT_BECAUSE = "it publishes random numbers, no energy"
+
     # A generator of random values is not a device: it has nothing to buy and nothing to run.
     # Declaring that is what lets a setup built from it ask for costs at all;
     # see Component.MODELS_NO_DEVICE.

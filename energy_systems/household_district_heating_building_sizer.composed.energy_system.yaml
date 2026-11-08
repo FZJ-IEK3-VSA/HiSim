@@ -34,9 +34,9 @@ components:
       - {$port: temperature_modifier}
       - HeatDistributionSystem
       - UTSPConnector
-      - {$port: pv_heat}
       - {$port: battery_heat}
       - {$port: cylinder_heat}
+      - {$port: pv_heat}
     ports:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifierInKelvin
       battery_heat: {partner: Battery, optional: true}     # the battery's HeatToHeatedZoneInWatt, 0 while it stands in an unheated cellar

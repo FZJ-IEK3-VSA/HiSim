@@ -521,7 +521,8 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
     real = TestPartnerRegistry.from_directories(resolver.directories)
     unheated = dict(real.partners["Building"].component)
     unheated["inputs"] = [
-        "Weather", "UTSPConnector", {"$port": "battery_heat"}, {"$port": "buffer_heat"}, {"$port": "cylinder_heat"}
+        "Weather", "UTSPConnector", {"$port": "battery_heat"}, {"$port": "pv_heat"}, {"$port": "buffer_heat"},
+        {"$port": "cylinder_heat"}
     ]
     unheated["ports"] = {name: port for name, port in unheated["ports"].items() if name != "heating"}
     registry = TestPartnerRegistry(

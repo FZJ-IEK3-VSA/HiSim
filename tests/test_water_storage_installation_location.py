@@ -415,8 +415,8 @@ class PinnedTwin:
 
         The buffer at 900 s loses ``UA (T0 - T_surrounding)`` with ``T0`` its start temperature, the hot-water tank
         ``UA (T̄ - T_surrounding)`` with ``T̄`` its step mean. In the heated zone the building's
-        ``HeatReleasedByDevicesInWatt`` less what the other located devices (the battery) release there is the sum of
-        both losses in every step; elsewhere it is that of the other devices alone.
+        ``HeatReleasedByDevicesInWatt`` less what the other located devices (the battery, the PV inverter) release there
+        is the sum of both losses in every step; elsewhere it is that of the other devices alone.
 
         Args:
             built: The built system after the run.

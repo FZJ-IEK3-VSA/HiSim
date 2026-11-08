@@ -440,7 +440,9 @@ def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribu
 
 @pytest.mark.assemblies
 def test_the_test_building_reads_the_heat_every_located_device_beside_it_releases_into_the_heated_zone() -> None:
-    """Catches a tank or a battery whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run
+    """The test building reads the heated-zone heat of every tank and battery beside it.
+
+    Catches a tank or a battery whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run
     refuses (D-h).
 
     Beside a boiler the building's ``buffer_heat`` port binds the subject's buffer and its ``cylinder_heat`` port the

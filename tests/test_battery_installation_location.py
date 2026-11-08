@@ -68,7 +68,9 @@ class Batteries:
 def test_the_two_released_heat_outputs_have_the_same_ports_in_every_location_and_the_two_losses_none(
     location: lt.InstallationLocation,
 ) -> None:
-    """A port that followed the location would make a recorded file right only for the house it was recorded on (D-h);
+    """The two released-heat outputs carry the same ports in every location, and the two loss outputs carry none.
+
+    A port that followed the location would make a recorded file right only for the house it was recorded on (D-h);
     a port left on a loss output would count the battery's losses twice in the balance.
     """
     battery = Batteries.build(location)
@@ -210,7 +212,9 @@ def test_the_battery_and_the_building_close_their_balance_in_every_step_at_every
 def test_the_battery_s_losses_go_where_it_stands_and_the_building_books_them_in_the_heated_zone(
     battery_run: Tuple[Optional[lt.InstallationLocation], Any, Path],
 ) -> None:
-    """The location's output carries the inverter's plus the cells' loss in every step, the other is 0, and in the
+    """The battery's losses go on its location's output, and in the heated zone the building books them.
+
+    The location's output carries the inverter's plus the cells' loss in every step, the other is 0, and in the
     heated zone the building's ``HeatReleasedByDevicesInWatt`` is the battery's heat (the tanks stand in the cellar).
     """
     location, built, _ = battery_run

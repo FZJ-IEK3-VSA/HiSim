@@ -39,3 +39,6 @@ def test_the_heat_released_into_the_heated_zone_is_room_heat_produced_with_no_bo
     assert port == EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ROOM_HEAT)
     assert port.pairs_with(EnergyPort(lt.EnergyRole.CONSUMPTION, lt.EnergyBalanceCarrier.ROOM_HEAT))
     assert port.default_boundary() is None
+    assert EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT).default_boundary() == (
+        lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS.value
+    )

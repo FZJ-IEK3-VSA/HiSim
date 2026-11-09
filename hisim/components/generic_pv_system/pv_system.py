@@ -254,7 +254,7 @@ class PVSystem(cp.PhysicsComponent):
         # The sun's input and the conversion loss close the array's energy balance (complete Sankey spec, Q-D):
         # the solar power on the modules enters from the sun, the AC power leaves to the electricity meter that
         # reads it (through the energy manager in the household twins), and what the modules and the inverter do
-        # not convert leaves to outdoors.
+        # not convert leaves to the boundary node "unconverted sunlight" (device-location spec, D-e).
         self.solar_power_on_modules_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.SolarPowerOnModulesInWatt,

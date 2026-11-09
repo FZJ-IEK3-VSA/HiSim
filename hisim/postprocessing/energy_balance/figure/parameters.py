@@ -266,11 +266,14 @@ class Adjustments:
         pathlength: Extra path length of a flow, by flow id (a terminal branch, or a tree connection's output).
         trunk: Extra trunk length, by node.
         tree_shift: The shift of a further tree from its computed position, by root, in u.
+        sides: The side of the trunk a flow attaches to instead of the orientation table's, by flow id, relative to
+            the trunk's drawn axis (a connector the search moved to the other side of its tree).
     """
 
     pathlength: Dict[str, float] = field(default_factory=dict)
     trunk: Dict[str, float] = field(default_factory=dict)
     tree_shift: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    sides: Dict[str, Side] = field(default_factory=dict)
 
     @staticmethod
     def add(table: Dict[str, float], key: str, amount: float) -> None:
@@ -284,7 +287,12 @@ class Adjustments:
 
     def signature(self) -> Tuple[object, ...]:
         """Return a value that changes whenever an adjustment does (the search stops on an unchanged round)."""
-        return (tuple(sorted(self.pathlength.items())), tuple(sorted(self.trunk.items())), tuple(sorted(self.tree_shift.items())))
+        return (
+            tuple(sorted(self.pathlength.items())),
+            tuple(sorted(self.trunk.items())),
+            tuple(sorted(self.tree_shift.items())),
+            tuple(sorted((flow_id, side.value) for flow_id, side in self.sides.items())),
+        )
 
 
 class FrameRule:
@@ -454,6 +462,7 @@ class ParameterBuilder:
         prior, connect, prior_flow = connection
         role = graph.roles[node.name]
         sides = Orientation.sides(graph, node, connect)
+        sides.update({flow_id: side for flow_id, side in adjustments.sides.items() if flow_id in sides})
         axis, connecting = ParameterBuilder.axis_and_connection(graph, node.name, prior, prior_flow, placed, axes, sides.get(connect or ""))
         flows: List[FlowParams] = []
         for flow in node.flows:

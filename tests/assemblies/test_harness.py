@@ -202,10 +202,11 @@ def test_a_sweep_of_an_all_or_none_of_member_from_an_unstated_base_states_the_ot
 
 @pytest.mark.assemblies
 def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
-    """Catches the real battery losing coverage to the constraint: every sample but the defaults states both sizes.
+    """Catches the real battery losing coverage to the constraint: every size sample states both sizes.
 
-    The PR tier keeps five samples (the defaults and each size's min and max, the other at the middle of its
-    range) and the capacity sweep runs at a stated power from every base, never beside an AUTO power.
+    The PR tier keeps the defaults, each size's min and max (the other at the middle of its range) and one sample
+    per location (device location, #1233), which keeps both sizes AUTO as the constraint allows; the capacity
+    sweep runs at a stated power from every base, never beside an AUTO power.
     """
     _, space = mock("storage/battery", Real.LIBRARY)
     samples = deterministic_samples(space)
@@ -215,9 +216,14 @@ def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
         (30.0, 7750.0),
         (15.5, 500.0),
         (15.5, 15000.0),
+        ("AUTO", "AUTO"),
+        ("AUTO", "AUTO"),
+        ("AUTO", "AUTO"),
     ]
+    assert [sample.values.get("location") for sample in samples][-3:] == ["HEATED_ZONE", "UNHEATED_SPACE", "OUTDOORS"]
     swept = sweeps(space, samples, space.model.tests.monotone[0])  # type: ignore[union-attr]
-    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 15000.0]
+    # the three location bases sweep the capacity at the middle power, like the defaults' base
+    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 7750.0, 7750.0, 7750.0, 15000.0]
     assert all(ParameterChecks.is_stated(point["power_in_watt"]) for _, points in swept for point in points)
 
 

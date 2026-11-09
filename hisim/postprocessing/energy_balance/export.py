@@ -6,7 +6,9 @@ judge it before anything else of the post-processing runs (``hisim/setup_rules/r
 declared port is NaN or infinite, when a component's balance does not close, when the two sides of a transfer
 disagree beyond the tolerance, when only one of two declared components books a transfer between them, when a fluid
 loop breaks the rules of :mod:`hisim.energy_port` (two components declaring an end on one flow, an end without its
-match, a loop pumping water the balance cannot see; :attr:`~.ports.DeclaredPorts.loop_breaches`), or, in a run
+match, a loop pumping water the balance cannot see; :attr:`~.ports.DeclaredPorts.loop_breaches`), when the supplier
+of a loop that may not cool removes heat from its water beyond the noise
+(:attr:`~.ports.DeclaredPorts.cooling_on_heating_only_loops`), or, in a run
 without undeclared components, when a meter publishes other than it reads or a metered port passes no meter
 (:mod:`.meters`); the violation names every one of them. A run in which no component declares a port passes.
 
@@ -131,11 +133,8 @@ class EnergyBalanceReport:
         )
 
     def step_time(self, step: Optional[int]) -> Optional[str]:
-        """The time stamp of a step, as the result table indexes it."""
-        index = self.declared.index
-        if step is None or index is None or step >= len(index):
-            return None
-        return str(index[step].isoformat()) if hasattr(index[step], "isoformat") else str(index[step])
+        """The time stamp of a step, as the result table indexes it (:meth:`~.ports.DeclaredPorts.step_time`)."""
+        return None if step is None else self.declared.step_time(step)
 
     def component_entry(self, balance: ComponentBalance) -> Dict[str, Any]:
         """One component's entry of the report."""

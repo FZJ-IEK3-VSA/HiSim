@@ -177,6 +177,15 @@ class LoopColumns:
         """The three outputs as the balance report lists them, ``component.output`` each."""
         return {leg: ".".join(getattr(self, leg)) for leg in self.LEGS}
 
+    @property
+    def key(self) -> Tuple[Tuple[str, str], FrozenSet[Tuple[str, str]]]:
+        """The loop's identity, the same for both ends: the flow and the two temperatures, whichever is the supply.
+
+        For example, ``(("Boiler", "Flow"), frozenset({("Boiler", "Supply"), ("Tank", "Return")}))``; two columns with
+        the same key :meth:`joins_the_same_outputs`.
+        """
+        return self.mass_flow, frozenset({self.supply_temperature, self.return_temperature})
+
     def joins_the_same_outputs(self, other: "LoopColumns") -> bool:
         """Whether ``other`` names the same flow and the same two temperatures, whichever it takes for the supply.
 
@@ -363,6 +372,54 @@ class ReadingFault:
     port: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class CoolingOnAHeatingOnlyLoop:
+    """A fluid loop that may not cool whose supplier removed heat from the water beyond the noise.
+
+    A loop may cool only if every member's :class:`~hisim.energy_port.FluidLoop` says ``may_cool``; the members of a
+    loop are its two ends (:class:`LoopColumns`). For example, a heat pump charging a hot-water tank whose supply
+    comes back 0.5 K colder than the tank's return, at 0.1 kg/s, removes 209 W from the water in that step, although
+    the tank says ``may_cool=False``. The balance books the step as cooling as the sign says
+    (:meth:`DeclaredPorts.book_by_the_supplier_s_sign`) and records it here; the setup rule ``AR-11`` refuses it.
+
+    Attributes:
+        supplier: The loop's supplier, the component that removed the heat.
+        loop: The supplier's port set, as messages name it (``component.loop``).
+        heating_only_members: The port sets on the loop that say ``may_cool=False``.
+        flow: The loop's mass-flow output, at which the fault is found.
+        first_step: The index of the first step beyond the noise.
+        steps: The number of steps beyond the noise.
+        largest_heat_removed_in_watt: The largest heat the supplier removed from the water in one of those steps.
+    """
+
+    supplier: str
+    loop: str
+    heating_only_members: Tuple[str, ...]
+    flow: str
+    first_step: int
+    steps: int
+    largest_heat_removed_in_watt: float
+
+    def describe(self, first_time: object) -> str:
+        """Return the sentence the setup rule reports, naming the loop, its supplier, the steps and the heat.
+
+        For example, ``the loop HeatPump.dhw heats only (DHWStorage.generator says may_cool=False), and its supplier
+        HeatPump removed heat from the water in 3 steps, first in step 1234 (2021-01-13T20:30:00), up to 209 W``.
+
+        Args:
+            first_time: The time of the first step, as the result table names it.
+
+        Returns:
+            The sentence, without a trailing full stop.
+        """
+        return (
+            f"the loop {self.loop} heats only ({', '.join(self.heating_only_members)} "
+            f"{'says' if len(self.heating_only_members) == 1 else 'say'} may_cool=False), and its "
+            f"supplier {self.supplier} removed heat from the water in {self.steps} steps, first in step "
+            f"{self.first_step} ({first_time}), up to {self.largest_heat_removed_in_watt:,.0f} W"
+        )
+
+
 @dataclass
 class DeclaredPorts:
     """Every declared port of a run, by component; the meters; the components that declare none, exempt or not."""
@@ -381,12 +438,30 @@ class DeclaredPorts:
     column_faults: List[ReadingFault] = field(default_factory=list)
     #: Every energy port an exempt component or a meter declares, which moves no energy of its own; AR-08 refuses each.
     node_port_faults: List[ReadingFault] = field(default_factory=list)
+    #: Every loop whose supplier removed heat beyond the noise although the loop may not cool; AR-11 refuses each.
+    cooling_on_heating_only_loops: List[CoolingOnAHeatingOnlyLoop] = field(default_factory=list)
     index: Optional[pd.Index] = None
+
+    #: The heat below which a supplier's negative heat is the noise of the convergence, not cooling, in W: the
+    #: tolerance of the loop's energy check (D17 of ``roadmap/fluid_loops_spec.md``, §3.4 there).
+    COOLING_NOISE_IN_WATT: ClassVar[float] = 1.0
 
     @property
     def loop_faults(self) -> List[str]:
-        """Every breach of the loop rules as its sentence, in the order found, as the balance report lists them."""
-        return [breach.message for breach in self.loop_breaches]
+        """Every breach of the loop rules, then every heating-only loop that cooled, as its sentence, as the balance report lists them."""
+        return [breach.message for breach in self.loop_breaches] + [
+            loop.describe(self.step_time(loop.first_step)) for loop in self.cooling_on_heating_only_loops
+        ]
+
+    def step_time(self, step: int) -> Optional[str]:
+        """The time stamp of a step, as the result table indexes it; None for a step the index does not have.
+
+        For example, step 4 of a run from 2021-01-01 at 900 s is ``"2021-01-01T01:00:00"``.
+        """
+        if self.index is None or step >= len(self.index):
+            return None
+        stamp = self.index[step]
+        return str(stamp.isoformat()) if hasattr(stamp, "isoformat") else str(stamp)
 
     @staticmethod
     def exchanges_of(component: Any) -> Tuple[MeteredExchange, ...]:
@@ -614,7 +689,9 @@ class DeclaredPorts:
         left out without a fault: a buffer's loop to a second generator the house does not have, a boiler's
         hot-water loop in a house without a tank. An end naming an output the run does not have, and a loop whose
         flow is negative in some step or whose step is not positive (:meth:`LoopColumns.refusal`, recorded once per
-        loop), are left out and recorded in :attr:`column_faults`.
+        loop), are left out and recorded in :attr:`column_faults`. A loop one of whose ends says
+        ``may_cool=False`` and whose supplier removes heat from the water beyond the noise (:attr:`COOLING_NOISE_IN_WATT`)
+        in some step is recorded once, at the supplier, in :attr:`cooling_on_heating_only_loops`.
         """
         position_of = {(output.component_name, output.field_name): column for column, output in enumerate(all_outputs)}
         self.loop_breaches.extend(loops.breaches)
@@ -634,6 +711,8 @@ class DeclaredPorts:
                         flow,
                     )
                 )
+        noise_in_kilowatt_hours = self.COOLING_NOISE_IN_WATT * seconds_per_timestep / hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR
+        heating_only = self.heating_only_members(loops)
         # The heat of each loop, once for both ends; None for a loop whose flow or step cannot be read
         heat_of: Dict[Tuple[LoopColumns, float], Optional[np.ndarray]] = {}
         for name, port_set, columns, peer_name in loops.ends:
@@ -668,7 +747,22 @@ class DeclaredPorts:
             if heat is None:
                 continue
             peer = Peer.unlinked() if peer_name is None else Peer(PeerKind.COMPONENT, peer_name)
-            for port, kilowatt_hours in self.book_by_the_supplier_s_sign(heat, port_set.loop.carrier, supplies=port_set.loop.supplies):
+            forbidding = heating_only.get(columns.key, ())
+            if port_set.loop.supplies and forbidding:
+                breach = self.cooling_beyond_the_noise(
+                    heat,
+                    noise_in_kilowatt_hours,
+                    seconds_per_timestep,
+                    supplier=port_set,
+                    heating_only_members=forbidding,
+                    flow=columns.mass_flow[1],
+                )
+                if breach is not None:
+                    self.cooling_on_heating_only_loops.append(breach)
+            booked = self.book_by_the_supplier_s_sign(
+                heat, port_set.loop.carrier, supplies=port_set.loop.supplies, noise_in_kilowatt_hours=noise_in_kilowatt_hours
+            )
+            for port, kilowatt_hours in booked:
                 flow_output = all_outputs[position_of[columns.mass_flow]]
                 series = PortSeries(
                     component=name,
@@ -682,30 +776,98 @@ class DeclaredPorts:
                 self.by_component.setdefault(name, []).append(series)
 
     @staticmethod
+    def heating_only_members(loops: "LoopWiring") -> Dict[Tuple[Tuple[str, str], FrozenSet[Tuple[str, str]]], Tuple[str, ...]]:
+        """The members whose loop says ``may_cool=False``, for every loop that has one, by :attr:`LoopColumns.key`.
+
+        A loop may cool only if every member allows it (D19 of ``roadmap/fluid_loops_spec.md``); the members the balance
+        sees of one loop are the ends that resolve to its three outputs. For example, a heat pump's hot-water end
+        (``may_cool=False``) and the tank's coil (``may_cool=False``) give ``("HeatPump.dhw", "Tank.generator")`` for
+        their loop; a heat pump's space-heating end that may cool and a buffer's generator end give no entry.
+
+        Args:
+            loops: The resolved loop ends of the run.
+
+        Returns:
+            The labels of the members that forbid cooling, in the order of the ends, for each loop with one.
+        """
+        forbidding: Dict[Tuple[Tuple[str, str], FrozenSet[Tuple[str, str]]], Tuple[str, ...]] = {}
+        for _, port_set, columns, _ in loops.ends:
+            if not port_set.loop.may_cool:
+                forbidding[columns.key] = forbidding.get(columns.key, ()) + (port_set.label,)
+        return forbidding
+
+    @staticmethod
+    def cooling_beyond_the_noise(
+        heat_in_kilowatt_hours: np.ndarray,
+        noise_in_kilowatt_hours: float,
+        seconds_per_timestep: float,
+        *,
+        supplier: FluidLoopPortSet,
+        heating_only_members: Tuple[str, ...],
+        flow: str,
+    ) -> Optional[CoolingOnAHeatingOnlyLoop]:
+        """The steps in which the supplier of a heating-only loop removed more heat from the water than the noise.
+
+        A negative heat no larger than the noise (:attr:`COOLING_NOISE_IN_WATT` times the step) is the convergence's,
+        not cooling: the supply of a hot-water loop 4e-8 K below the tank's step mean. Beyond it the supplier cooled
+        a loop that may not cool. For example, ``[1.0, -0.0001, -0.5]`` kWh per 900 s step with a noise of 0.00025 kWh
+        give one step, step 2, in which the supplier removed 2,000 W.
+
+        Args:
+            heat_in_kilowatt_hours: The loop's heat per step, in kWh, from the supplier's side.
+            noise_in_kilowatt_hours: The noise per step, in kWh.
+            seconds_per_timestep: The length of one step, which turns the largest heat into a power.
+            supplier: The supplier's port set.
+            heating_only_members: The members whose loop says ``may_cool=False``.
+            flow: The loop's mass-flow output.
+
+        Returns:
+            The breach, or None when no step is beyond the noise.
+        """
+        beyond = np.flatnonzero(heat_in_kilowatt_hours < -noise_in_kilowatt_hours)
+        if beyond.size == 0:
+            return None
+        largest_in_kilowatt_hours = float(-heat_in_kilowatt_hours[beyond].min())
+        return CoolingOnAHeatingOnlyLoop(
+            supplier=supplier.component_name,
+            loop=supplier.label,
+            heating_only_members=heating_only_members,
+            flow=flow,
+            first_step=int(beyond[0]),
+            steps=int(beyond.size),
+            largest_heat_removed_in_watt=largest_in_kilowatt_hours * hydronics.UnitConversion.JOULES_PER_KILOWATT_HOUR / seconds_per_timestep,
+        )
+
+    @staticmethod
     def book_by_the_supplier_s_sign(
-        heat_in_kilowatt_hours: np.ndarray, carrier: lt.EnergyBalanceCarrier, *, supplies: bool
+        heat_in_kilowatt_hours: np.ndarray, carrier: lt.EnergyBalanceCarrier, *, supplies: bool, noise_in_kilowatt_hours: float
     ) -> List[Tuple[EnergyPort, np.ndarray]]:
         """The ports one end of a loop books, with their kWh per step, by the sign of the supplier's heat (§3.4).
 
         ``heat_in_kilowatt_hours`` is ``m c (T_sup - T_ret) dt``, the heat the supplier adds to the fluid. Where it is
         positive the loop heats: the loop's ``carrier`` goes from the supplier (``PRODUCTION``) to the receiver (``CONSUMPTION``).
-        Where it is negative the supplier cools the fluid: ``COOLING`` goes from the receiver (``PRODUCTION``) to the supplier
-        (``CONSUMPTION``), the minus of the heat. A run in which no step cools books the heat as it is under the carrier alone,
-        so a heating-only loop has one port per end, as it always had; a run with a cooling step books both
-        directions, each 0 in the other's steps, and each end's balance is the same. For example, a heat pump's
-        space-heating loop that carries 2 kWh in one step and -1 kWh in the next books, at the heat pump, ``PRODUCTION`` of
-        space-heating heat ``[2, 0]`` and ``CONSUMPTION`` of cooling ``[0, 1]``.
+        Where it is negative beyond the noise the supplier cools the fluid: ``COOLING`` goes from the receiver
+        (``PRODUCTION``) to the supplier (``CONSUMPTION``), the minus of the heat. A negative heat within the noise
+        (``noise_in_kilowatt_hours``, :attr:`COOLING_NOISE_IN_WATT` times the step) is no cooling step: it stays on the
+        carrier's face with its sign, so that both ends' balances keep it and nothing draws a cooling flow of a few
+        microwatt-hours (bead hisim-false-cooling-edge-7130). A run in which no step cools books the heat as it is under
+        the carrier alone, so a heating-only loop has one port per end, as it always had; a run with a cooling step
+        books both directions, each 0 in the other's steps, and each end's balance is the same. For example, a heat
+        pump's space-heating loop that carries 2 kWh in one step and -1 kWh in the next books, at the heat pump,
+        ``PRODUCTION`` of space-heating heat ``[2, 0]`` and ``CONSUMPTION`` of cooling ``[0, 1]``; with -1e-8 kWh in the
+        second step it books ``[2, -1e-8]`` of space-heating heat alone.
 
         Args:
             heat_in_kilowatt_hours: The loop's heat per step, in kWh, from the supplier's side.
             carrier: The heat the loop carries while it heats.
             supplies: Whether this end is the loop's supplier.
+            noise_in_kilowatt_hours: The largest negative heat per step, in kWh, that is the noise of the convergence.
 
         Returns:
             The end's ports with their kWh per step: the heating face, and the cooling face where a step cools.
         """
         heating_role, cooling_role = (lt.EnergyRole.PRODUCTION, lt.EnergyRole.CONSUMPTION) if supplies else (lt.EnergyRole.CONSUMPTION, lt.EnergyRole.PRODUCTION)
-        cools = heat_in_kilowatt_hours < 0.0
+        cools = heat_in_kilowatt_hours < -noise_in_kilowatt_hours
         if not cools.any():
             return [(EnergyPort(heating_role, carrier), heat_in_kilowatt_hours)]
         return [

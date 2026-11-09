@@ -411,7 +411,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     ElectricalEnergyTotal = "ElectricalEnergyTotal"  # Wh
     ElectricalEnergySH = "ElectricalEnergySH"  # Wh
     ElectricalEnergyDHW = "ElectricalEnergyDHW"  # Wh
+    #: The heat taken from the source minus the electricity, signed (W); the balance books its three parts below.
     ThermalPowerFromEnvironment = "ThermalPowerInputFromEnvironment"  # W
+    #: The heat taken from the source in a step that does not cool, >= 0 (W).
+    HeatFromAmbientInWatt = "HeatFromAmbientInWatt"
+    #: The heat rejected to the source while cooling, the drawn heat plus the electricity, >= 0 (W).
+    HeatToAmbientInWatt = "HeatToAmbientInWatt"
+    #: The electricity beyond the heat delivered in a step that does not cool, at a COP below 1, >= 0 (W).
+    ElectricityLostInWatt = "ElectricityLostInWatt"
     #: The space-heating part of ThermalOutputPowerSH, its positive part: heat delivered to the circuit (W).
     ThermalPowerDeliveredForSpaceHeating = "ThermalPowerDeliveredForSpaceHeating"
     #: The cooling part of ThermalOutputPowerSH, its negative part turned positive: heat drawn from the circuit (W).
@@ -894,8 +901,47 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             field_name=self.ThermalPowerFromEnvironment,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
-            output_description="Thermal Input Power from Environment",
+            output_description=(
+                "Heat taken from the source minus the electricity in W, signed: negative while cooling and at a "
+                f"coefficient of performance below 1. The energy balance books its parts {self.HeatFromAmbientInWatt}, "
+                f"{self.HeatToAmbientInWatt} and {self.ElectricityLostInWatt}."
+            ),
+        )
+        # The source is the machine's source while it heats and its sink while it cools; the energy balance links the
+        # one to the "ambient heat source" boundary node and the other to "ambient heat sink" (owner decision Q-M of
+        # roadmap/complete_energy_sankeys_spec.md, bead hisim-hplib-cooling-rejection-node-q4m7).
+        self.heat_from_ambient: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatFromAmbientInWatt,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description=(
+                f"Heat the machine takes from its source in W, >= 0: {self.ThermalPowerFromEnvironment} in a step that "
+                "does not cool and in which it is positive, else 0."
+            ),
             energy_port=EnergyPort(EnergyRole.CONSUMPTION, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
+        self.heat_to_ambient: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatToAmbientInWatt,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description=(
+                f"Heat the machine rejects to its source while it cools in W, >= 0: {self.ThermalPowerDrawnForCooling} "
+                f"plus the electricity, minus {self.ThermalPowerFromEnvironment} in a cooling step, else 0."
+            ),
+            energy_port=EnergyPort(EnergyRole.PRODUCTION, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
+        self.electricity_lost: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityLostInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "Electricity beyond the heat delivered in a step that does not cool in W, >= 0: at a coefficient of "
+                f"performance below 1, minus {self.ThermalPowerFromEnvironment}, else 0. Booked to 'heat loss to outdoors'."
+            ),
+            energy_port=EnergyPort(EnergyRole.LOSS, EnergyBalanceCarrier.ELECTRICITY),
         )
         self.thermal_power_delivered_for_space_heating: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -2355,6 +2401,9 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         stsv.set_output_value(self.time_on_cooling, published.timers.time_on_cooling_in_seconds)
         stsv.set_output_value(self.time_off, published.timers.time_off_in_seconds)
         stsv.set_output_value(self.thermal_power_from_environment, operation.thermal_power_from_environment_in_watt)
+        stsv.set_output_value(self.heat_from_ambient, operation.heat_from_ambient_in_watt)
+        stsv.set_output_value(self.heat_to_ambient, operation.heat_to_ambient_in_watt)
+        stsv.set_output_value(self.electricity_lost, operation.electricity_lost_in_watt)
         stsv.set_output_value(
             self.thermal_power_delivered_for_space_heating, max(operation.thermal_power_space_heating_in_watt, 0.0)
         )

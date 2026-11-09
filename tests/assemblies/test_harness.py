@@ -202,10 +202,11 @@ def test_a_sweep_of_an_all_or_none_of_member_from_an_unstated_base_states_the_ot
 
 @pytest.mark.assemblies
 def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
-    """Catches the real battery losing coverage to the constraint: every sample but the defaults states both sizes.
+    """Catches the real battery losing coverage to the constraint: every size sample states both sizes.
 
-    The PR tier keeps five samples (the defaults and each size's min and max, the other at the middle of its
-    range) and the capacity sweep runs at a stated power from every base, never beside an AUTO power.
+    The PR tier keeps the defaults, each size's min and max (the other at the middle of its range) and one sample
+    per location (device location, #1233), which keeps both sizes AUTO as the constraint allows; the capacity
+    sweep runs at a stated power from every base, never beside an AUTO power.
     """
     _, space = mock("storage/battery", Real.LIBRARY)
     samples = deterministic_samples(space)
@@ -215,9 +216,14 @@ def test_the_battery_samples_and_sweeps_always_state_both_sizes() -> None:
         (30.0, 7750.0),
         (15.5, 500.0),
         (15.5, 15000.0),
+        ("AUTO", "AUTO"),
+        ("AUTO", "AUTO"),
+        ("AUTO", "AUTO"),
     ]
+    assert [sample.values.get("location") for sample in samples][-3:] == ["HEATED_ZONE", "UNHEATED_SPACE", "OUTDOORS"]
     swept = sweeps(space, samples, space.model.tests.monotone[0])  # type: ignore[union-attr]
-    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 15000.0]
+    # the three location bases sweep the capacity at the middle power, like the defaults' base
+    assert sorted(points[0]["power_in_watt"] for _, points in swept) == [500.0, 7750.0, 7750.0, 7750.0, 7750.0, 15000.0]
     assert all(ParameterChecks.is_stated(point["power_in_watt"]) for _, points in swept for point in points)
 
 
@@ -439,12 +445,16 @@ def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribu
 
 
 @pytest.mark.assemblies
-def test_the_test_building_reads_the_heat_every_tank_beside_it_releases_into_the_heated_zone() -> None:
-    """Catches a tank whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run refuses (D-h).
+def test_the_test_building_reads_the_heat_every_located_device_beside_it_releases_into_the_heated_zone() -> None:
+    """The test building reads the heated-zone heat of every tank and battery beside it.
+
+    Catches a tank or a battery whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run
+    refuses (D-h).
 
     Beside a boiler the building's ``buffer_heat`` port binds the subject's buffer and its ``cylinder_heat`` port the
     partner cylinder; beside the cylinder under test the subject's cylinder and the heat pump's partner buffer; beside
-    a PV array there is no tank and both ports stay unbound.
+    the battery under test its ``battery_heat`` port binds the subject; beside a PV array there is no located device
+    and every port stays unbound.
     """
     resolver = AssemblyResolver([Real.LIBRARY])
     registry = TestPartnerRegistry.from_directories(resolver.directories)
@@ -452,12 +462,14 @@ def test_the_test_building_reads_the_heat_every_tank_beside_it_releases_into_the
         ("heating/gas_condensing_boiler", {"buffer_heat": SUBJECT, "cylinder_heat": "DHWStorage"}),
         ("dhw/indirect_cylinder", {"buffer_heat": "Buffer", "cylinder_heat": SUBJECT}),
         ("heating/district_heating", {"cylinder_heat": "DHWStorage"}),
+        ("storage/battery", {"battery_heat": SUBJECT}),
         ("pv/array", {}),
     ):
         assembly = resolver.resolve(path, "test")
         document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
         verbs = document["components"]["Building"].get("optional-bind") or {}
-        assert {port: verbs[port] for port in ("buffer_heat", "cylinder_heat") if port in verbs} == expected, path
+        ports = ("battery_heat", "buffer_heat", "cylinder_heat")
+        assert {port: verbs[port] for port in ports if port in verbs} == expected, path
 
 
 @pytest.mark.assemblies
@@ -490,7 +502,9 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
     resolver = AssemblyResolver([Real.LIBRARY])
     real = TestPartnerRegistry.from_directories(resolver.directories)
     unheated = dict(real.partners["Building"].component)
-    unheated["inputs"] = ["Weather", "UTSPConnector", {"$port": "buffer_heat"}, {"$port": "cylinder_heat"}]
+    unheated["inputs"] = [
+        "Weather", "UTSPConnector", {"$port": "battery_heat"}, {"$port": "buffer_heat"}, {"$port": "cylinder_heat"}
+    ]
     unheated["ports"] = {name: port for name, port in unheated["ports"].items() if name != "heating"}
     registry = TestPartnerRegistry(
         [

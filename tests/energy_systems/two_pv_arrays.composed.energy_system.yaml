@@ -30,6 +30,7 @@ imports:
   battery:
     order: 5
     assembly: storage/battery
+    parameters: {location: OUTDOORS}   # no building, so no technical room to follow
   control:
     order: 6
     assembly: control/ems_self_consumption

@@ -31,6 +31,7 @@ from hisim.config.laws import ConfigSizingError
 from hisim.energy_system import EnergySystemErrorId, EnergySystemSizingError, expand_groups
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
 from hisim.energy_system.loader import load_energy_system
+from hisim.loadtypes import InstallationLocation
 
 
 class PinnedTwin:
@@ -183,6 +184,7 @@ class TestBothSizesInAPythonSetup:
     def battery(**sizes: float) -> BatteryConfig:
         """The fleet's battery preset with the given sizes stated."""
         config = BatteryConfig.preset_sized_to_pv("Battery")
+        config.installation_location = InstallationLocation.UNHEATED_SPACE
         for field_name, value in sizes.items():
             setattr(config, field_name, value)
         return config

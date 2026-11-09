@@ -306,6 +306,10 @@ class DeclaredPortRenamings:
             "Input_DHWStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromDHWStorage",
             # The same tank one index earlier in the electric-heating sizer, which has no buffer.
             "Input_DHWStorage_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromDHWStorage",
+            # The house battery's heat after the tanks' (device location, #1233): 16 in the electric-heating sizer,
+            # 17 in the solar-thermal heat-pump sizer.
+            "Input_Battery_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromBattery",
+            "Input_Battery_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromBattery",
         },
         # The fuel meter, which plays the same role for the solid-fuel and district-heating
         # sizers as the gas meter does for the gas ones.

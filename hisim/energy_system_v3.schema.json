@@ -400,6 +400,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -407,7 +421,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "pv_peak_power_in_watt"
+                    "pv_peak_power_in_watt",
+                    "technical_room_location"
                   ]
                 }
               }

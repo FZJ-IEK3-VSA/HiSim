@@ -100,6 +100,9 @@ tests:
     - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}
     - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: -5000, max: 40000}
+    - {output: HeatPump.HeatFromAmbientInWatt, unit: WATT, min: 0, max: 40000}           # the ambient heat taken, never negative
+    - {output: HeatPump.HeatToAmbientInWatt, unit: WATT, min: 0, max: 40000}             # rejected while cooling; zero here
+    - {output: HeatPump.ElectricityLostInWatt, unit: WATT, min: 0, max: 20000}           # at most the electricity it takes
       # ambient heat; hplib may book a small negative value at part load (measured 0 to 19.9 kW)
     - {output: HeatPump.ThermalPowerDeliveredForSpaceHeating, unit: WATT, min: 0, max: 40000}
     - {output: HeatPump.ThermalPowerDrawnForCooling, unit: WATT, min: -40000, max: 40000}     # zero here; sign unchecked

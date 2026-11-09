@@ -452,8 +452,8 @@ def test_the_test_building_reads_the_heat_every_located_device_beside_it_release
 
     Beside a boiler the building's ``buffer_heat`` port binds the subject's buffer and its ``cylinder_heat`` port the
     partner cylinder; beside the cylinder under test the subject's cylinder and the heat pump's partner buffer; beside
-    the battery under test its ``battery_heat`` port binds the subject; beside a PV array there is no located device
-    and every port stays unbound.
+    the battery under test its ``battery_heat`` port binds the subject; beside a PV array none of these three ports
+    binds (its inverter's heat is the ``pv_heat`` port's, tested below).
     """
     resolver = AssemblyResolver([Real.LIBRARY])
     registry = TestPartnerRegistry.from_directories(resolver.directories)

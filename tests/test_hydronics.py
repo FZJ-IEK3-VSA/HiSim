@@ -135,6 +135,7 @@ def test_water_density_is_the_storages_value_at_40_degrees() -> None:
         config=dataclasses.replace(
             simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("Buffer"),
             volume_heating_water_storage_in_liter=500.0,
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         ),
     )
     assert buffer.density_water_at_40_degree_celsius_in_kg_per_liter == Water.DENSITY_KG_PER_LITER

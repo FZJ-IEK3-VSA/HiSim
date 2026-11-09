@@ -228,7 +228,12 @@ class Synthetic:
         )
 
     @classmethod
-    def aggregator(cls, feed_weight: int, dispatch_weights: Tuple[int, ...]) -> RecordedSystem:
+    def aggregator(
+        cls,
+        feed_weight: int,
+        dispatch_weights: Tuple[int, ...],
+        transfer_defaults: Tuple[str, ...] = (),
+    ) -> RecordedSystem:
         """Builds an observation of one producer feeding an aggregator that grew a port for it.
 
         The aggregator carries one feed and as many unread control outputs as ``dispatch_weights``
@@ -239,6 +244,8 @@ class Synthetic:
             feed_weight: The weight of the aggregator's feed from the producer.
             dispatch_weights: One weight per control output the aggregator grew, all of them
                 created for the producer's class and read by nobody.
+            transfer_defaults: The producer's outputs the aggregator reads by its own declaration as a physics
+                component taking energy in (``ObservedComponent.transfer_defaults``); empty for one that observes.
 
         Returns:
             The observation, with the aggregator second so that it is the component asked.
@@ -273,6 +280,7 @@ class Synthetic:
                 )
                 for index, weight in enumerate(dispatch_weights, start=1)
             ),
+            transfer_defaults={cls.SOURCE: transfer_defaults} if transfer_defaults else {},
         )
         snapshot = WiringSnapshot(
             components=(cls.SOURCE, cls.AGGREGATOR),
@@ -694,6 +702,38 @@ def test_a_feed_with_no_control_output_at_all_is_recorded_as_a_measured_particip
     assert feed.source == Synthetic.SOURCE
     assert feed.weight == 1
     assert feed.dispatch is None
+
+
+@pytest.mark.base
+def test_a_physics_component_s_feed_of_its_declared_transfer_is_written_as_a_bare_item() -> None:
+    """A building's feed of a tank's heat into its heated zone is one bare item naming the tank (D-h).
+
+    The building grows the input by its own declaration, from the port the tank's output declares, and a file's bare
+    item expands to the same feed; so every twin lists each tank under the building, whatever the house. Catches the
+    feed transcribed in full, which a reader cannot tell from a hand-made wire.
+    """
+    system = Synthetic.aggregator(feed_weight=999, dispatch_weights=(), transfer_defaults=(Synthetic.MEASURED_OUTPUT,))
+
+    assert InputItemWriter(system).items(system.components[1]) == (DefaultInputs(source=Synthetic.SOURCE),)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("feed_weight", "transfer_defaults"),
+    [(1, ("Power",)), (999, ("Power", "Heat")), (999, ("Heat",))],
+    ids=["ranked", "one output of two", "another output"],
+)
+def test_a_feed_that_is_not_exactly_the_declared_transfer_is_written_in_full(
+    feed_weight: int, transfer_defaults: Tuple[str, ...]
+) -> None:
+    """A ranked feed, or feeds that read more, less or other outputs than declared, stay transcribed.
+
+    Catches a bare item that would expand on the next run to other wires than the ones recorded.
+    """
+    system = Synthetic.aggregator(feed_weight=feed_weight, dispatch_weights=(), transfer_defaults=transfer_defaults)
+
+    (item,) = InputItemWriter(system).items(system.components[1])
+    assert isinstance(item, AggregatorFeed)
 
 
 @pytest.mark.base

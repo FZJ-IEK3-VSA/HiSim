@@ -298,6 +298,15 @@ class DeclaredPortRenamings:
             "Input_CondensingHydrogenBoiler_EnergyDemandSh_0": "EnergyDemandShFromCondensingHydrogenBoiler",
             "Input_CondensingHydrogenBoiler_EnergyDemandDhw_1": "EnergyDemandDhwFromCondensingHydrogenBoiler",
         },
+        # The building, which takes in the heat a device releases into its heated zone (device location, #1213):
+        # the buffer's and the hot-water tank's standby heat, inserted after the building's static inputs. The twins
+        # write these feeds as bare items, which test_p3_parity's cross-check accepts by their source.
+        "Building": {
+            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
+            "Input_DHWStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromDHWStorage",
+            # The same tank one index earlier in the electric-heating sizer, which has no buffer.
+            "Input_DHWStorage_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromDHWStorage",
+        },
         # The fuel meter, which plays the same role for the solid-fuel and district-heating
         # sizers as the gas meter does for the gas ones.
         "FuelMeter": {

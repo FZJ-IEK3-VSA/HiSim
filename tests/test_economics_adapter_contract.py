@@ -51,7 +51,7 @@ from hisim.economics.adapter import (
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
-from hisim.loadtypes import ComponentType, LoadTypes
+from hisim.loadtypes import ComponentType, InstallationLocation, LoadTypes
 
 
 class AdapterContractScan:
@@ -120,6 +120,10 @@ class AdapterContractScan:
         # The vessel the apartment law gives the single apartment of a single-family house.
         # The extractor reads it as the litres it prices.
         "SimpleDHWStorageConfig.volume_heating_water_storage_in_liter": 250.0,
+        # Where the two vessels stand: the technical room of a house with an unheated cellar. The extractor does not
+        # read it, but the sweep resolves the whole configuration.
+        "SimpleHotWaterStorageConfig.installation_location": InstallationLocation.UNHEATED_SPACE,
+        "SimpleDHWStorageConfig.installation_location": InstallationLocation.UNHEATED_SPACE,
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,

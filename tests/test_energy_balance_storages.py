@@ -102,13 +102,17 @@ def test_the_buffer_declares_its_loops_loss_and_stored_heat_and_closes(twin: Tup
     assert port_roles(entry) == {
         Expected.SPACE_HEATING_LOOP[generator]: ("consumption", "space_heating_heat"),
         Expected.DISTRIBUTION_LOOP: ("production", "space_heating_heat"),
-        "StandbyHeatLoss": ("loss", "space_heating_heat"),
+        "HeatToHeatedZoneInWatt": ("production", "room_heat"),
+        "HeatLossInWatt": ("loss", "space_heating_heat"),
         "ThermalEnergyIncreaseInStorage": ("stored_change", "space_heating_heat"),
     }
     peers = {port["output"]: (port["peer_kind"], port["peer"]) for port in entry["ports"]}
     assert peers[Expected.SPACE_HEATING_LOOP[generator]] == ("component", generator)
     assert peers[Expected.DISTRIBUTION_LOOP] == ("component", "HeatDistributionSystem")
-    assert peers["StandbyHeatLoss"] == ("boundary", "outdoors")
+    # the twins stand on a row with an unheated cellar: the loss leaves the house, and the building reads the idle
+    # output of the heat into its heated zone
+    assert peers["HeatLossInWatt"] == ("boundary", "outdoors")
+    assert peers["HeatToHeatedZoneInWatt"] == ("component", "Building")
     # a week in January: the generator charges, the distribution draws, the buffer loses
     assert entry["consumption_kwh"] > 10.0 and entry["production_kwh"] > 10.0 and entry["loss_kwh"] > 0.0
 
@@ -124,7 +128,8 @@ def test_the_hot_water_tank_declares_its_loops_taps_loss_and_stored_heat_and_clo
     expected.update(
         {
             "ThermalPowerConsumptionDHW": ("production", "domestic_hot_water_heat"),
-            "StandbyHeatLoss": ("loss", "domestic_hot_water_heat"),
+            "HeatToHeatedZoneInWatt": ("production", "room_heat"),
+            "HeatLossInWatt": ("loss", "domestic_hot_water_heat"),
             "ThermalEnergyIncreaseInStorage": ("stored_change", "domestic_hot_water_heat"),
         }
     )
@@ -187,11 +192,11 @@ def test_the_connected_diagram_runs_from_the_generators_through_the_storages(twi
         ("space_heating_heat", generator, "SimpleHotWaterStorage"),
         ("space_heating_heat", "SimpleHotWaterStorage", "HeatDistributionSystem"),
         ("space_heating_heat", "HeatDistributionSystem", "Building"),
-        ("space_heating_heat", "SimpleHotWaterStorage", "SimpleHotWaterStorage · StandbyHeatLoss"),
-        ("space_heating_heat", "SimpleHotWaterStorage · StandbyHeatLoss", "outdoors"),
+        ("space_heating_heat", "SimpleHotWaterStorage", "SimpleHotWaterStorage · HeatLossInWatt"),
+        ("space_heating_heat", "SimpleHotWaterStorage · HeatLossInWatt", "outdoors"),
         ("domestic_hot_water_heat", "DHWStorage", "hot water drawn at the taps"),
-        ("domestic_hot_water_heat", "DHWStorage", "DHWStorage · StandbyHeatLoss"),
-        ("domestic_hot_water_heat", "DHWStorage · StandbyHeatLoss", "outdoors"),
+        ("domestic_hot_water_heat", "DHWStorage", "DHWStorage · HeatLossInWatt"),
+        ("domestic_hot_water_heat", "DHWStorage · HeatLossInWatt", "outdoors"),
     }
     expected |= {("domestic_hot_water_heat", name, "DHWStorage") for name in charging if name != "SolarThermalSystem"}
     assert expected <= links, sorted(expected - links)

@@ -16,6 +16,7 @@ contradict it. These tests pin each constant and check that a freshly built comp
 
 import pytest
 
+from hisim import loadtypes as lt
 from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import example_storage
@@ -181,7 +182,7 @@ def test_the_hot_water_tank_starts_half_way_between_the_tap_temperature_and_the_
         (tap_temperature_in_celsius + warm_water_aim_in_celsius) / 2, abs=1e-12
     )
     config = simple_water_storage.SimpleDHWStorageConfig(
-        component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0
+        component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0, installation_location=lt.InstallationLocation.UNHEATED_SPACE
     )
     tank = tank_class(my_simulation_parameters=StartValues.parameters(), config=config)
     assert tank.state.temperature_at_start_of_step_in_celsius == 50.0
@@ -211,7 +212,7 @@ def test_the_space_heating_buffer_states_its_start_temperature_once() -> None:
     buffer_class = simple_water_storage.SimpleHotWaterStorage
     assert buffer_class.INITIAL_TEMPERATURE_IN_CELSIUS == 35.0
     config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage").resolve(
-        SizingContext(maximal_thermal_power_in_watt=10_000.0)
+        SizingContext(maximal_thermal_power_in_watt=10_000.0, technical_room_location=lt.InstallationLocation.UNHEATED_SPACE)
     )
     buffer = buffer_class(my_simulation_parameters=StartValues.parameters(), config=config)
     assert buffer.state.mean_water_temperature_in_celsius == 35.0

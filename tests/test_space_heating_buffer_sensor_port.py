@@ -20,6 +20,7 @@ from typing import Dict
 
 import pytest
 
+from hisim import loadtypes as lt
 from hisim.component import ComponentConnection
 from hisim.components.generic_boiler import GenericBoilerController
 from hisim.components.generic_chp.controller import L1CHPController
@@ -58,6 +59,7 @@ class SensorRig:
             SimpleHotWaterStorageConfig.preset_buffer("Buffer"),
             volume_heating_water_storage_in_liter=cls.VOLUME_IN_LITER,
             heat_exchanger_is_present=heat_exchanger_is_present,
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         )
         buffer = SimpleHotWaterStorage(Parameters.one_day(seconds_per_timestep), config)
         return AllInputsRig.step_once(buffer, cls.INPUTS)

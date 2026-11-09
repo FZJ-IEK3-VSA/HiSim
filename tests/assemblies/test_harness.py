@@ -334,6 +334,8 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
             heating_site + ["DHWStorage", "GasMeter", "HeatDistributionController", "HeatDistributionSystem"],
             {
                 "bind": {
+                    "surroundings": "Building",
+                    "outside_air": "Weather",
                     "heating_curve": "HeatingCurveController",
                     "dhw_temperature": "DHWStorage",
                     "space_heating": "HeatDistributionSystem",
@@ -432,7 +434,30 @@ def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribu
     ):
         assembly = resolver.resolve(path, "test")
         document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
-        assert document["components"]["Building"].get("optional-bind") == expected, path
+        verbs = document["components"]["Building"].get("optional-bind") or {}
+        assert ({"heating": verbs["heating"]} if "heating" in verbs else None) == expected, path
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reads_the_heat_every_tank_beside_it_releases_into_the_heated_zone() -> None:
+    """Catches a tank whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run refuses (D-h).
+
+    Beside a boiler the building's ``buffer_heat`` port binds the subject's buffer and its ``cylinder_heat`` port the
+    partner cylinder; beside the cylinder under test the subject's cylinder and the heat pump's partner buffer; beside
+    a PV array there is no tank and both ports stay unbound.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    for path, expected in (
+        ("heating/gas_condensing_boiler", {"buffer_heat": SUBJECT, "cylinder_heat": "DHWStorage"}),
+        ("dhw/indirect_cylinder", {"buffer_heat": "Buffer", "cylinder_heat": SUBJECT}),
+        ("heating/district_heating", {"cylinder_heat": "DHWStorage"}),
+        ("pv/array", {}),
+    ):
+        assembly = resolver.resolve(path, "test")
+        document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
+        verbs = document["components"]["Building"].get("optional-bind") or {}
+        assert {port: verbs[port] for port in ("buffer_heat", "cylinder_heat") if port in verbs} == expected, path
 
 
 @pytest.mark.assemblies
@@ -465,8 +490,8 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
     resolver = AssemblyResolver([Real.LIBRARY])
     real = TestPartnerRegistry.from_directories(resolver.directories)
     unheated = dict(real.partners["Building"].component)
-    unheated["inputs"] = ["Weather", "UTSPConnector"]
-    del unheated["ports"]
+    unheated["inputs"] = ["Weather", "UTSPConnector", {"$port": "buffer_heat"}, {"$port": "cylinder_heat"}]
+    unheated["ports"] = {name: port for name, port in unheated["ports"].items() if name != "heating"}
     registry = TestPartnerRegistry(
         [
             dataclasses.replace(partner, component=unheated) if name == "Building" else partner

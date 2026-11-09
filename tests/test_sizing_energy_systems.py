@@ -16,6 +16,7 @@ from hisim.components import (
 from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLibConfig
 
 from hisim import log
+from hisim import loadtypes as lt
 from hisim import utils
 from hisim.config import SizingContext, concrete
 
@@ -171,9 +172,11 @@ def simulation_for_one_timestep(
     my_simple_hot_water_storage_config.sizing_option = (
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
+    # The sweep sizes volumes only, so where the vessels stand is stated rather than derived from the building.
     my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
         )
     )
 
@@ -184,7 +187,10 @@ def simulation_for_one_timestep(
 
     # Set DHW Storage
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_residence_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_residence_information.number_of_apartments,
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     # Energy system sizes
